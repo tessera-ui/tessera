@@ -3,6 +3,8 @@ use std::sync::Arc;
 use log::error;
 use winit::window::Window;
 
+use super::drawer::{DrawCommand, Drawer, ShapeVertex};
+
 pub(crate) struct WgpuApp {
     /// Avoiding release the window
     #[allow(unused)]
@@ -19,6 +21,8 @@ pub(crate) struct WgpuApp {
     size: winit::dpi::PhysicalSize<u32>,
     /// if size is changed
     size_changed: bool,
+    /// draw pipelines
+    drawer: Drawer,
 }
 
 impl WgpuApp {
@@ -88,6 +92,8 @@ impl WgpuApp {
             desired_maximum_frame_latency: 2,
         };
         surface.configure(&gpu, &config);
+        // Create drawer
+        let drawer = Drawer::new(&gpu, &queue, &config);
 
         Self {
             window,
@@ -97,6 +103,7 @@ impl WgpuApp {
             config,
             size,
             size_changed: false,
+            drawer,
         }
     }
 
@@ -131,7 +138,7 @@ impl WgpuApp {
                 label: Some("Render Encoder"),
             });
         // encode render commands
-        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &output
@@ -139,12 +146,53 @@ impl WgpuApp {
                     .create_view(&wgpu::TextureViewDescriptor::default()),
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
                     store: wgpu::StoreOp::Store,
                 },
             })],
             ..Default::default()
         });
+        // test: draw a red triangle
+        self.drawer.draw(
+            &self.gpu,
+            &self.config,
+            &self.queue,
+            &mut render_pass,
+            DrawCommand::Shape {
+                vertices: vec![
+                    ShapeVertex {
+                        position: [0, 0],
+                        color: [1.0, 0.0, 0.0],
+                    },
+                    ShapeVertex {
+                        position: [0, 50],
+                        color: [0.0, 1.0, 0.0],
+                    },
+                    ShapeVertex {
+                        position: [50, 50],
+                        color: [0.0, 0.0, 1.0],
+                    },
+                    ShapeVertex {
+                        position: [50, 0],
+                        color: [1.0, 1.0, 0.0],
+                    },
+                ],
+            },
+        );
+        // test: draw a text
+        self.drawer.draw(
+            &self.gpu,
+            &self.config,
+            &self.queue,
+            &mut render_pass,
+            DrawCommand::Text {
+                text: "Hello, world!".to_string(),
+                position: [500, 500],
+                color: [0.0, 0.0, 0.0], // black
+                size: 50.0,
+                line_height: 50.0,
+            },
+        );
         // here we drop render_pass to release borrowed encoder
         drop(render_pass);
         // finish command buffer and submit it to gpu queue

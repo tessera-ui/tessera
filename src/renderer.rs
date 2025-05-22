@@ -1,4 +1,5 @@
 mod app;
+mod drawer;
 
 use std::sync::Arc;
 
@@ -21,8 +22,6 @@ use crate::tokio_runtime;
 pub(crate) struct Renderer {
     /// WGPU app
     app: Arc<Mutex<Option<WgpuApp>>>,
-    /// Missed resize event
-    missed_resize: Arc<Mutex<Option<winit::dpi::PhysicalSize<u32>>>>,
 }
 
 impl Renderer {
@@ -62,7 +61,7 @@ impl ApplicationHandler for Renderer {
         let mut app = self.app.lock();
         let app = app.as_mut().unwrap();
 
-        // 窗口事件
+        // Handle window events
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -75,7 +74,7 @@ impl ApplicationHandler for Renderer {
                 }
             }
             WindowEvent::KeyboardInput { .. } => {
-                todo!("Handle keyboard input");
+                // todo!("Handle keyboard input");
             }
             WindowEvent::RedrawRequested => {
                 // notify the windowing system before rendering
@@ -83,7 +82,7 @@ impl ApplicationHandler for Renderer {
                 app.window.pre_present_notify();
                 // resize the surface if needed
                 app.resize_if_needed();
-                // re-render our surface
+                // todo: re-render our surface?
                 if let Err(e) = app.render() {
                     match e {
                         SurfaceError::Lost => {
