@@ -30,8 +30,11 @@ impl Drawer {
         }
     }
 
-    /// Draw the command
-    pub fn draw(
+    /// Draw/Prepare Draw the command
+    /// Some commands must be prepared before drawing
+    /// and some commands can be drawn directly
+    /// so we need to call both [Self::prepare_or_draw] and [Self::final_draw]
+    pub fn prepare_or_draw(
         &mut self,
         gpu: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
@@ -56,18 +59,22 @@ impl Drawer {
                 size,
                 line_height,
             } => {
-                self.text_renderer.draw(
-                    gpu,
-                    config,
-                    queue,
-                    render_pass,
-                    &text,
-                    pixel_to_ndc(position, [config.width, config.height]),
-                    color,
-                    size,
-                    line_height,
-                );
+                self.text_renderer
+                    .prepare(&text, position, color, size, line_height);
             }
         }
+    }
+
+    /// Do the actual drawing for drawers that need to be prepared before drawing
+    /// This should be called after all [Self::prepare_or_draw] calls
+    /// this should only called once per render
+    pub fn final_draw(
+        &mut self,
+        gpu: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        queue: &wgpu::Queue,
+        render_pass: &mut wgpu::RenderPass<'_>,
+    ) {
+        self.text_renderer.draw(gpu, config, queue, render_pass);
     }
 }

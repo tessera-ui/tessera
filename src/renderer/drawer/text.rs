@@ -16,6 +16,8 @@ pub struct GlyphonTextRender {
     viewport: glyphon::Viewport,
     /// Glypthon swash cache
     swash_cache: glyphon::SwashCache,
+    /// Buffer for text datas to render
+    buffer: Vec<TextData>,
 }
 
 impl GlyphonTextRender {
@@ -40,6 +42,8 @@ impl GlyphonTextRender {
         let viewport = glyphon::Viewport::new(gpu, &cache);
         // Create swash cache
         let swash_cache = glyphon::SwashCache::new();
+        // Create a buffer for text datas
+        let buffer = Vec::new();
 
         Self {
             text_renderer,
@@ -48,18 +52,17 @@ impl GlyphonTextRender {
             cache,
             viewport,
             swash_cache,
+            buffer,
         }
     }
 
-    /// Draw the text at the given position with the given color
-    pub fn draw(
+    /// Prepare all text datas before rendering
+    /// We must call [Self::draw] after all [Self::prepare] calls
+    /// to render the text
+    pub fn prepare(
         &mut self,
-        gpu: &wgpu::Device,
-        config: &wgpu::SurfaceConfiguration,
-        queue: &wgpu::Queue,
-        render_pass: &mut wgpu::RenderPass<'_>,
         text: &str,
-        position: [f32; 2],
+        position: [u32; 2],
         color: [f32; 3],
         size: f32,
         line_height: f32,
@@ -76,6 +79,19 @@ impl GlyphonTextRender {
             glyphon::Shaping::Advanced,
         );
         text_buffer.shape_until_scroll(&mut self.font_system, false);
+        // build text data and push it to the buffer for later rendering
+        let text_data = TextData::new(text_buffer, position, color);
+        self.buffer.push(text_data);
+    }
+
+    /// Draw the text at the given position with the given color
+    pub fn draw(
+        &mut self,
+        gpu: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        queue: &wgpu::Queue,
+        render_pass: &mut wgpu::RenderPass<'_>,
+    ) {
         // Update the viewport
         self.viewport.update(
             queue,
@@ -85,7 +101,6 @@ impl GlyphonTextRender {
             },
         );
         // Prepare the text renderer
-        let color = glyphon::Color::rgb(color[0] as u8, color[1] as u8, color[2] as u8);
         self.text_renderer
             .prepare(
                 gpu,
@@ -93,15 +108,7 @@ impl GlyphonTextRender {
                 &mut self.font_system,
                 &mut self.atlas,
                 &self.viewport,
-                [glyphon::TextArea {
-                    buffer: &text_buffer,
-                    left: position[0],
-                    top: position[1],
-                    scale: 1.0,
-                    bounds: glyphon::TextBounds::default(),
-                    default_color: color,
-                    custom_glyphs: &[],
-                }],
+                self.buffer.iter().map(|t| t.text_area()),
                 &mut self.swash_cache,
             )
             .unwrap();
@@ -109,5 +116,42 @@ impl GlyphonTextRender {
         self.text_renderer
             .render(&self.atlas, &self.viewport, render_pass)
             .unwrap();
+        // Clear the buffer
+        self.buffer.clear();
+    }
+}
+
+struct TextData {
+    /// glyphon text buffer
+    text_buffer: glyphon::Buffer,
+    // we need fields below to construct a glyphon::TextArea
+    // don't ask me why we cannot just save a glyphon::TextArea, ask borrow checker
+    /// Position of the text
+    position: [u32; 2],
+    /// Color of the text
+    color: glyphon::Color,
+}
+
+impl TextData {
+    /// Create a new text data
+    pub fn new(text_buffer: glyphon::Buffer, position: [u32; 2], color: [f32; 3]) -> Self {
+        Self {
+            text_buffer,
+            position,
+            color: glyphon::Color::rgb(color[0] as u8, color[1] as u8, color[2] as u8),
+        }
+    }
+
+    /// Get the glyphon text area from the text data
+    fn text_area(&self) -> glyphon::TextArea {
+        glyphon::TextArea {
+            buffer: &self.text_buffer,
+            left: self.position[0] as f32,
+            top: self.position[1] as f32,
+            scale: 1.0,
+            bounds: glyphon::TextBounds::default(),
+            default_color: self.color,
+            custom_glyphs: &[],
+        }
     }
 }

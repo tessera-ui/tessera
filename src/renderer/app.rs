@@ -152,8 +152,8 @@ impl WgpuApp {
             })],
             ..Default::default()
         });
-        // test: draw a red triangle
-        self.drawer.draw(
+        // test: draw a triangle
+        self.drawer.prepare_or_draw(
             &self.gpu,
             &self.config,
             &self.queue,
@@ -179,20 +179,61 @@ impl WgpuApp {
                 ],
             },
         );
+        // test: draw another shape
+        self.drawer.prepare_or_draw(
+            &self.gpu,
+            &self.config,
+            &self.queue,
+            &mut render_pass,
+            DrawCommand::Shape {
+                vertices: vec![
+                    ShapeVertex {
+                        position: [100, 0],
+                        color: [1.0, 0.0, 0.0],
+                    },
+                    ShapeVertex {
+                        position: [0, 100],
+                        color: [0.0, 1.0, 0.0],
+                    },
+                    ShapeVertex {
+                        position: [100, 100],
+                        color: [0.0, 0.0, 1.0],
+                    },
+                ],
+            },
+        );
         // test: draw a text
-        self.drawer.draw(
+        self.drawer.prepare_or_draw(
             &self.gpu,
             &self.config,
             &self.queue,
             &mut render_pass,
             DrawCommand::Text {
                 text: "Hello, world!".to_string(),
-                position: [500, 500],
+                position: [0, 0],
                 color: [0.0, 0.0, 0.0], // black
                 size: 50.0,
                 line_height: 50.0,
             },
         );
+        // test: draw another text at different position
+        self.drawer.prepare_or_draw(
+            &self.gpu,
+            &self.config,
+            &self.queue,
+            &mut render_pass,
+            DrawCommand::Text {
+                text: "Hello, Tessera!".to_string(),
+                position: [200, 200],
+                color: [0.0, 0.0, 0.0], // black
+                size: 50.0,
+                line_height: 50.0,
+            },
+        );
+        // we must call [Drawer::final_draw] to render drawers that need to be prepared
+        // before drawing
+        self.drawer
+            .final_draw(&self.gpu, &self.config, &self.queue, &mut render_pass);
         // here we drop render_pass to release borrowed encoder
         drop(render_pass);
         // finish command buffer and submit it to gpu queue
