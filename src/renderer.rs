@@ -3,11 +3,9 @@ mod drawer;
 
 use std::sync::Arc;
 
-use log::error;
 use parking_lot::Mutex;
 
 use app::WgpuApp;
-use wgpu::SurfaceError;
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
@@ -16,7 +14,15 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::tokio_runtime;
+use crate::{
+    component_tree::{
+        BasicDrawable, ComponentNode, ComponentTree, Constraint, DEFAULT_LAYOUT_DESC,
+        LayoutDescription, PositionRelation,
+    },
+    tokio_runtime,
+};
+
+pub use drawer::{DrawCommand, ShapeVertex, TextConstraint};
 
 #[derive(Default)]
 pub(crate) struct Renderer {
@@ -49,7 +55,7 @@ impl ApplicationHandler for Renderer {
     }
 
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
-        // 暂停事件
+        todo!("Handle suspend event");
     }
 
     fn window_event(
@@ -82,17 +88,68 @@ impl ApplicationHandler for Renderer {
                 app.window.pre_present_notify();
                 // resize the surface if needed
                 app.resize_if_needed();
-                // todo: re-render our surface?
-                if let Err(e) = app.render() {
-                    match e {
-                        SurfaceError::Lost => {
-                            error!("Surface is losted");
-                        }
-                        _ => {
-                            error!("Surface error: {:?}", e);
-                        }
-                    }
-                }
+                // render the surface
+                // for now, we have a simple component tree as a test
+                let mut component_tree = ComponentTree::new();
+                // Add a root node
+                // Here we draw a rectangle
+                // with a size of 100x100 and a color of red
+                // and place child node in center of the rectangle
+                component_tree.add_node(ComponentNode {
+                    layout_desc: Box::new(|inputs| {
+                        let input = inputs[0];
+                        let x = 1000 / 2 - input.width / 2;
+                        let y = 1000 / 2 - input.height / 2;
+                        vec![LayoutDescription {
+                            relative_position: PositionRelation {
+                                offset_x: x,
+                                offset_y: y,
+                            },
+                        }]
+                    }),
+                    constraint: Constraint {
+                        min_width: 1000,
+                        min_height: 1000,
+                        max_width: 1000,
+                        max_height: 1000,
+                    },
+                    drawable: Some(BasicDrawable::Rect {
+                        color: [1.0, 0.0, 0.0], // Red
+                    }),
+                });
+                // Add a child node
+                // Here we draw a rectangle with a size of 50x50 and a color of blue
+                component_tree.add_node(ComponentNode {
+                    layout_desc: Box::new(DEFAULT_LAYOUT_DESC),
+                    constraint: Constraint {
+                        min_width: 500,
+                        min_height: 500,
+                        max_width: 500,
+                        max_height: 500,
+                    },
+                    drawable: Some(BasicDrawable::Rect {
+                        color: [0.0, 0.0, 1.0], // Blue
+                    }),
+                });
+                // Add a text node
+                component_tree.add_node(ComponentNode {
+                    layout_desc: Box::new(DEFAULT_LAYOUT_DESC),
+                    constraint: Constraint {
+                        min_width: 100,
+                        min_height: 500,
+                        max_width: 100,
+                        max_height: 500,
+                    },
+                    drawable: Some(BasicDrawable::Text {
+                        text: "Hello, this is Tessera~~~~~".into(),
+                        color: [1.0, 1.0, 1.0], // Black
+                        font_size: 20.0,
+                        line_height: 20.0,
+                    }),
+                });
+                // Compute the draw commands
+                let commands = component_tree.compute();
+                app.render(commands).unwrap();
                 // Currently we render every frame
                 app.window.request_redraw();
             }

@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use glyphon::fontdb;
 
+use super::command::TextConstraint;
+
 /// A text renderer
 pub struct GlyphonTextRender {
     /// Glypthon text renderer
@@ -66,6 +68,7 @@ impl GlyphonTextRender {
         color: [f32; 3],
         size: f32,
         line_height: f32,
+        constraint: TextConstraint,
     ) {
         // Create text buffer
         let mut text_buffer = glyphon::Buffer::new(
@@ -78,9 +81,21 @@ impl GlyphonTextRender {
             &glyphon::Attrs::new().family(fontdb::Family::SansSerif),
             glyphon::Shaping::Advanced,
         );
+        text_buffer.set_size(
+            &mut self.font_system,
+            Some(constraint.max_width as f32),
+            Some(constraint.max_height as f32),
+        );
         text_buffer.shape_until_scroll(&mut self.font_system, false);
+        // Calculate text bounds
+        let bound = glyphon::TextBounds {
+            left: position[0] as i32,
+            top: position[1] as i32,
+            right: position[0] as i32 + constraint.max_width as i32,
+            bottom: position[1] as i32 + constraint.max_height as i32,
+        };
         // build text data and push it to the buffer for later rendering
-        let text_data = TextData::new(text_buffer, position, color);
+        let text_data = TextData::new(text_buffer, position, color, bound);
         self.buffer.push(text_data);
     }
 
@@ -130,15 +145,23 @@ struct TextData {
     position: [u32; 2],
     /// Color of the text
     color: glyphon::Color,
+    /// Text bounds of the text
+    bounds: glyphon::TextBounds,
 }
 
 impl TextData {
     /// Create a new text data
-    pub fn new(text_buffer: glyphon::Buffer, position: [u32; 2], color: [f32; 3]) -> Self {
+    pub fn new(
+        text_buffer: glyphon::Buffer,
+        position: [u32; 2],
+        color: [f32; 3],
+        text_bounds: glyphon::TextBounds,
+    ) -> Self {
         Self {
             text_buffer,
             position,
             color: glyphon::Color::rgb(color[0] as u8, color[1] as u8, color[2] as u8),
+            bounds: text_bounds,
         }
     }
 
@@ -149,7 +172,7 @@ impl TextData {
             left: self.position[0] as f32,
             top: self.position[1] as f32,
             scale: 1.0,
-            bounds: glyphon::TextBounds::default(),
+            bounds: self.bounds,
             default_color: self.color,
             custom_glyphs: &[],
         }

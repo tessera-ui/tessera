@@ -1,4 +1,5 @@
 /// Every draw command is a command that can be executed by the drawer.
+#[derive(Debug, PartialEq)]
 pub enum DrawCommand {
     /// Draw a shape with a spec color at vertices
     Shape {
@@ -16,9 +17,22 @@ pub enum DrawCommand {
         size: f32,
         /// line height of the text
         line_height: f32,
+        /// text constraints
+        constraint: TextConstraint,
     },
 }
 
+/// Describes size constraints for a text draw
+#[derive(Debug, PartialEq)]
+pub struct TextConstraint {
+    /// Maximum width of the text
+    pub max_width: u32,
+    /// Maximum height of the text
+    pub max_height: u32,
+}
+
+/// A vertex of a shape
+#[derive(Debug, PartialEq)]
 pub struct ShapeVertex {
     /// Position of the vertex(pixlel; x, y)
     pub position: [u32; 2],

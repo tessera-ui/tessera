@@ -3,7 +3,7 @@ use std::sync::Arc;
 use log::error;
 use winit::window::Window;
 
-use super::drawer::{DrawCommand, Drawer, ShapeVertex};
+use super::drawer::{DrawCommand, Drawer};
 
 pub(crate) struct WgpuApp {
     /// Avoiding release the window
@@ -37,8 +37,8 @@ impl WgpuApp {
         let surface = match instance.create_surface(window.clone()) {
             Ok(surface) => surface,
             Err(e) => {
-                error!("Failed to create surface: {:?}", e);
-                panic!("Failed to create surface: {:?}", e);
+                error!("Failed to create surface: {e:?}");
+                panic!("Failed to create surface: {e:?}");
             }
         };
         // Looking for adapter gpu
@@ -52,8 +52,8 @@ impl WgpuApp {
         {
             Ok(gpu) => gpu,
             Err(e) => {
-                error!("Failed to find an appropriate adapter: {:?}", e);
-                panic!("Failed to find an appropriate adapter: {:?}", e);
+                error!("Failed to find an appropriate adapter: {e:?}");
+                panic!("Failed to find an appropriate adapter: {e:?}");
             }
         };
         // Create a device and queue
@@ -74,8 +74,8 @@ impl WgpuApp {
         {
             Ok((gpu, queue)) => (gpu, queue),
             Err(e) => {
-                error!("Failed to create device: {:?}", e);
-                panic!("Failed to create device: {:?}", e);
+                error!("Failed to create device: {e:?}");
+                panic!("Failed to create device: {e:?}");
             }
         };
         // Create surface configuration
@@ -128,7 +128,10 @@ impl WgpuApp {
     }
 
     /// Render the surface
-    pub(crate) fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub(crate) fn render(
+        &mut self,
+        drawer_commands: impl IntoIterator<Item = DrawCommand>,
+    ) -> Result<(), wgpu::SurfaceError> {
         // get a texture from surface
         let output = self.surface.get_current_texture()?;
         // create a command encoder
@@ -152,84 +155,16 @@ impl WgpuApp {
             })],
             ..Default::default()
         });
-        // test: draw a triangle
-        self.drawer.prepare_or_draw(
-            &self.gpu,
-            &self.config,
-            &self.queue,
-            &mut render_pass,
-            DrawCommand::Shape {
-                vertices: vec![
-                    ShapeVertex {
-                        position: [0, 0],
-                        color: [1.0, 0.0, 0.0],
-                    },
-                    ShapeVertex {
-                        position: [0, 50],
-                        color: [0.0, 1.0, 0.0],
-                    },
-                    ShapeVertex {
-                        position: [50, 50],
-                        color: [0.0, 0.0, 1.0],
-                    },
-                    ShapeVertex {
-                        position: [50, 0],
-                        color: [1.0, 1.0, 0.0],
-                    },
-                ],
-            },
-        );
-        // test: draw another shape
-        self.drawer.prepare_or_draw(
-            &self.gpu,
-            &self.config,
-            &self.queue,
-            &mut render_pass,
-            DrawCommand::Shape {
-                vertices: vec![
-                    ShapeVertex {
-                        position: [100, 0],
-                        color: [1.0, 0.0, 0.0],
-                    },
-                    ShapeVertex {
-                        position: [0, 100],
-                        color: [0.0, 1.0, 0.0],
-                    },
-                    ShapeVertex {
-                        position: [100, 100],
-                        color: [0.0, 0.0, 1.0],
-                    },
-                ],
-            },
-        );
-        // test: draw a text
-        self.drawer.prepare_or_draw(
-            &self.gpu,
-            &self.config,
-            &self.queue,
-            &mut render_pass,
-            DrawCommand::Text {
-                text: "Hello, world!".to_string(),
-                position: [0, 0],
-                color: [0.0, 0.0, 0.0], // black
-                size: 50.0,
-                line_height: 50.0,
-            },
-        );
-        // test: draw another text at different position
-        self.drawer.prepare_or_draw(
-            &self.gpu,
-            &self.config,
-            &self.queue,
-            &mut render_pass,
-            DrawCommand::Text {
-                text: "Hello, Tessera!".to_string(),
-                position: [200, 200],
-                color: [0.0, 0.0, 0.0], // black
-                size: 50.0,
-                line_height: 50.0,
-            },
-        );
+        // draw commands
+        for command in drawer_commands {
+            self.drawer.prepare_or_draw(
+                &self.gpu,
+                &self.config,
+                &self.queue,
+                &mut render_pass,
+                command,
+            );
+        }
         // we must call [Drawer::final_draw] to render drawers that need to be prepared
         // before drawing
         self.drawer

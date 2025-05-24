@@ -1,3 +1,4 @@
+mod component_tree;
 mod renderer;
 mod tokio_runtime;
 

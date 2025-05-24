@@ -3,6 +3,7 @@ mod pos_misc;
 mod shape;
 mod text;
 
+pub use command::TextConstraint;
 pub use command::{DrawCommand, ShapeVertex};
 use pos_misc::pixel_to_ndc;
 use text::GlyphonTextRender;
@@ -58,9 +59,10 @@ impl Drawer {
                 color,
                 size,
                 line_height,
+                constraint,
             } => {
                 self.text_renderer
-                    .prepare(&text, position, color, size, line_height);
+                    .prepare(&text, position, color, size, line_height, constraint);
             }
         }
     }
