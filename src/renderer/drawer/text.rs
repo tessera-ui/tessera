@@ -59,43 +59,57 @@ impl GlyphonTextRender {
     }
 
     /// Prepare all text datas before rendering
-    /// We must call [Self::draw] after all [Self::prepare] calls
-    /// to render the text
-    pub fn prepare(
+    /// returns the text data buffer
+    /// Notice that we must specify the text position
+    /// before rendering its return value
+    pub fn build_text_data(
         &mut self,
         text: &str,
-        position: [u32; 2],
-        color: [f32; 3],
+        color: [u8; 3],
         size: f32,
         line_height: f32,
         constraint: TextConstraint,
-    ) {
+    ) -> TextData {
         // Create text buffer
         let mut text_buffer = glyphon::Buffer::new(
             &mut self.font_system,
             glyphon::Metrics::new(size, line_height),
         );
+        let color = glyphon::Color::rgb(color[0], color[1], color[2]);
         text_buffer.set_text(
             &mut self.font_system,
             text,
-            &glyphon::Attrs::new().family(fontdb::Family::SansSerif),
+            &glyphon::Attrs::new()
+                .family(fontdb::Family::SansSerif)
+                .color(color),
             glyphon::Shaping::Advanced,
         );
         text_buffer.set_size(
             &mut self.font_system,
-            Some(constraint.max_width as f32),
-            Some(constraint.max_height as f32),
+            constraint.max_width,
+            constraint.max_height,
         );
         text_buffer.shape_until_scroll(&mut self.font_system, false);
         // Calculate text bounds
-        let bound = glyphon::TextBounds {
-            left: position[0] as i32,
-            top: position[1] as i32,
-            right: position[0] as i32 + constraint.max_width as i32,
-            bottom: position[1] as i32 + constraint.max_height as i32,
-        };
-        // build text data and push it to the buffer for later rendering
-        let text_data = TextData::new(text_buffer, position, color, bound);
+        // Get the layout runs
+        let layout_runs = text_buffer.layout_runs();
+        let mut run_width: f32 = 0.0;
+        let line_height = text_buffer.lines.len() as f32 * text_buffer.metrics().line_height;
+        for run in layout_runs {
+            // Take the max. width of all lines.
+            run_width = run_width.max(run.line_w);
+        }
+        // build text data
+        TextData::new(
+            text_buffer,
+            None,
+            color,
+            [run_width as u32, line_height as u32],
+        )
+    }
+
+    /// Add a text data to the buffer, waiting to be drawn
+    pub fn push(&mut self, text_data: TextData) {
         self.buffer.push(text_data);
     }
 
@@ -136,43 +150,56 @@ impl GlyphonTextRender {
     }
 }
 
-struct TextData {
+#[derive(Debug)]
+pub struct TextData {
     /// glyphon text buffer
     text_buffer: glyphon::Buffer,
     // we need fields below to construct a glyphon::TextArea
     // don't ask me why we cannot just save a glyphon::TextArea, ask borrow checker
-    /// Position of the text
-    position: [u32; 2],
+    /// Position of the text, none if it is not computed yet
+    pub position: Option<[u32; 2]>,
     /// Color of the text
     color: glyphon::Color,
-    /// Text bounds of the text
-    bounds: glyphon::TextBounds,
+    /// Text area size
+    pub size: [u32; 2],
+}
+
+impl PartialEq for TextData {
+    fn eq(&self, other: &Self) -> bool {
+        self.position == other.position && self.color == other.color && self.size == other.size
+    }
 }
 
 impl TextData {
     /// Create a new text data
     pub fn new(
         text_buffer: glyphon::Buffer,
-        position: [u32; 2],
-        color: [f32; 3],
-        text_bounds: glyphon::TextBounds,
+        position: Option<[u32; 2]>,
+        color: glyphon::Color,
+        size: [u32; 2],
     ) -> Self {
         Self {
             text_buffer,
             position,
-            color: glyphon::Color::rgb(color[0] as u8, color[1] as u8, color[2] as u8),
-            bounds: text_bounds,
+            color,
+            size,
         }
     }
 
     /// Get the glyphon text area from the text data
     fn text_area(&self) -> glyphon::TextArea {
+        let bounds = glyphon::TextBounds {
+            left: self.position.unwrap()[0] as i32,
+            top: self.position.unwrap()[1] as i32,
+            right: self.position.unwrap()[0] as i32 + self.size[0] as i32,
+            bottom: self.position.unwrap()[1] as i32 + self.size[1] as i32,
+        };
         glyphon::TextArea {
             buffer: &self.text_buffer,
-            left: self.position[0] as f32,
-            top: self.position[1] as f32,
+            left: self.position.unwrap()[0] as f32,
+            top: self.position.unwrap()[1] as f32,
             scale: 1.0,
-            bounds: self.bounds,
+            bounds,
             default_color: self.color,
             custom_glyphs: &[],
         }

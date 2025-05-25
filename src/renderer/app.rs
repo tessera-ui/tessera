@@ -22,7 +22,7 @@ pub(crate) struct WgpuApp {
     /// if size is changed
     size_changed: bool,
     /// draw pipelines
-    drawer: Drawer,
+    pub drawer: Drawer,
 }
 
 impl WgpuApp {

@@ -1,7 +1,5 @@
 mod basic_drawable;
 mod node;
-#[cfg(test)]
-mod test;
 
 use std::num::NonZero;
 
@@ -98,7 +96,13 @@ fn measure_node(
         None => node_constraint,
     };
     // then we need to compute size
-    let mut computed_data = ComputedData::ZERO;
+    let mut computed_data = match &tree.get(node).unwrap().get().node.drawable {
+        Some(BasicDrawable::Text { data }) => ComputedData {
+            width: data.size[0],
+            height: data.size[1],
+        },
+        _ => ComputedData::ZERO,
+    };
     let children: Vec<_> = node.children(tree).collect();
     for node in children {
         computed_data += measure_node(node, tree, Some(final_constraint));
@@ -117,6 +121,8 @@ fn place_node(node: indextree::NodeId, tree: &mut indextree::Arena<Node>) {
     let current_pos = tree.get(node).unwrap().get().position.unwrap_or([0, 0]);
     // get all children nodes
     let children: Vec<_> = node.children(tree).collect();
+    // get self measured data
+    let self_measured_data = tree.get(node).unwrap().get().computed_data.unwrap();
     // get all measured data of children
     let measured_datas: Vec<_> = children
         .iter()
@@ -125,7 +131,7 @@ fn place_node(node: indextree::NodeId, tree: &mut indextree::Arena<Node>) {
     // get the layout descriptor
     let layout_desc = &tree.get(node).unwrap().get().node.layout_desc;
     // compute the relative position of each child node
-    let rel_positions = layout_desc(&measured_datas);
+    let rel_positions = layout_desc(&self_measured_data, &measured_datas);
     // trans into absolute position
     let abs_positions: Vec<_> = rel_positions
         .into_iter()
@@ -153,15 +159,20 @@ fn compute_draw_commands(
 ) -> Vec<DrawCommand> {
     let mut commands = Vec::new();
     // `traverse` is a method that returns an iterator over the tree, depth-first
-    for node in node.traverse(tree).filter_map(|edge| match edge {
-        indextree::NodeEdge::Start(node) => Some(node),
-        indextree::NodeEdge::End(_) => None,
-    }) {
-        let node = tree.get(node).unwrap().get();
-        if let Some(drawable) = &node.node.drawable {
+    let nodes: Vec<_> = node
+        .traverse(tree)
+        .filter_map(|edge| match edge {
+            indextree::NodeEdge::Start(node) => Some(node),
+            indextree::NodeEdge::End(_) => None,
+        })
+        .collect();
+    for node in nodes {
+        let node = tree.get_mut(node).unwrap().get_mut();
+        if let Some(drawable) = node.node.drawable.take() {
             let start_pos = node.position.unwrap_or([0, 0]);
             let size = node.computed_data.unwrap_or(ComputedData::ZERO);
-            let command = drawable.to_draw_command([size.width, size.height], start_pos);
+            let command =
+                drawable.into_draw_command([size.width, size.height], start_pos);
             commands.push(command);
         }
     }

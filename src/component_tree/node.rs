@@ -17,11 +17,11 @@ pub struct ComponentNode {
 /// it describes how to layout the children of a node
 /// and returns a vector of LayoutDescription, which describes
 /// their relative position to parent node itself
-pub type LayoutDescriptor = dyn Fn(&[ComputedData]) -> Vec<LayoutDescription>;
+pub type LayoutDescriptor = dyn Fn(&ComputedData, &[ComputedData]) -> Vec<LayoutDescription>;
 
 /// A default layout descriptor that does nothing but places children at the top-left corner
 /// of the parent node, with no offset
-pub const DEFAULT_LAYOUT_DESC: &LayoutDescriptor = &|_| {
+pub const DEFAULT_LAYOUT_DESC: &LayoutDescriptor = &|_, _| {
     vec![LayoutDescription {
         relative_position: PositionRelation {
             offset_x: 0,
@@ -71,8 +71,8 @@ impl ComputedData {
     /// Generate a smallest size for spec constraint
     pub fn smallest(constraint: &Constraint) -> Self {
         Self {
-            width: constraint.min_width,
-            height: constraint.min_height,
+            width: constraint.min_width.unwrap_or(0),
+            height: constraint.min_height.unwrap_or(0),
         }
     }
 
@@ -101,27 +101,62 @@ impl ComputedData {
 #[derive(Debug, Clone, Copy)]
 pub struct Constraint {
     /// max width(pixels)
-    pub max_width: u32,
+    pub max_width: Option<u32>,
     /// min width(pixels)
-    pub min_width: u32,
+    pub min_width: Option<u32>,
     /// max height(pixels)
-    pub max_height: u32,
+    pub max_height: Option<u32>,
     /// min height(pixels)
-    pub min_height: u32,
+    pub min_height: Option<u32>,
 }
 
 impl Constraint {
+    /// Create a new constraint
+    /// with all values set to None
+    /// which means no constraint
+    pub const NONE: Self = Self {
+        max_width: None,
+        min_width: None,
+        max_height: None,
+        min_height: None,
+    };
+
     /// Merge parent constraint and self constraint
     /// Parent constraint should always override self constraint
     /// if it's stricter
     pub fn merge(&self, parent: &Self) -> Self {
+        // width cannot be bigger than parent's max width
+        let max_width = match (self.max_width, parent.max_width) {
+            (Some(self_max), Some(parent_max)) => Some(self_max.min(parent_max)),
+            (Some(self_max), None) => Some(self_max),
+            (None, Some(parent_max)) => Some(parent_max),
+            (None, None) => None,
+        };
+        let min_width = match (self.min_width, max_width) {
+            (Some(self_min), Some(max_width)) => Some(self_min.min(max_width)),
+            (Some(self_min), None) => Some(self_min),
+            (None, Some(_)) => None,
+            (None, None) => None,
+        };
+        // height cannot be bigger than parent's max height
+        let max_height = match (self.max_height, parent.max_height) {
+            (Some(self_max), Some(parent_max)) => Some(self_max.min(parent_max)),
+            (Some(self_max), None) => Some(self_max),
+            (None, Some(parent_max)) => Some(parent_max),
+            (None, None) => None,
+        };
+        let min_height = match (self.min_height, max_height) {
+            (Some(self_min), Some(max_height)) => Some(self_min.min(max_height)),
+            (Some(self_min), None) => Some(self_min),
+            (None, Some(_)) => None,
+            (None, None) => None,
+        };
+
         Self {
-            // width cannot be bigger than parent's max width
-            max_width: self.max_width.min(parent.max_width),
-            min_width: self.min_width.min(parent.max_width),
-            // height cannot be bigger than parent's max height
-            max_height: self.max_height.min(parent.max_height),
-            min_height: self.min_height.min(parent.max_height),
+            max_width,
+            min_width,
+            max_height,
+            min_height,
         }
     }
 }

@@ -3,17 +3,16 @@ mod pos_misc;
 mod shape;
 mod text;
 
-pub use command::TextConstraint;
-pub use command::{DrawCommand, ShapeVertex};
+pub use command::{DrawCommand, ShapeVertex, TextConstraint};
 use pos_misc::pixel_to_ndc;
-use text::GlyphonTextRender;
+pub use text::{GlyphonTextRender, TextData};
 
 /// Drawer is a struct that handles pipelines and draw commands.
 pub struct Drawer {
     /// Shape pipeline
     shape_pipeline: shape::ShapePipeline,
     /// Text renderer
-    text_renderer: GlyphonTextRender,
+    pub text_renderer: GlyphonTextRender,
 }
 
 impl Drawer {
@@ -54,15 +53,10 @@ impl Drawer {
                     .draw(gpu, render_pass, positions, colors);
             }
             DrawCommand::Text {
-                text,
-                position,
-                color,
-                size,
-                line_height,
-                constraint,
+                data,
             } => {
                 self.text_renderer
-                    .prepare(&text, position, color, size, line_height, constraint);
+                    .push(data);
             }
         }
     }

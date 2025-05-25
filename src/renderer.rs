@@ -22,7 +22,7 @@ use crate::{
     tokio_runtime,
 };
 
-pub use drawer::{DrawCommand, ShapeVertex, TextConstraint};
+pub use drawer::{DrawCommand, ShapeVertex, TextConstraint, TextData};
 
 #[derive(Default)]
 pub(crate) struct Renderer {
@@ -93,13 +93,13 @@ impl ApplicationHandler for Renderer {
                 let mut component_tree = ComponentTree::new();
                 // Add a root node
                 // Here we draw a rectangle
-                // with a size of 100x100 and a color of red
+                // with a size of 1000x1000 and a color of red
                 // and place child node in center of the rectangle
                 component_tree.add_node(ComponentNode {
-                    layout_desc: Box::new(|inputs| {
-                        let input = inputs[0];
-                        let x = 1000 / 2 - input.width / 2;
-                        let y = 1000 / 2 - input.height / 2;
+                    layout_desc: Box::new(|self_size, children_size| {
+                        let input = children_size[0];
+                        let x = self_size.width / 2 - input.width / 2;
+                        let y = self_size.height / 2 - input.height / 2;
                         vec![LayoutDescription {
                             relative_position: PositionRelation {
                                 offset_x: x,
@@ -108,10 +108,10 @@ impl ApplicationHandler for Renderer {
                         }]
                     }),
                     constraint: Constraint {
-                        min_width: 1000,
-                        min_height: 1000,
-                        max_width: 1000,
-                        max_height: 1000,
+                        min_width: Some(1000),
+                        min_height: Some(1000),
+                        max_width: None,
+                        max_height: None,
                     },
                     drawable: Some(BasicDrawable::Rect {
                         color: [1.0, 0.0, 0.0], // Red
@@ -122,10 +122,10 @@ impl ApplicationHandler for Renderer {
                 component_tree.add_node(ComponentNode {
                     layout_desc: Box::new(DEFAULT_LAYOUT_DESC),
                     constraint: Constraint {
-                        min_width: 500,
-                        min_height: 500,
-                        max_width: 500,
-                        max_height: 500,
+                        min_width: None,
+                        min_height: None,
+                        max_width: None,
+                        max_height: None,
                     },
                     drawable: Some(BasicDrawable::Rect {
                         color: [0.0, 0.0, 1.0], // Blue
@@ -134,17 +134,15 @@ impl ApplicationHandler for Renderer {
                 // Add a text node
                 component_tree.add_node(ComponentNode {
                     layout_desc: Box::new(DEFAULT_LAYOUT_DESC),
-                    constraint: Constraint {
-                        min_width: 100,
-                        min_height: 500,
-                        max_width: 100,
-                        max_height: 500,
-                    },
+                    constraint: Constraint::NONE,
                     drawable: Some(BasicDrawable::Text {
-                        text: "Hello, this is Tessera~~~~~".into(),
-                        color: [1.0, 1.0, 1.0], // Black
-                        font_size: 20.0,
-                        line_height: 20.0,
+                        data: app.drawer.text_renderer.build_text_data(
+                            "Hello, this is Tessera~~~~~",
+                            [0, 255, 0], // Green
+                            50.0,
+                            50.0,
+                            TextConstraint { max_width: None, max_height: None }
+                        ),
                     }),
                 });
                 // Compute the draw commands

@@ -1,3 +1,5 @@
+use super::text::TextData;
+
 /// Every draw command is a command that can be executed by the drawer.
 #[derive(Debug, PartialEq)]
 pub enum DrawCommand {
@@ -7,18 +9,8 @@ pub enum DrawCommand {
         vertices: Vec<ShapeVertex>,
     },
     Text {
-        /// text to draw
-        text: String,
-        /// position of the text(pixel; x, y)
-        position: [u32; 2],
-        /// color of the text
-        color: [f32; 3],
-        /// font size of the text
-        size: f32,
-        /// line height of the text
-        line_height: f32,
-        /// text constraints
-        constraint: TextConstraint,
+        /// Text data to draw
+        data: TextData,
     },
 }
 
@@ -26,9 +18,11 @@ pub enum DrawCommand {
 #[derive(Debug, PartialEq)]
 pub struct TextConstraint {
     /// Maximum width of the text
-    pub max_width: u32,
+    /// If None, it will be calculated by the text renderer
+    pub max_width: Option<f32>,
     /// Maximum height of the text
-    pub max_height: u32,
+    /// If None, it will be calculated by the text renderer
+    pub max_height: Option<f32>,
 }
 
 /// A vertex of a shape
