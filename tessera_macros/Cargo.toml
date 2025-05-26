@@ -1,0 +1,12 @@
+[lib]
+proc-macro = true
+
+[package]
+name = "tessera_macros"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+quote = "1.0.40"
+syn = "2.0.101"
+tessera = { path = "../tessera" }

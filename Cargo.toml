@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["example", "tessera"]
+members = ["example", "tessera", "tessera_basic_components", "tessera_macros"]

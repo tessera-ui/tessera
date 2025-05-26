@@ -1,0 +1,8 @@
+[package]
+name = "tessera_basic_components"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+derive_builder = "0.20.2"
+tessera = { path = "../tessera" }
