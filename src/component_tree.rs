@@ -63,7 +63,7 @@ impl ComponentTree {
     }
 
     /// Compute the ComponentTree into a list of DrawCommand
-    pub fn compute(&mut self) -> Vec<DrawCommand> {
+    pub fn compute(&mut self, font_system: &mut glyphon::FontSystem) -> Vec<DrawCommand> {
         // Mesure Stage:
         // Traverse the tree and measure the size of each node
         // From the root node to the leaf node, then compute the size of each node
@@ -74,7 +74,7 @@ impl ComponentTree {
         else {
             return vec![];
         };
-        measure_node(root_node, &mut self.tree, None);
+        measure_node(font_system, root_node, &mut self.tree, None);
         // Placement Stage:
         // Traverse the tree and compute the position of each node
         place_node(root_node, &mut self.tree);
@@ -85,6 +85,7 @@ impl ComponentTree {
 
 /// Measure the size of a node
 fn measure_node(
+    font_system: &mut glyphon::FontSystem,
     node: indextree::NodeId,
     tree: &mut indextree::Arena<Node>,
     parent_constraint: Option<Constraint>,
@@ -96,19 +97,30 @@ fn measure_node(
         None => node_constraint,
     };
     // then we need to compute size
-    let mut computed_data = match &tree.get(node).unwrap().get().node.drawable {
-        Some(BasicDrawable::Text { data }) => ComputedData {
-            width: data.size[0],
-            height: data.size[1],
-        },
+    let mut computed_data = match &mut tree.get_mut(node).unwrap().get_mut().node.drawable {
+        Some(BasicDrawable::Text { data }) => {
+            // if the node is a text, we need to apply constraints
+            // to the text
+            data.resize(
+                font_system,
+                final_constraint.max_width.map(|width| width as f32),
+                final_constraint.max_height.map(|height| height as f32),
+            );
+            ComputedData {
+                width: data.size[0],
+                height: data.size[1],
+            }
+        }
         _ => ComputedData::ZERO,
     };
     let children: Vec<_> = node.children(tree).collect();
     for node in children {
-        computed_data += measure_node(node, tree, Some(final_constraint));
+        computed_data += measure_node(font_system, node, tree, Some(final_constraint));
     }
     // compute size cannot be smaller than the constraint's min size
     computed_data = computed_data.max(ComputedData::smallest(&final_constraint));
+    // compute size cannot be larger than the constraint's max size
+    computed_data = computed_data.min(ComputedData::largest(&final_constraint));
     // update measure result
     tree.get_mut(node).unwrap().get_mut().computed_data = Some(computed_data);
     // return to parent
@@ -171,8 +183,7 @@ fn compute_draw_commands(
         if let Some(drawable) = node.node.drawable.take() {
             let start_pos = node.position.unwrap_or([0, 0]);
             let size = node.computed_data.unwrap_or(ComputedData::ZERO);
-            let command =
-                drawable.into_draw_command([size.width, size.height], start_pos);
+            let command = drawable.into_draw_command([size.width, size.height], start_pos);
             commands.push(command);
         }
     }

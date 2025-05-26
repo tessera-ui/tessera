@@ -124,7 +124,7 @@ impl ApplicationHandler for Renderer {
                     constraint: Constraint {
                         min_width: None,
                         min_height: None,
-                        max_width: None,
+                        max_width: Some(100),
                         max_height: None,
                     },
                     drawable: Some(BasicDrawable::Rect {
@@ -137,7 +137,7 @@ impl ApplicationHandler for Renderer {
                     constraint: Constraint::NONE,
                     drawable: Some(BasicDrawable::Text {
                         data: app.drawer.text_renderer.build_text_data(
-                            "Hello, this is Tessera~~~~~",
+                            "Hello, this is Tessera~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
                             [0, 255, 0], // Green
                             50.0,
                             50.0,
@@ -146,7 +146,7 @@ impl ApplicationHandler for Renderer {
                     }),
                 });
                 // Compute the draw commands
-                let commands = component_tree.compute();
+                let commands = component_tree.compute(&mut app.drawer.text_renderer.font_system);
                 app.render(commands).unwrap();
                 // Currently we render every frame
                 app.window.request_redraw();

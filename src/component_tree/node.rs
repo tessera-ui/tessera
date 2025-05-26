@@ -76,6 +76,14 @@ impl ComputedData {
         }
     }
 
+    /// Generate a largest size for spec constraint
+    pub fn largest(constraint: &Constraint) -> Self {
+        Self {
+            width: constraint.max_width.unwrap_or(u32::MAX),
+            height: constraint.max_height.unwrap_or(u32::MAX),
+        }
+    }
+
     /// Returns the minimum of two computed data
     /// Impl trait `Ord` or `PartialOrd` does not help
     /// since we need both width and height to be minnimum

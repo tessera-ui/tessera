@@ -52,11 +52,8 @@ impl Drawer {
                 self.shape_pipeline
                     .draw(gpu, render_pass, positions, colors);
             }
-            DrawCommand::Text {
-                data,
-            } => {
-                self.text_renderer
-                    .push(data);
+            DrawCommand::Text { data } => {
+                self.text_renderer.push(data);
             }
         }
     }
