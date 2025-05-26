@@ -3,7 +3,7 @@ mod node;
 
 use std::num::NonZero;
 
-use crate::renderer::DrawCommand;
+use crate::renderer::{DrawCommand, write_font_system};
 pub use basic_drawable::BasicDrawable;
 pub use node::{
     ComponentNode, ComputedData, Constraint, DEFAULT_LAYOUT_DESC, LayoutDescription,
@@ -29,12 +29,24 @@ pub struct ComponentTree {
     node_queue: Vec<indextree::NodeId>,
 }
 
+impl Default for ComponentTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ComponentTree {
     /// Create a new ComponentTree
     pub fn new() -> Self {
         let tree = indextree::Arena::new();
         let node_queue = Vec::new();
         Self { tree, node_queue }
+    }
+
+    /// Clear the component tree
+    pub fn clear(&mut self) {
+        self.tree.clear();
+        self.node_queue.clear();
     }
 
     /// Add a new node to the tree
@@ -63,7 +75,7 @@ impl ComponentTree {
     }
 
     /// Compute the ComponentTree into a list of DrawCommand
-    pub fn compute(&mut self, font_system: &mut glyphon::FontSystem) -> Vec<DrawCommand> {
+    pub fn compute(&mut self) -> Vec<DrawCommand> {
         // Mesure Stage:
         // Traverse the tree and measure the size of each node
         // From the root node to the leaf node, then compute the size of each node
@@ -74,7 +86,7 @@ impl ComponentTree {
         else {
             return vec![];
         };
-        measure_node(font_system, root_node, &mut self.tree, None);
+        measure_node(root_node, &mut self.tree, None);
         // Placement Stage:
         // Traverse the tree and compute the position of each node
         place_node(root_node, &mut self.tree);
@@ -85,7 +97,6 @@ impl ComponentTree {
 
 /// Measure the size of a node
 fn measure_node(
-    font_system: &mut glyphon::FontSystem,
     node: indextree::NodeId,
     tree: &mut indextree::Arena<Node>,
     parent_constraint: Option<Constraint>,
@@ -102,7 +113,7 @@ fn measure_node(
             // if the node is a text, we need to apply constraints
             // to the text
             data.resize(
-                font_system,
+                &mut write_font_system(),
                 final_constraint.max_width.map(|width| width as f32),
                 final_constraint.max_height.map(|height| height as f32),
             );
@@ -115,7 +126,7 @@ fn measure_node(
     };
     let children: Vec<_> = node.children(tree).collect();
     for node in children {
-        computed_data += measure_node(font_system, node, tree, Some(final_constraint));
+        computed_data += measure_node(node, tree, Some(final_constraint));
     }
     // compute size cannot be smaller than the constraint's min size
     computed_data = computed_data.max(ComputedData::smallest(&final_constraint));

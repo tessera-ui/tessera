@@ -1,15 +1,48 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use glyphon::fontdb;
+use parking_lot::{RwLock, RwLockReadGuard};
 
 use super::command::TextConstraint;
+
+/// It costs a lot to create a glyphon font system, so we use a static one
+/// to share it every where and avoid creating it multiple times.
+static FONT_SYSTEM: OnceLock<RwLock<glyphon::FontSystem>> = OnceLock::new();
+
+/// It costs a lot to create a glyphon font system, so we use a static one
+/// to share it every where and avoid creating it multiple times.
+/// This function returns a read lock of the font system.
+pub fn read_font_system() -> RwLockReadGuard<'static, glyphon::FontSystem> {
+    FONT_SYSTEM
+        .get_or_init(|| {
+            RwLock::new(glyphon::FontSystem::new_with_fonts([
+                fontdb::Source::Binary(Arc::new(include_bytes!(
+                    "../assets/fonts/NotoSansSC-Regular.otf"
+                ))),
+            ]))
+        })
+        .read()
+}
+
+/// It costs a lot to create a glyphon font system, so we use a static one
+/// to share it every where and avoid creating it multiple times.
+/// This function returns a write lock of the font system.
+pub fn write_font_system() -> parking_lot::RwLockWriteGuard<'static, glyphon::FontSystem> {
+    FONT_SYSTEM
+        .get_or_init(|| {
+            RwLock::new(glyphon::FontSystem::new_with_fonts([
+                fontdb::Source::Binary(Arc::new(include_bytes!(
+                    "../assets/fonts/NotoSansSC-Regular.otf"
+                ))),
+            ]))
+        })
+        .write()
+}
 
 /// A text renderer
 pub struct GlyphonTextRender {
     /// Glypthon text renderer
     text_renderer: glyphon::TextRenderer,
-    /// Glypthon font system
-    pub font_system: glyphon::FontSystem,
     /// Glypthon font atlas
     atlas: glyphon::TextAtlas,
     /// Glypthon cache
@@ -29,10 +62,6 @@ impl GlyphonTextRender {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
     ) -> Self {
-        // Load fonts from system and assets
-        let font_system = glyphon::FontSystem::new_with_fonts([fontdb::Source::Binary(Arc::new(
-            include_bytes!("../assets/fonts/NotoSansSC-Regular.otf"),
-        ))]);
         // Create glyphon cache
         let cache = glyphon::Cache::new(gpu);
         // Create a font atlas
@@ -49,66 +78,12 @@ impl GlyphonTextRender {
 
         Self {
             text_renderer,
-            font_system,
             atlas,
             cache,
             viewport,
             swash_cache,
             buffer,
         }
-    }
-
-    /// Prepare all text datas before rendering
-    /// returns the text data buffer
-    /// Notice that we must specify the text position
-    /// before rendering its return value
-    pub fn build_text_data(
-        &mut self,
-        text: &str,
-        color: [u8; 3],
-        size: f32,
-        line_height: f32,
-        constraint: TextConstraint,
-    ) -> TextData {
-        // Create text buffer
-        let mut text_buffer = glyphon::Buffer::new(
-            &mut self.font_system,
-            glyphon::Metrics::new(size, line_height),
-        );
-        let color = glyphon::Color::rgb(color[0], color[1], color[2]);
-        text_buffer.set_wrap(&mut self.font_system, glyphon::Wrap::Glyph);
-        text_buffer.set_size(
-            &mut self.font_system,
-            constraint.max_width,
-            constraint.max_height,
-        );
-        text_buffer.set_text(
-            &mut self.font_system,
-            text,
-            &glyphon::Attrs::new()
-                .family(fontdb::Family::SansSerif)
-                .color(color),
-            glyphon::Shaping::Advanced,
-        );
-        text_buffer.shape_until_scroll(&mut self.font_system, false);
-        // Calculate text bounds
-        // Get the layout runs
-        let mut run_width: f32 = 0.0;
-        // Calculate the line height based on the number of lines
-        let line_height =
-            text_buffer.layout_runs().count() as f32 * text_buffer.metrics().line_height;
-        for run in text_buffer.layout_runs() {
-            // Take the max. width of all lines.
-            run_width = run_width.max(run.line_w);
-        }
-        // build text data
-        TextData::new(
-            text.to_string(),
-            text_buffer,
-            None,
-            color,
-            [run_width as u32, line_height as u32],
-        )
     }
 
     /// Add a text data to the buffer, waiting to be drawn
@@ -137,7 +112,7 @@ impl GlyphonTextRender {
             .prepare(
                 gpu,
                 queue,
-                &mut self.font_system,
+                &mut write_font_system(),
                 &mut self.atlas,
                 &self.viewport,
                 self.buffer.iter().map(|t| t.text_area()),
@@ -176,23 +151,57 @@ impl PartialEq for TextData {
 }
 
 impl TextData {
-    /// Create a new text data
+    /// Prepare all text datas before rendering
+    /// returns the text data buffer
+    /// Notice that we must specify the text position
+    /// before rendering its return value
     pub fn new(
-        content: String,
-        text_buffer: glyphon::Buffer,
-        position: Option<[u32; 2]>,
-        color: glyphon::Color,
-        size: [u32; 2],
-    ) -> Self {
+        text: String,
+        color: [u8; 3],
+        size: f32,
+        line_height: f32,
+        constraint: TextConstraint,
+    ) -> TextData {
+        // Create text buffer
+        let mut text_buffer = glyphon::Buffer::new(
+            &mut write_font_system(),
+            glyphon::Metrics::new(size, line_height),
+        );
+        let color = glyphon::Color::rgb(color[0], color[1], color[2]);
+        text_buffer.set_wrap(&mut write_font_system(), glyphon::Wrap::Glyph);
+        text_buffer.set_size(
+            &mut write_font_system(),
+            constraint.max_width,
+            constraint.max_height,
+        );
+        text_buffer.set_text(
+            &mut write_font_system(),
+            &text,
+            &glyphon::Attrs::new()
+                .family(fontdb::Family::SansSerif)
+                .color(color),
+            glyphon::Shaping::Advanced,
+        );
+        text_buffer.shape_until_scroll(&mut write_font_system(), false);
+        // Calculate text bounds
+        // Get the layout runs
+        let mut run_width: f32 = 0.0;
+        // Calculate the line height based on the number of lines
+        let line_height =
+            text_buffer.layout_runs().count() as f32 * text_buffer.metrics().line_height;
+        for run in text_buffer.layout_runs() {
+            // Take the max. width of all lines.
+            run_width = run_width.max(run.line_w);
+        }
+        // build text data
         Self {
-            content,
+            content: text,
             text_buffer,
-            position,
+            position: None, // Position will be set later
             color,
-            size,
+            size: [run_width as u32, line_height as u32],
         }
     }
-
     /// Get the glyphon text area from the text data
     fn text_area(&self) -> glyphon::TextArea {
         let bounds = glyphon::TextBounds {

@@ -17,7 +17,8 @@ pub struct ComponentNode {
 /// it describes how to layout the children of a node
 /// and returns a vector of LayoutDescription, which describes
 /// their relative position to parent node itself
-pub type LayoutDescriptor = dyn Fn(&ComputedData, &[ComputedData]) -> Vec<LayoutDescription>;
+pub type LayoutDescriptor =
+    dyn Fn(&ComputedData, &[ComputedData]) -> Vec<LayoutDescription> + Send + Sync;
 
 /// A default layout descriptor that does nothing but places children at the top-left corner
 /// of the parent node, with no offset

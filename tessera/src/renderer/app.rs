@@ -117,6 +117,11 @@ impl WgpuApp {
         self.size_changed = true;
     }
 
+    /// Get the size of the surface
+    pub(crate) fn size(&self) -> winit::dpi::PhysicalSize<u32> {
+        self.size
+    }
+
     /// Resize the surface if needed
     pub(crate) fn resize_if_needed(&mut self) {
         if self.size_changed {
