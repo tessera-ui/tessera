@@ -26,6 +26,21 @@ pub struct TextArgs {
     pub line_height: f32,
 }
 
+impl Into<TextArgs> for String {
+    fn into(self) -> TextArgs {
+        TextArgsBuilder::default().text(self).build().unwrap()
+    }
+}
+
+impl Into<TextArgs> for &str {
+    fn into(self) -> TextArgs {
+        TextArgsBuilder::default()
+            .text(self.to_string())
+            .build()
+            .unwrap()
+    }
+}
+
 /// Basic text component.
 ///
 /// # Example
@@ -38,9 +53,10 @@ pub struct TextArgs {
 ///     .unwrap();
 /// text(args);
 /// ```
-pub fn text(args: TextArgs) {
+pub fn text(args: impl Into<TextArgs>) {
     {
         // Add a text node
+        let args = args.into();
         TesseraRuntime::write()
             .component_tree
             .add_node(ComponentNode {
