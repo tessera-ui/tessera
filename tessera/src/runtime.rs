@@ -8,20 +8,12 @@ static TESSERA_RUNTIME: OnceLock<RwLock<TesseraRuntime>> = OnceLock::new();
 
 /// Contains sideeffects and runtime data(such as component tree)
 /// access runtime by static function `TesseraRuntime::get()`
+#[derive(Default)]
 pub struct TesseraRuntime {
     /// Component tree
     pub component_tree: ComponentTree,
     /// The size of the window, by pixels
     pub window_size: [u32; 2],
-}
-
-impl Default for TesseraRuntime {
-    fn default() -> Self {
-        Self {
-            component_tree: ComponentTree::new(),
-            window_size: [0, 0],
-        }
-    }
 }
 
 impl TesseraRuntime {
