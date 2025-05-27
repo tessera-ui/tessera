@@ -1,8 +1,6 @@
 use tessera::Renderer;
 use tessera_basic_components::{
-    column::column,
-    surface::{SurfaceArgsBuilder, surface},
-    text::text,
+    column::column, row::row, surface::{surface, SurfaceArgsBuilder}, text::text
 };
 use tessera_macros::tessera;
 
@@ -15,7 +13,7 @@ fn main() -> Result<(), impl std::error::Error> {
 fn app() {
     let args = SurfaceArgsBuilder::default().build().unwrap();
     surface(args, || {
-        column([
+        row([
             &|| text("Hello"),
             &|| text("This is a simple example of using Tessera."),
             &|| text("You can create complex UIs with ease."),
