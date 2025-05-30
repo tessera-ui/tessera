@@ -1,8 +1,6 @@
 use derive_builder::Builder;
-use tessera::{
-    BasicDrawable, ComponentNode, Constraint, DEFAULT_LAYOUT_DESC, TesseraRuntime, TextConstraint,
-    TextData,
-};
+use tessera::{BasicDrawable, ComputedData, TextConstraint, TextData};
+use tessera_macros::tessera;
 
 /// Arguments for the `text` component.
 ///
@@ -26,16 +24,16 @@ pub struct TextArgs {
     pub line_height: f32,
 }
 
-impl Into<TextArgs> for String {
-    fn into(self) -> TextArgs {
-        TextArgsBuilder::default().text(self).build().unwrap()
+impl From<String> for TextArgs {
+    fn from(val: String) -> Self {
+        TextArgsBuilder::default().text(val).build().unwrap()
     }
 }
 
-impl Into<TextArgs> for &str {
-    fn into(self) -> TextArgs {
+impl From<&str> for TextArgs {
+    fn from(val: &str) -> Self {
         TextArgsBuilder::default()
-            .text(self.to_string())
+            .text(val.to_string())
             .build()
             .unwrap()
     }
@@ -53,31 +51,34 @@ impl Into<TextArgs> for &str {
 ///     .unwrap();
 /// text(args);
 /// ```
+#[tessera]
 pub fn text(args: impl Into<TextArgs>) {
-    {
-        // Add a text node
-        let args = args.into();
-        TesseraRuntime::write()
-            .component_tree
-            .add_node(ComponentNode {
-                layout_desc: Box::new(DEFAULT_LAYOUT_DESC),
-                constraint: Constraint::NONE,
-                drawable: Some(BasicDrawable::Text {
-                    data: TextData::new(
-                        args.text,
-                        args.color,
-                        args.size,
-                        args.line_height,
-                        TextConstraint {
-                            max_width: None,
-                            max_height: None,
-                        },
-                    ),
-                }),
-            });
-    }
-
-    {
-        TesseraRuntime::write().component_tree.pop_node();
-    }
+    let args = args.into();
+    measure(Box::new(move |node_id, _, constraint, _, metadatas| {
+        // Create a new text node with the given arguments
+        let mut text_data = TextData::new(
+            args.text.clone(),
+            args.color,
+            args.size,
+            args.line_height,
+            TextConstraint {
+                max_width: None,
+                max_height: None,
+            },
+        );
+        // resize text data based on the constraint
+        text_data.resize(
+            constraint.max_width.map(|width| width as f32),
+            constraint.max_height.map(|height| height as f32),
+        );
+        // save it's actual size
+        let size = text_data.size;
+        // Add to drawable
+        let drawable = BasicDrawable::Text { data: text_data };
+        metadatas.get_mut(&node_id).unwrap().basic_drawable = Some(drawable);
+        ComputedData {
+            width: size[0],
+            height: size[1],
+        }
+    }));
 }

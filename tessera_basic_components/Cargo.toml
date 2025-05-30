@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 derive_builder = "0.20.2"
 tessera = { path = "../tessera" }
+tessera_macros = { path = "../tessera_macros" }

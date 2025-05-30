@@ -16,20 +16,39 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #(#fn_attrs)*
         #fn_vis #fn_sig {
-            use tessera::{TesseraRuntime, ComponentNode, DEFAULT_LAYOUT_DESC, Constraint};
-
             {
-                TesseraRuntime::write().component_tree.add_node(ComponentNode {
-                    layout_desc: Box::new(DEFAULT_LAYOUT_DESC),
-                    constraint: Constraint::NONE,
-                    drawable: None,
-                });
+                use tessera::{TesseraRuntime, ComponentNode};
+
+                TesseraRuntime::write()
+                    .component_tree
+                    .add_node(ComponentNode {
+                        measure_fn: None,
+                    });
             }
+
+
+
+            let measure = {
+                use tessera::{BasicDrawable, ComponentNode, MeasureFn, TesseraRuntime};
+                |fun: Box<MeasureFn>| {
+                    TesseraRuntime::write()
+                        .component_tree
+                        .current_node_mut()
+                        .unwrap()
+                        .measure_fn = Some(fun);
+                }
+            };
+
             {
                 #fn_block
             }
+
             {
-                TesseraRuntime::write().component_tree.pop_node();
+                use tessera::TesseraRuntime;
+
+                TesseraRuntime::write()
+                    .component_tree
+                    .pop_node();
             }
         }
     };

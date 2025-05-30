@@ -14,11 +14,9 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::{
-    ComponentNode, Constraint, DEFAULT_LAYOUT_DESC, runtime::TesseraRuntime, tokio_runtime,
-};
+use crate::{runtime::TesseraRuntime, tokio_runtime};
 
-pub use drawer::{DrawCommand, ShapeVertex, TextConstraint, TextData, write_font_system};
+pub use drawer::{DrawCommand, ShapeVertex, TextConstraint, TextData};
 
 pub struct Renderer<F: Fn()> {
     /// WGPU app
@@ -90,11 +88,11 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 TesseraRuntime::write().window_size = app.size().into();
                 // render the surface
                 // build the component tree
-                screen(&self.entry_point);
+                (self.entry_point)();
                 // get the component tree from the runtime
                 let component_tree = &mut TesseraRuntime::write().component_tree;
                 // Compute the draw commands then we can clear component tree for next build
-                let commands = component_tree.compute();
+                let commands = component_tree.compute(app.size().into());
                 component_tree.clear();
                 // Render the commands
                 app.render(commands).unwrap();
@@ -103,30 +101,5 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
             }
             _ => (),
         }
-    }
-}
-
-/// root component
-fn screen<F: Fn()>(entry_point: &F) {
-    {
-        let window_size = TesseraRuntime::write().window_size;
-        TesseraRuntime::write()
-            .component_tree
-            .add_node(ComponentNode {
-                layout_desc: Box::new(DEFAULT_LAYOUT_DESC),
-                constraint: Constraint {
-                    min_width: Some(window_size[0]),
-                    min_height: Some(window_size[1]),
-                    max_width: Some(window_size[0]),
-                    max_height: Some(window_size[1]),
-                },
-                drawable: None,
-            });
-    }
-
-    entry_point();
-
-    {
-        TesseraRuntime::write().component_tree.pop_node();
     }
 }

@@ -202,6 +202,7 @@ impl TextData {
             size: [run_width as u32, line_height as u32],
         }
     }
+
     /// Get the glyphon text area from the text data
     fn text_area(&self) -> glyphon::TextArea {
         let bounds = glyphon::TextBounds {
@@ -222,12 +223,9 @@ impl TextData {
     }
 
     /// resize the text area
-    pub fn resize(
-        &mut self,
-        font_system: &mut glyphon::FontSystem,
-        width: Option<f32>,
-        height: Option<f32>,
-    ) {
+    pub fn resize(&mut self, width: Option<f32>, height: Option<f32>) {
+        // get global font system
+        let font_system = &mut write_font_system();
         // Update the text buffer size
         self.text_buffer.set_wrap(font_system, glyphon::Wrap::Glyph);
         self.text_buffer.set_size(font_system, width, height);

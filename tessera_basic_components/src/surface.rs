@@ -1,5 +1,6 @@
 use derive_builder::Builder;
-use tessera::{BasicDrawable, ComponentNode, Constraint, DEFAULT_LAYOUT_DESC, TesseraRuntime};
+use tessera::{BasicDrawable, ComputedData, measure_node, place_node};
+use tessera_macros::tessera;
 
 /// Arguments for the `surface` component.
 #[derive(Debug, Default, Builder)]
@@ -9,22 +10,22 @@ pub struct SurfaceArgs {
 }
 
 /// Surface component, a basic container
+#[tessera]
 pub fn surface(args: SurfaceArgs, child: impl Fn()) {
-    {
-        // Add a new node to the component tree
-        TesseraRuntime::write()
-            .component_tree
-            .add_node(ComponentNode {
-                layout_desc: Box::new(DEFAULT_LAYOUT_DESC),
-                constraint: Constraint::NONE,
-                drawable: Some(BasicDrawable::Rect { color: args.color }),
-            });
-    }
+    measure(Box::new(
+        move |node_id, tree, constraint, children, metadatas| {
+            let mut size = ComputedData::ZERO;
+            for child in children {
+                let child_size = measure_node(*child, constraint, tree, metadatas);
+                size = size.max(child_size);
+                place_node(*child, [0, 0], metadatas);
+            }
+            // Add rect drawable
+            let drawable = BasicDrawable::Rect { color: args.color };
+            metadatas.get_mut(&node_id).unwrap().basic_drawable = Some(drawable);
+            size
+        },
+    ));
 
     child();
-
-    {
-        // Pop the node from the component tree
-        TesseraRuntime::write().component_tree.pop_node();
-    }
 }

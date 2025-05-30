@@ -5,7 +5,7 @@ mod text;
 
 pub use command::{DrawCommand, ShapeVertex, TextConstraint};
 use pos_misc::pixel_to_ndc;
-pub use text::{GlyphonTextRender, TextData, read_font_system, write_font_system};
+pub use text::{GlyphonTextRender, TextData};
 
 /// Drawer is a struct that handles pipelines and draw commands.
 pub struct Drawer {

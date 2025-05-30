@@ -1,40 +1,120 @@
+use std::collections::HashMap;
 use std::ops::{Add, AddAssign};
 
-use super::basic_drawable::BasicDrawable;
+use indextree::NodeId;
 
+use super::{basic_drawable::BasicDrawable, constraint::Constraint};
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component:
 pub struct ComponentNode {
     /// Describes the component in layout
-    pub layout_desc: Box<LayoutDescriptor>,
-    /// Describes the constraints of the component
-    pub constraint: Constraint,
-    /// what to draw by Drawer(optional)
-    pub drawable: Option<BasicDrawable>,
+    /// None means using default measure policy
+    /// which does nothing but places children at the top-left corner
+    /// of the parent node, with no offset
+    pub measure_fn: Option<Box<MeasureFn>>,
 }
 
-/// A LayoutDescriptor is a function that takes a slice of ComputedData
-/// it describes how to layout the children of a node
-/// and returns a vector of LayoutDescription, which describes
-/// their relative position to parent node itself
-pub type LayoutDescriptor =
-    dyn Fn(&ComputedData, &[ComputedData]) -> Vec<LayoutDescription> + Send + Sync;
+/// Contains metadata of the component node
+pub struct ComponentNodeMetaData {
+    /// The computed data
+    /// None if the node is not computed yet
+    pub computed_data: Option<ComputedData>,
+    /// The node's start position, relative to its parent
+    /// None if the node is not placed yet
+    pub rel_position: Option<[u32; 2]>,
+    /// Optional basic drawable
+    pub basic_drawable: Option<BasicDrawable>,
+}
+
+impl ComponentNodeMetaData {
+    pub const NONE: Self = Self {
+        computed_data: None,
+        rel_position: None,
+        basic_drawable: None,
+    };
+}
+
+/// A tree of component nodes
+pub type ComponentNodeTree = indextree::Arena<ComponentNode>;
+/// Contains all component nodes's metadatas
+pub type ComponentNodeMetaDatas = HashMap<NodeId, ComponentNodeMetaData>;
+/// A MeasureFn is a function that takes input `Constraint` and its children nodes
+/// finish placementing inside and return its size(`ComputedData`)
+pub type MeasureFn = dyn Fn(
+        indextree::NodeId,
+        &ComponentNodeTree,
+        &Constraint,
+        &[indextree::NodeId],
+        &mut ComponentNodeMetaDatas,
+    ) -> ComputedData
+    + Send
+    + Sync;
+
+/// Measure a node recursively, return its size
+pub fn measure_node(
+    node: indextree::NodeId,
+    constraint: &Constraint,
+    tree: &ComponentNodeTree,
+    component_node_metadatas: &mut ComponentNodeMetaDatas,
+) -> ComputedData {
+    let children: Vec<_> = node.children(tree).collect();
+    let size = if let Some(measure_fn) = &tree.get(node).unwrap().get().measure_fn {
+        // Use the specific measure function if it exists
+        measure_fn(node, tree, constraint, &children, component_node_metadatas)
+    } else {
+        // Use default measure function if no specific measure function is provided
+        DEFAULT_LAYOUT_DESC(node, tree, constraint, &children, component_node_metadatas)
+    };
+
+    if let Some(metadata) = component_node_metadatas.get_mut(&node) {
+        // Update the existing metadata with the computed size
+        metadata.computed_data = Some(size);
+    } else {
+        // If metadata does not exist, create a new one
+        component_node_metadatas.insert(
+            node,
+            ComponentNodeMetaData {
+                computed_data: Some(size),
+                rel_position: None,
+                basic_drawable: None,
+            },
+        );
+    }
+
+    size
+}
+
+/// Place node at spec relative position
+pub fn place_node(
+    node: indextree::NodeId,
+    rel_position: [u32; 2],
+    component_node_metadatas: &mut ComponentNodeMetaDatas,
+) {
+    if let Some(metadata) = component_node_metadatas.get_mut(&node) {
+        metadata.rel_position = Some(rel_position);
+    } else {
+        component_node_metadatas.insert(
+            node,
+            ComponentNodeMetaData {
+                computed_data: None,
+                rel_position: Some(rel_position),
+                basic_drawable: None,
+            },
+        );
+    }
+}
 
 /// A default layout descriptor that does nothing but places children at the top-left corner
 /// of the parent node, with no offset
-pub const DEFAULT_LAYOUT_DESC: &LayoutDescriptor = &|_, _| {
-    vec![LayoutDescription {
-        relative_position: PositionRelation {
-            offset_x: 0,
-            offset_y: 0,
-        },
-    }]
+const DEFAULT_LAYOUT_DESC: &MeasureFn = &|_, tree, constraint, children, metadatas| {
+    let mut size = ComputedData::ZERO;
+    for child in children {
+        let child_size = measure_node(*child, constraint, tree, metadatas);
+        size = size.max(child_size);
+        place_node(*child, [0, 0], metadatas);
+    }
+    size
 };
-
-pub struct LayoutDescription {
-    /// Describes position of the child node relative to parent node
-    pub relative_position: PositionRelation,
-}
 
 /// Layout info computed at measure Stage
 #[derive(Debug, Clone, Copy)]
@@ -104,76 +184,4 @@ impl ComputedData {
             height: self.height.max(rhs.height),
         }
     }
-}
-
-/// Describes constraints
-#[derive(Debug, Clone, Copy)]
-pub struct Constraint {
-    /// max width(pixels)
-    pub max_width: Option<u32>,
-    /// min width(pixels)
-    pub min_width: Option<u32>,
-    /// max height(pixels)
-    pub max_height: Option<u32>,
-    /// min height(pixels)
-    pub min_height: Option<u32>,
-}
-
-impl Constraint {
-    /// Create a new constraint
-    /// with all values set to None
-    /// which means no constraint
-    pub const NONE: Self = Self {
-        max_width: None,
-        min_width: None,
-        max_height: None,
-        min_height: None,
-    };
-
-    /// Merge parent constraint and self constraint
-    /// Parent constraint should always override self constraint
-    /// if it's stricter
-    pub fn merge(&self, parent: &Self) -> Self {
-        // width cannot be bigger than parent's max width
-        let max_width = match (self.max_width, parent.max_width) {
-            (Some(self_max), Some(parent_max)) => Some(self_max.min(parent_max)),
-            (Some(self_max), None) => Some(self_max),
-            (None, Some(parent_max)) => Some(parent_max),
-            (None, None) => None,
-        };
-        let min_width = match (self.min_width, max_width) {
-            (Some(self_min), Some(max_width)) => Some(self_min.min(max_width)),
-            (Some(self_min), None) => Some(self_min),
-            (None, Some(_)) => None,
-            (None, None) => None,
-        };
-        // height cannot be bigger than parent's max height
-        let max_height = match (self.max_height, parent.max_height) {
-            (Some(self_max), Some(parent_max)) => Some(self_max.min(parent_max)),
-            (Some(self_max), None) => Some(self_max),
-            (None, Some(parent_max)) => Some(parent_max),
-            (None, None) => None,
-        };
-        let min_height = match (self.min_height, max_height) {
-            (Some(self_min), Some(max_height)) => Some(self_min.min(max_height)),
-            (Some(self_min), None) => Some(self_min),
-            (None, Some(_)) => None,
-            (None, None) => None,
-        };
-
-        Self {
-            max_width,
-            min_width,
-            max_height,
-            min_height,
-        }
-    }
-}
-
-/// Describes the position of the node to another node's
-pub struct PositionRelation {
-    /// offset at x axis
-    pub offset_x: u32,
-    /// offset at y axis
-    pub offset_y: u32,
 }

@@ -2069,6 +2069,7 @@ version = "0.1.0"
 dependencies = [
  "derive_builder",
  "tessera",
+ "tessera_macros",
 ]
 
 [[package]]
