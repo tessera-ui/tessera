@@ -66,7 +66,10 @@ pub fn measure_node(
     // Check if the node has already been measured with the same constraint
     if let Some(metadata) = component_node_metadatas.get(&node) {
         if let Some(cached_size) = metadata.cached_computed_data.get(constraint) {
-            debug!("Cache hit for node {:?} with constraint {:?}", node, constraint);
+            debug!(
+                "Cache hit for node {:?} with constraint {:?}",
+                node, constraint
+            );
             return *cached_size;
         }
     }
@@ -113,8 +116,10 @@ pub fn place_node(
     component_node_metadatas: &mut ComponentNodeMetaDatas,
 ) {
     // we just simply unwrap here since you should always measure the node before placing it
-    component_node_metadatas.get_mut(&node).unwrap().rel_position =
-        Some(rel_position);
+    component_node_metadatas
+        .get_mut(&node)
+        .unwrap()
+        .rel_position = Some(rel_position);
 }
 
 /// A default layout descriptor that does nothing but places children at the top-left corner

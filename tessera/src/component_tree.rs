@@ -81,7 +81,8 @@ impl ComponentTree {
             current_node.append(new_node, &mut self.tree);
         }
         // we also need to add/reset a metadata for the new node
-        self.metadatas.insert(new_node, ComponentNodeMetaData::none());
+        self.metadatas
+            .insert(new_node, ComponentNodeMetaData::none());
         self.node_queue.push(new_node);
     }
 
