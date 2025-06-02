@@ -1,8 +1,9 @@
 mod app;
 mod drawer;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
+use log::{debug, warn};
 use parking_lot::Mutex;
 
 use app::WgpuApp;
@@ -87,15 +88,49 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 // and tell runtime the new size
                 TesseraRuntime::write().window_size = app.size().into();
                 // render the surface
+                // timer for performance measurement
+                let tree_timer = Instant::now();
                 // build the component tree
+                debug!("Building component tree...");
                 (self.entry_point)();
+                let build_tree_cost = tree_timer.elapsed();
+                debug!("Component tree built in {:?}", build_tree_cost);
                 // get the component tree from the runtime
                 let component_tree = &mut TesseraRuntime::write().component_tree;
+                // timer for performance measurement
+                let draw_timer = Instant::now();
                 // Compute the draw commands then we can clear component tree for next build
+                debug!("Computing draw commands...");
                 let commands = component_tree.compute(app.size().into());
+                let draw_cost = draw_timer.elapsed();
+                debug!("Draw commands computed in {:?}", draw_cost);
                 component_tree.clear();
+                // timer for performance measurement
+                let render_timer = Instant::now();
                 // Render the commands
+                debug!("Rendering draw commands...");
                 app.render(commands).unwrap();
+                let render_cost = render_timer.elapsed();
+                debug!("Rendered in {:?}", render_cost);
+                // print frame statistics
+                let fps = 1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32();
+                if fps < 30.0 {
+                    warn!(
+                        "Jank detected! Frame statistics:
+    Build tree cost: {:?}
+    Draw commands cost: {:?}
+    Render cost: {:?}
+    Total frame cost: {:?}
+    Fps: {:.2}
+",
+                        build_tree_cost,
+                        draw_cost,
+                        render_cost,
+                        build_tree_cost + draw_cost + render_cost,
+                        1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32()
+                    );
+                }
+
                 // Currently we render every frame
                 app.window.request_redraw();
             }
