@@ -23,6 +23,8 @@ pub(crate) struct WgpuApp {
     size_changed: bool,
     /// draw pipelines
     pub drawer: Drawer,
+    /// cache for render commands
+    render_commands_cache: Vec<DrawCommand>,
 }
 
 impl WgpuApp {
@@ -94,6 +96,8 @@ impl WgpuApp {
         surface.configure(&gpu, &config);
         // Create drawer
         let drawer = Drawer::new(&gpu, &queue, &config);
+        // Create cache for render commands
+        let render_commands_cache = Vec::new();
 
         Self {
             window,
@@ -104,6 +108,7 @@ impl WgpuApp {
             size,
             size_changed: false,
             drawer,
+            render_commands_cache,
         }
     }
 
@@ -137,6 +142,10 @@ impl WgpuApp {
         &mut self,
         drawer_commands: impl IntoIterator<Item = DrawCommand>,
     ) -> Result<(), wgpu::SurfaceError> {
+        let drawer_commands: Vec<_> = drawer_commands.into_iter().collect();
+        if drawer_commands.is_empty() || self.render_commands_cache == drawer_commands {
+            return Ok(());
+        }
         // get a texture from surface
         let output = self.surface.get_current_texture()?;
         // create a command encoder
