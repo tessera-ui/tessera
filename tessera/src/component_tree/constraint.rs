@@ -1,5 +1,5 @@
 /// Describes constraints
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Constraint {
     /// max width(pixels)
     pub max_width: Option<u32>,

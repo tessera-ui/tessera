@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ops::{Add, AddAssign};
 
 use indextree::NodeId;
+use log::debug;
 
 use super::{basic_drawable::BasicDrawable, constraint::Constraint};
 /// A ComponentNode is a node in the component tree.
@@ -19,6 +20,8 @@ pub struct ComponentNodeMetaData {
     /// The computed data
     /// None if the node is not computed yet
     pub computed_data: Option<ComputedData>,
+    /// Cached computed data for each constraint
+    pub cached_computed_data: HashMap<Constraint, ComputedData>,
     /// The node's start position, relative to its parent
     /// None if the node is not placed yet
     pub rel_position: Option<[u32; 2]>,
@@ -27,11 +30,14 @@ pub struct ComponentNodeMetaData {
 }
 
 impl ComponentNodeMetaData {
-    pub const NONE: Self = Self {
-        computed_data: None,
-        rel_position: None,
-        basic_drawable: None,
-    };
+    pub fn none() -> Self {
+        Self {
+            cached_computed_data: HashMap::new(),
+            computed_data: None,
+            rel_position: None,
+            basic_drawable: None,
+        }
+    }
 }
 
 /// A tree of component nodes
@@ -57,6 +63,14 @@ pub fn measure_node(
     tree: &ComponentNodeTree,
     component_node_metadatas: &mut ComponentNodeMetaDatas,
 ) -> ComputedData {
+    // Check if the node has already been measured with the same constraint
+    if let Some(metadata) = component_node_metadatas.get(&node) {
+        if let Some(cached_size) = metadata.cached_computed_data.get(constraint) {
+            debug!("Cache hit for node {:?} with constraint {:?}", node, constraint);
+            return *cached_size;
+        }
+    }
+    // If not, we need to measure it
     let children: Vec<_> = node.children(tree).collect();
     let size = if let Some(measure_fn) = &tree.get(node).unwrap().get().measure_fn {
         // Use the specific measure function if it exists
@@ -75,11 +89,19 @@ pub fn measure_node(
             node,
             ComponentNodeMetaData {
                 computed_data: Some(size),
+                cached_computed_data: HashMap::new(),
                 rel_position: None,
                 basic_drawable: None,
             },
         );
     }
+
+    // Cache the computed size for the given constraint
+    component_node_metadatas
+        .get_mut(&node)
+        .unwrap()
+        .cached_computed_data
+        .insert(constraint.clone(), size);
 
     size
 }
@@ -90,18 +112,9 @@ pub fn place_node(
     rel_position: [u32; 2],
     component_node_metadatas: &mut ComponentNodeMetaDatas,
 ) {
-    if let Some(metadata) = component_node_metadatas.get_mut(&node) {
-        metadata.rel_position = Some(rel_position);
-    } else {
-        component_node_metadatas.insert(
-            node,
-            ComponentNodeMetaData {
-                computed_data: None,
-                rel_position: Some(rel_position),
-                basic_drawable: None,
-            },
-        );
-    }
+    // we just simply unwrap here since you should always measure the node before placing it
+    component_node_metadatas.get_mut(&node).unwrap().rel_position =
+        Some(rel_position);
 }
 
 /// A default layout descriptor that does nothing but places children at the top-left corner
