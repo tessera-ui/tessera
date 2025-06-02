@@ -44,6 +44,7 @@ impl ComponentTree {
     /// Clear the component tree
     pub fn clear(&mut self) {
         self.tree.clear();
+        self.metadatas.clear();
         self.node_queue.clear();
     }
 
