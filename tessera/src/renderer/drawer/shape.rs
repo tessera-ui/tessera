@@ -207,7 +207,7 @@ impl ShapePipeline {
                     } else {
                         // This case should ideally not happen if inputs are validated
                         // Or handle it by returning early / logging a more severe error
-                        return Vertex::new([0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0]); // Placeholder
+                        Vertex::new([0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0])// Placeholder
                     }
                 }
             })

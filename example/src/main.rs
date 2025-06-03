@@ -2,6 +2,7 @@ use tessera::Renderer;
 use tessera_basic_components::{
     column::{AsColumnChild, ColumnChild, column},
     row::{RowChild, row},
+    spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };
@@ -51,6 +52,15 @@ fn app() {
                     )
                 })
                 .into_column_child(),
+                (&|| {
+                    spacer(
+                        SpacerArgsBuilder::default()
+                            .height(10)
+                            .build()
+                            .unwrap(),
+                    )
+                })
+                    .into_column_child(),
                 (&|| {
                     surface(
                         SurfaceArgsBuilder::default()
