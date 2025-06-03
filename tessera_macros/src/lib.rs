@@ -17,13 +17,18 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #(#fn_attrs)*
         #fn_vis #fn_sig {
             {
-                use tessera::{TesseraRuntime, ComponentNode};
+                use tessera::{TesseraRuntime, ComponentNode, Constraint}; // Added Constraint
 
                 TesseraRuntime::write()
                     .component_tree
-                    .add_node(ComponentNode {
-                        measure_fn: None,
-                    });
+                    .add_node(
+                        ComponentNode {
+                            measure_fn: None,
+                        },
+                        Constraint::NONE // Pass Constraint::NONE as the intrinsic_constraint
+                                         // The component's measure_fn will use its args
+                                         // to define its behavior and merge with parent constraint.
+                    );
             }
 
 

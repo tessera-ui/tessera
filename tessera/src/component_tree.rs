@@ -6,7 +6,7 @@ use std::num::NonZero;
 
 use crate::renderer::DrawCommand;
 pub use basic_drawable::{BasicDrawable, ShadowProps};
-pub use constraint::Constraint;
+pub use constraint::{Constraint, DimensionValue}; // Added DimensionValue
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
     MeasureFn, measure_node, place_node,
@@ -72,18 +72,20 @@ impl ComponentTree {
     }
 
     /// Add a new node to the tree
-    pub fn add_node(&mut self, node: ComponentNode) {
+    /// Nodes now store their intrinsic constraints in their metadata.
+    /// The `node_component` itself primarily holds the measure_fn.
+    pub fn add_node(&mut self, node_component: ComponentNode, intrinsic_constraint: Constraint) {
         // Add new node to index tree
-        let new_node = self.tree.new_node(node);
+        let new_node_id = self.tree.new_node(node_component);
         // If there is a current node, append the new node to it
-        // And push the new node to the queue to record
-        if let Some(current_node) = self.node_queue.last_mut() {
-            current_node.append(new_node, &mut self.tree);
+        if let Some(current_node_id) = self.node_queue.last_mut() {
+            current_node_id.append(new_node_id, &mut self.tree);
         }
-        // we also need to add/reset a metadata for the new node
-        self.metadatas
-            .insert(new_node, ComponentNodeMetaData::none());
-        self.node_queue.push(new_node);
+        // Add/reset metadata for the new node, including its intrinsic constraint
+        let mut metadata = ComponentNodeMetaData::none();
+        metadata.constraint = intrinsic_constraint; // Store the node's own constraint
+        self.metadatas.insert(new_node_id, metadata);
+        self.node_queue.push(new_node_id);
     }
 
     /// Pop the last node from the queue
@@ -106,16 +108,20 @@ impl ComponentTree {
         else {
             return vec![];
         };
-        // Let components measure and place themselves
-        let screen_constraint = Constraint {
-            max_width: Some(screen_size[0]),
-            max_height: Some(screen_size[1]),
-            min_width: None,
-            min_height: None,
-        };
+        // The root node is constrained by the screen size.
+        let screen_constraint = Constraint::new(
+            DimensionValue::Fixed(screen_size[0]),
+            DimensionValue::Fixed(screen_size[1]),
+        );
+
+        // The root node's intrinsic constraint (if any, e.g. from App component's args)
+        // should also be considered. For now, assume root's intrinsic is Constraint::NONE
+        // or it's handled by the root component's measure function if it has one.
+        // If the root component (e.g. the main `app` function's surface) specifies Fill,
+        // it will correctly merge with this screen_constraint.
         measure_node(
             root_node,
-            &screen_constraint,
+            &screen_constraint, // This is the parent_constraint for the root node
             &self.tree,
             &mut self.metadatas,
         );
@@ -149,14 +155,13 @@ fn compute_draw_commands_inner(
     metadatas: &mut ComponentNodeMetaDatas,
     commands: &mut Vec<DrawCommand>,
 ) {
-    let rel_pos = metadatas
-        .get(&node_id)
-        .unwrap()
-        .rel_position
-        .unwrap_or([0, 0]);
+    let metadata_entry = metadatas.get_mut(&node_id).unwrap(); // Should always exist after measure
+
+    let rel_pos = metadata_entry.rel_position.unwrap_or([0, 0]);
     let self_pos = [start_pos[0] + rel_pos[0], start_pos[1] + rel_pos[1]];
-    if let Some(drawable) = metadatas.get_mut(&node_id).unwrap().basic_drawable.take() {
-        let size = metadatas.get(&node_id).unwrap().computed_data.unwrap();
+
+    if let Some(drawable) = metadata_entry.basic_drawable.take() {
+        let size = metadata_entry.computed_data.unwrap(); // Should exist after measure
         let command = drawable.into_draw_command([size.width, size.height], self_pos);
         commands.push(command);
     }

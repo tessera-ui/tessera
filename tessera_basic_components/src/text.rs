@@ -1,5 +1,7 @@
 use derive_builder::Builder;
-use tessera::{BasicDrawable, ComputedData, TextConstraint, TextData};
+use tessera::{
+    BasicDrawable, ComponentNodeMetaData, ComputedData, DimensionValue, TextConstraint, TextData,
+}; // Re-added Constraint
 use tessera_macros::tessera;
 
 /// Arguments for the `text` component.
@@ -13,7 +15,8 @@ use tessera_macros::tessera;
 ///     .build()
 ///     .unwrap();
 /// ```
-#[derive(Debug, Default, Builder)]
+#[derive(Debug, Default, Builder, Clone)]
+#[builder(pattern = "owned")]
 pub struct TextArgs {
     pub text: String,
     #[builder(default = "[0, 0, 0]")] // Default color is black
@@ -53,32 +56,48 @@ impl From<&str> for TextArgs {
 /// ```
 #[tessera]
 pub fn text(args: impl Into<TextArgs>) {
-    let args = args.into();
-    measure(Box::new(move |node_id, _, constraint, _, metadatas| {
-        // Create a new text node with the given arguments
-        let mut text_data = TextData::new(
-            args.text.clone(),
-            args.color,
-            args.size,
-            args.line_height,
-            TextConstraint {
-                max_width: None,
-                max_height: None,
-            },
-        );
-        // resize text data based on the constraint
-        text_data.resize(
-            constraint.max_width.map(|width| width as f32),
-            constraint.max_height.map(|height| height as f32),
-        );
-        // save it's actual size
-        let size = text_data.size;
-        // Add to drawable
-        let drawable = BasicDrawable::Text { data: text_data };
-        metadatas.get_mut(&node_id).unwrap().basic_drawable = Some(drawable);
-        ComputedData {
-            width: size[0],
-            height: size[1],
-        }
-    }));
+    let text_args = args.into();
+    measure(Box::new(
+        move |node_id, _, parent_constraint, _, metadatas| {
+            let max_width_for_resize: Option<f32> = match parent_constraint.width {
+                DimensionValue::Fixed(w) => Some(w as f32),
+                DimensionValue::Wrap => None,
+                DimensionValue::Fill { max } => max.map(|m| m as f32),
+            };
+
+            let max_height_for_resize: Option<f32> = match parent_constraint.height {
+                DimensionValue::Fixed(h) => Some(h as f32),
+                DimensionValue::Wrap => None,
+                DimensionValue::Fill { max } => max.map(|m| m as f32),
+            };
+
+            let mut text_data = TextData::new(
+                text_args.text.clone(),
+                text_args.color,
+                text_args.size,
+                text_args.line_height,
+                TextConstraint {
+                    max_width: None,
+                    max_height: None,
+                },
+            );
+            text_data.resize(max_width_for_resize, max_height_for_resize);
+
+            let size = text_data.size;
+            let drawable = BasicDrawable::Text { data: text_data };
+
+            if let Some(metadata) = metadatas.get_mut(&node_id) {
+                metadata.basic_drawable = Some(drawable);
+            } else {
+                let mut default_meta = ComponentNodeMetaData::default();
+                default_meta.basic_drawable = Some(drawable);
+                metadatas.insert(node_id, default_meta);
+            }
+
+            ComputedData {
+                width: size[0],
+                height: size[1],
+            }
+        },
+    ));
 }

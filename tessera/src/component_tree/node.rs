@@ -4,7 +4,10 @@ use std::ops::{Add, AddAssign};
 use indextree::NodeId;
 use log::debug;
 
-use super::{basic_drawable::BasicDrawable, constraint::Constraint};
+use super::{
+    basic_drawable::BasicDrawable,
+    constraint::{Constraint, DimensionValue},
+};
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component:
 pub struct ComponentNode {
@@ -27,15 +30,33 @@ pub struct ComponentNodeMetaData {
     pub rel_position: Option<[u32; 2]>,
     /// Optional basic drawable
     pub basic_drawable: Option<BasicDrawable>,
+    /// The constraint that this node has intrinsically (e.g. from its arguments)
+    /// This is merged with parent's constraint during layout.
+    /// Default is Constraint::NONE (Wrap/Wrap)
+    pub constraint: Constraint,
 }
 
 impl ComponentNodeMetaData {
     pub fn none() -> Self {
+        // This function can be kept or removed if Default is preferred
         Self {
             cached_computed_data: HashMap::new(),
             computed_data: None,
             rel_position: None,
             basic_drawable: None,
+            constraint: Constraint::NONE,
+        }
+    }
+}
+
+impl Default for ComponentNodeMetaData {
+    fn default() -> Self {
+        Self {
+            cached_computed_data: HashMap::new(),
+            computed_data: None,
+            rel_position: None,
+            basic_drawable: None,
+            constraint: Constraint::NONE, // Default intrinsic constraint
         }
     }
 }
@@ -49,7 +70,7 @@ pub type ComponentNodeMetaDatas = HashMap<NodeId, ComponentNodeMetaData>;
 pub type MeasureFn = dyn Fn(
         indextree::NodeId,
         &ComponentNodeTree,
-        &Constraint,
+        &Constraint, // This is the constraint from the parent
         &[indextree::NodeId],
         &mut ComponentNodeMetaDatas,
     ) -> ComputedData
@@ -59,49 +80,50 @@ pub type MeasureFn = dyn Fn(
 /// Measure a node recursively, return its size
 pub fn measure_node(
     node: indextree::NodeId,
-    constraint: &Constraint,
+    parent_constraint: &Constraint,
     tree: &ComponentNodeTree,
     component_node_metadatas: &mut ComponentNodeMetaDatas,
 ) -> ComputedData {
-    // Check if the node has already been measured with the same constraint
+    let node_intrinsic_constraint = component_node_metadatas
+        .get(&node)
+        .map_or(Constraint::NONE, |m| m.constraint);
+    let effective_constraint = node_intrinsic_constraint.merge(parent_constraint);
+
     if let Some(metadata) = component_node_metadatas.get(&node)
-        && let Some(cached_size) = metadata.cached_computed_data.get(constraint)
+        && let Some(cached_size) = metadata.cached_computed_data.get(&effective_constraint)
     {
-        debug!("Cache hit for node {node:?} with constraint {constraint:?}");
+        debug!("Cache hit for node {node:?} with effective_constraint {effective_constraint:?}");
         return *cached_size;
     }
-    // If not, we need to measure it
+
     let children: Vec<_> = node.children(tree).collect();
     let size = if let Some(measure_fn) = &tree.get(node).unwrap().get().measure_fn {
-        // Use the specific measure function if it exists
-        measure_fn(node, tree, constraint, &children, component_node_metadatas)
+        // Pass the original parent_constraint; the measure_fn is responsible for
+        // using its own args to determine its intrinsic behavior and merge.
+        measure_fn(
+            node,
+            tree,
+            parent_constraint,
+            &children,
+            component_node_metadatas,
+        )
     } else {
-        // Use default measure function if no specific measure function is provided
-        DEFAULT_LAYOUT_DESC(node, tree, constraint, &children, component_node_metadatas)
+        // DEFAULT_LAYOUT_DESC uses the fully effective_constraint
+        DEFAULT_LAYOUT_DESC(
+            node,
+            tree,
+            &effective_constraint,
+            &children,
+            component_node_metadatas,
+        )
     };
 
-    if let Some(metadata) = component_node_metadatas.get_mut(&node) {
-        // Update the existing metadata with the computed size
-        metadata.computed_data = Some(size);
-    } else {
-        // If metadata does not exist, create a new one
-        component_node_metadatas.insert(
-            node,
-            ComponentNodeMetaData {
-                computed_data: Some(size),
-                cached_computed_data: HashMap::new(),
-                rel_position: None,
-                basic_drawable: None,
-            },
-        );
-    }
-
-    // Cache the computed size for the given constraint
-    component_node_metadatas
-        .get_mut(&node)
-        .unwrap()
+    // Ensure metadata exists before trying to update cache or computed_data
+    let metadata = component_node_metadatas.entry(node).or_default();
+    metadata.computed_data = Some(size);
+    metadata
         .cached_computed_data
-        .insert(*constraint, size);
+        .insert(effective_constraint, size);
 
     size
 }
@@ -112,24 +134,25 @@ pub fn place_node(
     rel_position: [u32; 2],
     component_node_metadatas: &mut ComponentNodeMetaDatas,
 ) {
-    // we just simply unwrap here since you should always measure the node before placing it
     component_node_metadatas
-        .get_mut(&node)
-        .unwrap()
+        .entry(node) // Use entry to ensure metadata exists
+        .or_default()
         .rel_position = Some(rel_position);
 }
 
 /// A default layout descriptor that does nothing but places children at the top-left corner
-/// of the parent node, with no offset
-const DEFAULT_LAYOUT_DESC: &MeasureFn = &|_, tree, constraint, children, metadatas| {
-    let mut size = ComputedData::ZERO;
-    for child in children {
-        let child_size = measure_node(*child, constraint, tree, metadatas);
-        size = size.max(child_size);
-        place_node(*child, [0, 0], metadatas);
-    }
-    size
-};
+/// of the parent node, with no offset.
+/// Children are measured with the parent's effective constraint.
+const DEFAULT_LAYOUT_DESC: &MeasureFn =
+    &|_current_node_id, tree, effective_constraint, children, metadatas| {
+        let mut size = ComputedData::ZERO;
+        for child_node_id in children {
+            let child_size = measure_node(*child_node_id, effective_constraint, tree, metadatas);
+            size = size.max(child_size);
+            place_node(*child_node_id, [0, 0], metadatas);
+        }
+        size
+    };
 
 /// Layout info computed at measure Stage
 #[derive(Debug, Clone, Copy)]
@@ -165,24 +188,38 @@ impl ComputedData {
     };
 
     /// Generate a smallest size for spec constraint
+    /// This typically means Fixed values are respected, Wrap/Fill are 0 if no content.
     pub fn smallest(constraint: &Constraint) -> Self {
-        Self {
-            width: constraint.min_width.unwrap_or(0),
-            height: constraint.min_height.unwrap_or(0),
-        }
+        let width = match constraint.width {
+            DimensionValue::Fixed(w) => w,
+            DimensionValue::Wrap => 0,
+            DimensionValue::Fill { .. } => 0,
+        };
+        let height = match constraint.height {
+            DimensionValue::Fixed(h) => h,
+            DimensionValue::Wrap => 0,
+            DimensionValue::Fill { .. } => 0,
+        };
+        Self { width, height }
     }
 
     /// Generate a largest size for spec constraint
+    /// This typically means Fixed values are respected, Wrap/Fill take u32::MAX or their own max.
     pub fn largest(constraint: &Constraint) -> Self {
-        Self {
-            width: constraint.max_width.unwrap_or(u32::MAX),
-            height: constraint.max_height.unwrap_or(u32::MAX),
-        }
+        let width = match constraint.width {
+            DimensionValue::Fixed(w) => w,
+            DimensionValue::Wrap => u32::MAX,
+            DimensionValue::Fill { max } => max.unwrap_or(u32::MAX),
+        };
+        let height = match constraint.height {
+            DimensionValue::Fixed(h) => h,
+            DimensionValue::Wrap => u32::MAX,
+            DimensionValue::Fill { max } => max.unwrap_or(u32::MAX),
+        };
+        Self { width, height }
     }
 
     /// Returns the minimum of two computed data
-    /// Impl trait `Ord` or `PartialOrd` does not help
-    /// since we need both width and height to be minnimum
     pub fn min(self, rhs: Self) -> Self {
         Self {
             width: self.width.min(rhs.width),
@@ -191,8 +228,6 @@ impl ComputedData {
     }
 
     /// Returns the maximum of two computed data
-    /// Impl trait `Ord` or `PartialOrd` does not help
-    /// since we need both width and height to be maximum
     pub fn max(self, rhs: Self) -> Self {
         Self {
             width: self.width.max(rhs.width),

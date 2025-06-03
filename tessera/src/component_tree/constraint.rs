@@ -1,63 +1,79 @@
-/// Describes constraints
+/// Defines how a dimension (width or height) should be calculated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DimensionValue {
+    /// The dimension is a fixed value.
+    Fixed(u32),
+    /// The dimension should wrap its content.
+    Wrap,
+    /// The dimension should fill the available space, optionally up to a maximum.
+    Fill { max: Option<u32> },
+}
+
+impl Default for DimensionValue {
+    fn default() -> Self {
+        DimensionValue::Wrap // Default to wrapping content
+    }
+}
+
+/// Represents layout constraints for a component node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Constraint {
-    /// max width(pixels)
-    pub max_width: Option<u32>,
-    /// min width(pixels)
-    pub min_width: Option<u32>,
-    /// max height(pixels)
-    pub max_height: Option<u32>,
-    /// min height(pixels)
-    pub min_height: Option<u32>,
+    pub width: DimensionValue,
+    pub height: DimensionValue,
 }
 
 impl Constraint {
-    /// Create a new constraint
-    /// with all values set to None
-    /// which means no constraint
+    /// A constraint that specifies no preference (Wrap for both width and height).
     pub const NONE: Self = Self {
-        max_width: None,
-        min_width: None,
-        max_height: None,
-        min_height: None,
+        width: DimensionValue::Wrap,
+        height: DimensionValue::Wrap,
     };
 
-    /// Merge parent constraint and self constraint
-    /// Parent constraint should always override self constraint
-    /// if it's stricter
-    pub fn merge(&self, parent: &Self) -> Self {
-        // width cannot be bigger than parent's max width
-        let max_width = match (self.max_width, parent.max_width) {
-            (Some(self_max), Some(parent_max)) => Some(self_max.min(parent_max)),
-            (Some(self_max), None) => Some(self_max),
-            (None, Some(parent_max)) => Some(parent_max),
-            (None, None) => None,
-        };
-        let min_width = match (self.min_width, max_width) {
-            (Some(self_min), Some(max_width)) => Some(self_min.min(max_width)),
-            (Some(self_min), None) => Some(self_min),
-            (None, Some(_)) => None,
-            (None, None) => None,
-        };
-        // height cannot be bigger than parent's max height
-        let max_height = match (self.max_height, parent.max_height) {
-            (Some(self_max), Some(parent_max)) => Some(self_max.min(parent_max)),
-            (Some(self_max), None) => Some(self_max),
-            (None, Some(parent_max)) => Some(parent_max),
-            (None, None) => None,
-        };
-        let min_height = match (self.min_height, max_height) {
-            (Some(self_min), Some(max_height)) => Some(self_min.min(max_height)),
-            (Some(self_min), None) => Some(self_min),
-            (None, Some(_)) => None,
-            (None, None) => None,
-        };
+    /// Creates a new constraint.
+    pub fn new(width: DimensionValue, height: DimensionValue) -> Self {
+        Self { width, height }
+    }
 
-        Self {
-            max_width,
-            min_width,
-            max_height,
-            min_height,
+    /// Merges this constraint with a parent constraint.
+    ///
+    /// Rules:
+    /// - If self is Fixed, it overrides parent (Fixed wins).
+    /// - If self is Wrap, parent's constraint is used (parent might provide a bound).
+    /// - If self is Fill:
+    ///   - If parent is Fixed(p_val): result is Fixed(min(p_val, self.max.unwrap_or(p_val))).
+    ///   - If parent is Wrap: result is self (Fill, as parent offers no concrete size to fill).
+    ///     This case means the Fill component will behave like Wrap if its children don't expand.
+    ///   - If parent is Fill {max: p_max}: result is Fill {max: combined_max}.
+    ///     combined_max is min(self.max, p_max) if both exist, or the existing one, or None.
+    pub fn merge(&self, parent_constraint: &Constraint) -> Self {
+        let new_width = Self::merge_dimension(self.width, parent_constraint.width);
+        let new_height = Self::merge_dimension(self.height, parent_constraint.height);
+        Constraint::new(new_width, new_height)
+    }
+
+    fn merge_dimension(child_dim: DimensionValue, parent_dim: DimensionValue) -> DimensionValue {
+        match child_dim {
+            DimensionValue::Fixed(cv) => DimensionValue::Fixed(cv), // Child's Fixed overrides
+            DimensionValue::Wrap => match parent_dim {
+                DimensionValue::Fixed(pv) => DimensionValue::Fixed(pv), // Parent provides a fixed bound for Wrap
+                DimensionValue::Wrap => DimensionValue::Wrap,           // Wrap remains Wrap
+                DimensionValue::Fill { max: p_max } => DimensionValue::Fill { max: p_max }, // Wrap behaves as Fill within parent's Fill bounds
+            },
+            DimensionValue::Fill { max: c_max } => match parent_dim {
+                DimensionValue::Fixed(pv) => {
+                    DimensionValue::Fixed(c_max.map_or(pv, |cm| pv.min(cm)))
+                }
+                DimensionValue::Wrap => DimensionValue::Fill { max: c_max }, // Fill remains Fill, parent Wrap offers no concrete size
+                DimensionValue::Fill { max: p_max } => {
+                    let new_max = match (c_max, p_max) {
+                        (Some(cm), Some(pm)) => Some(cm.min(pm)),
+                        (Some(cm), None) => Some(cm),
+                        (None, Some(pm)) => Some(pm),
+                        (None, None) => None,
+                    };
+                    DimensionValue::Fill { max: new_max }
+                }
+            },
         }
     }
 }
