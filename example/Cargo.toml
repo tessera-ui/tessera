@@ -8,7 +8,3 @@ env_logger = "0.11.8"
 tessera = { path = "../tessera" }
 tessera_macros = { path = "../tessera_macros" }
 tessera_basic_components = { path = "../tessera_basic_components" }
-
-[profile.release]
-debug = true
-lto = true
