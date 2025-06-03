@@ -5,7 +5,7 @@ pub mod tokio_runtime;
 
 pub use component_tree::{
     BasicDrawable, ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
-    ComponentTree, ComputedData, Constraint, MeasureFn, measure_node, place_node,
+    ComponentTree, ComputedData, Constraint, MeasureFn, ShadowProps, measure_node, place_node,
 };
 pub use indextree::{Arena, NodeId};
 pub use renderer::{Renderer, TextConstraint, TextData};

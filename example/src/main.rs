@@ -14,23 +14,38 @@ fn main() -> Result<(), impl std::error::Error> {
 
 #[tessera]
 fn app() {
-    let args = SurfaceArgsBuilder::default().build().unwrap();
-    surface(args, || {
-        column([
-            (&|| {
-                row([
-                    RowChild::new(Some(1.0), &|| text("Hello, this is tessera")),
-                    RowChild::new(Some(1.0), &|| text("Hello, this is another tessera")),
-                ])
-            })
-                .as_column_child(),
-            (&|| {
-                column([
-                    ColumnChild::new(Some(1.0), &|| text("This is a column")),
-                    ColumnChild::new(Some(1.0), &|| text("Another item in column")),
-                ])
-            })
-                .as_column_child(),
-        ]);
-    });
+    surface(
+        SurfaceArgsBuilder::default()
+            .color([1.0, 1.0, 1.0])
+            .build()
+            .unwrap(),
+        || {
+            surface(
+                SurfaceArgsBuilder::default()
+                    .corner_radius(25.0)
+                    .build()
+                    .unwrap(),
+                || {
+                    column([
+                        (&|| {
+                            row([
+                                RowChild::new(Some(1.0), &|| text("Hello, this is tessera")),
+                                RowChild::new(Some(1.0), &|| {
+                                    text("Hello, this is another tessera")
+                                }),
+                            ])
+                        })
+                            .into_column_child(),
+                        (&|| {
+                            column([
+                                ColumnChild::new(Some(1.0), &|| text("This is a column")),
+                                ColumnChild::new(Some(1.0), &|| text("Another item in column")),
+                            ])
+                        })
+                            .into_column_child(),
+                    ]);
+                },
+            );
+        },
+    );
 }

@@ -64,14 +64,11 @@ pub fn measure_node(
     component_node_metadatas: &mut ComponentNodeMetaDatas,
 ) -> ComputedData {
     // Check if the node has already been measured with the same constraint
-    if let Some(metadata) = component_node_metadatas.get(&node) {
-        if let Some(cached_size) = metadata.cached_computed_data.get(constraint) {
-            debug!(
-                "Cache hit for node {:?} with constraint {:?}",
-                node, constraint
-            );
-            return *cached_size;
-        }
+    if let Some(metadata) = component_node_metadatas.get(&node)
+        && let Some(cached_size) = metadata.cached_computed_data.get(constraint)
+    {
+        debug!("Cache hit for node {node:?} with constraint {constraint:?}");
+        return *cached_size;
     }
     // If not, we need to measure it
     let children: Vec<_> = node.children(tree).collect();
@@ -104,7 +101,7 @@ pub fn measure_node(
         .get_mut(&node)
         .unwrap()
         .cached_computed_data
-        .insert(constraint.clone(), size);
+        .insert(*constraint, size);
 
     size
 }

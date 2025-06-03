@@ -17,7 +17,7 @@ use winit::{
 
 use crate::{runtime::TesseraRuntime, tokio_runtime};
 
-pub use drawer::{DrawCommand, ShapeVertex, TextConstraint, TextData};
+pub use drawer::{DrawCommand, ShapeUniforms, ShapeVertex, TextConstraint, TextData};
 
 pub struct Renderer<F: Fn()> {
     /// WGPU app
@@ -44,7 +44,9 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
         }
 
         // Create a new window
-        let window_attributes = Window::default_attributes().with_title("Tessera");
+        let window_attributes = Window::default_attributes()
+            .with_title("Tessera")
+            .with_transparent(true);
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
         let wgpu_app = tokio_runtime::get().block_on(WgpuApp::new(window));
@@ -94,7 +96,7 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 debug!("Building component tree...");
                 (self.entry_point)();
                 let build_tree_cost = tree_timer.elapsed();
-                debug!("Component tree built in {:?}", build_tree_cost);
+                debug!("Component tree built in {build_tree_cost:?}");
                 // get the component tree from the runtime
                 let component_tree = &mut TesseraRuntime::write().component_tree;
                 // timer for performance measurement
@@ -103,7 +105,7 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 debug!("Computing draw commands...");
                 let commands = component_tree.compute(app.size().into());
                 let draw_cost = draw_timer.elapsed();
-                debug!("Draw commands computed in {:?}", draw_cost);
+                debug!("Draw commands computed in {draw_cost:?}");
                 component_tree.clear();
                 // timer for performance measurement
                 let render_timer = Instant::now();
@@ -111,7 +113,7 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 debug!("Rendering draw commands...");
                 app.render(commands).unwrap();
                 let render_cost = render_timer.elapsed();
-                debug!("Rendered in {:?}", render_cost);
+                debug!("Rendered in {render_cost:?}");
                 // print frame statistics
                 let fps = 1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32();
                 if fps < 30.0 {

@@ -5,7 +5,7 @@ mod node;
 use std::num::NonZero;
 
 use crate::renderer::DrawCommand;
-pub use basic_drawable::BasicDrawable;
+pub use basic_drawable::{BasicDrawable, ShadowProps};
 pub use constraint::Constraint;
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,

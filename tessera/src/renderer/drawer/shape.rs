@@ -2,31 +2,46 @@ use bytemuck::{Pod, Zeroable};
 use earcutr::earcut;
 use wgpu::{include_wgsl, util::DeviceExt};
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq)]
+pub struct ShapeUniforms {
+    // vec4f: size.x, size.y, corner_radius, is_shadow (0.0 for false, 1.0 for true)
+    pub size_cr_is_shadow: [f32; 4],
+    // vec4f: r, g, b, a (main object color)
+    pub object_color: [f32; 4],
+    // vec4f: r, g, b, a (shadow color)
+    pub shadow_color: [f32; 4],
+    // vec4f: offset.x, offset.y, shadow_smoothness, unused_padding
+    pub shadow_params: [f32; 4],
+}
+
 /// Vertex for any shapes
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-struct Vertex {
+#[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq)]
+pub struct Vertex {
     /// Position of the vertex(x, y, z)
-    position: [f32; 3],
+    pub position: [f32; 3],
     /// Color of the vertex
-    color: [f32; 3],
+    pub color: [f32; 3],
+    /// Normalized local position relative to rect center
+    pub local_pos: [f32; 2],
 }
 
 impl Vertex {
     /// Describe the vertex attributes
     /// 0: position (x, y, z)
     /// 1: color (r, g, b)
+    /// 2: local_pos (u, v)
     /// The vertex attribute array is used to describe the vertex buffer layout
-    const ATTR: [wgpu::VertexAttribute; 2] =
-        wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
+    const ATTR: [wgpu::VertexAttribute; 3] =
+        wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2];
 
     /// Create a new vertex
-    fn new(pos: [f32; 2], color: [f32; 3]) -> Self {
-        let x = pos[0];
-        let y = pos[1];
+    fn new(pos: [f32; 2], color: [f32; 3], local_pos: [f32; 2]) -> Self {
         Self {
-            position: [x, y, 0.0],
+            position: [pos[0], pos[1], 0.0],
             color,
+            local_pos,
         }
     }
 
@@ -41,20 +56,54 @@ impl Vertex {
 }
 
 pub struct ShapePipeline {
-    /// Shape pipeline
     pipeline: wgpu::RenderPipeline,
-    /// Shape pipeline layout
-    pipeline_layout: wgpu::PipelineLayout,
+    uniform_buffer: wgpu::Buffer,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
 }
 
 impl ShapePipeline {
     pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
         let shader = gpu.create_shader_module(include_wgsl!("shaders/shape.wgsl"));
+
+        let bind_group_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: wgpu::BufferSize::new(
+                        std::mem::size_of::<ShapeUniforms>() as _
+                    ),
+                },
+                count: None,
+            }],
+            label: Some("shape_bind_group_layout"),
+        });
+
         let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Shape Pipeline Layout"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[&bind_group_layout], // USE THE NEW LAYOUT
             push_constant_ranges: &[],
         });
+
+        let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Shape Uniform Buffer"),
+            size: std::mem::size_of::<ShapeUniforms>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+            label: Some("shape_bind_group"),
+        });
+
         let pipeline = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Shape Pipeline"),
             layout: Some(&pipeline_layout),
@@ -85,7 +134,7 @@ impl ShapePipeline {
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING), // CHANGE TO ALPHA_BLENDING
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -95,30 +144,54 @@ impl ShapePipeline {
 
         Self {
             pipeline,
-            pipeline_layout,
+            uniform_buffer,
+            bind_group_layout,
+            bind_group,
         }
     }
 
-    /// Draw the shape
     pub fn draw(
         &self,
         gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
         render_pass: &mut wgpu::RenderPass<'_>,
-        vertices: Vec<[f32; 2]>,
-        colors: Vec<[f32; 3]>,
+        polygon_vertices: &[[f32; 2]],
+        vertex_colors: &[[f32; 3]],
+        vertex_local_pos: &[[f32; 2]],
+        uniforms: &ShapeUniforms,
     ) {
-        // Flatten 2D vertex array for earcutr
-        let flat: Vec<f64> = vertices
+        let flat_polygon_vertices: Vec<f64> = polygon_vertices
             .iter()
             .flat_map(|[x, y]| vec![*x as f64, *y as f64])
             .collect();
 
-        // Triangulate using earcutr
-        let indices = earcut(&flat, &[], 2).unwrap(); // no holes, 2D
+        let indices = earcut(&flat_polygon_vertices, &[], 2).unwrap_or_else(|e| {
+            eprintln!("Earcut error: {e:?}");
+            Vec::new()
+        });
+
+        if indices.is_empty() && !polygon_vertices.is_empty() {
+            return;
+        }
+
         let vertex_data: Vec<Vertex> = indices
             .iter()
-            .map(|&i| Vertex::new(vertices[i], colors[i]))
+            .map(|&i| {
+                if i < polygon_vertices.len()
+                    && i < vertex_colors.len()
+                    && i < vertex_local_pos.len()
+                {
+                    Vertex::new(polygon_vertices[i], vertex_colors[i], vertex_local_pos[i])
+                } else {
+                    eprintln!("Warning: Earcut index {i} out of bounds for input arrays.");
+                    Vertex::new(polygon_vertices[0], vertex_colors[0], vertex_local_pos[0])
+                }
+            })
             .collect();
+
+        if vertex_data.is_empty() {
+            return;
+        }
 
         let vertex_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Triangulated Vertex Buffer"),
@@ -126,7 +199,10 @@ impl ShapePipeline {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        gpu_queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
+
         render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, &self.bind_group, &[]);
         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         render_pass.draw(0..vertex_data.len() as u32, 0..1);
     }

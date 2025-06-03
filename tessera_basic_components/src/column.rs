@@ -24,11 +24,11 @@ impl ColumnChild {
 }
 
 pub trait AsColumnChild {
-    fn as_column_child(self) -> ColumnChild;
+    fn into_column_child(self) -> ColumnChild;
 }
 
 impl<F: Fn()> AsColumnChild for &'static F {
-    fn as_column_child(self) -> ColumnChild {
+    fn into_column_child(self) -> ColumnChild {
         ColumnChild {
             weight: None,
             child: self,

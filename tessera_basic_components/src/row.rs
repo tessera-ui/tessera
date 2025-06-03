@@ -24,11 +24,11 @@ impl RowChild {
 }
 
 pub trait AsRowChild {
-    fn as_row_child(self) -> RowChild;
+    fn into_row_child(self) -> RowChild;
 }
 
 impl<F: Fn()> AsRowChild for &'static F {
-    fn as_row_child(self) -> RowChild {
+    fn into_row_child(self) -> RowChild {
         RowChild {
             weight: None,
             child: self,
