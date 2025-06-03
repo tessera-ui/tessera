@@ -31,7 +31,7 @@ impl WgpuApp {
     /// Create a new WGPU app, as the root of Tessera
     pub(crate) async fn new(window: Arc<Window>) -> Self {
         // Looking for gpus
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
@@ -142,10 +142,12 @@ impl WgpuApp {
         &mut self,
         drawer_commands: impl IntoIterator<Item = DrawCommand>,
     ) -> Result<(), wgpu::SurfaceError> {
-        let drawer_commands: Vec<_> = drawer_commands.into_iter().collect();
-        if drawer_commands.is_empty() || self.render_commands_cache == drawer_commands {
+        let drawer_commands_vec: Vec<_> = drawer_commands.into_iter().collect();
+        if drawer_commands_vec.is_empty() || self.render_commands_cache == drawer_commands_vec {
             return Ok(());
         }
+        self.render_commands_cache = drawer_commands_vec.clone();
+
         // get a texture from surface
         let output = self.surface.get_current_texture()?;
         // create a command encoder
@@ -169,8 +171,13 @@ impl WgpuApp {
             })],
             ..Default::default()
         });
+
+        // Begin frame for drawer
+        self.drawer.begin_frame();
+
         // draw commands
-        for command in drawer_commands {
+        for command in drawer_commands_vec {
+            // Use the collected Vec
             self.drawer.prepare_or_draw(
                 &self.gpu,
                 &self.config,

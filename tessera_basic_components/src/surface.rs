@@ -35,14 +35,28 @@ pub fn surface(args: SurfaceArgs, child: impl Fn()) {
             let child_constraint = Constraint {
                 min_width: constraint.min_width,
                 min_height: constraint.min_height,
-                max_width: constraint.max_width.map(|mw| (mw.saturating_sub(padding_2_u32)).max(constraint.min_width.unwrap_or(0))).or(constraint.min_width),
-                max_height: constraint.max_height.map(|mh| (mh.saturating_sub(padding_2_u32)).max(constraint.min_height.unwrap_or(0))).or(constraint.min_height),
+                max_width: constraint
+                    .max_width
+                    .map(|mw| {
+                        (mw.saturating_sub(padding_2_u32)).max(constraint.min_width.unwrap_or(0))
+                    })
+                    .or(constraint.min_width),
+                max_height: constraint
+                    .max_height
+                    .map(|mh| {
+                        (mh.saturating_sub(padding_2_u32)).max(constraint.min_height.unwrap_or(0))
+                    })
+                    .or(constraint.min_height),
             };
 
             for child_node_id in children {
                 let child_size = measure_node(*child_node_id, &child_constraint, tree, metadatas);
                 size = size.max(child_size);
-                place_node(*child_node_id, [args.padding as u32, args.padding as u32], metadatas);
+                place_node(
+                    *child_node_id,
+                    [args.padding as u32, args.padding as u32],
+                    metadatas,
+                );
             }
 
             // Add rect drawable

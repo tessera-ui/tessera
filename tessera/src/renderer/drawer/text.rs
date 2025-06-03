@@ -128,7 +128,7 @@ impl GlyphonTextRender {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextData {
     /// Text content to render
     content: String,

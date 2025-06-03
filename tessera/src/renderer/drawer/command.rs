@@ -4,7 +4,7 @@ use super::{
 };
 
 /// Every draw command is a command that can be executed by the drawer.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum DrawCommand {
     /// Draw a shape with a spec color at vertices
     Shape {

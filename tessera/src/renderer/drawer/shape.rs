@@ -62,9 +62,25 @@ pub struct ShapePipeline {
     bind_group: wgpu::BindGroup,
 }
 
+// Define MAX_CONCURRENT_SHAPES, can be adjusted later
+pub const MAX_CONCURRENT_SHAPES: wgpu::BufferAddress = 256;
+
 impl ShapePipeline {
     pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
         let shader = gpu.create_shader_module(include_wgsl!("shaders/shape.wgsl"));
+
+        let uniform_alignment =
+            gpu.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
+        let size_of_shape_uniforms = std::mem::size_of::<ShapeUniforms>() as wgpu::BufferAddress;
+        let aligned_size_of_shape_uniforms =
+            wgpu::util::align_to(size_of_shape_uniforms, uniform_alignment);
+
+        let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Shape Uniform Buffer"),
+            size: MAX_CONCURRENT_SHAPES * aligned_size_of_shape_uniforms,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         let bind_group_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -72,7 +88,7 @@ impl ShapePipeline {
                 visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
+                    has_dynamic_offset: true, // Set to true for dynamic offsets
                     min_binding_size: wgpu::BufferSize::new(
                         std::mem::size_of::<ShapeUniforms>() as _
                     ),
@@ -82,26 +98,23 @@ impl ShapePipeline {
             label: Some("shape_bind_group_layout"),
         });
 
-        let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Shape Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout], // USE THE NEW LAYOUT
-            push_constant_ranges: &[],
-        });
-
-        let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Shape Uniform Buffer"),
-            size: std::mem::size_of::<ShapeUniforms>() as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &uniform_buffer,
+                    offset: 0, // Initial offset, will be overridden by dynamic offset
+                    size: wgpu::BufferSize::new(std::mem::size_of::<ShapeUniforms>() as _),
+                }),
             }],
             label: Some("shape_bind_group"),
+        });
+
+        let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Shape Pipeline Layout"),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
         });
 
         let pipeline = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -134,7 +147,7 @@ impl ShapePipeline {
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING), // CHANGE TO ALPHA_BLENDING
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -159,6 +172,7 @@ impl ShapePipeline {
         vertex_colors: &[[f32; 3]],
         vertex_local_pos: &[[f32; 2]],
         uniforms: &ShapeUniforms,
+        dynamic_offset: wgpu::DynamicOffset,
     ) {
         let flat_polygon_vertices: Vec<f64> = polygon_vertices
             .iter()
@@ -184,7 +198,17 @@ impl ShapePipeline {
                     Vertex::new(polygon_vertices[i], vertex_colors[i], vertex_local_pos[i])
                 } else {
                     eprintln!("Warning: Earcut index {i} out of bounds for input arrays.");
-                    Vertex::new(polygon_vertices[0], vertex_colors[0], vertex_local_pos[0])
+                    // Fallback to the first vertex if index is out of bounds
+                    if !polygon_vertices.is_empty()
+                        && !vertex_colors.is_empty()
+                        && !vertex_local_pos.is_empty()
+                    {
+                        Vertex::new(polygon_vertices[0], vertex_colors[0], vertex_local_pos[0])
+                    } else {
+                        // This case should ideally not happen if inputs are validated
+                        // Or handle it by returning early / logging a more severe error
+                        return Vertex::new([0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0]); // Placeholder
+                    }
                 }
             })
             .collect();
@@ -199,10 +223,14 @@ impl ShapePipeline {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        gpu_queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
+        gpu_queue.write_buffer(
+            &self.uniform_buffer,
+            dynamic_offset as wgpu::BufferAddress,
+            bytemuck::bytes_of(uniforms),
+        );
 
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &self.bind_group, &[]);
+        render_pass.set_bind_group(0, &self.bind_group, &[dynamic_offset]);
         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         render_pass.draw(0..vertex_data.len() as u32, 0..1);
     }
