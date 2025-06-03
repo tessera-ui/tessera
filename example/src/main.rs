@@ -20,32 +20,50 @@ fn app() {
             .build()
             .unwrap(),
         || {
-            surface(
-                SurfaceArgsBuilder::default()
-                    .corner_radius(25.0)
-                    .build()
-                    .unwrap(),
-                || {
-                    column([
-                        (&|| {
-                            row([
-                                RowChild::new(Some(1.0), &|| text("Hello, this is tessera")),
-                                RowChild::new(Some(1.0), &|| {
-                                    text("Hello, this is another tessera")
-                                }),
-                            ])
-                        })
-                            .into_column_child(),
-                        (&|| {
+            column([
+                (|| {
+                    surface(
+                        SurfaceArgsBuilder::default().padding(20.0).build().unwrap(),
+                        || {
                             column([
-                                ColumnChild::new(Some(1.0), &|| text("This is a column")),
-                                ColumnChild::new(Some(1.0), &|| text("Another item in column")),
-                            ])
-                        })
-                            .into_column_child(),
-                    ]);
-                },
-            );
+                                (&|| {
+                                    row([
+                                        RowChild::new(Some(1.0), &|| {
+                                            text("Hello, this is tessera")
+                                        }),
+                                        RowChild::new(Some(1.0), &|| {
+                                            text("Hello, this is another tessera")
+                                        }),
+                                    ])
+                                })
+                                    .into_column_child(),
+                                (&|| {
+                                    column([
+                                        ColumnChild::new(Some(1.0), &|| text("This is a column")),
+                                        ColumnChild::new(Some(1.0), &|| {
+                                            text("Another item in column")
+                                        }),
+                                    ])
+                                })
+                                    .into_column_child(),
+                            ]);
+                        },
+                    )
+                })
+                .into_column_child(),
+                (&|| {
+                    surface(
+                        SurfaceArgsBuilder::default()
+                            .corner_radius(25.0)
+                            .build()
+                            .unwrap(),
+                        || {
+                            text("Hello, this is a surface with text");
+                        },
+                    )
+                })
+                    .into_column_child(),
+            ]);
         },
     );
 }
