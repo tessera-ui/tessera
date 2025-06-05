@@ -8,7 +8,6 @@ use tessera::{
 use tessera_macros::tessera;
 
 /// Represents a child item within a Row layout.
-#[derive(Clone)]
 pub struct RowItem {
     /// Determines how much space the child should take if its width_behavior is Fill,
     /// relative to other Fill children with weights.
@@ -16,13 +15,13 @@ pub struct RowItem {
     /// Defines the width behavior of this child.
     pub width_behavior: DimensionValue,
     /// The actual child component. Must be Send + Sync.
-    pub child: &'static (dyn Fn() + Send + Sync),
+    pub child: Box<dyn Fn() + Send + Sync>,
 }
 
 impl RowItem {
     /// Creates a new `RowItem`.
     pub fn new(
-        child: &'static (dyn Fn() + Send + Sync),
+        child: Box<dyn Fn() + Send + Sync>,
         width_behavior: DimensionValue,
         weight: Option<f32>,
     ) -> Self {
@@ -34,18 +33,18 @@ impl RowItem {
     }
 
     /// Helper to create a RowItem that wraps its content.
-    pub fn wrap(child: &'static (dyn Fn() + Send + Sync)) -> Self {
+    pub fn wrap(child: Box<dyn Fn() + Send + Sync>) -> Self {
         Self::new(child, DimensionValue::Wrap, None)
     }
 
     /// Helper to create a RowItem that is fixed width.
-    pub fn fixed(child: &'static (dyn Fn() + Send + Sync), width: u32) -> Self {
+    pub fn fixed(child: Box<dyn Fn() + Send + Sync>, width: u32) -> Self {
         Self::new(child, DimensionValue::Fixed(width), None)
     }
 
     /// Helper to create a RowItem that fills available space, optionally with a weight and max.
     pub fn fill(
-        child: &'static (dyn Fn() + Send + Sync),
+        child: Box<dyn Fn() + Send + Sync>,
         weight: Option<f32>,
         max_width: Option<u32>,
     ) -> Self {
@@ -65,34 +64,34 @@ impl AsRowItem for RowItem {
 }
 
 /// Default conversion: a simple function closure becomes a `RowItem` that wraps its content.
-impl<F: Fn() + Send + Sync + 'static> AsRowItem for &'static F {
+impl<F: Fn() + Send + Sync + 'static> AsRowItem for F {
     fn into_row_item(self) -> RowItem {
         RowItem {
             weight: None,
             width_behavior: DimensionValue::Wrap, // Default to Wrap
-            child: self,
+            child: Box::new(self),
         }
     }
 }
 
 // Allow (Fn, DimensionValue) to be a RowItem
-impl<F: Fn() + Send + Sync + 'static> AsRowItem for (&'static F, DimensionValue) {
+impl<F: Fn() + Send + Sync + 'static> AsRowItem for (F, DimensionValue) {
     fn into_row_item(self) -> RowItem {
         RowItem {
             weight: None, // No weight specified
             width_behavior: self.1,
-            child: self.0,
+            child: Box::new(self.0),
         }
     }
 }
 
 // Allow (Fn, DimensionValue, f32_weight) to be a RowItem
-impl<F: Fn() + Send + Sync + 'static> AsRowItem for (&'static F, DimensionValue, f32) {
+impl<F: Fn() + Send + Sync + 'static> AsRowItem for (F, DimensionValue, f32) {
     fn into_row_item(self) -> RowItem {
         RowItem {
             weight: Some(self.2),
             width_behavior: self.1,
-            child: self.0,
+            child: Box::new(self.0),
         }
     }
 }
@@ -100,10 +99,10 @@ impl<F: Fn() + Send + Sync + 'static> AsRowItem for (&'static F, DimensionValue,
 /// A row component that arranges its children horizontally.
 /// Children can have fixed sizes, wrap their content, or fill available space (optionally with weights).
 #[tessera]
-pub fn row<const N: usize>(children_items_input: [impl AsRowItem + Clone; N]) {
+pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
     let children_items: [RowItem; N] =
         children_items_input.map(|item_input| item_input.into_row_item());
-    let children_items_for_measure = children_items.clone(); // Clone for the measure closure
+    let children_items_for_measure: Vec<_> = children_items.iter().map(|child| (child.weight, child.width_behavior)).collect(); // For the measure closure
 
     measure(Box::new(
         move |node_id, tree, row_parent_constraint, children_node_ids, metadatas| {
@@ -119,7 +118,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem + Clone; N]) {
                 let item = &children_items_for_measure[i]; // Use cloned version
                 let child_node_id = children_node_ids[i];
 
-                match item.width_behavior {
+                match item.1 {
                     DimensionValue::Fixed(fixed_width) => {
                         let child_constraint_for_measure = Constraint::new(
                             DimensionValue::Fixed(fixed_width),
@@ -178,9 +177,9 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem + Clone; N]) {
 
             for i in 0..N {
                 let item = &children_items_for_measure[i]; // Use cloned version
-                if let DimensionValue::Fill { .. } = item.width_behavior {
+                if let DimensionValue::Fill { .. } = item.1 {
                     fill_children_indices.push(i);
-                    if let Some(w) = item.weight {
+                    if let Some(w) = item.0 {
                         if w > 0.0 {
                             total_fill_weight += w;
                         } else {
@@ -214,7 +213,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem + Clone; N]) {
                 if total_fill_weight > 0.0 {
                     for &index in &fill_children_indices {
                         let item = &children_items_for_measure[index]; // Use cloned version
-                        if let Some(weight) = item.weight {
+                        if let Some(weight) = item.0 {
                             if weight > 0.0 {
                                 let child_node_id = children_node_ids[index];
                                 let proportional_width = ((weight / total_fill_weight)
@@ -223,7 +222,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem + Clone; N]) {
 
                                 if let DimensionValue::Fill {
                                     max: child_max_fill,
-                                } = item.width_behavior
+                                } = item.1
                                 {
                                     let alloc_width = child_max_fill
                                         .map_or(proportional_width, |m| proportional_width.min(m));
@@ -264,7 +263,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem + Clone; N]) {
                         let child_node_id = children_node_ids[index];
                         if let DimensionValue::Fill {
                             max: child_max_fill,
-                        } = item.width_behavior
+                        } = item.1
                         {
                             let alloc_width = child_max_fill
                                 .map_or(width_per_unweighted_child, |m| {
