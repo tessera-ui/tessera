@@ -36,7 +36,7 @@ pub struct SurfaceArgs {
 
 /// Surface component, a basic container that can have its own size constraints.
 #[tessera]
-pub fn surface(args: SurfaceArgs, child: impl Fn()) {
+pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
     // Clone args for the measure closure, as it's FnBox and might be called multiple times or sent across threads.
     let measure_args = args.clone();
 
@@ -53,7 +53,7 @@ pub fn surface(args: SurfaceArgs, child: impl Fn()) {
 
             // 2. Merge with parent_constraint to get effective_surface_constraint
             let effective_surface_constraint =
-                surface_intrinsic_constraint.merge(&parent_constraint);
+                surface_intrinsic_constraint.merge(parent_constraint);
 
             // 3. Determine constraint for the child
             let child_constraint_width = match effective_surface_constraint.width {

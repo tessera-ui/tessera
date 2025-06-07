@@ -15,13 +15,13 @@ pub struct ColumnItem {
     /// Defines the height behavior of this child.
     pub height_behavior: DimensionValue,
     /// The actual child component. Must be Send + Sync.
-    pub child: Box<dyn Fn() + Send + Sync>,
+    pub child: Box<dyn FnOnce() + Send + Sync>,
 }
 
 impl ColumnItem {
     /// Creates a new `ColumnItem`.
     pub fn new(
-        child: Box<dyn Fn() + Send + Sync>,
+        child: Box<dyn FnOnce() + Send + Sync>,
         height_behavior: DimensionValue,
         weight: Option<f32>,
     ) -> Self {
@@ -33,19 +33,19 @@ impl ColumnItem {
     }
 
     /// Helper to create a ColumnItem that wraps its content (height).
-    pub fn wrap(child: Box<dyn Fn() + Send + Sync>) -> Self {
+    pub fn wrap(child: Box<dyn FnOnce() + Send + Sync>) -> Self {
         Self::new(child, DimensionValue::Wrap, None)
     }
 
     /// Helper to create a ColumnItem that is fixed height.
-    pub fn fixed(child: Box<dyn Fn() + Send + Sync>, height: u32) -> Self {
+    pub fn fixed(child: Box<dyn FnOnce() + Send + Sync>, height: u32) -> Self {
         Self::new(child, DimensionValue::Fixed(height), None)
     }
 
     /// Helper to create a ColumnItem that fills available space (height),
     /// optionally with a weight and max_height.
     pub fn fill(
-        child: Box<dyn Fn() + Send + Sync>,
+        child: Box<dyn FnOnce() + Send + Sync>,
         weight: Option<f32>,
         max_height: Option<u32>,
     ) -> Self {
@@ -103,14 +103,17 @@ impl<F: Fn() + Send + Sync + 'static> AsColumnItem for (F, DimensionValue, f32) 
 pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
     let children_items: [ColumnItem; N] =
         children_items_input.map(|item_input| item_input.into_column_item());
-    let children_items_for_measure: Vec<_> = children_items.iter().map(|child| (child.weight, child.height_behavior)).collect(); // For the measure closure
+    let children_items_for_measure: Vec<_> = children_items
+        .iter()
+        .map(|child| (child.weight, child.height_behavior))
+        .collect(); // For the measure closure
 
     measure(Box::new(
         move |node_id, tree, column_parent_constraint, children_node_ids, metadatas| {
             // Use children_items_for_measure inside this closure
             let effective_column_constraint = metadatas[&node_id]
                 .constraint
-                .merge(&column_parent_constraint);
+                .merge(column_parent_constraint);
 
             let mut measured_children_sizes: Vec<Option<ComputedData>> = vec![None; N];
             let mut total_height_for_fixed_wrap: u32 = 0;
@@ -217,44 +220,41 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                 if total_fill_weight > 0.0 {
                     for &index in &fill_children_indices {
                         let item = &children_items_for_measure[index]; // Use cloned version
-                        if let Some(weight) = item.0 {
-                            if weight > 0.0 {
-                                let child_node_id = children_node_ids[index];
-                                let proportional_height = ((weight / total_fill_weight)
-                                    * remaining_height_for_fill as f32)
-                                    as u32;
+                        if let Some(weight) = item.0
+                            && weight > 0.0
+                        {
+                            let child_node_id = children_node_ids[index];
+                            let proportional_height = ((weight / total_fill_weight)
+                                * remaining_height_for_fill as f32)
+                                as u32;
 
-                                if let DimensionValue::Fill {
-                                    max: child_max_fill,
-                                } = item.1
-                                {
-                                    let alloc_height = child_max_fill
-                                        .map_or(proportional_height, |m| {
-                                            proportional_height.min(m)
-                                        });
-                                    let final_alloc_height =
-                                        alloc_height.min(temp_remaining_height);
+                            if let DimensionValue::Fill {
+                                max: child_max_fill,
+                            } = item.1
+                            {
+                                let alloc_height = child_max_fill
+                                    .map_or(proportional_height, |m| proportional_height.min(m));
+                                let final_alloc_height = alloc_height.min(temp_remaining_height);
 
-                                    let child_constraint_for_measure = Constraint::new(
-                                        effective_column_constraint.width,
-                                        DimensionValue::Fixed(final_alloc_height),
-                                    );
-                                    let final_child_constraint = metadatas[&child_node_id]
-                                        .constraint
-                                        .merge(&child_constraint_for_measure);
-                                    let size = measure_node(
-                                        child_node_id,
-                                        &final_child_constraint,
-                                        tree,
-                                        metadatas,
-                                    );
-                                    measured_children_sizes[index] = Some(size);
-                                    actual_height_taken_by_fill_children += size.height;
-                                    temp_remaining_height =
-                                        temp_remaining_height.saturating_sub(size.height);
-                                    computed_max_column_width =
-                                        computed_max_column_width.max(size.width);
-                                }
+                                let child_constraint_for_measure = Constraint::new(
+                                    effective_column_constraint.width,
+                                    DimensionValue::Fixed(final_alloc_height),
+                                );
+                                let final_child_constraint = metadatas[&child_node_id]
+                                    .constraint
+                                    .merge(&child_constraint_for_measure);
+                                let size = measure_node(
+                                    child_node_id,
+                                    &final_child_constraint,
+                                    tree,
+                                    metadatas,
+                                );
+                                measured_children_sizes[index] = Some(size);
+                                actual_height_taken_by_fill_children += size.height;
+                                temp_remaining_height =
+                                    temp_remaining_height.saturating_sub(size.height);
+                                computed_max_column_width =
+                                    computed_max_column_width.max(size.width);
                             }
                         }
                     }
@@ -349,7 +349,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
     ));
 
     // Use the original children_items here, iterating by reference
-    for item in children_items.iter() {
+    for item in children_items {
         (item.child)();
     }
 }

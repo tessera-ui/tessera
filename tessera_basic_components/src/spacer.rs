@@ -59,7 +59,7 @@ pub fn spacer(args: SpacerArgs) {
 
             // 2. Merge with parent_constraint to get effective_spacer_constraint
             // This is what the parent wants/allows the spacer to be.
-            let effective_spacer_constraint = spacer_intrinsic_constraint.merge(&parent_constraint);
+            let effective_spacer_constraint = spacer_intrinsic_constraint.merge(parent_constraint);
 
             // 3. Calculate final Spacer dimensions based on the effective_spacer_constraint
             // Since Spacer has no content, Wrap resolves to 0.

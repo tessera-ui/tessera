@@ -146,7 +146,10 @@ pub struct TextData {
 
 impl PartialEq for TextData {
     fn eq(&self, other: &Self) -> bool {
-        self.position == other.position && self.color == other.color && self.size == other.size
+        self.content == other.content
+            && self.position == other.position
+            && self.color == other.color
+            && self.size == other.size
     }
 }
 

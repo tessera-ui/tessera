@@ -4,6 +4,8 @@ use std::ops::{Add, AddAssign};
 use indextree::NodeId;
 use log::debug;
 
+use crate::cursor::CursorEvent;
+
 use super::{
     basic_drawable::BasicDrawable,
     constraint::{Constraint, DimensionValue},
@@ -16,6 +18,9 @@ pub struct ComponentNode {
     /// which does nothing but places children at the top-left corner
     /// of the parent node, with no offset
     pub measure_fn: Option<Box<MeasureFn>>,
+    /// Describes the state handler for the component
+    /// This is used to handle state changes
+    pub state_handler_fn: Option<Box<StateHandlerFn>>,
 }
 
 /// Contains metadata of the component node
@@ -28,6 +33,10 @@ pub struct ComponentNodeMetaData {
     /// The node's start position, relative to its parent
     /// None if the node is not placed yet
     pub rel_position: Option<[u32; 2]>,
+    /// The node's start position, relative to root window
+    /// This will be computed during drawing command's generation
+    /// None if the node is not drawn yet
+    pub abs_position: Option<[u32; 2]>,
     /// Optional basic drawable
     pub basic_drawable: Option<BasicDrawable>,
     /// The constraint that this node has intrinsically (e.g. from its arguments)
@@ -43,6 +52,7 @@ impl ComponentNodeMetaData {
             cached_computed_data: HashMap::new(),
             computed_data: None,
             rel_position: None,
+            abs_position: None,
             basic_drawable: None,
             constraint: Constraint::NONE,
         }
@@ -55,6 +65,7 @@ impl Default for ComponentNodeMetaData {
             cached_computed_data: HashMap::new(),
             computed_data: None,
             rel_position: None,
+            abs_position: None,
             basic_drawable: None,
             constraint: Constraint::NONE, // Default intrinsic constraint
         }
@@ -76,6 +87,20 @@ pub type MeasureFn = dyn Fn(
     ) -> ComputedData
     + Send
     + Sync;
+/// A StateHandlerFn is a function that takes input `NodeId` as the node's id
+/// and `ComputedData` as the computed data(size) of the node.
+/// It is used to handle state changes
+pub type StateHandlerFn = dyn Fn(&StateHandlerInput) + Send + Sync;
+
+/// The input for state handler function
+pub struct StateHandlerInput {
+    /// The node's id
+    pub node_id: indextree::NodeId,
+    /// The computed data of the node
+    pub computed_data: ComputedData,
+    /// The cursor events
+    pub cursor_events: Vec<CursorEvent>,
+}
 
 /// Measure a node recursively, return its size
 pub fn measure_node(

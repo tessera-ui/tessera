@@ -1,18 +1,13 @@
 /// Defines how a dimension (width or height) should be calculated.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum DimensionValue {
     /// The dimension is a fixed value.
     Fixed(u32),
     /// The dimension should wrap its content.
+    #[default]
     Wrap,
     /// The dimension should fill the available space, optionally up to a maximum.
     Fill { max: Option<u32> },
-}
-
-impl Default for DimensionValue {
-    fn default() -> Self {
-        DimensionValue::Wrap // Default to wrapping content
-    }
 }
 
 /// Represents layout constraints for a component node.

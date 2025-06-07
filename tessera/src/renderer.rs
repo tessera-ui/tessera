@@ -15,7 +15,11 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::{runtime::TesseraRuntime, tokio_runtime};
+use crate::{
+    cursor::{CursorEvent, CursorEventContent, CursorState},
+    runtime::TesseraRuntime,
+    tokio_runtime,
+};
 
 pub use drawer::{DrawCommand, ShapeUniforms, ShapeVertex, TextConstraint, TextData};
 
@@ -24,6 +28,8 @@ pub struct Renderer<F: Fn()> {
     app: Arc<Mutex<Option<WgpuApp>>>,
     /// Entry UI Function
     entry_point: F,
+    /// The state of the cursor
+    cursor_state: CursorState,
 }
 
 impl<F: Fn()> Renderer<F> {
@@ -31,7 +37,12 @@ impl<F: Fn()> Renderer<F> {
     pub fn run(entry_point: F) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::new().unwrap();
         let app = Arc::new(Mutex::new(None));
-        let mut renderer = Self { app, entry_point };
+        let cursor_state = CursorState::default();
+        let mut renderer = Self {
+            app,
+            entry_point,
+            cursor_state,
+        };
         event_loop.run_app(&mut renderer)
     }
 }
@@ -78,6 +89,42 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                     app.resize(size);
                 }
             }
+            WindowEvent::CursorMoved {
+                device_id: _,
+                position,
+            } => {
+                // Update cursor position
+                let event = CursorEvent {
+                    timestamp: Instant::now(),
+                    content: CursorEventContent::from_position([
+                        position.x as u32,
+                        position.y as u32,
+                    ]),
+                };
+                self.cursor_state.push_event(event);
+                debug!("Cursor moved to: {}, {}", position.x, position.y);
+            }
+            WindowEvent::CursorLeft { device_id: _ } => {
+                // Clear cursor position when it leaves the window
+                self.cursor_state.out_of_window();
+                debug!("Cursor left the window");
+            }
+            WindowEvent::MouseInput {
+                device_id: _,
+                state,
+                button,
+            } => {
+                let Some(event_content) = CursorEventContent::from_press_event(state, button)
+                else {
+                    return; // Ignore unsupported buttons
+                };
+                let event = CursorEvent {
+                    timestamp: Instant::now(),
+                    content: event_content,
+                };
+                self.cursor_state.push_event(event);
+                debug!("Mouse input: {state:?} button {button:?}");
+            }
             WindowEvent::KeyboardInput { .. } => {
                 // todo!("Handle keyboard input");
             }
@@ -103,7 +150,8 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 let draw_timer = Instant::now();
                 // Compute the draw commands then we can clear component tree for next build
                 debug!("Computing draw commands...");
-                let commands = component_tree.compute(app.size().into());
+                let cursor_events = self.cursor_state.pop_events().unwrap_or_default();
+                let commands = component_tree.compute(app.size().into(), cursor_events.into());
                 let draw_cost = draw_timer.elapsed();
                 debug!("Draw commands computed in {draw_cost:?}");
                 component_tree.clear();

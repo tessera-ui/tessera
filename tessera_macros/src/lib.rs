@@ -24,6 +24,7 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     .add_node(
                         ComponentNode {
                             measure_fn: None,
+                            state_handler_fn: None,
                         },
                         Constraint::NONE // Pass Constraint::NONE as the intrinsic_constraint
                                          // The component's measure_fn will use its args
@@ -41,6 +42,17 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         .current_node_mut()
                         .unwrap()
                         .measure_fn = Some(fun);
+                }
+            };
+
+            let state_handler = {
+                use tessera::{StateHandlerFn, TesseraRuntime};
+                |fun: Box<StateHandlerFn>| {
+                    TesseraRuntime::write()
+                        .component_tree
+                        .current_node_mut()
+                        .unwrap()
+                        .state_handler_fn = Some(fun);
                 }
             };
 

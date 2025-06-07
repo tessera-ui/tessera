@@ -4,12 +4,12 @@ mod node;
 
 use std::num::NonZero;
 
-use crate::renderer::DrawCommand;
+use crate::{component_tree::node::StateHandlerInput, cursor::CursorEvent, renderer::DrawCommand};
 pub use basic_drawable::{BasicDrawable, ShadowProps};
-pub use constraint::{Constraint, DimensionValue}; // Added DimensionValue
+pub use constraint::{Constraint, DimensionValue};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
-    MeasureFn, measure_node, place_node,
+    MeasureFn, StateHandlerFn, measure_node, place_node,
 };
 
 /// Respents a component tree
@@ -20,6 +20,8 @@ pub struct ComponentTree {
     metadatas: ComponentNodeMetaDatas,
     /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
+    /// The ID of the node that currently has focus
+    pub focused_node_id: Option<indextree::NodeId>,
 }
 
 impl Default for ComponentTree {
@@ -38,6 +40,7 @@ impl ComponentTree {
             tree,
             node_queue,
             metadatas,
+            focused_node_id: None,
         }
     }
 
@@ -46,6 +49,7 @@ impl ComponentTree {
         self.tree.clear();
         self.metadatas.clear();
         self.node_queue.clear();
+        self.focused_node_id = None;
     }
 
     /// Get node by NodeId
@@ -97,7 +101,11 @@ impl ComponentTree {
     }
 
     /// Compute the ComponentTree into a list of DrawCommand
-    pub fn compute(&mut self, screen_size: [u32; 2]) -> Vec<DrawCommand> {
+    pub fn compute(
+        &mut self,
+        screen_size: [u32; 2],
+        cursor_events: Vec<CursorEvent>,
+    ) -> Vec<DrawCommand> {
         // Mesure Stage:
         // Traverse the tree and measure the size of each node
         // From the root node to the leaf node, then compute the size of each node
@@ -125,8 +133,60 @@ impl ComponentTree {
             &self.tree,
             &mut self.metadatas,
         );
-        // In the end, we need to traverse the tree again and get the draw commands.
-        compute_draw_commands(root_node, &mut self.tree, &mut self.metadatas)
+        // Traverse the tree again and get the draw commands.
+        let commands = compute_draw_commands(root_node, &mut self.tree, &mut self.metadatas);
+        // After gen all drawing commands, we can execute state handlers for the whole tree.
+        // This is beause some event such as mouse click cannot be ensured where it happens
+        // until the whole tree is measured.
+        for node in root_node
+            .reverse_traverse(&self.tree)
+            .filter_map(|edge| match edge {
+                indextree::NodeEdge::Start(node_id) => Some(node_id),
+                indextree::NodeEdge::End(_) => None,
+            })
+        {
+            // Get the state handler function for the node, if it exists
+            // we do it first to skip unnecessary computation
+            // if there is no state handler function at all.
+            let Some(state_handler) = self
+                .tree
+                .get(node)
+                .and_then(|n| n.get().state_handler_fn.as_ref())
+            else {
+                continue;
+            };
+            // transform the cursor events to set their position
+            // relative to the node's position
+            let cursor_events = cursor_events
+                .iter()
+                .cloned()
+                .map(|mut event| {
+                    // Get the node's absolute position
+                    let abs_position = self
+                        .metadatas
+                        .get(&node)
+                        .and_then(|m| m.abs_position)
+                        .unwrap_or([0, 0]); // Default to [0, 0] if not set
+                    // Set the cursor event's position relative to the node
+                    event.content = event.content.into_relative_position(abs_position);
+                    event
+                })
+                .collect::<Vec<_>>();
+            // Create the input for the state handler
+            let input = StateHandlerInput {
+                node_id: node,
+                computed_data: self
+                    .metadatas
+                    .get(&node)
+                    .and_then(|m| m.computed_data) // Get the computed data for the node
+                    .unwrap(), // Should always exist after measure
+                cursor_events,
+            };
+            // Call the state handler function with the input
+            state_handler(&input);
+        }
+        // Return the computed draw commands
+        commands
     }
 }
 
@@ -159,6 +219,8 @@ fn compute_draw_commands_inner(
 
     let rel_pos = metadata_entry.rel_position.unwrap_or([0, 0]);
     let self_pos = [start_pos[0] + rel_pos[0], start_pos[1] + rel_pos[1]];
+
+    metadata_entry.abs_position = Some(self_pos);
 
     if let Some(drawable) = metadata_entry.basic_drawable.take() {
         let size = metadata_entry.computed_data.unwrap(); // Should exist after measure
