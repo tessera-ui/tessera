@@ -111,7 +111,9 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
     measure(Box::new(
         move |node_id, tree, column_parent_constraint, children_node_ids, metadatas| {
             // Use children_items_for_measure inside this closure
-            let effective_column_constraint = metadatas[&node_id]
+            let effective_column_constraint = metadatas
+                .get_mut(&node_id)
+                .unwrap()
                 .constraint
                 .merge(column_parent_constraint);
 
@@ -129,7 +131,9 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             effective_column_constraint.width,
                             DimensionValue::Fixed(fixed_height),
                         );
-                        let final_child_constraint = metadatas[&child_node_id]
+                        let final_child_constraint = metadatas
+                            .get_mut(&child_node_id)
+                            .unwrap()
                             .constraint
                             .merge(&child_constraint_for_measure);
                         let size =
@@ -143,7 +147,9 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             effective_column_constraint.width,
                             DimensionValue::Wrap,
                         );
-                        let final_child_constraint = metadatas[&child_node_id]
+                        let final_child_constraint = metadatas
+                            .get_mut(&child_node_id)
+                            .unwrap()
                             .constraint
                             .merge(&child_constraint_for_measure);
                         let size =
@@ -205,7 +211,9 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                     let child_node_id = children_node_ids[index];
                     let child_constraint_for_measure =
                         Constraint::new(effective_column_constraint.width, DimensionValue::Wrap);
-                    let final_child_constraint = metadatas[&child_node_id]
+                    let final_child_constraint = metadatas
+                        .get_mut(&child_node_id)
+                        .unwrap()
                         .constraint
                         .merge(&child_constraint_for_measure);
                     let size =
@@ -240,7 +248,9 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                                     effective_column_constraint.width,
                                     DimensionValue::Fixed(final_alloc_height),
                                 );
-                                let final_child_constraint = metadatas[&child_node_id]
+                                let final_child_constraint = metadatas
+                                    .get_mut(&child_node_id)
+                                    .unwrap()
                                     .constraint
                                     .merge(&child_constraint_for_measure);
                                 let size = measure_node(
@@ -282,7 +292,9 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                                 effective_column_constraint.width,
                                 DimensionValue::Fixed(final_alloc_height),
                             );
-                            let final_child_constraint = metadatas[&child_node_id]
+                            let final_child_constraint = metadatas
+                                .get_mut(&child_node_id)
+                                .unwrap()
                                 .constraint
                                 .merge(&child_constraint_for_measure);
                             let size = measure_node(

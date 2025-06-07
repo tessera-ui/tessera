@@ -86,7 +86,7 @@ pub fn text(args: impl Into<TextArgs>) {
             let size = text_data.size;
             let drawable = BasicDrawable::Text { data: text_data };
 
-            if let Some(metadata) = metadatas.get_mut(&node_id) {
+            if let Some(mut metadata) = metadatas.get_mut(&node_id) {
                 metadata.basic_drawable = Some(drawable);
             } else {
                 let mut default_meta = ComponentNodeMetaData::default();

@@ -4,6 +4,8 @@ mod node;
 
 use std::num::NonZero;
 
+use rayon::prelude::*;
+
 use crate::{component_tree::node::StateHandlerInput, cursor::CursorEvent, renderer::DrawCommand};
 pub use basic_drawable::{BasicDrawable, ShadowProps};
 pub use constraint::{Constraint, DimensionValue};
@@ -134,7 +136,8 @@ impl ComponentTree {
             &mut self.metadatas,
         );
         // Traverse the tree again and get the draw commands.
-        let commands = compute_draw_commands(root_node, &mut self.tree, &mut self.metadatas);
+        let commands =
+            compute_draw_commands_parallel(root_node, &mut self.tree, &mut self.metadatas);
         // After gen all drawing commands, we can execute state handlers for the whole tree.
         // This is beause some event such as mouse click cannot be ensured where it happens
         // until the whole tree is measured.
@@ -190,46 +193,45 @@ impl ComponentTree {
     }
 }
 
-/// Compute the whole tree to generate draw commands
-fn compute_draw_commands(
+fn compute_draw_commands_parallel(
     node_id: indextree::NodeId,
-    tree: &mut ComponentNodeTree,
-    metadatas: &mut ComponentNodeMetaDatas,
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
 ) -> Vec<DrawCommand> {
-    let mut commands = Vec::new();
-    compute_draw_commands_inner(
-        [0, 0], // Start position is [0, 0] for the root node
-        node_id,
-        tree,
-        metadatas,
-        &mut commands,
-    );
-    commands
+    compute_draw_commands_inner_parallel([0, 0], node_id, tree, metadatas)
 }
 
-/// Inner function to compute draw commands recursively
-fn compute_draw_commands_inner(
+fn compute_draw_commands_inner_parallel(
     start_pos: [u32; 2],
     node_id: indextree::NodeId,
-    tree: &mut ComponentNodeTree,
-    metadatas: &mut ComponentNodeMetaDatas,
-    commands: &mut Vec<DrawCommand>,
-) {
-    let metadata_entry = metadatas.get_mut(&node_id).unwrap(); // Should always exist after measure
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+) -> Vec<DrawCommand> {
+    let mut local_commands = Vec::new();
 
-    let rel_pos = metadata_entry.rel_position.unwrap_or([0, 0]);
-    let self_pos = [start_pos[0] + rel_pos[0], start_pos[1] + rel_pos[1]];
+    if let Some(mut entry) = metadatas.get_mut(&node_id) {
+        let rel_pos = entry.rel_position.unwrap_or([0, 0]);
+        let self_pos = [start_pos[0] + rel_pos[0], start_pos[1] + rel_pos[1]];
+        entry.abs_position = Some(self_pos);
 
-    metadata_entry.abs_position = Some(self_pos);
+        if let Some(drawable) = entry.basic_drawable.take() {
+            let size = entry.computed_data.unwrap();
+            let command = drawable.into_draw_command([size.width, size.height], self_pos);
+            local_commands.push(command);
+        }
 
-    if let Some(drawable) = metadata_entry.basic_drawable.take() {
-        let size = metadata_entry.computed_data.unwrap(); // Should exist after measure
-        let command = drawable.into_draw_command([size.width, size.height], self_pos);
-        commands.push(command);
+        drop(entry);
+
+        let children: Vec<_> = node_id.children(tree).collect();
+        let child_results: Vec<Vec<DrawCommand>> = children
+            .into_par_iter()
+            .map(|child| compute_draw_commands_inner_parallel(self_pos, child, tree, metadatas))
+            .collect();
+
+        for child_cmds in child_results {
+            local_commands.extend(child_cmds);
+        }
     }
 
-    let children: Vec<_> = node_id.children(tree).collect();
-    for child in children {
-        compute_draw_commands_inner(self_pos, child, tree, metadatas, commands);
-    }
+    local_commands
 }

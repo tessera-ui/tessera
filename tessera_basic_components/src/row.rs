@@ -110,8 +110,11 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
     measure(Box::new(
         move |node_id, tree, row_parent_constraint, children_node_ids, metadatas| {
             // Use children_items_for_measure inside this closure
-            let effective_row_constraint =
-                metadatas[&node_id].constraint.merge(row_parent_constraint);
+            let effective_row_constraint = metadatas
+                .get_mut(&node_id)
+                .unwrap()
+                .constraint
+                .merge(row_parent_constraint);
 
             let mut measured_children_sizes: Vec<Option<ComputedData>> = vec![None; N];
             let mut total_width_for_fixed_wrap: u32 = 0;
@@ -127,7 +130,9 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                             DimensionValue::Fixed(fixed_width),
                             effective_row_constraint.height,
                         );
-                        let final_child_constraint = metadatas[&child_node_id]
+                        let final_child_constraint = metadatas
+                            .get_mut(&child_node_id)
+                            .unwrap()
                             .constraint
                             .merge(&child_constraint_for_measure);
                         let size =
@@ -139,7 +144,9 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                     DimensionValue::Wrap => {
                         let child_constraint_for_measure =
                             Constraint::new(DimensionValue::Wrap, effective_row_constraint.height);
-                        let final_child_constraint = metadatas[&child_node_id]
+                        let final_child_constraint = metadatas
+                            .get_mut(&child_node_id)
+                            .unwrap()
                             .constraint
                             .merge(&child_constraint_for_measure);
                         let size =
@@ -201,7 +208,9 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                     let child_node_id = children_node_ids[index];
                     let child_constraint_for_measure =
                         Constraint::new(DimensionValue::Wrap, effective_row_constraint.height);
-                    let final_child_constraint = metadatas[&child_node_id]
+                    let final_child_constraint = metadatas
+                        .get_mut(&child_node_id)
+                        .unwrap()
                         .constraint
                         .merge(&child_constraint_for_measure);
                     let size =
@@ -236,7 +245,9 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                                     DimensionValue::Fixed(final_alloc_width),
                                     effective_row_constraint.height,
                                 );
-                                let final_child_constraint = metadatas[&child_node_id]
+                                let final_child_constraint = metadatas
+                                    .get_mut(&child_node_id)
+                                    .unwrap()
                                     .constraint
                                     .merge(&child_constraint_for_measure);
                                 let size = measure_node(
@@ -277,7 +288,9 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                                 DimensionValue::Fixed(final_alloc_width),
                                 effective_row_constraint.height,
                             );
-                            let final_child_constraint = metadatas[&child_node_id]
+                            let final_child_constraint = metadatas
+                                .get_mut(&child_node_id)
+                                .unwrap()
                                 .constraint
                                 .merge(&child_constraint_for_measure);
                             let size = measure_node(

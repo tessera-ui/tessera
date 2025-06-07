@@ -81,7 +81,9 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             let mut child_measured_size = ComputedData::ZERO;
             if let Some(&child_node_id) = children_node_ids.first() {
                 // The child's own defined constraints also need to be merged.
-                let final_child_constraint_for_measure = metadatas[&child_node_id]
+                let final_child_constraint_for_measure = metadatas
+                    .get_mut(&child_node_id)
+                    .unwrap()
                     .constraint
                     .merge(&child_actual_constraint);
                 child_measured_size = measure_node(
@@ -125,7 +127,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 corner_radius: measure_args.corner_radius,
                 shadow: measure_args.shadow,
             };
-            if let Some(metadata) = metadatas.get_mut(&node_id) {
+            if let Some(mut metadata) = metadatas.get_mut(&node_id) {
                 metadata.basic_drawable = Some(drawable);
             }
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::ops::{Add, AddAssign};
 
+use dashmap::DashMap;
 use indextree::NodeId;
 use log::debug;
 
@@ -75,7 +76,7 @@ impl Default for ComponentNodeMetaData {
 /// A tree of component nodes
 pub type ComponentNodeTree = indextree::Arena<ComponentNode>;
 /// Contains all component nodes's metadatas
-pub type ComponentNodeMetaDatas = HashMap<NodeId, ComponentNodeMetaData>;
+pub type ComponentNodeMetaDatas = DashMap<NodeId, ComponentNodeMetaData>;
 /// A MeasureFn is a function that takes input `Constraint` and its children nodes
 /// finish placementing inside and return its size(`ComputedData`)
 pub type MeasureFn = dyn Fn(
@@ -144,7 +145,7 @@ pub fn measure_node(
     };
 
     // Ensure metadata exists before trying to update cache or computed_data
-    let metadata = component_node_metadatas.entry(node).or_default();
+    let mut metadata = component_node_metadatas.entry(node).or_default();
     metadata.computed_data = Some(size);
     metadata
         .cached_computed_data
