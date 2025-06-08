@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::error;
+use log::{debug, error};
 use winit::window::Window;
 
 use super::drawer::{DrawCommand, Drawer};
@@ -23,8 +23,6 @@ pub(crate) struct WgpuApp {
     size_changed: bool,
     /// draw pipelines
     pub drawer: Drawer,
-    /// cache for render commands
-    render_commands_cache: Vec<DrawCommand>,
 }
 
 impl WgpuApp {
@@ -83,12 +81,24 @@ impl WgpuApp {
         // Create surface configuration
         let size = window.inner_size();
         let caps = surface.get_capabilities(&adapter);
+        // Choose the present mode
+        let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
+            // Mailbox is the best choice for most cases, it allows for low latency and high FPS
+            wgpu::PresentMode::Mailbox
+        } else if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
+            // Fifo is the fallback, it is the most compatible and stable
+            wgpu::PresentMode::Fifo
+        } else {
+            // Immediate is the least preferred, it can cause tearing and is not recommended
+            wgpu::PresentMode::Immediate
+        };
+        debug!("Using present mode: {:?}", present_mode);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: caps.formats[0],
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Mailbox,
+            present_mode: present_mode,
             alpha_mode: caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
@@ -96,8 +106,6 @@ impl WgpuApp {
         surface.configure(&gpu, &config);
         // Create drawer
         let drawer = Drawer::new(&gpu, &queue, &config);
-        // Create cache for render commands
-        let render_commands_cache = Vec::new();
 
         Self {
             window,
@@ -108,7 +116,6 @@ impl WgpuApp {
             size,
             size_changed: false,
             drawer,
-            render_commands_cache,
         }
     }
 
@@ -142,12 +149,6 @@ impl WgpuApp {
         &mut self,
         drawer_commands: impl IntoIterator<Item = DrawCommand>,
     ) -> Result<(), wgpu::SurfaceError> {
-        let drawer_commands_vec: Vec<_> = drawer_commands.into_iter().collect();
-        if drawer_commands_vec.is_empty() || self.render_commands_cache == drawer_commands_vec {
-            return Ok(());
-        }
-        self.render_commands_cache = drawer_commands_vec.clone();
-
         // get a texture from surface
         let output = self.surface.get_current_texture()?;
         // create a command encoder
@@ -176,7 +177,7 @@ impl WgpuApp {
         self.drawer.begin_frame();
 
         // draw commands
-        for command in drawer_commands_vec {
+        for command in drawer_commands {
             // Use the collected Vec
             self.drawer.prepare_or_draw(
                 &self.gpu,

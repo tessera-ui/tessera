@@ -21,7 +21,10 @@ use crate::{
     tokio_runtime,
 };
 
-pub use drawer::{DrawCommand, ShapeUniforms, ShapeVertex, TextConstraint, TextData};
+pub use drawer::{
+    DrawCommand, ShapeUniforms, ShapeVertex, TextConstraint, TextData, read_font_system,
+    write_font_system,
+};
 
 pub struct Renderer<F: Fn()> {
     /// WGPU app

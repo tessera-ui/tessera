@@ -4,3 +4,4 @@ pub mod row;
 pub mod spacer;
 pub mod surface;
 pub mod text;
+pub mod text_editor;

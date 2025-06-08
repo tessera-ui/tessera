@@ -11,5 +11,5 @@ pub use component_tree::{
 };
 pub use cursor::{CursorEvent, CursorEventContent, PressKeyEventType};
 pub use indextree::{Arena, NodeId};
-pub use renderer::{Renderer, TextConstraint, TextData};
+pub use renderer::{Renderer, TextConstraint, TextData, read_font_system, write_font_system};
 pub use runtime::TesseraRuntime;

@@ -8,7 +8,7 @@ pub use crate::renderer::drawer::shape::{
 };
 pub use command::{DrawCommand, TextConstraint};
 use pos_misc::pixel_to_ndc;
-pub use text::{GlyphonTextRender, TextData};
+pub use text::{GlyphonTextRender, TextData, read_font_system, write_font_system};
 
 /// Drawer is a struct that handles pipelines and draw commands.
 pub struct Drawer {

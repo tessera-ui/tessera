@@ -59,29 +59,28 @@ pub fn text(args: impl Into<TextArgs>) {
     let text_args = args.into();
     measure(Box::new(
         move |node_id, _, parent_constraint, _, metadatas| {
-            let max_width_for_resize: Option<f32> = match parent_constraint.width {
+            let max_width: Option<f32> = match parent_constraint.width {
                 DimensionValue::Fixed(w) => Some(w as f32),
                 DimensionValue::Wrap => None,
                 DimensionValue::Fill { max } => max.map(|m| m as f32),
             };
 
-            let max_height_for_resize: Option<f32> = match parent_constraint.height {
+            let max_height: Option<f32> = match parent_constraint.height {
                 DimensionValue::Fixed(h) => Some(h as f32),
                 DimensionValue::Wrap => None,
                 DimensionValue::Fill { max } => max.map(|m| m as f32),
             };
 
-            let mut text_data = TextData::new(
+            let text_data = TextData::new(
                 text_args.text.clone(),
                 text_args.color,
                 text_args.size,
                 text_args.line_height,
                 TextConstraint {
-                    max_width: None,
-                    max_height: None,
+                    max_width,
+                    max_height,
                 },
             );
-            text_data.resize(max_width_for_resize, max_height_for_resize);
 
             let size = text_data.size;
             let drawable = BasicDrawable::Text { data: text_data };

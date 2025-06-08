@@ -130,27 +130,14 @@ impl GlyphonTextRender {
 
 #[derive(Debug, Clone)]
 pub struct TextData {
-    /// Text content to render
-    content: String,
     /// glyphon text buffer
     text_buffer: glyphon::Buffer,
     // we need fields below to construct a glyphon::TextArea
     // don't ask me why we cannot just save a glyphon::TextArea, ask borrow checker
     /// Position of the text, none if it is not computed yet
     pub position: Option<[u32; 2]>,
-    /// Color of the text
-    color: glyphon::Color,
     /// Text area size
     pub size: [u32; 2],
-}
-
-impl PartialEq for TextData {
-    fn eq(&self, other: &Self) -> bool {
-        self.content == other.content
-            && self.position == other.position
-            && self.color == other.color
-            && self.size == other.size
-    }
 }
 
 impl TextData {
@@ -198,10 +185,27 @@ impl TextData {
         }
         // build text data
         Self {
-            content: text,
             text_buffer,
-            position: None, // Position will be set later
-            color,
+            position: None,
+            size: [run_width as u32, line_height as u32],
+        }
+    }
+
+    pub fn from_buffer(text_buffer: glyphon::Buffer) -> Self {
+        // Calculate text bounds
+        // Get the layout runs
+        let mut run_width: f32 = 0.0;
+        // Calculate the line height based on the number of lines
+        let line_height =
+            text_buffer.layout_runs().count() as f32 * text_buffer.metrics().line_height;
+        for run in text_buffer.layout_runs() {
+            // Take the max. width of all lines.
+            run_width = run_width.max(run.line_w);
+        }
+        // build text data
+        Self {
+            text_buffer,
+            position: None,
             size: [run_width as u32, line_height as u32],
         }
     }
@@ -220,37 +224,8 @@ impl TextData {
             top: self.position.unwrap()[1] as f32,
             scale: 1.0,
             bounds,
-            default_color: self.color,
+            default_color: glyphon::Color::rgb(0, 0, 0), // Black by default
             custom_glyphs: &[],
         }
-    }
-
-    /// resize the text area
-    pub fn resize(&mut self, width: Option<f32>, height: Option<f32>) {
-        // get global font system
-        let font_system = &mut write_font_system();
-        // Update the text buffer size
-        self.text_buffer.set_wrap(font_system, glyphon::Wrap::Glyph);
-        self.text_buffer.set_size(font_system, width, height);
-        self.text_buffer.set_text(
-            font_system,
-            &self.content,
-            &glyphon::Attrs::new()
-                .family(fontdb::Family::SansSerif)
-                .color(self.color),
-            glyphon::Shaping::Advanced,
-        );
-        self.text_buffer.shape_until_scroll(font_system, false);
-        // Get the layout runs
-        let mut run_width: f32 = 0.0;
-        // Calculate the line height based on the number of lines
-        let line_height =
-            self.text_buffer.layout_runs().count() as f32 * self.text_buffer.metrics().line_height;
-        for run in self.text_buffer.layout_runs() {
-            // Take the max. width of all lines.
-            run_width = run_width.max(run.line_w);
-        }
-        // Update the size
-        self.size = [run_width as u32, line_height as u32];
     }
 }
