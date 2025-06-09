@@ -13,3 +13,6 @@ pub use cursor::{CursorEvent, CursorEventContent, PressKeyEventType};
 pub use indextree::{Arena, NodeId};
 pub use renderer::{Renderer, TextConstraint, TextData, read_font_system, write_font_system};
 pub use runtime::TesseraRuntime;
+
+// re-export winit
+pub use winit;

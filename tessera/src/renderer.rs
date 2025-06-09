@@ -7,6 +7,8 @@ use log::{debug, warn};
 use parking_lot::Mutex;
 
 use app::WgpuApp;
+#[cfg(target_os = "android")]
+use winit::platform::android::{EventLoopBuilderExtAndroid, activity::AndroidApp};
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
@@ -36,6 +38,7 @@ pub struct Renderer<F: Fn()> {
 }
 
 impl<F: Fn()> Renderer<F> {
+    #[cfg(not(target_os = "android"))]
     /// Create event loop and run application
     pub fn run(entry_point: F) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::new().unwrap();
@@ -46,6 +49,26 @@ impl<F: Fn()> Renderer<F> {
             entry_point,
             cursor_state,
         };
+        event_loop.run_app(&mut renderer)
+    }
+
+    #[cfg(target_os = "android")]
+    /// Create event loop and run application on Android
+    pub fn run(entry_point: F, android_app: AndroidApp) -> Result<(), EventLoopError> {
+        use log::info;
+
+        let event_loop = EventLoop::builder()
+            .with_android_app(android_app)
+            .build()
+            .unwrap();
+        let app = Arc::new(Mutex::new(None));
+        let cursor_state = CursorState::default();
+        let mut renderer = Self {
+            app,
+            entry_point,
+            cursor_state,
+        };
+        info!("Starting Tessera Renderer on Android...");
         event_loop.run_app(&mut renderer)
     }
 }

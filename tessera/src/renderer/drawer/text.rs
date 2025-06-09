@@ -9,34 +9,42 @@ use super::command::TextConstraint;
 /// to share it every where and avoid creating it multiple times.
 static FONT_SYSTEM: OnceLock<RwLock<glyphon::FontSystem>> = OnceLock::new();
 
+#[cfg(target_os = "android")]
+fn init_font_system() -> RwLock<glyphon::FontSystem> {
+    let mut font_system = glyphon::FontSystem::new_with_fonts([fontdb::Source::Binary(Arc::new(
+        include_bytes!("../assets/fonts/NotoSansSC-Regular.otf"),
+    ))]);
+    font_system.db_mut().load_fonts_dir("/system/fonts");
+    font_system.db_mut().set_sans_serif_family("Roboto");
+    font_system.db_mut().set_serif_family("Noto Serif");
+    font_system.db_mut().set_monospace_family("Droid Sans Mono");
+    font_system.db_mut().set_cursive_family("Dancing Script");
+    font_system.db_mut().set_fantasy_family("Dancing Script");
+
+    RwLock::new(font_system)
+}
+
+#[cfg(not(target_os = "android"))]
+fn init_font_system() -> RwLock<glyphon::FontSystem> {
+    RwLock::new(glyphon::FontSystem::new_with_fonts([
+        fontdb::Source::Binary(Arc::new(include_bytes!(
+            "../assets/fonts/NotoSansSC-Regular.otf"
+        ))),
+    ]))
+}
+
 /// It costs a lot to create a glyphon font system, so we use a static one
 /// to share it every where and avoid creating it multiple times.
 /// This function returns a read lock of the font system.
 pub fn read_font_system() -> RwLockReadGuard<'static, glyphon::FontSystem> {
-    FONT_SYSTEM
-        .get_or_init(|| {
-            RwLock::new(glyphon::FontSystem::new_with_fonts([
-                fontdb::Source::Binary(Arc::new(include_bytes!(
-                    "../assets/fonts/NotoSansSC-Regular.otf"
-                ))),
-            ]))
-        })
-        .read()
+    FONT_SYSTEM.get_or_init(|| init_font_system()).read()
 }
 
 /// It costs a lot to create a glyphon font system, so we use a static one
 /// to share it every where and avoid creating it multiple times.
 /// This function returns a write lock of the font system.
 pub fn write_font_system() -> parking_lot::RwLockWriteGuard<'static, glyphon::FontSystem> {
-    FONT_SYSTEM
-        .get_or_init(|| {
-            RwLock::new(glyphon::FontSystem::new_with_fonts([
-                fontdb::Source::Binary(Arc::new(include_bytes!(
-                    "../assets/fonts/NotoSansSC-Regular.otf"
-                ))),
-            ]))
-        })
-        .write()
+    FONT_SYSTEM.get_or_init(|| init_font_system()).write()
 }
 
 /// A text renderer

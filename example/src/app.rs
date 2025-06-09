@@ -13,12 +13,6 @@ use tessera_basic_components::{
 };
 use tessera_macros::tessera;
 
-fn main() -> Result<(), impl std::error::Error> {
-    env_logger::init();
-    let value = Arc::new(AtomicU64::new(0));
-    Renderer::run(|| app(value.clone()))
-}
-
 // Header row component with two text items
 #[tessera]
 fn header_row() {
@@ -71,7 +65,7 @@ fn value_display(value: Arc<AtomicU64>) {
 
 // Main app component
 #[tessera]
-fn app(value: Arc<AtomicU64>) {
+pub fn app(value: Arc<AtomicU64>) {
     {
         let value = value.clone();
         surface(

@@ -4,3 +4,6 @@ members = ["example", "tessera", "tessera_basic_components", "tessera_macros"]
 
 [profile.release]
 debug = true
+codegen-units = 1
+lto = true
+strip = true
