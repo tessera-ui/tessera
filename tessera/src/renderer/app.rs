@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::{debug, error};
+use log::{debug, error, info};
 use winit::window::Window;
 
 use super::drawer::{DrawCommand, Drawer};
@@ -92,7 +92,7 @@ impl WgpuApp {
             // Immediate is the least preferred, it can cause tearing and is not recommended
             wgpu::PresentMode::Immediate
         };
-        debug!("Using present mode: {:?}", present_mode);
+        info!("Using present mode: {:?}", present_mode);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: caps.formats[0],

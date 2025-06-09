@@ -57,7 +57,7 @@ impl TextEditorState {
 
 /// A text editor component
 #[tessera]
-fn text_editor(state: Arc<RwLock<TextEditorState>>) {
+pub fn text_editor(state: Arc<RwLock<TextEditorState>>) {
     measure(Box::new(
         move |node_id, _, parent_constraint, _, metadatas| {
             let max_width: Option<f32> = match parent_constraint.width {
