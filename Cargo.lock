@@ -677,6 +677,7 @@ dependencies = [
  "android_logger",
  "env_logger",
  "log",
+ "parking_lot",
  "rand",
  "tessera",
  "tessera_basic_components",

@@ -61,7 +61,7 @@ pub enum CursorEventContent {
     /// The cursor is moved
     Moved {
         /// Position, in pixels
-        pos: [u32; 2],
+        pos: [i32; 2],
     },
     /// The cursor is left the window
     Left,
@@ -74,7 +74,9 @@ pub enum CursorEventContent {
 impl CursorEventContent {
     /// Create a move event
     pub fn from_position(pos: [u32; 2]) -> Self {
-        Self::Moved { pos }
+        Self::Moved {
+            pos: [pos[0] as i32, pos[1] as i32],
+        }
     }
 
     /// Transform the position to be relative to the given position
@@ -82,7 +84,10 @@ impl CursorEventContent {
     pub fn into_relative_position(self, abs_start_pos: [u32; 2]) -> Self {
         match self {
             Self::Moved { pos } => Self::Moved {
-                pos: [pos[0] - abs_start_pos[0], pos[1] - abs_start_pos[1]],
+                pos: [
+                    pos[0] as i32 - abs_start_pos[0] as i32,
+                    pos[1] as i32 - abs_start_pos[1] as i32,
+                ],
             },
             Self::Left => Self::Left,
             Self::Pressed(event_type) => Self::Pressed(event_type),

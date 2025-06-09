@@ -1,9 +1,13 @@
-use std::sync::{
-    Arc,
-    atomic::{self, AtomicU64},
+use std::{
+    sync::{
+        Arc,
+        atomic::{self, AtomicU64},
+    },
+    time::Instant,
 };
 
-use tessera::{CursorEventContent, DimensionValue, Renderer};
+use parking_lot::RwLock;
+use tessera::{CursorEventContent, DimensionValue};
 use tessera_basic_components::{
     column::{ColumnItem, column},
     row::{RowItem, row},
@@ -63,11 +67,28 @@ fn value_display(value: Arc<AtomicU64>) {
     )
 }
 
+#[tessera]
+fn perf(last_frame: Arc<RwLock<Instant>>, fps: Arc<AtomicU64>) {
+    text(format!("FPS: {}", fps.load(atomic::Ordering::SeqCst)));
+    state_handler(Box::new(move |_| {
+        let now = Instant::now();
+        let mut last_frame = last_frame.write();
+
+        fps.store(
+            (1.0 / now.duration_since(*last_frame).as_secs_f32()) as u64,
+            atomic::Ordering::SeqCst,
+        );
+        *last_frame = now;
+    }));
+}
+
 // Main app component
 #[tessera]
-pub fn app(value: Arc<AtomicU64>) {
+pub fn app(value: Arc<AtomicU64>, last_frame: Arc<RwLock<Instant>>, fps: Arc<AtomicU64>) {
     {
         let value = value.clone();
+        let last_frame = last_frame.clone();
+        let fps = fps.clone();
         surface(
             SurfaceArgsBuilder::default()
                 .color([1.0, 1.0, 1.0])
@@ -87,6 +108,7 @@ pub fn app(value: Arc<AtomicU64>) {
                         )
                     })),
                     ColumnItem::wrap(Box::new(|| value_display(value))),
+                    ColumnItem::wrap(Box::new(|| perf(last_frame, fps))),
                 ]);
             },
         );
