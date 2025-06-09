@@ -23,6 +23,7 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     .component_tree
                     .add_node(
                         ComponentNode {
+                            fn_name: stringify!(#fn_name).to_string(),
                             measure_fn: None,
                             state_handler_fn: None,
                         },

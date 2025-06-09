@@ -2,8 +2,10 @@ mod basic_drawable;
 mod constraint;
 mod node;
 
-use std::num::NonZero;
+use std::{num::NonZero, time::Instant};
 
+use glyphon::cosmic_text::ttf_parser::apple_layout::state;
+use log::debug;
 use rayon::prelude::*;
 
 use crate::{component_tree::node::StateHandlerInput, cursor::CursorEvent, renderer::DrawCommand};
@@ -124,6 +126,9 @@ impl ComponentTree {
             DimensionValue::Fixed(screen_size[1]),
         );
 
+        // timer for measurement cost
+        let measure_timer = Instant::now();
+        debug!("Start measuring the component tree...");
         // The root node's intrinsic constraint (if any, e.g. from App component's args)
         // should also be considered. For now, assume root's intrinsic is Constraint::NONE
         // or it's handled by the root component's measure function if it has one.
@@ -135,12 +140,24 @@ impl ComponentTree {
             &self.tree,
             &mut self.metadatas,
         );
+        debug!("Component tree measured in {:?}", measure_timer.elapsed());
         // Traverse the tree again and get the draw commands.
+        // Timer for draw commands computation
+        let compute_draw_timer = Instant::now();
+        debug!("Start computing draw commands...");
         let commands =
             compute_draw_commands_parallel(root_node, &mut self.tree, &mut self.metadatas);
+        debug!(
+            "Draw commands computed in {:?}, total commands: {}",
+            compute_draw_timer.elapsed(),
+            commands.len()
+        );
         // After gen all drawing commands, we can execute state handlers for the whole tree.
         // This is beause some event such as mouse click cannot be ensured where it happens
         // until the whole tree is measured.
+        // Timer for state handler execution
+        let state_handler_timer = Instant::now();
+        debug!("Start executing state handlers...");
         for node in root_node
             .reverse_traverse(&self.tree)
             .filter_map(|edge| match edge {
@@ -188,6 +205,10 @@ impl ComponentTree {
             // Call the state handler function with the input
             state_handler(&input);
         }
+        debug!(
+            "State handlers executed in {:?}",
+            state_handler_timer.elapsed()
+        );
         // Return the computed draw commands
         commands
     }

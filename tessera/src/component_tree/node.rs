@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ops::{Add, AddAssign};
+use std::time::Instant;
 
 use dashmap::DashMap;
 use indextree::NodeId;
@@ -14,6 +15,9 @@ use super::{
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component:
 pub struct ComponentNode {
+    /// Component function's name
+    /// for debugging purposes
+    pub fn_name: String,
     /// Describes the component in layout
     /// None means using default measure policy
     /// which does nothing but places children at the top-left corner
@@ -123,6 +127,9 @@ pub fn measure_node(
     }
 
     let children: Vec<_> = node.children(tree).collect();
+    // Timer for this measure function
+    let timer = Instant::now();
+    debug!("Measuring node {}", tree.get(node).unwrap().get().fn_name);
     let size = if let Some(measure_fn) = &tree.get(node).unwrap().get().measure_fn {
         // Pass the original parent_constraint; the measure_fn is responsible for
         // using its own args to determine its intrinsic behavior and merge.
@@ -143,6 +150,11 @@ pub fn measure_node(
             component_node_metadatas,
         )
     };
+    debug!(
+        "Measured node {} in {:?}",
+        tree.get(node).unwrap().get().fn_name,
+        timer.elapsed(),
+    );
 
     // Ensure metadata exists before trying to update cache or computed_data
     let mut metadata = component_node_metadatas.entry(node).or_default();
