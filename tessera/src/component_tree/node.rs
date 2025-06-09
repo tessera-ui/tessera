@@ -1,20 +1,19 @@
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::ops::{Add, AddAssign};
-use std::sync::Arc; // Keep Arc for potential other uses, though direct params might not need it now
-use std::time::Instant;
+use std::{
+    collections::HashMap,
+    ops::{Add, AddAssign},
+    time::Instant,
+};
 
 use dashmap::DashMap;
 use indextree::NodeId;
 use log::debug;
 use rayon::prelude::*;
 
-use crate::cursor::CursorEvent;
-
 use super::{
     basic_drawable::BasicDrawable,
     constraint::{Constraint, DimensionValue},
 };
+use crate::cursor::CursorEvent;
 
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component.

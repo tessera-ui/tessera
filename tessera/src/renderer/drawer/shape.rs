@@ -58,6 +58,7 @@ impl Vertex {
 pub struct ShapePipeline {
     pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
+    #[allow(unused)]
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 }

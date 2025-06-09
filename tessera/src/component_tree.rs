@@ -2,7 +2,7 @@ mod basic_drawable;
 mod constraint;
 mod node;
 
-use std::{num::NonZero, sync::Arc, time::Instant};
+use std::{num::NonZero, time::Instant};
 
 use log::debug;
 use rayon::prelude::*;

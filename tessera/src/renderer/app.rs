@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::{debug, error, info};
+use log::{error, info};
 use winit::window::Window;
 
 use super::drawer::{DrawCommand, Drawer};

@@ -254,7 +254,6 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                 }
             } else if remaining_height_for_fill > 0 {
                 let mut temp_remaining_height_for_weighted = remaining_height_for_fill;
-                let mut temp_remaining_height_for_unweighted = remaining_height_for_fill;
 
                 // Prepare weighted fill children
                 if total_fill_weight > 0.0 {
@@ -363,7 +362,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                         }
                     }
                 }
-                temp_remaining_height_for_unweighted = temp_remaining_height_for_weighted; // Update for unweighted
+                let mut temp_remaining_height_for_unweighted = temp_remaining_height_for_weighted; // Update for unweighted
 
                 if !fill_children_indices_without_weight.is_empty()
                     && temp_remaining_height_for_unweighted > 0

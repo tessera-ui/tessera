@@ -54,6 +54,7 @@ pub struct GlyphonTextRender {
     /// Glypthon font atlas
     atlas: glyphon::TextAtlas,
     /// Glypthon cache
+    #[allow(unused)]
     cache: glyphon::Cache,
     /// Glypthon viewport
     viewport: glyphon::Viewport,
