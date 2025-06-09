@@ -30,9 +30,9 @@ pub struct TextArgs {
     pub text: String,
     #[builder(default = "[0, 0, 0]")] // Default color is black
     pub color: [u8; 3],
-    #[builder(default = "Dp(50.0)")]
+    #[builder(default = "Dp(25.0)")]
     pub size: Dp,
-    #[builder(default = "Dp(50.0)")]
+    #[builder(default = "Dp(25.0)")]
     pub line_height: Dp,
 }
 
