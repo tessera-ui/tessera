@@ -87,7 +87,10 @@ fn text_column() {
 #[tessera]
 fn content_section() {
     surface(
-        SurfaceArgsBuilder::default().padding(20.0).build().unwrap(),
+        SurfaceArgsBuilder::default()
+            .padding(20.0.into())
+            .build()
+            .unwrap(),
         || {
             column([
                 ColumnItem::wrap(Box::new(header_row)),

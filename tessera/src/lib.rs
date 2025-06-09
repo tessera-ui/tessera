@@ -1,9 +1,11 @@
 mod component_tree;
 mod cursor;
+mod dp;
 mod renderer;
 mod runtime;
 pub mod tokio_runtime;
 
+pub use crate::dp::Dp;
 pub use component_tree::{
     BasicDrawable, ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
     ComponentTree, ComputedData, Constraint, DimensionValue, MeasureFn, MeasurementError,

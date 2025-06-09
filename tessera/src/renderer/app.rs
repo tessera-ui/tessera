@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use log::{error, info};
+use parking_lot::RwLock;
 use winit::window::Window;
+
+use crate::dp::SCALE_FACTOR;
 
 use super::drawer::{DrawCommand, Drawer};
 
@@ -106,6 +109,12 @@ impl WgpuApp {
         surface.configure(&gpu, &config);
         // Create drawer
         let drawer = Drawer::new(&gpu, &queue, &config);
+        // Set scale factor for dp conversion
+        let scale_factor = window.scale_factor();
+        info!("Window scale factor: {}", scale_factor);
+        SCALE_FACTOR
+            .set(RwLock::new(scale_factor))
+            .expect("Failed to set scale factor");
 
         Self {
             window,

@@ -19,6 +19,7 @@ use winit::{
 
 use crate::{
     cursor::{CursorEvent, CursorEventContent, CursorState, PressKeyEventType},
+    dp::SCALE_FACTOR,
     runtime::TesseraRuntime,
     tokio_runtime,
 };
@@ -152,10 +153,7 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 debug!("Mouse input: {state:?} button {button:?}");
             }
             WindowEvent::Touch(touch_event) => {
-                let pos = [
-                    touch_event.location.x as u32,
-                    touch_event.location.y as u32,
-                ];
+                let pos = [touch_event.location.x as u32, touch_event.location.y as u32];
                 debug!(
                     "Touch event: id {}, phase {:?}, position {:?}",
                     touch_event.id, touch_event.phase, pos
@@ -191,6 +189,9 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                         self.cursor_state.push_event(event);
                     }
                 }
+            }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                *SCALE_FACTOR.get().unwrap().write() = scale_factor;
             }
             WindowEvent::KeyboardInput { .. } => {
                 // todo!("Handle keyboard input");

@@ -1,5 +1,5 @@
 use tessera::{
-    ComputedData, Constraint, DimensionValue, MeasurementError, measure_nodes, place_node,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, measure_nodes, place_node,
 };
 use tessera_macros::tessera;
 
@@ -34,8 +34,8 @@ impl ColumnItem {
     }
 
     /// Helper to create a ColumnItem that is fixed height.
-    pub fn fixed(child: Box<dyn FnOnce() + Send + Sync>, height: u32) -> Self {
-        Self::new(child, DimensionValue::Fixed(height), None)
+    pub fn fixed(child: Box<dyn FnOnce() + Send + Sync>, height: Dp) -> Self {
+        Self::new(child, DimensionValue::Fixed(height.to_pixels_u32()), None)
     }
 
     /// Helper to create a ColumnItem that fills available space (height),
@@ -43,9 +43,15 @@ impl ColumnItem {
     pub fn fill(
         child: Box<dyn FnOnce() + Send + Sync>,
         weight: Option<f32>,
-        max_height: Option<u32>,
+        max_height: Option<Dp>,
     ) -> Self {
-        Self::new(child, DimensionValue::Fill { max: max_height }, weight)
+        Self::new(
+            child,
+            DimensionValue::Fill {
+                max: max_height.as_ref().map(Dp::to_pixels_u32),
+            },
+            weight,
+        )
     }
 }
 

@@ -1,7 +1,13 @@
 use derive_builder::Builder;
 use tessera::{
-    BasicDrawable, ComponentNodeMetaData, ComputedData, DimensionValue, TextConstraint, TextData,
-}; // Re-added Constraint
+    BasicDrawable,
+    ComponentNodeMetaData,
+    ComputedData,
+    DimensionValue,
+    Dp, // Re-added Constraint
+    TextConstraint,
+    TextData,
+};
 use tessera_macros::tessera;
 
 /// Arguments for the `text` component.
@@ -9,9 +15,12 @@ use tessera_macros::tessera;
 /// # Example
 /// ```
 /// use tessera_basic_components::text::{TextArgs, TextArgsBuilder};
+/// use tessera::Dp;
 /// // a simple hello world text, in black
 /// let args = TextArgsBuilder::default()
 ///     .text("Hello, World!".to_string())
+///     .size(Dp(50.0)) // Example using Dp
+///     .line_height(Dp(50.0)) // Example using Dp
 ///     .build()
 ///     .unwrap();
 /// ```
@@ -21,10 +30,10 @@ pub struct TextArgs {
     pub text: String,
     #[builder(default = "[0, 0, 0]")] // Default color is black
     pub color: [u8; 3],
-    #[builder(default = "50.0")]
-    pub size: f32,
-    #[builder(default = "50.0")]
-    pub line_height: f32,
+    #[builder(default = "Dp(50.0)")]
+    pub size: Dp,
+    #[builder(default = "Dp(50.0)")]
+    pub line_height: Dp,
 }
 
 impl From<String> for TextArgs {
@@ -47,9 +56,12 @@ impl From<&str> for TextArgs {
 /// # Example
 /// ```no_run
 /// use tessera_basic_components::text::{text, TextArgs, TextArgsBuilder};
+/// use tessera::Dp;
 /// // a simple hello world text, in black
 /// let args = TextArgsBuilder::default()
 ///     .text("Hello, World!".to_string())
+///     .size(Dp(50.0)) // Example using Dp
+///     .line_height(Dp(50.0)) // Example using Dp
 ///     .build()
 ///     .unwrap();
 /// text(args);
@@ -74,8 +86,8 @@ pub fn text(args: impl Into<TextArgs>) {
             let text_data = TextData::new(
                 text_args.text.clone(),
                 text_args.color,
-                text_args.size,
-                text_args.line_height,
+                text_args.size.to_pixels_f32(),
+                text_args.line_height.to_pixels_f32(),
                 TextConstraint {
                     max_width,
                     max_height,

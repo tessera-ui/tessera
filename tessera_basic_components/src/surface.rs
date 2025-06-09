@@ -1,6 +1,6 @@
 use derive_builder::Builder;
 use tessera::{
-    BasicDrawable, ComputedData, Constraint, DimensionValue, MeasurementError, ShadowProps,
+    BasicDrawable, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, ShadowProps,
     measure_nodes, place_node,
 };
 use tessera_macros::tessera;
@@ -19,8 +19,8 @@ pub struct SurfaceArgs {
     #[builder(default)]
     pub shadow: Option<ShadowProps>,
     /// The padding of the surface.
-    #[builder(default = "0.0")]
-    pub padding: f32,
+    #[builder(default = "Dp(0.0)")]
+    pub padding: Dp,
     /// Optional explicit width behavior for the surface. Defaults to Wrap if None.
     #[builder(default, setter(strip_option))]
     pub width: Option<DimensionValue>,
@@ -37,7 +37,8 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
 
     measure(Box::new(
         move |node_id, tree, parent_constraint, children_node_ids, metadatas| {
-            let padding_2_f32 = measure_args.padding * 2.0;
+            let padding_val = measure_args.padding.to_pixels_f32();
+            let padding_2_f32 = padding_val * 2.0;
             let padding_2_u32 = padding_2_f32 as u32;
 
             // 1. Determine Surface's intrinsic constraint based on args
@@ -99,7 +100,10 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 // Place the child
                 place_node(
                     child_node_id,
-                    [measure_args.padding as u32, measure_args.padding as u32],
+                    [
+                        measure_args.padding.to_pixels_u32(),
+                        measure_args.padding.to_pixels_u32(),
+                    ],
                     metadatas,
                 );
             }

@@ -4,7 +4,7 @@ use glyphon::{Edit, cosmic_text::BufferRef};
 use parking_lot::RwLock;
 
 use tessera::{
-    BasicDrawable, ComputedData, DimensionValue, TextConstraint, TextData, write_font_system,
+    BasicDrawable, ComputedData, DimensionValue, Dp, TextConstraint, TextData, write_font_system,
 };
 use tessera_macros::tessera;
 
@@ -15,10 +15,10 @@ pub struct TextEditorState {
 
 impl TextEditorState {
     /// Creates a new `TextEditorState` with the given size, line height, and text constraint.
-    pub fn new(size: f32, line_height: f32, text_constraint: TextConstraint) -> Self {
+    pub fn new(size: Dp, line_height: Dp, text_constraint: TextConstraint) -> Self {
         let buffer = glyphon::Buffer::new(
             &mut write_font_system(),
-            glyphon::Metrics::new(size, line_height),
+            glyphon::Metrics::new(size.to_pixels_f32(), line_height.to_pixels_f32()),
         );
         let editor = glyphon::Editor::new(buffer);
         Self {

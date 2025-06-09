@@ -1,3 +1,4 @@
+use tessera::Dp; // Added Dp import
 use tessera::{
     ComputedData, Constraint, DimensionValue, MeasurementError, measure_nodes, place_node,
 };
@@ -34,17 +35,24 @@ impl RowItem {
     }
 
     /// Helper to create a RowItem that is fixed width.
-    pub fn fixed(child: Box<dyn FnOnce() + Send + Sync>, width: u32) -> Self {
-        Self::new(child, DimensionValue::Fixed(width), None)
+    pub fn fixed(child: Box<dyn FnOnce() + Send + Sync>, width: Dp) -> Self {
+        // Changed width to Dp
+        Self::new(child, DimensionValue::Fixed(width.to_pixels_u32()), None) // width is Dp
     }
 
     /// Helper to create a RowItem that fills available space, optionally with a weight and max.
     pub fn fill(
         child: Box<dyn FnOnce() + Send + Sync>,
         weight: Option<f32>,
-        max_width: Option<u32>,
+        max_width: Option<Dp>, // Changed max_width to Option<Dp>
     ) -> Self {
-        Self::new(child, DimensionValue::Fill { max: max_width }, weight)
+        Self::new(
+            child,
+            DimensionValue::Fill {
+                max: max_width.as_ref().map(Dp::to_pixels_u32),
+            },
+            weight,
+        ) // max_width is Option<Dp>
     }
 }
 
@@ -123,8 +131,9 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                 let child_node_id = children_node_ids[i];
                 match item_behavior {
                     DimensionValue::Fixed(fixed_width) => {
+                        // fixed_width is Dp
                         let child_constraint_for_measure = Constraint::new(
-                            DimensionValue::Fixed(fixed_width),
+                            DimensionValue::Fixed(fixed_width), // fixed_width is Dp
                             effective_row_constraint.height,
                         );
                         let child_intrinsic_constraint = metadatas
@@ -186,18 +195,19 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
 
             match effective_row_constraint.width {
                 DimensionValue::Fixed(row_fixed_width) => {
+                    // row_fixed_width is Dp
                     remaining_width_for_fill =
-                        row_fixed_width.saturating_sub(total_width_for_fixed_wrap);
+                        u32::from(row_fixed_width).saturating_sub(total_width_for_fixed_wrap);
                 }
                 DimensionValue::Wrap => {
                     is_row_effectively_wrap_for_children = true;
                 }
                 DimensionValue::Fill {
-                    max: Some(row_max_budget),
+                    max: Some(row_max_budget), // row_max_budget is Dp
                     ..
                 } => {
                     remaining_width_for_fill =
-                        row_max_budget.saturating_sub(total_width_for_fixed_wrap);
+                        u32::from(row_max_budget).saturating_sub(total_width_for_fixed_wrap);
                 }
                 DimensionValue::Fill { max: None, .. } => {
                     is_row_effectively_wrap_for_children = true;
@@ -262,12 +272,13 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                             as u32;
 
                         if let DimensionValue::Fill {
-                            max: child_max_fill,
+                            max: child_max_fill, // child_max_fill is Option<Dp>
                             ..
                         } = item_behavior
                         {
-                            let alloc_width = child_max_fill
-                                .map_or(proportional_width, |m| proportional_width.min(m));
+                            let alloc_width = child_max_fill.map_or(proportional_width, |m_dp| {
+                                proportional_width.min(u32::from(m_dp))
+                            });
                             let final_alloc_width =
                                 alloc_width.min(temp_remaining_width_for_weighted);
 
@@ -311,13 +322,13 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                         let item_behavior = children_items_for_measure[index].1;
                         let child_node_id = children_node_ids[index];
                         if let DimensionValue::Fill {
-                            max: child_max_fill,
+                            max: child_max_fill, // child_max_fill is Option<Dp>
                             ..
                         } = item_behavior
                         {
                             let alloc_width = child_max_fill
-                                .map_or(width_per_unweighted_child, |m| {
-                                    width_per_unweighted_child.min(m)
+                                .map_or(width_per_unweighted_child, |m_dp| {
+                                    width_per_unweighted_child.min(u32::from(m_dp))
                                 });
                             let final_alloc_width =
                                 alloc_width.min(temp_remaining_width_for_unweighted);
@@ -378,15 +389,12 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                 total_width_for_fixed_wrap + actual_width_taken_by_fill_children;
 
             let final_row_width = match effective_row_constraint.width {
-                DimensionValue::Fixed(w) => w,
+                DimensionValue::Fixed(w) => u32::from(w), // w is Dp
                 DimensionValue::Wrap => total_children_width,
                 DimensionValue::Fill { max, .. } => {
-                    let resolved_fill_width = max.unwrap_or(total_children_width);
-                    if max.is_some() {
-                        resolved_fill_width.min(total_children_width)
-                    } else {
-                        total_children_width
-                    }
+                    // max is Option<Dp>
+                    max.map(|dp| u32::from(dp).min(total_children_width))
+                        .unwrap_or(total_children_width)
                 }
             };
             let final_row_height = match effective_row_constraint.height {
