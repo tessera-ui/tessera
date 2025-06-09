@@ -18,7 +18,7 @@ use winit::{
 };
 
 use crate::{
-    cursor::{CursorEvent, CursorEventContent, CursorState},
+    cursor::{CursorEvent, CursorEventContent, CursorState, PressKeyEventType},
     runtime::TesseraRuntime,
     tokio_runtime,
 };
@@ -150,6 +150,47 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 };
                 self.cursor_state.push_event(event);
                 debug!("Mouse input: {state:?} button {button:?}");
+            }
+            WindowEvent::Touch(touch_event) => {
+                let pos = [
+                    touch_event.location.x as u32,
+                    touch_event.location.y as u32,
+                ];
+                debug!(
+                    "Touch event: id {}, phase {:?}, position {:?}",
+                    touch_event.id, touch_event.phase, pos
+                );
+                match touch_event.phase {
+                    winit::event::TouchPhase::Started => {
+                        // First, move the cursor to the touch position
+                        let move_event = CursorEvent {
+                            timestamp: Instant::now(),
+                            content: CursorEventContent::from_position(pos),
+                        };
+                        self.cursor_state.push_event(move_event);
+                        // Then, simulate a left mouse button press
+                        let press_event = CursorEvent {
+                            timestamp: Instant::now(), // Consider if a slightly different timestamp is needed
+                            content: CursorEventContent::Pressed(PressKeyEventType::Left),
+                        };
+                        self.cursor_state.push_event(press_event);
+                    }
+                    winit::event::TouchPhase::Moved => {
+                        let event = CursorEvent {
+                            timestamp: Instant::now(),
+                            content: CursorEventContent::from_position(pos),
+                        };
+                        self.cursor_state.push_event(event);
+                    }
+                    winit::event::TouchPhase::Ended | winit::event::TouchPhase::Cancelled => {
+                        // Simulate a left mouse button release
+                        let event = CursorEvent {
+                            timestamp: Instant::now(),
+                            content: CursorEventContent::Released(PressKeyEventType::Left),
+                        };
+                        self.cursor_state.push_event(event);
+                    }
+                }
             }
             WindowEvent::KeyboardInput { .. } => {
                 // todo!("Handle keyboard input");
