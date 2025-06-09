@@ -93,10 +93,10 @@ pub fn text(args: impl Into<TextArgs>) {
                 metadatas.insert(node_id, default_meta);
             }
 
-            ComputedData {
+            Ok(ComputedData {
                 width: size[0],
                 height: size[1],
-            }
+            })
         },
     ));
 }

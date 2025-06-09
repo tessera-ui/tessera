@@ -1,17 +1,12 @@
 use derive_builder::Builder;
 use tessera::{
-    BasicDrawable,
-    ComputedData,
-    Constraint,
-    DimensionValue,
-    ShadowProps, // Removed NodeId from here
-    measure_node,
-    place_node, // Removed ComponentNodeMetaDatas
+    BasicDrawable, ComputedData, Constraint, DimensionValue, MeasurementError, ShadowProps,
+    measure_nodes, place_node,
 };
 use tessera_macros::tessera;
 
 /// Arguments for the `surface` component.
-#[derive(Debug, Default, Builder, Clone)] // Added Clone
+#[derive(Debug, Default, Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SurfaceArgs {
     /// The color of the surface.
@@ -61,7 +56,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                     DimensionValue::Fixed(sw.saturating_sub(padding_2_u32))
                 }
                 DimensionValue::Wrap => DimensionValue::Wrap, // Child wraps, padding added later
-                DimensionValue::Fill { max: s_max_w } => DimensionValue::Fill {
+                DimensionValue::Fill { max: s_max_w, .. } => DimensionValue::Fill {
                     max: s_max_w.map(|m| m.saturating_sub(padding_2_u32)),
                 },
             };
@@ -70,7 +65,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                     DimensionValue::Fixed(sh.saturating_sub(padding_2_u32))
                 }
                 DimensionValue::Wrap => DimensionValue::Wrap, // Child wraps, padding added later
-                DimensionValue::Fill { max: s_max_h } => DimensionValue::Fill {
+                DimensionValue::Fill { max: s_max_h, .. } => DimensionValue::Fill {
                     max: s_max_h.map(|m| m.saturating_sub(padding_2_u32)),
                 },
             };
@@ -81,17 +76,25 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             let mut child_measured_size = ComputedData::ZERO;
             if let Some(&child_node_id) = children_node_ids.first() {
                 // The child's own defined constraints also need to be merged.
-                let final_child_constraint_for_measure = metadatas
-                    .get_mut(&child_node_id)
-                    .unwrap()
-                    .constraint
-                    .merge(&child_actual_constraint);
-                child_measured_size = measure_node(
-                    child_node_id,
-                    &final_child_constraint_for_measure,
-                    tree,
-                    metadatas,
-                );
+                let child_intrinsic_constraint = metadatas
+                    .get(&child_node_id) // Use .get() for reading constraint
+                    .ok_or_else(|| MeasurementError::ChildMeasurementFailed(child_node_id))? // Handle if meta not found
+                    .constraint;
+                let final_child_constraint_for_measure =
+                    child_intrinsic_constraint.merge(&child_actual_constraint);
+
+                let nodes_to_measure = vec![(child_node_id, final_child_constraint_for_measure)];
+                let results_map = measure_nodes(nodes_to_measure, tree, metadatas);
+
+                child_measured_size = results_map
+                    .get(&child_node_id)
+                    .ok_or_else(|| {
+                        MeasurementError::MeasureFnFailed(format!(
+                            "Child {:?} result missing in map",
+                            child_node_id
+                        ))
+                    })?
+                    .clone()?; // Clone the Result and then propagate error with ?
 
                 // Place the child
                 place_node(
@@ -110,15 +113,19 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             let final_surface_width = match effective_surface_constraint.width {
                 DimensionValue::Fixed(sw) => sw,
                 DimensionValue::Wrap => content_width_with_padding,
-                DimensionValue::Fill { max: Some(s_max_w) } => s_max_w, // Surface fills up to this max
-                DimensionValue::Fill { max: None } => content_width_with_padding, // Behaves like Wrap if parent didn't give fixed size
+                DimensionValue::Fill {
+                    max: Some(s_max_w), ..
+                } => core::cmp::min(s_max_w, content_width_with_padding),
+                DimensionValue::Fill { max: None, .. } => content_width_with_padding,
             };
 
             let final_surface_height = match effective_surface_constraint.height {
                 DimensionValue::Fixed(sh) => sh,
                 DimensionValue::Wrap => content_height_with_padding,
-                DimensionValue::Fill { max: Some(s_max_h) } => s_max_h, // Surface fills up to this max
-                DimensionValue::Fill { max: None } => content_height_with_padding, // Behaves like Wrap if parent didn't give fixed size
+                DimensionValue::Fill {
+                    max: Some(s_max_h), ..
+                } => core::cmp::min(s_max_h, content_height_with_padding),
+                DimensionValue::Fill { max: None, .. } => content_height_with_padding,
             };
 
             // Add rect drawable
@@ -131,10 +138,10 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 metadata.basic_drawable = Some(drawable);
             }
 
-            ComputedData {
+            Ok(ComputedData {
                 width: final_surface_width,
                 height: final_surface_height,
-            }
+            })
         },
     ));
 

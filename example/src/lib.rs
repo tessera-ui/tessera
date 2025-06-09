@@ -6,7 +6,7 @@ use tessera::Renderer;
 #[cfg(target_os = "android")]
 use tessera::winit::platform::android::activity::AndroidApp;
 
-use app::{app, AppState};
+use app::{AppState, app};
 
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
@@ -17,11 +17,8 @@ fn android_main(android_app: AndroidApp) {
     android_logger::init_once(Config::default().with_max_level(LevelFilter::Info));
     info!("Starting Android app...");
     let app_state = Arc::new(AppState::new());
-    Renderer::run(
-        || app(app_state.clone()),
-        android_app.clone(),
-    )
-    .unwrap_or_else(|err| error!("App failed to run: {}", err));
+    Renderer::run(|| app(app_state.clone()), android_app.clone())
+        .unwrap_or_else(|err| error!("App failed to run: {}", err));
 }
 
 #[allow(dead_code)]

@@ -2,9 +2,8 @@ mod basic_drawable;
 mod constraint;
 mod node;
 
-use std::{num::NonZero, time::Instant};
+use std::{num::NonZero, sync::Arc, time::Instant};
 
-use glyphon::cosmic_text::ttf_parser::apple_layout::state;
 use log::debug;
 use rayon::prelude::*;
 
@@ -13,7 +12,7 @@ pub use basic_drawable::{BasicDrawable, ShadowProps};
 pub use constraint::{Constraint, DimensionValue};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
-    MeasureFn, StateHandlerFn, measure_node, place_node,
+    MeasureFn, MeasurementError, StateHandlerFn, measure_node, measure_nodes, place_node,
 };
 
 /// Respents a component tree
@@ -83,23 +82,17 @@ impl ComponentTree {
     /// Nodes now store their intrinsic constraints in their metadata.
     /// The `node_component` itself primarily holds the measure_fn.
     pub fn add_node(&mut self, node_component: ComponentNode, intrinsic_constraint: Constraint) {
-        // Add new node to index tree
         let new_node_id = self.tree.new_node(node_component);
-        // If there is a current node, append the new node to it
         if let Some(current_node_id) = self.node_queue.last_mut() {
             current_node_id.append(new_node_id, &mut self.tree);
         }
-        // Add/reset metadata for the new node, including its intrinsic constraint
         let mut metadata = ComponentNodeMetaData::none();
-        metadata.constraint = intrinsic_constraint; // Store the node's own constraint
+        metadata.constraint = intrinsic_constraint;
         self.metadatas.insert(new_node_id, metadata);
         self.node_queue.push(new_node_id);
     }
 
     /// Pop the last node from the queue
-    /// This should be called in the end of a component
-    /// after all its children nodes are added
-    /// to indicate that the component is finished
     pub fn pop_node(&mut self) {
         self.node_queue.pop();
     }
@@ -110,110 +103,110 @@ impl ComponentTree {
         screen_size: [u32; 2],
         cursor_events: Vec<CursorEvent>,
     ) -> Vec<DrawCommand> {
-        // Mesure Stage:
-        // Traverse the tree and measure the size of each node
-        // From the root node to the leaf node, then compute the size of each node
-        let Some(root_node) = self
-            .tree
-            // indextree use 1 based indexing, so the first element is at 1 and not 0.
-            .get_node_id_at(NonZero::new(1).unwrap())
-        else {
+        let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
             return vec![];
         };
-        // The root node is constrained by the screen size.
         let screen_constraint = Constraint::new(
             DimensionValue::Fixed(screen_size[0]),
             DimensionValue::Fixed(screen_size[1]),
         );
 
-        // timer for measurement cost
         let measure_timer = Instant::now();
         debug!("Start measuring the component tree...");
-        // The root node's intrinsic constraint (if any, e.g. from App component's args)
-        // should also be considered. For now, assume root's intrinsic is Constraint::NONE
-        // or it's handled by the root component's measure function if it has one.
-        // If the root component (e.g. the main `app` function's surface) specifies Fill,
-        // it will correctly merge with this screen_constraint.
-        measure_node(
+
+        // Call measure_node with &self.tree and &self.metadatas
+        // Handle the Result from measure_node
+        match measure_node(
             root_node,
-            &screen_constraint, // This is the parent_constraint for the root node
+            &screen_constraint,
             &self.tree,
-            &mut self.metadatas,
-        );
-        debug!("Component tree measured in {:?}", measure_timer.elapsed());
-        // Traverse the tree again and get the draw commands.
-        // Timer for draw commands computation
+            &self.metadatas, // Changed from &mut self.metadatas to &self.metadatas
+        ) {
+            Ok(_root_computed_data) => {
+                debug!("Component tree measured in {:?}", measure_timer.elapsed());
+            }
+            Err(e) => {
+                log::error!(
+                    "Root node ({:?}) measurement failed: {:?}. Aborting draw command computation.",
+                    root_node,
+                    e
+                );
+                return vec![]; // Early return if root measurement fails
+            }
+        }
+
         let compute_draw_timer = Instant::now();
         debug!("Start computing draw commands...");
-        let commands =
-            compute_draw_commands_parallel(root_node, &mut self.tree, &mut self.metadatas);
+        // compute_draw_commands_parallel expects &ComponentNodeTree and &ComponentNodeMetaDatas
+        // It also uses get_mut on metadatas internally, which is fine for DashMap with &self.
+        let commands = compute_draw_commands_parallel(root_node, &self.tree, &self.metadatas);
         debug!(
             "Draw commands computed in {:?}, total commands: {}",
             compute_draw_timer.elapsed(),
             commands.len()
         );
-        // After gen all drawing commands, we can execute state handlers for the whole tree.
-        // This is beause some event such as mouse click cannot be ensured where it happens
-        // until the whole tree is measured.
-        // Timer for state handler execution
+
         let state_handler_timer = Instant::now();
         debug!("Start executing state handlers...");
-        for node in root_node
+        for node_id_loop in root_node // Renamed to avoid conflict with node_id in StateHandlerInput
             .reverse_traverse(&self.tree)
             .filter_map(|edge| match edge {
-                indextree::NodeEdge::Start(node_id) => Some(node_id),
+                indextree::NodeEdge::Start(id) => Some(id),
                 indextree::NodeEdge::End(_) => None,
             })
         {
-            // Get the state handler function for the node, if it exists
-            // we do it first to skip unnecessary computation
-            // if there is no state handler function at all.
             let Some(state_handler) = self
                 .tree
-                .get(node)
+                .get(node_id_loop)
                 .and_then(|n| n.get().state_handler_fn.as_ref())
             else {
                 continue;
             };
-            // transform the cursor events to set their position
-            // relative to the node's position
-            let cursor_events = cursor_events
+
+            let current_cursor_events = cursor_events // Use a different name for clarity
                 .iter()
                 .cloned()
                 .map(|mut event| {
-                    // Get the node's absolute position
                     let abs_position = self
                         .metadatas
-                        .get(&node)
+                        .get(&node_id_loop)
                         .and_then(|m| m.abs_position)
-                        .unwrap_or([0, 0]); // Default to [0, 0] if not set
-                    // Set the cursor event's position relative to the node
+                        .unwrap_or([0, 0]);
                     event.content = event.content.into_relative_position(abs_position);
                     event
                 })
                 .collect::<Vec<_>>();
-            // Create the input for the state handler
-            let input = StateHandlerInput {
-                node_id: node,
-                computed_data: self
-                    .metadatas
-                    .get(&node)
-                    .and_then(|m| m.computed_data) // Get the computed data for the node
-                    .unwrap(), // Should always exist after measure
-                cursor_events,
-            };
-            // Call the state handler function with the input
-            state_handler(&input);
+
+            let computed_data_option = self // Renamed for clarity
+                .metadatas
+                .get(&node_id_loop)
+                .and_then(|m| m.computed_data);
+
+            if let Some(node_computed_data) = computed_data_option {
+                // Check if computed_data exists
+                let input = StateHandlerInput {
+                    node_id: node_id_loop,
+                    computed_data: node_computed_data,
+                    cursor_events: current_cursor_events,
+                };
+                state_handler(&input);
+            } else {
+                log::warn!(
+                    "Computed data not found for node {:?} during state handler execution.",
+                    node_id_loop
+                );
+            }
         }
         debug!(
             "State handlers executed in {:?}",
             state_handler_timer.elapsed()
         );
-        // Return the computed draw commands
         commands
     }
 }
 
+// This function seems to take &ComponentNodeTree and &ComponentNodeMetaDatas, which is consistent.
+// Internally, it uses metadatas.get_mut(&node_id). DashMap allows this with &self.
 fn compute_draw_commands_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
@@ -230,28 +223,40 @@ fn compute_draw_commands_inner_parallel(
 ) -> Vec<DrawCommand> {
     let mut local_commands = Vec::new();
 
+    // Accessing metadatas with get_mut. DashMap's get_mut returns a RefMut,
+    // which is fine with an immutable reference to the DashMap itself (&DashMap).
     if let Some(mut entry) = metadatas.get_mut(&node_id) {
         let rel_pos = entry.rel_position.unwrap_or([0, 0]);
         let self_pos = [start_pos[0] + rel_pos[0], start_pos[1] + rel_pos[1]];
-        entry.abs_position = Some(self_pos);
+        entry.abs_position = Some(self_pos); // Modifying through RefMut
 
         if let Some(drawable) = entry.basic_drawable.take() {
-            let size = entry.computed_data.unwrap();
+            // Modifying through RefMut
+            let size = entry.computed_data.unwrap(); // Assuming computed_data is always Some after measure
             let command = drawable.into_draw_command([size.width, size.height], self_pos);
             local_commands.push(command);
         }
+    } // RefMut is dropped here, lock released if any
 
-        drop(entry);
+    // Recursive call, passing references
+    let children: Vec<_> = node_id.children(tree).collect();
+    let child_results: Vec<Vec<DrawCommand>> = children
+        .into_par_iter()
+        .map(|child| {
+            compute_draw_commands_inner_parallel(
+                metadatas
+                    .get(&node_id)
+                    .and_then(|m| m.abs_position)
+                    .unwrap_or(start_pos), // Get self_pos again for children
+                child,
+                tree,
+                metadatas,
+            )
+        })
+        .collect();
 
-        let children: Vec<_> = node_id.children(tree).collect();
-        let child_results: Vec<Vec<DrawCommand>> = children
-            .into_par_iter()
-            .map(|child| compute_draw_commands_inner_parallel(self_pos, child, tree, metadatas))
-            .collect();
-
-        for child_cmds in child_results {
-            local_commands.extend(child_cmds);
-        }
+    for child_cmds in child_results {
+        local_commands.extend(child_cmds);
     }
 
     local_commands

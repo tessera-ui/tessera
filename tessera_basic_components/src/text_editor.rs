@@ -81,10 +81,10 @@ pub fn text_editor(state: Arc<RwLock<TextEditorState>>) {
             if let Some(mut metadata) = metadatas.get_mut(&node_id) {
                 metadata.basic_drawable = Some(drawable);
             }
-            ComputedData {
+            Ok(ComputedData {
                 width: size[0],
                 height: size[1],
-            }
+            })
         },
     ));
 }

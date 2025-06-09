@@ -6,8 +6,8 @@ pub mod tokio_runtime;
 
 pub use component_tree::{
     BasicDrawable, ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
-    ComponentTree, ComputedData, Constraint, DimensionValue, MeasureFn, ShadowProps,
-    StateHandlerFn, measure_node, place_node,
+    ComponentTree, ComputedData, Constraint, DimensionValue, MeasureFn, MeasurementError,
+    ShadowProps, StateHandlerFn, measure_node, measure_nodes, place_node,
 };
 pub use cursor::{CursorEvent, CursorEventContent, PressKeyEventType};
 pub use indextree::{Arena, NodeId};

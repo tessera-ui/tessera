@@ -90,10 +90,10 @@ pub fn spacer(args: SpacerArgs) {
                 }
             };
 
-            ComputedData {
+            Ok(ComputedData {
                 width: final_spacer_width,
                 height: final_spacer_height,
-            }
+            })
         },
     ));
     // Spacer has no children, so the children rendering part is empty.

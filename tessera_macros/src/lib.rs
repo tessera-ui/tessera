@@ -17,7 +17,7 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #(#fn_attrs)*
         #fn_vis #fn_sig {
             {
-                use tessera::{TesseraRuntime, ComponentNode, Constraint}; // Added Constraint
+                use tessera::{TesseraRuntime, ComponentNode, Constraint};
 
                 TesseraRuntime::write()
                     .component_tree
