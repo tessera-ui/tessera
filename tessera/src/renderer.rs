@@ -190,7 +190,7 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 debug!("Rendered in {render_cost:?}");
                 // print frame statistics
                 let fps = 1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32();
-                if fps < 30.0 {
+                if fps < 60.0 {
                     warn!(
                         "Jank detected! Frame statistics:
     Build tree cost: {:?}

@@ -17,6 +17,38 @@ use tessera_basic_components::{
 };
 use tessera_macros::tessera;
 
+struct PerformanceMetrics {
+    fps: AtomicU64,
+    last_frame: RwLock<Instant>,
+    last_fps_update_time: RwLock<Instant>,
+    frames_since_last_update: AtomicU64,
+}
+
+struct AppData {
+    click_count: AtomicU64,
+}
+
+pub struct AppState {
+    metrics: Arc<PerformanceMetrics>,
+    data: Arc<AppData>,
+}
+
+impl AppState {
+    pub fn new() -> Self {
+        Self {
+            metrics: Arc::new(PerformanceMetrics {
+                fps: AtomicU64::new(0),
+                last_frame: RwLock::new(Instant::now()),
+                last_fps_update_time: RwLock::new(Instant::now()),
+                frames_since_last_update: AtomicU64::new(0),
+            }),
+            data: Arc::new(AppData {
+                click_count: AtomicU64::new(0),
+            }),
+        }
+    }
+}
+
 // Header row component with two text items
 #[tessera]
 fn header_row() {
@@ -55,40 +87,46 @@ fn content_section() {
 
 // Value display component
 #[tessera]
-fn value_display(value: Arc<AtomicU64>) {
+fn value_display(app_data: Arc<AppData>) {
     surface(
         SurfaceArgsBuilder::default()
             .corner_radius(25.0)
             .build()
             .unwrap(),
         move || {
-            text(value.load(atomic::Ordering::SeqCst).to_string());
+            text(app_data.click_count.load(atomic::Ordering::SeqCst).to_string());
         },
     )
 }
 
 #[tessera]
-fn perf(last_frame: Arc<RwLock<Instant>>, fps: Arc<AtomicU64>) {
-    text(format!("FPS: {}", fps.load(atomic::Ordering::SeqCst)));
+fn perf_display(metrics: Arc<PerformanceMetrics>) {
+    text(format!("FPS: {}", metrics.fps.load(atomic::Ordering::SeqCst)));
     state_handler(Box::new(move |_| {
         let now = Instant::now();
-        let mut last_frame = last_frame.write();
+        // Update last_frame for other potential uses (e.g. precise frame time)
+        let mut last_frame_guard = metrics.last_frame.write();
+        *last_frame_guard = now;
 
-        fps.store(
-            (1.0 / now.duration_since(*last_frame).as_secs_f32()) as u64,
-            atomic::Ordering::SeqCst,
-        );
-        *last_frame = now;
+        metrics.frames_since_last_update.fetch_add(1, atomic::Ordering::SeqCst);
+
+        let mut last_fps_update_time_guard = metrics.last_fps_update_time.write();
+        let elapsed_ms = now.duration_since(*last_fps_update_time_guard).as_millis();
+
+        if elapsed_ms >= 100 {
+            let frame_count = metrics.frames_since_last_update.swap(0, atomic::Ordering::SeqCst);
+            let new_fps = (frame_count as f64 / (elapsed_ms as f64 / 1000.0)) as u64;
+            metrics.fps.store(new_fps, atomic::Ordering::SeqCst);
+            *last_fps_update_time_guard = now;
+        }
     }));
 }
 
-// Main app component
 #[tessera]
-pub fn app(value: Arc<AtomicU64>, last_frame: Arc<RwLock<Instant>>, fps: Arc<AtomicU64>) {
+pub fn app(state: Arc<AppState>) {
     {
-        let value = value.clone();
-        let last_frame = last_frame.clone();
-        let fps = fps.clone();
+        let app_data_clone = state.data.clone();
+        let metrics_clone = state.metrics.clone();
         surface(
             SurfaceArgsBuilder::default()
                 .color([1.0, 1.0, 1.0])
@@ -107,39 +145,30 @@ pub fn app(value: Arc<AtomicU64>, last_frame: Arc<RwLock<Instant>>, fps: Arc<Ato
                                 .unwrap(),
                         )
                     })),
-                    ColumnItem::wrap(Box::new(|| value_display(value))),
-                    ColumnItem::wrap(Box::new(|| perf(last_frame, fps))),
+                    ColumnItem::wrap(Box::new(move || value_display(app_data_clone.clone()))),
+                    ColumnItem::wrap(Box::new(move || perf_display(metrics_clone.clone()))),
                 ]);
             },
         );
     }
 
     {
-        let value = value.clone();
+        let app_data_clone_for_handler = state.data.clone();
         state_handler(Box::new(move |input| {
-            // Handle state changes here, e.g., update UI based on cursor events
-            // For this example, we do increment when left mouse button clicked
             let count = input
                 .cursor_events
                 .iter()
                 .filter(|event| {
-                    // filter out left release events
                     match &event.content {
-                        CursorEventContent::Pressed(key) => match key {
-                            tessera::PressKeyEventType::Left => {
-                                println!("Left mouse button pressed");
-                                true
-                            }
-                            _ => false,
-                        },
+                        CursorEventContent::Pressed(key) => matches!(key, tessera::PressKeyEventType::Left),
                         _ => false,
                     }
                 })
                 .count();
-            if count == 0 {
-                return;
+            if count > 0 {
+                println!("Left mouse button pressed {} times", count);
+                app_data_clone_for_handler.click_count.fetch_add(count as u64, atomic::Ordering::SeqCst);
             }
-            value.fetch_add(count as u64, atomic::Ordering::SeqCst);
         }));
     }
 }
