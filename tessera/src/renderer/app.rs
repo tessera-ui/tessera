@@ -85,10 +85,10 @@ impl WgpuApp {
         let size = window.inner_size();
         let caps = surface.get_capabilities(&adapter);
         // Choose the present mode
-        let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
+        let present_mode = /*if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
             // Mailbox is the best choice for most cases, it allows for low latency and high FPS
-            wgpu::PresentMode::Mailbox
-        } else if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
+            wgpu::PresentMode::FifoRelaxed
+        } else */if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
             // Fifo is the fallback, it is the most compatible and stable
             wgpu::PresentMode::Fifo
         } else {
