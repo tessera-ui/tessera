@@ -15,6 +15,9 @@ cargo run
    ```bash
    # get device id
    x devices # let's say the device id is `adb:823c4f8b`
-   x run -p example --arch arm64 --target android
    x run -p example --arch arm64 --device adb:823c4f8b
+   ```
+3. optional: build the apk
+   ```bash
+   x build -p example --platform android --arch arm64 --format apk
    ```
