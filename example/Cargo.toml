@@ -12,12 +12,16 @@ name = "example"
 path = "src/lib.rs"
 
 [dependencies]
-env_logger = "0.11.8"
 tessera = { path = "../tessera" }
 tessera_macros = { path = "../tessera_macros" }
 tessera_basic_components = { path = "../tessera_basic_components" }
 rand = "0.9.1"
 tokio = { version = "1.45.1", features = ["full"] }
 log = "0.4.27"
-android_logger = "0.15.0"
 parking_lot = "0.12.4"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+flexi_logger = { version = "0.30.2", features = ["async"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.15.0"

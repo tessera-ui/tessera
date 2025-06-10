@@ -27,8 +27,14 @@ fn main() {}
 
 #[allow(dead_code)]
 #[cfg(not(target_os = "android"))]
-fn main() -> Result<(), impl std::error::Error> {
-    env_logger::init();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use log::error;
+
+    let _logger = flexi_logger::Logger::try_with_env()?
+        .write_mode(flexi_logger::WriteMode::Async)
+        .start()?;
     let app_state = Arc::new(AppState::new());
     Renderer::run(|| app(app_state.clone()))
+        .unwrap_or_else(|e| error!("App failed to run: {}", e));
+    Ok(())
 }
