@@ -3,6 +3,7 @@ mod cursor;
 mod dp;
 mod renderer;
 mod runtime;
+mod thread_utils;
 pub mod tokio_runtime;
 
 pub use crate::dp::Dp;

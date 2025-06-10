@@ -6,6 +6,8 @@ use std::{sync::Arc, time::Instant};
 use log::{debug, warn};
 use parking_lot::Mutex;
 
+use crate::thread_utils;
+
 use app::WgpuApp;
 #[cfg(target_os = "android")]
 use winit::platform::android::{EventLoopBuilderExtAndroid, activity::AndroidApp};
@@ -50,14 +52,13 @@ impl<F: Fn()> Renderer<F> {
             entry_point,
             cursor_state,
         };
+        thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
     }
 
     #[cfg(target_os = "android")]
     /// Create event loop and run application on Android
     pub fn run(entry_point: F, android_app: AndroidApp) -> Result<(), EventLoopError> {
-        use log::info;
-
         let event_loop = EventLoop::builder()
             .with_android_app(android_app)
             .build()
@@ -69,7 +70,7 @@ impl<F: Fn()> Renderer<F> {
             entry_point,
             cursor_state,
         };
-        info!("Starting Tessera Renderer on Android...");
+        thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
     }
 }
