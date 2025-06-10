@@ -114,8 +114,8 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
         move |node_id, tree, column_parent_constraint, children_node_ids, metadatas| {
             // Use children_items_for_measure inside this closure
             let column_intrinsic_constraint = metadatas
-                .get(&node_id) // Changed from get_mut, and unwrap to ok_or
-                .ok_or_else(|| MeasurementError::NodeNotFoundInMeta)?
+                .get(&node_id)
+                .ok_or(MeasurementError::NodeNotFoundInMeta)?
                 .constraint;
             let effective_column_constraint =
                 column_intrinsic_constraint.merge(column_parent_constraint);
@@ -137,7 +137,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                         );
                         let child_intrinsic_constraint = metadatas
                             .get(&child_node_id)
-                            .ok_or_else(|| MeasurementError::ChildMeasurementFailed(child_node_id))?
+                            .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                             .constraint;
                         let final_child_constraint =
                             child_intrinsic_constraint.merge(&child_constraint_for_measure);
@@ -154,7 +154,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                         );
                         let child_intrinsic_constraint = metadatas
                             .get(&child_node_id)
-                            .ok_or_else(|| MeasurementError::ChildMeasurementFailed(child_node_id))?
+                            .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                             .constraint;
                         let final_child_constraint =
                             child_intrinsic_constraint.merge(&child_constraint_for_measure);
@@ -179,8 +179,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                         .get(&child_node_id)
                         .ok_or_else(|| {
                             MeasurementError::MeasureFnFailed(format!(
-                                "Result missing for fixed/wrap child {:?}",
-                                child_node_id
+                                "Result missing for fixed/wrap child {child_node_id:?}"
                             ))
                         })?
                         .clone()?;
@@ -251,7 +250,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                         );
                         let child_intrinsic_constraint = metadatas
                             .get(&child_node_id)
-                            .ok_or_else(|| MeasurementError::ChildMeasurementFailed(child_node_id))?
+                            .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                             .constraint;
                         let final_child_constraint =
                             child_intrinsic_constraint.merge(&child_constraint_for_measure);
@@ -291,7 +290,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
-                                .ok_or_else(|| {
+                                .ok_or({
                                     MeasurementError::ChildMeasurementFailed(child_node_id)
                                 })?
                                 .constraint;
@@ -348,7 +347,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
-                                .ok_or_else(|| {
+                                .ok_or({
                                     MeasurementError::ChildMeasurementFailed(child_node_id)
                                 })?
                                 .constraint;
@@ -398,7 +397,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
-                                .ok_or_else(|| {
+                                .ok_or({
                                     MeasurementError::ChildMeasurementFailed(child_node_id)
                                 })?
                                 .constraint;
@@ -431,8 +430,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                         .get(&child_node_id)
                         .ok_or_else(|| {
                             MeasurementError::MeasureFnFailed(format!(
-                                "Result missing for fill/wrap child {:?}",
-                                child_node_id
+                                "Result missing for fill/wrap child {child_node_id:?}"
                             ))
                         })?
                         .clone()?;

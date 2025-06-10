@@ -79,7 +79,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 // The child's own defined constraints also need to be merged.
                 let child_intrinsic_constraint = metadatas
                     .get(&child_node_id) // Use .get() for reading constraint
-                    .ok_or_else(|| MeasurementError::ChildMeasurementFailed(child_node_id))? // Handle if meta not found
+                    .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))? // Handle if meta not found
                     .constraint;
                 let final_child_constraint_for_measure =
                     child_intrinsic_constraint.merge(&child_actual_constraint);
@@ -91,8 +91,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                     .get(&child_node_id)
                     .ok_or_else(|| {
                         MeasurementError::MeasureFnFailed(format!(
-                            "Child {:?} result missing in map",
-                            child_node_id
+                            "Child {child_node_id:?} result missing in map"
                         ))
                     })?
                     .clone()?; // Clone the Result and then propagate error with ?

@@ -34,6 +34,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .write_mode(flexi_logger::WriteMode::Async)
         .start()?;
     let app_state = Arc::new(AppState::new());
-    Renderer::run(|| app(app_state.clone())).unwrap_or_else(|e| error!("App failed to run: {}", e));
+    Renderer::run(|| app(app_state.clone())).unwrap_or_else(|e| error!("App failed to run: {e}"));
     Ok(())
 }

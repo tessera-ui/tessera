@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Instant};
 use log::{debug, warn};
 use parking_lot::Mutex;
 
-use crate::thread_utils;
+use crate::{keyboard_state::KeyboardState, thread_utils};
 
 use app::WgpuApp;
 #[cfg(target_os = "android")]
@@ -38,6 +38,8 @@ pub struct Renderer<F: Fn()> {
     entry_point: F,
     /// The state of the cursor
     cursor_state: CursorState,
+    /// The state of the keyboard
+    keyboard_state: KeyboardState,
 }
 
 impl<F: Fn()> Renderer<F> {
@@ -47,10 +49,12 @@ impl<F: Fn()> Renderer<F> {
         let event_loop = EventLoop::new().unwrap();
         let app = Arc::new(Mutex::new(None));
         let cursor_state = CursorState::default();
+        let keyboard_state = KeyboardState::default();
         let mut renderer = Self {
             app,
             entry_point,
             cursor_state,
+            keyboard_state,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -65,10 +69,12 @@ impl<F: Fn()> Renderer<F> {
             .unwrap();
         let app = Arc::new(Mutex::new(None));
         let cursor_state = CursorState::default();
+        let keyboard_state = KeyboardState::default();
         let mut renderer = Self {
             app,
             entry_point,
             cursor_state,
+            keyboard_state,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -134,7 +140,7 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
             }
             WindowEvent::CursorLeft { device_id: _ } => {
                 // Clear cursor position when it leaves the window
-                self.cursor_state.out_of_window();
+                self.cursor_state.clear();
                 debug!("Cursor left the window");
             }
             WindowEvent::MouseInput {
@@ -194,8 +200,9 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 *SCALE_FACTOR.get().unwrap().write() = scale_factor;
             }
-            WindowEvent::KeyboardInput { .. } => {
-                
+            WindowEvent::KeyboardInput { event, .. } => {
+                debug!("Keyboard input: {event:?}");
+                self.keyboard_state.push_event(event);
             }
             WindowEvent::RedrawRequested => {
                 // notify the windowing system before rendering
@@ -220,7 +227,9 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 // Compute the draw commands then we can clear component tree for next build
                 debug!("Computing draw commands...");
                 let cursor_events = self.cursor_state.take_events();
-                let commands = component_tree.compute(app.size().into(), cursor_events.into());
+                let keyboard_events = self.keyboard_state.take_events();
+                let commands =
+                    component_tree.compute(app.size().into(), cursor_events, keyboard_events);
                 let draw_cost = draw_timer.elapsed();
                 debug!("Draw commands computed in {draw_cost:?}");
                 component_tree.clear();

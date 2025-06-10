@@ -18,7 +18,7 @@ impl Dp {
     pub fn to_pixels_f64(&self) -> f64 {
         let scale_factor = SCALE_FACTOR
             .get()
-            .map(|lock| lock.read().clone())
+            .map(|lock| *lock.read())
             .expect("Scale factor not set");
         self.0 * scale_factor
     }
@@ -27,7 +27,7 @@ impl Dp {
     pub fn from_pixels_f64(value: f64) -> Self {
         let scale_factor = SCALE_FACTOR
             .get()
-            .map(|lock| lock.read().clone())
+            .map(|lock| *lock.read())
             .expect("Scale factor not set");
         Dp(value / scale_factor)
     }
@@ -36,7 +36,7 @@ impl Dp {
     pub fn to_pixels_u32(&self) -> u32 {
         let scale_factor = SCALE_FACTOR
             .get()
-            .map(|lock| lock.read().clone())
+            .map(|lock| *lock.read())
             .expect("Scale factor not set");
         (self.0 * scale_factor) as u32
     }
@@ -45,7 +45,7 @@ impl Dp {
     pub fn from_pixels_u32(value: u32) -> Self {
         let scale_factor = SCALE_FACTOR
             .get()
-            .map(|lock| lock.read().clone())
+            .map(|lock| *lock.read())
             .expect("Scale factor not set");
         Dp((value as f64) / scale_factor)
     }
@@ -54,7 +54,7 @@ impl Dp {
     pub fn to_pixels_f32(&self) -> f32 {
         let scale_factor = SCALE_FACTOR
             .get()
-            .map(|lock| lock.read().clone())
+            .map(|lock| *lock.read())
             .expect("Scale factor not set");
         (self.0 * scale_factor) as f32
     }
@@ -63,7 +63,7 @@ impl Dp {
     pub fn from_pixels_f32(value: f32) -> Self {
         let scale_factor = SCALE_FACTOR
             .get()
-            .map(|lock| lock.read().clone())
+            .map(|lock| *lock.read())
             .expect("Scale factor not set");
         Dp((value as f64) / scale_factor)
     }

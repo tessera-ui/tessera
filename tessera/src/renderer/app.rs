@@ -95,13 +95,13 @@ impl WgpuApp {
             // Immediate is the least preferred, it can cause tearing and is not recommended
             wgpu::PresentMode::Immediate
         };
-        info!("Using present mode: {:?}", present_mode);
+        info!("Using present mode: {present_mode:?}");
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: caps.formats[0],
             width: size.width,
             height: size.height,
-            present_mode: present_mode,
+            present_mode,
             alpha_mode: caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
@@ -111,7 +111,7 @@ impl WgpuApp {
         let drawer = Drawer::new(&gpu, &queue, &config);
         // Set scale factor for dp conversion
         let scale_factor = window.scale_factor();
-        info!("Window scale factor: {}", scale_factor);
+        info!("Window scale factor: {scale_factor}");
         SCALE_FACTOR
             .set(RwLock::new(scale_factor))
             .expect("Failed to set scale factor");

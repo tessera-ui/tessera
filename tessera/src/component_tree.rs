@@ -102,6 +102,7 @@ impl ComponentTree {
         &mut self,
         screen_size: [u32; 2],
         cursor_events: Vec<CursorEvent>,
+        keyboard_events: Vec<winit::event::KeyEvent>,
     ) -> Vec<DrawCommand> {
         let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
             return vec![];
@@ -116,20 +117,13 @@ impl ComponentTree {
 
         // Call measure_node with &self.tree and &self.metadatas
         // Handle the Result from measure_node
-        match measure_node(
-            root_node,
-            &screen_constraint,
-            &self.tree,
-            &self.metadatas, // Changed from &mut self.metadatas to &self.metadatas
-        ) {
+        match measure_node(root_node, &screen_constraint, &self.tree, &self.metadatas) {
             Ok(_root_computed_data) => {
                 debug!("Component tree measured in {:?}", measure_timer.elapsed());
             }
             Err(e) => {
                 log::error!(
-                    "Root node ({:?}) measurement failed: {:?}. Aborting draw command computation.",
-                    root_node,
-                    e
+                    "Root node ({root_node:?}) measurement failed: {e:?}. Aborting draw command computation."
                 );
                 return vec![]; // Early return if root measurement fails
             }
@@ -163,7 +157,8 @@ impl ComponentTree {
                 continue;
             };
 
-            let current_cursor_events = cursor_events // Use a different name for clarity
+            // Get the current cursor events
+            let current_cursor_events = cursor_events
                 .iter()
                 .cloned()
                 .map(|mut event| {
@@ -177,7 +172,8 @@ impl ComponentTree {
                 })
                 .collect::<Vec<_>>();
 
-            let computed_data_option = self // Renamed for clarity
+            // Get the computed_data for the current node
+            let computed_data_option = self
                 .metadatas
                 .get(&node_id_loop)
                 .and_then(|m| m.computed_data);
@@ -188,12 +184,12 @@ impl ComponentTree {
                     node_id: node_id_loop,
                     computed_data: node_computed_data,
                     cursor_events: current_cursor_events,
+                    keyboard_events: keyboard_events.clone(),
                 };
                 state_handler(&input);
             } else {
                 log::warn!(
-                    "Computed data not found for node {:?} during state handler execution.",
-                    node_id_loop
+                    "Computed data not found for node {node_id_loop:?} during state handler execution."
                 );
             }
         }

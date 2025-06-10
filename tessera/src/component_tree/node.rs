@@ -102,10 +102,10 @@ pub enum MeasurementError {
 /// finishes placementing inside, and returns its size (`ComputedData`) or an error.
 pub type MeasureFn = dyn Fn(
         indextree::NodeId,
-        &ComponentNodeTree, // Changed from &Arc<T> to &T
+        &ComponentNodeTree,
         &Constraint,
         &[indextree::NodeId],
-        &ComponentNodeMetaDatas, // Changed from &Arc<T> to &T
+        &ComponentNodeMetaDatas,
     ) -> Result<ComputedData, MeasurementError>
     + Send
     + Sync;
@@ -118,14 +118,19 @@ pub struct StateHandlerInput {
     pub node_id: indextree::NodeId,
     pub computed_data: ComputedData,
     pub cursor_events: Vec<CursorEvent>,
+    pub keyboard_events: Vec<winit::event::KeyEvent>,
 }
 
 /// Measures a single node recursively, returning its size or an error.
+///
+/// See [`measure_nodes`] for concurrent measurement of multiple nodes.
+/// Which is very recommended for most cases. You should only use this function
+/// when your're very sure that you only need to measure a single node.
 pub fn measure_node(
     node_id: NodeId,
     parent_constraint: &Constraint,
-    tree: &ComponentNodeTree, // Changed from &Arc<T> to &T
-    component_node_metadatas: &ComponentNodeMetaDatas, // Changed from &Arc<T> to &T
+    tree: &ComponentNodeTree,
+    component_node_metadatas: &ComponentNodeMetaDatas,
 ) -> Result<ComputedData, MeasurementError> {
     let node_data_ref = tree
         .get(node_id)
@@ -137,8 +142,8 @@ pub fn measure_node(
         .map_or(Constraint::NONE, |m| m.constraint);
     let effective_constraint = node_intrinsic_constraint.merge(parent_constraint);
 
-    if let Some(metadata_entry) = component_node_metadatas.get(&node_id) {
-        if let Some(cached_size) = metadata_entry
+    if let Some(metadata_entry) = component_node_metadatas.get(&node_id)
+        && let Some(cached_size) = metadata_entry
             .cached_computed_data
             .get(&effective_constraint)
         {
@@ -147,7 +152,6 @@ pub fn measure_node(
             );
             return Ok(*cached_size);
         }
-    }
 
     let children: Vec<_> = node_id.children(tree).collect(); // No .as_ref() needed for &Arena
     let timer = Instant::now();
@@ -190,7 +194,7 @@ pub fn measure_node(
 pub fn place_node(
     node: indextree::NodeId,
     rel_position: [u32; 2],
-    component_node_metadatas: &ComponentNodeMetaDatas, // Changed from &Arc<T> to &T
+    component_node_metadatas: &ComponentNodeMetaDatas,
 ) {
     component_node_metadatas
         .entry(node)
@@ -229,8 +233,7 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn =
                 }
                 Some(Err(e)) => {
                     debug!(
-                        "Child node {:?} measurement failed for parent {:?}: {:?}",
-                        child_id, current_node_id, e
+                        "Child node {child_id:?} measurement failed for parent {current_node_id:?}: {e:?}"
                     );
                     if first_error.is_none() {
                         first_error = Some(MeasurementError::ChildMeasurementFailed(child_id));
@@ -238,13 +241,11 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn =
                 }
                 None => {
                     debug!(
-                        "Child node {:?} was not found in measure_nodes results for parent {:?}",
-                        child_id, current_node_id
+                        "Child node {child_id:?} was not found in measure_nodes results for parent {current_node_id:?}"
                     );
                     if first_error.is_none() {
                         first_error = Some(MeasurementError::MeasureFnFailed(format!(
-                            "Result for child {:?} missing",
-                            child_id
+                            "Result for child {child_id:?} missing"
                         )));
                     }
                 }
@@ -271,8 +272,8 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn =
 /// Concurrently measures multiple nodes using Rayon for parallelism.
 pub fn measure_nodes(
     nodes_to_measure: Vec<(NodeId, Constraint)>,
-    tree: &ComponentNodeTree, // Changed from Arc<T> to &T
-    component_node_metadatas: &ComponentNodeMetaDatas, // Changed from Arc<T> to &T
+    tree: &ComponentNodeTree,
+    component_node_metadatas: &ComponentNodeMetaDatas,
 ) -> HashMap<NodeId, Result<ComputedData, MeasurementError>> {
     if nodes_to_measure.is_empty() {
         return HashMap::new();

@@ -232,7 +232,7 @@ pub fn app(state: Arc<AppState>) {
                 })
                 .count();
             if count > 0 {
-                println!("Left mouse button pressed {} times", count);
+                println!("Left mouse button pressed {count} times");
                 app_data_clone_for_handler
                     .click_count
                     .fetch_add(count as u64, atomic::Ordering::SeqCst);

@@ -36,15 +36,14 @@ impl RowItem {
 
     /// Helper to create a RowItem that is fixed width.
     pub fn fixed(child: Box<dyn FnOnce() + Send + Sync>, width: Dp) -> Self {
-        // Changed width to Dp
-        Self::new(child, DimensionValue::Fixed(width.to_pixels_u32()), None) // width is Dp
+        Self::new(child, DimensionValue::Fixed(width.to_pixels_u32()), None)
     }
 
     /// Helper to create a RowItem that fills available space, optionally with a weight and max.
     pub fn fill(
         child: Box<dyn FnOnce() + Send + Sync>,
         weight: Option<f32>,
-        max_width: Option<Dp>, // Changed max_width to Option<Dp>
+        max_width: Option<Dp>,
     ) -> Self {
         Self::new(
             child,
@@ -115,8 +114,8 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
         move |node_id, tree, row_parent_constraint, children_node_ids, metadatas| {
             // Use children_items_for_measure inside this closure
             let row_intrinsic_constraint = metadatas
-                .get(&node_id) // Changed from get_mut, and unwrap to ok_or
-                .ok_or_else(|| MeasurementError::NodeNotFoundInMeta)?
+                .get(&node_id)
+                .ok_or(MeasurementError::NodeNotFoundInMeta)?
                 .constraint;
             let effective_row_constraint = row_intrinsic_constraint.merge(row_parent_constraint);
 
@@ -138,7 +137,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                         );
                         let child_intrinsic_constraint = metadatas
                             .get(&child_node_id)
-                            .ok_or_else(|| MeasurementError::ChildMeasurementFailed(child_node_id))?
+                            .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                             .constraint;
                         let final_child_constraint =
                             child_intrinsic_constraint.merge(&child_constraint_for_measure);
@@ -153,7 +152,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                             Constraint::new(DimensionValue::Wrap, effective_row_constraint.height);
                         let child_intrinsic_constraint = metadatas
                             .get(&child_node_id)
-                            .ok_or_else(|| MeasurementError::ChildMeasurementFailed(child_node_id))?
+                            .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                             .constraint;
                         let final_child_constraint =
                             child_intrinsic_constraint.merge(&child_constraint_for_measure);
@@ -178,8 +177,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                         .get(&child_node_id)
                         .ok_or_else(|| {
                             MeasurementError::MeasureFnFailed(format!(
-                                "Result missing for fixed/wrap child {:?}",
-                                child_node_id
+                                "Result missing for fixed/wrap child {child_node_id:?}"
                             ))
                         })?
                         .clone()?;
@@ -197,7 +195,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                 DimensionValue::Fixed(row_fixed_width) => {
                     // row_fixed_width is Dp
                     remaining_width_for_fill =
-                        u32::from(row_fixed_width).saturating_sub(total_width_for_fixed_wrap);
+                        row_fixed_width.saturating_sub(total_width_for_fixed_wrap);
                 }
                 DimensionValue::Wrap => {
                     is_row_effectively_wrap_for_children = true;
@@ -207,7 +205,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                     ..
                 } => {
                     remaining_width_for_fill =
-                        u32::from(row_max_budget).saturating_sub(total_width_for_fixed_wrap);
+                        row_max_budget.saturating_sub(total_width_for_fixed_wrap);
                 }
                 DimensionValue::Fill { max: None, .. } => {
                     is_row_effectively_wrap_for_children = true;
@@ -250,7 +248,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                             Constraint::new(DimensionValue::Wrap, effective_row_constraint.height);
                         let child_intrinsic_constraint = metadatas
                             .get(&child_node_id)
-                            .ok_or_else(|| MeasurementError::ChildMeasurementFailed(child_node_id))?
+                            .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                             .constraint;
                         let final_child_constraint =
                             child_intrinsic_constraint.merge(&child_constraint_for_measure);
@@ -277,7 +275,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                         } = item_behavior
                         {
                             let alloc_width = child_max_fill.map_or(proportional_width, |m_dp| {
-                                proportional_width.min(u32::from(m_dp))
+                                proportional_width.min(m_dp)
                             });
                             let final_alloc_width =
                                 alloc_width.min(temp_remaining_width_for_weighted);
@@ -288,7 +286,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
-                                .ok_or_else(|| {
+                                .ok_or({
                                     MeasurementError::ChildMeasurementFailed(child_node_id)
                                 })?
                                 .constraint;
@@ -328,7 +326,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                         {
                             let alloc_width = child_max_fill
                                 .map_or(width_per_unweighted_child, |m_dp| {
-                                    width_per_unweighted_child.min(u32::from(m_dp))
+                                    width_per_unweighted_child.min(m_dp)
                                 });
                             let final_alloc_width =
                                 alloc_width.min(temp_remaining_width_for_unweighted);
@@ -339,7 +337,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
-                                .ok_or_else(|| {
+                                .ok_or({
                                     MeasurementError::ChildMeasurementFailed(child_node_id)
                                 })?
                                 .constraint;
@@ -373,8 +371,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                         .get(&child_node_id)
                         .ok_or_else(|| {
                             MeasurementError::MeasureFnFailed(format!(
-                                "Result missing for fill/wrap child {:?}",
-                                child_node_id
+                                "Result missing for fill/wrap child {child_node_id:?}"
                             ))
                         })?
                         .clone()?;
@@ -389,11 +386,11 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                 total_width_for_fixed_wrap + actual_width_taken_by_fill_children;
 
             let final_row_width = match effective_row_constraint.width {
-                DimensionValue::Fixed(w) => u32::from(w), // w is Dp
+                DimensionValue::Fixed(w) => w, // w is Dp
                 DimensionValue::Wrap => total_children_width,
                 DimensionValue::Fill { max, .. } => {
                     // max is Option<Dp>
-                    max.map(|dp| u32::from(dp).min(total_children_width))
+                    max.map(|dp| dp.min(total_children_width))
                         .unwrap_or(total_children_width)
                 }
             };

@@ -27,10 +27,8 @@ impl CursorState {
         self.events.drain(..).collect()
     }
 
-    /// Called when the cursor is moved out of the window
-    /// Resets the press info of all keys
-    /// and set position to `None`
-    pub fn out_of_window(&mut self) {
+    /// Clear all cursor events
+    pub fn clear(&mut self) {
         self.events.clear();
     }
 }
@@ -74,8 +72,8 @@ impl CursorEventContent {
         match self {
             Self::Moved { pos } => Self::Moved {
                 pos: [
-                    pos[0] as i32 - abs_start_pos[0] as i32,
-                    pos[1] as i32 - abs_start_pos[1] as i32,
+                    pos[0] - abs_start_pos[0] as i32,
+                    pos[1] - abs_start_pos[1] as i32,
                 ],
             },
             Self::Left => Self::Left,
