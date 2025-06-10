@@ -195,7 +195,7 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 *SCALE_FACTOR.get().unwrap().write() = scale_factor;
             }
             WindowEvent::KeyboardInput { .. } => {
-                // todo!("Handle keyboard input");
+                
             }
             WindowEvent::RedrawRequested => {
                 // notify the windowing system before rendering
@@ -219,7 +219,7 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 let draw_timer = Instant::now();
                 // Compute the draw commands then we can clear component tree for next build
                 debug!("Computing draw commands...");
-                let cursor_events = self.cursor_state.pop_events().unwrap_or_default();
+                let cursor_events = self.cursor_state.take_events();
                 let commands = component_tree.compute(app.size().into(), cursor_events.into());
                 let draw_cost = draw_timer.elapsed();
                 debug!("Draw commands computed in {draw_cost:?}");

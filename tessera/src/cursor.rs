@@ -2,40 +2,29 @@ use std::{collections::VecDeque, time::Instant};
 
 // We don't want to keep too many events in the queue
 // when ui is janked(in badly way!)
-const KEEP_DUEQUES_COUNT: usize = 10;
 const KEEP_EVENTS_COUNT: usize = 10;
 
 /// The state of the cursor
 #[derive(Default)]
 pub struct CursorState {
     /// Press event deque
-    events: VecDeque<VecDeque<CursorEvent>>,
+    events: VecDeque<CursorEvent>,
 }
 
 impl CursorState {
     pub fn push_event(&mut self, event: CursorEvent) {
         // Add the event to the deque
-        // here we just add the event to the last deque in the deques
-        // in order to handle all events in one frame
-        if let Some(last_events) = self.events.back_mut() {
-            last_events.push_back(event);
-            // if the last deque is too long, we remove the oldest one
-            if last_events.len() > KEEP_EVENTS_COUNT {
-                last_events.pop_front();
-            }
-        } else {
-            self.events.push_back(vec![event].into());
-        }
+        self.events.push_back(event);
         // If the events deque is too long, we remove the oldest one
-        if self.events.len() > KEEP_DUEQUES_COUNT {
+        if self.events.len() > KEEP_EVENTS_COUNT {
             self.events.pop_front();
         }
     }
 
     /// Custom a group of events
-    pub fn pop_events(&mut self) -> Option<VecDeque<CursorEvent>> {
-        // Get the last group of events
-        self.events.pop_front()
+    /// Note: Events are ordered from left (oldest) to right (newest)
+    pub fn take_events(&mut self) -> Vec<CursorEvent> {
+        self.events.drain(..).collect()
     }
 
     /// Called when the cursor is moved out of the window
