@@ -91,6 +91,7 @@ fn text_column() {
 fn content_section() {
     surface(
         SurfaceArgsBuilder::default()
+            .corner_radius(25.0)
             .padding(20.0.into())
             .build()
             .unwrap(),

@@ -24,16 +24,35 @@ struct VertexOutput {
 fn vs_main(model: VertexInput) -> VertexOutput {
     var out: VertexOutput;
     out.color = model.color;
-    // Assuming model.position.xy are already the final screen/clip coordinates for the vertex
     out.clip_position = vec4f(model.position.xy, 0.0, 1.0);
-    out.local_pos_out = model.local_pos_in; // Pass through local_pos
+    out.local_pos_out = model.local_pos_in;
     return out;
 }
 
-// Helper function for SDF
-fn sdf_rounded_box(p: vec2f, b: vec2f, r: f32) -> f32 {
+// Helper function for G2-like SDF using p-norm for rounded corners
+// p: point to sample
+// b: half-size of the box
+// r: corner radius
+// k: exponent for p-norm (k=2.0 for G1 circle, k>2.0 for G2-like superellipse)
+fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: f32, k: f32) -> f32 {
     let q = abs(p) - b + r;
-    return length(max(q, vec2f(0.0))) + min(max(q.x, q.y), 0.0) - r;
+
+    let v_x = max(q.x, 0.0);
+    let v_y = max(q.y, 0.0);
+
+    var dist_corner_shape: f32;
+    // Use a small epsilon for comparing k to 2.0 to handle potential float inaccuracies
+    if (abs(k - 2.0) < 0.001) { // G1 behavior (standard circle)
+        dist_corner_shape = length(vec2f(v_x, v_y));
+    } else { // G2-like behavior with exponent k
+        if (v_x == 0.0 && v_y == 0.0) {
+            dist_corner_shape = 0.0;
+        } else {
+            dist_corner_shape = pow(pow(v_x, k) + pow(v_y, k), 1.0/k);
+        }
+    }
+    
+    return dist_corner_shape + min(max(q.x, q.y), 0.0) - r;
 }
 
 @fragment
@@ -47,6 +66,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let shadow_offset = shape_params.shadow_params.xy;
     let shadow_smoothness = shape_params.shadow_params.z;
 
+    // G2 exponent for rounded corners.
+    // k=2.0 results in standard G1 circular corners.
+    // k > 2.0 (e.g., 2.5, 3.0, 4.0) gives G2-like superelliptical corners.
+    let G2_K_VALUE: f32 = 3.0;
+
     // in.local_pos_out is expected to be in normalized range, e.g., [-0.5, 0.5] for x and y
     let p_normalized = in.local_pos_out;
     // Scale to actual rectangle dimensions, centered at (0,0) for SDF calculation
@@ -57,26 +81,24 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     if (is_shadow_flag == 1.0) { // --- Draw Shadow ---
         let p_scaled_shadow_space = p_scaled_object_space - shadow_offset;
-        let dist_shadow = sdf_rounded_box(p_scaled_shadow_space, rect_half_size, corner_radius);
+        let dist_shadow = sdf_g2_rounded_box(p_scaled_shadow_space, rect_half_size, corner_radius, G2_K_VALUE);
 
-        // Anti-aliasing for shadow edge (pixel-size dependent)
-        // Using fwidth for a more robust anti-aliasing width
-        let aa_width = fwidth(dist_shadow); // Estimate of how much dist_shadow changes per pixel
+        // Anti-aliasing for shadow edge
+        let aa_width = fwidth(dist_shadow);
         let shadow_alpha = 1.0 - smoothstep(-aa_width, aa_width, dist_shadow);
 
-        // Softness/blur for the shadow (independent of AA)
-        // This makes the shadow fade out over 'shadow_smoothness' distance
+        // Softness/blur for the shadow
         let shadow_soft_alpha = smoothstep(shadow_smoothness, 0.0, dist_shadow);
         
-        let combined_shadow_alpha = shadow_alpha * shadow_soft_alpha; // Multiply alphas
+        let combined_shadow_alpha = shadow_alpha * shadow_soft_alpha;
 
-        if (combined_shadow_alpha <= 0.001) { // Use a small threshold for discarding
+        if (combined_shadow_alpha <= 0.001) {
             discard;
         }
         final_color = vec4f(shadow_color_uniform.rgb, shadow_color_uniform.a * combined_shadow_alpha);
 
     } else { // --- Draw Object ---
-        let dist_object = sdf_rounded_box(p_scaled_object_space, rect_half_size, corner_radius);
+        let dist_object = sdf_g2_rounded_box(p_scaled_object_space, rect_half_size, corner_radius, G2_K_VALUE);
 
         let aa_width = fwidth(dist_object);
         let object_alpha = 1.0 - smoothstep(-aa_width, aa_width, dist_object);
@@ -84,8 +106,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         if (object_alpha <= 0.001) {
             discard;
         }
-
-        // Option 2: Use color from Uniform (as defined in current ShapeUniforms)
+        
         final_color = vec4f(object_color_uniform.rgb, object_color_uniform.a * object_alpha);
     }
 
