@@ -16,6 +16,7 @@ earcutr = "0.5.0"
 indextree = "4.7.4"
 rayon = "1.10.0"
 dashmap = "6.1.0"
+uuid = { version = "1.17.0", features = ["v4"] }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = "0.2.172"

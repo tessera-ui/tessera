@@ -1,7 +1,7 @@
 use std::sync::{Arc, OnceLock};
 
 use glyphon::fontdb;
-use parking_lot::{RwLock, RwLockReadGuard};
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use super::command::TextConstraint;
 
@@ -43,7 +43,7 @@ pub fn read_font_system() -> RwLockReadGuard<'static, glyphon::FontSystem> {
 /// It costs a lot to create a glyphon font system, so we use a static one
 /// to share it every where and avoid creating it multiple times.
 /// This function returns a write lock of the font system.
-pub fn write_font_system() -> parking_lot::RwLockWriteGuard<'static, glyphon::FontSystem> {
+pub fn write_font_system() -> RwLockWriteGuard<'static, glyphon::FontSystem> {
     FONT_SYSTEM.get_or_init(init_font_system).write()
 }
 
