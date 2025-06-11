@@ -57,6 +57,12 @@ impl Vertex {
     }
 }
 
+pub struct ShapeVertexData<'a> {
+    pub polygon_vertices: &'a [[f32; 2]],
+    pub vertex_colors: &'a [[f32; 3]],
+    pub vertex_local_pos: &'a [[f32; 2]],
+}
+
 pub struct ShapePipeline {
     pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
@@ -171,13 +177,12 @@ impl ShapePipeline {
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
         render_pass: &mut wgpu::RenderPass<'_>,
-        polygon_vertices: &[[f32; 2]],
-        vertex_colors: &[[f32; 3]],
-        vertex_local_pos: &[[f32; 2]],
+        vertex_data_in: &ShapeVertexData,
         uniforms: &ShapeUniforms,
         dynamic_offset: wgpu::DynamicOffset,
     ) {
-        let flat_polygon_vertices: Vec<f64> = polygon_vertices
+        let flat_polygon_vertices: Vec<f64> = vertex_data_in
+            .polygon_vertices
             .iter()
             .flat_map(|[x, y]| vec![*x as f64, *y as f64])
             .collect();
@@ -187,26 +192,34 @@ impl ShapePipeline {
             Vec::new()
         });
 
-        if indices.is_empty() && !polygon_vertices.is_empty() {
+        if indices.is_empty() && !vertex_data_in.polygon_vertices.is_empty() {
             return;
         }
 
         let vertex_data: Vec<Vertex> = indices
             .iter()
             .map(|&i| {
-                if i < polygon_vertices.len()
-                    && i < vertex_colors.len()
-                    && i < vertex_local_pos.len()
+                if i < vertex_data_in.polygon_vertices.len()
+                    && i < vertex_data_in.vertex_colors.len()
+                    && i < vertex_data_in.vertex_local_pos.len()
                 {
-                    Vertex::new(polygon_vertices[i], vertex_colors[i], vertex_local_pos[i])
+                    Vertex::new(
+                        vertex_data_in.polygon_vertices[i],
+                        vertex_data_in.vertex_colors[i],
+                        vertex_data_in.vertex_local_pos[i],
+                    )
                 } else {
                     error!("Warning: Earcut index {i} out of bounds for input arrays.");
                     // Fallback to the first vertex if index is out of bounds
-                    if !polygon_vertices.is_empty()
-                        && !vertex_colors.is_empty()
-                        && !vertex_local_pos.is_empty()
+                    if !vertex_data_in.polygon_vertices.is_empty()
+                        && !vertex_data_in.vertex_colors.is_empty()
+                        && !vertex_data_in.vertex_local_pos.is_empty()
                     {
-                        Vertex::new(polygon_vertices[0], vertex_colors[0], vertex_local_pos[0])
+                        Vertex::new(
+                            vertex_data_in.polygon_vertices[0],
+                            vertex_data_in.vertex_colors[0],
+                            vertex_data_in.vertex_local_pos[0],
+                        )
                     } else {
                         // This case should ideally not happen if inputs are validated
                         // Or handle it by returning early / logging a more severe error

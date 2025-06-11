@@ -25,8 +25,10 @@ pub(super) fn cursor(height_px: u32, bink_timer: Instant) {
         if let Some(mut metadata) = metadatas.get_mut(&node_id) {
             metadata.basic_drawable = Some(drawable);
         } else {
-            let mut default_meta = ComponentNodeMetaData::default();
-            default_meta.basic_drawable = Some(drawable);
+            let default_meta = ComponentNodeMetaData {
+                basic_drawable: Some(drawable),
+                ..Default::default()
+            };
             metadatas.insert(node_id, default_meta);
         }
         // Return the computed data for the cursor

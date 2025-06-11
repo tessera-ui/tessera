@@ -24,9 +24,4 @@ impl KeyboardState {
     pub fn take_events(&mut self) -> Vec<winit::event::KeyEvent> {
         self.events.drain(..).collect()
     }
-
-    /// Clear all keyboard events
-    pub fn clear(&mut self) {
-        self.events.clear();
-    }
 }

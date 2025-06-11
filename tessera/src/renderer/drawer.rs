@@ -4,7 +4,7 @@ mod shape;
 mod text;
 
 pub use crate::renderer::drawer::shape::{
-    MAX_CONCURRENT_SHAPES, ShapeUniforms, Vertex as ShapeVertex,
+    MAX_CONCURRENT_SHAPES, ShapeUniforms, ShapeVertexData, Vertex as ShapeVertex,
 };
 pub use command::{DrawCommand, TextConstraint};
 use pos_misc::pixel_to_ndc;
@@ -97,13 +97,17 @@ impl Drawer {
                     // Set render_mode to 2.0 for shadow
                     uniforms_for_shadow.render_params[3] = 2.0;
 
+                    let vertex_data_for_shadow = ShapeVertexData {
+                        polygon_vertices: &positions,
+                        vertex_colors: &colors,
+                        vertex_local_pos: &local_positions,
+                    };
+
                     self.shape_pipeline.draw(
                         gpu,
                         queue,
                         render_pass,
-                        &positions,
-                        &colors,
-                        &local_positions,
+                        &vertex_data_for_shadow,
                         &uniforms_for_shadow,
                         dynamic_offset,
                     );
@@ -121,13 +125,17 @@ impl Drawer {
                     );
                 }
 
+                let vertex_data_for_object = ShapeVertexData {
+                    polygon_vertices: &positions,
+                    vertex_colors: &colors,
+                    vertex_local_pos: &local_positions,
+                };
+
                 self.shape_pipeline.draw(
                     gpu,
                     queue,
                     render_pass,
-                    &positions,
-                    &colors,
-                    &local_positions,
+                    &vertex_data_for_object,
                     &uniforms, // Use original uniforms for the object
                     dynamic_offset,
                 );

@@ -217,7 +217,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
             let mut fill_children_indices_with_weight: Vec<usize> = Vec::new();
             let mut fill_children_indices_without_weight: Vec<usize> = Vec::new();
 
-            for i in 0..N {
+            for (i, _item) in children_items_for_measure.iter().enumerate().take(N) {
                 let item_weight = children_items_for_measure[i].0;
                 let item_behavior = children_items_for_measure[i].1;
                 if let DimensionValue::Fill { .. } = item_behavior {
