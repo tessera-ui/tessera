@@ -128,18 +128,13 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 position,
             } => {
                 // Update cursor position
-                let event = CursorEvent {
-                    timestamp: Instant::now(),
-                    content: CursorEventContent::from_position([
-                        position.x as u32,
-                        position.y as u32,
-                    ]),
-                };
-                self.cursor_state.push_event(event);
+                self.cursor_state
+                    .update_position([position.x as i32, position.y as i32]);
                 debug!("Cursor moved to: {}, {}", position.x, position.y);
             }
             WindowEvent::CursorLeft { device_id: _ } => {
                 // Clear cursor position when it leaves the window
+                // This also set the position to None
                 self.cursor_state.clear();
                 debug!("Cursor left the window");
             }
@@ -160,7 +155,7 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 debug!("Mouse input: {state:?} button {button:?}");
             }
             WindowEvent::Touch(touch_event) => {
-                let pos = [touch_event.location.x as u32, touch_event.location.y as u32];
+                let pos = [touch_event.location.x as i32, touch_event.location.y as i32];
                 debug!(
                     "Touch event: id {}, phase {:?}, position {:?}",
                     touch_event.id, touch_event.phase, pos
@@ -168,24 +163,17 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 match touch_event.phase {
                     winit::event::TouchPhase::Started => {
                         // First, move the cursor to the touch position
-                        let move_event = CursorEvent {
-                            timestamp: Instant::now(),
-                            content: CursorEventContent::from_position(pos),
-                        };
-                        self.cursor_state.push_event(move_event);
+                        self.cursor_state.update_position(pos);
                         // Then, simulate a left mouse button press
                         let press_event = CursorEvent {
-                            timestamp: Instant::now(), // Consider if a slightly different timestamp is needed
+                            timestamp: Instant::now(),
                             content: CursorEventContent::Pressed(PressKeyEventType::Left),
                         };
                         self.cursor_state.push_event(press_event);
                     }
                     winit::event::TouchPhase::Moved => {
-                        let event = CursorEvent {
-                            timestamp: Instant::now(),
-                            content: CursorEventContent::from_position(pos),
-                        };
-                        self.cursor_state.push_event(event);
+                        // update the cursor position
+                        self.cursor_state.update_position(pos);
                     }
                     winit::event::TouchPhase::Ended | winit::event::TouchPhase::Cancelled => {
                         // Simulate a left mouse button release
@@ -194,6 +182,8 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                             content: CursorEventContent::Released(PressKeyEventType::Left),
                         };
                         self.cursor_state.push_event(event);
+                        // Set the cursor position to None
+                        self.cursor_state.update_position(None);
                     }
                 }
             }
@@ -226,10 +216,15 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 let draw_timer = Instant::now();
                 // Compute the draw commands then we can clear component tree for next build
                 debug!("Computing draw commands...");
+                let cursor_position = self.cursor_state.position();
                 let cursor_events = self.cursor_state.take_events();
                 let keyboard_events = self.keyboard_state.take_events();
-                let commands =
-                    component_tree.compute(app.size().into(), cursor_events, keyboard_events);
+                let commands = component_tree.compute(
+                    app.size().into(),
+                    cursor_position,
+                    cursor_events,
+                    keyboard_events,
+                );
                 let draw_cost = draw_timer.elapsed();
                 debug!("Draw commands computed in {draw_cost:?}");
                 component_tree.clear();

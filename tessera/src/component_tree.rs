@@ -97,6 +97,7 @@ impl ComponentTree {
     pub fn compute(
         &mut self,
         screen_size: [u32; 2],
+        cursor_position: Option<[i32; 2]>,
         cursor_events: Vec<CursorEvent>,
         keyboard_events: Vec<winit::event::KeyEvent>,
     ) -> Vec<DrawCommand> {
@@ -154,20 +155,18 @@ impl ComponentTree {
             };
 
             // Get the current cursor events
-            let current_cursor_events = cursor_events
-                .iter()
-                .cloned()
-                .map(|mut event| {
-                    let abs_position = self
-                        .metadatas
-                        .get(&node_id_loop)
-                        .and_then(|m| m.abs_position)
-                        .unwrap_or([0, 0]);
-                    event.content = event.content.into_relative_position(abs_position);
-                    event
-                })
-                .collect::<Vec<_>>();
-
+            let current_cursor_events = cursor_events.iter().cloned().collect::<Vec<_>>();
+            // Compute the relative cursor position for the current node, if available
+            let current_cursor_position = cursor_position.map(|pos| {
+                // Get the absolute position of the current node
+                let abs_pos = self
+                    .metadatas
+                    .get(&node_id_loop)
+                    .and_then(|m| m.abs_position)
+                    .unwrap_or([0, 0]);
+                // Calculate the relative position
+                [pos[0] - abs_pos[0] as i32, pos[1] - abs_pos[1] as i32]
+            });
             // Get the computed_data for the current node
             let computed_data_option = self
                 .metadatas
@@ -179,6 +178,7 @@ impl ComponentTree {
                 let input = StateHandlerInput {
                     node_id: node_id_loop,
                     computed_data: node_computed_data,
+                    cursor_position: current_cursor_position,
                     cursor_events: current_cursor_events,
                     keyboard_events: keyboard_events.clone(),
                 };

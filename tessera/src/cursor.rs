@@ -7,11 +7,21 @@ const KEEP_EVENTS_COUNT: usize = 10;
 /// The state of the cursor
 #[derive(Default)]
 pub struct CursorState {
+    /// Tracks the cursor position
+    ///
+    /// # For mouse
+    /// `None` means the cursor is out of the window
+    ///
+    /// # For touch
+    ///
+    /// `None` means user is not touching the screen
+    position: Option<[i32; 2]>,
     /// Press event deque
     events: VecDeque<CursorEvent>,
 }
 
 impl CursorState {
+    /// Push cursor event to queue
     pub fn push_event(&mut self, event: CursorEvent) {
         // Add the event to the deque
         self.events.push_back(event);
@@ -21,8 +31,14 @@ impl CursorState {
         }
     }
 
+    /// Update the cursor position in state
+    pub fn update_position(&mut self, position: impl Into<Option<[i32; 2]>>) {
+        self.position = position.into();
+    }
+
     /// Custom a group of events
-    /// Note: Events are ordered from left (oldest) to right (newest)
+    ///
+    /// # Note: Events are ordered from left (oldest) to right (newest)
     pub fn take_events(&mut self) -> Vec<CursorEvent> {
         self.events.drain(..).collect()
     }
@@ -30,6 +46,12 @@ impl CursorState {
     /// Clear all cursor events
     pub fn clear(&mut self) {
         self.events.clear();
+        self.update_position(None);
+    }
+
+    /// Get the current cursor position
+    pub fn position(&self) -> Option<[i32; 2]> {
+        self.position
     }
 }
 
@@ -45,13 +67,6 @@ pub struct CursorEvent {
 /// Cursor event types
 #[derive(Debug, Clone)]
 pub enum CursorEventContent {
-    /// The cursor is moved
-    Moved {
-        /// Position, in pixels
-        pos: [i32; 2],
-    },
-    /// The cursor is left the window
-    Left,
     /// The cursor is pressed
     Pressed(PressKeyEventType),
     /// The cursor is released
@@ -59,29 +74,6 @@ pub enum CursorEventContent {
 }
 
 impl CursorEventContent {
-    /// Create a move event
-    pub fn from_position(pos: [u32; 2]) -> Self {
-        Self::Moved {
-            pos: [pos[0] as i32, pos[1] as i32],
-        }
-    }
-
-    /// Transform the position to be relative to the given position
-    /// , if the event contains a position info.
-    pub fn into_relative_position(self, abs_start_pos: [u32; 2]) -> Self {
-        match self {
-            Self::Moved { pos } => Self::Moved {
-                pos: [
-                    pos[0] - abs_start_pos[0] as i32,
-                    pos[1] - abs_start_pos[1] as i32,
-                ],
-            },
-            Self::Left => Self::Left,
-            Self::Pressed(event_type) => Self::Pressed(event_type),
-            Self::Released(event_type) => Self::Released(event_type),
-        }
-    }
-
     /// Create a key press/release event
     pub fn from_press_event(
         state: winit::event::ElementState,

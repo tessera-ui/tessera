@@ -115,9 +115,17 @@ pub type StateHandlerFn = dyn Fn(&StateHandlerInput) + Send + Sync;
 
 /// Input for the state handler function (`StateHandlerFn`).
 pub struct StateHandlerInput {
+    /// The `NodeId` of the component node that this state handler is for.
+    /// Usually used to access the component's metadata.
     pub node_id: indextree::NodeId,
+    /// The size of the component node, computed during the measure stage.
     pub computed_data: ComputedData,
+    /// The position of the cursor, if available.
+    /// Relative to the root position of the component.
+    pub cursor_position: Option<[i32; 2]>,
+    /// Cursor events from the event loop, if any.
     pub cursor_events: Vec<CursorEvent>,
+    /// Keyboard events from the event loop, if any.
     pub keyboard_events: Vec<winit::event::KeyEvent>,
 }
 

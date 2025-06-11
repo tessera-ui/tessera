@@ -6,15 +6,19 @@ use glyphon::{Edit, cosmic_text::BufferRef};
 use parking_lot::RwLock;
 
 use tessera::{
-    BasicDrawable, ComponentNodeMetaData, ComputedData, DimensionValue, Dp, TextConstraint,
-    TextData, measure_node, place_node, winit, write_font_system,
+    BasicDrawable, ComponentNodeMetaData, ComputedData, CursorEventContent, DimensionValue, Dp,
+    TextConstraint, TextData, focus_state::Focus, measure_node, place_node, winit,
+    write_font_system,
 };
 use tessera_macros::tessera;
+
+use crate::pos_misc::is_position_in_component;
 
 pub struct TextEditorState {
     line_height: u32,
     pub(crate) editor: glyphon::Editor<'static>,
     bink_timer: Instant,
+    focus_handler: Focus,
 }
 
 impl TextEditorState {
@@ -31,6 +35,7 @@ impl TextEditorState {
             line_height,
             editor,
             bink_timer: Instant::now(),
+            focus_handler: Focus::new(),
         }
     }
 
@@ -75,9 +80,11 @@ pub fn text_editor(state: Arc<RwLock<TextEditorState>>) {
                     .map(|(x, y)| [x as u32, y as u32])
                     .unwrap_or([0, 0]);
                 // Place the cursor node
-                let cursor_node_id = children_node_ids[0]; // text editor only has one child, the cursor
-                let _ = measure_node(cursor_node_id, parent_constraint, tree, metadatas);
-                place_node(cursor_node_id, cursor_pos, metadatas);
+                if let Some(cursor_node_id) = children_node_ids.first().copied() {
+                    // text editor only has one child, the cursor
+                    let _ = measure_node(cursor_node_id, parent_constraint, tree, metadatas);
+                    place_node(cursor_node_id, cursor_pos, metadatas);
+                }
                 // Get the text constraint from the state
                 let max_width: Option<f32> = match parent_constraint.width {
                     DimensionValue::Fixed(w) => Some(w as f32),
@@ -117,11 +124,40 @@ pub fn text_editor(state: Arc<RwLock<TextEditorState>>) {
         ));
     }
 
-    cursor::cursor(state.read().line_height(), state.read().bink_timer);
+    // Only show cursor if the editor is focused
+    if state.read().focus_handler.is_focused() {
+        cursor::cursor(state.read().line_height(), state.read().bink_timer);
+    }
 
     {
         let state = state.clone();
         state_handler(Box::new(move |input| {
+            // Check if the editor is focused
+            let is_focused = state.read().focus_handler.is_focused();
+            // process the cursor events
+            let size = input.computed_data;
+            let cursor_posistion = input.cursor_position;
+            let is_cursor_in_editor = cursor_posistion
+                .map(|pos| is_position_in_component(size, pos))
+                .unwrap_or(false);
+            // we only handle cursor input if the cursor is in the editor
+            if is_cursor_in_editor {
+                // first, we check if the editor is not focused
+                // if it is not focused and is clicked, we request focus
+                if !is_focused
+                    && input
+                        .cursor_events
+                        .iter()
+                        .any(|event| matches!(event.content, CursorEventContent::Pressed(_)))
+                {
+                    // if it is not focused, we focus it
+                    state.write().focus_handler.request_focus();
+                }
+            }
+            // return early if the editor is not focused
+            if !is_focused {
+                return;
+            }
             // transform the input event to editor action
             let actions = input
                 .keyboard_events
