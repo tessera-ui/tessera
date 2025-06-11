@@ -17,7 +17,7 @@ pub(super) fn cursor(height_px: u32, bink_timer: Instant) {
     measure(Box::new(move |node_id, _, _, _, metadatas| {
         // Cursor is a rectangle with a fixed width and variable height
         let drawable = BasicDrawable::Rect {
-            color: [0.0, 0.0, 0.0],
+            color: [0.0, 0.0, 0.0, 1.0],
             corner_radius: 0.0,
             shadow: None,
         };

@@ -6,12 +6,12 @@ use tessera::{
 use tessera_macros::tessera;
 
 /// Arguments for the `surface` component.
-#[derive(Debug, Default, Builder, Clone)]
+#[derive(Debug, Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SurfaceArgs {
-    /// The color of the surface.
-    #[builder(default = "[0.4745, 0.5255, 0.7961]")]
-    pub color: [f32; 3],
+    /// The fill color of the surface (RGBA).
+    #[builder(default = "[0.4745, 0.5255, 0.7961, 1.0]")]
+    pub color: [f32; 4],
     /// The corner radius of the surface.
     #[builder(default = "0.0")]
     pub corner_radius: f32,
@@ -27,6 +27,19 @@ pub struct SurfaceArgs {
     /// Optional explicit height behavior for the surface. Defaults to Wrap if None.
     #[builder(default, setter(strip_option))]
     pub height: Option<DimensionValue>,
+    /// Width of the border. If > 0, an outline will be drawn.
+    #[builder(default = "0.0")]
+    pub border_width: f32,
+    /// Optional color for the border (RGBA). If None and border_width > 0, `color` will be used.
+    #[builder(default)]
+    pub border_color: Option<[f32; 4]>,
+}
+
+// Manual implementation of Default because derive_builder's default conflicts with our specific defaults
+impl Default for SurfaceArgs {
+    fn default() -> Self {
+        SurfaceArgsBuilder::default().build().unwrap()
+    }
 }
 
 /// Surface component, a basic container that can have its own size constraints.
@@ -56,7 +69,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 DimensionValue::Fixed(sw) => {
                     DimensionValue::Fixed(sw.saturating_sub(padding_2_u32))
                 }
-                DimensionValue::Wrap => DimensionValue::Wrap, // Child wraps, padding added later
+                DimensionValue::Wrap => DimensionValue::Wrap,
                 DimensionValue::Fill { max: s_max_w, .. } => DimensionValue::Fill {
                     max: s_max_w.map(|m| m.saturating_sub(padding_2_u32)),
                 },
@@ -65,7 +78,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 DimensionValue::Fixed(sh) => {
                     DimensionValue::Fixed(sh.saturating_sub(padding_2_u32))
                 }
-                DimensionValue::Wrap => DimensionValue::Wrap, // Child wraps, padding added later
+                DimensionValue::Wrap => DimensionValue::Wrap,
                 DimensionValue::Fill { max: s_max_h, .. } => DimensionValue::Fill {
                     max: s_max_h.map(|m| m.saturating_sub(padding_2_u32)),
                 },
@@ -73,13 +86,12 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             let child_actual_constraint =
                 Constraint::new(child_constraint_width, child_constraint_height);
 
-            // 4. Measure the child (assuming single child from `child: impl Fn()`)
+            // 4. Measure the child
             let mut child_measured_size = ComputedData::ZERO;
             if let Some(&child_node_id) = children_node_ids.first() {
-                // The child's own defined constraints also need to be merged.
                 let child_intrinsic_constraint = metadatas
-                    .get(&child_node_id) // Use .get() for reading constraint
-                    .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))? // Handle if meta not found
+                    .get(&child_node_id)
+                    .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                     .constraint;
                 let final_child_constraint_for_measure =
                     child_intrinsic_constraint.merge(&child_actual_constraint);
@@ -94,9 +106,8 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                             "Child {child_node_id:?} result missing in map"
                         ))
                     })?
-                    .clone()?; // Clone the Result and then propagate error with ?
+                    .clone()?;
 
-                // Place the child
                 place_node(
                     child_node_id,
                     [
@@ -107,7 +118,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 );
             }
 
-            // 5. Calculate final Surface dimensions based on effective_surface_constraint and child's size
+            // 5. Calculate final Surface dimensions
             let content_width_with_padding =
                 child_measured_size.width.saturating_add(padding_2_u32);
             let content_height_with_padding =
@@ -131,12 +142,22 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 DimensionValue::Fill { max: None, .. } => content_height_with_padding,
             };
 
-            // Add rect drawable
-            let drawable = BasicDrawable::Rect {
-                color: measure_args.color,
-                corner_radius: measure_args.corner_radius,
-                shadow: measure_args.shadow,
+            // Add drawable based on border_width
+            let drawable = if measure_args.border_width > 0.0 {
+                BasicDrawable::OutlinedRect {
+                    color: measure_args.border_color.unwrap_or(measure_args.color), // color is RGBA
+                    corner_radius: measure_args.corner_radius,
+                    shadow: measure_args.shadow,
+                    border_width: measure_args.border_width,
+                }
+            } else {
+                BasicDrawable::Rect {
+                    color: measure_args.color, // color is RGBA
+                    corner_radius: measure_args.corner_radius,
+                    shadow: measure_args.shadow,
+                }
             };
+
             if let Some(mut metadata) = metadatas.get_mut(&node_id) {
                 metadata.basic_drawable = Some(drawable);
             }

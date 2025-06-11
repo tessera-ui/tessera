@@ -38,7 +38,6 @@ impl Drawer {
         let alignment = gpu.limits().min_uniform_buffer_offset_alignment;
         let shape_uniform_alignment =
             wgpu::util::align_to(size_of_shape_uniforms, alignment) as u32;
-        // let shape_uniform_alignment = (size_of_shape_uniforms + alignment - 1) / alignment * alignment;
 
         let max_shape_uniform_buffer_offset =
             (MAX_CONCURRENT_SHAPES as u32 - 1) * shape_uniform_alignment;
@@ -63,7 +62,7 @@ impl Drawer {
     /// so we need to call both [Self::prepare_or_draw] and [Self::final_draw]
     pub fn prepare_or_draw(
         &mut self,
-        gpu: &wgpu::Device, // Keep gpu for shape_pipeline.draw if it needs it for vertex buffers
+        gpu: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
         queue: &wgpu::Queue,
         render_pass: &mut wgpu::RenderPass<'_>,
@@ -81,27 +80,25 @@ impl Drawer {
                 let colors: Vec<[f32; 3]> = vertices.iter().map(|v| v.color).collect();
                 let local_positions: Vec<[f32; 2]> = vertices.iter().map(|v| v.local_pos).collect();
 
-                // Two-pass drawing:
-                // Pass 1: Draw Shadow (if shadow is enabled in uniforms)
-                let has_shadow = uniforms.shadow_color[3] > 0.0 && uniforms.shadow_params[2] > 0.0;
+                // Check if shadow needs to be drawn
+                // shadow_color[3] is alpha, render_params[2] is shadow_smoothness
+                let has_shadow = uniforms.shadow_color[3] > 0.0 && uniforms.render_params[2] > 0.0;
 
                 if has_shadow {
                     let dynamic_offset = self.current_shape_uniform_offset;
                     if dynamic_offset > self.max_shape_uniform_buffer_offset {
-                        // Handle buffer overflow, e.g., by logging or panicking
-                        // For now, let's panic as this indicates too many shapes for the buffer.
-                        // A more robust solution might involve resizing the buffer or limiting shapes.
                         panic!(
-                            "Shape uniform buffer overflow: offset {} > max {}",
+                            "Shape uniform buffer overflow for shadow: offset {} > max {}",
                             dynamic_offset, self.max_shape_uniform_buffer_offset
                         );
                     }
 
                     let mut uniforms_for_shadow = uniforms;
-                    uniforms_for_shadow.size_cr_is_shadow[3] = 1.0; // Set is_shadow = true
+                    // Set render_mode to 2.0 for shadow
+                    uniforms_for_shadow.render_params[3] = 2.0;
 
                     self.shape_pipeline.draw(
-                        gpu, // Pass gpu if shape_pipeline.draw needs it
+                        gpu,
                         queue,
                         render_pass,
                         &positions,
@@ -113,25 +110,25 @@ impl Drawer {
                     self.current_shape_uniform_offset += self.shape_uniform_alignment;
                 }
 
-                // Pass 2: Draw Object
+                // Draw Object (Fill or Outline)
+                // The original 'uniforms' should have render_params[3] set to 0.0 (fill) or 1.0 (outline)
+                // and size_cr_border_width[3] to the border_width by the caller.
                 let dynamic_offset = self.current_shape_uniform_offset;
                 if dynamic_offset > self.max_shape_uniform_buffer_offset {
                     panic!(
-                        "Shape uniform buffer overflow: offset {} > max {}",
+                        "Shape uniform buffer overflow for object: offset {} > max {}",
                         dynamic_offset, self.max_shape_uniform_buffer_offset
                     );
                 }
-                let mut uniforms_for_object = uniforms;
-                uniforms_for_object.size_cr_is_shadow[3] = 0.0; // Set is_shadow = false
 
                 self.shape_pipeline.draw(
-                    gpu, // Pass gpu if shape_pipeline.draw needs it
+                    gpu,
                     queue,
                     render_pass,
                     &positions,
                     &colors,
                     &local_positions,
-                    &uniforms_for_object,
+                    &uniforms, // Use original uniforms for the object
                     dynamic_offset,
                 );
                 self.current_shape_uniform_offset += self.shape_uniform_alignment;

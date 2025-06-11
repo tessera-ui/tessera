@@ -1,8 +1,8 @@
 struct ShapeUniforms {
-    size_cr_is_shadow: vec4f, // size.xy, corner_radius, is_shadow (0.0 or 1.0)
-    object_color: vec4f,
-    shadow_color: vec4f,
-    shadow_params: vec4f, // offset.xy, smoothness, unused
+    size_cr_border_width: vec4f, // size.xy, corner_radius, border_width
+    primary_color: vec4f,      // fill_color or border_color
+    shadow_color: vec4f,       // shadow_color
+    render_params: vec4f,      // shadow_offset.xy, shadow_smoothness, render_mode
 };
 
 @group(0) @binding(0)
@@ -57,14 +57,16 @@ fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: f32, k: f32) -> f32 {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    let size = shape_params.size_cr_is_shadow.xy;
-    let corner_radius = shape_params.size_cr_is_shadow.z;
-    let is_shadow_flag = shape_params.size_cr_is_shadow.w;
+    let size = shape_params.size_cr_border_width.xy;
+    let corner_radius = shape_params.size_cr_border_width.z;
+    let border_width = shape_params.size_cr_border_width.w;
 
-    let object_color_uniform = shape_params.object_color;
+    let primary_color_uniform = shape_params.primary_color;
     let shadow_color_uniform = shape_params.shadow_color;
-    let shadow_offset = shape_params.shadow_params.xy;
-    let shadow_smoothness = shape_params.shadow_params.z;
+
+    let shadow_offset = shape_params.render_params.xy;
+    let shadow_smoothness = shape_params.render_params.z;
+    let render_mode = shape_params.render_params.w; // 0.0: fill, 1.0: outline, 2.0: shadow
 
     // G2 exponent for rounded corners.
     // k=2.0 results in standard G1 circular corners.
@@ -79,13 +81,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     var final_color: vec4f;
 
-    if (is_shadow_flag == 1.0) { // --- Draw Shadow ---
+    if (render_mode == 2.0) { // --- Draw Shadow ---
         let p_scaled_shadow_space = p_scaled_object_space - shadow_offset;
         let dist_shadow = sdf_g2_rounded_box(p_scaled_shadow_space, rect_half_size, corner_radius, G2_K_VALUE);
 
         // Anti-aliasing for shadow edge
-        let aa_width = fwidth(dist_shadow);
-        let shadow_alpha = 1.0 - smoothstep(-aa_width, aa_width, dist_shadow);
+        let aa_width_shadow = fwidth(dist_shadow);
+        let shadow_alpha = 1.0 - smoothstep(-aa_width_shadow, aa_width_shadow, dist_shadow);
 
         // Softness/blur for the shadow
         let shadow_soft_alpha = smoothstep(shadow_smoothness, 0.0, dist_shadow);
@@ -97,17 +99,38 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         }
         final_color = vec4f(shadow_color_uniform.rgb, shadow_color_uniform.a * combined_shadow_alpha);
 
-    } else { // --- Draw Object ---
+    } else { // --- Draw Object (Fill or Outline) ---
         let dist_object = sdf_g2_rounded_box(p_scaled_object_space, rect_half_size, corner_radius, G2_K_VALUE);
+        let aa_width_object = fwidth(dist_object);
 
-        let aa_width = fwidth(dist_object);
-        let object_alpha = 1.0 - smoothstep(-aa_width, aa_width, dist_object);
+        if (render_mode == 0.0) { // --- Draw Fill ---
+            let object_alpha = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
 
-        if (object_alpha <= 0.001) {
+            if (object_alpha <= 0.001) {
+                discard;
+            }
+            final_color = vec4f(primary_color_uniform.rgb, primary_color_uniform.a * object_alpha);
+
+        } else if (render_mode == 1.0) { // --- Draw Outline ---
+            if (border_width <= 0.0) {
+                discard;
+            }
+            // Alpha for the outer edge of the border
+            let alpha_outer_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
+            // Alpha for the inner edge of the border (shape shrunk by border_width)
+            let alpha_inner_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object + border_width);
+            
+            // The outline alpha is the difference
+            let outline_alpha = alpha_outer_edge - alpha_inner_edge;
+
+            if (outline_alpha <= 0.001) {
+                discard;
+            }
+            final_color = vec4f(primary_color_uniform.rgb, primary_color_uniform.a * max(0.0, outline_alpha));
+        } else {
+            // Should not happen with valid render_mode
             discard;
         }
-        
-        final_color = vec4f(object_color_uniform.rgb, object_color_uniform.a * object_alpha);
     }
 
     return final_color;

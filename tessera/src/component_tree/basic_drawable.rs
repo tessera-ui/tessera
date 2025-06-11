@@ -3,14 +3,25 @@ use crate::renderer::{DrawCommand, ShapeUniforms, ShapeVertex, TextData};
 /// These are very basic drawables that trans into DrawerCommand
 /// , basically just copys of DrawerCommand without position
 pub enum BasicDrawable {
-    /// A rectangle
+    /// A filled rectangle
     Rect {
-        /// Color of the rectangle(RGB)
-        color: [f32; 3],
+        /// Color of the rectangle (RGBA)
+        color: [f32; 4],
         /// Corner radius of the rectangle
         corner_radius: f32,
         /// Shadow properties of the rectangle
         shadow: Option<ShadowProps>,
+    },
+    /// An outlined rectangle
+    OutlinedRect {
+        /// Color of the border (RGBA)
+        color: [f32; 4],
+        /// Corner radius of the rectangle
+        corner_radius: f32,
+        /// Shadow properties of the rectangle (applied to the outline shape)
+        shadow: Option<ShadowProps>,
+        /// Width of the border
+        border_width: f32,
     },
     /// A Text
     Text {
@@ -19,7 +30,7 @@ pub enum BasicDrawable {
     },
 }
 
-/// Properties for shadow, used in BasicDrawable::Rect
+/// Properties for shadow, used in BasicDrawable variants
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShadowProps {
     /// Color of the shadow (RGBA)
@@ -39,73 +50,111 @@ impl BasicDrawable {
                 corner_radius,
                 shadow,
             } => {
-                let width = size[0];
-                let height = size[1];
-
-                // Define local_pos for the 4 corners of a rectangle, normalized to [-0.5, 0.5]
-                // Order: Top-Left, Top-Right, Bottom-Right, Bottom-Left (matching original vertex generation)
-                let rect_local_pos = [
-                    [-0.5, -0.5], // Top-Left
-                    [0.5, -0.5],  // Top-Right
-                    [0.5, 0.5],   // Bottom-Right
-                    [-0.5, 0.5],  // Bottom-Left
-                ];
-
-                let vertices = vec![
-                    ShapeVertex {
-                        position: [position[0] as f32, position[1] as f32, 0.0], // Top-Left
-                        color,
-                        local_pos: rect_local_pos[0],
-                    },
-                    ShapeVertex {
-                        position: [(position[0] + width) as f32, position[1] as f32, 0.0], // Top-Right
-                        color,
-                        local_pos: rect_local_pos[1],
-                    },
-                    ShapeVertex {
-                        position: [
-                            (position[0] + width) as f32,
-                            (position[1] + height) as f32,
-                            0.0,
-                        ], // Bottom-Right
-                        color,
-                        local_pos: rect_local_pos[2],
-                    },
-                    ShapeVertex {
-                        position: [position[0] as f32, (position[1] + height) as f32, 0.0], // Bottom-Left
-                        color,
-                        local_pos: rect_local_pos[3],
-                    },
-                ];
-
-                let object_rgba_color = [color[0], color[1], color[2], 1.0f32]; // Assume opaque object color
-
-                let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) =
-                    if let Some(s_props) = shadow {
-                        (s_props.color, s_props.offset, s_props.smoothness)
-                    } else {
-                        // Default values for uniforms if no shadow, shadow pass might be skipped by Drawer
-                        ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
-                    };
-
-                let uniforms = ShapeUniforms {
-                    size_cr_is_shadow: [width as f32, height as f32, corner_radius, 0.0], // is_shadow (last element) will be set by Drawer for each pass
-                    object_color: object_rgba_color,
-                    shadow_color: shadow_rgba_color,
-                    shadow_params: [
-                        shadow_offset_vec[0],
-                        shadow_offset_vec[1],
-                        shadow_smooth_val,
-                        0.0,
-                    ], // last element is padding
-                };
-
-                DrawCommand::Shape { vertices, uniforms }
+                Self::rect_to_draw_command(
+                    size,
+                    position,
+                    color, // RGBA
+                    corner_radius,
+                    shadow,
+                    0.0, // border_width for fill is 0
+                    0.0, // render_mode for fill is 0.0
+                )
+            }
+            BasicDrawable::OutlinedRect {
+                color,
+                corner_radius,
+                shadow,
+                border_width,
+            } => {
+                Self::rect_to_draw_command(
+                    size,
+                    position,
+                    color, // RGBA, This color is for the border
+                    corner_radius,
+                    shadow,
+                    border_width,
+                    1.0, // render_mode for outline is 1.0
+                )
             }
             BasicDrawable::Text { mut data } => {
                 data.position = Some(position);
                 DrawCommand::Text { data }
             }
         }
+    }
+
+    /// Helper function to create Shape DrawCommand for both Rect and OutlinedRect
+    fn rect_to_draw_command(
+        size: [u32; 2],
+        position: [u32; 2],
+        primary_color_rgba: [f32; 4], // Changed from primary_color_rgb
+        corner_radius: f32,
+        shadow: Option<ShadowProps>,
+        border_width: f32,
+        render_mode: f32,
+    ) -> DrawCommand {
+        let width = size[0];
+        let height = size[1];
+
+        let rect_local_pos = [
+            [-0.5, -0.5], // Top-Left
+            [0.5, -0.5],  // Top-Right
+            [0.5, 0.5],   // Bottom-Right
+            [-0.5, 0.5],  // Bottom-Left
+        ];
+
+        // Vertex color is less important now as shader uses uniform primary_color
+        let vertex_color_placeholder_rgb = [0.0, 0.0, 0.0]; // Kept as RGB for vertex data
+
+        let vertices = vec![
+            ShapeVertex {
+                position: [position[0] as f32, position[1] as f32, 0.0],
+                color: vertex_color_placeholder_rgb,
+                local_pos: rect_local_pos[0],
+            },
+            ShapeVertex {
+                position: [(position[0] + width) as f32, position[1] as f32, 0.0],
+                color: vertex_color_placeholder_rgb,
+                local_pos: rect_local_pos[1],
+            },
+            ShapeVertex {
+                position: [
+                    (position[0] + width) as f32,
+                    (position[1] + height) as f32,
+                    0.0,
+                ],
+                color: vertex_color_placeholder_rgb,
+                local_pos: rect_local_pos[2],
+            },
+            ShapeVertex {
+                position: [position[0] as f32, (position[1] + height) as f32, 0.0],
+                color: vertex_color_placeholder_rgb,
+                local_pos: rect_local_pos[3],
+            },
+        ];
+
+        // primary_color_rgba is now directly used
+        // let primary_rgba_color = [primary_color_rgb[0], primary_color_rgb[1], primary_color_rgb[2], 1.0f32];
+
+        let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) =
+            if let Some(s_props) = shadow {
+                (s_props.color, s_props.offset, s_props.smoothness)
+            } else {
+                ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
+            };
+
+        let uniforms = ShapeUniforms {
+            size_cr_border_width: [width as f32, height as f32, corner_radius, border_width],
+            primary_color: primary_color_rgba, // Directly use the RGBA color
+            shadow_color: shadow_rgba_color,
+            render_params: [
+                shadow_offset_vec[0],
+                shadow_offset_vec[1],
+                shadow_smooth_val,
+                render_mode, // 0.0 for fill, 1.0 for outline
+            ],
+        };
+
+        DrawCommand::Shape { vertices, uniforms }
     }
 }

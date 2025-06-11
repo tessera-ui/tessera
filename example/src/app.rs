@@ -93,6 +93,7 @@ fn content_section() {
         SurfaceArgsBuilder::default()
             .corner_radius(25.0)
             .padding(20.0.into())
+            .color([0.8, 0.8, 0.9, 1.0]) // Light purple fill, RGBA
             .build()
             .unwrap(),
         || {
@@ -110,6 +111,7 @@ fn value_display(app_data: Arc<AppData>) {
     surface(
         SurfaceArgsBuilder::default()
             .corner_radius(25.0)
+            .color([0.9, 0.8, 0.8, 1.0]) // Light red fill, RGBA
             .build()
             .unwrap(),
         move || {
@@ -131,7 +133,6 @@ fn perf_display(metrics: Arc<PerformanceMetrics>) {
     ));
     state_handler(Box::new(move |_| {
         let now = Instant::now();
-        // Update last_frame for other potential uses (e.g. precise frame time)
         let mut last_frame_guard = metrics.last_frame.write();
         *last_frame_guard = now;
 
@@ -173,16 +174,11 @@ fn anim_spacer(state: Arc<AnimSpacerState>) {
         let elapsed = now.duration_since(state.start_time).as_secs_f32();
 
         let max_height = state.max_height.load(atomic::Ordering::SeqCst) as f32;
-        let speed = 200.0; // pixels/sec
+        let speed = 200.0;
         let period = 2.0 * max_height / speed;
-
-        // t ∈ [0.0, 1.0)
         let t = (elapsed % period) / period;
-
         let triangle = if t < 0.5 { 2.0 * t } else { 2.0 * (1.0 - t) };
-
         let eased = ease_in_out_sine(triangle);
-
         let new_height = (eased * max_height).round() as u32;
         state.height.store(new_height, atomic::Ordering::SeqCst);
     }));
@@ -196,8 +192,9 @@ pub fn app(state: Arc<AppState>) {
         let metrics_clone = state.metrics.clone();
         let editor_state_clone = state.editor_state.clone();
         surface(
+            // Main background surface
             SurfaceArgsBuilder::default()
-                .color([1.0, 1.0, 1.0])
+                .color([0.2, 0.2, 0.25, 1.0]) // Darker background, RGBA
                 .width(DimensionValue::Fill { max: None })
                 .height(DimensionValue::Fill { max: None })
                 .build()
@@ -213,6 +210,46 @@ pub fn app(state: Arc<AppState>) {
                                 .unwrap(),
                         )
                     })),
+                    // --- New Outline Surface Example ---
+                    ColumnItem::wrap(Box::new(|| {
+                        surface(
+                            SurfaceArgsBuilder::default()
+                                .color([0.3, 0.3, 0.3, 0.5]) // Semi-transparent fill color
+                                .border_width(5.0)
+                                .border_color(Some([1.0, 0.0, 0.0, 1.0])) // Red border, RGBA
+                                .corner_radius(15.0)
+                                .width(DimensionValue::Fixed(200))
+                                .height(DimensionValue::Fixed(100))
+                                .padding(10.0.into())
+                                .shadow(Some(tessera::ShadowProps {
+                                    color: [0.0, 0.0, 0.0, 0.5],
+                                    offset: [3.0, 3.0],
+                                    smoothness: 5.0,
+                                }))
+                                .build()
+                                .unwrap(),
+                            || {
+                                text("Outlined Box");
+                            },
+                        )
+                    })),
+                    // --- Transparent Surface Example ---
+                    ColumnItem::wrap(Box::new(|| {
+                        surface(
+                            SurfaceArgsBuilder::default()
+                                .color([0.0, 0.0, 1.0, 0.3]) // Transparent blue fill
+                                .corner_radius(10.0)
+                                .width(DimensionValue::Fixed(150))
+                                .height(DimensionValue::Fixed(70))
+                                .padding(5.0.into())
+                                .build()
+                                .unwrap(),
+                            || {
+                                text("Transparent Fill");
+                            },
+                        )
+                    })),
+                    // --- End Examples ---
                     ColumnItem::wrap(Box::new(move || {
                         anim_spacer(anim_space_state_clone.clone())
                     })),

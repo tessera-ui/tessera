@@ -155,7 +155,7 @@ impl ComponentTree {
             };
 
             // Get the current cursor events
-            let current_cursor_events = cursor_events.iter().cloned().collect::<Vec<_>>();
+            let current_cursor_events = cursor_events.to_vec();
             // Compute the relative cursor position for the current node, if available
             let current_cursor_position = cursor_position.map(|pos| {
                 // Get the absolute position of the current node

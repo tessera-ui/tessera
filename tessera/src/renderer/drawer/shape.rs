@@ -6,14 +6,15 @@ use wgpu::{include_wgsl, util::DeviceExt};
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq)]
 pub struct ShapeUniforms {
-    // vec4f: size.x, size.y, corner_radius, is_shadow (0.0 for false, 1.0 for true)
-    pub size_cr_is_shadow: [f32; 4],
-    // vec4f: r, g, b, a (main object color)
-    pub object_color: [f32; 4],
+    // vec4f: size.x, size.y, corner_radius, border_width
+    pub size_cr_border_width: [f32; 4],
+    // vec4f: r, g, b, a (fill_color or border_color)
+    pub primary_color: [f32; 4],
     // vec4f: r, g, b, a (shadow color)
     pub shadow_color: [f32; 4],
-    // vec4f: offset.x, offset.y, shadow_smoothness, unused_padding
-    pub shadow_params: [f32; 4],
+    // vec4f: shadow_offset.x, shadow_offset.y, shadow_smoothness, render_mode
+    // render_mode: 0.0 = fill, 1.0 = outline, 2.0 = shadow
+    pub render_params: [f32; 4],
 }
 
 /// Vertex for any shapes
