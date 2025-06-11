@@ -14,6 +14,7 @@ use tessera_basic_components::{
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::text,
+    text_editor::{TextEditorState, text_editor},
 };
 use tessera_macros::tessera;
 
@@ -38,6 +39,7 @@ pub struct AppState {
     metrics: Arc<PerformanceMetrics>,
     anim_space_state: Arc<AnimSpacerState>,
     data: Arc<AppData>,
+    editor_state: Arc<RwLock<TextEditorState>>,
 }
 
 impl AppState {
@@ -57,6 +59,7 @@ impl AppState {
             data: Arc::new(AppData {
                 click_count: AtomicU64::new(0),
             }),
+            editor_state: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), 50.0.into()))),
         }
     }
 }
@@ -190,6 +193,7 @@ pub fn app(state: Arc<AppState>) {
         let anim_space_state_clone = state.anim_space_state.clone();
         let app_data_clone = state.data.clone();
         let metrics_clone = state.metrics.clone();
+        let editor_state_clone = state.editor_state.clone();
         surface(
             SurfaceArgsBuilder::default()
                 .color([1.0, 1.0, 1.0])
@@ -210,6 +214,9 @@ pub fn app(state: Arc<AppState>) {
                     })),
                     ColumnItem::wrap(Box::new(move || {
                         anim_spacer(anim_space_state_clone.clone())
+                    })),
+                    ColumnItem::wrap(Box::new(move || {
+                        text_editor(editor_state_clone.clone());
                     })),
                     ColumnItem::wrap(Box::new(move || value_display(app_data_clone.clone()))),
                     ColumnItem::wrap(Box::new(move || perf_display(metrics_clone.clone()))),

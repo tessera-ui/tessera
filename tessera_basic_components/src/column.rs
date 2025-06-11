@@ -290,9 +290,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
-                                .ok_or({
-                                    MeasurementError::ChildMeasurementFailed(child_node_id)
-                                })?
+                                .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                                 .constraint;
                             let final_child_constraint =
                                 child_intrinsic_constraint.merge(&child_constraint_for_measure);
@@ -347,9 +345,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
-                                .ok_or({
-                                    MeasurementError::ChildMeasurementFailed(child_node_id)
-                                })?
+                                .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                                 .constraint;
                             let final_child_constraint =
                                 child_intrinsic_constraint.merge(&child_constraint_for_measure);
@@ -397,9 +393,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
-                                .ok_or({
-                                    MeasurementError::ChildMeasurementFailed(child_node_id)
-                                })?
+                                .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                                 .constraint;
                             let final_child_constraint =
                                 child_intrinsic_constraint.merge(&child_constraint_for_measure);

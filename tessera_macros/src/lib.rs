@@ -57,9 +57,12 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             };
 
-            {
-                #fn_block
-            }
+            // Package the function body into a closure
+            // so early return won't break the component tree
+            let result = {
+                let closure = || #fn_block;
+                closure()
+            };
 
             {
                 use tessera::TesseraRuntime;
@@ -68,6 +71,8 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     .component_tree
                     .pop_node();
             }
+
+            result
         }
     };
 

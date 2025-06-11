@@ -274,9 +274,8 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                             ..
                         } = item_behavior
                         {
-                            let alloc_width = child_max_fill.map_or(proportional_width, |m_dp| {
-                                proportional_width.min(m_dp)
-                            });
+                            let alloc_width = child_max_fill
+                                .map_or(proportional_width, |m_dp| proportional_width.min(m_dp));
                             let final_alloc_width =
                                 alloc_width.min(temp_remaining_width_for_weighted);
 
@@ -286,9 +285,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
-                                .ok_or({
-                                    MeasurementError::ChildMeasurementFailed(child_node_id)
-                                })?
+                                .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                                 .constraint;
                             let final_child_constraint =
                                 child_intrinsic_constraint.merge(&child_constraint_for_measure);
@@ -337,9 +334,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
-                                .ok_or({
-                                    MeasurementError::ChildMeasurementFailed(child_node_id)
-                                })?
+                                .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
                                 .constraint;
                             let final_child_constraint =
                                 child_intrinsic_constraint.merge(&child_constraint_for_measure);

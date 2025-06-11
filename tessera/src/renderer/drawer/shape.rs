@@ -1,5 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use earcutr::earcut;
+use log::error;
 use wgpu::{include_wgsl, util::DeviceExt};
 
 #[repr(C)]
@@ -181,7 +182,7 @@ impl ShapePipeline {
             .collect();
 
         let indices = earcut(&flat_polygon_vertices, &[], 2).unwrap_or_else(|e| {
-            eprintln!("Earcut error: {e:?}");
+            error!("Earcut error: {e:?}");
             Vec::new()
         });
 
@@ -198,7 +199,7 @@ impl ShapePipeline {
                 {
                     Vertex::new(polygon_vertices[i], vertex_colors[i], vertex_local_pos[i])
                 } else {
-                    eprintln!("Warning: Earcut index {i} out of bounds for input arrays.");
+                    error!("Warning: Earcut index {i} out of bounds for input arrays.");
                     // Fallback to the first vertex if index is out of bounds
                     if !polygon_vertices.is_empty()
                         && !vertex_colors.is_empty()

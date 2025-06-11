@@ -146,12 +146,10 @@ pub fn measure_node(
         && let Some(cached_size) = metadata_entry
             .cached_computed_data
             .get(&effective_constraint)
-        {
-            debug!(
-                "Cache hit for node {node_id:?} with effective_constraint {effective_constraint:?}"
-            );
-            return Ok(*cached_size);
-        }
+    {
+        debug!("Cache hit for node {node_id:?} with effective_constraint {effective_constraint:?}");
+        return Ok(*cached_size);
+    }
 
     let children: Vec<_> = node_id.children(tree).collect(); // No .as_ref() needed for &Arena
     let timer = Instant::now();
