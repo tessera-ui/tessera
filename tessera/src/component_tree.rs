@@ -23,8 +23,6 @@ pub struct ComponentTree {
     metadatas: ComponentNodeMetaDatas,
     /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
-    /// The ID of the node that currently has focus
-    pub focused_node_id: Option<indextree::NodeId>,
 }
 
 impl Default for ComponentTree {
@@ -43,7 +41,6 @@ impl ComponentTree {
             tree,
             node_queue,
             metadatas,
-            focused_node_id: None,
         }
     }
 
@@ -52,7 +49,6 @@ impl ComponentTree {
         self.tree.clear();
         self.metadatas.clear();
         self.node_queue.clear();
-        self.focused_node_id = None;
     }
 
     /// Get node by NodeId

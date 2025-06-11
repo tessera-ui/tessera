@@ -30,14 +30,4 @@ impl TesseraRuntime {
             .get_or_init(|| RwLock::new(Self::default()))
             .write()
     }
-
-    /// Sets the currently focused node in the component tree.
-    pub fn set_focused_node(&mut self, node_id: Option<indextree::NodeId>) {
-        self.component_tree.focused_node_id = node_id;
-    }
-
-    /// Gets the currently focused node from the component tree.
-    pub fn get_focused_node(&self) -> Option<indextree::NodeId> {
-        self.component_tree.focused_node_id
-    }
 }
