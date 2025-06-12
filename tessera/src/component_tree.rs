@@ -204,11 +204,12 @@ fn compute_draw_commands_parallel(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
 ) -> Vec<DrawCommand> {
-    compute_draw_commands_inner_parallel([0, 0], node_id, tree, metadatas)
+    compute_draw_commands_inner_parallel([0, 0], true, node_id, tree, metadatas)
 }
 
 fn compute_draw_commands_inner_parallel(
     start_pos: [u32; 2],
+    is_root: bool,
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
@@ -218,7 +219,18 @@ fn compute_draw_commands_inner_parallel(
     // Accessing metadatas with get_mut. DashMap's get_mut returns a RefMut,
     // which is fine with an immutable reference to the DashMap itself (&DashMap).
     if let Some(mut entry) = metadatas.get_mut(&node_id) {
-        let rel_pos = entry.rel_position.unwrap_or([0, 0]);
+        let rel_pos = match entry.rel_position {
+            Some(pos) => pos,
+            None => {
+                if is_root {
+                    // If it's the root node and rel_position is None, we assume it starts at [0, 0]
+                    [0, 0]
+                } else {
+                    // If not root and rel_position is None, we skip this node
+                    return local_commands;
+                }
+            }
+        };
         let self_pos = [start_pos[0] + rel_pos[0], start_pos[1] + rel_pos[1]];
         entry.abs_position = Some(self_pos); // Modifying through RefMut
 
@@ -240,6 +252,7 @@ fn compute_draw_commands_inner_parallel(
                     .get(&node_id)
                     .and_then(|m| m.abs_position)
                     .unwrap_or(start_pos), // Get self_pos again for children
+                false,
                 child,
                 tree,
                 metadatas,

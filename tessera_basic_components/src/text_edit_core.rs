@@ -212,11 +212,11 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                     DimensionValue::Fill { max, .. } => max.map(|m| m as f32),
                 };
 
-                // Critical insight: For text editors, we should let text flow naturally and
-                // let the surface adjust, rather than cramming text into small spaces
+                // For proper scrolling behavior, we need to respect height constraints
+                // When max height is specified, content should be clipped and scrollable
                 let max_height_pixels: Option<f32> = match parent_constraint.height {
                     DimensionValue::Fixed(h) => Some(h as f32), // Respect explicit fixed heights
-                    DimensionValue::Wrap { .. } => None,        // Let text determine natural height
+                    DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Respect max height for wrapping
                     DimensionValue::Fill { max, .. } => max.map(|m| m as f32),
                 };
 
@@ -315,17 +315,18 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                 state_clone.write().current_selection_rects = selection_rects;
 
                 // Handle cursor positioning (cursor comes after selection rects)
-                let cursor_pos = state_clone
+                if let Some(cursor_pos) = state_clone
                     .read()
                     .editor
                     .cursor_position()
                     .map(|(x, y)| [x as u32, y as u32])
-                    .unwrap_or([0, 0]);
-
-                let cursor_node_index = selection_rects_len;
-                if let Some(cursor_node_id) = children_node_ids.get(cursor_node_index).copied() {
-                    let _ = measure_node(cursor_node_id, parent_constraint, tree, metadatas);
-                    place_node(cursor_node_id, cursor_pos, metadatas);
+                {
+                    let cursor_node_index = selection_rects_len;
+                    if let Some(cursor_node_id) = children_node_ids.get(cursor_node_index).copied()
+                    {
+                        let _ = measure_node(cursor_node_id, parent_constraint, tree, metadatas);
+                        place_node(cursor_node_id, cursor_pos, metadatas);
+                    }
                 }
 
                 let drawable = BasicDrawable::Text {
@@ -343,10 +344,16 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                     );
                 }
 
-                // Return actual text size - container will handle minimum constraints
+                // Return constrained size - respect maximum height to prevent overflow
+                let constrained_height = if let Some(max_h) = max_height_pixels {
+                    text_data.size[1].min(max_h as u32)
+                } else {
+                    text_data.size[1]
+                };
+
                 Ok(ComputedData {
                     width: text_data.size[0],
-                    height: text_data.size[1],
+                    height: constrained_height,
                 })
             },
         ));

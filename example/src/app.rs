@@ -33,6 +33,7 @@ pub struct AnimSpacerState {
 
 struct AppData {
     click_count: AtomicU64,
+    scroll_count: AtomicU64,
 }
 
 pub struct AppState {
@@ -59,6 +60,7 @@ impl AppState {
             }),
             data: Arc::new(AppData {
                 click_count: AtomicU64::new(0),
+                scroll_count: AtomicU64::new(0),
             }),
             editor_state: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), 50.0.into()))),
             editor_state_2: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), 50.0.into()))),
@@ -131,6 +133,24 @@ fn value_display(app_data: Arc<AppData>) {
     )
 }
 
+// Scroll count display component
+#[tessera]
+fn scroll_display(app_data: Arc<AppData>) {
+    surface(
+        SurfaceArgsBuilder::default()
+            .corner_radius(25.0)
+            .color([0.8, 0.9, 0.8, 1.0]) // Light green fill, RGBA
+            .build()
+            .unwrap(),
+        move || {
+            text(format!(
+                "Scrolls: {}",
+                app_data.scroll_count.load(atomic::Ordering::SeqCst)
+            ));
+        },
+    )
+}
+
 #[tessera]
 fn perf_display(metrics: Arc<PerformanceMetrics>) {
     text(format!(
@@ -194,7 +214,8 @@ fn anim_spacer(state: Arc<AnimSpacerState>) {
 pub fn app(state: Arc<AppState>) {
     {
         let anim_space_state_clone = state.anim_space_state.clone();
-        let app_data_clone = state.data.clone();
+        let app_data_clone_for_scroll_display = state.data.clone();
+        let app_data_clone_for_value_display = state.data.clone();
         let metrics_clone = state.metrics.clone();
         let editor_state_clone = state.editor_state.clone();
         let editor_state_2_clone = state.editor_state_2.clone();
@@ -269,10 +290,7 @@ pub fn app(state: Arc<AppState>) {
                     ColumnItem::wrap(Box::new(move || {
                         text_editor(
                             TextEditorArgsBuilder::default()
-                                .height(Some(DimensionValue::Wrap {
-                                    min: Some(50),  // Minimum height for usability
-                                    max: Some(200), // Maximum height to prevent excessive growth
-                                }))
+                                .height(Some(DimensionValue::Fixed(120))) // Fixed height to test scrolling
                                 .width(Some(DimensionValue::Fill {
                                     min: None,
                                     max: None,
@@ -299,10 +317,7 @@ pub fn app(state: Arc<AppState>) {
                     ColumnItem::wrap(Box::new(move || {
                         text_editor(
                             TextEditorArgsBuilder::default()
-                                .height(Some(DimensionValue::Wrap {
-                                    min: Some(50),
-                                    max: Some(150),
-                                }))
+                                .height(Some(DimensionValue::Fixed(100))) // Fixed height to test scrolling
                                 .width(Some(DimensionValue::Fill {
                                     min: None,
                                     max: None,
@@ -315,7 +330,12 @@ pub fn app(state: Arc<AppState>) {
                     ColumnItem::wrap(Box::new(move || {
                         anim_spacer(anim_space_state_clone.clone())
                     })),
-                    ColumnItem::wrap(Box::new(move || value_display(app_data_clone.clone()))),
+                    ColumnItem::wrap(Box::new(move || {
+                        value_display(app_data_clone_for_value_display.clone())
+                    })),
+                    ColumnItem::wrap(Box::new(move || {
+                        scroll_display(app_data_clone_for_scroll_display.clone())
+                    })),
                     ColumnItem::wrap(Box::new(move || perf_display(metrics_clone.clone()))),
                 ]);
             },
@@ -340,6 +360,36 @@ pub fn app(state: Arc<AppState>) {
                 app_data_clone_for_handler
                     .click_count
                     .fetch_add(count as u64, atomic::Ordering::SeqCst);
+            }
+        }));
+    }
+
+    {
+        let app_data_clone_for_scroll = state.data.clone();
+        state_handler(Box::new(move |input| {
+            let scroll_count = input
+                .cursor_events
+                .iter()
+                .filter(|event| match &event.content {
+                    CursorEventContent::Scroll(_) => true,
+                    _ => false,
+                })
+                .count();
+            if scroll_count > 0 {
+                let total_delta: f32 = input
+                    .cursor_events
+                    .iter()
+                    .filter_map(|event| match &event.content {
+                        CursorEventContent::Scroll(scroll_event) => {
+                            Some(scroll_event.delta_y.abs())
+                        }
+                        _ => None,
+                    })
+                    .sum();
+                println!("Scrolled {scroll_count} times with total delta: {total_delta}");
+                app_data_clone_for_scroll
+                    .scroll_count
+                    .fetch_add(scroll_count as u64, atomic::Ordering::SeqCst);
             }
         }));
     }

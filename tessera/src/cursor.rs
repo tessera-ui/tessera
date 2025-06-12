@@ -64,6 +64,15 @@ pub struct CursorEvent {
     pub content: CursorEventContent,
 }
 
+/// Event representing a scroll action
+#[derive(Debug, Clone)]
+pub struct ScrollEventType {
+    /// Horizontal scroll delta
+    pub delta_x: f32,
+    /// Vertical scroll delta
+    pub delta_y: f32,
+}
+
 /// Cursor event types
 #[derive(Debug, Clone)]
 pub enum CursorEventContent {
@@ -71,6 +80,8 @@ pub enum CursorEventContent {
     Pressed(PressKeyEventType),
     /// The cursor is released
     Released(PressKeyEventType),
+    /// The cursor is scrolled
+    Scroll(ScrollEventType),
 }
 
 impl CursorEventContent {
@@ -90,6 +101,15 @@ impl CursorEventContent {
             winit::event::ElementState::Released => Self::Released(event_type),
         };
         Some(state)
+    }
+
+    /// Create a scroll event
+    pub fn from_scroll_event(delta: winit::event::MouseScrollDelta) -> Self {
+        let (delta_x, delta_y) = match delta {
+            winit::event::MouseScrollDelta::LineDelta(x, y) => (x, y),
+            winit::event::MouseScrollDelta::PixelDelta(delta) => (delta.x as f32, delta.y as f32),
+        };
+        Self::Scroll(ScrollEventType { delta_x, delta_y })
     }
 }
 

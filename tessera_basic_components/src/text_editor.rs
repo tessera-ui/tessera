@@ -261,6 +261,34 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                 }
             }
 
+            // Handle scroll events (only when focused)
+            if state_for_handler.read().focus_handler().is_focused() {
+                let scroll_events: Vec<_> = input
+                    .cursor_events
+                    .iter()
+                    .filter_map(|event| match &event.content {
+                        CursorEventContent::Scroll(scroll_event) => Some(scroll_event),
+                        _ => None,
+                    })
+                    .collect();
+
+                for scroll_event in scroll_events {
+                    // Convert scroll delta to lines
+                    let lines_to_scroll = scroll_event.delta_y as i32;
+
+                    if lines_to_scroll != 0 {
+                        // Scroll up for positive delta_y, down for negative
+                        let action = glyphon::Action::Scroll {
+                            lines: -lines_to_scroll,
+                        };
+                        state_for_handler
+                            .write()
+                            .editor_mut()
+                            .action(&mut write_font_system(), action);
+                    }
+                }
+            }
+
             // Handle keyboard events (only when focused)
             if state_for_handler.read().focus_handler().is_focused() {
                 let actions = input

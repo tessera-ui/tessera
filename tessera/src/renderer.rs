@@ -154,6 +154,19 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 self.cursor_state.push_event(event);
                 debug!("Mouse input: {state:?} button {button:?}");
             }
+            WindowEvent::MouseWheel {
+                device_id: _,
+                delta,
+                phase: _,
+            } => {
+                let event_content = CursorEventContent::from_scroll_event(delta);
+                let event = CursorEvent {
+                    timestamp: Instant::now(),
+                    content: event_content,
+                };
+                self.cursor_state.push_event(event);
+                debug!("Mouse scroll: {delta:?}");
+            }
             WindowEvent::Touch(touch_event) => {
                 let pos = [touch_event.location.x as i32, touch_event.location.y as i32];
                 debug!(

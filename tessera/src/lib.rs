@@ -14,7 +14,7 @@ pub use component_tree::{
     ComponentTree, ComputedData, Constraint, DimensionValue, MeasureFn, MeasurementError,
     ShadowProps, StateHandlerFn, measure_node, measure_nodes, place_node,
 };
-pub use cursor::{CursorEvent, CursorEventContent, PressKeyEventType};
+pub use cursor::{CursorEvent, CursorEventContent, PressKeyEventType, ScrollEventType};
 pub use indextree::{Arena, NodeId};
 pub use renderer::{Renderer, TextConstraint, TextData, read_font_system, write_font_system};
 pub use runtime::TesseraRuntime;
