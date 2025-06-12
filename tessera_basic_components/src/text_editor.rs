@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use glyphon::Edit;
+use glyphon::{Action, Edit};
 use parking_lot::RwLock;
 
 use tessera::{CursorEventContent, DimensionValue, Dp, write_font_system};
@@ -10,7 +10,7 @@ use tessera_macros::tessera;
 use crate::{
     pos_misc::is_position_in_component,
     surface::{SurfaceArgsBuilder, surface},
-    text_edit_core::{map_key_event_to_action, text_edit_core},
+    text_edit_core::{ClickType, map_key_event_to_action, text_edit_core},
 };
 
 // Re-export TextEditorState for convenience
@@ -81,6 +81,9 @@ pub struct TextEditorArgs {
     /// Background color when focused (RGBA). Defaults to white.
     #[builder(default = "None")]
     pub focus_background_color: Option<[f32; 4]>,
+    /// Color for text selection highlight (RGBA). Defaults to light blue with transparency.
+    #[builder(default = "Some([0.5, 0.7, 1.0, 0.4])")]
+    pub selection_color: Option<[f32; 4]>,
 }
 
 /// A text editor component with two-layer architecture:
@@ -110,6 +113,11 @@ pub struct TextEditorArgs {
 pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditorState>>) {
     let editor_args: TextEditorArgs = args.into();
 
+    // Update the state with the selection color from args
+    if let Some(selection_color) = editor_args.selection_color {
+        state.write().set_selection_color(selection_color);
+    }
+
     // Surface layer - provides visual container and minimum size guarantee
     {
         let state_for_surface = state.clone();
@@ -135,16 +143,121 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
 
             // Handle click events - now we have a full clickable area from surface
             if is_cursor_in_editor {
-                let has_click = input
+                // Handle mouse pressed events
+                let click_events: Vec<_> = input
                     .cursor_events
                     .iter()
-                    .any(|event| matches!(event.content, CursorEventContent::Pressed(_)));
+                    .filter(|event| matches!(event.content, CursorEventContent::Pressed(_)))
+                    .collect();
 
-                if has_click && !state_for_handler.read().focus_handler().is_focused() {
-                    state_for_handler
-                        .write()
-                        .focus_handler_mut()
-                        .request_focus();
+                // Handle mouse released events (end of drag)
+                let release_events: Vec<_> = input
+                    .cursor_events
+                    .iter()
+                    .filter(|event| matches!(event.content, CursorEventContent::Released(_)))
+                    .collect();
+
+                if !click_events.is_empty() {
+                    // Request focus if not already focused
+                    if !state_for_handler.read().focus_handler().is_focused() {
+                        state_for_handler
+                            .write()
+                            .focus_handler_mut()
+                            .request_focus();
+                    }
+
+                    // Handle cursor positioning for clicks
+                    if let Some(cursor_pos) = cursor_position {
+                        // Calculate the relative position within the text area
+                        let padding = editor_args.padding.to_pixels_u32() as i32;
+                        let border_width = editor_args.border_width as i32;
+
+                        let text_relative_x = cursor_pos[0] as i32 - padding - border_width;
+                        let text_relative_y = cursor_pos[1] as i32 - padding - border_width;
+
+                        // Only process if the click is within the text area
+                        if text_relative_x >= 0 && text_relative_y >= 0 {
+                            // Determine click type and handle accordingly
+                            let click_type = state_for_handler.write().handle_click(
+                                [text_relative_x, text_relative_y],
+                                click_events[0].timestamp,
+                            );
+
+                            match click_type {
+                                ClickType::Single => {
+                                    // Single click: position cursor
+                                    state_for_handler.write().editor_mut().action(
+                                        &mut write_font_system(),
+                                        Action::Click {
+                                            x: text_relative_x,
+                                            y: text_relative_y,
+                                        },
+                                    );
+                                }
+                                ClickType::Double => {
+                                    // Double click: select word
+                                    state_for_handler.write().editor_mut().action(
+                                        &mut write_font_system(),
+                                        Action::DoubleClick {
+                                            x: text_relative_x,
+                                            y: text_relative_y,
+                                        },
+                                    );
+                                }
+                                ClickType::Triple => {
+                                    // Triple click: select line
+                                    state_for_handler.write().editor_mut().action(
+                                        &mut write_font_system(),
+                                        Action::TripleClick {
+                                            x: text_relative_x,
+                                            y: text_relative_y,
+                                        },
+                                    );
+                                }
+                            }
+
+                            // Start potential drag operation
+                            state_for_handler.write().start_drag();
+                        }
+                    }
+                }
+
+                // Handle drag events (mouse move while dragging)
+                // This happens every frame when cursor position changes during drag
+                if state_for_handler.read().is_dragging() && cursor_position.is_some() {
+                    let cursor_pos = cursor_position.unwrap();
+                    let padding = editor_args.padding.to_pixels_u32() as i32;
+                    let border_width = editor_args.border_width as i32;
+
+                    let text_relative_x = cursor_pos[0] as i32 - padding - border_width;
+                    let text_relative_y = cursor_pos[1] as i32 - padding - border_width;
+
+                    if text_relative_x >= 0 && text_relative_y >= 0 {
+                        // Only trigger drag if position actually changed
+                        let last_pos = state_for_handler.read().last_click_position();
+                        let current_pos = [text_relative_x, text_relative_y];
+
+                        if last_pos.map_or(true, |pos| pos != current_pos) {
+                            // Extend selection by dragging
+                            state_for_handler.write().editor_mut().action(
+                                &mut write_font_system(),
+                                Action::Drag {
+                                    x: text_relative_x,
+                                    y: text_relative_y,
+                                },
+                            );
+
+                            // Update last position to current position
+                            state_for_handler
+                                .write()
+                                .update_last_click_position(current_pos);
+                        }
+                    }
+                }
+
+                // Handle mouse release events (end drag)
+                if !release_events.is_empty() {
+                    state_for_handler.write().stop_drag();
                 }
             }
 
@@ -332,6 +445,11 @@ impl TextEditorArgs {
 
     pub fn with_focus_background_color(mut self, color: [f32; 4]) -> Self {
         self.focus_background_color = Some(color);
+        self
+    }
+
+    pub fn with_selection_color(mut self, color: [f32; 4]) -> Self {
+        self.selection_color = Some(color);
         self
     }
 }

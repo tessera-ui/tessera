@@ -2271,6 +2271,7 @@ dependencies = [
  "parking_lot",
  "tessera",
  "tessera_macros",
+ "unicode-segmentation",
 ]
 
 [[package]]

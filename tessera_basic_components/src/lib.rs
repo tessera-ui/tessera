@@ -2,6 +2,7 @@
 pub mod column;
 mod pos_misc;
 pub mod row;
+pub mod selection_highlight_rect;
 pub mod spacer;
 pub mod surface;
 pub mod text;

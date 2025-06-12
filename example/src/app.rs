@@ -40,6 +40,7 @@ pub struct AppState {
     anim_space_state: Arc<AnimSpacerState>,
     data: Arc<AppData>,
     editor_state: Arc<RwLock<TextEditorState>>,
+    editor_state_2: Arc<RwLock<TextEditorState>>,
 }
 
 impl AppState {
@@ -60,6 +61,7 @@ impl AppState {
                 click_count: AtomicU64::new(0),
             }),
             editor_state: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), 50.0.into()))),
+            editor_state_2: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), 50.0.into()))),
         }
     }
 }
@@ -195,6 +197,7 @@ pub fn app(state: Arc<AppState>) {
         let app_data_clone = state.data.clone();
         let metrics_clone = state.metrics.clone();
         let editor_state_clone = state.editor_state.clone();
+        let editor_state_2_clone = state.editor_state_2.clone();
         surface(
             // Main background surface
             SurfaceArgsBuilder::default()
@@ -274,9 +277,39 @@ pub fn app(state: Arc<AppState>) {
                                     min: None,
                                     max: None,
                                 }))
+                                .selection_color(Some([0.3, 0.8, 0.4, 0.5])) // Custom green selection with 50% transparency
                                 .build()
                                 .unwrap(),
                             editor_state_clone.clone(),
+                        );
+                    })),
+                    ColumnItem::wrap(Box::new(|| {
+                        spacer(
+                            SpacerArgsBuilder::default()
+                                .height(DimensionValue::Fixed(10))
+                                .width(DimensionValue::Fill {
+                                    min: None,
+                                    max: None,
+                                })
+                                .build()
+                                .unwrap(),
+                        )
+                    })),
+                    // Second text editor with default selection color
+                    ColumnItem::wrap(Box::new(move || {
+                        text_editor(
+                            TextEditorArgsBuilder::default()
+                                .height(Some(DimensionValue::Wrap {
+                                    min: Some(50),
+                                    max: Some(150),
+                                }))
+                                .width(Some(DimensionValue::Fill {
+                                    min: None,
+                                    max: None,
+                                }))
+                                .build()
+                                .unwrap(),
+                            editor_state_2_clone.clone(),
                         );
                     })),
                     ColumnItem::wrap(Box::new(move || {
