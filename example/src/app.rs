@@ -14,7 +14,7 @@ use tessera_basic_components::{
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::text,
-    text_editor::{TextEditorState, text_editor},
+    text_editor::{TextEditorArgsBuilder, TextEditorState, text_editor},
 };
 use tessera_macros::tessera;
 
@@ -94,6 +94,10 @@ fn content_section() {
             .corner_radius(25.0)
             .padding(20.0.into())
             .color([0.8, 0.8, 0.9, 1.0]) // Light purple fill, RGBA
+            .width(DimensionValue::Fill {
+                min: None,
+                max: None,
+            })
             .build()
             .unwrap(),
         || {
@@ -195,8 +199,14 @@ pub fn app(state: Arc<AppState>) {
             // Main background surface
             SurfaceArgsBuilder::default()
                 .color([0.2, 0.2, 0.25, 1.0]) // Darker background, RGBA
-                .width(DimensionValue::Fill { max: None })
-                .height(DimensionValue::Fill { max: None })
+                .width(DimensionValue::Fill {
+                    min: None,
+                    max: None,
+                })
+                .height(DimensionValue::Fill {
+                    min: None,
+                    max: None,
+                })
                 .build()
                 .unwrap(),
             move || {
@@ -206,6 +216,10 @@ pub fn app(state: Arc<AppState>) {
                         spacer(
                             SpacerArgsBuilder::default()
                                 .height(DimensionValue::Fixed(10))
+                                .width(DimensionValue::Fill {
+                                    min: None,
+                                    max: None,
+                                })
                                 .build()
                                 .unwrap(),
                         )
@@ -249,12 +263,24 @@ pub fn app(state: Arc<AppState>) {
                             },
                         )
                     })),
-                    // --- End Examples ---
                     ColumnItem::wrap(Box::new(move || {
-                        anim_spacer(anim_space_state_clone.clone())
+                        text_editor(
+                            TextEditorArgsBuilder::default()
+                                .height(Some(DimensionValue::Wrap {
+                                    min: Some(50),  // Minimum height for usability
+                                    max: Some(200), // Maximum height to prevent excessive growth
+                                }))
+                                .width(Some(DimensionValue::Fill {
+                                    min: None,
+                                    max: None,
+                                }))
+                                .build()
+                                .unwrap(),
+                            editor_state_clone.clone(),
+                        );
                     })),
                     ColumnItem::wrap(Box::new(move || {
-                        text_editor(editor_state_clone.clone());
+                        anim_spacer(anim_space_state_clone.clone())
                     })),
                     ColumnItem::wrap(Box::new(move || value_display(app_data_clone.clone()))),
                     ColumnItem::wrap(Box::new(move || perf_display(metrics_clone.clone()))),

@@ -1,11 +1,6 @@
 use derive_builder::Builder;
 use tessera::{
-    BasicDrawable,
-    ComponentNodeMetaData,
-    ComputedData,
-    DimensionValue,
-    Dp, // Re-added Constraint
-    TextConstraint,
+    BasicDrawable, ComponentNodeMetaData, ComputedData, DimensionValue, Dp, TextConstraint,
     TextData,
 };
 use tessera_macros::tessera;
@@ -73,14 +68,14 @@ pub fn text(args: impl Into<TextArgs>) {
         move |node_id, _, parent_constraint, _, metadatas| {
             let max_width: Option<f32> = match parent_constraint.width {
                 DimensionValue::Fixed(w) => Some(w as f32),
-                DimensionValue::Wrap => None,
-                DimensionValue::Fill { max } => max.map(|m| m as f32),
+                DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Use max from Wrap
+                DimensionValue::Fill { max, .. } => max.map(|m| m as f32), // Use max from Fill
             };
 
             let max_height: Option<f32> = match parent_constraint.height {
                 DimensionValue::Fixed(h) => Some(h as f32),
-                DimensionValue::Wrap => None,
-                DimensionValue::Fill { max } => max.map(|m| m as f32),
+                DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Use max from Wrap
+                DimensionValue::Fill { max, .. } => max.map(|m| m as f32), // Use max from Fill
             };
 
             let text_data = TextData::new(
@@ -100,6 +95,8 @@ pub fn text(args: impl Into<TextArgs>) {
             if let Some(mut metadata) = metadatas.get_mut(&node_id) {
                 metadata.basic_drawable = Some(drawable);
             } else {
+                // This branch might be less common if metadatas are pre-populated or entry().or_default() is used.
+                // However, keeping it for safety if a node_id somehow exists without prior metadata entry.
                 let default_meta = ComponentNodeMetaData {
                     basic_drawable: Some(drawable),
                     ..Default::default()

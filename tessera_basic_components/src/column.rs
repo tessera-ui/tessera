@@ -30,7 +30,14 @@ impl ColumnItem {
 
     /// Helper to create a ColumnItem that wraps its content (height).
     pub fn wrap(child: Box<dyn FnOnce() + Send + Sync>) -> Self {
-        Self::new(child, DimensionValue::Wrap, None)
+        Self::new(
+            child,
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
+            None,
+        )
     }
 
     /// Helper to create a ColumnItem that is fixed height.
@@ -48,6 +55,7 @@ impl ColumnItem {
         Self::new(
             child,
             DimensionValue::Fill {
+                min: None, // Add min field
                 max: max_height.as_ref().map(Dp::to_pixels_u32),
             },
             weight,
@@ -71,7 +79,10 @@ impl<F: Fn() + Send + Sync + 'static> AsColumnItem for F {
     fn into_column_item(self) -> ColumnItem {
         ColumnItem {
             weight: None,
-            height_behavior: DimensionValue::Wrap, // Default to Wrap for height
+            height_behavior: DimensionValue::Wrap {
+                min: None,
+                max: None,
+            }, // Default to Wrap for height
             child: Box::new(self),
         }
     }
@@ -147,10 +158,17 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             i,
                         ));
                     }
-                    DimensionValue::Wrap => {
+                    DimensionValue::Wrap { .. } => {
+                        // Updated match for Wrap
+                        // For Wrap children, their height constraint is Wrap, but they respect column's width constraint.
+                        // The min/max from the child's Wrap behavior will be part of its intrinsic constraint,
+                        // which gets merged.
                         let child_constraint_for_measure = Constraint::new(
                             effective_column_constraint.width,
-                            DimensionValue::Wrap,
+                            DimensionValue::Wrap {
+                                min: None,
+                                max: None,
+                            }, // Pass a basic Wrap, intrinsic will merge its min/max
                         );
                         let child_intrinsic_constraint = metadatas
                             .get(&child_node_id)
@@ -198,8 +216,17 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                     remaining_height_for_fill =
                         column_fixed_height.saturating_sub(total_height_for_fixed_wrap);
                 }
-                DimensionValue::Wrap => {
-                    is_column_effectively_wrap_for_children = true;
+                DimensionValue::Wrap {
+                    max: col_wrap_max, ..
+                } => {
+                    // Consider column's own wrap max
+                    if let Some(max_h) = col_wrap_max {
+                        remaining_height_for_fill =
+                            max_h.saturating_sub(total_height_for_fixed_wrap);
+                        // If max_h is already less than fixed/wrap, remaining could be 0 or negative (handled by saturating_sub)
+                    } else {
+                        is_column_effectively_wrap_for_children = true; // No max, so fill children wrap
+                    }
                 }
                 DimensionValue::Fill {
                     max: Some(column_max_budget),
@@ -209,6 +236,8 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                         column_max_budget.saturating_sub(total_height_for_fixed_wrap);
                 }
                 DimensionValue::Fill { max: None, .. } => {
+                    // This means the column itself can grow indefinitely if parent allows.
+                    // So, Fill children effectively behave as Wrap unless they have their own max.
                     is_column_effectively_wrap_for_children = true;
                 }
             }
@@ -237,16 +266,25 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
             let mut actual_height_taken_by_fill_children: u32 = 0;
 
             // --- Stage 2: Measure Fill children ---
-            let mut fill_nodes_to_measure = Vec::new();
+            let mut fill_nodes_to_measure_group = Vec::new();
 
             if is_column_effectively_wrap_for_children {
+                // If column wraps or has unbounded fill, Fill children also wrap
                 for i in 0..N {
                     let item_behavior = children_items_for_measure[i].1;
-                    if let DimensionValue::Fill { .. } = item_behavior {
+                    if let DimensionValue::Fill {
+                        min: child_fill_min,
+                        max: child_fill_max,
+                    } = item_behavior
+                    {
                         let child_node_id = children_node_ids[i];
+                        // Child's Fill becomes Wrap, but respects its own min/max from Fill.
                         let child_constraint_for_measure = Constraint::new(
                             effective_column_constraint.width,
-                            DimensionValue::Wrap,
+                            DimensionValue::Wrap {
+                                min: child_fill_min,
+                                max: child_fill_max,
+                            },
                         );
                         let child_intrinsic_constraint = metadatas
                             .get(&child_node_id)
@@ -254,75 +292,26 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             .constraint;
                         let final_child_constraint =
                             child_intrinsic_constraint.merge(&child_constraint_for_measure);
-                        fill_nodes_to_measure.push((child_node_id, final_child_constraint, i));
+                        fill_nodes_to_measure_group.push((
+                            child_node_id,
+                            final_child_constraint,
+                            i,
+                        ));
                     }
                 }
             } else if remaining_height_for_fill > 0 {
-                let mut temp_remaining_height_for_weighted = remaining_height_for_fill;
+                // Distribute remaining_height_for_fill among Fill children
+                // This part is complex for full parallelization due to dependencies.
+                // For now, simplified sequential logic for Fill distribution to ensure correctness.
+                let mut current_remaining_fill_budget = remaining_height_for_fill;
 
-                // Prepare weighted fill children
                 if total_fill_weight > 0.0 {
                     for &index in &fill_children_indices_with_weight {
-                        let item_weight = children_items_for_measure[index].0.unwrap();
-                        let item_behavior = children_items_for_measure[index].1;
-                        let child_node_id = children_node_ids[index];
-
-                        let proportional_height = ((item_weight / total_fill_weight)
-                            * remaining_height_for_fill as f32)
-                            as u32;
-
-                        if let DimensionValue::Fill {
-                            max: child_max_fill,
-                            ..
-                        } = item_behavior
-                        {
-                            let alloc_height = child_max_fill
-                                .map_or(proportional_height, |m| proportional_height.min(m));
-                            // Note: temp_remaining_height_for_weighted is the budget for *this specific child* among weighted ones.
-                            // The original logic for temp_remaining_height was a running total.
-                            // For parallel measurement, each child gets its calculated share of the *initial* remaining_height_for_fill.
-                            // We'll sum up their actual take later.
-                            let final_alloc_height = alloc_height.min(remaining_height_for_fill); // Cap by total available for fill
-
-                            let child_constraint_for_measure = Constraint::new(
-                                effective_column_constraint.width,
-                                DimensionValue::Fixed(final_alloc_height),
-                            );
-                            let child_intrinsic_constraint = metadatas
-                                .get(&child_node_id)
-                                .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
-                                .constraint;
-                            let final_child_constraint =
-                                child_intrinsic_constraint.merge(&child_constraint_for_measure);
-                            fill_nodes_to_measure.push((
-                                child_node_id,
-                                final_child_constraint,
-                                index,
-                            ));
+                        if current_remaining_fill_budget == 0 {
+                            break;
                         }
-                    }
-                }
-                // After processing results for weighted, update temp_remaining_height_for_unweighted
-                // Then prepare unweighted fill children
-                // This two-step parallelization for Fill is tricky.
-                // Simpler: measure weighted, then based on remaining, measure unweighted.
-                // For now, let's assume we can calculate all Fill constraints first if possible.
-                // The original code updated temp_remaining_height sequentially.
-                // To parallelize Fill, we'd need to pre-calculate all their constraints.
-                // This might require a slightly different loop structure or a more complex pre-calculation.
-
-                // Let's stick to the original sequential logic for Fill distribution for now,
-                // and parallelize the measure_node calls within that logic if a group can be measured together.
-                // The current structure makes full parallelization of Fill hard without significant refactoring.
-                // So, for Fill, we will revert to sequential measure_node calls for now to maintain correctness,
-                // as their constraints depend on prior Fill children's measurements.
-                // The user asked for minimal changes. Full parallelization of this Fill logic is not minimal.
-
-                // Reverting Fill to sequential for correctness under "minimal change"
-                if total_fill_weight > 0.0 {
-                    for &index in &fill_children_indices_with_weight {
                         let item_weight = children_items_for_measure[index].0.unwrap();
-                        let item_behavior = children_items_for_measure[index].1;
+                        let item_behavior = children_items_for_measure[index].1; // This is DimensionValue::Fill
                         let child_node_id = children_node_ids[index];
 
                         let proportional_height = ((item_weight / total_fill_weight)
@@ -330,18 +319,24 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                             as u32;
 
                         if let DimensionValue::Fill {
-                            max: child_max_fill,
+                            min: child_min,
+                            max: child_max,
                             ..
                         } = item_behavior
                         {
-                            let alloc_height = child_max_fill
-                                .map_or(proportional_height, |m| proportional_height.min(m));
-                            let final_alloc_height =
-                                alloc_height.min(temp_remaining_height_for_weighted);
+                            let mut alloc_height = proportional_height;
+                            if let Some(max_h) = child_max {
+                                alloc_height = alloc_height.min(max_h);
+                            }
+                            alloc_height = alloc_height.min(current_remaining_fill_budget); // Cannot exceed current budget
+                            if let Some(min_h) = child_min {
+                                alloc_height = alloc_height.max(min_h);
+                            }
+                            alloc_height = alloc_height.min(current_remaining_fill_budget); // Re-cap after min
 
                             let child_constraint_for_measure = Constraint::new(
                                 effective_column_constraint.width,
-                                DimensionValue::Fixed(final_alloc_height),
+                                DimensionValue::Fixed(alloc_height),
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
@@ -349,47 +344,55 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                                 .constraint;
                             let final_child_constraint =
                                 child_intrinsic_constraint.merge(&child_constraint_for_measure);
+                            // Measure this child individually
                             let size = tessera::measure_node(
                                 child_node_id,
                                 &final_child_constraint,
                                 tree,
                                 metadatas,
-                            )?; // Explicit call
+                            )?;
                             measured_children_sizes[index] = Some(size);
                             actual_height_taken_by_fill_children += size.height;
-                            temp_remaining_height_for_weighted =
-                                temp_remaining_height_for_weighted.saturating_sub(size.height);
+                            current_remaining_fill_budget =
+                                current_remaining_fill_budget.saturating_sub(size.height);
                             computed_max_column_width = computed_max_column_width.max(size.width);
                         }
                     }
                 }
-                let mut temp_remaining_height_for_unweighted = temp_remaining_height_for_weighted; // Update for unweighted
 
                 if !fill_children_indices_without_weight.is_empty()
-                    && temp_remaining_height_for_unweighted > 0
+                    && current_remaining_fill_budget > 0
                 {
                     let num_unweighted_fill = fill_children_indices_without_weight.len();
                     let height_per_unweighted_child =
-                        temp_remaining_height_for_unweighted / num_unweighted_fill as u32;
+                        current_remaining_fill_budget / num_unweighted_fill as u32;
 
                     for &index in &fill_children_indices_without_weight {
-                        let item_behavior = children_items_for_measure[index].1;
+                        if current_remaining_fill_budget == 0 {
+                            break;
+                        }
+                        let item_behavior = children_items_for_measure[index].1; // This is DimensionValue::Fill
                         let child_node_id = children_node_ids[index];
+
                         if let DimensionValue::Fill {
-                            max: child_max_fill,
+                            min: child_min,
+                            max: child_max,
                             ..
                         } = item_behavior
                         {
-                            let alloc_height = child_max_fill
-                                .map_or(height_per_unweighted_child, |m| {
-                                    height_per_unweighted_child.min(m)
-                                });
-                            let final_alloc_height =
-                                alloc_height.min(temp_remaining_height_for_unweighted);
+                            let mut alloc_height = height_per_unweighted_child;
+                            if let Some(max_h) = child_max {
+                                alloc_height = alloc_height.min(max_h);
+                            }
+                            alloc_height = alloc_height.min(current_remaining_fill_budget);
+                            if let Some(min_h) = child_min {
+                                alloc_height = alloc_height.max(min_h);
+                            }
+                            alloc_height = alloc_height.min(current_remaining_fill_budget);
 
                             let child_constraint_for_measure = Constraint::new(
                                 effective_column_constraint.width,
-                                DimensionValue::Fixed(final_alloc_height),
+                                DimensionValue::Fixed(alloc_height),
                             );
                             let child_intrinsic_constraint = metadatas
                                 .get(&child_node_id)
@@ -397,29 +400,30 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                                 .constraint;
                             let final_child_constraint =
                                 child_intrinsic_constraint.merge(&child_constraint_for_measure);
+                            // Measure this child individually
                             let size = tessera::measure_node(
                                 child_node_id,
                                 &final_child_constraint,
                                 tree,
                                 metadatas,
-                            )?; // Explicit call
+                            )?;
                             measured_children_sizes[index] = Some(size);
                             actual_height_taken_by_fill_children += size.height;
-                            temp_remaining_height_for_unweighted =
-                                temp_remaining_height_for_unweighted.saturating_sub(size.height);
+                            current_remaining_fill_budget =
+                                current_remaining_fill_budget.saturating_sub(size.height);
                             computed_max_column_width = computed_max_column_width.max(size.width);
                         }
                     }
                 }
             }
-            // Process fill_nodes_to_measure if it was populated (only for is_column_effectively_wrap_for_children case)
-            if !fill_nodes_to_measure.is_empty() {
-                let nodes_for_api: Vec<_> = fill_nodes_to_measure
+
+            if !fill_nodes_to_measure_group.is_empty() {
+                let nodes_for_api: Vec<_> = fill_nodes_to_measure_group
                     .iter()
                     .map(|(id, constraint, _idx)| (*id, *constraint))
                     .collect();
                 let results_map = measure_nodes(nodes_for_api, tree, metadatas);
-                for (child_node_id, _constraint, original_idx) in fill_nodes_to_measure {
+                for (child_node_id, _constraint, original_idx) in fill_nodes_to_measure_group {
                     let size = results_map
                         .get(&child_node_id)
                         .ok_or_else(|| {
@@ -438,24 +442,77 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
             let total_children_height =
                 total_height_for_fixed_wrap + actual_height_taken_by_fill_children;
 
-            let final_column_height = match effective_column_constraint.height {
-                DimensionValue::Fixed(h) => h,
-                DimensionValue::Wrap => total_children_height,
-                DimensionValue::Fill { max, .. } => {
-                    let resolved_fill_height = max.unwrap_or(total_children_height);
-                    if max.is_some() {
-                        resolved_fill_height.min(total_children_height)
-                    } else {
-                        total_children_height
+            let mut final_column_height = total_children_height;
+            match effective_column_constraint.height {
+                DimensionValue::Fixed(h) => final_column_height = h,
+                DimensionValue::Wrap { min, max } => {
+                    if let Some(min_h) = min {
+                        final_column_height = final_column_height.max(min_h);
+                    }
+                    if let Some(max_h) = max {
+                        final_column_height = final_column_height.min(max_h);
+                    }
+                }
+                DimensionValue::Fill { min, max } => {
+                    // For Fill, the column's height is constrained by its parent.
+                    // The `total_children_height` is what children want.
+                    // If parent provides a fixed height (via merge), that's the budget.
+                    // If parent provides a max fill height, that's the budget.
+                    // The column's own min/max from its Fill constraint also apply.
+                    let parent_provided_height = match column_parent_constraint.height {
+                        DimensionValue::Fixed(ph) => Some(ph),
+                        DimensionValue::Fill {
+                            max: p_max_fill, ..
+                        } => p_max_fill,
+                        _ => None, // Parent is Wrap or unbounded Fill, so no hard limit from parent
+                    };
+
+                    if let Some(pph) = parent_provided_height {
+                        final_column_height = total_children_height.min(pph);
+                    } // else, it's effectively wrapping content or bounded by its own max.
+
+                    if let Some(min_h) = min {
+                        final_column_height = final_column_height.max(min_h);
+                    }
+                    if let Some(max_h) = max {
+                        final_column_height = final_column_height.min(max_h);
                     }
                 }
             };
-            let final_column_width = match effective_column_constraint.width {
-                DimensionValue::Fixed(w) => w,
-                DimensionValue::Wrap => computed_max_column_width,
-                DimensionValue::Fill { max, .. } => max.map_or(computed_max_column_width, |m| {
-                    computed_max_column_width.min(m)
-                }),
+
+            let mut final_column_width = computed_max_column_width;
+            match effective_column_constraint.width {
+                DimensionValue::Fixed(w) => final_column_width = w,
+                DimensionValue::Wrap { min, max } => {
+                    if let Some(min_w) = min {
+                        final_column_width = final_column_width.max(min_w);
+                    }
+                    if let Some(max_w) = max {
+                        final_column_width = final_column_width.min(max_w);
+                    }
+                }
+                DimensionValue::Fill { min, max } => {
+                    let parent_provided_width = match column_parent_constraint.width {
+                        DimensionValue::Fixed(pw) => Some(pw),
+                        DimensionValue::Fill {
+                            max: p_max_fill, ..
+                        } => p_max_fill,
+                        _ => None,
+                    };
+
+                    if let Some(ppw) = parent_provided_width {
+                        final_column_width = ppw; // Fill should use parent's provided width
+                    } else {
+                        // When no parent provides width, Fill should wrap content (like a Wrap behavior)
+                        final_column_width = computed_max_column_width;
+                    }
+                    if let Some(min_w) = min {
+                        final_column_width = final_column_width.max(min_w);
+                    }
+                    if let Some(max_w) = max {
+                        final_column_width = final_column_width.min(max_w);
+                    }
+                }
             };
 
             let mut current_y_offset: u32 = 0;
@@ -465,8 +522,13 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                     place_node(child_node_id, [0, current_y_offset], metadatas);
                     current_y_offset += size.height;
                 } else {
+                    // This case should ideally not be hit if all measurements are successful or errors handled.
+                    // If a Fill child got 0 budget and wasn't measured, its size is 0.
                     let mut meta_entry = metadatas.entry(child_node_id).or_default();
-                    meta_entry.computed_data = Some(ComputedData::ZERO);
+                    if meta_entry.computed_data.is_none() {
+                        // Only set if not already set (e.g. by an error path)
+                        meta_entry.computed_data = Some(ComputedData::ZERO);
+                    }
                     place_node(child_node_id, [0, current_y_offset], metadatas);
                 }
             }

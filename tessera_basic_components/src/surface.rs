@@ -21,10 +21,10 @@ pub struct SurfaceArgs {
     /// The padding of the surface.
     #[builder(default = "Dp(0.0)")]
     pub padding: Dp,
-    /// Optional explicit width behavior for the surface. Defaults to Wrap if None.
+    /// Optional explicit width behavior for the surface. Defaults to Wrap {min: None, max: None} if None.
     #[builder(default, setter(strip_option))]
     pub width: Option<DimensionValue>,
-    /// Optional explicit height behavior for the surface. Defaults to Wrap if None.
+    /// Optional explicit height behavior for the surface. Defaults to Wrap {min: None, max: None} if None.
     #[builder(default, setter(strip_option))]
     pub height: Option<DimensionValue>,
     /// Width of the border. If > 0, an outline will be drawn.
@@ -45,7 +45,6 @@ impl Default for SurfaceArgs {
 /// Surface component, a basic container that can have its own size constraints.
 #[tessera]
 pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
-    // Clone args for the measure closure, as it's FnBox and might be called multiple times or sent across threads.
     let measure_args = args.clone();
 
     measure(Box::new(
@@ -55,8 +54,14 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             let padding_2_u32 = padding_2_f32 as u32;
 
             // 1. Determine Surface's intrinsic constraint based on args
-            let surface_intrinsic_width = measure_args.width.unwrap_or(DimensionValue::Wrap);
-            let surface_intrinsic_height = measure_args.height.unwrap_or(DimensionValue::Wrap);
+            let surface_intrinsic_width = measure_args.width.unwrap_or(DimensionValue::Wrap {
+                min: None,
+                max: None,
+            });
+            let surface_intrinsic_height = measure_args.height.unwrap_or(DimensionValue::Wrap {
+                min: None,
+                max: None,
+            });
             let surface_intrinsic_constraint =
                 Constraint::new(surface_intrinsic_width, surface_intrinsic_height);
 
@@ -65,23 +70,78 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 surface_intrinsic_constraint.merge(parent_constraint);
 
             // 3. Determine constraint for the child
+            // For Fill constraint, Surface should determine its own final size first, then give child a Fixed constraint
             let child_constraint_width = match effective_surface_constraint.width {
                 DimensionValue::Fixed(sw) => {
                     DimensionValue::Fixed(sw.saturating_sub(padding_2_u32))
                 }
-                DimensionValue::Wrap => DimensionValue::Wrap,
-                DimensionValue::Fill { max: s_max_w, .. } => DimensionValue::Fill {
+                DimensionValue::Wrap {
+                    min: s_min_w,
+                    max: s_max_w,
+                } => DimensionValue::Wrap {
+                    min: s_min_w.map(|m| m.saturating_sub(padding_2_u32)),
                     max: s_max_w.map(|m| m.saturating_sub(padding_2_u32)),
                 },
+                DimensionValue::Fill {
+                    min: _s_min_w,
+                    max: s_max_w,
+                } => {
+                    // For Fill, Surface should use parent's provided width and give child a Fixed constraint
+                    let parent_provided_width = match parent_constraint.width {
+                        DimensionValue::Fixed(pw) => Some(pw),
+                        DimensionValue::Fill {
+                            max: p_max_fill, ..
+                        } => p_max_fill,
+                        _ => None,
+                    };
+
+                    if let Some(ppw) = parent_provided_width {
+                        // Surface takes the full parent-provided width, child gets fixed constraint
+                        DimensionValue::Fixed(ppw.saturating_sub(padding_2_u32))
+                    } else {
+                        // No parent width available, fallback to wrap-like behavior
+                        DimensionValue::Wrap {
+                            min: None,
+                            max: s_max_w.map(|m| m.saturating_sub(padding_2_u32)),
+                        }
+                    }
+                }
             };
             let child_constraint_height = match effective_surface_constraint.height {
                 DimensionValue::Fixed(sh) => {
                     DimensionValue::Fixed(sh.saturating_sub(padding_2_u32))
                 }
-                DimensionValue::Wrap => DimensionValue::Wrap,
-                DimensionValue::Fill { max: s_max_h, .. } => DimensionValue::Fill {
+                DimensionValue::Wrap {
+                    min: s_min_h,
+                    max: s_max_h,
+                } => DimensionValue::Wrap {
+                    min: s_min_h.map(|m| m.saturating_sub(padding_2_u32)),
                     max: s_max_h.map(|m| m.saturating_sub(padding_2_u32)),
                 },
+                DimensionValue::Fill {
+                    min: _s_min_h,
+                    max: s_max_h,
+                } => {
+                    // For Fill, Surface should use parent's provided height and give child a Fixed constraint
+                    let parent_provided_height = match parent_constraint.height {
+                        DimensionValue::Fixed(ph) => Some(ph),
+                        DimensionValue::Fill {
+                            max: p_max_fill, ..
+                        } => p_max_fill,
+                        _ => None,
+                    };
+
+                    if let Some(pph) = parent_provided_height {
+                        // Surface takes the full parent-provided height, child gets fixed constraint
+                        DimensionValue::Fixed(pph.saturating_sub(padding_2_u32))
+                    } else {
+                        // No parent height available, fallback to wrap-like behavior
+                        DimensionValue::Wrap {
+                            min: None,
+                            max: s_max_h.map(|m| m.saturating_sub(padding_2_u32)),
+                        }
+                    }
+                }
             };
             let child_actual_constraint =
                 Constraint::new(child_constraint_width, child_constraint_height);
@@ -124,35 +184,66 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             let content_height_with_padding =
                 child_measured_size.height.saturating_add(padding_2_u32);
 
-            let final_surface_width = match effective_surface_constraint.width {
-                DimensionValue::Fixed(sw) => sw,
-                DimensionValue::Wrap => content_width_with_padding,
-                DimensionValue::Fill {
-                    max: Some(s_max_w), ..
-                } => core::cmp::min(s_max_w, content_width_with_padding),
-                DimensionValue::Fill { max: None, .. } => content_width_with_padding,
+            let mut final_surface_width = content_width_with_padding;
+            match effective_surface_constraint.width {
+                DimensionValue::Fixed(sw) => final_surface_width = sw,
+                DimensionValue::Wrap { min, max } => {
+                    if let Some(min_w) = min {
+                        final_surface_width = final_surface_width.max(min_w);
+                    }
+                    if let Some(max_w) = max {
+                        final_surface_width = final_surface_width.min(max_w);
+                    }
+                }
+                DimensionValue::Fill { min, max } => {
+                    // For Fill constraint, use the max value from Surface's constraint (which comes from parent)
+                    if let Some(max_w) = max {
+                        final_surface_width = max_w; // Fill should use the provided max constraint
+                    } else {
+                        // When no max constraint provided, wrap content (like a Wrap behavior)
+                        final_surface_width = content_width_with_padding;
+                    }
+                    if let Some(min_w) = min {
+                        final_surface_width = final_surface_width.max(min_w);
+                    }
+                }
             };
 
-            let final_surface_height = match effective_surface_constraint.height {
-                DimensionValue::Fixed(sh) => sh,
-                DimensionValue::Wrap => content_height_with_padding,
-                DimensionValue::Fill {
-                    max: Some(s_max_h), ..
-                } => core::cmp::min(s_max_h, content_height_with_padding),
-                DimensionValue::Fill { max: None, .. } => content_height_with_padding,
+            let mut final_surface_height = content_height_with_padding;
+            match effective_surface_constraint.height {
+                DimensionValue::Fixed(sh) => final_surface_height = sh,
+                DimensionValue::Wrap { min, max } => {
+                    if let Some(min_h) = min {
+                        final_surface_height = final_surface_height.max(min_h);
+                    }
+                    if let Some(max_h) = max {
+                        final_surface_height = final_surface_height.min(max_h);
+                    }
+                }
+                DimensionValue::Fill { min, max } => {
+                    // For Fill constraint, use the max value from Surface's constraint (which comes from parent)
+                    if let Some(max_h) = max {
+                        final_surface_height = max_h; // Fill should use the provided max constraint
+                    } else {
+                        // When no max constraint provided, wrap content (like a Wrap behavior)
+                        final_surface_height = content_height_with_padding;
+                    }
+                    if let Some(min_h) = min {
+                        final_surface_height = final_surface_height.max(min_h);
+                    }
+                }
             };
 
-            // Add drawable based on border_width
             let drawable = if measure_args.border_width > 0.0 {
                 BasicDrawable::OutlinedRect {
-                    color: measure_args.border_color.unwrap_or(measure_args.color), // color is RGBA
+                    color: measure_args.border_color.unwrap_or(measure_args.color),
                     corner_radius: measure_args.corner_radius,
                     shadow: measure_args.shadow,
                     border_width: measure_args.border_width,
                 }
             } else {
                 BasicDrawable::Rect {
-                    color: measure_args.color, // color is RGBA
+                    color: measure_args.color,
                     corner_radius: measure_args.corner_radius,
                     shadow: measure_args.shadow,
                 }

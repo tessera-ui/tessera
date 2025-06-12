@@ -12,3 +12,14 @@ pub fn is_position_in_rect(position: [i32; 2], rect: [i32; 4]) -> bool {
 
     x >= rect_x && x <= rect_x + rect_width && y >= rect_y && y <= rect_y + rect_height
 }
+
+#[test]
+fn test_is_position_in_component() {
+    let size = ComputedData {
+        width: 100,
+        height: 50,
+    };
+    assert!(is_position_in_component(size, [50, 25]));
+    assert!(!is_position_in_component(size, [150, 25]));
+    assert!(!is_position_in_component(size, [50, 75]));
+}

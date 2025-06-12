@@ -167,7 +167,10 @@ pub fn measure_node(
         measure_fn(
             node_id,
             tree,
-            parent_constraint,
+            parent_constraint, // Should this be effective_constraint? Original code used parent_constraint.
+            // Custom measure functions might want the original parent_constraint to decide how to merge.
+            // Or they might expect the already merged effective_constraint.
+            // For now, keeping parent_constraint as per original logic.
             &children,
             component_node_metadatas,
         )
@@ -175,7 +178,7 @@ pub fn measure_node(
         DEFAULT_LAYOUT_DESC(
             node_id,
             tree,
-            &effective_constraint,
+            &effective_constraint, // Default layout uses the merged constraint.
             &children,
             component_node_metadatas,
         )
@@ -213,20 +216,21 @@ pub fn place_node(
 pub const DEFAULT_LAYOUT_DESC: &MeasureFn =
     &|current_node_id, tree, effective_constraint, children_ids, metadatas| {
         if children_ids.is_empty() {
-            return Ok(ComputedData::ZERO);
+            // If there are no children, the size depends on the effective_constraint
+            // For Fixed, it's the fixed size. For Wrap/Fill, it's typically 0 if no content.
+            // This part might need refinement based on how min constraints in Wrap/Fill should behave for empty nodes.
+            // For now, returning ZERO, assuming intrinsic size of an empty node is zero before min constraints are applied.
+            // The actual min size enforcement happens when the parent (or this node itself if it has intrinsic min)
+            // considers its own DimensionValue.
+            return Ok(ComputedData::min_from_constraint(effective_constraint));
         }
 
         let nodes_to_measure: Vec<(NodeId, Constraint)> = children_ids
             .iter()
-            .map(|&child_id| (child_id, *effective_constraint))
+            .map(|&child_id| (child_id, *effective_constraint)) // Children inherit parent's effective constraint
             .collect();
 
-        // Pass references directly to measure_nodes
-        let children_results_map = measure_nodes(
-            nodes_to_measure,
-            tree,      // Pass &ComponentNodeTree
-            metadatas, // Pass &ComponentNodeMetaDatas
-        );
+        let children_results_map = measure_nodes(nodes_to_measure, tree, metadatas);
 
         let mut aggregate_size = ComputedData::ZERO;
         let mut first_error: Option<MeasurementError> = None;
@@ -262,17 +266,83 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn =
             return Err(error);
         }
         if successful_children_data.is_empty() && !children_ids.is_empty() {
+            // This case should ideally be caught by first_error if all children failed.
+            // If it's reached, it implies some logic issue.
             return Err(MeasurementError::MeasureFnFailed(
-                "All children failed to measure in DEFAULT_LAYOUT_DESC".to_string(),
+                "All children failed to measure or results missing in DEFAULT_LAYOUT_DESC"
+                    .to_string(),
             ));
         }
 
+        // For default layout (stacking), the aggregate size is the max of children's sizes.
         for (child_id, child_size) in successful_children_data {
             aggregate_size = aggregate_size.max(child_size);
-            place_node(child_id, [0, 0], metadatas);
+            place_node(child_id, [0, 0], metadatas); // All children at [0,0] for simple stacking
         }
 
-        Ok(aggregate_size)
+        // The aggregate_size is based on children. Now apply current node's own constraints.
+        // If current node is Fixed, its size is fixed.
+        // If current node is Wrap, its size is aggregate_size (clamped by its own min/max).
+        // If current node is Fill, its size is aggregate_size (clamped by its own min/max, and parent's available space if parent was Fill).
+        // This final clamping/adjustment based on `effective_constraint` should ideally happen
+        // when `ComputedData` is returned from `measure_node` itself, or by the caller of `measure_node`.
+        // For DEFAULT_LAYOUT_DESC, it should return the size required by its children,
+        // and then `measure_node` will finalize it based on `effective_constraint`.
+
+        // Let's refine: DEFAULT_LAYOUT_DESC should calculate the "natural" size based on children.
+        // Then, `measure_node` (or its caller) would apply the `effective_constraint` to this natural size.
+        // However, `measure_node` currently directly returns the result of `DEFAULT_LAYOUT_DESC` or custom `measure_fn`.
+        // So, `DEFAULT_LAYOUT_DESC` itself needs to consider `effective_constraint` for its final size.
+
+        let mut final_width = aggregate_size.width;
+        let mut final_height = aggregate_size.height;
+
+        match effective_constraint.width {
+            DimensionValue::Fixed(w) => final_width = w,
+            DimensionValue::Wrap { min, max } => {
+                if let Some(min_w) = min {
+                    final_width = final_width.max(min_w);
+                }
+                if let Some(max_w) = max {
+                    final_width = final_width.min(max_w);
+                }
+            }
+            DimensionValue::Fill { min, max } => {
+                // Fill behaves like wrap for default layout unless children expand
+                if let Some(min_w) = min {
+                    final_width = final_width.max(min_w);
+                }
+                if let Some(max_w) = max {
+                    final_width = final_width.min(max_w);
+                }
+                // If parent was Fill, this node would have gotten a Fill constraint too.
+                // The actual "filling" happens because children might be Fill.
+                // If children are not Fill, this node wraps them.
+            }
+        }
+        match effective_constraint.height {
+            DimensionValue::Fixed(h) => final_height = h,
+            DimensionValue::Wrap { min, max } => {
+                if let Some(min_h) = min {
+                    final_height = final_height.max(min_h);
+                }
+                if let Some(max_h) = max {
+                    final_height = final_height.min(max_h);
+                }
+            }
+            DimensionValue::Fill { min, max } => {
+                if let Some(min_h) = min {
+                    final_height = final_height.max(min_h);
+                }
+                if let Some(max_h) = max {
+                    final_height = final_height.min(max_h);
+                }
+            }
+        }
+        Ok(ComputedData {
+            width: final_width,
+            height: final_height,
+        })
     };
 
 /// Concurrently measures multiple nodes using Rayon for parallelism.
@@ -287,10 +357,6 @@ pub fn measure_nodes(
     nodes_to_measure
         .into_par_iter()
         .map(|(node_id, parent_constraint)| {
-            // Closure captures references to tree and component_node_metadatas
-            // These references must be 'Sync' for Rayon to allow this.
-            // Arena<T> is Sync if T is Sync. ComponentNode is Sync.
-            // DashMap is Sync.
             let result = measure_node(node_id, &parent_constraint, tree, component_node_metadatas);
             (node_id, result)
         })
@@ -326,33 +392,50 @@ impl ComputedData {
         height: 0,
     };
 
-    pub fn smallest(constraint: &Constraint) -> Self {
+    /// Calculates a "minimum" size based on a constraint.
+    /// For Fixed, it's the fixed value. For Wrap/Fill, it's their 'min' if Some, else 0.
+    pub fn min_from_constraint(constraint: &Constraint) -> Self {
         let width = match constraint.width {
             DimensionValue::Fixed(w) => w,
-            DimensionValue::Wrap => 0,
-            DimensionValue::Fill { .. } => 0,
+            DimensionValue::Wrap { min, .. } => min.unwrap_or(0),
+            DimensionValue::Fill { min, .. } => min.unwrap_or(0),
         };
         let height = match constraint.height {
             DimensionValue::Fixed(h) => h,
-            DimensionValue::Wrap => 0,
-            DimensionValue::Fill { .. } => 0,
+            DimensionValue::Wrap { min, .. } => min.unwrap_or(0),
+            DimensionValue::Fill { min, .. } => min.unwrap_or(0),
         };
         Self { width, height }
     }
 
-    pub fn largest(constraint: &Constraint) -> Self {
-        let width = match constraint.width {
-            DimensionValue::Fixed(w) => w,
-            DimensionValue::Wrap => u32::MAX,
-            DimensionValue::Fill { max, .. } => max.unwrap_or(u32::MAX),
-        };
-        let height = match constraint.height {
-            DimensionValue::Fixed(h) => h,
-            DimensionValue::Wrap => u32::MAX,
-            DimensionValue::Fill { max, .. } => max.unwrap_or(u32::MAX),
-        };
-        Self { width, height }
-    }
+    // Old smallest and largest might not be as relevant with min/max in Wrap/Fill
+    // pub fn smallest(constraint: &Constraint) -> Self {
+    //     let width = match constraint.width {
+    //         DimensionValue::Fixed(w) => w,
+    //         DimensionValue::Wrap { min, .. } => min.unwrap_or(0), // Use min from Wrap, or 0
+    //         DimensionValue::Fill { min, .. } => min.unwrap_or(0), // Use min from Fill, or 0
+    //     };
+    //     let height = match constraint.height {
+    //         DimensionValue::Fixed(h) => h,
+    //         DimensionValue::Wrap { min, .. } => min.unwrap_or(0), // Use min from Wrap, or 0
+    //         DimensionValue::Fill { min, .. } => min.unwrap_or(0), // Use min from Fill, or 0
+    //     };
+    //     Self { width, height }
+    // }
+
+    // pub fn largest(constraint: &Constraint) -> Self {
+    //     let width = match constraint.width {
+    //         DimensionValue::Fixed(w) => w,
+    //         DimensionValue::Wrap { max, .. } => max.unwrap_or(u32::MAX), // Use max from Wrap, or u32::MAX
+    //         DimensionValue::Fill { max, .. } => max.unwrap_or(u32::MAX),
+    //     };
+    //     let height = match constraint.height {
+    //         DimensionValue::Fixed(h) => h,
+    //         DimensionValue::Wrap { max, .. } => max.unwrap_or(u32::MAX), // Use max from Wrap, or u32::MAX
+    //         DimensionValue::Fill { max, .. } => max.unwrap_or(u32::MAX),
+    //     };
+    //     Self { width, height }
+    // }
 
     pub fn min(self, rhs: Self) -> Self {
         Self {

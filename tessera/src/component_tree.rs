@@ -4,7 +4,7 @@ mod node;
 
 use std::{num::NonZero, time::Instant};
 
-use log::debug;
+use log::{debug, error};
 use rayon::prelude::*;
 
 use crate::{component_tree::node::StateHandlerInput, cursor::CursorEvent, renderer::DrawCommand};
@@ -119,7 +119,7 @@ impl ComponentTree {
                 debug!("Component tree measured in {:?}", measure_timer.elapsed());
             }
             Err(e) => {
-                log::error!(
+                error!(
                     "Root node ({root_node:?}) measurement failed: {e:?}. Aborting draw command computation."
                 );
                 return vec![]; // Early return if root measurement fails
