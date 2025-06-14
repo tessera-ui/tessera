@@ -64,50 +64,48 @@ impl From<&str> for TextArgs {
 #[tessera]
 pub fn text(args: impl Into<TextArgs>) {
     let text_args = args.into();
-    measure(Box::new(
-        move |node_id, _, parent_constraint, _, metadatas| {
-            let max_width: Option<f32> = match parent_constraint.width {
-                DimensionValue::Fixed(w) => Some(w as f32),
-                DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Use max from Wrap
-                DimensionValue::Fill { max, .. } => max.map(|m| m as f32), // Use max from Fill
+    measure(Box::new(move |input| {
+        let max_width: Option<f32> = match input.effective_constraint.width {
+            DimensionValue::Fixed(w) => Some(w as f32),
+            DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Use max from Wrap
+            DimensionValue::Fill { max, .. } => max.map(|m| m as f32), // Use max from Fill
+        };
+
+        let max_height: Option<f32> = match input.effective_constraint.height {
+            DimensionValue::Fixed(h) => Some(h as f32),
+            DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Use max from Wrap
+            DimensionValue::Fill { max, .. } => max.map(|m| m as f32), // Use max from Fill
+        };
+
+        let text_data = TextData::new(
+            text_args.text.clone(),
+            text_args.color,
+            text_args.size.to_pixels_f32(),
+            text_args.line_height.to_pixels_f32(),
+            TextConstraint {
+                max_width,
+                max_height,
+            },
+        );
+
+        let size = text_data.size;
+        let drawable = BasicDrawable::Text { data: text_data };
+
+        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
+            metadata.basic_drawable = Some(drawable);
+        } else {
+            // This branch might be less common if metadatas are pre-populated or entry().or_default() is used.
+            // However, keeping it for safety if a node_id somehow exists without prior metadata entry.
+            let default_meta = ComponentNodeMetaData {
+                basic_drawable: Some(drawable),
+                ..Default::default()
             };
+            input.metadatas.insert(input.current_node_id, default_meta);
+        }
 
-            let max_height: Option<f32> = match parent_constraint.height {
-                DimensionValue::Fixed(h) => Some(h as f32),
-                DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Use max from Wrap
-                DimensionValue::Fill { max, .. } => max.map(|m| m as f32), // Use max from Fill
-            };
-
-            let text_data = TextData::new(
-                text_args.text.clone(),
-                text_args.color,
-                text_args.size.to_pixels_f32(),
-                text_args.line_height.to_pixels_f32(),
-                TextConstraint {
-                    max_width,
-                    max_height,
-                },
-            );
-
-            let size = text_data.size;
-            let drawable = BasicDrawable::Text { data: text_data };
-
-            if let Some(mut metadata) = metadatas.get_mut(&node_id) {
-                metadata.basic_drawable = Some(drawable);
-            } else {
-                // This branch might be less common if metadatas are pre-populated or entry().or_default() is used.
-                // However, keeping it for safety if a node_id somehow exists without prior metadata entry.
-                let default_meta = ComponentNodeMetaData {
-                    basic_drawable: Some(drawable),
-                    ..Default::default()
-                };
-                metadatas.insert(node_id, default_meta);
-            }
-
-            Ok(ComputedData {
-                width: size[0],
-                height: size[1],
-            })
-        },
-    ));
+        Ok(ComputedData {
+            width: size[0],
+            height: size[1],
+        })
+    }));
 }

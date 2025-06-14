@@ -11,28 +11,28 @@ impl Px {
     pub const fn new(value: i32) -> Self {
         Px(value)
     }
-    
+
     /// 从 Dp 转换为 Px
     pub fn from_dp(dp: Dp) -> Self {
         Px(dp.to_pixels_f64() as i32)
     }
-    
+
     /// 转换为 Dp
     pub fn to_dp(self) -> Dp {
         let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
         Dp((self.0 as f64) / scale_factor)
     }
-    
+
     /// 获取绝对值（用于渲染时的坐标转换）
     pub fn abs(self) -> u32 {
         self.0.max(0) as u32
     }
-    
+
     /// 转换为 f32
     pub fn to_f32(self) -> f32 {
         self.0 as f32
     }
-    
+
     /// 从 f32 创建
     pub fn from_f32(value: f32) -> Self {
         Px(value as i32)
@@ -48,19 +48,13 @@ pub struct PxPosition {
 
 impl PxPosition {
     /// 创建零位置
-    pub const ZERO: Self = Self {
-        x: Px(0),
-        y: Px(0),
-    };
-    
+    pub const ZERO: Self = Self { x: Px(0), y: Px(0) };
+
     /// 创建新位置
     pub const fn new(x: Px, y: Px) -> Self {
-        Self {
-            x,
-            y,
-        }
+        Self { x, y }
     }
-    
+
     /// 偏移位置
     pub fn offset(self, dx: Px, dy: Px) -> Self {
         Self {
@@ -68,7 +62,7 @@ impl PxPosition {
             y: Px(self.y.0 + dy.0),
         }
     }
-    
+
     /// 计算到另一点的距离
     pub fn distance_to(self, other: Self) -> f32 {
         let dx = (self.x.0 - other.x.0) as f32;
@@ -79,7 +73,7 @@ impl PxPosition {
 
 impl std::ops::Add for Px {
     type Output = Self;
-    
+
     fn add(self, rhs: Self) -> Self::Output {
         Px(self.0 + rhs.0)
     }
@@ -95,7 +89,7 @@ impl Neg for Px {
 
 impl std::ops::Sub for Px {
     type Output = Self;
-    
+
     fn sub(self, rhs: Self) -> Self::Output {
         Px(self.0 - rhs.0)
     }
@@ -103,7 +97,7 @@ impl std::ops::Sub for Px {
 
 impl std::ops::Mul<i32> for Px {
     type Output = Self;
-    
+
     fn mul(self, rhs: i32) -> Self::Output {
         Px(self.0 * rhs)
     }
@@ -111,7 +105,7 @@ impl std::ops::Mul<i32> for Px {
 
 impl std::ops::Div<i32> for Px {
     type Output = Self;
-    
+
     fn div(self, rhs: i32) -> Self::Output {
         Px(self.0 / rhs)
     }
@@ -126,7 +120,7 @@ impl From<Dp> for Px {
 // 算术运算支持 - PxPosition
 impl std::ops::Add for PxPosition {
     type Output = Self;
-    
+
     fn add(self, rhs: Self) -> Self::Output {
         PxPosition {
             x: self.x + rhs.x,
@@ -137,7 +131,7 @@ impl std::ops::Add for PxPosition {
 
 impl std::ops::Sub for PxPosition {
     type Output = Self;
-    
+
     fn sub(self, rhs: Self) -> Self::Output {
         PxPosition {
             x: self.x - rhs.x,
@@ -200,7 +194,7 @@ mod tests {
     fn test_px_creation() {
         let px = Px::new(42);
         assert_eq!(px.0, 42);
-        
+
         let px_neg = Px::new(-10);
         assert_eq!(px_neg.0, -10);
     }
@@ -209,7 +203,7 @@ mod tests {
     fn test_px_arithmetic() {
         let a = Px(10);
         let b = Px(5);
-        
+
         assert_eq!(a + b, Px(15));
         assert_eq!(a - b, Px(5));
         assert_eq!(a * 2, Px(20));
@@ -228,7 +222,7 @@ mod tests {
         let pos = PxPosition::new(Px(10), Px(-5));
         assert_eq!(pos.x, Px(10));
         assert_eq!(pos.y, Px(-5));
-        
+
         let offset_pos = pos.offset(Px(2), Px(3));
         assert_eq!(offset_pos, PxPosition::new(Px(12), Px(-2)));
     }
@@ -237,10 +231,10 @@ mod tests {
     fn test_px_position_arithmetic() {
         let pos1 = PxPosition::new(Px(10), Px(20));
         let pos2 = PxPosition::new(Px(5), Px(15));
-        
+
         let sum = pos1 + pos2;
         assert_eq!(sum, PxPosition::new(Px(15), Px(35)));
-        
+
         let diff = pos1 - pos2;
         assert_eq!(diff, PxPosition::new(Px(5), Px(5)));
     }
@@ -251,7 +245,7 @@ mod tests {
         let px_pos: PxPosition = i32_pos.into();
         let back_to_i32: [i32; 2] = px_pos.into();
         assert_eq!(i32_pos, back_to_i32);
-        
+
         let u32_pos: [u32; 2] = [10, 5];
         let px_from_u32: PxPosition = u32_pos.into();
         let back_to_u32: [u32; 2] = px_from_u32.into();

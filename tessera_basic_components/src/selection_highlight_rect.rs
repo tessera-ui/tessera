@@ -12,28 +12,26 @@ pub fn selection_highlight_rect(
     height: u32,
     color: [f32; 4], // RGBA color with alpha for transparency
 ) {
-    measure(Box::new(
-        move |node_id, _tree, _parent_constraint, _children_node_ids, metadatas| {
-            let drawable = BasicDrawable::Rect {
-                color,
-                corner_radius: 0.0, // Sharp corners for text selection
-                shadow: None,       // No shadow for selection highlight
-            };
+    measure(Box::new(move |input| {
+        let drawable = BasicDrawable::Rect {
+            color,
+            corner_radius: 0.0, // Sharp corners for text selection
+            shadow: None,       // No shadow for selection highlight
+        };
 
-            if let Some(mut metadata) = metadatas.get_mut(&node_id) {
-                metadata.basic_drawable = Some(drawable);
-            } else {
-                metadatas.insert(
-                    node_id,
-                    ComponentNodeMetaData {
-                        basic_drawable: Some(drawable),
-                        ..Default::default()
-                    },
-                );
-            }
+        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
+            metadata.basic_drawable = Some(drawable);
+        } else {
+            input.metadatas.insert(
+                input.current_node_id,
+                ComponentNodeMetaData {
+                    basic_drawable: Some(drawable),
+                    ..Default::default()
+                },
+            );
+        }
 
-            // Return the specified size
-            Ok(ComputedData { width, height })
-        },
-    ));
+        // Return the specified size
+        Ok(ComputedData { width, height })
+    }));
 }

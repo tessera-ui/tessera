@@ -14,7 +14,7 @@ pub(super) fn cursor(height_px: u32, bink_timer: Instant) {
         return;
     }
 
-    measure(Box::new(move |node_id, _, _, _, metadatas| {
+    measure(Box::new(move |input| {
         // Cursor is a rectangle with a fixed width and variable height
         let drawable = BasicDrawable::Rect {
             color: [0.0, 0.0, 0.0, 1.0],
@@ -22,14 +22,14 @@ pub(super) fn cursor(height_px: u32, bink_timer: Instant) {
             shadow: None,
         };
         // Add the drawable to the metadata
-        if let Some(mut metadata) = metadatas.get_mut(&node_id) {
+        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
             metadata.basic_drawable = Some(drawable);
         } else {
             let default_meta = ComponentNodeMetaData {
                 basic_drawable: Some(drawable),
                 ..Default::default()
             };
-            metadatas.insert(node_id, default_meta);
+            input.metadatas.insert(input.current_node_id, default_meta);
         }
         // Return the computed data for the cursor
         Ok(ComputedData {

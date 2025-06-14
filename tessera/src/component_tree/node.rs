@@ -13,7 +13,10 @@ use super::{
     basic_drawable::BasicDrawable,
     constraint::{Constraint, DimensionValue},
 };
-use crate::{cursor::{CursorEvent, ScrollEventType}, px::PxPosition};
+use crate::{
+    cursor::{CursorEvent, ScrollEventType},
+    px::PxPosition,
+};
 
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component.
@@ -100,15 +103,22 @@ pub enum MeasurementError {
 
 /// A `MeasureFn` is a function that takes an input `Constraint` and its children nodes,
 /// finishes placementing inside, and returns its size (`ComputedData`) or an error.
-pub type MeasureFn = dyn Fn(
-        indextree::NodeId,
-        &ComponentNodeTree,
-        &Constraint,
-        &[indextree::NodeId],
-        &ComponentNodeMetaDatas,
-    ) -> Result<ComputedData, MeasurementError>
-    + Send
-    + Sync;
+pub type MeasureFn =
+    dyn Fn(&MeasureInput<'_>) -> Result<ComputedData, MeasurementError> + Send + Sync;
+
+/// Input for the measure function (`MeasureFn`).
+pub struct MeasureInput<'a> {
+    /// The `NodeId` of the current node being measured.
+    pub current_node_id: indextree::NodeId,
+    /// The component tree containing all nodes.
+    pub tree: &'a ComponentNodeTree,
+    /// The effective constraint for this node, merged with its parent's constraint.
+    pub effective_constraint: &'a Constraint,
+    /// The children nodes of the current node.
+    pub children_ids: &'a [indextree::NodeId],
+    /// Metadata for all component nodes, used to access cached data and constraints.
+    pub metadatas: &'a ComponentNodeMetaDatas,
+}
 
 /// A `StateHandlerFn` is a function that handles state changes for a component.
 pub type StateHandlerFn = dyn Fn(&StateHandlerInput) + Send + Sync;
@@ -166,24 +176,21 @@ pub fn measure_node(
     debug!("Measuring node {}", node_data.fn_name);
 
     let size = if let Some(measure_fn) = &node_data.measure_fn {
-        measure_fn(
-            node_id,
+        measure_fn(&MeasureInput {
+            current_node_id: node_id,
             tree,
-            parent_constraint, // Should this be effective_constraint? Original code used parent_constraint.
-            // Custom measure functions might want the original parent_constraint to decide how to merge.
-            // Or they might expect the already merged effective_constraint.
-            // For now, keeping parent_constraint as per original logic.
-            &children,
-            component_node_metadatas,
-        )
+            effective_constraint: &effective_constraint,
+            children_ids: &children,
+            metadatas: component_node_metadatas,
+        })
     } else {
-        DEFAULT_LAYOUT_DESC(
-            node_id,
+        DEFAULT_LAYOUT_DESC(&MeasureInput {
+            current_node_id: node_id,
             tree,
-            &effective_constraint, // Default layout uses the merged constraint.
-            &children,
-            component_node_metadatas,
-        )
+            effective_constraint: &effective_constraint,
+            children_ids: &children,
+            metadatas: component_node_metadatas,
+        })
     }?;
 
     debug!(
@@ -215,137 +222,140 @@ pub fn place_node(
 
 /// A default layout descriptor (`MeasureFn`) that places children at the top-left corner ([0,0])
 /// of the parent node with no offset. Children are measured concurrently using `measure_nodes`.
-pub const DEFAULT_LAYOUT_DESC: &MeasureFn =
-    &|current_node_id, tree, effective_constraint, children_ids, metadatas| {
-        if children_ids.is_empty() {
-            // If there are no children, the size depends on the effective_constraint
-            // For Fixed, it's the fixed size. For Wrap/Fill, it's typically 0 if no content.
-            // This part might need refinement based on how min constraints in Wrap/Fill should behave for empty nodes.
-            // For now, returning ZERO, assuming intrinsic size of an empty node is zero before min constraints are applied.
-            // The actual min size enforcement happens when the parent (or this node itself if it has intrinsic min)
-            // considers its own DimensionValue.
-            return Ok(ComputedData::min_from_constraint(effective_constraint));
-        }
+pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
+    if input.children_ids.is_empty() {
+        // If there are no children, the size depends on the effective_constraint
+        // For Fixed, it's the fixed size. For Wrap/Fill, it's typically 0 if no content.
+        // This part might need refinement based on how min constraints in Wrap/Fill should behave for empty nodes.
+        // For now, returning ZERO, assuming intrinsic size of an empty node is zero before min constraints are applied.
+        // The actual min size enforcement happens when the parent (or this node itself if it has intrinsic min)
+        // considers its own DimensionValue.
+        return Ok(ComputedData::min_from_constraint(
+            input.effective_constraint,
+        ));
+    }
 
-        let nodes_to_measure: Vec<(NodeId, Constraint)> = children_ids
-            .iter()
-            .map(|&child_id| (child_id, *effective_constraint)) // Children inherit parent's effective constraint
-            .collect();
+    let nodes_to_measure: Vec<(NodeId, Constraint)> = input
+        .children_ids
+        .iter()
+        .map(|&child_id| (child_id, *input.effective_constraint)) // Children inherit parent's effective constraint
+        .collect();
 
-        let children_results_map = measure_nodes(nodes_to_measure, tree, metadatas);
+    let children_results_map = measure_nodes(nodes_to_measure, input.tree, input.metadatas);
 
-        let mut aggregate_size = ComputedData::ZERO;
-        let mut first_error: Option<MeasurementError> = None;
-        let mut successful_children_data = Vec::new();
+    let mut aggregate_size = ComputedData::ZERO;
+    let mut first_error: Option<MeasurementError> = None;
+    let mut successful_children_data = Vec::new();
 
-        for &child_id in children_ids {
-            match children_results_map.get(&child_id) {
-                Some(Ok(child_size)) => {
-                    successful_children_data.push((child_id, *child_size));
+    for &child_id in input.children_ids {
+        match children_results_map.get(&child_id) {
+            Some(Ok(child_size)) => {
+                successful_children_data.push((child_id, *child_size));
+            }
+            Some(Err(e)) => {
+                debug!(
+                    "Child node {child_id:?} measurement failed for parent {:?}: {e:?}",
+                    input.current_node_id
+                );
+                if first_error.is_none() {
+                    first_error = Some(MeasurementError::ChildMeasurementFailed(child_id));
                 }
-                Some(Err(e)) => {
-                    debug!(
-                        "Child node {child_id:?} measurement failed for parent {current_node_id:?}: {e:?}"
-                    );
-                    if first_error.is_none() {
-                        first_error = Some(MeasurementError::ChildMeasurementFailed(child_id));
-                    }
-                }
-                None => {
-                    debug!(
-                        "Child node {child_id:?} was not found in measure_nodes results for parent {current_node_id:?}"
-                    );
-                    if first_error.is_none() {
-                        first_error = Some(MeasurementError::MeasureFnFailed(format!(
-                            "Result for child {child_id:?} missing"
-                        )));
-                    }
+            }
+            None => {
+                debug!(
+                    "Child node {child_id:?} was not found in measure_nodes results for parent {:?}",
+                    input.current_node_id
+                );
+                if first_error.is_none() {
+                    first_error = Some(MeasurementError::MeasureFnFailed(format!(
+                        "Result for child {child_id:?} missing"
+                    )));
                 }
             }
         }
+    }
 
-        if let Some(error) = first_error {
-            return Err(error);
-        }
-        if successful_children_data.is_empty() && !children_ids.is_empty() {
-            // This case should ideally be caught by first_error if all children failed.
-            // If it's reached, it implies some logic issue.
-            return Err(MeasurementError::MeasureFnFailed(
-                "All children failed to measure or results missing in DEFAULT_LAYOUT_DESC"
-                    .to_string(),
-            ));
-        }
+    if let Some(error) = first_error {
+        return Err(error);
+    }
+    if successful_children_data.is_empty() && !input.children_ids.is_empty() {
+        // This case should ideally be caught by first_error if all children failed.
+        // If it's reached, it implies some logic issue.
+        return Err(MeasurementError::MeasureFnFailed(
+            "All children failed to measure or results missing in DEFAULT_LAYOUT_DESC".to_string(),
+        ));
+    }
 
-        // For default layout (stacking), the aggregate size is the max of children's sizes.
-        for (child_id, child_size) in successful_children_data {
-            aggregate_size = aggregate_size.max(child_size);
-            place_node(child_id, PxPosition::ZERO, metadatas); // All children at [0,0] for simple stacking
-        }
+    // For default layout (stacking), the aggregate size is the max of children's sizes.
+    for (child_id, child_size) in successful_children_data {
+        aggregate_size = aggregate_size.max(child_size);
+        place_node(child_id, PxPosition::ZERO, input.metadatas); // All children at [0,0] for simple stacking
+    }
 
-        // The aggregate_size is based on children. Now apply current node's own constraints.
-        // If current node is Fixed, its size is fixed.
-        // If current node is Wrap, its size is aggregate_size (clamped by its own min/max).
-        // If current node is Fill, its size is aggregate_size (clamped by its own min/max, and parent's available space if parent was Fill).
-        // This final clamping/adjustment based on `effective_constraint` should ideally happen
-        // when `ComputedData` is returned from `measure_node` itself, or by the caller of `measure_node`.
-        // For DEFAULT_LAYOUT_DESC, it should return the size required by its children,
-        // and then `measure_node` will finalize it based on `effective_constraint`.
+    // The aggregate_size is based on children. Now apply current node's own constraints.
+    // If current node is Fixed, its size is fixed.
+    // If current node is Wrap, its size is aggregate_size (clamped by its own min/max).
+    // If current node is Fill, its size is aggregate_size (clamped by its own min/max, and parent's available space if parent was Fill).
+    // This final clamping/adjustment based on `effective_constraint` should ideally happen
+    // when `ComputedData` is returned from `measure_node` itself, or by the caller of `measure_node`.
+    // For DEFAULT_LAYOUT_DESC, it should return the size required by its children,
+    // and then `measure_node` will finalize it based on `effective_constraint`.
 
-        // Let's refine: DEFAULT_LAYOUT_DESC should calculate the "natural" size based on children.
-        // Then, `measure_node` (or its caller) would apply the `effective_constraint` to this natural size.
-        // However, `measure_node` currently directly returns the result of `DEFAULT_LAYOUT_DESC` or custom `measure_fn`.
-        // So, `DEFAULT_LAYOUT_DESC` itself needs to consider `effective_constraint` for its final size.
+    // Let's refine: DEFAULT_LAYOUT_DESC should calculate the "natural" size based on children.
+    // Then, `measure_node` (or its caller) would apply the `effective_constraint` to this natural size.
+    // However, `measure_node` currently directly returns the result of `DEFAULT_LAYOUT_DESC` or custom `measure_fn`.
+    // So, `DEFAULT_LAYOUT_DESC` itself needs to consider `effective_constraint` for its final size.
 
-        let mut final_width = aggregate_size.width;
-        let mut final_height = aggregate_size.height;
+    let mut final_width = aggregate_size.width;
+    let mut final_height = aggregate_size.height;
 
-        match effective_constraint.width {
-            DimensionValue::Fixed(w) => final_width = w,
-            DimensionValue::Wrap { min, max } => {
-                if let Some(min_w) = min {
-                    final_width = final_width.max(min_w);
-                }
-                if let Some(max_w) = max {
-                    final_width = final_width.min(max_w);
-                }
+    match input.effective_constraint.width {
+        DimensionValue::Fixed(w) => final_width = w,
+        DimensionValue::Wrap { min, max } => {
+            if let Some(min_w) = min {
+                final_width = final_width.max(min_w);
             }
-            DimensionValue::Fill { min, max } => {
-                // Fill behaves like wrap for default layout unless children expand
-                if let Some(min_w) = min {
-                    final_width = final_width.max(min_w);
-                }
-                if let Some(max_w) = max {
-                    final_width = final_width.min(max_w);
-                }
-                // If parent was Fill, this node would have gotten a Fill constraint too.
-                // The actual "filling" happens because children might be Fill.
-                // If children are not Fill, this node wraps them.
+            if let Some(max_w) = max {
+                final_width = final_width.min(max_w);
             }
         }
-        match effective_constraint.height {
-            DimensionValue::Fixed(h) => final_height = h,
-            DimensionValue::Wrap { min, max } => {
-                if let Some(min_h) = min {
-                    final_height = final_height.max(min_h);
-                }
-                if let Some(max_h) = max {
-                    final_height = final_height.min(max_h);
-                }
+        DimensionValue::Fill { min, max } => {
+            // Fill behaves like wrap for default layout unless children expand
+            if let Some(min_w) = min {
+                final_width = final_width.max(min_w);
             }
-            DimensionValue::Fill { min, max } => {
-                if let Some(min_h) = min {
-                    final_height = final_height.max(min_h);
-                }
-                if let Some(max_h) = max {
-                    final_height = final_height.min(max_h);
-                }
+            if let Some(max_w) = max {
+                final_width = final_width.min(max_w);
+            }
+            // If parent was Fill, this node would have gotten a Fill constraint too.
+            // The actual "filling" happens because children might be Fill.
+            // If children are not Fill, this node wraps them.
+        }
+    }
+    match input.effective_constraint.height {
+        DimensionValue::Fixed(h) => final_height = h,
+        DimensionValue::Wrap { min, max } => {
+            if let Some(min_h) = min {
+                final_height = final_height.max(min_h);
+            }
+            if let Some(max_h) = max {
+                final_height = final_height.min(max_h);
             }
         }
-        Ok(ComputedData {
-            width: final_width,
-            height: final_height,
-        })
-    };
+        DimensionValue::Fill { min, max } => {
+            if let Some(min_h) = min {
+                final_height = final_height.max(min_h);
+            }
+            if let Some(max_h) = max {
+                final_height = final_height.min(max_h);
+            }
+        }
+    }
+    Ok(ComputedData {
+        width: final_width,
+        height: final_height,
+    })
+};
 
 /// Concurrently measures multiple nodes using Rayon for parallelism.
 pub fn measure_nodes(

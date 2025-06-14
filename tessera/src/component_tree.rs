@@ -7,7 +7,10 @@ use std::{num::NonZero, time::Instant};
 use log::{debug, error};
 use rayon::prelude::*;
 
-use crate::{component_tree::node::StateHandlerInput, cursor::CursorEvent, px::PxPosition, renderer::DrawCommand};
+use crate::{
+    component_tree::node::StateHandlerInput, cursor::CursorEvent, px::PxPosition,
+    renderer::DrawCommand,
+};
 pub use basic_drawable::{BasicDrawable, ShadowProps};
 pub use constraint::{Constraint, DimensionValue};
 pub use node::{
@@ -234,7 +237,7 @@ fn compute_draw_commands_inner_parallel(
         };
         let self_pos = [
             (start_pos[0] as i32 + rel_pos.x.0) as u32,
-            (start_pos[1] as i32 + rel_pos.y.0) as u32
+            (start_pos[1] as i32 + rel_pos.y.0) as u32,
         ];
         entry.abs_position = Some(self_pos.into()); // Modifying through RefMut
 

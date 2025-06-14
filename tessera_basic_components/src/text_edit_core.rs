@@ -204,160 +204,167 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
     // Text rendering with constraints from parent container
     {
         let state_clone = state.clone();
-        measure(Box::new(
-            move |node_id, tree, parent_constraint, children_node_ids, metadatas| {
-                // Surface provides constraints that should be respected for text layout
-                let max_width_pixels: Option<f32> = match parent_constraint.width {
-                    DimensionValue::Fixed(w) => Some(w as f32),
-                    DimensionValue::Wrap { max, .. } => max.map(|m| m as f32),
-                    DimensionValue::Fill { max, .. } => max.map(|m| m as f32),
-                };
+        measure(Box::new(move |input| {
+            // Surface provides constraints that should be respected for text layout
+            let max_width_pixels: Option<f32> = match input.effective_constraint.width {
+                DimensionValue::Fixed(w) => Some(w as f32),
+                DimensionValue::Wrap { max, .. } => max.map(|m| m as f32),
+                DimensionValue::Fill { max, .. } => max.map(|m| m as f32),
+            };
 
-                // For proper scrolling behavior, we need to respect height constraints
-                // When max height is specified, content should be clipped and scrollable
-                let max_height_pixels: Option<f32> = match parent_constraint.height {
-                    DimensionValue::Fixed(h) => Some(h as f32), // Respect explicit fixed heights
-                    DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Respect max height for wrapping
-                    DimensionValue::Fill { max, .. } => max.map(|m| m as f32),
-                };
+            // For proper scrolling behavior, we need to respect height constraints
+            // When max height is specified, content should be clipped and scrollable
+            let max_height_pixels: Option<f32> = match input.effective_constraint.height {
+                DimensionValue::Fixed(h) => Some(h as f32), // Respect explicit fixed heights
+                DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Respect max height for wrapping
+                DimensionValue::Fill { max, .. } => max.map(|m| m as f32),
+            };
 
-                let text_data = state_clone.write().text_data(TextConstraint {
-                    max_width: max_width_pixels,
-                    max_height: max_height_pixels,
-                });
+            let text_data = state_clone.write().text_data(TextConstraint {
+                max_width: max_width_pixels,
+                max_height: max_height_pixels,
+            });
 
-                // Calculate selection rectangles
-                let mut selection_rects = Vec::new();
-                let selection_bounds = state_clone.read().editor.selection_bounds();
-                if let Some((start, end)) = selection_bounds {
-                    state_clone.read().editor.with_buffer(|buffer| {
-                        for run in buffer.layout_runs() {
-                            let line_i = run.line_i;
-                            let _line_y = run.line_y;
-                            let line_top = run.line_top;
-                            let line_height = run.line_height;
+            // Calculate selection rectangles
+            let mut selection_rects = Vec::new();
+            let selection_bounds = state_clone.read().editor.selection_bounds();
+            if let Some((start, end)) = selection_bounds {
+                state_clone.read().editor.with_buffer(|buffer| {
+                    for run in buffer.layout_runs() {
+                        let line_i = run.line_i;
+                        let _line_y = run.line_y;
+                        let line_top = run.line_top;
+                        let line_height = run.line_height;
 
-                            // Highlight selection
-                            if line_i >= start.line && line_i <= end.line {
-                                let mut range_opt = None;
-                                for glyph in run.glyphs.iter() {
-                                    // Guess x offset based on characters
-                                    let cluster = &run.text[glyph.start..glyph.end];
-                                    let total = cluster.grapheme_indices(true).count();
-                                    let mut c_x = glyph.x;
-                                    let c_w = glyph.w / total as f32;
-                                    for (i, c) in cluster.grapheme_indices(true) {
-                                        let c_start = glyph.start + i;
-                                        let c_end = glyph.start + i + c.len();
-                                        if (start.line != line_i || c_end > start.index)
-                                            && (end.line != line_i || c_start < end.index)
-                                        {
-                                            range_opt = match range_opt.take() {
-                                                Some((min, max)) => Some((
-                                                    std::cmp::min(min, c_x as i32),
-                                                    std::cmp::max(max, (c_x + c_w) as i32),
-                                                )),
-                                                None => Some((c_x as i32, (c_x + c_w) as i32)),
-                                            };
-                                        } else if let Some((min, max)) = range_opt.take() {
-                                            selection_rects.push(RectDef {
-                                                x: min,
-                                                y: line_top as i32,
-                                                width: std::cmp::max(0, max - min) as u32,
-                                                height: line_height as u32,
-                                            });
-                                        }
-                                        c_x += c_w;
+                        // Highlight selection
+                        if line_i >= start.line && line_i <= end.line {
+                            let mut range_opt = None;
+                            for glyph in run.glyphs.iter() {
+                                // Guess x offset based on characters
+                                let cluster = &run.text[glyph.start..glyph.end];
+                                let total = cluster.grapheme_indices(true).count();
+                                let mut c_x = glyph.x;
+                                let c_w = glyph.w / total as f32;
+                                for (i, c) in cluster.grapheme_indices(true) {
+                                    let c_start = glyph.start + i;
+                                    let c_end = glyph.start + i + c.len();
+                                    if (start.line != line_i || c_end > start.index)
+                                        && (end.line != line_i || c_start < end.index)
+                                    {
+                                        range_opt = match range_opt.take() {
+                                            Some((min, max)) => Some((
+                                                std::cmp::min(min, c_x as i32),
+                                                std::cmp::max(max, (c_x + c_w) as i32),
+                                            )),
+                                            None => Some((c_x as i32, (c_x + c_w) as i32)),
+                                        };
+                                    } else if let Some((min, max)) = range_opt.take() {
+                                        selection_rects.push(RectDef {
+                                            x: min,
+                                            y: line_top as i32,
+                                            width: std::cmp::max(0, max - min) as u32,
+                                            height: line_height as u32,
+                                        });
                                     }
-                                }
-
-                                if run.glyphs.is_empty() && end.line > line_i {
-                                    // Highlight all of internal empty lines
-                                    range_opt = Some((0, buffer.size().0.unwrap_or(0.0) as i32));
-                                }
-
-                                if let Some((mut min, mut max)) = range_opt.take() {
-                                    if end.line > line_i {
-                                        // Draw to end of line
-                                        if run.rtl {
-                                            min = 0;
-                                        } else {
-                                            max = buffer.size().0.unwrap_or(0.0) as i32;
-                                        }
-                                    }
-                                    selection_rects.push(RectDef {
-                                        x: min,
-                                        y: line_top as i32,
-                                        width: std::cmp::max(0, max - min) as u32,
-                                        height: line_height as u32,
-                                    });
+                                    c_x += c_w;
                                 }
                             }
+
+                            if run.glyphs.is_empty() && end.line > line_i {
+                                // Highlight all of internal empty lines
+                                range_opt = Some((0, buffer.size().0.unwrap_or(0.0) as i32));
+                            }
+
+                            if let Some((mut min, mut max)) = range_opt.take() {
+                                if end.line > line_i {
+                                    // Draw to end of line
+                                    if run.rtl {
+                                        min = 0;
+                                    } else {
+                                        max = buffer.size().0.unwrap_or(0.0) as i32;
+                                    }
+                                }
+                                selection_rects.push(RectDef {
+                                    x: min,
+                                    y: line_top as i32,
+                                    width: std::cmp::max(0, max - min) as u32,
+                                    height: line_height as u32,
+                                });
+                            }
                         }
-                    });
-                }
-
-                // Record length before moving
-                let selection_rects_len = selection_rects.len();
-
-                // Handle selection rectangle positioning
-                for (i, rect_def) in selection_rects.iter().enumerate() {
-                    if let Some(rect_node_id) = children_node_ids.get(i).copied() {
-                        let _ = measure_node(rect_node_id, parent_constraint, tree, metadatas);
-                        place_node(
-                            rect_node_id,
-                            PxPosition::new(Px(rect_def.x), Px(rect_def.y)),
-                            metadatas,
-                        );
                     }
-                }
+                });
+            }
 
-                // Store calculated selection rectangles
-                state_clone.write().current_selection_rects = selection_rects;
+            // Record length before moving
+            let selection_rects_len = selection_rects.len();
 
-                // Handle cursor positioning (cursor comes after selection rects)
-                if let Some(cursor_pos) = state_clone
-                    .read()
-                    .editor
-                    .cursor_position()
-                    .map(|(x, y)| [x as u32, y as u32])
-                {
-                    let cursor_node_index = selection_rects_len;
-                    if let Some(cursor_node_id) = children_node_ids.get(cursor_node_index).copied()
-                    {
-                        let _ = measure_node(cursor_node_id, parent_constraint, tree, metadatas);
-                        place_node(cursor_node_id, cursor_pos.into(), metadatas);
-                    }
-                }
-
-                let drawable = BasicDrawable::Text {
-                    data: text_data.clone(),
-                };
-                if let Some(mut metadata) = metadatas.get_mut(&node_id) {
-                    metadata.basic_drawable = Some(drawable);
-                } else {
-                    metadatas.insert(
-                        node_id,
-                        ComponentNodeMetaData {
-                            basic_drawable: Some(drawable),
-                            ..Default::default()
-                        },
+            // Handle selection rectangle positioning
+            for (i, rect_def) in selection_rects.iter().enumerate() {
+                if let Some(rect_node_id) = input.children_ids.get(i).copied() {
+                    let _ = measure_node(
+                        rect_node_id,
+                        input.effective_constraint,
+                        input.tree,
+                        input.metadatas,
+                    );
+                    place_node(
+                        rect_node_id,
+                        PxPosition::new(Px(rect_def.x), Px(rect_def.y)),
+                        input.metadatas,
                     );
                 }
+            }
 
-                // Return constrained size - respect maximum height to prevent overflow
-                let constrained_height = if let Some(max_h) = max_height_pixels {
-                    text_data.size[1].min(max_h as u32)
-                } else {
-                    text_data.size[1]
-                };
+            // Store calculated selection rectangles
+            state_clone.write().current_selection_rects = selection_rects;
 
-                Ok(ComputedData {
-                    width: text_data.size[0],
-                    height: constrained_height,
-                })
-            },
-        ));
+            // Handle cursor positioning (cursor comes after selection rects)
+            if let Some(cursor_pos) = state_clone
+                .read()
+                .editor
+                .cursor_position()
+                .map(|(x, y)| [x as u32, y as u32])
+            {
+                let cursor_node_index = selection_rects_len;
+                if let Some(cursor_node_id) = input.children_ids.get(cursor_node_index).copied() {
+                    let _ = measure_node(
+                        cursor_node_id,
+                        input.effective_constraint,
+                        input.tree,
+                        input.metadatas,
+                    );
+                    place_node(cursor_node_id, cursor_pos.into(), input.metadatas);
+                }
+            }
+
+            let drawable = BasicDrawable::Text {
+                data: text_data.clone(),
+            };
+            if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
+                metadata.basic_drawable = Some(drawable);
+            } else {
+                input.metadatas.insert(
+                    input.current_node_id,
+                    ComponentNodeMetaData {
+                        basic_drawable: Some(drawable),
+                        ..Default::default()
+                    },
+                );
+            }
+
+            // Return constrained size - respect maximum height to prevent overflow
+            let constrained_height = if let Some(max_h) = max_height_pixels {
+                text_data.size[1].min(max_h as u32)
+            } else {
+                text_data.size[1]
+            };
+
+            Ok(ComputedData {
+                width: text_data.size[0],
+                height: constrained_height,
+            })
+        }));
     }
 
     // Selection highlighting

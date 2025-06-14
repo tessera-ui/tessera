@@ -12,7 +12,7 @@ pub mod tokio_runtime;
 
 pub use crate::dp::Dp;
 pub use crate::px::{Px, PxPosition};
-pub use crate::scroll_state::{ScrollState, ScrollBounds, ScrollDirection, ContentRect};
+pub use crate::scroll_state::{ContentRect, ScrollBounds, ScrollDirection, ScrollState};
 pub use component_tree::{
     BasicDrawable, ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
     ComponentTree, ComputedData, Constraint, DimensionValue, MeasureFn, MeasurementError,
