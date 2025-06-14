@@ -1,3 +1,5 @@
+use std::ops::Neg;
+
 use crate::dp::{Dp, SCALE_FACTOR};
 
 /// 物理像素坐标类型，支持负值用于滚动
@@ -75,12 +77,19 @@ impl PxPosition {
     }
 }
 
-// 算术运算支持 - Px
 impl std::ops::Add for Px {
     type Output = Self;
     
     fn add(self, rhs: Self) -> Self::Output {
         Px(self.0 + rhs.0)
+    }
+}
+
+impl Neg for Px {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Px::new(-self.0)
     }
 }
 
