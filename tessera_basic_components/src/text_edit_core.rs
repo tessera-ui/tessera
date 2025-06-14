@@ -8,8 +8,9 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::selection_highlight_rect::selection_highlight_rect;
 use tessera::{
-    BasicDrawable, ComponentNodeMetaData, ComputedData, DimensionValue, Dp, TextConstraint,
-    TextData, focus_state::Focus, measure_node, place_node, winit, write_font_system,
+    BasicDrawable, ComponentNodeMetaData, ComputedData, DimensionValue, Dp, Px, PxPosition,
+    TextConstraint, TextData, focus_state::Focus, measure_node, place_node, winit,
+    write_font_system,
 };
 use tessera_macros::tessera;
 
@@ -305,7 +306,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                         let _ = measure_node(rect_node_id, parent_constraint, tree, metadatas);
                         place_node(
                             rect_node_id,
-                            [rect_def.x as u32, rect_def.y as u32],
+                            PxPosition::new(Px(rect_def.x), Px(rect_def.y)),
                             metadatas,
                         );
                     }
@@ -325,7 +326,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                     if let Some(cursor_node_id) = children_node_ids.get(cursor_node_index).copied()
                     {
                         let _ = measure_node(cursor_node_id, parent_constraint, tree, metadatas);
-                        place_node(cursor_node_id, cursor_pos, metadatas);
+                        place_node(cursor_node_id, cursor_pos.into(), metadatas);
                     }
                 }
 

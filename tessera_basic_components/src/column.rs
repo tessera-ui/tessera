@@ -1,5 +1,6 @@
 use tessera::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, measure_nodes, place_node,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, PxPosition, measure_nodes,
+    place_node,
 };
 use tessera_macros::tessera;
 
@@ -519,7 +520,11 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
             for i in 0..N {
                 let child_node_id = children_node_ids[i];
                 if let Some(size) = measured_children_sizes[i] {
-                    place_node(child_node_id, [0, current_y_offset], metadatas);
+                    place_node(
+                        child_node_id,
+                        PxPosition::new(Px(0), Px(current_y_offset as i32)),
+                        metadatas,
+                    );
                     current_y_offset += size.height;
                 } else {
                     // This case should ideally not be hit if all measurements are successful or errors handled.
@@ -529,7 +534,11 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                         // Only set if not already set (e.g. by an error path)
                         meta_entry.computed_data = Some(ComputedData::ZERO);
                     }
-                    place_node(child_node_id, [0, current_y_offset], metadatas);
+                    place_node(
+                        child_node_id,
+                        PxPosition::new(Px(0), Px(current_y_offset as i32)),
+                        metadatas,
+                    );
                 }
             }
 

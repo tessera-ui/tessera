@@ -3,12 +3,16 @@ mod cursor;
 mod dp;
 pub mod focus_state;
 mod keyboard_state;
+mod px;
 mod renderer;
 mod runtime;
+pub mod scroll_state;
 mod thread_utils;
 pub mod tokio_runtime;
 
 pub use crate::dp::Dp;
+pub use crate::px::{Px, PxPosition};
+pub use crate::scroll_state::{ScrollState, ScrollBounds, ScrollDirection, ContentRect};
 pub use component_tree::{
     BasicDrawable, ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
     ComponentTree, ComputedData, Constraint, DimensionValue, MeasureFn, MeasurementError,

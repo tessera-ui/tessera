@@ -13,7 +13,7 @@ use super::{
     basic_drawable::BasicDrawable,
     constraint::{Constraint, DimensionValue},
 };
-use crate::cursor::CursorEvent;
+use crate::{cursor::{CursorEvent, ScrollEventType}, px::PxPosition};
 
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component.
@@ -38,11 +38,11 @@ pub struct ComponentNodeMetaData {
     pub cached_computed_data: HashMap<Constraint, ComputedData>,
     /// The node's start position, relative to its parent.
     /// None if the node is not placed yet.
-    pub rel_position: Option<[u32; 2]>,
+    pub rel_position: Option<PxPosition>,
     /// The node's start position, relative to the root window.
     /// This will be computed during drawing command's generation.
     /// None if the node is not drawn yet.
-    pub abs_position: Option<[u32; 2]>,
+    pub abs_position: Option<PxPosition>,
     /// Optional basic drawable associated with this node.
     pub basic_drawable: Option<BasicDrawable>,
     /// The constraint that this node has intrinsically (e.g., from its arguments).
@@ -125,6 +125,8 @@ pub struct StateHandlerInput {
     pub cursor_position: Option<[i32; 2]>,
     /// Cursor events from the event loop, if any.
     pub cursor_events: Vec<CursorEvent>,
+    /// Scroll events from the event loop, if any.
+    pub scroll_events: Vec<ScrollEventType>,
     /// Keyboard events from the event loop, if any.
     pub keyboard_events: Vec<winit::event::KeyEvent>,
 }
@@ -202,7 +204,7 @@ pub fn measure_node(
 /// Places a node at the specified relative position within its parent.
 pub fn place_node(
     node: indextree::NodeId,
-    rel_position: [u32; 2],
+    rel_position: PxPosition,
     component_node_metadatas: &ComponentNodeMetaDatas,
 ) {
     component_node_metadatas
@@ -277,7 +279,7 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn =
         // For default layout (stacking), the aggregate size is the max of children's sizes.
         for (child_id, child_size) in successful_children_data {
             aggregate_size = aggregate_size.max(child_size);
-            place_node(child_id, [0, 0], metadatas); // All children at [0,0] for simple stacking
+            place_node(child_id, PxPosition::ZERO, metadatas); // All children at [0,0] for simple stacking
         }
 
         // The aggregate_size is based on children. Now apply current node's own constraints.

@@ -1,7 +1,7 @@
 use derive_builder::Builder;
 use tessera::{
-    BasicDrawable, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, ShadowProps,
-    measure_nodes, place_node,
+    BasicDrawable, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, PxPosition,
+    ShadowProps, measure_nodes, place_node,
 };
 use tessera_macros::tessera;
 
@@ -170,10 +170,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
 
                 place_node(
                     child_node_id,
-                    [
-                        measure_args.padding.to_pixels_u32(),
-                        measure_args.padding.to_pixels_u32(),
-                    ],
+                    PxPosition::new(measure_args.padding.into(), measure_args.padding.into()),
                     metadatas,
                 );
             }

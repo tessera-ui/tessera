@@ -1,6 +1,7 @@
 use tessera::Dp; // Added Dp import
 use tessera::{
-    ComputedData, Constraint, DimensionValue, MeasurementError, measure_nodes, place_node,
+    ComputedData, Constraint, DimensionValue, MeasurementError, Px, PxPosition, measure_nodes,
+    place_node,
 };
 use tessera_macros::tessera;
 
@@ -495,14 +496,22 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
             for i in 0..N {
                 let child_node_id = children_node_ids[i];
                 if let Some(size) = measured_children_sizes[i] {
-                    place_node(child_node_id, [current_x_offset, 0], metadatas);
+                    place_node(
+                        child_node_id,
+                        PxPosition::new(Px::new(current_x_offset as i32), Px::new(0)),
+                        metadatas,
+                    );
                     current_x_offset += size.width;
                 } else {
                     let mut meta_entry = metadatas.entry(child_node_id).or_default();
                     if meta_entry.computed_data.is_none() {
                         meta_entry.computed_data = Some(ComputedData::ZERO);
                     }
-                    place_node(child_node_id, [current_x_offset, 0], metadatas);
+                    place_node(
+                        child_node_id,
+                        PxPosition::new(Px::new(current_x_offset as i32), Px::new(0)),
+                        metadatas,
+                    );
                 }
             }
 

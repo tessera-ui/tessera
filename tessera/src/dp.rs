@@ -2,6 +2,8 @@ use std::sync::OnceLock;
 
 use parking_lot::RwLock;
 
+use crate::Px;
+
 pub static SCALE_FACTOR: OnceLock<RwLock<f64>> = OnceLock::new();
 
 /// Density-independent pixels (dp) for UI scaling.
@@ -54,5 +56,11 @@ impl Dp {
 impl From<f64> for Dp {
     fn from(value: f64) -> Self {
         Dp::new(value)
+    }
+}
+
+impl From<Px> for Dp {
+    fn from(px: Px) -> Self {
+        Dp::from_pixels_f64(px.to_dp().0)
     }
 }

@@ -7,7 +7,7 @@ use std::{num::NonZero, time::Instant};
 use log::{debug, error};
 use rayon::prelude::*;
 
-use crate::{component_tree::node::StateHandlerInput, cursor::CursorEvent, renderer::DrawCommand};
+use crate::{component_tree::node::StateHandlerInput, cursor::CursorEvent, px::PxPosition, renderer::DrawCommand};
 pub use basic_drawable::{BasicDrawable, ShadowProps};
 pub use constraint::{Constraint, DimensionValue};
 pub use node::{
@@ -163,9 +163,9 @@ impl ComponentTree {
                     .metadatas
                     .get(&node_id_loop)
                     .and_then(|m| m.abs_position)
-                    .unwrap_or([0, 0]);
+                    .unwrap_or(PxPosition::ZERO);
                 // Calculate the relative position
-                [pos[0] - abs_pos[0] as i32, pos[1] - abs_pos[1] as i32]
+                [pos[0] - abs_pos.x.0, pos[1] - abs_pos.y.0]
             });
             // Get the computed_data for the current node
             let computed_data_option = self
@@ -180,6 +180,7 @@ impl ComponentTree {
                     computed_data: node_computed_data,
                     cursor_position: current_cursor_position,
                     cursor_events: current_cursor_events,
+                    scroll_events: Vec::new(), // TODO: Pass actual scroll events
                     keyboard_events: keyboard_events.clone(),
                 };
                 state_handler(&input);
@@ -224,15 +225,18 @@ fn compute_draw_commands_inner_parallel(
             None => {
                 if is_root {
                     // If it's the root node and rel_position is None, we assume it starts at [0, 0]
-                    [0, 0]
+                    PxPosition::ZERO
                 } else {
                     // If not root and rel_position is None, we skip this node
                     return local_commands;
                 }
             }
         };
-        let self_pos = [start_pos[0] + rel_pos[0], start_pos[1] + rel_pos[1]];
-        entry.abs_position = Some(self_pos); // Modifying through RefMut
+        let self_pos = [
+            (start_pos[0] as i32 + rel_pos.x.0) as u32,
+            (start_pos[1] as i32 + rel_pos.y.0) as u32
+        ];
+        entry.abs_position = Some(self_pos.into()); // Modifying through RefMut
 
         if let Some(drawable) = entry.basic_drawable.take() {
             // Modifying through RefMut
@@ -251,6 +255,7 @@ fn compute_draw_commands_inner_parallel(
                 metadatas
                     .get(&node_id)
                     .and_then(|m| m.abs_position)
+                    .map(|pos| pos.into())
                     .unwrap_or(start_pos), // Get self_pos again for children
                 false,
                 child,
