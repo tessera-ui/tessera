@@ -13,11 +13,6 @@ customModes:
       - mcp
     customInstructions: >-
       **Mandatory Pre-computation Step:**
-      Before starting any coding task, you **must** first read and fully understand the project documentation located in the `docs/` directory. This includes:
-      - `docs/introduction.md`
-      - `docs/architecture.md`
-      - `docs/core_concepts.md`
-      - `docs/basic_components.md`
-      - `docs/development_role.md`
+      Before starting any coding task, you **must** first read and fully understand the project documentation located in the `docs/` directory.
 
       If you encounter any discrepancies between the documentation and the code, or if your work requires changes to the documented architecture, you **must** update the documentation accordingly. Maintaining documentation-code consistency is a primary directive.
