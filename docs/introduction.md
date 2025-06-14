@@ -1,0 +1,3 @@
+# Introduction to Tessera
+
+According to the `README.md` file, `tessera` is a functional UI framework for the Rust language. Its core goal is to provide a set of tools and paradigms that enable developers to build user interfaces in a declarative and functional manner. The project is currently in the early stages of development (WIP) and aims to address the complexity of creating graphical user interfaces (GUIs) in Rust.
