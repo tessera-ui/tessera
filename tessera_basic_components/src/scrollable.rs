@@ -9,6 +9,8 @@ use tessera::{
 };
 use tessera_macros::tessera;
 
+use crate::pos_misc::is_position_in_component;
+
 #[derive(Debug, Builder)]
 pub struct ScrollableArgs {
     /// The desired width behavior of the scrollable area.
@@ -215,22 +217,30 @@ pub fn scrollable(
         // Update scroll position based on time (always call this each frame)
         state.write().update_scroll_position(args.scroll_smoothing);
 
-        // Handle click events to request focus
-        let click_events: Vec<_> = input
-            .cursor_events
-            .iter()
-            .filter(|event| matches!(event.content, CursorEventContent::Pressed(_)))
-            .collect();
+        let size = input.computed_data;
+        let cursor_pos_option = input.cursor_position;
+        let is_cursor_in_component = cursor_pos_option
+            .map(|pos| is_position_in_component(size, pos))
+            .unwrap_or(false);
 
-        if !click_events.is_empty() {
-            // Request focus if not already focused
-            if !state.read().focus_handler().is_focused() {
-                state.write().focus_handler_mut().request_focus();
+        // Handle click events to request focus (only when cursor is in component)
+        if is_cursor_in_component {
+            let click_events: Vec<_> = input
+                .cursor_events
+                .iter()
+                .filter(|event| matches!(event.content, CursorEventContent::Pressed(_)))
+                .collect();
+
+            if !click_events.is_empty() {
+                // Request focus if not already focused
+                if !state.read().focus_handler().is_focused() {
+                    state.write().focus_handler_mut().request_focus();
+                }
             }
         }
 
-        // Handle scroll events (only when focused)
-        if state.read().focus_handler().is_focused() {
+        // Handle scroll events (only when cursor is in component and focused)
+        if is_cursor_in_component && state.read().focus_handler().is_focused() {
             for event in input
                 .cursor_events
                 .iter()
