@@ -237,32 +237,35 @@ pub fn scrollable(
                     state.write().focus_handler_mut().request_focus();
                 }
             }
-        }
 
-        // Handle scroll events (only when cursor is in component and focused)
-        if is_cursor_in_component && state.read().focus_handler().is_focused() {
-            for event in input
-                .cursor_events
-                .iter()
-                .filter_map(|event| match &event.content {
-                    CursorEventContent::Scroll(event) => Some(event),
-                    _ => None,
-                })
-            {
-                let mut state_guard = state.write();
+            // Handle scroll events (only when focused)
+            if state.read().focus_handler().is_focused() {
+                for event in input
+                    .cursor_events
+                    .iter()
+                    .filter_map(|event| match &event.content {
+                        CursorEventContent::Scroll(event) => Some(event),
+                        _ => None,
+                    })
+                {
+                    let mut state_guard = state.write();
 
-                // Apply scroll speed multiplier
-                let scroll_delta_x = event.delta_x * args.scroll_speed;
-                let scroll_delta_y = event.delta_y * args.scroll_speed;
+                    // Apply scroll speed multiplier
+                    let scroll_delta_x = event.delta_x * args.scroll_speed;
+                    let scroll_delta_y = event.delta_y * args.scroll_speed;
 
-                // Calculate new target position
-                let current_target = state_guard.target_position;
-                let new_target = current_target
-                    .offset(Px::from_f32(scroll_delta_x), Px::from_f32(scroll_delta_y));
+                    // Calculate new target position
+                    let current_target = state_guard.target_position;
+                    let new_target = current_target
+                        .offset(Px::from_f32(scroll_delta_x), Px::from_f32(scroll_delta_y));
 
-                // Set new target position
-                state_guard.set_target_position(new_target);
+                    // Set new target position
+                    state_guard.set_target_position(new_target);
+                }
             }
+
+            // Block all cursor events to prevent propagation when cursor is in scrollable
+            input.cursor_events.clear();
         }
 
         // Apply bounds constraints to target position
