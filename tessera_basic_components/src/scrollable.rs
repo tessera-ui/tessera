@@ -5,7 +5,7 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera::{
     ComputedData, Constraint, CursorEventContent, DimensionValue, Px, PxPosition, measure_node,
-    place_node,
+    place_node, focus_state::Focus,
 };
 use tessera_macros::tessera;
 
@@ -47,6 +47,8 @@ pub struct ScrollableState {
     child_size: ComputedData,
     /// Last frame time for delta time calculation
     last_frame_time: Option<Instant>,
+    /// Focus handler for the scrollable component
+    focus_handler: Focus,
 }
 
 impl ScrollableState {
@@ -57,6 +59,7 @@ impl ScrollableState {
             target_position: PxPosition::ZERO,
             child_size: ComputedData::ZERO,
             last_frame_time: None,
+            focus_handler: Focus::new(),
         }
     }
 
@@ -108,6 +111,16 @@ impl ScrollableState {
     /// Sets a new target position for scrolling
     fn set_target_position(&mut self, target: PxPosition) {
         self.target_position = target;
+    }
+
+    /// Gets a reference to the focus handler
+    pub fn focus_handler(&self) -> &Focus {
+        &self.focus_handler
+    }
+
+    /// Gets a mutable reference to the focus handler
+    pub fn focus_handler_mut(&mut self) -> &mut Focus {
+        &mut self.focus_handler
     }
 }
 
@@ -202,28 +215,44 @@ pub fn scrollable(
         // Update scroll position based on time (always call this each frame)
         state.write().update_scroll_position(args.scroll_smoothing);
 
-        // Handle scroll events
-        for event in input
+        // Handle click events to request focus
+        let click_events: Vec<_> = input
             .cursor_events
             .iter()
-            .filter_map(|event| match &event.content {
-                CursorEventContent::Scroll(event) => Some(event),
-                _ => None,
-            })
-        {
-            let mut state_guard = state.write();
+            .filter(|event| matches!(event.content, CursorEventContent::Pressed(_)))
+            .collect();
 
-            // Apply scroll speed multiplier
-            let scroll_delta_x = event.delta_x * args.scroll_speed;
-            let scroll_delta_y = event.delta_y * args.scroll_speed;
+        if !click_events.is_empty() {
+            // Request focus if not already focused
+            if !state.read().focus_handler().is_focused() {
+                state.write().focus_handler_mut().request_focus();
+            }
+        }
 
-            // Calculate new target position
-            let current_target = state_guard.target_position;
-            let new_target =
-                current_target.offset(Px::from_f32(scroll_delta_x), Px::from_f32(scroll_delta_y));
+        // Handle scroll events (only when focused)
+        if state.read().focus_handler().is_focused() {
+            for event in input
+                .cursor_events
+                .iter()
+                .filter_map(|event| match &event.content {
+                    CursorEventContent::Scroll(event) => Some(event),
+                    _ => None,
+                })
+            {
+                let mut state_guard = state.write();
 
-            // Set new target position
-            state_guard.set_target_position(new_target);
+                // Apply scroll speed multiplier
+                let scroll_delta_x = event.delta_x * args.scroll_speed;
+                let scroll_delta_y = event.delta_y * args.scroll_speed;
+
+                // Calculate new target position
+                let current_target = state_guard.target_position;
+                let new_target =
+                    current_target.offset(Px::from_f32(scroll_delta_x), Px::from_f32(scroll_delta_y));
+
+                // Set new target position
+                state_guard.set_target_position(new_target);
+            }
         }
 
         // Apply bounds constraints to target position
