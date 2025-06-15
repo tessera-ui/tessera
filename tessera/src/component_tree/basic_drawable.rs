@@ -1,4 +1,8 @@
-use crate::renderer::{DrawCommand, ShapeUniforms, ShapeVertex, TextData};
+use crate::{
+    Px,
+    px::PxPosition,
+    renderer::{DrawCommand, ShapeUniforms, ShapeVertex, TextData},
+};
 
 /// These are very basic drawables that trans into DrawerCommand
 /// , basically just copys of DrawerCommand without position
@@ -43,7 +47,7 @@ pub struct ShadowProps {
 
 impl BasicDrawable {
     /// Convert BasicDrawable to a DrawCommand
-    pub fn into_draw_command(self, size: [u32; 2], position: [u32; 2]) -> DrawCommand {
+    pub fn into_draw_command(self, size: [Px; 2], position: PxPosition) -> DrawCommand {
         match self {
             BasicDrawable::Rect {
                 color,
@@ -85,8 +89,8 @@ impl BasicDrawable {
 
     /// Helper function to create Shape DrawCommand for both Rect and OutlinedRect
     fn rect_to_draw_command(
-        size: [u32; 2],
-        position: [u32; 2],
+        size: [Px; 2],
+        position: PxPosition,
         primary_color_rgba: [f32; 4], // Changed from primary_color_rgb
         corner_radius: f32,
         shadow: Option<ShadowProps>,
@@ -105,29 +109,33 @@ impl BasicDrawable {
 
         // Vertex color is less important now as shader uses uniform primary_color
         let vertex_color_placeholder_rgb = [0.0, 0.0, 0.0]; // Kept as RGB for vertex data
+        let top_left = position.to_f32_arr3();
+        let top_right = [top_left[0] + width.to_f32(), top_left[1], top_left[2]];
+        let bottom_right = [
+            top_left[0] + width.to_f32(),
+            top_left[1] + height.to_f32(),
+            top_left[2],
+        ];
+        let bottom_left = [top_left[0], top_left[1] + height.to_f32(), top_left[2]];
 
         let vertices = vec![
             ShapeVertex {
-                position: [position[0] as f32, position[1] as f32, 0.0],
+                position: top_left,
                 color: vertex_color_placeholder_rgb,
                 local_pos: rect_local_pos[0],
             },
             ShapeVertex {
-                position: [(position[0] + width) as f32, position[1] as f32, 0.0],
+                position: top_right,
                 color: vertex_color_placeholder_rgb,
                 local_pos: rect_local_pos[1],
             },
             ShapeVertex {
-                position: [
-                    (position[0] + width) as f32,
-                    (position[1] + height) as f32,
-                    0.0,
-                ],
+                position: bottom_right,
                 color: vertex_color_placeholder_rgb,
                 local_pos: rect_local_pos[2],
             },
             ShapeVertex {
-                position: [position[0] as f32, (position[1] + height) as f32, 0.0],
+                position: bottom_left,
                 color: vertex_color_placeholder_rgb,
                 local_pos: rect_local_pos[3],
             },
@@ -144,7 +152,7 @@ impl BasicDrawable {
             };
 
         let uniforms = ShapeUniforms {
-            size_cr_border_width: [width as f32, height as f32, corner_radius, border_width],
+            size_cr_border_width: [width.to_f32(), height.to_f32(), corner_radius, border_width],
             primary_color: primary_color_rgba, // Directly use the RGBA color
             shadow_color: shadow_rgba_color,
             render_params: [

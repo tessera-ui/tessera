@@ -1,5 +1,7 @@
 use std::{collections::VecDeque, time::Instant};
 
+use crate::PxPosition;
+
 // We don't want to keep too many events in the queue
 // when ui is janked(in badly way!)
 const KEEP_EVENTS_COUNT: usize = 10;
@@ -15,7 +17,7 @@ pub struct CursorState {
     /// # For touch
     ///
     /// `None` means user is not touching the screen
-    position: Option<[i32; 2]>,
+    position: Option<PxPosition>,
     /// Press event deque
     events: VecDeque<CursorEvent>,
 }
@@ -32,7 +34,7 @@ impl CursorState {
     }
 
     /// Update the cursor position in state
-    pub fn update_position(&mut self, position: impl Into<Option<[i32; 2]>>) {
+    pub fn update_position(&mut self, position: impl Into<Option<PxPosition>>) {
         self.position = position.into();
     }
 
@@ -50,7 +52,7 @@ impl CursorState {
     }
 
     /// Get the current cursor position
-    pub fn position(&self) -> Option<[i32; 2]> {
+    pub fn position(&self) -> Option<PxPosition> {
         self.position
     }
 }
@@ -66,7 +68,7 @@ pub struct CursorEvent {
 
 /// Event representing a scroll action
 #[derive(Debug, Clone)]
-pub struct ScrollEventType {
+pub struct ScrollEventConent {
     /// Horizontal scroll delta
     pub delta_x: f32,
     /// Vertical scroll delta
@@ -81,7 +83,7 @@ pub enum CursorEventContent {
     /// The cursor is released
     Released(PressKeyEventType),
     /// The cursor is scrolled
-    Scroll(ScrollEventType),
+    Scroll(ScrollEventConent),
 }
 
 impl CursorEventContent {
@@ -109,7 +111,7 @@ impl CursorEventContent {
             winit::event::MouseScrollDelta::LineDelta(x, y) => (x, y),
             winit::event::MouseScrollDelta::PixelDelta(delta) => (delta.x as f32, delta.y as f32),
         };
-        Self::Scroll(ScrollEventType { delta_x, delta_y })
+        Self::Scroll(ScrollEventConent { delta_x, delta_y })
     }
 }
 

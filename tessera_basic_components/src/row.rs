@@ -44,7 +44,7 @@ impl RowItem {
 
     /// Helper to create a RowItem that is fixed width.
     pub fn fixed(child: Box<dyn FnOnce() + Send + Sync>, width: Dp) -> Self {
-        Self::new(child, DimensionValue::Fixed(width.to_pixels_u32()), None)
+        Self::new(child, DimensionValue::Fixed(width.into()), None)
     }
 
     /// Helper to create a RowItem that fills available space, optionally with a weight and max.
@@ -57,7 +57,7 @@ impl RowItem {
             child,
             DimensionValue::Fill {
                 min: None, // Add min field
-                max: max_width.as_ref().map(Dp::to_pixels_u32),
+                max: max_width.map(|dp| dp.into()),
             },
             weight,
         )
@@ -117,7 +117,7 @@ impl<F: FnOnce() + Send + Sync + 'static> AsRowItem for (F, DimensionValue, f32)
 pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
     let children_items: [RowItem; N] =
         children_items_input.map(|item_input| item_input.into_row_item());
-    let children_items_for_measure: Vec<_> = children_items
+    let children_items_for_measure: Vec<(_, _)> = children_items
         .iter()
         .map(|child| (child.weight, child.width_behavior))
         .collect(); // For the measure closure
@@ -131,8 +131,8 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
         let effective_row_constraint = row_intrinsic_constraint.merge(input.effective_constraint);
 
         let mut measured_children_sizes: Vec<Option<ComputedData>> = vec![None; N];
-        let mut total_width_for_fixed_wrap: u32 = 0;
-        let mut computed_max_row_height: u32 = 0;
+        let mut total_width_for_fixed_wrap: Px = Px(0);
+        let mut computed_max_row_height: Px = Px(0);
 
         // --- Stage 1: Measure Fixed and Wrap children ---
         let mut fixed_wrap_nodes_to_measure = Vec::new();
@@ -177,7 +177,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
         }
 
         if !fixed_wrap_nodes_to_measure.is_empty() {
-            let nodes_for_api: Vec<_> = fixed_wrap_nodes_to_measure
+            let nodes_for_api: Vec<(_, _)> = fixed_wrap_nodes_to_measure
                 .iter()
                 .map(|(id, constraint, _idx)| (*id, *constraint))
                 .collect();
@@ -198,20 +198,20 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
         }
         // --- End Stage 1 ---
 
-        let mut remaining_width_for_fill: u32 = 0;
+        let mut remaining_width_for_fill: Px = Px(0);
         let mut is_row_effectively_wrap_for_children = false;
 
         match effective_row_constraint.width {
             DimensionValue::Fixed(row_fixed_width) => {
                 remaining_width_for_fill =
-                    row_fixed_width.saturating_sub(total_width_for_fixed_wrap);
+                    (row_fixed_width - total_width_for_fixed_wrap).max(Px(0));
             }
             DimensionValue::Wrap {
                 max: row_wrap_max, ..
             } => {
                 // Consider row's own wrap max
                 if let Some(max_w) = row_wrap_max {
-                    remaining_width_for_fill = max_w.saturating_sub(total_width_for_fixed_wrap);
+                    remaining_width_for_fill = (max_w - total_width_for_fixed_wrap).max(Px(0));
                 } else {
                     is_row_effectively_wrap_for_children = true; // No max, so fill children wrap
                 }
@@ -220,8 +220,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                 max: Some(row_max_budget),
                 ..
             } => {
-                remaining_width_for_fill =
-                    row_max_budget.saturating_sub(total_width_for_fixed_wrap);
+                remaining_width_for_fill = (row_max_budget - total_width_for_fixed_wrap).max(Px(0));
             }
             DimensionValue::Fill { max: None, .. } => {
                 is_row_effectively_wrap_for_children = true;
@@ -249,7 +248,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
             }
         }
 
-        let mut actual_width_taken_by_fill_children: u32 = 0;
+        let mut actual_width_taken_by_fill_children: Px = Px(0);
 
         // --- Stage 2: Measure Fill children ---
         let mut fill_nodes_to_measure_group = Vec::new();
@@ -280,21 +279,21 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                     fill_nodes_to_measure_group.push((child_node_id, final_child_constraint, i));
                 }
             }
-        } else if remaining_width_for_fill > 0 {
+        } else if remaining_width_for_fill > Px(0) {
             let mut current_remaining_fill_budget = remaining_width_for_fill;
 
             if total_fill_weight > 0.0 {
                 for &index in &fill_children_indices_with_weight {
-                    if current_remaining_fill_budget == 0 {
+                    if current_remaining_fill_budget == Px(0) {
                         break;
                     }
                     let item_weight = children_items_for_measure[index].0.unwrap();
                     let item_behavior = children_items_for_measure[index].1;
                     let child_node_id = input.children_ids[index];
 
-                    let proportional_width = ((item_weight / total_fill_weight)
-                        * remaining_width_for_fill as f32)
-                        as u32;
+                    let proportional_width = Px(((item_weight / total_fill_weight)
+                        * remaining_width_for_fill.0 as f32)
+                        as i32);
 
                     if let DimensionValue::Fill {
                         min: child_min,
@@ -332,20 +331,21 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                         measured_children_sizes[index] = Some(size);
                         actual_width_taken_by_fill_children += size.width;
                         current_remaining_fill_budget =
-                            current_remaining_fill_budget.saturating_sub(size.width);
+                            (current_remaining_fill_budget - size.width).max(Px(0));
                         computed_max_row_height = computed_max_row_height.max(size.height);
                     }
                 }
             }
 
-            if !fill_children_indices_without_weight.is_empty() && current_remaining_fill_budget > 0
+            if !fill_children_indices_without_weight.is_empty()
+                && current_remaining_fill_budget > Px(0)
             {
                 let num_unweighted_fill = fill_children_indices_without_weight.len();
                 let width_per_unweighted_child =
-                    current_remaining_fill_budget / num_unweighted_fill as u32;
+                    current_remaining_fill_budget / (num_unweighted_fill as i32);
 
                 for &index in &fill_children_indices_without_weight {
-                    if current_remaining_fill_budget == 0 {
+                    if current_remaining_fill_budget == Px(0) {
                         break;
                     }
                     let item_behavior = children_items_for_measure[index].1;
@@ -387,7 +387,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                         measured_children_sizes[index] = Some(size);
                         actual_width_taken_by_fill_children += size.width;
                         current_remaining_fill_budget =
-                            current_remaining_fill_budget.saturating_sub(size.width);
+                            (current_remaining_fill_budget - size.width).max(Px(0));
                         computed_max_row_height = computed_max_row_height.max(size.height);
                     }
                 }
@@ -395,7 +395,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
         }
 
         if !fill_nodes_to_measure_group.is_empty() {
-            let nodes_for_api: Vec<_> = fill_nodes_to_measure_group
+            let nodes_for_api: Vec<(_, _)> = fill_nodes_to_measure_group
                 .iter()
                 .map(|(id, constraint, _idx)| (*id, *constraint))
                 .collect();
@@ -483,13 +483,13 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
             }
         };
 
-        let mut current_x_offset: u32 = 0;
+        let mut current_x_offset: Px = Px(0);
         for i in 0..N {
             let child_node_id = input.children_ids[i];
             if let Some(size) = measured_children_sizes[i] {
                 place_node(
                     child_node_id,
-                    PxPosition::new(Px::new(current_x_offset as i32), Px::new(0)),
+                    PxPosition::new(current_x_offset, Px(0)),
                     input.metadatas,
                 );
                 current_x_offset += size.width;
@@ -500,7 +500,7 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
                 }
                 place_node(
                     child_node_id,
-                    PxPosition::new(Px::new(current_x_offset as i32), Px::new(0)),
+                    PxPosition::new(current_x_offset, Px(0)),
                     input.metadatas,
                 );
             }

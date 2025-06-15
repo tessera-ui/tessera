@@ -1,4 +1,4 @@
-use tessera::{BasicDrawable, ComponentNodeMetaData, ComputedData};
+use tessera::{BasicDrawable, ComponentNodeMetaData, ComputedData, Px};
 use tessera_macros::tessera;
 
 /// A single rectangular highlight for text selection
@@ -8,8 +8,8 @@ use tessera_macros::tessera;
 /// to represent a complete selection that spans multiple lines or has complex geometry.
 #[tessera]
 pub fn selection_highlight_rect(
-    width: u32,
-    height: u32,
+    width: Px,
+    height: Px,
     color: [f32; 4], // RGBA color with alpha for transparency
 ) {
     measure(Box::new(move |input| {

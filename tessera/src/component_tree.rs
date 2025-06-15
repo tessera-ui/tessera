@@ -7,15 +7,13 @@ use std::{num::NonZero, time::Instant};
 use log::{debug, error};
 use rayon::prelude::*;
 
-use crate::{
-    component_tree::node::StateHandlerInput, cursor::CursorEvent, px::PxPosition,
-    renderer::DrawCommand,
-};
+use crate::{Px, cursor::CursorEvent, px::PxPosition, renderer::DrawCommand};
 pub use basic_drawable::{BasicDrawable, ShadowProps};
 pub use constraint::{Constraint, DimensionValue};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
-    MeasureFn, MeasurementError, StateHandlerFn, measure_node, measure_nodes, place_node,
+    MeasureFn, MeasurementError, StateHandlerFn, StateHandlerInput, measure_node, measure_nodes,
+    place_node,
 };
 
 /// Respents a component tree
@@ -99,8 +97,8 @@ impl ComponentTree {
     /// Compute the ComponentTree into a list of DrawCommand
     pub fn compute(
         &mut self,
-        screen_size: [u32; 2],
-        cursor_position: Option<[i32; 2]>,
+        screen_size: [Px; 2],
+        cursor_position: Option<PxPosition>,
         cursor_events: Vec<CursorEvent>,
         keyboard_events: Vec<winit::event::KeyEvent>,
     ) -> Vec<DrawCommand> {
@@ -168,7 +166,7 @@ impl ComponentTree {
                     .and_then(|m| m.abs_position)
                     .unwrap_or(PxPosition::ZERO);
                 // Calculate the relative position
-                [pos[0] - abs_pos.x.0, pos[1] - abs_pos.y.0]
+                pos - abs_pos
             });
             // Get the computed_data for the current node
             let computed_data_option = self
@@ -183,7 +181,6 @@ impl ComponentTree {
                     computed_data: node_computed_data,
                     cursor_position: current_cursor_position,
                     cursor_events: current_cursor_events,
-                    scroll_events: Vec::new(), // TODO: Pass actual scroll events
                     keyboard_events: keyboard_events.clone(),
                 };
                 state_handler(&input);
@@ -208,11 +205,11 @@ fn compute_draw_commands_parallel(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
 ) -> Vec<DrawCommand> {
-    compute_draw_commands_inner_parallel([0, 0], true, node_id, tree, metadatas)
+    compute_draw_commands_inner_parallel(PxPosition::ZERO, true, node_id, tree, metadatas)
 }
 
 fn compute_draw_commands_inner_parallel(
-    start_pos: [u32; 2],
+    start_pos: PxPosition,
     is_root: bool,
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
@@ -235,11 +232,8 @@ fn compute_draw_commands_inner_parallel(
                 }
             }
         };
-        let self_pos = [
-            (start_pos[0] as i32 + rel_pos.x.0) as u32,
-            (start_pos[1] as i32 + rel_pos.y.0) as u32,
-        ];
-        entry.abs_position = Some(self_pos.into()); // Modifying through RefMut
+        let self_pos = start_pos + rel_pos;
+        entry.abs_position = Some(self_pos); // Modifying through RefMut
 
         if let Some(drawable) = entry.basic_drawable.take() {
             // Modifying through RefMut
@@ -258,7 +252,6 @@ fn compute_draw_commands_inner_parallel(
                 metadatas
                     .get(&node_id)
                     .and_then(|m| m.abs_position)
-                    .map(|pos| pos.into())
                     .unwrap_or(start_pos), // Get self_pos again for children
                 false,
                 child,

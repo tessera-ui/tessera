@@ -1,13 +1,13 @@
 use std::time::Instant;
 
-use tessera::{BasicDrawable, ComponentNodeMetaData, ComputedData, Dp};
+use tessera::{BasicDrawable, ComponentNodeMetaData, ComputedData, Dp, Px};
 use tessera_macros::tessera;
 
 const CURSOR_WIDRH: Dp = Dp(2.5);
 
 /// A blink cursor component for text editor.
 #[tessera]
-pub(super) fn cursor(height_px: u32, bink_timer: Instant) {
+pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
     // skip the cursor based on the timer
     // to make it blink
     if bink_timer.elapsed().as_millis() % 1000 < 500 {
@@ -33,7 +33,7 @@ pub(super) fn cursor(height_px: u32, bink_timer: Instant) {
         }
         // Return the computed data for the cursor
         Ok(ComputedData {
-            width: CURSOR_WIDRH.to_pixels_u32(),
+            width: CURSOR_WIDRH.into(),
             height: height_px,
         })
     }));

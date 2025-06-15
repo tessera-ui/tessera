@@ -1,5 +1,5 @@
 use derive_builder::Builder;
-use tessera::{ComputedData, Constraint, DimensionValue};
+use tessera::{ComputedData, Constraint, DimensionValue, Px};
 use tessera_macros::tessera;
 
 /// Arguments for the Spacer component.
@@ -7,12 +7,12 @@ use tessera_macros::tessera;
 #[builder(pattern = "owned")]
 pub struct SpacerArgs {
     /// The desired width behavior of the spacer.
-    /// Defaults to Fixed(0). Use Fill { min: None, max: None } for an expanding spacer.
-    #[builder(default = "DimensionValue::Fixed(0)")]
+    /// Defaults to Fixed(Px(0)). Use Fill { min: None, max: None } for an expanding spacer.
+    #[builder(default = "DimensionValue::Fixed(Px(0))")]
     pub width: DimensionValue,
     /// The desired height behavior of the spacer.
-    /// Defaults to Fixed(0). Use Fill { min: None, max: None } for an expanding spacer.
-    #[builder(default = "DimensionValue::Fixed(0)")]
+    /// Defaults to Fixed(Px(0)). Use Fill { min: None, max: None } for an expanding spacer.
+    #[builder(default = "DimensionValue::Fixed(Px(0))")]
     pub height: DimensionValue,
 }
 
@@ -39,7 +39,7 @@ impl SpacerArgs {
                 min: None,
                 max: None,
             })
-            .height(DimensionValue::Fixed(0)) // Default height if only filling width
+            .height(DimensionValue::Fixed(Px(0))) // Default height if only filling width
             .build()
             .unwrap()
     }
@@ -47,7 +47,7 @@ impl SpacerArgs {
     /// Creates a spacer that tries to fill available height.
     pub fn fill_height() -> Self {
         SpacerArgsBuilder::default()
-            .width(DimensionValue::Fixed(0)) // Default width if only filling height
+            .width(DimensionValue::Fixed(Px(0))) // Default width if only filling height
             .height(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -70,7 +70,7 @@ pub fn spacer(args: SpacerArgs) {
 
         let final_spacer_width = match effective_spacer_constraint.width {
             DimensionValue::Fixed(w) => w,
-            DimensionValue::Wrap { min, .. } => min.unwrap_or(0), // Spacer has no content, so it's its min or 0.
+            DimensionValue::Wrap { min, .. } => min.unwrap_or(Px(0)), // Spacer has no content, so it's its min or 0.
             DimensionValue::Fill { min, max: _ } => {
                 // If the effective constraint is Fill, it means the parent allows filling.
                 // However, a simple spacer has no content to expand beyond its minimum.
@@ -82,14 +82,14 @@ pub fn spacer(args: SpacerArgs) {
                 // If parent was Wrap, merge would result in Fill{min,max} (if spacer was Fill).
                 // If parent was Fill{p_min, p_max}, merge would result in Fill{combined_min, combined_max}.
                 // In all Fill cases, the spacer itself doesn't "push" for more than its min.
-                min.unwrap_or(0)
+                min.unwrap_or(Px(0))
             }
         };
 
         let final_spacer_height = match effective_spacer_constraint.height {
             DimensionValue::Fixed(h) => h,
-            DimensionValue::Wrap { min, .. } => min.unwrap_or(0),
-            DimensionValue::Fill { min, max: _ } => min.unwrap_or(0),
+            DimensionValue::Wrap { min, .. } => min.unwrap_or(Px(0)),
+            DimensionValue::Fill { min, max: _ } => min.unwrap_or(Px(0)),
         };
 
         Ok(ComputedData {

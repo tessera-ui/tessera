@@ -144,7 +144,7 @@ pub struct TextData {
     // we need fields below to construct a glyphon::TextArea
     // don't ask me why we cannot just save a glyphon::TextArea, ask borrow checker
     /// Position of the text, none if it is not computed yet
-    pub position: Option<[u32; 2]>,
+    pub position: Option<crate::px::PxPosition>,
     /// Text area size
     pub size: [u32; 2],
 }
@@ -221,16 +221,17 @@ impl TextData {
 
     /// Get the glyphon text area from the text data
     fn text_area(&self) -> glyphon::TextArea {
+        let pos = self.position.unwrap();
         let bounds = glyphon::TextBounds {
-            left: self.position.unwrap()[0] as i32,
-            top: self.position.unwrap()[1] as i32,
-            right: self.position.unwrap()[0] as i32 + self.size[0] as i32,
-            bottom: self.position.unwrap()[1] as i32 + self.size[1] as i32,
+            left: pos.x.0,
+            top: pos.y.0,
+            right: pos.x.0 + self.size[0] as i32,
+            bottom: pos.y.0 + self.size[1] as i32,
         };
         glyphon::TextArea {
             buffer: &self.text_buffer,
-            left: self.position.unwrap()[0] as f32,
-            top: self.position.unwrap()[1] as f32,
+            left: pos.x.to_f32(),
+            top: pos.y.to_f32(),
             scale: 1.0,
             bounds,
             default_color: glyphon::Color::rgb(0, 0, 0), // Black by default

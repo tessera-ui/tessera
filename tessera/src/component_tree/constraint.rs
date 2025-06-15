@@ -1,12 +1,14 @@
+use crate::Px;
+
 /// Defines how a dimension (width or height) should be calculated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DimensionValue {
     /// The dimension is a fixed value in logical pixels.
-    Fixed(u32),
+    Fixed(Px),
     /// The dimension should wrap its content, optionally bounded by min and/or max logical pixels.
-    Wrap { min: Option<u32>, max: Option<u32> },
+    Wrap { min: Option<Px>, max: Option<Px> },
     /// The dimension should fill the available space, optionally bounded by min and/or max logical pixels.
-    Fill { min: Option<u32>, max: Option<u32> },
+    Fill { min: Option<Px>, max: Option<Px> },
 }
 
 impl Default for DimensionValue {
@@ -171,32 +173,35 @@ mod tests {
 
     #[test]
     fn test_fixed_parent_wrap_child_wrap_grandchild() {
-        // 父组件 Fixed(100) -> 子组件 Wrap {min: Some(20), max: Some(80)} -> 子子组件 Wrap {min: Some(10), max: Some(50)}
+        // 父组件 Fixed(100) -> 子组件 Wrap {min: Some(Px(20)), max: Some(Px(80))} -> 子子组件 Wrap {min: Some(Px(10)), max: Some(Px(50))}
 
         // 父组件约束
-        let parent = Constraint::new(DimensionValue::Fixed(100), DimensionValue::Fixed(100));
+        let parent = Constraint::new(
+            DimensionValue::Fixed(Px(100)),
+            DimensionValue::Fixed(Px(100)),
+        );
 
         // 子组件约束
         let child = Constraint::new(
             DimensionValue::Wrap {
-                min: Some(20),
-                max: Some(80),
+                min: Some(Px(20)),
+                max: Some(Px(80)),
             },
             DimensionValue::Wrap {
-                min: Some(20),
-                max: Some(80),
+                min: Some(Px(20)),
+                max: Some(Px(80)),
             },
         );
 
         // 子子组件约束
         let grandchild = Constraint::new(
             DimensionValue::Wrap {
-                min: Some(10),
-                max: Some(50),
+                min: Some(Px(10)),
+                max: Some(Px(50)),
             },
             DimensionValue::Wrap {
-                min: Some(10),
-                max: Some(50),
+                min: Some(Px(10)),
+                max: Some(Px(50)),
             },
         );
 
@@ -207,15 +212,15 @@ mod tests {
         assert_eq!(
             merged_child.width,
             DimensionValue::Wrap {
-                min: Some(20),
-                max: Some(80)
+                min: Some(Px(20)),
+                max: Some(Px(80))
             }
         );
         assert_eq!(
             merged_child.height,
             DimensionValue::Wrap {
-                min: Some(20),
-                max: Some(80)
+                min: Some(Px(20)),
+                max: Some(Px(80))
             }
         );
 
@@ -226,62 +231,62 @@ mod tests {
         assert_eq!(
             final_result.width,
             DimensionValue::Wrap {
-                min: Some(10),
-                max: Some(50)
+                min: Some(Px(10)),
+                max: Some(Px(50))
             }
         );
         assert_eq!(
             final_result.height,
             DimensionValue::Wrap {
-                min: Some(10),
-                max: Some(50)
+                min: Some(Px(10)),
+                max: Some(Px(50))
             }
         );
     }
 
     #[test]
     fn test_fill_parent_wrap_child() {
-        // 父组件 Fill {min: Some(50), max: Some(200)} -> 子组件 Wrap {min: Some(30), max: Some(150)}
+        // 父组件 Fill {min: Some(Px(50)), max: Some(Px(200))} -> 子组件 Wrap {min: Some(Px(30)), max: Some(Px(150))}
 
         let parent = Constraint::new(
             DimensionValue::Fill {
-                min: Some(50),
-                max: Some(200),
+                min: Some(Px(50)),
+                max: Some(Px(200)),
             },
             DimensionValue::Fill {
-                min: Some(50),
-                max: Some(200),
+                min: Some(Px(50)),
+                max: Some(Px(200)),
             },
         );
 
         let child = Constraint::new(
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(150),
+                min: Some(Px(30)),
+                max: Some(Px(150)),
             },
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(150),
+                min: Some(Px(30)),
+                max: Some(Px(150)),
             },
         );
 
         let result = child.merge(&parent);
 
         // 子组件是 Wrap，父组件是 Fill，结果应该是 Wrap
-        // min 保持子组件自己的值 (30)
-        // max 应该是子组件和父组件的较小值 (150)
+        // min 保持子组件自己的值 (Px(30))
+        // max 应该是子组件和父组件的较小值 (Px(150))
         assert_eq!(
             result.width,
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(150)
+                min: Some(Px(30)),
+                max: Some(Px(150))
             }
         );
         assert_eq!(
             result.height,
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(150)
+                min: Some(Px(30)),
+                max: Some(Px(150))
             }
         );
     }
@@ -289,27 +294,27 @@ mod tests {
     #[test]
     fn test_fill_parent_wrap_child_no_child_min() {
         // 测试子组件没有 min 的情况
-        // 父组件 Fill {min: Some(50), max: Some(200)} -> 子组件 Wrap {min: None, max: Some(150)}
+        // 父组件 Fill {min: Some(Px(50)), max: Some(Px(200))} -> 子组件 Wrap {min: None, max: Some(Px(150))}
 
         let parent = Constraint::new(
             DimensionValue::Fill {
-                min: Some(50),
-                max: Some(200),
+                min: Some(Px(50)),
+                max: Some(Px(200)),
             },
             DimensionValue::Fill {
-                min: Some(50),
-                max: Some(200),
+                min: Some(Px(50)),
+                max: Some(Px(200)),
             },
         );
 
         let child = Constraint::new(
             DimensionValue::Wrap {
                 min: None,
-                max: Some(150),
+                max: Some(Px(150)),
             },
             DimensionValue::Wrap {
                 min: None,
-                max: Some(150),
+                max: Some(Px(150)),
             },
         );
 
@@ -320,14 +325,14 @@ mod tests {
             result.width,
             DimensionValue::Wrap {
                 min: None,
-                max: Some(150)
+                max: Some(Px(150))
             }
         );
         assert_eq!(
             result.height,
             DimensionValue::Wrap {
                 min: None,
-                max: Some(150)
+                max: Some(Px(150))
             }
         );
     }
@@ -335,27 +340,27 @@ mod tests {
     #[test]
     fn test_fill_parent_wrap_child_no_parent_max() {
         // 测试父组件没有 max 的情况
-        // 父组件 Fill {min: Some(50), max: None} -> 子组件 Wrap {min: Some(30), max: Some(150)}
+        // 父组件 Fill {min: Some(Px(50)), max: None} -> 子组件 Wrap {min: Some(Px(30)), max: Some(Px(150))}
 
         let parent = Constraint::new(
             DimensionValue::Fill {
-                min: Some(50),
+                min: Some(Px(50)),
                 max: None,
             },
             DimensionValue::Fill {
-                min: Some(50),
+                min: Some(Px(50)),
                 max: None,
             },
         );
 
         let child = Constraint::new(
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(150),
+                min: Some(Px(30)),
+                max: Some(Px(150)),
             },
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(150),
+                min: Some(Px(30)),
+                max: Some(Px(150)),
             },
         );
 
@@ -365,15 +370,15 @@ mod tests {
         assert_eq!(
             result.width,
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(150)
+                min: Some(Px(30)),
+                max: Some(Px(150))
             }
         );
         assert_eq!(
             result.height,
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(150)
+                min: Some(Px(30)),
+                max: Some(Px(150))
             }
         );
     }
@@ -381,38 +386,41 @@ mod tests {
     #[test]
     fn test_fixed_parent_wrap_child() {
         // 测试 Fixed 父组件与 Wrap 子组件的合并
-        // 父组件 Fixed(100) -> 子组件 Wrap {min: Some(30), max: Some(120)}
+        // 父组件 Fixed(Px(100)) -> 子组件 Wrap {min: Some(Px(30)), max: Some(Px(120))}
 
-        let parent = Constraint::new(DimensionValue::Fixed(100), DimensionValue::Fixed(100));
+        let parent = Constraint::new(
+            DimensionValue::Fixed(Px(100)),
+            DimensionValue::Fixed(Px(100)),
+        );
 
         let child = Constraint::new(
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(120),
+                min: Some(Px(30)),
+                max: Some(Px(120)),
             },
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(120),
+                min: Some(Px(30)),
+                max: Some(Px(120)),
             },
         );
 
         let result = child.merge(&parent);
 
         // 子组件应该保持 Wrap，但 max 被父组件的 Fixed 值限制
-        // min 保持子组件自己的值 (30)
-        // max 应该是子组件 max 和父组件 Fixed 值的较小值 (100)
+        // min 保持子组件自己的值 (Px(30))
+        // max 应该是子组件 max 和父组件 Fixed 值的较小值 (Px(100))
         assert_eq!(
             result.width,
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(100)
+                min: Some(Px(30)),
+                max: Some(Px(100))
             }
         );
         assert_eq!(
             result.height,
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(100)
+                min: Some(Px(30)),
+                max: Some(Px(100))
             }
         );
     }
@@ -420,17 +428,20 @@ mod tests {
     #[test]
     fn test_fixed_parent_wrap_child_no_child_max() {
         // 测试子组件没有 max 的情况
-        // 父组件 Fixed(100) -> 子组件 Wrap {min: Some(30), max: None}
+        // 父组件 Fixed(Px(100)) -> 子组件 Wrap {min: Some(Px(30)), max: None}
 
-        let parent = Constraint::new(DimensionValue::Fixed(100), DimensionValue::Fixed(100));
+        let parent = Constraint::new(
+            DimensionValue::Fixed(Px(100)),
+            DimensionValue::Fixed(Px(100)),
+        );
 
         let child = Constraint::new(
             DimensionValue::Wrap {
-                min: Some(30),
+                min: Some(Px(30)),
                 max: None,
             },
             DimensionValue::Wrap {
-                min: Some(30),
+                min: Some(Px(30)),
                 max: None,
             },
         );
@@ -441,15 +452,15 @@ mod tests {
         assert_eq!(
             result.width,
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(100)
+                min: Some(Px(30)),
+                max: Some(Px(100))
             }
         );
         assert_eq!(
             result.height,
             DimensionValue::Wrap {
-                min: Some(30),
-                max: Some(100)
+                min: Some(Px(30)),
+                max: Some(Px(100))
             }
         );
     }
@@ -457,38 +468,41 @@ mod tests {
     #[test]
     fn test_fixed_parent_fill_child() {
         // 测试 Fixed 父组件与 Fill 子组件的合并
-        // 父组件 Fixed(100) -> 子组件 Fill {min: Some(30), max: Some(120)}
+        // 父组件 Fixed(Px(100)) -> 子组件 Fill {min: Some(Px(30)), max: Some(Px(120))}
 
-        let parent = Constraint::new(DimensionValue::Fixed(100), DimensionValue::Fixed(100));
+        let parent = Constraint::new(
+            DimensionValue::Fixed(Px(100)),
+            DimensionValue::Fixed(Px(100)),
+        );
 
         let child = Constraint::new(
             DimensionValue::Fill {
-                min: Some(30),
-                max: Some(120),
+                min: Some(Px(30)),
+                max: Some(Px(120)),
             },
             DimensionValue::Fill {
-                min: Some(30),
-                max: Some(120),
+                min: Some(Px(30)),
+                max: Some(Px(120)),
             },
         );
 
         let result = child.merge(&parent);
 
         // 子组件应该保持 Fill，但 max 被父组件的 Fixed 值限制
-        // min 保持子组件自己的值 (30)
-        // max 应该是子组件 max 和父组件 Fixed 值的较小值 (100)
+        // min 保持子组件自己的值 (Px(30))
+        // max 应该是子组件 max 和父组件 Fixed 值的较小值 (Px(100))
         assert_eq!(
             result.width,
             DimensionValue::Fill {
-                min: Some(30),
-                max: Some(100)
+                min: Some(Px(30)),
+                max: Some(Px(100))
             }
         );
         assert_eq!(
             result.height,
             DimensionValue::Fill {
-                min: Some(30),
-                max: Some(100)
+                min: Some(Px(30)),
+                max: Some(Px(100))
             }
         );
     }
@@ -496,17 +510,20 @@ mod tests {
     #[test]
     fn test_fixed_parent_fill_child_no_child_max() {
         // 测试子组件没有 max 的情况
-        // 父组件 Fixed(100) -> 子组件 Fill {min: Some(30), max: None}
+        // 父组件 Fixed(Px(100)) -> 子组件 Fill {min: Some(Px(30)), max: None}
 
-        let parent = Constraint::new(DimensionValue::Fixed(100), DimensionValue::Fixed(100));
+        let parent = Constraint::new(
+            DimensionValue::Fixed(Px(100)),
+            DimensionValue::Fixed(Px(100)),
+        );
 
         let child = Constraint::new(
             DimensionValue::Fill {
-                min: Some(30),
+                min: Some(Px(30)),
                 max: None,
             },
             DimensionValue::Fill {
-                min: Some(30),
+                min: Some(Px(30)),
                 max: None,
             },
         );
@@ -517,15 +534,15 @@ mod tests {
         assert_eq!(
             result.width,
             DimensionValue::Fill {
-                min: Some(30),
-                max: Some(100)
+                min: Some(Px(30)),
+                max: Some(Px(100))
             }
         );
         assert_eq!(
             result.height,
             DimensionValue::Fill {
-                min: Some(30),
-                max: Some(100)
+                min: Some(Px(30)),
+                max: Some(Px(100))
             }
         );
     }
@@ -533,18 +550,21 @@ mod tests {
     #[test]
     fn test_fixed_parent_fill_child_no_child_min() {
         // 测试子组件没有 min 的情况
-        // 父组件 Fixed(100) -> 子组件 Fill {min: None, max: Some(120)}
+        // 父组件 Fixed(Px(100)) -> 子组件 Fill {min: None, max: Some(Px(120))}
 
-        let parent = Constraint::new(DimensionValue::Fixed(100), DimensionValue::Fixed(100));
+        let parent = Constraint::new(
+            DimensionValue::Fixed(Px(100)),
+            DimensionValue::Fixed(Px(100)),
+        );
 
         let child = Constraint::new(
             DimensionValue::Fill {
                 min: None,
-                max: Some(120),
+                max: Some(Px(120)),
             },
             DimensionValue::Fill {
                 min: None,
-                max: Some(120),
+                max: Some(Px(120)),
             },
         );
 
@@ -555,14 +575,14 @@ mod tests {
             result.width,
             DimensionValue::Fill {
                 min: None,
-                max: Some(100)
+                max: Some(Px(100))
             }
         );
         assert_eq!(
             result.height,
             DimensionValue::Fill {
                 min: None,
-                max: Some(100)
+                max: Some(Px(100))
             }
         );
     }

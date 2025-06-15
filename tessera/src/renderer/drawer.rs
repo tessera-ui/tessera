@@ -3,6 +3,7 @@ mod pos_misc;
 mod shape;
 mod text;
 
+use crate::PxPosition;
 pub use crate::renderer::drawer::shape::{
     MAX_CONCURRENT_SHAPES, ShapeUniforms, ShapeVertexData, Vertex as ShapeVertex,
 };
@@ -73,8 +74,10 @@ impl Drawer {
                 let positions: Vec<[f32; 2]> = vertices
                     .iter()
                     .map(|v| {
-                        let pos = [v.position[0], v.position[1]];
-                        pixel_to_ndc(pos, [config.width, config.height])
+                        pixel_to_ndc(
+                            PxPosition::from_f32_arr3(v.position),
+                            [config.width, config.height],
+                        )
                     })
                     .collect();
                 let colors: Vec<[f32; 3]> = vertices.iter().map(|v| v.color).collect();

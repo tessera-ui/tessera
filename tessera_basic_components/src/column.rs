@@ -43,7 +43,7 @@ impl ColumnItem {
 
     /// Helper to create a ColumnItem that is fixed height.
     pub fn fixed(child: Box<dyn FnOnce() + Send + Sync>, height: Dp) -> Self {
-        Self::new(child, DimensionValue::Fixed(height.to_pixels_u32()), None)
+        Self::new(child, DimensionValue::Fixed(height.into()), None)
     }
 
     /// Helper to create a ColumnItem that fills available space (height),
@@ -57,7 +57,7 @@ impl ColumnItem {
             child,
             DimensionValue::Fill {
                 min: None, // Add min field
-                max: max_height.as_ref().map(Dp::to_pixels_u32),
+                max: max_height.map(|dp| dp.into()),
             },
             weight,
         )
@@ -117,7 +117,7 @@ impl<F: Fn() + Send + Sync + 'static> AsColumnItem for (F, DimensionValue, f32) 
 pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
     let children_items: [ColumnItem; N] =
         children_items_input.map(|item_input| item_input.into_column_item());
-    let children_items_for_measure: Vec<_> = children_items
+    let children_items_for_measure: Vec<(_, _)> = children_items
         .iter()
         .map(|child| (child.weight, child.height_behavior))
         .collect(); // For the measure closure
@@ -133,8 +133,8 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
             column_intrinsic_constraint.merge(input.effective_constraint);
 
         let mut measured_children_sizes: Vec<Option<ComputedData>> = vec![None; N];
-        let mut total_height_for_fixed_wrap: u32 = 0;
-        let mut computed_max_column_width: u32 = 0;
+        let mut total_height_for_fixed_wrap: Px = Px(0);
+        let mut computed_max_column_width: Px = Px(0);
 
         // --- Stage 1: Measure Fixed and Wrap children ---
         let mut fixed_wrap_nodes_to_measure = Vec::new();
@@ -182,7 +182,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
         }
 
         if !fixed_wrap_nodes_to_measure.is_empty() {
-            let nodes_for_api: Vec<_> = fixed_wrap_nodes_to_measure
+            let nodes_for_api: Vec<(_, _)> = fixed_wrap_nodes_to_measure
                 .iter()
                 .map(|(id, constraint, _idx)| (*id, *constraint))
                 .collect();
@@ -203,20 +203,20 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
         }
         // --- End Stage 1 ---
 
-        let mut remaining_height_for_fill: u32 = 0;
+        let mut remaining_height_for_fill: Px = Px(0);
         let mut is_column_effectively_wrap_for_children = false;
 
         match effective_column_constraint.height {
             DimensionValue::Fixed(column_fixed_height) => {
                 remaining_height_for_fill =
-                    column_fixed_height.saturating_sub(total_height_for_fixed_wrap);
+                    (column_fixed_height - total_height_for_fixed_wrap).max(Px(0));
             }
             DimensionValue::Wrap {
                 max: col_wrap_max, ..
             } => {
                 // Consider column's own wrap max
                 if let Some(max_h) = col_wrap_max {
-                    remaining_height_for_fill = max_h.saturating_sub(total_height_for_fixed_wrap);
+                    remaining_height_for_fill = (max_h - total_height_for_fixed_wrap).max(Px(0));
                     // If max_h is already less than fixed/wrap, remaining could be 0 or negative (handled by saturating_sub)
                 } else {
                     is_column_effectively_wrap_for_children = true; // No max, so fill children wrap
@@ -227,7 +227,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                 ..
             } => {
                 remaining_height_for_fill =
-                    column_max_budget.saturating_sub(total_height_for_fixed_wrap);
+                    (column_max_budget - total_height_for_fixed_wrap).max(Px(0));
             }
             DimensionValue::Fill { max: None, .. } => {
                 // This means the column itself can grow indefinitely if parent allows.
@@ -257,7 +257,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
             }
         }
 
-        let mut actual_height_taken_by_fill_children: u32 = 0;
+        let mut actual_height_taken_by_fill_children: Px = Px(0);
 
         // --- Stage 2: Measure Fill children ---
         let mut fill_nodes_to_measure_group = Vec::new();
@@ -290,7 +290,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                     fill_nodes_to_measure_group.push((child_node_id, final_child_constraint, i));
                 }
             }
-        } else if remaining_height_for_fill > 0 {
+        } else if remaining_height_for_fill > Px(0) {
             // Distribute remaining_height_for_fill among Fill children
             // This part is complex for full parallelization due to dependencies.
             // For now, simplified sequential logic for Fill distribution to ensure correctness.
@@ -298,16 +298,16 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
 
             if total_fill_weight > 0.0 {
                 for &index in &fill_children_indices_with_weight {
-                    if current_remaining_fill_budget == 0 {
+                    if current_remaining_fill_budget == Px(0) {
                         break;
                     }
                     let item_weight = children_items_for_measure[index].0.unwrap();
                     let item_behavior = children_items_for_measure[index].1; // This is DimensionValue::Fill
                     let child_node_id = input.children_ids[index];
 
-                    let proportional_height = ((item_weight / total_fill_weight)
-                        * remaining_height_for_fill as f32)
-                        as u32;
+                    let proportional_height = Px(((item_weight / total_fill_weight)
+                        * remaining_height_for_fill.0 as f32)
+                        as i32);
 
                     if let DimensionValue::Fill {
                         min: child_min,
@@ -346,20 +346,21 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                         measured_children_sizes[index] = Some(size);
                         actual_height_taken_by_fill_children += size.height;
                         current_remaining_fill_budget =
-                            current_remaining_fill_budget.saturating_sub(size.height);
+                            (current_remaining_fill_budget - size.height).max(Px(0));
                         computed_max_column_width = computed_max_column_width.max(size.width);
                     }
                 }
             }
 
-            if !fill_children_indices_without_weight.is_empty() && current_remaining_fill_budget > 0
+            if !fill_children_indices_without_weight.is_empty()
+                && current_remaining_fill_budget > Px(0)
             {
                 let num_unweighted_fill = fill_children_indices_without_weight.len();
                 let height_per_unweighted_child =
-                    current_remaining_fill_budget / num_unweighted_fill as u32;
+                    current_remaining_fill_budget / (num_unweighted_fill as i32);
 
                 for &index in &fill_children_indices_without_weight {
-                    if current_remaining_fill_budget == 0 {
+                    if current_remaining_fill_budget == Px(0) {
                         break;
                     }
                     let item_behavior = children_items_for_measure[index].1; // This is DimensionValue::Fill
@@ -402,7 +403,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                         measured_children_sizes[index] = Some(size);
                         actual_height_taken_by_fill_children += size.height;
                         current_remaining_fill_budget =
-                            current_remaining_fill_budget.saturating_sub(size.height);
+                            (current_remaining_fill_budget - size.height).max(Px(0));
                         computed_max_column_width = computed_max_column_width.max(size.width);
                     }
                 }
@@ -410,7 +411,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
         }
 
         if !fill_nodes_to_measure_group.is_empty() {
-            let nodes_for_api: Vec<_> = fill_nodes_to_measure_group
+            let nodes_for_api: Vec<(_, _)> = fill_nodes_to_measure_group
                 .iter()
                 .map(|(id, constraint, _idx)| (*id, *constraint))
                 .collect();
@@ -507,13 +508,13 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
             }
         };
 
-        let mut current_y_offset: u32 = 0;
+        let mut current_y_offset: Px = Px(0);
         for i in 0..N {
             let child_node_id = input.children_ids[i];
             if let Some(size) = measured_children_sizes[i] {
                 place_node(
                     child_node_id,
-                    PxPosition::new(Px(0), Px(current_y_offset as i32)),
+                    PxPosition::new(Px(0), current_y_offset),
                     input.metadatas,
                 );
                 current_y_offset += size.height;
@@ -527,7 +528,7 @@ pub fn column<const N: usize>(children_items_input: [impl AsColumnItem; N]) {
                 }
                 place_node(
                     child_node_id,
-                    PxPosition::new(Px(0), Px(current_y_offset as i32)),
+                    PxPosition::new(Px(0), current_y_offset),
                     input.metadatas,
                 );
             }

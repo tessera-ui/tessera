@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Instant};
 use log::{debug, warn};
 use parking_lot::Mutex;
 
-use crate::{keyboard_state::KeyboardState, thread_utils};
+use crate::{Px, PxPosition, keyboard_state::KeyboardState, thread_utils};
 
 use app::WgpuApp;
 #[cfg(target_os = "android")]
@@ -129,7 +129,7 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
             } => {
                 // Update cursor position
                 self.cursor_state
-                    .update_position([position.x as i32, position.y as i32]);
+                    .update_position(PxPosition::from_f64_arr2([position.x, position.y]));
                 debug!("Cursor moved to: {}, {}", position.x, position.y);
             }
             WindowEvent::CursorLeft { device_id: _ } => {
@@ -168,7 +168,8 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 debug!("Mouse scroll: {delta:?}");
             }
             WindowEvent::Touch(touch_event) => {
-                let pos = [touch_event.location.x as i32, touch_event.location.y as i32];
+                let pos =
+                    PxPosition::from_f64_arr2([touch_event.location.x, touch_event.location.y]);
                 debug!(
                     "Touch event: id {}, phase {:?}, position {:?}",
                     touch_event.id, touch_event.phase, pos
@@ -232,8 +233,9 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 let cursor_position = self.cursor_state.position();
                 let cursor_events = self.cursor_state.take_events();
                 let keyboard_events = self.keyboard_state.take_events();
+                let screen_size: [Px; 2] = [app.size().width.into(), app.size().height.into()];
                 let commands = component_tree.compute(
-                    app.size().into(),
+                    screen_size,
                     cursor_position,
                     cursor_events,
                     keyboard_events,

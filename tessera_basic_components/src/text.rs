@@ -1,6 +1,6 @@
 use derive_builder::Builder;
 use tessera::{
-    BasicDrawable, ComponentNodeMetaData, ComputedData, DimensionValue, Dp, TextConstraint,
+    BasicDrawable, ComponentNodeMetaData, ComputedData, DimensionValue, Dp, Px, TextConstraint,
     TextData,
 };
 use tessera_macros::tessera;
@@ -63,18 +63,18 @@ impl From<&str> for TextArgs {
 /// ```
 #[tessera]
 pub fn text(args: impl Into<TextArgs>) {
-    let text_args = args.into();
+    let text_args: TextArgs = args.into();
     measure(Box::new(move |input| {
-        let max_width: Option<f32> = match input.effective_constraint.width {
-            DimensionValue::Fixed(w) => Some(w as f32),
-            DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Use max from Wrap
-            DimensionValue::Fill { max, .. } => max.map(|m| m as f32), // Use max from Fill
+        let max_width: Option<Px> = match input.effective_constraint.width {
+            DimensionValue::Fixed(w) => Some(w),
+            DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
+            DimensionValue::Fill { max, .. } => max, // Use max from Fill
         };
 
-        let max_height: Option<f32> = match input.effective_constraint.height {
-            DimensionValue::Fixed(h) => Some(h as f32),
-            DimensionValue::Wrap { max, .. } => max.map(|m| m as f32), // Use max from Wrap
-            DimensionValue::Fill { max, .. } => max.map(|m| m as f32), // Use max from Fill
+        let max_height: Option<Px> = match input.effective_constraint.height {
+            DimensionValue::Fixed(h) => Some(h),
+            DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
+            DimensionValue::Fill { max, .. } => max, // Use max from Fill
         };
 
         let text_data = TextData::new(
@@ -83,8 +83,8 @@ pub fn text(args: impl Into<TextArgs>) {
             text_args.size.to_pixels_f32(),
             text_args.line_height.to_pixels_f32(),
             TextConstraint {
-                max_width,
-                max_height,
+                max_width: max_width.map(|px| px.to_f32()),
+                max_height: max_height.map(|px| px.to_f32()),
             },
         );
 
@@ -104,8 +104,8 @@ pub fn text(args: impl Into<TextArgs>) {
         }
 
         Ok(ComputedData {
-            width: size[0],
-            height: size[1],
+            width: size[0].into(),
+            height: size[1].into(),
         })
     }));
 }

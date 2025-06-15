@@ -13,10 +13,7 @@ use super::{
     basic_drawable::BasicDrawable,
     constraint::{Constraint, DimensionValue},
 };
-use crate::{
-    cursor::{CursorEvent, ScrollEventType},
-    px::PxPosition,
-};
+use crate::{Px, cursor::CursorEvent, px::PxPosition};
 
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component.
@@ -132,11 +129,9 @@ pub struct StateHandlerInput {
     pub computed_data: ComputedData,
     /// The position of the cursor, if available.
     /// Relative to the root position of the component.
-    pub cursor_position: Option<[i32; 2]>,
+    pub cursor_position: Option<PxPosition>,
     /// Cursor events from the event loop, if any.
     pub cursor_events: Vec<CursorEvent>,
-    /// Scroll events from the event loop, if any.
-    pub scroll_events: Vec<ScrollEventType>,
     /// Keyboard events from the event loop, if any.
     pub keyboard_events: Vec<winit::event::KeyEvent>,
 }
@@ -378,8 +373,8 @@ pub fn measure_nodes(
 /// Layout information computed at the measure stage, representing the size of a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ComputedData {
-    pub width: u32,
-    pub height: u32,
+    pub width: Px,
+    pub height: Px,
 }
 
 impl Add for ComputedData {
@@ -400,8 +395,8 @@ impl AddAssign for ComputedData {
 
 impl ComputedData {
     pub const ZERO: Self = Self {
-        width: 0,
-        height: 0,
+        width: Px(0),
+        height: Px(0),
     };
 
     /// Calculates a "minimum" size based on a constraint.
@@ -409,45 +404,16 @@ impl ComputedData {
     pub fn min_from_constraint(constraint: &Constraint) -> Self {
         let width = match constraint.width {
             DimensionValue::Fixed(w) => w,
-            DimensionValue::Wrap { min, .. } => min.unwrap_or(0),
-            DimensionValue::Fill { min, .. } => min.unwrap_or(0),
+            DimensionValue::Wrap { min, .. } => min.unwrap_or(Px(0)),
+            DimensionValue::Fill { min, .. } => min.unwrap_or(Px(0)),
         };
         let height = match constraint.height {
             DimensionValue::Fixed(h) => h,
-            DimensionValue::Wrap { min, .. } => min.unwrap_or(0),
-            DimensionValue::Fill { min, .. } => min.unwrap_or(0),
+            DimensionValue::Wrap { min, .. } => min.unwrap_or(Px(0)),
+            DimensionValue::Fill { min, .. } => min.unwrap_or(Px(0)),
         };
         Self { width, height }
     }
-
-    // Old smallest and largest might not be as relevant with min/max in Wrap/Fill
-    // pub fn smallest(constraint: &Constraint) -> Self {
-    //     let width = match constraint.width {
-    //         DimensionValue::Fixed(w) => w,
-    //         DimensionValue::Wrap { min, .. } => min.unwrap_or(0), // Use min from Wrap, or 0
-    //         DimensionValue::Fill { min, .. } => min.unwrap_or(0), // Use min from Fill, or 0
-    //     };
-    //     let height = match constraint.height {
-    //         DimensionValue::Fixed(h) => h,
-    //         DimensionValue::Wrap { min, .. } => min.unwrap_or(0), // Use min from Wrap, or 0
-    //         DimensionValue::Fill { min, .. } => min.unwrap_or(0), // Use min from Fill, or 0
-    //     };
-    //     Self { width, height }
-    // }
-
-    // pub fn largest(constraint: &Constraint) -> Self {
-    //     let width = match constraint.width {
-    //         DimensionValue::Fixed(w) => w,
-    //         DimensionValue::Wrap { max, .. } => max.unwrap_or(u32::MAX), // Use max from Wrap, or u32::MAX
-    //         DimensionValue::Fill { max, .. } => max.unwrap_or(u32::MAX),
-    //     };
-    //     let height = match constraint.height {
-    //         DimensionValue::Fixed(h) => h,
-    //         DimensionValue::Wrap { max, .. } => max.unwrap_or(u32::MAX), // Use max from Wrap, or u32::MAX
-    //         DimensionValue::Fill { max, .. } => max.unwrap_or(u32::MAX),
-    //     };
-    //     Self { width, height }
-    // }
 
     pub fn min(self, rhs: Self) -> Self {
         Self {

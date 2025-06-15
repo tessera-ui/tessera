@@ -1,45 +1,47 @@
-use std::ops::Neg;
+use std::ops::{AddAssign, Neg};
 
 use crate::dp::{Dp, SCALE_FACTOR};
 
-/// 物理像素坐标类型，支持负值用于滚动
+/// Physical pixel coordinate type, supports negative values for scrolling
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct Px(pub i32);
 
 impl Px {
-    /// 创建新的 Px 实例
+    pub const ZERO: Self = Self(0);
+
+    /// Create a new Px instance
     pub const fn new(value: i32) -> Self {
         Px(value)
     }
 
-    /// 从 Dp 转换为 Px
+    /// Convert from Dp to Px
     pub fn from_dp(dp: Dp) -> Self {
         Px(dp.to_pixels_f64() as i32)
     }
 
-    /// 转换为 Dp
+    /// Convert to Dp
     pub fn to_dp(self) -> Dp {
         let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
         Dp((self.0 as f64) / scale_factor)
     }
 
-    /// 获取绝对值（用于渲染时的坐标转换）
+    /// Get absolute value (used for coordinate conversion during rendering)
     pub fn abs(self) -> u32 {
         self.0.max(0) as u32
     }
 
-    /// 转换为 f32
+    /// Convert to f32
     pub fn to_f32(self) -> f32 {
         self.0 as f32
     }
 
-    /// 从 f32 创建
+    /// Create from f32
     pub fn from_f32(value: f32) -> Self {
         Px(value as i32)
     }
 }
 
-/// 物理像素位置类型
+/// Physical pixel position type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PxPosition {
     pub x: Px,
@@ -47,15 +49,15 @@ pub struct PxPosition {
 }
 
 impl PxPosition {
-    /// 创建零位置
+    /// Create a zero position
     pub const ZERO: Self = Self { x: Px(0), y: Px(0) };
 
-    /// 创建新位置
+    /// Create a new position
     pub const fn new(x: Px, y: Px) -> Self {
         Self { x, y }
     }
 
-    /// 偏移位置
+    /// Offset the position
     pub fn offset(self, dx: Px, dy: Px) -> Self {
         Self {
             x: Px(self.x.0 + dx.0),
@@ -63,11 +65,65 @@ impl PxPosition {
         }
     }
 
-    /// 计算到另一点的距离
+    /// Calculate the distance to another point
     pub fn distance_to(self, other: Self) -> f32 {
         let dx = (self.x.0 - other.x.0) as f32;
         let dy = (self.y.0 - other.y.0) as f32;
         (dx * dx + dy * dy).sqrt()
+    }
+
+    /// Convert to a f32 array (2D)
+    pub fn to_f32_arr2(self) -> [f32; 2] {
+        [self.x.0 as f32, self.y.0 as f32]
+    }
+
+    /// Convert to a f32 array (3D)
+    pub fn to_f32_arr3(self) -> [f32; 3] {
+        [self.x.0 as f32, self.y.0 as f32, 0.0]
+    }
+
+    /// Create from a f32 array (2D)
+    pub fn from_f32_arr2(arr: [f32; 2]) -> Self {
+        Self {
+            x: Px::new(arr[0] as i32),
+            y: Px::new(arr[1] as i32),
+        }
+    }
+
+    /// Create from a f32 array (3D)
+    /// Note: The third element will be ignored
+    pub fn from_f32_arr3(arr: [f32; 3]) -> Self {
+        Self {
+            x: Px::new(arr[0] as i32),
+            y: Px::new(arr[1] as i32),
+        }
+    }
+
+    /// Convert to a f64 array (2D)
+    pub fn to_f64_arr2(self) -> [f64; 2] {
+        [self.x.0 as f64, self.y.0 as f64]
+    }
+
+    /// Convert to a f64 array (3D)
+    pub fn to_f64_arr3(self) -> [f64; 3] {
+        [self.x.0 as f64, self.y.0 as f64, 0.0]
+    }
+
+    /// Create from a f64 array (2D)
+    pub fn from_f64_arr2(arr: [f64; 2]) -> Self {
+        Self {
+            x: Px::new(arr[0] as i32),
+            y: Px::new(arr[1] as i32),
+        }
+    }
+
+    /// Create from a f64 array (3D)
+    /// Note: The third element will be ignored
+    pub fn from_f64_arr3(arr: [f64; 3]) -> Self {
+        Self {
+            x: Px::new(arr[0] as i32),
+            y: Px::new(arr[1] as i32),
+        }
     }
 }
 
@@ -111,13 +167,31 @@ impl std::ops::Div<i32> for Px {
     }
 }
 
+impl From<i32> for Px {
+    fn from(value: i32) -> Self {
+        Px(value)
+    }
+}
+
+impl From<u32> for Px {
+    fn from(value: u32) -> Self {
+        Px(value as i32)
+    }
+}
+
 impl From<Dp> for Px {
     fn from(dp: Dp) -> Self {
         Px::from_dp(dp)
     }
 }
 
-// 算术运算支持 - PxPosition
+impl AddAssign for Px {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
+}
+
+// Arithmetic operations support - PxPosition
 impl std::ops::Add for PxPosition {
     type Output = Self;
 
@@ -140,7 +214,7 @@ impl std::ops::Sub for PxPosition {
     }
 }
 
-// 类型转换实现
+// Type conversion implementations
 impl From<[i32; 2]> for PxPosition {
     fn from(pos: [i32; 2]) -> Self {
         PxPosition {

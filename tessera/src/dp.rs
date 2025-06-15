@@ -51,6 +51,11 @@ impl Dp {
         let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
         Dp((value as f64) / scale_factor)
     }
+
+    /// Converts `Dp` to `Px`.
+    pub fn to_px(&self) -> Px {
+        Px::from_f32(self.to_pixels_f32())
+    }
 }
 
 impl From<f64> for Dp {

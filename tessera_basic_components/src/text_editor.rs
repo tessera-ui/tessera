@@ -4,7 +4,7 @@ use derive_builder::Builder;
 use glyphon::{Action, Edit};
 use parking_lot::RwLock;
 
-use tessera::{CursorEventContent, DimensionValue, Dp, write_font_system};
+use tessera::{CursorEventContent, DimensionValue, Dp, Px, PxPosition, write_font_system};
 use tessera_macros::tessera;
 
 use crate::{
@@ -21,20 +21,20 @@ pub use crate::text_edit_core::TextEditorState;
 /// # Example
 /// ```
 /// use tessera_basic_components::text_editor::{TextEditorArgs, TextEditorArgsBuilder, TextEditorState};
-/// use tessera::{Dp, DimensionValue};
+/// use tessera::{Dp, DimensionValue, Px};
 /// use std::sync::Arc;
 /// use parking_lot::RwLock;
 ///
 /// // Create a text editor with a fixed width and height.
 /// let editor_args_fixed = TextEditorArgsBuilder::default()
-///     .width(Some(DimensionValue::Fixed(200))) // pixels
-///     .height(Some(DimensionValue::Fixed(100))) // pixels
+///     .width(Some(DimensionValue::Fixed(Px(200)))) // pixels
+///     .height(Some(DimensionValue::Fixed(Px(100)))) // pixels
 ///     .build()
 ///     .unwrap();
 ///
 /// // Create a text editor that fills available width up to 500px, with a min width of 50px
 /// let editor_args_fill_wrap = TextEditorArgsBuilder::default()
-///     .width(Some(DimensionValue::Fill { min: Some(50), max: Some(500) })) // pixels
+///     .width(Some(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) })) // pixels
 ///     .height(Some(DimensionValue::Wrap { min: None, max: None }))
 ///     .build()
 ///     .unwrap();
@@ -96,13 +96,13 @@ pub struct TextEditorArgs {
 ///
 /// ```
 /// use tessera_basic_components::text_editor::{text_editor, TextEditorArgs, TextEditorArgsBuilder, TextEditorState};
-/// use tessera::{Dp, DimensionValue};
+/// use tessera::{Dp, DimensionValue, Px};
 /// use std::sync::Arc;
 /// use parking_lot::RwLock;
 ///
 /// let args = TextEditorArgsBuilder::default()
-///     .width(Some(DimensionValue::Fixed(300)))
-///     .height(Some(DimensionValue::Fill { min: Some(50), max: Some(500) }))
+///     .width(Some(DimensionValue::Fixed(Px(300))))
+///     .height(Some(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) }))
 ///     .build()
 ///     .unwrap();
 ///
@@ -136,8 +136,8 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
         let state_for_handler = state.clone();
         state_handler(Box::new(move |input| {
             let size = input.computed_data; // This is the full surface size
-            let cursor_position = input.cursor_position;
-            let is_cursor_in_editor = cursor_position
+            let cursor_pos_option = input.cursor_position;
+            let is_cursor_in_editor = cursor_pos_option
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
 
@@ -167,21 +167,22 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                     }
 
                     // Handle cursor positioning for clicks
-                    if let Some(cursor_pos) = cursor_position {
+                    if let Some(cursor_pos) = cursor_pos_option {
                         // Calculate the relative position within the text area
-                        let padding = editor_args.padding.to_pixels_u32() as i32;
-                        let border_width = editor_args.border_width as i32;
+                        let padding_px: Px = editor_args.padding.into();
+                        let border_width_px = Px(editor_args.border_width as i32); // Assuming border_width is integer pixels
 
-                        let text_relative_x = cursor_pos[0] as i32 - padding - border_width;
-                        let text_relative_y = cursor_pos[1] as i32 - padding - border_width;
+                        let text_relative_x_px = cursor_pos.x - padding_px - border_width_px;
+                        let text_relative_y_px = cursor_pos.y - padding_px - border_width_px;
 
-                        // Only process if the click is within the text area
-                        if text_relative_x >= 0 && text_relative_y >= 0 {
+                        // Only process if the click is within the text area (non-negative relative coords)
+                        if text_relative_x_px >= Px(0) && text_relative_y_px >= Px(0) {
+                            let text_relative_pos =
+                                PxPosition::new(text_relative_x_px, text_relative_y_px);
                             // Determine click type and handle accordingly
-                            let click_type = state_for_handler.write().handle_click(
-                                [text_relative_x, text_relative_y],
-                                click_events[0].timestamp,
-                            );
+                            let click_type = state_for_handler
+                                .write()
+                                .handle_click(text_relative_pos, click_events[0].timestamp);
 
                             match click_type {
                                 ClickType::Single => {
@@ -189,8 +190,8 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                                     state_for_handler.write().editor_mut().action(
                                         &mut write_font_system(),
                                         Action::Click {
-                                            x: text_relative_x,
-                                            y: text_relative_y,
+                                            x: text_relative_pos.x.0,
+                                            y: text_relative_pos.y.0,
                                         },
                                     );
                                 }
@@ -199,8 +200,8 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                                     state_for_handler.write().editor_mut().action(
                                         &mut write_font_system(),
                                         Action::DoubleClick {
-                                            x: text_relative_x,
-                                            y: text_relative_y,
+                                            x: text_relative_pos.x.0,
+                                            y: text_relative_pos.y.0,
                                         },
                                     );
                                 }
@@ -209,8 +210,8 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                                     state_for_handler.write().editor_mut().action(
                                         &mut write_font_system(),
                                         Action::TripleClick {
-                                            x: text_relative_x,
-                                            y: text_relative_y,
+                                            x: text_relative_pos.x.0,
+                                            y: text_relative_pos.y.0,
                                         },
                                     );
                                 }
@@ -224,33 +225,33 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
 
                 // Handle drag events (mouse move while dragging)
                 // This happens every frame when cursor position changes during drag
-                if state_for_handler.read().is_dragging() && cursor_position.is_some() {
-                    let cursor_pos = cursor_position.unwrap();
-                    let padding = editor_args.padding.to_pixels_u32() as i32;
-                    let border_width = editor_args.border_width as i32;
+                if state_for_handler.read().is_dragging() && cursor_pos_option.is_some() {
+                    let cursor_pos = cursor_pos_option.unwrap();
+                    let padding_px: Px = editor_args.padding.into();
+                    let border_width_px = Px(editor_args.border_width as i32);
 
-                    let text_relative_x = cursor_pos[0] as i32 - padding - border_width;
-                    let text_relative_y = cursor_pos[1] as i32 - padding - border_width;
+                    let text_relative_x_px = cursor_pos.x - padding_px - border_width_px;
+                    let text_relative_y_px = cursor_pos.y - padding_px - border_width_px;
 
-                    if text_relative_x >= 0 && text_relative_y >= 0 {
-                        // Only trigger drag if position actually changed
-                        let last_pos = state_for_handler.read().last_click_position();
-                        let current_pos = [text_relative_x, text_relative_y];
+                    if text_relative_x_px >= Px(0) && text_relative_y_px >= Px(0) {
+                        let current_pos_px =
+                            PxPosition::new(text_relative_x_px, text_relative_y_px);
+                        let last_pos_px = state_for_handler.read().last_click_position();
 
-                        if last_pos.map_or(true, |pos| pos != current_pos) {
+                        if last_pos_px.map_or(true, |l_pos| l_pos != current_pos_px) {
                             // Extend selection by dragging
                             state_for_handler.write().editor_mut().action(
                                 &mut write_font_system(),
                                 Action::Drag {
-                                    x: text_relative_x,
-                                    y: text_relative_y,
+                                    x: current_pos_px.x.0,
+                                    y: current_pos_px.y.0,
                                 },
                             );
 
                             // Update last position to current position
                             state_for_handler
                                 .write()
-                                .update_last_click_position(current_pos);
+                                .update_last_click_position(current_pos_px);
                         }
                     }
                 }
@@ -321,7 +322,7 @@ fn create_surface_args(
     } else {
         // Use default with minimum
         builder = builder.width(DimensionValue::Wrap {
-            min: args.min_width.map(|dp| dp.to_pixels_u32()).or(Some(120)), // Default minimum width 120dp
+            min: args.min_width.map(|dp| dp.into()).or(Some(Px(120))), // Default minimum width 120px
             max: None,
         });
     }
@@ -331,14 +332,14 @@ fn create_surface_args(
         builder = builder.height(height);
     } else {
         // Use line height as basis with some padding
-        let line_height = state.read().line_height();
-        let padding = args.padding.to_pixels_u32() * 2; // top + bottom padding
-        let min_height = args
+        let line_height_px = state.read().line_height();
+        let padding_px: Px = args.padding.into();
+        let min_height_px = args
             .min_height
-            .map(|dp| dp.to_pixels_u32())
-            .unwrap_or(line_height + padding + 10); // +10 for comfortable spacing
+            .map(|dp| dp.into())
+            .unwrap_or(line_height_px + padding_px * 2 + Px(10)); // +10 for comfortable spacing
         builder = builder.height(DimensionValue::Wrap {
-            min: Some(min_height),
+            min: Some(min_height_px),
             max: None,
         });
     }

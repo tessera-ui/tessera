@@ -1,16 +1,17 @@
 use std::{
     sync::{
         Arc,
-        atomic::{self, AtomicU32, AtomicU64},
+        atomic::{self, AtomicI32, AtomicU64}, // Changed AtomicU32 to AtomicI32
     },
     time::Instant,
 };
 
 use parking_lot::RwLock;
-use tessera::{CursorEventContent, DimensionValue};
+use tessera::{CursorEventContent, DimensionValue, Px}; // Added Px import
 use tessera_basic_components::{
     column::{ColumnItem, column},
     row::{RowItem, row},
+    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::text,
@@ -26,14 +27,15 @@ struct PerformanceMetrics {
 }
 
 pub struct AnimSpacerState {
-    pub height: AtomicU32,
-    pub max_height: AtomicU32,
+    pub height: AtomicI32,     // Changed from AtomicU32
+    pub max_height: AtomicI32, // Changed from AtomicU32
     pub start_time: Instant,
 }
 
 struct AppData {
     click_count: AtomicU64,
     scroll_count: AtomicU64,
+    scrollable_state: Arc<RwLock<ScrollableState>>,
 }
 
 pub struct AppState {
@@ -54,13 +56,14 @@ impl AppState {
                 frames_since_last_update: AtomicU64::new(0),
             }),
             anim_space_state: Arc::new(AnimSpacerState {
-                height: AtomicU32::new(0),
-                max_height: AtomicU32::new(100),
+                height: AtomicI32::new(0),       // Changed from AtomicU32
+                max_height: AtomicI32::new(100), // Changed from AtomicU32
                 start_time: Instant::now(),
             }),
             data: Arc::new(AppData {
                 click_count: AtomicU64::new(0),
                 scroll_count: AtomicU64::new(0),
+                scrollable_state: Arc::new(RwLock::new(ScrollableState::new())),
             }),
             editor_state: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), 50.0.into()))),
             editor_state_2: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), 50.0.into()))),
@@ -188,9 +191,9 @@ fn ease_in_out_sine(x: f32) -> f32 {
 fn anim_spacer(state: Arc<AnimSpacerState>) {
     spacer(
         SpacerArgsBuilder::default()
-            .height(DimensionValue::Fixed(
-                state.height.load(atomic::Ordering::SeqCst),
-            ))
+            .height(DimensionValue::Fixed(Px(state
+                .height
+                .load(atomic::Ordering::SeqCst))))
             .build()
             .unwrap(),
     );
@@ -205,7 +208,7 @@ fn anim_spacer(state: Arc<AnimSpacerState>) {
         let t = (elapsed % period) / period;
         let triangle = if t < 0.5 { 2.0 * t } else { 2.0 * (1.0 - t) };
         let eased = ease_in_out_sine(triangle);
-        let new_height = (eased * max_height).round() as u32;
+        let new_height = (eased * max_height).round() as i32; // Changed to i32
         state.height.store(new_height, atomic::Ordering::SeqCst);
     }));
 }
@@ -213,131 +216,138 @@ fn anim_spacer(state: Arc<AnimSpacerState>) {
 #[tessera]
 pub fn app(state: Arc<AppState>) {
     {
+        let scroller_state_clone = state.data.scrollable_state.clone();
         let anim_space_state_clone = state.anim_space_state.clone();
         let app_data_clone_for_scroll_display = state.data.clone();
         let app_data_clone_for_value_display = state.data.clone();
         let metrics_clone = state.metrics.clone();
         let editor_state_clone = state.editor_state.clone();
         let editor_state_2_clone = state.editor_state_2.clone();
-        surface(
-            // Main background surface
-            SurfaceArgsBuilder::default()
-                .color([0.2, 0.2, 0.25, 1.0]) // Darker background, RGBA
-                .width(DimensionValue::Fill {
-                    min: None,
-                    max: None,
-                })
-                .height(DimensionValue::Fill {
-                    min: None,
-                    max: None,
-                })
-                .build()
-                .unwrap(),
-            move || {
-                column([
-                    ColumnItem::wrap(Box::new(content_section)),
-                    ColumnItem::wrap(Box::new(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(DimensionValue::Fixed(10))
-                                .width(DimensionValue::Fill {
-                                    min: None,
-                                    max: None,
-                                })
-                                .build()
-                                .unwrap(),
-                        )
-                    })),
-                    // --- New Outline Surface Example ---
-                    ColumnItem::wrap(Box::new(|| {
-                        surface(
-                            SurfaceArgsBuilder::default()
-                                .color([0.3, 0.3, 0.3, 0.5]) // Semi-transparent fill color
-                                .border_width(5.0)
-                                .border_color(Some([1.0, 0.0, 0.0, 1.0])) // Red border, RGBA
-                                .corner_radius(15.0)
-                                .width(DimensionValue::Fixed(200))
-                                .height(DimensionValue::Fixed(100))
-                                .padding(10.0.into())
-                                .shadow(Some(tessera::ShadowProps {
-                                    color: [0.0, 0.0, 0.0, 0.5],
-                                    offset: [3.0, 3.0],
-                                    smoothness: 5.0,
-                                }))
-                                .build()
-                                .unwrap(),
-                            || {
-                                text("Outlined Box");
-                            },
-                        )
-                    })),
-                    // --- Transparent Surface Example ---
-                    ColumnItem::wrap(Box::new(|| {
-                        surface(
-                            SurfaceArgsBuilder::default()
-                                .color([0.0, 0.0, 1.0, 0.3]) // Transparent blue fill
-                                .corner_radius(10.0)
-                                .width(DimensionValue::Fixed(150))
-                                .height(DimensionValue::Fixed(70))
-                                .padding(5.0.into())
-                                .build()
-                                .unwrap(),
-                            || {
-                                text("Transparent Fill");
-                            },
-                        )
-                    })),
-                    ColumnItem::wrap(Box::new(move || {
-                        text_editor(
-                            TextEditorArgsBuilder::default()
-                                .height(Some(DimensionValue::Fixed(120))) // Fixed height to test scrolling
-                                .width(Some(DimensionValue::Fill {
-                                    min: None,
-                                    max: None,
-                                }))
-                                .selection_color(Some([0.3, 0.8, 0.4, 0.5])) // Custom green selection with 50% transparency
-                                .build()
-                                .unwrap(),
-                            editor_state_clone.clone(),
-                        );
-                    })),
-                    ColumnItem::wrap(Box::new(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(DimensionValue::Fixed(10))
-                                .width(DimensionValue::Fill {
-                                    min: None,
-                                    max: None,
-                                })
-                                .build()
-                                .unwrap(),
-                        )
-                    })),
-                    // Second text editor with default selection color
-                    ColumnItem::wrap(Box::new(move || {
-                        text_editor(
-                            TextEditorArgsBuilder::default()
-                                .height(Some(DimensionValue::Fixed(100))) // Fixed height to test scrolling
-                                .width(Some(DimensionValue::Fill {
-                                    min: None,
-                                    max: None,
-                                }))
-                                .build()
-                                .unwrap(),
-                            editor_state_2_clone.clone(),
-                        );
-                    })),
-                    ColumnItem::wrap(Box::new(move || {
-                        anim_spacer(anim_space_state_clone.clone())
-                    })),
-                    ColumnItem::wrap(Box::new(move || {
-                        value_display(app_data_clone_for_value_display.clone())
-                    })),
-                    ColumnItem::wrap(Box::new(move || {
-                        scroll_display(app_data_clone_for_scroll_display.clone())
-                    })),
-                    ColumnItem::wrap(Box::new(move || perf_display(metrics_clone.clone()))),
-                ]);
+        scrollable(
+            ScrollableArgsBuilder::default().build().unwrap(),
+            scroller_state_clone,
+            || {
+                surface(
+                    // Main background surface
+                    SurfaceArgsBuilder::default()
+                        .color([0.2, 0.2, 0.25, 1.0]) // Darker background, RGBA
+                        .width(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .height(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .build()
+                        .unwrap(),
+                    move || {
+                        column([
+                            ColumnItem::wrap(Box::new(content_section)),
+                            ColumnItem::wrap(Box::new(|| {
+                                spacer(
+                                    SpacerArgsBuilder::default()
+                                        .height(DimensionValue::Fixed(Px(10)))
+                                        .width(DimensionValue::Fill {
+                                            min: None,
+                                            max: None,
+                                        })
+                                        .build()
+                                        .unwrap(),
+                                )
+                            })),
+                            // --- New Outline Surface Example ---
+                            ColumnItem::wrap(Box::new(|| {
+                                surface(
+                                    SurfaceArgsBuilder::default()
+                                        .color([0.3, 0.3, 0.3, 0.5]) // Semi-transparent fill color
+                                        .border_width(5.0)
+                                        .border_color(Some([1.0, 0.0, 0.0, 1.0])) // Red border, RGBA
+                                        .corner_radius(15.0)
+                                        .width(DimensionValue::Fixed(Px(200)))
+                                        .height(DimensionValue::Fixed(Px(100)))
+                                        .padding(10.0.into())
+                                        .shadow(Some(tessera::ShadowProps {
+                                            color: [0.0, 0.0, 0.0, 0.5],
+                                            offset: [3.0, 3.0],
+                                            smoothness: 5.0,
+                                        }))
+                                        .build()
+                                        .unwrap(),
+                                    || {
+                                        text("Outlined Box");
+                                    },
+                                )
+                            })),
+                            // --- Transparent Surface Example ---
+                            ColumnItem::wrap(Box::new(|| {
+                                surface(
+                                    SurfaceArgsBuilder::default()
+                                        .color([0.0, 0.0, 1.0, 0.3]) // Transparent blue fill
+                                        .corner_radius(10.0)
+                                        .width(DimensionValue::Fixed(Px(150)))
+                                        .height(DimensionValue::Fixed(Px(70)))
+                                        .padding(5.0.into())
+                                        .build()
+                                        .unwrap(),
+                                    || {
+                                        text("Transparent Fill");
+                                    },
+                                )
+                            })),
+                            ColumnItem::wrap(Box::new(move || {
+                                text_editor(
+                                    TextEditorArgsBuilder::default()
+                                        .height(Some(DimensionValue::Fixed(Px(120)))) // Fixed height to test scrolling
+                                        .width(Some(DimensionValue::Fill {
+                                            min: None,
+                                            max: None,
+                                        }))
+                                        .selection_color(Some([0.3, 0.8, 0.4, 0.5])) // Custom green selection with 50% transparency
+                                        .build()
+                                        .unwrap(),
+                                    editor_state_clone.clone(),
+                                );
+                            })),
+                            ColumnItem::wrap(Box::new(|| {
+                                spacer(
+                                    SpacerArgsBuilder::default()
+                                        .height(DimensionValue::Fixed(Px(10)))
+                                        .width(DimensionValue::Fill {
+                                            min: None,
+                                            max: None,
+                                        })
+                                        .build()
+                                        .unwrap(),
+                                )
+                            })),
+                            // Second text editor with default selection color
+                            ColumnItem::wrap(Box::new(move || {
+                                text_editor(
+                                    TextEditorArgsBuilder::default()
+                                        .height(Some(DimensionValue::Fixed(Px(100)))) // Fixed height to test scrolling
+                                        .width(Some(DimensionValue::Fill {
+                                            min: None,
+                                            max: None,
+                                        }))
+                                        .build()
+                                        .unwrap(),
+                                    editor_state_2_clone.clone(),
+                                );
+                            })),
+                            ColumnItem::wrap(Box::new(move || {
+                                anim_spacer(anim_space_state_clone.clone())
+                            })),
+                            ColumnItem::wrap(Box::new(move || {
+                                value_display(app_data_clone_for_value_display.clone())
+                            })),
+                            ColumnItem::wrap(Box::new(move || {
+                                scroll_display(app_data_clone_for_scroll_display.clone())
+                            })),
+                            ColumnItem::wrap(Box::new(move || perf_display(metrics_clone.clone()))),
+                        ]);
+                    },
+                )
             },
         );
     }

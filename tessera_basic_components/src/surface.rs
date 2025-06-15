@@ -1,6 +1,6 @@
 use derive_builder::Builder;
 use tessera::{
-    BasicDrawable, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, PxPosition,
+    BasicDrawable, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, PxPosition,
     ShadowProps, measure_nodes, place_node,
 };
 use tessera_macros::tessera;
@@ -48,9 +48,8 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
     let measure_args = args.clone();
 
     measure(Box::new(move |input| {
-        let padding_val = measure_args.padding.to_pixels_f32();
-        let padding_2_f32 = padding_val * 2.0;
-        let padding_2_u32 = padding_2_f32 as u32;
+        let padding_px: Px = measure_args.padding.into();
+        let padding_2_px = padding_px * 2;
 
         // 1. Determine Surface's intrinsic constraint based on args
         let surface_intrinsic_width = measure_args.width.unwrap_or(DimensionValue::Wrap {
@@ -71,13 +70,13 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
         // 3. Determine constraint for the child
         // For Fill constraint, Surface should determine its own final size first, then give child a Fixed constraint
         let child_constraint_width = match effective_surface_constraint.width {
-            DimensionValue::Fixed(sw) => DimensionValue::Fixed(sw.saturating_sub(padding_2_u32)),
+            DimensionValue::Fixed(sw) => DimensionValue::Fixed((sw - padding_2_px).max(Px(0))),
             DimensionValue::Wrap {
                 min: s_min_w,
                 max: s_max_w,
             } => DimensionValue::Wrap {
-                min: s_min_w.map(|m| m.saturating_sub(padding_2_u32)),
-                max: s_max_w.map(|m| m.saturating_sub(padding_2_u32)),
+                min: s_min_w.map(|m| (m - padding_2_px).max(Px(0))),
+                max: s_max_w.map(|m| (m - padding_2_px).max(Px(0))),
             },
             DimensionValue::Fill {
                 min: _s_min_w,
@@ -94,24 +93,24 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
 
                 if let Some(ppw) = parent_provided_width {
                     // Surface takes the full parent-provided width, child gets fixed constraint
-                    DimensionValue::Fixed(ppw.saturating_sub(padding_2_u32))
+                    DimensionValue::Fixed((ppw - padding_2_px).max(Px(0)))
                 } else {
                     // No parent width available, fallback to wrap-like behavior
                     DimensionValue::Wrap {
                         min: None,
-                        max: s_max_w.map(|m| m.saturating_sub(padding_2_u32)),
+                        max: s_max_w.map(|m| (m - padding_2_px).max(Px(0))),
                     }
                 }
             }
         };
         let child_constraint_height = match effective_surface_constraint.height {
-            DimensionValue::Fixed(sh) => DimensionValue::Fixed(sh.saturating_sub(padding_2_u32)),
+            DimensionValue::Fixed(sh) => DimensionValue::Fixed((sh - padding_2_px).max(Px(0))),
             DimensionValue::Wrap {
                 min: s_min_h,
                 max: s_max_h,
             } => DimensionValue::Wrap {
-                min: s_min_h.map(|m| m.saturating_sub(padding_2_u32)),
-                max: s_max_h.map(|m| m.saturating_sub(padding_2_u32)),
+                min: s_min_h.map(|m| (m - padding_2_px).max(Px(0))),
+                max: s_max_h.map(|m| (m - padding_2_px).max(Px(0))),
             },
             DimensionValue::Fill {
                 min: _s_min_h,
@@ -128,12 +127,12 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
 
                 if let Some(pph) = parent_provided_height {
                     // Surface takes the full parent-provided height, child gets fixed constraint
-                    DimensionValue::Fixed(pph.saturating_sub(padding_2_u32))
+                    DimensionValue::Fixed((pph - padding_2_px).max(Px(0)))
                 } else {
                     // No parent height available, fallback to wrap-like behavior
                     DimensionValue::Wrap {
                         min: None,
-                        max: s_max_h.map(|m| m.saturating_sub(padding_2_u32)),
+                        max: s_max_h.map(|m| (m - padding_2_px).max(Px(0))),
                     }
                 }
             }
@@ -166,14 +165,14 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
 
             place_node(
                 child_node_id,
-                PxPosition::new(measure_args.padding.into(), measure_args.padding.into()),
+                PxPosition::new(padding_px, padding_px),
                 input.metadatas,
             );
         }
 
         // 5. Calculate final Surface dimensions
-        let content_width_with_padding = child_measured_size.width.saturating_add(padding_2_u32);
-        let content_height_with_padding = child_measured_size.height.saturating_add(padding_2_u32);
+        let content_width_with_padding = child_measured_size.width + padding_2_px;
+        let content_height_with_padding = child_measured_size.height + padding_2_px;
 
         let mut final_surface_width = content_width_with_padding;
         match effective_surface_constraint.width {
@@ -245,8 +244,8 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
         }
 
         Ok(ComputedData {
-            width: final_surface_width,
-            height: final_surface_height,
+            width: final_surface_width.max(Px(0)), // Ensure final dimensions are not negative
+            height: final_surface_height.max(Px(0)), // Ensure final dimensions are not negative
         })
     }));
 
