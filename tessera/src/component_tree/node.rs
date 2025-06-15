@@ -118,10 +118,21 @@ pub struct MeasureInput<'a> {
 }
 
 /// A `StateHandlerFn` is a function that handles state changes for a component.
-pub type StateHandlerFn = dyn Fn(&StateHandlerInput) + Send + Sync;
+///
+/// The rule of execution order is:
+///
+/// 1. Children's state handlers are executed earlier than parent's.
+/// 2. Newer components' state handlers are executed earlier than older ones.
+///
+/// Acutally, rule 2 includes rule 1, because a newer component is always a child of an older component :)
+pub type StateHandlerFn = dyn Fn(StateHandlerInput) + Send + Sync;
 
 /// Input for the state handler function (`StateHandlerFn`).
-pub struct StateHandlerInput {
+///
+/// Note that you can modify the `cursor_events` and `keyboard_events` vectors
+/// for exmaple block some keyboard events or cursor events to prevent them from propagating
+/// to parent components and older brother components.
+pub struct StateHandlerInput<'a> {
     /// The `NodeId` of the component node that this state handler is for.
     /// Usually used to access the component's metadata.
     pub node_id: indextree::NodeId,
@@ -131,9 +142,9 @@ pub struct StateHandlerInput {
     /// Relative to the root position of the component.
     pub cursor_position: Option<PxPosition>,
     /// Cursor events from the event loop, if any.
-    pub cursor_events: Vec<CursorEvent>,
+    pub cursor_events: &'a mut Vec<CursorEvent>,
     /// Keyboard events from the event loop, if any.
-    pub keyboard_events: Vec<winit::event::KeyEvent>,
+    pub keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
 }
 
 /// Measures a single node recursively, returning its size or an error.

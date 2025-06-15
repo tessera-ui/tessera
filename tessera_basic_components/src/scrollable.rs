@@ -4,8 +4,8 @@ use std::time::Instant;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera::{
-    ComputedData, Constraint, CursorEventContent, DimensionValue, Px, PxPosition, measure_node,
-    place_node, focus_state::Focus,
+    ComputedData, Constraint, CursorEventContent, DimensionValue, Px, PxPosition,
+    focus_state::Focus, measure_node, place_node,
 };
 use tessera_macros::tessera;
 
@@ -247,8 +247,8 @@ pub fn scrollable(
 
                 // Calculate new target position
                 let current_target = state_guard.target_position;
-                let new_target =
-                    current_target.offset(Px::from_f32(scroll_delta_x), Px::from_f32(scroll_delta_y));
+                let new_target = current_target
+                    .offset(Px::from_f32(scroll_delta_x), Px::from_f32(scroll_delta_y));
 
                 // Set new target position
                 state_guard.set_target_position(new_target);

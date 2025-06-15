@@ -260,10 +260,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                 if !release_events.is_empty() {
                     state_for_handler.write().stop_drag();
                 }
-            }
 
-            // Handle scroll events (only when focused)
-            if state_for_handler.read().focus_handler().is_focused() {
                 let scroll_events: Vec<_> = input
                     .cursor_events
                     .iter()
@@ -273,21 +270,27 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                     })
                     .collect();
 
-                for scroll_event in scroll_events {
-                    // Convert scroll delta to lines
-                    let lines_to_scroll = scroll_event.delta_y as i32;
+                // Handle scroll events (only when focused and cursor is in editor)
+                if state_for_handler.read().focus_handler().is_focused() {
+                    for scroll_event in scroll_events {
+                        // Convert scroll delta to lines
+                        let lines_to_scroll = scroll_event.delta_y as i32;
 
-                    if lines_to_scroll != 0 {
-                        // Scroll up for positive delta_y, down for negative
-                        let action = glyphon::Action::Scroll {
-                            lines: -lines_to_scroll,
-                        };
-                        state_for_handler
-                            .write()
-                            .editor_mut()
-                            .action(&mut write_font_system(), action);
+                        if lines_to_scroll != 0 {
+                            // Scroll up for positive delta_y, down for negative
+                            let action = glyphon::Action::Scroll {
+                                lines: -lines_to_scroll,
+                            };
+                            state_for_handler
+                                .write()
+                                .editor_mut()
+                                .action(&mut write_font_system(), action);
+                        }
                     }
                 }
+
+                // Block all cursor events to prevent propagation
+                input.cursor_events.clear();
             }
 
             // Handle keyboard events (only when focused)
@@ -304,6 +307,8 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                         .editor
                         .action(&mut write_font_system(), action);
                 }
+                // Block all keyboard events to prevent propagation
+                input.keyboard_events.clear();
             }
         }));
     }

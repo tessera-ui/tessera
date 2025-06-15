@@ -99,8 +99,8 @@ impl ComponentTree {
         &mut self,
         screen_size: [Px; 2],
         cursor_position: Option<PxPosition>,
-        cursor_events: Vec<CursorEvent>,
-        keyboard_events: Vec<winit::event::KeyEvent>,
+        mut cursor_events: Vec<CursorEvent>,
+        mut keyboard_events: Vec<winit::event::KeyEvent>,
     ) -> Vec<DrawCommand> {
         let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
             return vec![];
@@ -140,7 +140,7 @@ impl ComponentTree {
 
         let state_handler_timer = Instant::now();
         debug!("Start executing state handlers...");
-        for node_id_loop in root_node // Renamed to avoid conflict with node_id in StateHandlerInput
+        for node_id in root_node
             .reverse_traverse(&self.tree)
             .filter_map(|edge| match edge {
                 indextree::NodeEdge::Start(id) => Some(id),
@@ -149,44 +149,39 @@ impl ComponentTree {
         {
             let Some(state_handler) = self
                 .tree
-                .get(node_id_loop)
+                .get(node_id)
                 .and_then(|n| n.get().state_handler_fn.as_ref())
             else {
                 continue;
             };
 
-            // Get the current cursor events
-            let current_cursor_events = cursor_events.to_vec();
             // Compute the relative cursor position for the current node, if available
             let current_cursor_position = cursor_position.map(|pos| {
                 // Get the absolute position of the current node
                 let abs_pos = self
                     .metadatas
-                    .get(&node_id_loop)
+                    .get(&node_id)
                     .and_then(|m| m.abs_position)
                     .unwrap_or(PxPosition::ZERO);
                 // Calculate the relative position
                 pos - abs_pos
             });
             // Get the computed_data for the current node
-            let computed_data_option = self
-                .metadatas
-                .get(&node_id_loop)
-                .and_then(|m| m.computed_data);
+            let computed_data_option = self.metadatas.get(&node_id).and_then(|m| m.computed_data);
 
             if let Some(node_computed_data) = computed_data_option {
                 // Check if computed_data exists
                 let input = StateHandlerInput {
-                    node_id: node_id_loop,
+                    node_id,
                     computed_data: node_computed_data,
                     cursor_position: current_cursor_position,
-                    cursor_events: current_cursor_events,
-                    keyboard_events: keyboard_events.clone(),
+                    cursor_events: &mut cursor_events,
+                    keyboard_events: &mut keyboard_events,
                 };
-                state_handler(&input);
+                state_handler(input);
             } else {
                 log::warn!(
-                    "Computed data not found for node {node_id_loop:?} during state handler execution."
+                    "Computed data not found for node {node_id:?} during state handler execution."
                 );
             }
         }
