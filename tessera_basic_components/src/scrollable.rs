@@ -30,12 +30,12 @@ pub struct ScrollableArgs {
     #[builder(default = "false")]
     pub horizontal: bool,
     /// Scroll speed multiplier. Higher values make scrolling faster.
-    /// Defaults to 20.0 for reasonable scroll speed.
-    #[builder(default = "20.0")]
+    /// Defaults to 50.0 for responsive scroll speed.
+    #[builder(default = "50.0")]
     pub scroll_speed: f32,
     /// Scroll smoothing factor (0.0 = instant, 1.0 = very smooth).
-    /// Defaults to 0.15 for responsive but smooth scrolling.
-    #[builder(default = "0.1")]
+    /// Defaults to 0.05 for very responsive but still smooth scrolling.
+    #[builder(default = "0.05")]
     pub scroll_smoothing: f32,
 }
 
@@ -85,12 +85,12 @@ impl ScrollableState {
 
         self.last_frame_time = Some(current_time);
 
-        // If we're close enough to target, snap to it
-        let distance_x = (self.target_position.x - self.child_position.x).abs();
-        let distance_y = (self.target_position.y - self.child_position.y).abs();
-        let total_distance = distance_x + distance_y;
+        // Calculate the difference between target and current position
+        let diff_x = self.target_position.x.to_f32() - self.child_position.x.to_f32();
+        let diff_y = self.target_position.y.to_f32() - self.child_position.y.to_f32();
 
-        if total_distance <= 1 {
+        // If we're close enough to target, snap to it
+        if diff_x.abs() < 1.0 && diff_y.abs() < 1.0 {
             if self.child_position != self.target_position {
                 self.child_position = self.target_position;
                 return true;
@@ -98,18 +98,15 @@ impl ScrollableState {
             return false;
         }
 
-        // Calculate interpolation factor based on smoothing and delta time
-        // Higher smoothing = more lerp, lower smoothing = more immediate
-        let lerp_factor = (1.0 - smoothing).powf(delta_time * 60.0).clamp(0.0, 1.0);
+        // Use simple velocity-based movement for consistent behavior
+        // Higher smoothing = slower movement
+        let movement_factor = (1.0 - smoothing) * delta_time * 60.0;
 
-        // Interpolate towards target
         let old_position = self.child_position;
-        let delta_x = self.target_position.x.to_f32() - self.child_position.x.to_f32();
-        let delta_y = self.target_position.y.to_f32() - self.child_position.y.to_f32();
 
         self.child_position = PxPosition {
-            x: Px::from_f32(self.child_position.x.to_f32() + delta_x * (1.0 - lerp_factor)),
-            y: Px::from_f32(self.child_position.y.to_f32() + delta_y * (1.0 - lerp_factor)),
+            x: Px::from_f32(self.child_position.x.to_f32() + diff_x * movement_factor),
+            y: Px::from_f32(self.child_position.y.to_f32() + diff_y * movement_factor),
         };
 
         // Return true if position changed significantly
@@ -220,9 +217,6 @@ pub fn scrollable(
 
     // Handle scroll input and position updates
     state_handler(Box::new(move |input| {
-        // Update scroll position based on time (always call this each frame)
-        state.write().update_scroll_position(args.scroll_smoothing);
-
         let size = input.computed_data;
         let cursor_pos_option = input.cursor_position;
         let is_cursor_in_component = cursor_pos_option
@@ -265,8 +259,18 @@ pub fn scrollable(
                     let new_target = current_target
                         .offset(Px::from_f32(scroll_delta_x), Px::from_f32(scroll_delta_y));
 
-                    // Set new target position
-                    state_guard.set_target_position(new_target);
+                    // Apply bounds constraints immediately before setting target
+                    let child_size = state_guard.child_size;
+                    let constrained_target = constrain_position(
+                        new_target,
+                        &child_size,
+                        &input.computed_data,
+                        args.vertical,
+                        args.horizontal,
+                    );
+
+                    // Set constrained target position
+                    state_guard.set_target_position(constrained_target);
                 }
             }
 
@@ -276,19 +280,8 @@ pub fn scrollable(
             }
         }
 
-        // Apply bounds constraints to target position
-        let target_position = state.read().target_position;
-        let child_size = state.read().child_size;
-        let constrained_target = constrain_position(
-            target_position,
-            &child_size,
-            &input.computed_data,
-            args.vertical,
-            args.horizontal,
-        );
-
-        // Set contrained target position
-        state.write().set_target_position(constrained_target);
+        // Update scroll position based on time (only once per frame, after handling events)
+        state.write().update_scroll_position(args.scroll_smoothing);
     }));
 
     // Add child component
