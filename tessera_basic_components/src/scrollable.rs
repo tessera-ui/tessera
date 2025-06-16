@@ -274,6 +274,19 @@ pub fn scrollable(
                 }
             }
 
+            // Apply bound constraints to the child position
+            // To make sure we constrain the target position at least once per frame
+            let target = state.read().target_position;
+            let child_size = state.read().child_size;
+            let constrained_position = constrain_position(
+                target,
+                &child_size,
+                &input.computed_data,
+                args.vertical,
+                args.horizontal,
+            );
+            state.write().set_target_position(constrained_position);
+
             // Only block cursor events when focused to prevent propagation
             if state.read().focus_handler().is_focused() {
                 input.cursor_events.clear();
