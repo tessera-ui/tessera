@@ -7,8 +7,9 @@ use std::{
 };
 
 use parking_lot::RwLock;
-use tessera::{CursorEventContent, DimensionValue, Px}; // Added Px import
+use tessera::{CursorEventContent, DimensionValue, Dp, Px}; // Added Px import
 use tessera_basic_components::{
+    button::{ButtonArgsBuilder, button},
     column::{ColumnItem, column},
     row::{RowItem, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
@@ -35,6 +36,7 @@ pub struct AnimSpacerState {
 struct AppData {
     click_count: AtomicU64,
     scroll_count: AtomicU64,
+    button_click_count: AtomicU64,
     scrollable_state: Arc<RwLock<ScrollableState>>,
 }
 
@@ -63,6 +65,7 @@ impl AppState {
             data: Arc::new(AppData {
                 click_count: AtomicU64::new(0),
                 scroll_count: AtomicU64::new(0),
+                button_click_count: AtomicU64::new(0),
                 scrollable_state: Arc::new(RwLock::new(ScrollableState::new())),
             }),
             editor_state: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), 50.0.into()))),
@@ -154,6 +157,84 @@ fn scroll_display(app_data: Arc<AppData>) {
     )
 }
 
+// Button demo component
+#[tessera]
+fn button_demo(app_data: Arc<AppData>) {
+    column([
+        ColumnItem::wrap(Box::new(|| text("Button Demo:"))),
+        ColumnItem::wrap(Box::new({
+            let app_data_clone = app_data.clone();
+            move || {
+                row([
+                    RowItem::wrap(Box::new({
+                        let app_data_for_button = app_data_clone.clone();
+                        move || {
+                            button(ButtonArgsBuilder::default()
+                                .text("Click Me!".to_string())
+                                .color([0.2, 0.7, 0.2, 1.0]) // Green
+                                .padding(Dp(16.0))
+                                .on_click(Arc::new({
+                                    let app_data_for_click = app_data_for_button.clone();
+                                    move || {
+                                        app_data_for_click.button_click_count.fetch_add(1, atomic::Ordering::SeqCst);
+                                        println!("Button clicked!");
+                                    }
+                                }))
+                                .build()
+                                .unwrap())
+                        }
+                    })),
+                    RowItem::wrap(Box::new(|| {
+                        spacer(SpacerArgsBuilder::default()
+                            .width(DimensionValue::Fixed(Px(10)))
+                            .build()
+                            .unwrap())
+                    })),
+                    RowItem::wrap(Box::new({
+                        let app_data_for_button2 = app_data_clone.clone();
+                        move || {
+                            button(ButtonArgsBuilder::default()
+                                .text("Secondary".to_string())
+                                .color([0.6, 0.6, 0.6, 1.0]) // Gray
+                                .text_color([0, 0, 0]) // Black text
+                                .padding(Dp(12.0))
+                                .corner_radius(4.0)
+                                .on_click(Arc::new({
+                                    let app_data_for_click2 = app_data_for_button2.clone();
+                                    move || {
+                                        println!("Secondary button clicked!");
+                                        app_data_for_click2.button_click_count.fetch_add(1, atomic::Ordering::SeqCst);
+                                    }
+                                }))
+                                .build()
+                                .unwrap())
+                        }
+                    })),
+                ])
+            }
+        })),
+        ColumnItem::wrap(Box::new({
+            let app_data_for_display = app_data.clone();
+            move || {
+                surface(
+                    SurfaceArgsBuilder::default()
+                        .corner_radius(8.0)
+                        .color([0.9, 0.9, 0.7, 1.0]) // Light yellow fill, RGBA
+                        .padding(Dp(8.0))
+                        .build()
+                        .unwrap(),
+                    move || {
+                        text(format!(
+                            "Button clicks: {}",
+                            app_data_for_display.button_click_count.load(atomic::Ordering::SeqCst)
+                        ));
+                    },
+                )
+            }
+        })),
+    ])
+}
+
 #[tessera]
 fn perf_display(metrics: Arc<PerformanceMetrics>) {
     text(format!(
@@ -220,6 +301,7 @@ pub fn app(state: Arc<AppState>) {
         let anim_space_state_clone = state.anim_space_state.clone();
         let app_data_clone_for_scroll_display = state.data.clone();
         let app_data_clone_for_value_display = state.data.clone();
+        let app_data_clone_for_button_demo = state.data.clone();
         let metrics_clone = state.metrics.clone();
         let editor_state_clone = state.editor_state.clone();
         let editor_state_2_clone = state.editor_state_2.clone();
@@ -244,6 +326,22 @@ pub fn app(state: Arc<AppState>) {
                     move || {
                         column([
                             ColumnItem::wrap(Box::new(content_section)),
+                            ColumnItem::wrap(Box::new(|| {
+                                spacer(
+                                    SpacerArgsBuilder::default()
+                                        .height(DimensionValue::Fixed(Px(10)))
+                                        .width(DimensionValue::Fill {
+                                            min: None,
+                                            max: None,
+                                        })
+                                        .build()
+                                        .unwrap(),
+                                )
+                            })),
+                            // --- Button Demo ---
+                            ColumnItem::wrap(Box::new(move || {
+                                button_demo(app_data_clone_for_button_demo.clone())
+                            })),
                             ColumnItem::wrap(Box::new(|| {
                                 spacer(
                                     SpacerArgsBuilder::default()
