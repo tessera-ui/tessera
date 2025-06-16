@@ -162,8 +162,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             }
 
             // Calculate ripple effect
-            let dist_to_ripple_center = distance(p_normalized, ripple_center);
-            let ripple_effect = calculate_ripple_effect(dist_to_ripple_center, ripple_radius);
+            // To maintain circular ripple, we need to convert normalized coordinates to pixel space
+            // and then calculate distance in pixel space to ensure true circular ripple
+            let p_pixel = p_normalized * size;
+            let center_pixel = ripple_center * size;
+            let dist_to_ripple_center_pixel = distance(p_pixel, center_pixel);
+            
+            // Normalize the pixel distance based on the smaller dimension for consistent ripple size
+            let min_dimension = min(size.x, size.y);
+            let normalized_dist = dist_to_ripple_center_pixel / min_dimension;
+            let ripple_effect = calculate_ripple_effect(normalized_dist, ripple_radius);
             let ripple_final_alpha = ripple_effect * ripple_alpha;
 
             // Blend primary color with ripple effect
@@ -189,8 +197,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             }
 
             // Calculate ripple effect
-            let dist_to_ripple_center = distance(p_normalized, ripple_center);
-            let ripple_effect = calculate_ripple_effect(dist_to_ripple_center, ripple_radius);
+            // To maintain circular ripple, we need to convert normalized coordinates to pixel space
+            // and then calculate distance in pixel space to ensure true circular ripple
+            let p_pixel = p_normalized * size;
+            let center_pixel = ripple_center * size;
+            let dist_to_ripple_center_pixel = distance(p_pixel, center_pixel);
+            
+            // Normalize the pixel distance based on the smaller dimension for consistent ripple size
+            let min_dimension = min(size.x, size.y);
+            let normalized_dist = dist_to_ripple_center_pixel / min_dimension;
+            let ripple_effect = calculate_ripple_effect(normalized_dist, ripple_radius);
             let ripple_final_alpha = ripple_effect * ripple_alpha;
 
             // Blend primary color with ripple effect
