@@ -53,6 +53,12 @@ pub struct ScrollableState {
     focus_handler: Focus,
 }
 
+impl Default for ScrollableState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScrollableState {
     /// Creates a new ScrollableState with default values.
     pub fn new() -> Self {
@@ -143,7 +149,7 @@ pub fn scrollable(
             };
             let merged_constraint = input.effective_constraint.merge(&arg_constraint);
             // Now calculate the constraints to child
-            let mut child_constraint = merged_constraint.clone();
+            let mut child_constraint = merged_constraint;
             // If vertical scrollable, set height to wrap
             if args.vertical {
                 child_constraint.height = tessera::DimensionValue::Wrap {

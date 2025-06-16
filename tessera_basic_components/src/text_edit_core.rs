@@ -325,8 +325,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
 
             // Handle cursor positioning (cursor comes after selection rects)
             if let Some(cursor_pos_raw) = state_clone.read().editor.cursor_position() {
-                let cursor_pos =
-                    PxPosition::new(Px(cursor_pos_raw.0 as i32), Px(cursor_pos_raw.1 as i32));
+                let cursor_pos = PxPosition::new(Px(cursor_pos_raw.0), Px(cursor_pos_raw.1));
                 let cursor_node_index = selection_rects_len;
                 if let Some(cursor_node_id) = input.children_ids.get(cursor_node_index).copied() {
                     let _ = measure_node(

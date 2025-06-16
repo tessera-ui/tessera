@@ -225,8 +225,9 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
 
                 // Handle drag events (mouse move while dragging)
                 // This happens every frame when cursor position changes during drag
-                if state_for_handler.read().is_dragging() && cursor_pos_option.is_some() {
-                    let cursor_pos = cursor_pos_option.unwrap();
+                if state_for_handler.read().is_dragging()
+                    && let Some(cursor_pos) = cursor_pos_option
+                {
                     let padding_px: Px = editor_args.padding.into();
                     let border_width_px = Px(editor_args.border_width as i32);
 
@@ -238,7 +239,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                             PxPosition::new(text_relative_x_px, text_relative_y_px);
                         let last_pos_px = state_for_handler.read().last_click_position();
 
-                        if last_pos_px.map_or(true, |l_pos| l_pos != current_pos_px) {
+                        if last_pos_px != Some(current_pos_px) {
                             // Extend selection by dragging
                             state_for_handler.write().editor_mut().action(
                                 &mut write_font_system(),

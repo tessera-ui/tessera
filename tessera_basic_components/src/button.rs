@@ -1,14 +1,12 @@
-use std::sync::Arc;
 use derive_builder::Builder;
-use tessera::{
-    CursorEventContent, DimensionValue, Dp, PressKeyEventType
-};
+use std::sync::Arc;
+use tessera::{CursorEventContent, DimensionValue, Dp, PressKeyEventType};
 use tessera_macros::tessera;
 
 use crate::{
     pos_misc::is_position_in_component,
     surface::{SurfaceArgsBuilder, surface},
-    text::{text, TextArgsBuilder},
+    text::{TextArgsBuilder, text},
 };
 
 /// Arguments for the `button` component.
@@ -73,13 +71,13 @@ impl Default for ButtonArgs {
 }
 
 /// Interactive button component that can display text and handle click events.
-/// 
+///
 /// # Example
 /// ```no_run
 /// use tessera_basic_components::button::{button, ButtonArgsBuilder};
 /// use tessera::Dp;
 /// use std::sync::Arc;
-/// 
+///
 /// let args = ButtonArgsBuilder::default()
 ///     .text("Click me!".to_string())
 ///     .color([0.1, 0.7, 0.3, 1.0]) // Green button
@@ -87,23 +85,20 @@ impl Default for ButtonArgs {
 ///     .on_click(Arc::new(|| println!("Button clicked!")))
 ///     .build()
 ///     .unwrap();
-/// 
+///
 /// button(args);
 /// ```
 #[tessera]
 pub fn button(args: impl Into<ButtonArgs>) {
     let button_args: ButtonArgs = args.into();
-    
+
     // Create surface for button background and container
     {
         let args_for_surface = button_args.clone();
-        surface(
-            create_surface_args(&args_for_surface),
-            move || {
-                // Text content inside the button
-                text(create_text_args(&args_for_surface));
-            },
-        );
+        surface(create_surface_args(&args_for_surface), move || {
+            // Text content inside the button
+            text(create_text_args(&args_for_surface));
+        });
     }
 
     // Event handling for button interactions
@@ -122,7 +117,12 @@ pub fn button(args: impl Into<ButtonArgs>) {
                 let release_events: Vec<_> = input
                     .cursor_events
                     .iter()
-                    .filter(|event| matches!(event.content, CursorEventContent::Released(PressKeyEventType::Left)))
+                    .filter(|event| {
+                        matches!(
+                            event.content,
+                            CursorEventContent::Released(PressKeyEventType::Left)
+                        )
+                    })
                     .collect();
 
                 if !release_events.is_empty() {
@@ -146,7 +146,7 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         builder = builder.width(width);
     }
 
-    // Set height if available  
+    // Set height if available
     if let Some(height) = args.height {
         builder = builder.height(height);
     }

@@ -136,8 +136,8 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
 
         // --- Stage 1: Measure Fixed and Wrap children ---
         let mut fixed_wrap_nodes_to_measure = Vec::new();
-        for i in 0..N {
-            let item_behavior = children_items_for_measure[i].1;
+        for (i, item) in children_items_for_measure.iter().enumerate().take(N) {
+            let item_behavior = item.1;
             let child_node_id = input.children_ids[i];
             match item_behavior {
                 DimensionValue::Fixed(fixed_width) => {
@@ -254,8 +254,8 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
         let mut fill_nodes_to_measure_group = Vec::new();
 
         if is_row_effectively_wrap_for_children {
-            for i in 0..N {
-                let item_behavior = children_items_for_measure[i].1;
+            for (i, item) in children_items_for_measure.iter().enumerate().take(N) {
+                let item_behavior = item.1;
                 if let DimensionValue::Fill {
                     min: child_fill_min,
                     max: child_fill_max,
@@ -484,9 +484,9 @@ pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
         };
 
         let mut current_x_offset: Px = Px(0);
-        for i in 0..N {
+        for (i, size_option) in measured_children_sizes.iter().enumerate().take(N) {
             let child_node_id = input.children_ids[i];
-            if let Some(size) = measured_children_sizes[i] {
+            if let Some(size) = size_option {
                 place_node(
                     child_node_id,
                     PxPosition::new(current_x_offset, Px(0)),

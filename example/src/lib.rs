@@ -1,4 +1,13 @@
+mod animated_spacer;
 mod app;
+mod app_state;
+mod button_demo;
+mod component_showcase;
+mod content_section;
+mod layout_examples;
+mod misc;
+mod performance_display;
+mod text_editors;
 
 use std::sync::Arc;
 
@@ -6,7 +15,8 @@ use tessera::Renderer;
 #[cfg(target_os = "android")]
 use tessera::winit::platform::android::activity::AndroidApp;
 
-use app::{AppState, app};
+use app::app;
+use app_state::AppState;
 
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
