@@ -7,6 +7,7 @@ mod content_section;
 mod layout_examples;
 mod misc;
 mod performance_display;
+mod ripple_demo;
 mod text_editors;
 
 use std::sync::Arc;

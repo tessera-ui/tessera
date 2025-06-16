@@ -2,6 +2,7 @@
 pub mod button;
 pub mod column;
 mod pos_misc;
+pub mod ripple_rect;
 pub mod row;
 pub mod scrollable;
 pub mod selection_highlight_rect;

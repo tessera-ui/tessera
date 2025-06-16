@@ -15,6 +15,7 @@ use crate::{
     layout_examples::{outlined_surface_example, transparent_surface_example},
     misc::create_spacer,
     performance_display::perf_display,
+    ripple_demo::ripple_demo,
     text_editors::{text_editor_1, text_editor_2},
 };
 
@@ -119,6 +120,37 @@ fn animation_showcase(state: Arc<AppState>) {
     ])
 }
 
+/// Ripple effect showcase
+#[tessera]
+fn ripple_showcase(state: Arc<AppState>) {
+    column([
+        ColumnItem::wrap(Box::new(|| section_header("Ripple Effect Components"))),
+        ColumnItem::wrap(Box::new(create_spacer(15))),
+        ColumnItem::wrap(Box::new({
+            let state_clone = state.clone();
+            move || {
+                surface(
+                    SurfaceArgsBuilder::default()
+                        .color([0.25, 0.25, 0.3, 1.0])
+                        .corner_radius(10.0)
+                        .padding(Dp(20.0))
+                        .width(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .height(DimensionValue::Wrap {
+                            min: None,
+                            max: None,
+                        })
+                        .build()
+                        .unwrap(),
+                    move || ripple_demo(state_clone.clone()),
+                )
+            }
+        })),
+    ])
+}
+
 /// Performance showcase
 #[tessera]
 fn performance_showcase(state: Arc<AppState>) {
@@ -165,16 +197,22 @@ pub fn component_showcase(state: Arc<AppState>) {
             move || text_editor_showcase(state_clone.clone())
         })),
         ColumnItem::wrap(Box::new(create_spacer(30))),
-        // Animation components
+        // Ripple effect components
         ColumnItem::wrap(Box::new({
             let state_clone = state.clone();
-            move || animation_showcase(state_clone.clone())
+            move || ripple_showcase(state_clone.clone())
         })),
         ColumnItem::wrap(Box::new(create_spacer(30))),
         // Performance monitoring
         ColumnItem::wrap(Box::new({
             let state_clone = state.clone();
             move || performance_showcase(state_clone.clone())
+        })),
+        ColumnItem::wrap(Box::new(create_spacer(30))),
+        // Animation components (放在最下面避免跳动)
+        ColumnItem::wrap(Box::new({
+            let state_clone = state.clone();
+            move || animation_showcase(state_clone.clone())
         })),
         ColumnItem::wrap(Box::new(create_spacer(30))),
     ])

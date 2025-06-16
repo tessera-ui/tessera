@@ -3,6 +3,8 @@ struct ShapeUniforms {
     primary_color: vec4f,      // fill_color or border_color
     shadow_color: vec4f,       // shadow_color
     render_params: vec4f,      // shadow_offset.xy, shadow_smoothness, render_mode
+    ripple_params: vec4f,      // ripple_center.xy, ripple_radius, ripple_alpha
+    ripple_color: vec4f,       // ripple_color.rgb, unused
 };
 
 @group(0) @binding(0)
@@ -55,6 +57,24 @@ fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: f32, k: f32) -> f32 {
     return dist_corner_shape + min(max(q.x, q.y), 0.0) - r;
 }
 
+// Calculate ripple effect based on distance from ripple center
+fn calculate_ripple_effect(dist_to_center: f32, ripple_radius: f32) -> f32 {
+    if (ripple_radius <= 0.0) {
+        return 0.0;
+    }
+    
+    // Create a smooth ripple wave
+    let normalized_dist = dist_to_center / max(ripple_radius, 0.001);
+    
+    // Simple ripple: fade out as we get further from center, with a peak at the edge
+    let ripple_wave = 1.0 - abs(normalized_dist - 1.0);
+    
+    // Smooth falloff to avoid harsh edges
+    let smooth_falloff = smoothstep(0.0, 0.3, ripple_wave) * smoothstep(1.5, 0.8, normalized_dist);
+    
+    return clamp(smooth_falloff, 0.0, 1.0);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let size = shape_params.size_cr_border_width.xy;
@@ -66,7 +86,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     let shadow_offset = shape_params.render_params.xy;
     let shadow_smoothness = shape_params.render_params.z;
-    let render_mode = shape_params.render_params.w; // 0.0: fill, 1.0: outline, 2.0: shadow
+    let render_mode = shape_params.render_params.w; // 0.0: fill, 1.0: outline, 2.0: shadow, 3.0: ripple_fill, 4.0: ripple_outline
+    
+    // Ripple parameters
+    let ripple_center = shape_params.ripple_params.xy;
+    let ripple_radius = shape_params.ripple_params.z;
+    let ripple_alpha = shape_params.ripple_params.w;
+    let ripple_color_rgb = shape_params.ripple_color.rgb;
 
     // G2 exponent for rounded corners.
     // k=2.0 results in standard G1 circular corners.
@@ -127,6 +153,52 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                 discard;
             }
             final_color = vec4f(primary_color_uniform.rgb, primary_color_uniform.a * max(0.0, outline_alpha));
+
+        } else if (render_mode == 3.0) { // --- Draw Ripple Fill ---
+            let object_alpha = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
+
+            if (object_alpha <= 0.001) {
+                discard;
+            }
+
+            // Calculate ripple effect
+            let dist_to_ripple_center = distance(p_normalized, ripple_center);
+            let ripple_effect = calculate_ripple_effect(dist_to_ripple_center, ripple_radius);
+            let ripple_final_alpha = ripple_effect * ripple_alpha;
+
+            // Blend primary color with ripple effect
+            let base_color = vec3f(primary_color_uniform.rgb);
+            let blended_color = mix(base_color, ripple_color_rgb, ripple_final_alpha);
+            
+            final_color = vec4f(blended_color, primary_color_uniform.a * object_alpha);
+
+        } else if (render_mode == 4.0) { // --- Draw Ripple Outline ---
+            if (border_width <= 0.0) {
+                discard;
+            }
+            // Alpha for the outer edge of the border
+            let alpha_outer_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
+            // Alpha for the inner edge of the border (shape shrunk by border_width)
+            let alpha_inner_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object + border_width);
+            
+            // The outline alpha is the difference
+            let outline_alpha = alpha_outer_edge - alpha_inner_edge;
+
+            if (outline_alpha <= 0.001) {
+                discard;
+            }
+
+            // Calculate ripple effect
+            let dist_to_ripple_center = distance(p_normalized, ripple_center);
+            let ripple_effect = calculate_ripple_effect(dist_to_ripple_center, ripple_radius);
+            let ripple_final_alpha = ripple_effect * ripple_alpha;
+
+            // Blend primary color with ripple effect
+            let base_color = vec3f(primary_color_uniform.rgb);
+            let blended_color = mix(base_color, ripple_color_rgb, ripple_final_alpha);
+            
+            final_color = vec4f(blended_color, primary_color_uniform.a * max(0.0, outline_alpha));
+
         } else {
             // Should not happen with valid render_mode
             discard;

@@ -8,7 +8,7 @@ use log::{debug, error};
 use rayon::prelude::*;
 
 use crate::{Px, cursor::CursorEvent, px::PxPosition, renderer::DrawCommand};
-pub use basic_drawable::{BasicDrawable, ShadowProps};
+pub use basic_drawable::{BasicDrawable, RippleProps, ShadowProps};
 pub use constraint::{Constraint, DimensionValue};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,

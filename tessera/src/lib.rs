@@ -14,7 +14,7 @@ pub use crate::px::{Px, PxPosition};
 pub use component_tree::{
     BasicDrawable, ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
     ComponentTree, ComputedData, Constraint, DimensionValue, MeasureFn, MeasurementError,
-    ShadowProps, StateHandlerFn, StateHandlerInput, measure_node, measure_nodes, place_node,
+    RippleProps, ShadowProps, StateHandlerFn, StateHandlerInput, measure_node, measure_nodes, place_node,
 };
 pub use cursor::{CursorEvent, CursorEventContent, PressKeyEventType, ScrollEventConent};
 pub use indextree::{Arena, NodeId};
