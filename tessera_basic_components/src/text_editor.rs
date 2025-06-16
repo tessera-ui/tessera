@@ -290,8 +290,10 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                     }
                 }
 
-                // Block all cursor events to prevent propagation
-                input.cursor_events.clear();
+                // Only block cursor events when focused to prevent propagation
+                if state_for_handler.read().focus_handler().is_focused() {
+                    input.cursor_events.clear();
+                }
             }
 
             // Handle keyboard events (only when focused)

@@ -35,7 +35,7 @@ pub struct ScrollableArgs {
     pub scroll_speed: f32,
     /// Scroll smoothing factor (0.0 = instant, 1.0 = very smooth).
     /// Defaults to 0.15 for responsive but smooth scrolling.
-    #[builder(default = "0.15")]
+    #[builder(default = "0.1")]
     pub scroll_smoothing: f32,
 }
 
@@ -270,8 +270,10 @@ pub fn scrollable(
                 }
             }
 
-            // Block all cursor events to prevent propagation when cursor is in scrollable
-            input.cursor_events.clear();
+            // Only block cursor events when focused to prevent propagation
+            if state.read().focus_handler().is_focused() {
+                input.cursor_events.clear();
+            }
         }
 
         // Apply bounds constraints to target position

@@ -130,8 +130,22 @@ pub fn button(args: impl Into<ButtonArgs>) {
                     (args_for_handler.on_click)();
                 }
 
-                // Consume cursor events to prevent propagation
-                input.cursor_events.clear();
+                // Check for mouse press events (for button state changes in future)
+                let press_events: Vec<_> = input
+                    .cursor_events
+                    .iter()
+                    .filter(|event| {
+                        matches!(
+                            event.content,
+                            CursorEventContent::Pressed(PressKeyEventType::Left)
+                        )
+                    })
+                    .collect();
+
+                // Only consume cursor events if we're handling relevant mouse events
+                if !release_events.is_empty() || !press_events.is_empty() {
+                    input.cursor_events.clear();
+                }
             }
         }));
     }
