@@ -24,6 +24,7 @@ pub fn outlined_surface_example() {
             }))
             .build()
             .unwrap(),
+        None, // Non-interactive
         || {
             text("Outlined Box");
         },
@@ -42,6 +43,7 @@ pub fn transparent_surface_example() {
             .padding(5.0.into())
             .build()
             .unwrap(),
+        None, // Non-interactive
         || {
             text("Transparent Fill");
         },

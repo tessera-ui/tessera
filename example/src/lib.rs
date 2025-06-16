@@ -1,13 +1,12 @@
 mod animated_spacer;
 mod app;
 mod app_state;
-mod button_demo;
 mod component_showcase;
 mod content_section;
+mod interactive_demo;
 mod layout_examples;
 mod misc;
 mod performance_display;
-mod ripple_demo;
 mod text_editors;
 
 use std::sync::Arc;

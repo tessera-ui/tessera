@@ -1,12 +1,83 @@
 use derive_builder::Builder;
+use std::sync::{Arc, atomic};
 use tessera::{
-    BasicDrawable, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, PxPosition,
-    ShadowProps, measure_nodes, place_node,
+    BasicDrawable, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
+    MeasurementError, PressKeyEventType, Px, PxPosition, RippleProps, ShadowProps, measure_nodes,
+    place_node,
 };
 use tessera_macros::tessera;
 
+use crate::pos_misc::is_position_in_component;
+
+/// State for managing ripple animation
+pub struct RippleState {
+    pub is_animating: atomic::AtomicBool,
+    pub start_time: atomic::AtomicU64, // Store as u64 millis since epoch
+    pub click_pos_x: atomic::AtomicI32, // Store as fixed-point * 1000
+    pub click_pos_y: atomic::AtomicI32, // Store as fixed-point * 1000
+}
+
+impl Default for RippleState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RippleState {
+    pub fn new() -> Self {
+        Self {
+            is_animating: atomic::AtomicBool::new(false),
+            start_time: atomic::AtomicU64::new(0),
+            click_pos_x: atomic::AtomicI32::new(0),
+            click_pos_y: atomic::AtomicI32::new(0),
+        }
+    }
+
+    pub fn start_animation(&self, click_pos: [f32; 2]) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        self.start_time.store(now, atomic::Ordering::SeqCst);
+        self.click_pos_x
+            .store((click_pos[0] * 1000.0) as i32, atomic::Ordering::SeqCst);
+        self.click_pos_y
+            .store((click_pos[1] * 1000.0) as i32, atomic::Ordering::SeqCst);
+        self.is_animating.store(true, atomic::Ordering::SeqCst);
+    }
+
+    pub fn get_animation_progress(&self) -> Option<(f32, [f32; 2])> {
+        let is_animating = self.is_animating.load(atomic::Ordering::SeqCst);
+
+        if !is_animating {
+            return None;
+        }
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        let start = self.start_time.load(atomic::Ordering::SeqCst);
+        let elapsed_ms = now.saturating_sub(start);
+        let progress = (elapsed_ms as f32) / 600.0; // 600ms animation
+
+        if progress >= 1.0 {
+            self.is_animating.store(false, atomic::Ordering::SeqCst);
+            return None;
+        }
+
+        let click_pos = [
+            self.click_pos_x.load(atomic::Ordering::SeqCst) as f32 / 1000.0,
+            self.click_pos_y.load(atomic::Ordering::SeqCst) as f32 / 1000.0,
+        ];
+
+        Some((progress, click_pos))
+    }
+}
+
 /// Arguments for the `surface` component.
-#[derive(Debug, Builder, Clone)]
+#[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SurfaceArgs {
     /// The fill color of the surface (RGBA).
@@ -33,6 +104,36 @@ pub struct SurfaceArgs {
     /// Optional color for the border (RGBA). If None and border_width > 0, `color` will be used.
     #[builder(default)]
     pub border_color: Option<[f32; 4]>,
+    /// Optional click callback function. If provided, surface becomes interactive with ripple effect.
+    #[builder(default)]
+    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// The ripple color (RGB) for interactive surfaces.
+    #[builder(default = "[1.0, 1.0, 1.0]")]
+    pub ripple_color: [f32; 3],
+}
+
+impl std::fmt::Debug for SurfaceArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SurfaceArgs")
+            .field("color", &self.color)
+            .field("corner_radius", &self.corner_radius)
+            .field("shadow", &self.shadow)
+            .field("padding", &self.padding)
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("border_width", &self.border_width)
+            .field("border_color", &self.border_color)
+            .field(
+                "on_click",
+                &if self.on_click.is_some() {
+                    "<callback>"
+                } else {
+                    "None"
+                },
+            )
+            .field("ripple_color", &self.ripple_color)
+            .finish()
+    }
 }
 
 // Manual implementation of Default because derive_builder's default conflicts with our specific defaults
@@ -43,9 +144,11 @@ impl Default for SurfaceArgs {
 }
 
 /// Surface component, a basic container that can have its own size constraints.
+/// If args contains an on_click callback, a ripple_state must be provided for interactive behavior.
 #[tessera]
-pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
+pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child: impl FnOnce()) {
     let measure_args = args.clone();
+    let ripple_state_for_measure = ripple_state.clone();
 
     measure(Box::new(move |input| {
         let padding_px: Px = measure_args.padding.into();
@@ -224,18 +327,57 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             }
         };
 
-        let drawable = if measure_args.border_width > 0.0 {
-            BasicDrawable::OutlinedRect {
-                color: measure_args.border_color.unwrap_or(measure_args.color),
-                corner_radius: measure_args.corner_radius,
-                shadow: measure_args.shadow,
-                border_width: measure_args.border_width,
+        let drawable = if measure_args.on_click.is_some() {
+            // Interactive surface with ripple effect
+            let ripple_props = if let Some(ref state) = ripple_state_for_measure {
+                if let Some((progress, click_pos)) = state.get_animation_progress() {
+                    let radius = progress; // Expand from 0 to 1
+                    let alpha = (1.0 - progress) * 0.3; // Fade out
+
+                    RippleProps {
+                        center: click_pos,
+                        radius,
+                        alpha,
+                        color: measure_args.ripple_color,
+                    }
+                } else {
+                    RippleProps::default()
+                }
+            } else {
+                RippleProps::default()
+            };
+
+            if measure_args.border_width > 0.0 {
+                BasicDrawable::RippleOutlinedRect {
+                    color: measure_args.border_color.unwrap_or(measure_args.color),
+                    corner_radius: measure_args.corner_radius,
+                    shadow: measure_args.shadow,
+                    border_width: measure_args.border_width,
+                    ripple: ripple_props,
+                }
+            } else {
+                BasicDrawable::RippleRect {
+                    color: measure_args.color,
+                    corner_radius: measure_args.corner_radius,
+                    shadow: measure_args.shadow,
+                    ripple: ripple_props,
+                }
             }
         } else {
-            BasicDrawable::Rect {
-                color: measure_args.color,
-                corner_radius: measure_args.corner_radius,
-                shadow: measure_args.shadow,
+            // Non-interactive surface
+            if measure_args.border_width > 0.0 {
+                BasicDrawable::OutlinedRect {
+                    color: measure_args.border_color.unwrap_or(measure_args.color),
+                    corner_radius: measure_args.corner_radius,
+                    shadow: measure_args.shadow,
+                    border_width: measure_args.border_width,
+                }
+            } else {
+                BasicDrawable::Rect {
+                    color: measure_args.color,
+                    corner_radius: measure_args.corner_radius,
+                    shadow: measure_args.shadow,
+                }
             }
         };
 
@@ -250,4 +392,68 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
     }));
 
     child();
+
+    // Event handling for interactive surfaces
+    if args.on_click.is_some() {
+        let args_for_handler = args.clone();
+        let state_for_handler = ripple_state;
+        state_handler(Box::new(move |input| {
+            let size = input.computed_data;
+            let cursor_pos_option = input.cursor_position;
+            let is_cursor_in_surface = cursor_pos_option
+                .map(|pos| is_position_in_component(size, pos))
+                .unwrap_or(false);
+
+            // Handle mouse events
+            if is_cursor_in_surface {
+                // Check for mouse press events to start ripple
+                let press_events: Vec<_> = input
+                    .cursor_events
+                    .iter()
+                    .filter(|event| {
+                        matches!(
+                            event.content,
+                            CursorEventContent::Pressed(PressKeyEventType::Left)
+                        )
+                    })
+                    .collect();
+
+                // Check for mouse release events (click)
+                let release_events: Vec<_> = input
+                    .cursor_events
+                    .iter()
+                    .filter(|event| {
+                        matches!(
+                            event.content,
+                            CursorEventContent::Released(PressKeyEventType::Left)
+                        )
+                    })
+                    .collect();
+
+                if !press_events.is_empty()
+                    && let (Some(cursor_pos), Some(state)) =
+                        (cursor_pos_option, state_for_handler.as_ref())
+                {
+                    // Convert cursor position to normalized coordinates [-0.5, 0.5]
+                    let normalized_x = (cursor_pos.x.to_f32() / size.width.to_f32()) - 0.5;
+                    let normalized_y = (cursor_pos.y.to_f32() / size.height.to_f32()) - 0.5;
+
+                    // Start ripple animation
+                    state.start_animation([normalized_x, normalized_y]);
+                }
+
+                if !release_events.is_empty() {
+                    // Trigger click callback
+                    if let Some(ref on_click) = args_for_handler.on_click {
+                        on_click();
+                    }
+                }
+
+                // Consume cursor events if we're handling relevant mouse events
+                if !press_events.is_empty() || !release_events.is_empty() {
+                    input.cursor_events.clear();
+                }
+            }
+        }));
+    }
 }

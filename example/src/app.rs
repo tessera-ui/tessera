@@ -26,6 +26,7 @@ fn main_content(state: Arc<AppState>) {
             })
             .build()
             .unwrap(),
+        None, // Non-interactive background
         move || {
             // Use the new organized component showcase
             component_showcase(state.clone());

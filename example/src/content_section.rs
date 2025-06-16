@@ -43,6 +43,7 @@ pub fn content_section() {
             })
             .build()
             .unwrap(),
+        None, // Non-interactive content section
         || {
             column([
                 ColumnItem::wrap(Box::new(header_row)),
