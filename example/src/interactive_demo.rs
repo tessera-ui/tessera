@@ -32,7 +32,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         ColumnItem::wrap(Box::new(|| {
             text(
                 TextArgsBuilder::default()
-                    .text("Interactive Buttons:".to_string())
+                    .text("Interactive Buttons with Hover Effects:".to_string())
                     .size(tessera::Dp(18.0))
                     .line_height(tessera::Dp(24.0))
                     .color(md_colors::ON_SURFACE_VARIANT)
@@ -40,13 +40,14 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                     .unwrap(),
             )
         })),
-        // Primary button
+        // Primary button with hover effect
         ColumnItem::wrap(Box::new({
             let state = app_state.ripple_states.primary.clone();
             move || {
                 button(
                     ButtonArgsBuilder::default()
                         .color(md_colors::PRIMARY) // Material Design primary color
+                        .hover_color(Some([0.3, 0.6, 0.9, 1.0])) // Lighter blue on hover
                         .corner_radius(8.0)
                         .padding(Dp(12.0))
                         .on_click(Arc::new(|| {
@@ -58,7 +59,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                     || {
                         text(
                             TextArgsBuilder::default()
-                                .text("Primary Button".to_string())
+                                .text("Primary Button (Hover Effect)".to_string())
                                 .color(md_colors::ON_SURFACE)
                                 .size(Dp(16.0))
                                 .line_height(Dp(20.0))
@@ -71,13 +72,14 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         })),
         // Small spacer between buttons
         ColumnItem::wrap(Box::new(create_spacer(8))),
-        // Success button
+        // Success button with hover effect
         ColumnItem::wrap(Box::new({
             let state = app_state.ripple_states.success.clone();
             move || {
                 button(
                     ButtonArgsBuilder::default()
                         .color(md_colors::TERTIARY) // Material Design tertiary color
+                        .hover_color(Some([0.2, 0.8, 0.4, 1.0])) // Lighter green on hover
                         .corner_radius(8.0)
                         .padding(Dp(12.0))
                         .on_click(Arc::new(|| {
@@ -89,7 +91,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                     || {
                         text(
                             TextArgsBuilder::default()
-                                .text("Success Button".to_string())
+                                .text("Success Button (Hover Effect)".to_string())
                                 .color(md_colors::ON_SURFACE)
                                 .size(Dp(16.0))
                                 .line_height(Dp(20.0))
@@ -102,13 +104,14 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         })),
         // Small spacer between buttons
         ColumnItem::wrap(Box::new(create_spacer(8))),
-        // Danger button
+        // Danger button with hover effect
         ColumnItem::wrap(Box::new({
             let state = app_state.ripple_states.danger.clone();
             move || {
                 button(
                     ButtonArgsBuilder::default()
                         .color(md_colors::ERROR) // Material Design error color
+                        .hover_color(Some([0.9, 0.3, 0.3, 1.0])) // Lighter red on hover
                         .corner_radius(8.0)
                         .padding(Dp(12.0))
                         .on_click(Arc::new(|| {
@@ -120,7 +123,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                     || {
                         text(
                             TextArgsBuilder::default()
-                                .text("Danger Button".to_string())
+                                .text("Danger Button (Hover Effect)".to_string())
                                 .color(md_colors::ON_SURFACE)
                                 .size(Dp(16.0))
                                 .line_height(Dp(20.0))
@@ -137,7 +140,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         ColumnItem::wrap(Box::new(|| {
             text(
                 TextArgsBuilder::default()
-                    .text("Interactive Surfaces:".to_string())
+                    .text("Interactive Surfaces with Hover Effects:".to_string())
                     .size(tessera::Dp(18.0))
                     .line_height(tessera::Dp(24.0))
                     .color(md_colors::ON_SURFACE_VARIANT)
@@ -145,13 +148,14 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                     .unwrap(),
             )
         })),
-        // Custom interactive surface with border
+        // Custom interactive surface with hover effect
         ColumnItem::wrap(Box::new({
             let state = app_state.ripple_states.custom.clone();
             move || {
                 surface(
                     SurfaceArgsBuilder::default()
                         .color(md_colors::SECONDARY) // Material Design secondary color
+                        .hover_color(Some([0.6, 0.7, 0.9, 1.0])) // Lighter color on hover
                         .ripple_color(md_colors::RIPPLE) // Material Design ripple
                         .corner_radius(12.0)
                         .padding(Dp(16.0))
@@ -168,7 +172,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                     || {
                         text(
                             TextArgsBuilder::default()
-                                .text("Interactive Surface\nwith custom styling".to_string())
+                                .text("Interactive Surface\nwith Hover Effect".to_string())
                                 .color(md_colors::ON_SURFACE)
                                 .size(Dp(14.0))
                                 .line_height(Dp(18.0))
@@ -196,7 +200,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                 || {
                     text(
                         TextArgsBuilder::default()
-                            .text("Non-interactive Surface".to_string())
+                            .text("Non-interactive Surface\n(No Hover Effect)".to_string())
                             .color(md_colors::ON_SURFACE_VARIANT)
                             .size(Dp(14.0))
                             .line_height(Dp(18.0))

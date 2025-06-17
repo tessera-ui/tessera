@@ -9,12 +9,13 @@ use tessera_macros::tessera;
 
 use crate::pos_misc::is_position_in_component;
 
-/// State for managing ripple animation
+/// State for managing ripple animation and hover effects
 pub struct RippleState {
     pub is_animating: atomic::AtomicBool,
     pub start_time: atomic::AtomicU64, // Store as u64 millis since epoch
     pub click_pos_x: atomic::AtomicI32, // Store as fixed-point * 1000
     pub click_pos_y: atomic::AtomicI32, // Store as fixed-point * 1000
+    pub is_hovered: atomic::AtomicBool, // Track hover state
 }
 
 impl Default for RippleState {
@@ -30,6 +31,7 @@ impl RippleState {
             start_time: atomic::AtomicU64::new(0),
             click_pos_x: atomic::AtomicI32::new(0),
             click_pos_y: atomic::AtomicI32::new(0),
+            is_hovered: atomic::AtomicBool::new(false),
         }
     }
 
@@ -74,6 +76,16 @@ impl RippleState {
 
         Some((progress, click_pos))
     }
+
+    /// Set hover state
+    pub fn set_hovered(&self, hovered: bool) {
+        self.is_hovered.store(hovered, atomic::Ordering::SeqCst);
+    }
+
+    /// Get hover state
+    pub fn is_hovered(&self) -> bool {
+        self.is_hovered.load(atomic::Ordering::SeqCst)
+    }
 }
 
 /// Arguments for the `surface` component.
@@ -83,6 +95,9 @@ pub struct SurfaceArgs {
     /// The fill color of the surface (RGBA).
     #[builder(default = "[0.4745, 0.5255, 0.7961, 1.0]")]
     pub color: [f32; 4],
+    /// The hover color of the surface (RGBA). If None, no hover effect is applied.
+    #[builder(default)]
+    pub hover_color: Option<[f32; 4]>,
     /// The corner radius of the surface.
     #[builder(default = "0.0")]
     pub corner_radius: f32,
@@ -116,6 +131,7 @@ impl std::fmt::Debug for SurfaceArgs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SurfaceArgs")
             .field("color", &self.color)
+            .field("hover_color", &self.hover_color)
             .field("corner_radius", &self.corner_radius)
             .field("shadow", &self.shadow)
             .field("padding", &self.padding)
@@ -327,6 +343,17 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             }
         };
 
+        // 6. Determine the color to use based on hover state
+        let is_hovered = ripple_state_for_measure.as_ref()
+            .map(|state| state.is_hovered())
+            .unwrap_or(false);
+        
+        let effective_color = if is_hovered && measure_args.hover_color.is_some() {
+            measure_args.hover_color.unwrap()
+        } else {
+            measure_args.color
+        };
+
         let drawable = if measure_args.on_click.is_some() {
             // Interactive surface with ripple effect
             let ripple_props = if let Some(ref state) = ripple_state_for_measure {
@@ -349,7 +376,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
 
             if measure_args.border_width > 0.0 {
                 BasicDrawable::RippleOutlinedRect {
-                    color: measure_args.border_color.unwrap_or(measure_args.color),
+                    color: measure_args.border_color.unwrap_or(effective_color),
                     corner_radius: measure_args.corner_radius,
                     shadow: measure_args.shadow,
                     border_width: measure_args.border_width,
@@ -357,7 +384,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 }
             } else {
                 BasicDrawable::RippleRect {
-                    color: measure_args.color,
+                    color: effective_color,
                     corner_radius: measure_args.corner_radius,
                     shadow: measure_args.shadow,
                     ripple: ripple_props,
@@ -367,14 +394,14 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             // Non-interactive surface
             if measure_args.border_width > 0.0 {
                 BasicDrawable::OutlinedRect {
-                    color: measure_args.border_color.unwrap_or(measure_args.color),
+                    color: measure_args.border_color.unwrap_or(effective_color),
                     corner_radius: measure_args.corner_radius,
                     shadow: measure_args.shadow,
                     border_width: measure_args.border_width,
                 }
             } else {
                 BasicDrawable::Rect {
-                    color: measure_args.color,
+                    color: effective_color,
                     corner_radius: measure_args.corner_radius,
                     shadow: measure_args.shadow,
                 }
@@ -403,6 +430,11 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             let is_cursor_in_surface = cursor_pos_option
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
+
+            // Update hover state
+            if let Some(ref state) = state_for_handler {
+                state.set_hovered(is_cursor_in_surface);
+            }
 
             // Handle mouse events
             if is_cursor_in_surface {

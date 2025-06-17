@@ -12,6 +12,9 @@ pub struct ButtonArgs {
     /// The fill color of the button (RGBA).
     #[builder(default = "[0.2, 0.5, 0.8, 1.0]")]
     pub color: [f32; 4],
+    /// The hover color of the button (RGBA). If None, no hover effect is applied.
+    #[builder(default)]
+    pub hover_color: Option<[f32; 4]>,
     /// The corner radius of the button.
     #[builder(default = "8.0")]
     pub corner_radius: f32,
@@ -41,6 +44,7 @@ impl std::fmt::Debug for ButtonArgs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ButtonArgs")
             .field("color", &self.color)
+            .field("hover_color", &self.hover_color)
             .field("corner_radius", &self.corner_radius)
             .field("padding", &self.padding)
             .field("width", &self.width)
@@ -112,6 +116,7 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
 
     builder
         .color(args.color)
+        .hover_color(args.hover_color)
         .corner_radius(args.corner_radius)
         .padding(args.padding)
         .border_width(args.border_width)
@@ -165,6 +170,11 @@ impl ButtonArgs {
 impl ButtonArgs {
     pub fn with_color(mut self, color: [f32; 4]) -> Self {
         self.color = color;
+        self
+    }
+
+    pub fn with_hover_color(mut self, hover_color: [f32; 4]) -> Self {
+        self.hover_color = Some(hover_color);
         self
     }
 
