@@ -7,7 +7,9 @@ use tessera_basic_components::{
 };
 use tessera_macros::tessera;
 
-use crate::{app_state::AppState, component_showcase::component_showcase, material_colors::md_colors};
+use crate::{
+    app_state::AppState, component_showcase::component_showcase, material_colors::md_colors,
+};
 
 /// Creates the main content area with organized component showcase
 #[tessera]

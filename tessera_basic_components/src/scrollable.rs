@@ -13,7 +13,7 @@ use crate::pos_misc::is_position_in_component;
 
 #[derive(Debug, Builder)]
 pub struct ScrollableArgs {
-    /// The desired width behavior of the scrollable area.
+    /// The desired width behavior of the scrollable area
     /// Defaults to Wrap { min: None, max: None }.
     #[builder(default = "tessera::DimensionValue::Wrap { min: None, max: None }")]
     pub width: tessera::DimensionValue,
@@ -29,10 +29,7 @@ pub struct ScrollableArgs {
     /// Defaults to `false` since most scrollable areas are not horizontal.
     #[builder(default = "false")]
     pub horizontal: bool,
-    /// Scroll speed multiplier. Higher values make scrolling faster.
-    /// Defaults to 50.0 for responsive scroll speed.
-    #[builder(default = "50.0")]
-    pub scroll_speed: f32,
+
     /// Scroll smoothing factor (0.0 = instant, 1.0 = very smooth).
     /// Defaults to 0.05 for very responsive but still smooth scrolling.
     #[builder(default = "0.05")]
@@ -250,9 +247,9 @@ pub fn scrollable(
                 {
                     let mut state_guard = state.write();
 
-                    // Apply scroll speed multiplier
-                    let scroll_delta_x = event.delta_x * args.scroll_speed;
-                    let scroll_delta_y = event.delta_y * args.scroll_speed;
+                    // Use scroll delta directly (speed already handled in cursor.rs)
+                    let scroll_delta_x = event.delta_x;
+                    let scroll_delta_y = event.delta_y;
 
                     // Calculate new target position
                     let current_target = state_guard.target_position;

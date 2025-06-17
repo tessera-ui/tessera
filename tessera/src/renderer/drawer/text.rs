@@ -220,7 +220,7 @@ impl TextData {
     }
 
     /// Get the glyphon text area from the text data
-    fn text_area(&self) -> glyphon::TextArea {
+    fn text_area(&'_ self) -> glyphon::TextArea<'_> {
         let pos = self.position.unwrap();
         let bounds = glyphon::TextBounds {
             left: pos.x.0,

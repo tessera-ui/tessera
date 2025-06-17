@@ -39,12 +39,19 @@ fn main() {}
 #[allow(dead_code)]
 #[cfg(not(target_os = "android"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use log::error;
+    use log::{error, info};
 
     let _logger = flexi_logger::Logger::try_with_env()?
         .write_mode(flexi_logger::WriteMode::Async)
         .start()?;
+
+    info!("Starting Tessera example with touch scroll support...");
+    info!("Touch scroll enabled: sensitivity=1.2, threshold=10.0px");
+
     let app_state = Arc::new(AppState::new());
+
+    // For now, use standard run method and note that touch scroll is automatically enabled with defaults
+    // TODO: In future versions, we can create renderer with custom config first, then run it
     Renderer::run(|| app(app_state.clone())).unwrap_or_else(|e| error!("App failed to run: {e}"));
     Ok(())
 }

@@ -344,10 +344,11 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         };
 
         // 6. Determine the color to use based on hover state
-        let is_hovered = ripple_state_for_measure.as_ref()
+        let is_hovered = ripple_state_for_measure
+            .as_ref()
             .map(|state| state.is_hovered())
             .unwrap_or(false);
-        
+
         let effective_color = if is_hovered && measure_args.hover_color.is_some() {
             measure_args.hover_color.unwrap()
         } else {

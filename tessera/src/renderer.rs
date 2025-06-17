@@ -20,7 +20,7 @@ use winit::{
 };
 
 use crate::{
-    cursor::{CursorEvent, CursorEventContent, CursorState, PressKeyEventType},
+    cursor::{CursorEvent, CursorEventContent, CursorState},
     dp::SCALE_FACTOR,
     runtime::TesseraRuntime,
     tokio_runtime,
@@ -78,6 +78,30 @@ impl<F: Fn()> Renderer<F> {
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
+    }
+
+    /// Create a renderer with custom touch scroll configuration
+    pub fn with_touch_config(entry_point: F, touch_enabled: bool, min_move_threshold: f32) -> Self {
+        let mut cursor_state = CursorState::default();
+        cursor_state.configure_touch_scroll(touch_enabled, min_move_threshold);
+
+        Self {
+            app: Arc::new(Mutex::new(None)),
+            entry_point,
+            cursor_state,
+            keyboard_state: KeyboardState::default(),
+        }
+    }
+
+    /// Configure touch scroll behavior
+    pub fn configure_touch_scroll(&mut self, enabled: bool, min_threshold: f32) {
+        self.cursor_state
+            .configure_touch_scroll(enabled, min_threshold);
+    }
+
+    /// Get current active touch count (for debugging)
+    pub fn active_touch_count(&self) -> usize {
+        self.cursor_state.active_touch_count()
     }
 }
 
@@ -176,28 +200,21 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
                 );
                 match touch_event.phase {
                     winit::event::TouchPhase::Started => {
-                        // First, move the cursor to the touch position
-                        self.cursor_state.update_position(pos);
-                        // Then, simulate a left mouse button press
-                        let press_event = CursorEvent {
-                            timestamp: Instant::now(),
-                            content: CursorEventContent::Pressed(PressKeyEventType::Left),
-                        };
-                        self.cursor_state.push_event(press_event);
+                        // Use new touch start handling method
+                        self.cursor_state.handle_touch_start(touch_event.id, pos);
                     }
                     winit::event::TouchPhase::Moved => {
-                        // update the cursor position
-                        self.cursor_state.update_position(pos);
+                        // Use new touch move handling method, may generate scroll event
+                        if let Some(scroll_event) =
+                            self.cursor_state.handle_touch_move(touch_event.id, pos)
+                        {
+                            // Scroll event is already added to event queue in handle_touch_move
+                            self.cursor_state.push_event(scroll_event);
+                        }
                     }
                     winit::event::TouchPhase::Ended | winit::event::TouchPhase::Cancelled => {
-                        // Simulate a left mouse button release
-                        let event = CursorEvent {
-                            timestamp: Instant::now(),
-                            content: CursorEventContent::Released(PressKeyEventType::Left),
-                        };
-                        self.cursor_state.push_event(event);
-                        // Set the cursor position to None
-                        self.cursor_state.update_position(None);
+                        // Use new touch end handling method
+                        self.cursor_state.handle_touch_end(touch_event.id);
                     }
                 }
             }

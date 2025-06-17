@@ -30,7 +30,12 @@ pub fn text_editor_1(state: Arc<RwLock<TextEditorState>>) {
                 min: None,
                 max: None,
             }))
-            .selection_color(Some([md_colors::PRIMARY[0], md_colors::PRIMARY[1], md_colors::PRIMARY[2], 0.4])) // Material Design primary color with transparency
+            .selection_color(Some([
+                md_colors::PRIMARY[0],
+                md_colors::PRIMARY[1],
+                md_colors::PRIMARY[2],
+                0.4,
+            ])) // Material Design primary color with transparency
             .build()
             .unwrap(),
         state,
