@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use tessera::DimensionValue;
+use tessera::{DimensionValue, Dp};
 use tessera_basic_components::{
     scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
 };
 use tessera_macros::tessera;
 
-use crate::{app_state::AppState, component_showcase::component_showcase};
+use crate::{app_state::AppState, component_showcase::component_showcase, material_colors::md_colors};
 
 /// Creates the main content area with organized component showcase
 #[tessera]
@@ -15,7 +15,8 @@ fn main_content(state: Arc<AppState>) {
     surface(
         // Main background surface
         SurfaceArgsBuilder::default()
-            .color([0.15, 0.15, 0.2, 1.0]) // Darker, more elegant background
+            .color(md_colors::SURFACE) // Material Design surface color
+            .padding(Dp(16.0)) // Add consistent padding around main content
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,

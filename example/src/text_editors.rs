@@ -4,6 +4,8 @@ use tessera::{DimensionValue, Px};
 use tessera_basic_components::text_editor::{TextEditorArgsBuilder, TextEditorState, text_editor};
 use tessera_macros::tessera;
 
+use crate::material_colors::md_colors;
+
 pub struct TextEditorsState {
     pub editor_state: Arc<RwLock<TextEditorState>>,
     pub editor_state_2: Arc<RwLock<TextEditorState>>,
@@ -28,7 +30,7 @@ pub fn text_editor_1(state: Arc<RwLock<TextEditorState>>) {
                 min: None,
                 max: None,
             }))
-            .selection_color(Some([0.3, 0.8, 0.4, 0.5])) // Custom green selection with 50% transparency
+            .selection_color(Some([md_colors::PRIMARY[0], md_colors::PRIMARY[1], md_colors::PRIMARY[2], 0.4])) // Material Design primary color with transparency
             .build()
             .unwrap(),
         state,

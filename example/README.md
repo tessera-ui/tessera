@@ -1,3 +1,7 @@
+# Tessera UI Framework Example
+
+This example demonstrates the capabilities of the Tessera UI framework with a comprehensive component showcase featuring 
+
 ## Run example on windows/linux
 
 ```bash

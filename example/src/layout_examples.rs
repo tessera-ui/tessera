@@ -5,14 +5,16 @@ use tessera_basic_components::{
 };
 use tessera_macros::tessera;
 
+use crate::material_colors::md_colors;
+
 /// Outlined surface example with border and shadow
 #[tessera]
 pub fn outlined_surface_example() {
     surface(
         SurfaceArgsBuilder::default()
-            .color([0.3, 0.3, 0.3, 0.5]) // Semi-transparent fill color
+            .color(md_colors::SURFACE_CONTAINER_TRANSPARENT) // Material Design surface-container with opacity
             .border_width(5.0)
-            .border_color(Some([1.0, 0.0, 0.0, 1.0])) // Red border, RGBA
+            .border_color(Some(md_colors::OUTLINE)) // Material Design outline color
             .corner_radius(15.0)
             .width(DimensionValue::Fixed(Px(200)))
             .height(DimensionValue::Fixed(Px(100)))
@@ -36,7 +38,7 @@ pub fn outlined_surface_example() {
 pub fn transparent_surface_example() {
     surface(
         SurfaceArgsBuilder::default()
-            .color([0.0, 0.0, 1.0, 0.3]) // Transparent blue fill
+            .color(md_colors::TERTIARY_TRANSPARENT) // Material Design tertiary color with transparency
             .corner_radius(10.0)
             .width(DimensionValue::Fixed(Px(150)))
             .height(DimensionValue::Fixed(Px(70)))

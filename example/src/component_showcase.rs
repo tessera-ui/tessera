@@ -13,6 +13,7 @@ use crate::{
     app_state::AppState,
     interactive_demo::interactive_demo,
     layout_examples::{outlined_surface_example, transparent_surface_example},
+    material_colors::md_colors,
     misc::create_spacer,
     performance_display::perf_display,
     text_editors::{text_editor_1, text_editor_2},
@@ -23,9 +24,9 @@ use crate::{
 fn surface_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .color([0.25, 0.25, 0.3, 1.0])
+            .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
             .corner_radius(10.0)
-            .padding(Dp(20.0))
+            .padding(Dp(24.0))
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -46,13 +47,13 @@ fn surface_showcase() {
                             .text("Surface Components".to_string())
                             .size(tessera::Dp(24.0))
                             .line_height(tessera::Dp(32.0))
-                            .color([255, 255, 255])
+                            .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
                     )
                 })),
                 // Spacer
-                ColumnItem::wrap(Box::new(create_spacer(15))),
+                ColumnItem::wrap(Box::new(create_spacer(12))),
                 // Content
                 ColumnItem::wrap(Box::new(|| {
                     row([
@@ -74,9 +75,9 @@ fn text_editor_showcase(state: Arc<AppState>) {
 
     surface(
         SurfaceArgsBuilder::default()
-            .color([0.25, 0.25, 0.3, 1.0])
+            .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
             .corner_radius(10.0)
-            .padding(Dp(20.0))
+            .padding(Dp(24.0))
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -97,16 +98,16 @@ fn text_editor_showcase(state: Arc<AppState>) {
                             .text("Text Editor Components".to_string())
                             .size(tessera::Dp(24.0))
                             .line_height(tessera::Dp(32.0))
-                            .color([255, 255, 255])
+                            .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
                     )
                 })),
                 // Spacer
-                ColumnItem::wrap(Box::new(create_spacer(15))),
+                ColumnItem::wrap(Box::new(create_spacer(12))),
                 // Content
                 ColumnItem::wrap(Box::new(move || text_editor_1(editor_state_clone.clone()))),
-                ColumnItem::wrap(Box::new(create_spacer(15))),
+                ColumnItem::wrap(Box::new(create_spacer(16))),
                 ColumnItem::wrap(Box::new(move || {
                     text_editor_2(editor_state_2_clone.clone())
                 })),
@@ -122,9 +123,9 @@ fn animation_showcase(state: Arc<AppState>) {
 
     surface(
         SurfaceArgsBuilder::default()
-            .color([0.25, 0.25, 0.3, 1.0])
+            .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
             .corner_radius(10.0)
-            .padding(Dp(20.0))
+            .padding(Dp(24.0))
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -145,15 +146,17 @@ fn animation_showcase(state: Arc<AppState>) {
                             .text("Animation Components".to_string())
                             .size(tessera::Dp(24.0))
                             .line_height(tessera::Dp(32.0))
-                            .color([255, 255, 255])
+                            .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
                     )
                 })),
-                ColumnItem::wrap(Box::new(create_spacer(15))),
+                ColumnItem::wrap(Box::new(create_spacer(12))),
                 // Content
                 ColumnItem::wrap(Box::new(|| text("Animated Spacer:"))),
+                ColumnItem::wrap(Box::new(create_spacer(8))),
                 ColumnItem::wrap(Box::new(move || anim_spacer(anim_state_clone.clone()))),
+                ColumnItem::wrap(Box::new(create_spacer(8))),
                 ColumnItem::wrap(Box::new(|| text("↑ Height animation effect"))),
             ])
         },
@@ -166,9 +169,9 @@ fn interactive_showcase(state: Arc<AppState>) {
     let state_clone = state.clone();
     surface(
         SurfaceArgsBuilder::default()
-            .color([0.25, 0.25, 0.3, 1.0])
+            .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
             .corner_radius(10.0)
-            .padding(Dp(20.0))
+            .padding(Dp(24.0))
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -191,9 +194,9 @@ fn performance_showcase(state: Arc<AppState>) {
 
     surface(
         SurfaceArgsBuilder::default()
-            .color([0.25, 0.25, 0.3, 1.0])
+            .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
             .corner_radius(10.0)
-            .padding(Dp(20.0))
+            .padding(Dp(24.0))
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -214,12 +217,12 @@ fn performance_showcase(state: Arc<AppState>) {
                             .text("Performance Monitoring".to_string())
                             .size(tessera::Dp(24.0))
                             .line_height(tessera::Dp(32.0))
-                            .color([255, 255, 255])
+                            .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
                     )
                 })),
-                ColumnItem::wrap(Box::new(create_spacer(15))),
+                ColumnItem::wrap(Box::new(create_spacer(12))),
                 // Content
                 ColumnItem::wrap(Box::new(move || perf_display(metrics_clone.clone()))),
             ])
@@ -235,9 +238,9 @@ pub fn component_showcase(state: Arc<AppState>) {
         ColumnItem::wrap(Box::new(|| {
             surface(
                 SurfaceArgsBuilder::default()
-                    .color([0.3, 0.4, 0.5, 1.0])
+                    .color(md_colors::PRIMARY_CONTAINER) // Material Design primary-container
                     .corner_radius(8.0)
-                    .padding(Dp(12.0))
+                    .padding(Dp(24.0))
                     .width(DimensionValue::Fill {
                         min: None,
                         max: None,
@@ -251,40 +254,40 @@ pub fn component_showcase(state: Arc<AppState>) {
                             .text("Tessera UI Framework Component Showcase".to_string())
                             .size(tessera::Dp(24.0))
                             .line_height(tessera::Dp(32.0))
-                            .color([255, 255, 255])
+                            .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
                     );
                 },
             )
         })),
-        ColumnItem::wrap(Box::new(create_spacer(30))),
+        ColumnItem::wrap(Box::new(create_spacer(24))),
         // Surface components
         ColumnItem::wrap(Box::new(surface_showcase)),
-        ColumnItem::wrap(Box::new(create_spacer(30))),
+        ColumnItem::wrap(Box::new(create_spacer(24))),
         // Text editor components
         ColumnItem::wrap(Box::new({
             let state_clone = state.clone();
             move || text_editor_showcase(state_clone.clone())
         })),
-        ColumnItem::wrap(Box::new(create_spacer(30))),
+        ColumnItem::wrap(Box::new(create_spacer(24))),
         // Interactive components
         ColumnItem::wrap(Box::new({
             let state_clone = state.clone();
             move || interactive_showcase(state_clone.clone())
         })),
-        ColumnItem::wrap(Box::new(create_spacer(30))),
+        ColumnItem::wrap(Box::new(create_spacer(24))),
         // Performance monitoring
         ColumnItem::wrap(Box::new({
             let state_clone = state.clone();
             move || performance_showcase(state_clone.clone())
         })),
-        ColumnItem::wrap(Box::new(create_spacer(30))),
+        ColumnItem::wrap(Box::new(create_spacer(24))),
         // Animation components (放在最下面避免跳动)
         ColumnItem::wrap(Box::new({
             let state_clone = state.clone();
             move || animation_showcase(state_clone.clone())
         })),
-        ColumnItem::wrap(Box::new(create_spacer(30))),
+        ColumnItem::wrap(Box::new(create_spacer(24))),
     ])
 }
