@@ -21,7 +21,7 @@ log = "0.4.27"
 parking_lot = "0.12.4"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-flexi_logger = { version = "0.30.2", features = ["async"] }
+flexi_logger = { version = "0.31.0", features = ["async"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15.0"

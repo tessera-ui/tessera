@@ -1,7 +1,7 @@
 use tessera::DimensionValue;
 use tessera_basic_components::{
-    column::{ColumnItem, column},
-    row::{RowItem, row},
+    column::{AsColumnItem, ColumnArgsBuilder, column},
+    row::{AsRowItem, RowArgsBuilder, row},
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };
@@ -10,23 +10,25 @@ use tessera_macros::tessera;
 /// Header row component with two text items
 #[tessera]
 pub fn header_row() {
-    row([
-        RowItem::fill(Box::new(|| text("Hello, this is tessera")), Some(1.0), None),
-        RowItem::fill(
-            Box::new(|| text("Hello, this is another tessera")),
-            Some(1.0),
-            None,
-        ),
-    ])
+    row(
+        RowArgsBuilder::default().build().unwrap(),
+        [
+            ((|| text("Hello, this is tessera")), 1.0f32).into_row_item(),
+            ((|| text("Hello, this is another tessera")), 1.0f32).into_row_item(),
+        ],
+    )
 }
 
 /// Vertical text column component
 #[tessera]
 pub fn text_column() {
-    column([
-        ColumnItem::fill(Box::new(|| text("This is a column")), Some(1.0), None),
-        ColumnItem::fill(Box::new(|| text("Another item in column")), Some(1.0), None),
-    ])
+    column(
+        ColumnArgsBuilder::default().build().unwrap(),
+        [
+            ((|| text("This is a column")), 1.0f32).into_column_item(),
+            ((|| text("Another item in column")), 1.0f32).into_column_item(),
+        ],
+    )
 }
 
 /// Content section with header and text column
@@ -45,10 +47,13 @@ pub fn content_section() {
             .unwrap(),
         None, // Non-interactive content section
         || {
-            column([
-                ColumnItem::wrap(Box::new(header_row)),
-                ColumnItem::wrap(Box::new(text_column)),
-            ]);
+            column(
+                ColumnArgsBuilder::default().build().unwrap(),
+                [
+                    (|| header_row()).into_column_item(),
+                    (|| text_column()).into_column_item(),
+                ],
+            );
         },
     )
 }

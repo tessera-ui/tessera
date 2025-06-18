@@ -23,10 +23,6 @@ fn main_content(state: Arc<AppState>) {
                 min: None,
                 max: None,
             })
-            .height(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
             .build()
             .unwrap(),
         None, // Non-interactive background

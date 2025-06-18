@@ -12,6 +12,7 @@ mod text_editors;
 
 use std::sync::Arc;
 
+use log::error;
 use tessera::Renderer;
 #[cfg(target_os = "android")]
 use tessera::winit::platform::android::activity::AndroidApp;
@@ -39,14 +40,9 @@ fn main() {}
 #[allow(dead_code)]
 #[cfg(not(target_os = "android"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use log::{error, info};
-
     let _logger = flexi_logger::Logger::try_with_env()?
         .write_mode(flexi_logger::WriteMode::Async)
         .start()?;
-
-    info!("Starting Tessera example with touch scroll support...");
-    info!("Touch scroll enabled: sensitivity=1.2, threshold=10.0px");
 
     let app_state = Arc::new(AppState::new());
 

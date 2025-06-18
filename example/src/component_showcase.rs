@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use tessera::{DimensionValue, Dp};
 use tessera_basic_components::{
-    column::{ColumnItem, column},
-    row::{RowItem, row},
+    column::{AsColumnItem, ColumnArgsBuilder, column},
+    row::{AsRowItem, RowArgsBuilder, row},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -39,30 +39,38 @@ fn surface_showcase() {
             .unwrap(),
         None, // Non-interactive container
         || {
-            column([
-                // Title inside the card
-                ColumnItem::wrap(Box::new(|| {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Surface Components".to_string())
-                            .size(tessera::Dp(24.0))
-                            .line_height(tessera::Dp(32.0))
-                            .color(md_colors::ON_SURFACE)
-                            .build()
-                            .unwrap(),
-                    )
-                })),
-                // Spacer
-                ColumnItem::wrap(Box::new(create_spacer(12))),
-                // Content
-                ColumnItem::wrap(Box::new(|| {
-                    row([
-                        RowItem::wrap(Box::new(outlined_surface_example)),
-                        RowItem::wrap(Box::new(create_spacer(20))),
-                        RowItem::wrap(Box::new(transparent_surface_example)),
-                    ])
-                })),
-            ])
+            column(
+                ColumnArgsBuilder::default().build().unwrap(),
+                [
+                    // Title inside the card
+                    (|| {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Surface Components".to_string())
+                                .size(tessera::Dp(24.0))
+                                .line_height(tessera::Dp(32.0))
+                                .color(md_colors::ON_SURFACE)
+                                .build()
+                                .unwrap(),
+                        )
+                    })
+                    .into_column_item(),
+                    // Spacer
+                    (|| (create_spacer(12))()).into_column_item(),
+                    // Content
+                    (|| {
+                        row(
+                            RowArgsBuilder::default().build().unwrap(),
+                            [
+                                (|| outlined_surface_example()).into_row_item(),
+                                (|| (create_spacer(20))()).into_row_item(),
+                                (|| transparent_surface_example()).into_row_item(),
+                            ],
+                        )
+                    })
+                    .into_column_item(),
+                ],
+            )
         },
     )
 }
@@ -75,14 +83,10 @@ fn text_editor_showcase(state: Arc<AppState>) {
 
     surface(
         SurfaceArgsBuilder::default()
-            .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
+            .color(md_colors::SURFACE_CONTAINER)
             .corner_radius(10.0)
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Wrap {
                 min: None,
                 max: None,
             })
@@ -90,28 +94,36 @@ fn text_editor_showcase(state: Arc<AppState>) {
             .unwrap(),
         None, // Non-interactive container
         move || {
-            column([
-                // Title inside the card
-                ColumnItem::wrap(Box::new(|| {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Text Editor Components".to_string())
-                            .size(tessera::Dp(24.0))
-                            .line_height(tessera::Dp(32.0))
-                            .color(md_colors::ON_SURFACE)
-                            .build()
-                            .unwrap(),
-                    )
-                })),
-                // Spacer
-                ColumnItem::wrap(Box::new(create_spacer(12))),
-                // Content
-                ColumnItem::wrap(Box::new(move || text_editor_1(editor_state_clone.clone()))),
-                ColumnItem::wrap(Box::new(create_spacer(16))),
-                ColumnItem::wrap(Box::new(move || {
-                    text_editor_2(editor_state_2_clone.clone())
-                })),
-            ])
+            column(
+                ColumnArgsBuilder::default()
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .build()
+                    .unwrap(),
+                [
+                    // Title inside the card
+                    (|| {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Text Editor Components".to_string())
+                                .size(tessera::Dp(24.0))
+                                .line_height(tessera::Dp(32.0))
+                                .color(md_colors::ON_SURFACE)
+                                .build()
+                                .unwrap(),
+                        )
+                    })
+                    .into_column_item(),
+                    // Spacer
+                    (|| (create_spacer(12))()).into_column_item(),
+                    // Content
+                    (move || text_editor_1(editor_state_clone.clone())).into_column_item(),
+                    (|| (create_spacer(16))()).into_column_item(),
+                    (move || text_editor_2(editor_state_2_clone.clone())).into_column_item(),
+                ],
+            )
         },
     )
 }
@@ -130,35 +142,41 @@ fn animation_showcase(state: Arc<AppState>) {
                 min: None,
                 max: None,
             })
-            .height(DimensionValue::Wrap {
-                min: None,
-                max: None,
-            })
             .build()
             .unwrap(),
         None, // Non-interactive
         move || {
-            column([
-                // Title inside the card
-                ColumnItem::wrap(Box::new(|| {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Animation Components".to_string())
-                            .size(tessera::Dp(24.0))
-                            .line_height(tessera::Dp(32.0))
-                            .color(md_colors::ON_SURFACE)
-                            .build()
-                            .unwrap(),
-                    )
-                })),
-                ColumnItem::wrap(Box::new(create_spacer(12))),
-                // Content
-                ColumnItem::wrap(Box::new(|| text("Animated Spacer:"))),
-                ColumnItem::wrap(Box::new(create_spacer(8))),
-                ColumnItem::wrap(Box::new(move || anim_spacer(anim_state_clone.clone()))),
-                ColumnItem::wrap(Box::new(create_spacer(8))),
-                ColumnItem::wrap(Box::new(|| text("↑ Height animation effect"))),
-            ])
+            column(
+                ColumnArgsBuilder::default()
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .build()
+                    .unwrap(),
+                [
+                    // Title inside the card
+                    (|| {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Animation Components".to_string())
+                                .size(tessera::Dp(24.0))
+                                .line_height(tessera::Dp(32.0))
+                                .color(md_colors::ON_SURFACE)
+                                .build()
+                                .unwrap(),
+                        )
+                    })
+                    .into_column_item(),
+                    (|| (create_spacer(12))()).into_column_item(),
+                    // Content
+                    (|| text("Animated Spacer:")).into_column_item(),
+                    (|| (create_spacer(8))()).into_column_item(),
+                    (move || anim_spacer(anim_state_clone.clone())).into_column_item(),
+                    (|| (create_spacer(8))()).into_column_item(),
+                    (|| text("↑ Height animation effect")).into_column_item(),
+                ],
+            )
         },
     )
 }
@@ -173,10 +191,6 @@ fn interactive_showcase(state: Arc<AppState>) {
             .corner_radius(10.0)
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Wrap {
                 min: None,
                 max: None,
             })
@@ -201,31 +215,37 @@ fn performance_showcase(state: Arc<AppState>) {
                 min: None,
                 max: None,
             })
-            .height(DimensionValue::Wrap {
-                min: None,
-                max: None,
-            })
             .build()
             .unwrap(),
         None, // Non-interactive
         move || {
-            column([
-                // Title inside the card
-                ColumnItem::wrap(Box::new(|| {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Performance Monitoring".to_string())
-                            .size(tessera::Dp(24.0))
-                            .line_height(tessera::Dp(32.0))
-                            .color(md_colors::ON_SURFACE)
-                            .build()
-                            .unwrap(),
-                    )
-                })),
-                ColumnItem::wrap(Box::new(create_spacer(12))),
-                // Content
-                ColumnItem::wrap(Box::new(move || perf_display(metrics_clone.clone()))),
-            ])
+            column(
+                ColumnArgsBuilder::default()
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .build()
+                    .unwrap(),
+                [
+                    // Title inside the card
+                    (|| {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Performance Monitoring".to_string())
+                                .size(tessera::Dp(24.0))
+                                .line_height(tessera::Dp(32.0))
+                                .color(md_colors::ON_SURFACE)
+                                .build()
+                                .unwrap(),
+                        )
+                    })
+                    .into_column_item(),
+                    (|| (create_spacer(12))()).into_column_item(),
+                    // Content
+                    (move || perf_display(metrics_clone.clone())).into_column_item(),
+                ],
+            )
         },
     )
 }
@@ -233,61 +253,75 @@ fn performance_showcase(state: Arc<AppState>) {
 /// Main component showcase that organizes all components
 #[tessera]
 pub fn component_showcase(state: Arc<AppState>) {
-    column([
-        // Welcome section
-        ColumnItem::wrap(Box::new(|| {
-            surface(
-                SurfaceArgsBuilder::default()
-                    .color(md_colors::PRIMARY_CONTAINER) // Material Design primary-container
-                    .corner_radius(8.0)
-                    .padding(Dp(24.0))
-                    .width(DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
-                    .build()
-                    .unwrap(),
-                None, // Non-interactive
-                || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Tessera UI Framework Component Showcase".to_string())
-                            .size(tessera::Dp(24.0))
-                            .line_height(tessera::Dp(32.0))
-                            .color(md_colors::ON_SURFACE)
-                            .build()
-                            .unwrap(),
-                    );
-                },
-            )
-        })),
-        ColumnItem::wrap(Box::new(create_spacer(24))),
-        // Surface components
-        ColumnItem::wrap(Box::new(surface_showcase)),
-        ColumnItem::wrap(Box::new(create_spacer(24))),
-        // Text editor components
-        ColumnItem::wrap(Box::new({
-            let state_clone = state.clone();
-            move || text_editor_showcase(state_clone.clone())
-        })),
-        ColumnItem::wrap(Box::new(create_spacer(24))),
-        // Interactive components
-        ColumnItem::wrap(Box::new({
-            let state_clone = state.clone();
-            move || interactive_showcase(state_clone.clone())
-        })),
-        ColumnItem::wrap(Box::new(create_spacer(24))),
-        // Performance monitoring
-        ColumnItem::wrap(Box::new({
-            let state_clone = state.clone();
-            move || performance_showcase(state_clone.clone())
-        })),
-        ColumnItem::wrap(Box::new(create_spacer(24))),
-        // Animation components (放在最下面避免跳动)
-        ColumnItem::wrap(Box::new({
-            let state_clone = state.clone();
-            move || animation_showcase(state_clone.clone())
-        })),
-        ColumnItem::wrap(Box::new(create_spacer(24))),
-    ])
+    column(
+        ColumnArgsBuilder::default()
+            .width(DimensionValue::Fill {
+                min: None,
+                max: None,
+            })
+            .build()
+            .unwrap(),
+        [
+            // Welcome section
+            (|| {
+                surface(
+                    SurfaceArgsBuilder::default()
+                        .color(md_colors::PRIMARY_CONTAINER)
+                        .corner_radius(8.0)
+                        .padding(Dp(24.0))
+                        .width(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .build()
+                        .unwrap(),
+                    None, // Non-interactive
+                    || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Tessera UI Framework Component Showcase".to_string())
+                                .size(tessera::Dp(24.0))
+                                .line_height(tessera::Dp(32.0))
+                                .color(md_colors::ON_SURFACE)
+                                .build()
+                                .unwrap(),
+                        );
+                    },
+                )
+            })
+            .into_column_item(),
+            (|| create_spacer(24)()).into_column_item(),
+            // Surface components
+            (|| surface_showcase()).into_column_item(),
+            (|| create_spacer(24)()).into_column_item(),
+            // Text editor components
+            ({
+                let state_clone = state.clone();
+                move || text_editor_showcase(state_clone.clone())
+            })
+            .into_column_item(),
+            (|| create_spacer(24)()).into_column_item(),
+            // Interactive components
+            ({
+                let state_clone = state.clone();
+                move || interactive_showcase(state_clone.clone())
+            })
+            .into_column_item(),
+            (|| create_spacer(24)()).into_column_item(),
+            // Performance monitoring
+            ({
+                let state_clone = state.clone();
+                move || performance_showcase(state_clone.clone())
+            })
+            .into_column_item(),
+            (|| create_spacer(24)()).into_column_item(),
+            // Animation components (Place at the bottom to avoid jumping)
+            ({
+                let state_clone = state.clone();
+                move || animation_showcase(state_clone.clone())
+            })
+            .into_column_item(),
+            (|| create_spacer(24)()).into_column_item(),
+        ],
+    )
 }

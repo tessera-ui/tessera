@@ -1,66 +1,52 @@
-use tessera::Dp; // Added Dp import
-use tessera::{
-    ComputedData, Constraint, DimensionValue, MeasurementError, Px, PxPosition, measure_nodes,
-    place_node,
-};
+use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
+use derive_builder::Builder;
+use tessera::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node};
 use tessera_macros::tessera;
+
+/// Arguments for the `row` component.
+#[derive(Builder, Clone, Debug)]
+#[builder(pattern = "owned")]
+pub struct RowArgs {
+    /// Width behavior for the row.
+    #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
+    pub width: DimensionValue,
+    /// Height behavior for the row.
+    #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
+    pub height: DimensionValue,
+    /// Main axis alignment (horizontal alignment).
+    #[builder(default = "MainAxisAlignment::Start")]
+    pub main_axis_alignment: MainAxisAlignment,
+    /// Cross axis alignment (vertical alignment).
+    #[builder(default = "CrossAxisAlignment::Start")]
+    pub cross_axis_alignment: CrossAxisAlignment,
+}
+
+impl Default for RowArgs {
+    fn default() -> Self {
+        RowArgsBuilder::default().build().unwrap()
+    }
+}
 
 /// Represents a child item within a Row layout.
 pub struct RowItem {
-    /// Determines how much space the child should take if its width_behavior is Fill,
-    /// relative to other Fill children with weights.
+    /// Optional weight for flexible space distribution
     pub weight: Option<f32>,
-    /// Defines the width behavior of this child.
-    pub width_behavior: DimensionValue,
-    /// The actual child component. Must be Send + Sync.
+    /// The actual child component
     pub child: Box<dyn FnOnce() + Send + Sync>,
 }
 
 impl RowItem {
-    /// Creates a new `RowItem`.
-    pub fn new(
-        child: Box<dyn FnOnce() + Send + Sync>,
-        width_behavior: DimensionValue,
-        weight: Option<f32>,
-    ) -> Self {
+    /// Creates a new `RowItem` with optional weight.
+    pub fn new(child: Box<dyn FnOnce() + Send + Sync>, weight: Option<f32>) -> Self {
+        RowItem { weight, child }
+    }
+
+    /// Creates a weighted row item
+    pub fn weighted(child: Box<dyn FnOnce() + Send + Sync>, weight: f32) -> Self {
         RowItem {
-            weight,
-            width_behavior,
+            weight: Some(weight),
             child,
         }
-    }
-
-    /// Helper to create a RowItem that wraps its content.
-    pub fn wrap(child: Box<dyn FnOnce() + Send + Sync>) -> Self {
-        Self::new(
-            child,
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
-            None,
-        )
-    }
-
-    /// Helper to create a RowItem that is fixed width.
-    pub fn fixed(child: Box<dyn FnOnce() + Send + Sync>, width: Dp) -> Self {
-        Self::new(child, DimensionValue::Fixed(width.into()), None)
-    }
-
-    /// Helper to create a RowItem that fills available space, optionally with a weight and max.
-    pub fn fill(
-        child: Box<dyn FnOnce() + Send + Sync>,
-        weight: Option<f32>,
-        max_width: Option<Dp>,
-    ) -> Self {
-        Self::new(
-            child,
-            DimensionValue::Fill {
-                min: None, // Add min field
-                max: max_width.map(|dp| dp.into()),
-            },
-            weight,
-        )
     }
 }
 
@@ -75,444 +61,344 @@ impl AsRowItem for RowItem {
     }
 }
 
-/// Default conversion: a simple function closure becomes a `RowItem` that wraps its content.
+/// Default conversion: a simple function closure becomes a `RowItem` without weight.
 impl<F: FnOnce() + Send + Sync + 'static> AsRowItem for F {
     fn into_row_item(self) -> RowItem {
         RowItem {
             weight: None,
-            width_behavior: DimensionValue::Wrap {
-                min: None,
-                max: None,
-            }, // Default to Wrap
             child: Box::new(self),
         }
     }
 }
 
-// Allow (FnOnce, DimensionValue) to be a RowItem
-impl<F: FnOnce() + Send + Sync + 'static> AsRowItem for (F, DimensionValue) {
+/// Allow (FnOnce, weight) to be a RowItem
+impl<F: FnOnce() + Send + Sync + 'static> AsRowItem for (F, f32) {
     fn into_row_item(self) -> RowItem {
         RowItem {
-            weight: None, // No weight specified
-            width_behavior: self.1,
-            child: Box::new(self.0),
-        }
-    }
-}
-
-// Allow (FnOnce, DimensionValue, f32_weight) to be a RowItem
-impl<F: FnOnce() + Send + Sync + 'static> AsRowItem for (F, DimensionValue, f32) {
-    fn into_row_item(self) -> RowItem {
-        RowItem {
-            weight: Some(self.2),
-            width_behavior: self.1,
+            weight: Some(self.1),
             child: Box::new(self.0),
         }
     }
 }
 
 /// A row component that arranges its children horizontally.
-/// Children can have fixed sizes, wrap their content, or fill available space (optionally with weights).
 #[tessera]
-pub fn row<const N: usize>(children_items_input: [impl AsRowItem; N]) {
+pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem; N]) {
     let children_items: [RowItem; N] =
         children_items_input.map(|item_input| item_input.into_row_item());
-    let children_items_for_measure: Vec<(_, _)> = children_items
-        .iter()
-        .map(|child| (child.weight, child.width_behavior))
-        .collect(); // For the measure closure
+
+    let mut child_closures = Vec::with_capacity(N);
+    let mut child_weights = Vec::with_capacity(N);
+
+    for child_item in children_items {
+        child_closures.push(child_item.child);
+        child_weights.push(child_item.weight);
+    }
 
     measure(Box::new(move |input| {
-        let row_intrinsic_constraint = input
-            .metadatas
-            .get(&input.current_node_id)
-            .ok_or(MeasurementError::NodeNotFoundInMeta)?
-            .constraint;
-        let effective_row_constraint = row_intrinsic_constraint.merge(input.effective_constraint);
+        let row_intrinsic_constraint = Constraint::new(args.width, args.height);
+        // This is the effective constraint for the row itself
+        let row_effective_constraint = row_intrinsic_constraint.merge(input.parent_constraint);
 
-        let mut measured_children_sizes: Vec<Option<ComputedData>> = vec![None; N];
-        let mut total_width_for_fixed_wrap: Px = Px(0);
-        let mut computed_max_row_height: Px = Px(0);
+        let mut children_sizes = vec![None; N];
+        let mut max_child_height = Px(0);
 
-        // --- Stage 1: Measure Fixed and Wrap children ---
-        let mut fixed_wrap_nodes_to_measure = Vec::new();
-        for (i, item) in children_items_for_measure.iter().enumerate().take(N) {
-            let item_behavior = item.1;
-            let child_node_id = input.children_ids[i];
-            match item_behavior {
-                DimensionValue::Fixed(fixed_width) => {
-                    let child_constraint_for_measure = Constraint::new(
-                        DimensionValue::Fixed(fixed_width),
-                        effective_row_constraint.height,
-                    );
-                    let child_intrinsic_constraint = input
-                        .metadatas
-                        .get(&child_node_id)
-                        .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
-                        .constraint;
-                    let final_child_constraint =
-                        child_intrinsic_constraint.merge(&child_constraint_for_measure);
-                    fixed_wrap_nodes_to_measure.push((child_node_id, final_child_constraint, i));
-                }
-                DimensionValue::Wrap { .. } => {
-                    // Updated match for Wrap
-                    let child_constraint_for_measure = Constraint::new(
-                        DimensionValue::Wrap {
-                            min: None,
-                            max: None,
-                        }, // Pass basic Wrap
-                        effective_row_constraint.height,
-                    );
-                    let child_intrinsic_constraint = input
-                        .metadatas
-                        .get(&child_node_id)
-                        .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
-                        .constraint;
-                    let final_child_constraint =
-                        child_intrinsic_constraint.merge(&child_constraint_for_measure);
-                    fixed_wrap_nodes_to_measure.push((child_node_id, final_child_constraint, i));
-                }
-                DimensionValue::Fill { .. } => {} // Fill children measured later
-            }
-        }
+        // For Row, main axis is horizontal, so check width for weight distribution
+        let should_use_weight_for_width = match row_effective_constraint.width {
+            DimensionValue::Fixed(_) => true,
+            DimensionValue::Fill { max: Some(_), .. } => true,
+            DimensionValue::Wrap { max: Some(_), .. } => true,
+            _ => false,
+        };
 
-        if !fixed_wrap_nodes_to_measure.is_empty() {
-            let nodes_for_api: Vec<(_, _)> = fixed_wrap_nodes_to_measure
-                .iter()
-                .map(|(id, constraint, _idx)| (*id, *constraint))
-                .collect();
-            let results_map = measure_nodes(nodes_for_api, input.tree, input.metadatas);
-            for (child_node_id, _constraint, original_idx) in fixed_wrap_nodes_to_measure {
-                let size = results_map
-                    .get(&child_node_id)
-                    .ok_or_else(|| {
-                        MeasurementError::MeasureFnFailed(format!(
-                            "Result missing for fixed/wrap child {child_node_id:?}"
-                        ))
-                    })?
-                    .clone()?;
-                measured_children_sizes[original_idx] = Some(size);
-                total_width_for_fixed_wrap += size.width;
-                computed_max_row_height = computed_max_row_height.max(size.height);
-            }
-        }
-        // --- End Stage 1 ---
+        if should_use_weight_for_width {
+            let available_width_for_children = match row_effective_constraint.width {
+                DimensionValue::Fixed(w) => w,
+                DimensionValue::Fill { max: Some(w), .. } => w,
+                DimensionValue::Wrap { max: Some(w), .. } => w,
+                _ => unreachable!(
+                    "Width should be constrained if should_use_weight_for_width is true"
+                ),
+            };
 
-        let mut remaining_width_for_fill: Px = Px(0);
-        let mut is_row_effectively_wrap_for_children = false;
+            let mut weighted_children_indices = Vec::new();
+            let mut unweighted_children_indices = Vec::new();
+            let mut total_weight_sum = 0.0f32;
 
-        match effective_row_constraint.width {
-            DimensionValue::Fixed(row_fixed_width) => {
-                remaining_width_for_fill =
-                    (row_fixed_width - total_width_for_fixed_wrap).max(Px(0));
-            }
-            DimensionValue::Wrap {
-                max: row_wrap_max, ..
-            } => {
-                // Consider row's own wrap max
-                if let Some(max_w) = row_wrap_max {
-                    remaining_width_for_fill = (max_w - total_width_for_fixed_wrap).max(Px(0));
-                } else {
-                    is_row_effectively_wrap_for_children = true; // No max, so fill children wrap
-                }
-            }
-            DimensionValue::Fill {
-                max: Some(row_max_budget),
-                ..
-            } => {
-                remaining_width_for_fill = (row_max_budget - total_width_for_fixed_wrap).max(Px(0));
-            }
-            DimensionValue::Fill { max: None, .. } => {
-                is_row_effectively_wrap_for_children = true;
-            }
-        }
-
-        let mut total_fill_weight: f32 = 0.0;
-        let mut fill_children_indices_with_weight: Vec<usize> = Vec::new();
-        let mut fill_children_indices_without_weight: Vec<usize> = Vec::new();
-
-        for (i, _item) in children_items_for_measure.iter().enumerate().take(N) {
-            let item_weight = children_items_for_measure[i].0;
-            let item_behavior = children_items_for_measure[i].1;
-            if let DimensionValue::Fill { .. } = item_behavior {
-                if let Some(w) = item_weight {
-                    if w > 0.0 {
-                        fill_children_indices_with_weight.push(i);
-                        total_fill_weight += w;
+            for (i, weight_opt) in child_weights.iter().enumerate() {
+                if let Some(w) = weight_opt {
+                    if *w > 0.0 {
+                        weighted_children_indices.push(i);
+                        total_weight_sum += w;
                     } else {
-                        fill_children_indices_without_weight.push(i);
+                        unweighted_children_indices.push(i);
                     }
                 } else {
-                    fill_children_indices_without_weight.push(i);
+                    unweighted_children_indices.push(i);
                 }
             }
-        }
 
-        let mut actual_width_taken_by_fill_children: Px = Px(0);
+            let mut total_width_of_unweighted_children = Px(0);
+            for &child_idx in &unweighted_children_indices {
+                let child_id = input.children_ids[child_idx];
 
-        // --- Stage 2: Measure Fill children ---
-        let mut fill_nodes_to_measure_group = Vec::new();
+                // Parent (row) offers Wrap for width and its own effective height constraint to unweighted children
+                let parent_offered_constraint_for_child = Constraint::new(
+                    DimensionValue::Wrap {
+                        min: None,
+                        max: None,
+                    },
+                    row_effective_constraint.height,
+                );
 
-        if is_row_effectively_wrap_for_children {
-            for (i, item) in children_items_for_measure.iter().enumerate().take(N) {
-                let item_behavior = item.1;
-                if let DimensionValue::Fill {
-                    min: child_fill_min,
-                    max: child_fill_max,
-                } = item_behavior
-                {
-                    let child_node_id = input.children_ids[i];
-                    let child_constraint_for_measure = Constraint::new(
-                        DimensionValue::Wrap {
-                            min: child_fill_min,
-                            max: child_fill_max,
-                        },
-                        effective_row_constraint.height,
+                // measure_node will fetch the child's intrinsic constraint and merge it
+                let child_result = tessera::measure_node(
+                    child_id,
+                    &parent_offered_constraint_for_child,
+                    input.tree,
+                    input.metadatas,
+                )?;
+
+                children_sizes[child_idx] = Some(child_result);
+                total_width_of_unweighted_children += child_result.width;
+                max_child_height = max_child_height.max(child_result.height);
+            }
+
+            let remaining_width_for_weighted_children =
+                (available_width_for_children - total_width_of_unweighted_children).max(Px(0));
+            if total_weight_sum > 0.0 {
+                for &child_idx in &weighted_children_indices {
+                    let child_weight = child_weights[child_idx].unwrap_or(0.0);
+                    let allocated_width_for_child =
+                        Px((remaining_width_for_weighted_children.0 as f32
+                            * (child_weight / total_weight_sum)) as i32);
+                    let child_id = input.children_ids[child_idx];
+
+                    // Parent (row) offers Fixed allocated width and its own effective height constraint to weighted children
+                    let parent_offered_constraint_for_child = Constraint::new(
+                        DimensionValue::Fixed(allocated_width_for_child),
+                        row_effective_constraint.height,
                     );
-                    let child_intrinsic_constraint = input
-                        .metadatas
-                        .get(&child_node_id)
-                        .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
-                        .constraint;
-                    let final_child_constraint =
-                        child_intrinsic_constraint.merge(&child_constraint_for_measure);
-                    fill_nodes_to_measure_group.push((child_node_id, final_child_constraint, i));
-                }
-            }
-        } else if remaining_width_for_fill > Px(0) {
-            let mut current_remaining_fill_budget = remaining_width_for_fill;
 
-            if total_fill_weight > 0.0 {
-                for &index in &fill_children_indices_with_weight {
-                    if current_remaining_fill_budget == Px(0) {
-                        break;
-                    }
-                    let item_weight = children_items_for_measure[index].0.unwrap();
-                    let item_behavior = children_items_for_measure[index].1;
-                    let child_node_id = input.children_ids[index];
+                    // measure_node will fetch the child's intrinsic constraint and merge it
+                    let child_result = tessera::measure_node(
+                        child_id,
+                        &parent_offered_constraint_for_child,
+                        input.tree,
+                        input.metadatas,
+                    )?;
 
-                    let proportional_width = Px(((item_weight / total_fill_weight)
-                        * remaining_width_for_fill.0 as f32)
-                        as i32);
-
-                    if let DimensionValue::Fill {
-                        min: child_min,
-                        max: child_max,
-                        ..
-                    } = item_behavior
-                    {
-                        let mut alloc_width = proportional_width;
-                        if let Some(max_w) = child_max {
-                            alloc_width = alloc_width.min(max_w);
-                        }
-                        alloc_width = alloc_width.min(current_remaining_fill_budget);
-                        if let Some(min_w) = child_min {
-                            alloc_width = alloc_width.max(min_w);
-                        }
-                        alloc_width = alloc_width.min(current_remaining_fill_budget);
-
-                        let child_constraint_for_measure = Constraint::new(
-                            DimensionValue::Fixed(alloc_width),
-                            effective_row_constraint.height,
-                        );
-                        let child_intrinsic_constraint = input
-                            .metadatas
-                            .get(&child_node_id)
-                            .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
-                            .constraint;
-                        let final_child_constraint =
-                            child_intrinsic_constraint.merge(&child_constraint_for_measure);
-                        let size = tessera::measure_node(
-                            child_node_id,
-                            &final_child_constraint,
-                            input.tree,
-                            input.metadatas,
-                        )?;
-                        measured_children_sizes[index] = Some(size);
-                        actual_width_taken_by_fill_children += size.width;
-                        current_remaining_fill_budget =
-                            (current_remaining_fill_budget - size.width).max(Px(0));
-                        computed_max_row_height = computed_max_row_height.max(size.height);
-                    }
+                    children_sizes[child_idx] = Some(child_result);
+                    max_child_height = max_child_height.max(child_result.height);
                 }
             }
 
-            if !fill_children_indices_without_weight.is_empty()
-                && current_remaining_fill_budget > Px(0)
-            {
-                let num_unweighted_fill = fill_children_indices_without_weight.len();
-                let width_per_unweighted_child =
-                    current_remaining_fill_budget / (num_unweighted_fill as i32);
-
-                for &index in &fill_children_indices_without_weight {
-                    if current_remaining_fill_budget == Px(0) {
-                        break;
+            let final_row_width = available_width_for_children;
+            // Row's height is determined by its own effective constraint, or by wrapping content if no explicit max.
+            let final_row_height = match row_effective_constraint.height {
+                DimensionValue::Fixed(h) => h,
+                DimensionValue::Fill { max: Some(h), .. } => h,
+                DimensionValue::Wrap { min, max } => {
+                    let mut h = max_child_height;
+                    if let Some(min_h) = min {
+                        h = h.max(min_h);
                     }
-                    let item_behavior = children_items_for_measure[index].1;
-                    let child_node_id = input.children_ids[index];
-
-                    if let DimensionValue::Fill {
-                        min: child_min,
-                        max: child_max,
-                        ..
-                    } = item_behavior
-                    {
-                        let mut alloc_width = width_per_unweighted_child;
-                        if let Some(max_w) = child_max {
-                            alloc_width = alloc_width.min(max_w);
-                        }
-                        alloc_width = alloc_width.min(current_remaining_fill_budget);
-                        if let Some(min_w) = child_min {
-                            alloc_width = alloc_width.max(min_w);
-                        }
-                        alloc_width = alloc_width.min(current_remaining_fill_budget);
-
-                        let child_constraint_for_measure = Constraint::new(
-                            DimensionValue::Fixed(alloc_width),
-                            effective_row_constraint.height,
-                        );
-                        let child_intrinsic_constraint = input
-                            .metadatas
-                            .get(&child_node_id)
-                            .ok_or(MeasurementError::ChildMeasurementFailed(child_node_id))?
-                            .constraint;
-                        let final_child_constraint =
-                            child_intrinsic_constraint.merge(&child_constraint_for_measure);
-                        let size = tessera::measure_node(
-                            child_node_id,
-                            &final_child_constraint,
-                            input.tree,
-                            input.metadatas,
-                        )?;
-                        measured_children_sizes[index] = Some(size);
-                        actual_width_taken_by_fill_children += size.width;
-                        current_remaining_fill_budget =
-                            (current_remaining_fill_budget - size.width).max(Px(0));
-                        computed_max_row_height = computed_max_row_height.max(size.height);
+                    if let Some(max_h) = max {
+                        h = h.min(max_h);
                     }
+                    h
                 }
-            }
-        }
+                _ => max_child_height, // Fill { max: None } or Wrap { max: None } -> wraps content
+            };
 
-        if !fill_nodes_to_measure_group.is_empty() {
-            let nodes_for_api: Vec<(_, _)> = fill_nodes_to_measure_group
+            let total_measured_children_width: Px = children_sizes
                 .iter()
-                .map(|(id, constraint, _idx)| (*id, *constraint))
-                .collect();
-            let results_map = measure_nodes(nodes_for_api, input.tree, input.metadatas);
-            for (child_node_id, _constraint, original_idx) in fill_nodes_to_measure_group {
-                let size = results_map
-                    .get(&child_node_id)
-                    .ok_or_else(|| {
-                        MeasurementError::MeasureFnFailed(format!(
-                            "Result missing for fill/wrap child {child_node_id:?}"
-                        ))
-                    })?
-                    .clone()?;
-                measured_children_sizes[original_idx] = Some(size);
-                actual_width_taken_by_fill_children += size.width;
-                computed_max_row_height = computed_max_row_height.max(size.height);
-            }
-        }
-        // --- End Stage 2 ---
+                .filter_map(|size_opt| size_opt.as_ref().map(|s| s.width))
+                .fold(Px(0), |acc, width| acc + width);
 
-        let total_children_width = total_width_for_fixed_wrap + actual_width_taken_by_fill_children;
+            place_children_with_alignment(
+                &children_sizes,
+                input.children_ids,
+                input.metadatas,
+                final_row_width,
+                final_row_height,
+                total_measured_children_width,
+                args.main_axis_alignment,
+                args.cross_axis_alignment,
+                N,
+            );
 
-        let mut final_row_width = total_children_width;
-        match effective_row_constraint.width {
-            DimensionValue::Fixed(w) => final_row_width = w,
-            DimensionValue::Wrap { min, max } => {
-                if let Some(min_w) = min {
-                    final_row_width = final_row_width.max(min_w);
-                }
-                if let Some(max_w) = max {
-                    final_row_width = final_row_width.min(max_w);
-                }
-            }
-            DimensionValue::Fill { min, max } => {
-                let parent_provided_width = match input.effective_constraint.width {
-                    DimensionValue::Fixed(pw) => Some(pw),
-                    DimensionValue::Fill {
-                        max: p_max_fill, ..
-                    } => p_max_fill,
-                    _ => None,
-                };
-                if let Some(ppw) = parent_provided_width {
-                    final_row_width = ppw; // Fill should use parent's provided width
-                } else {
-                    // When no parent provides width, Fill should wrap content (like a Wrap behavior)
-                    final_row_width = total_children_width;
-                }
-                if let Some(min_w) = min {
-                    final_row_width = final_row_width.max(min_w);
-                }
-                if let Some(max_w) = max {
-                    final_row_width = final_row_width.min(max_w);
-                }
-            }
-        };
+            Ok(ComputedData {
+                width: final_row_width,
+                height: final_row_height,
+            })
+        } else {
+            // Not using weight logic for width (row width is Wrap or Fill without max)
+            let mut total_children_measured_width = Px(0);
 
-        let mut final_row_height = computed_max_row_height;
-        match effective_row_constraint.height {
-            DimensionValue::Fixed(h) => final_row_height = h,
-            DimensionValue::Wrap { min, max } => {
-                if let Some(min_h) = min {
-                    final_row_height = final_row_height.max(min_h);
-                }
-                if let Some(max_h) = max {
-                    final_row_height = final_row_height.min(max_h);
-                }
-            }
-            DimensionValue::Fill { min, max } => {
-                let parent_provided_height = match input.effective_constraint.height {
-                    DimensionValue::Fixed(ph) => Some(ph),
-                    DimensionValue::Fill {
-                        max: p_max_fill, ..
-                    } => p_max_fill,
-                    _ => None,
-                };
-                if let Some(pph) = parent_provided_height {
-                    final_row_height = computed_max_row_height.min(pph);
-                }
-                if let Some(min_h) = min {
-                    final_row_height = final_row_height.max(min_h);
-                }
-                if let Some(max_h) = max {
-                    final_row_height = final_row_height.min(max_h);
-                }
-            }
-        };
+            for i in 0..N {
+                let child_id = input.children_ids[i];
 
-        let mut current_x_offset: Px = Px(0);
-        for (i, size_option) in measured_children_sizes.iter().enumerate().take(N) {
-            let child_node_id = input.children_ids[i];
-            if let Some(size) = size_option {
-                place_node(
-                    child_node_id,
-                    PxPosition::new(current_x_offset, Px(0)),
-                    input.metadatas,
+                // Parent (row) offers Wrap for width and its effective height
+                let parent_offered_constraint_for_child = Constraint::new(
+                    DimensionValue::Wrap {
+                        min: None,
+                        max: None,
+                    },
+                    row_effective_constraint.height,
                 );
-                current_x_offset += size.width;
-            } else {
-                let mut meta_entry = input.metadatas.entry(child_node_id).or_default();
-                if meta_entry.computed_data.is_none() {
-                    meta_entry.computed_data = Some(ComputedData::ZERO);
-                }
-                place_node(
-                    child_node_id,
-                    PxPosition::new(current_x_offset, Px(0)),
-                    input.metadatas,
-                );
-            }
-        }
 
-        Ok(ComputedData {
-            width: final_row_width,
-            height: final_row_height,
-        })
+                // measure_node will fetch the child's intrinsic constraint and merge it
+                let child_result = tessera::measure_node(
+                    child_id,
+                    &parent_offered_constraint_for_child,
+                    input.tree,
+                    input.metadatas,
+                )?;
+
+                children_sizes[i] = Some(child_result);
+                total_children_measured_width += child_result.width;
+                max_child_height = max_child_height.max(child_result.height);
+            }
+
+            // Determine row's final size based on its own constraints and content
+            let final_row_width = match row_effective_constraint.width {
+                DimensionValue::Fixed(w) => w,
+                DimensionValue::Fill { min, .. } => {
+                    // Max is None if here
+                    let mut w = total_children_measured_width;
+                    if let Some(min_w) = min {
+                        w = w.max(min_w);
+                    }
+                    w
+                }
+                DimensionValue::Wrap { min, max } => {
+                    let mut w = total_children_measured_width;
+                    if let Some(min_w) = min {
+                        w = w.max(min_w);
+                    }
+                    if let Some(max_w) = max {
+                        w = w.min(max_w);
+                    }
+                    w
+                }
+            };
+
+            let final_row_height = match row_effective_constraint.height {
+                DimensionValue::Fixed(h) => h,
+                DimensionValue::Fill { min, max } => {
+                    let mut h = max_child_height;
+                    if let Some(min_h) = min {
+                        h = h.max(min_h);
+                    }
+                    if let Some(max_h) = max {
+                        h = h.min(max_h);
+                    } else {
+                        h = max_child_height;
+                    }
+                    h
+                }
+                DimensionValue::Wrap { min, max } => {
+                    let mut h = max_child_height;
+                    if let Some(min_h) = min {
+                        h = h.max(min_h);
+                    }
+                    if let Some(max_h) = max {
+                        h = h.min(max_h);
+                    }
+                    h
+                }
+            };
+
+            place_children_with_alignment(
+                &children_sizes,
+                input.children_ids,
+                input.metadatas,
+                final_row_width,
+                final_row_height,
+                total_children_measured_width,
+                args.main_axis_alignment,
+                args.cross_axis_alignment,
+                N,
+            );
+
+            Ok(ComputedData {
+                width: final_row_width,
+                height: final_row_height,
+            })
+        }
     }));
 
-    for item in children_items {
-        (item.child)();
+    for child_closure in child_closures {
+        child_closure();
+    }
+}
+
+/// 根据对齐方式放置子元素的辅助函数 (水平布局)
+fn place_children_with_alignment(
+    children_sizes: &[Option<ComputedData>],
+    children_ids: &[tessera::NodeId],
+    metadatas: &tessera::ComponentNodeMetaDatas,
+    final_row_width: Px,
+    final_row_height: Px,
+    total_children_width: Px,
+    main_axis_alignment: MainAxisAlignment,
+    cross_axis_alignment: CrossAxisAlignment,
+    child_count: usize,
+) {
+    let available_space = (final_row_width - total_children_width).max(Px(0));
+
+    // 计算主轴起始位置和间距 (对于 Row，主轴是水平方向)
+    let (mut current_x, spacing_between_children) = match main_axis_alignment {
+        MainAxisAlignment::Start => (Px(0), Px(0)),
+        MainAxisAlignment::Center => (available_space / 2, Px(0)),
+        MainAxisAlignment::End => (available_space, Px(0)),
+        MainAxisAlignment::SpaceEvenly => {
+            if child_count > 0 {
+                let s = available_space / (child_count as i32 + 1);
+                (s, s)
+            } else {
+                (Px(0), Px(0))
+            }
+        }
+        MainAxisAlignment::SpaceBetween => {
+            if child_count > 1 {
+                (Px(0), available_space / (child_count as i32 - 1))
+            } else if child_count == 1 {
+                (available_space / 2, Px(0))
+            } else {
+                (Px(0), Px(0))
+            }
+        }
+        MainAxisAlignment::SpaceAround => {
+            if child_count > 0 {
+                let s = available_space / (child_count as i32);
+                (s / 2, s)
+            } else {
+                (Px(0), Px(0))
+            }
+        }
+    };
+
+    for (i, child_size_opt) in children_sizes.iter().enumerate() {
+        if let Some(child_actual_size) = child_size_opt {
+            let child_id = children_ids[i];
+
+            // 计算交叉轴位置 (对于 Row，交叉轴是垂直方向)
+            let y_offset = match cross_axis_alignment {
+                CrossAxisAlignment::Start => Px(0),
+                CrossAxisAlignment::Center => {
+                    (final_row_height - child_actual_size.height).max(Px(0)) / 2
+                }
+                CrossAxisAlignment::End => (final_row_height - child_actual_size.height).max(Px(0)),
+                CrossAxisAlignment::Stretch => Px(0),
+            };
+
+            place_node(child_id, PxPosition::new(current_x, y_offset), metadatas);
+            current_x += child_actual_size.width;
+            if i < child_count - 1 {
+                current_x += spacing_between_children;
+            }
+        }
     }
 }

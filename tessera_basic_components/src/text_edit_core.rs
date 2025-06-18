@@ -206,7 +206,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
         let state_clone = state.clone();
         measure(Box::new(move |input| {
             // Surface provides constraints that should be respected for text layout
-            let max_width_pixels: Option<Px> = match input.effective_constraint.width {
+            let max_width_pixels: Option<Px> = match input.parent_constraint.width {
                 DimensionValue::Fixed(w) => Some(w),
                 DimensionValue::Wrap { max, .. } => max,
                 DimensionValue::Fill { max, .. } => max,
@@ -214,7 +214,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
 
             // For proper scrolling behavior, we need to respect height constraints
             // When max height is specified, content should be clipped and scrollable
-            let max_height_pixels: Option<Px> = match input.effective_constraint.height {
+            let max_height_pixels: Option<Px> = match input.parent_constraint.height {
                 DimensionValue::Fixed(h) => Some(h), // Respect explicit fixed heights
                 DimensionValue::Wrap { max, .. } => max, // Respect max height for wrapping
                 DimensionValue::Fill { max, .. } => max,
@@ -308,7 +308,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                 if let Some(rect_node_id) = input.children_ids.get(i).copied() {
                     let _ = measure_node(
                         rect_node_id,
-                        input.effective_constraint,
+                        input.parent_constraint,
                         input.tree,
                         input.metadatas,
                     );
@@ -330,7 +330,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                 if let Some(cursor_node_id) = input.children_ids.get(cursor_node_index).copied() {
                     let _ = measure_node(
                         cursor_node_id,
-                        input.effective_constraint,
+                        input.parent_constraint,
                         input.tree,
                         input.metadatas,
                     );

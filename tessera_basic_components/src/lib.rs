@@ -1,4 +1,5 @@
 //! Contains the basic components of the Tessera ui framework.
+pub mod alignment;
 pub mod button;
 pub mod column;
 mod pos_misc;

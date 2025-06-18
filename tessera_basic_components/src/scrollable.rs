@@ -29,7 +29,6 @@ pub struct ScrollableArgs {
     /// Defaults to `false` since most scrollable areas are not horizontal.
     #[builder(default = "false")]
     pub horizontal: bool,
-
     /// Scroll smoothing factor (0.0 = instant, 1.0 = very smooth).
     /// Defaults to 0.05 for very responsive but still smooth scrolling.
     #[builder(default = "0.05")]
@@ -141,7 +140,7 @@ pub fn scrollable(
                 width: args.width,
                 height: args.height,
             };
-            let merged_constraint = input.effective_constraint.merge(&arg_constraint);
+            let merged_constraint = input.parent_constraint.merge(&arg_constraint);
             // Now calculate the constraints to child
             let mut child_constraint = merged_constraint;
             // If vertical scrollable, set height to wrap

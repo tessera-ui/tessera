@@ -66,7 +66,7 @@ pub fn spacer(args: SpacerArgs) {
     measure(Box::new(move |input| {
         let spacer_intrinsic_constraint = Constraint::new(args.width, args.height);
         let effective_spacer_constraint =
-            spacer_intrinsic_constraint.merge(input.effective_constraint);
+            spacer_intrinsic_constraint.merge(input.parent_constraint);
 
         let final_spacer_width = match effective_spacer_constraint.width {
             DimensionValue::Fixed(w) => w,

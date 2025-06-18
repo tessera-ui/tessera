@@ -48,6 +48,7 @@ impl Constraint {
     /// Merges this constraint with a parent constraint.
     ///
     /// Rules:
+    ///
     /// - If self is Fixed, it overrides parent (Fixed wins).
     /// - If self is Wrap, it keeps its own min and combines max constraints:
     ///   - If parent is Fixed(p_val): result is Wrap with child's min and max capped by p_val.
@@ -173,15 +174,15 @@ mod tests {
 
     #[test]
     fn test_fixed_parent_wrap_child_wrap_grandchild() {
-        // 父组件 Fixed(100) -> 子组件 Wrap {min: Some(Px(20)), max: Some(Px(80))} -> 子子组件 Wrap {min: Some(Px(10)), max: Some(Px(50))}
+        // ParentComponent Fixed(100) -> ChildComponent Wrap {min: Some(Px(20)), max: Some(Px(80))} -> GrandchildComponent Wrap {min: Some(Px(10)), max: Some(Px(50))}
 
-        // 父组件约束
+        // ParentComponentConstraint
         let parent = Constraint::new(
             DimensionValue::Fixed(Px(100)),
             DimensionValue::Fixed(Px(100)),
         );
 
-        // 子组件约束
+        // ChildComponentConstraint
         let child = Constraint::new(
             DimensionValue::Wrap {
                 min: Some(Px(20)),
@@ -193,7 +194,7 @@ mod tests {
             },
         );
 
-        // 子子组件约束
+        // GrandchildComponentConstraint
         let grandchild = Constraint::new(
             DimensionValue::Wrap {
                 min: Some(Px(10)),
@@ -205,10 +206,10 @@ mod tests {
             },
         );
 
-        // 第一层合并：子组件 merge 父组件
+        // FirstLevelMerge：ChildComponent merge ParentComponent
         let merged_child = child.merge(&parent);
 
-        // 子组件是 Wrap，父组件是 Fixed，结果应该是 Wrap，但 max 被父组件的 Fixed 值限制
+        // ChildComponentIs Wrap，ParentComponentIs Fixed，ResultShouldBe Wrap，But max LimitedByParentComponent's Fixed ValueLimit
         assert_eq!(
             merged_child.width,
             DimensionValue::Wrap {
@@ -224,10 +225,10 @@ mod tests {
             }
         );
 
-        // 第二层合并：子子组件 merge 已合并的子组件
+        // SecondLevelMerge：GrandchildComponent merge MergedChildComponent
         let final_result = grandchild.merge(&merged_child);
 
-        // 子子组件是 Wrap，已合并的子组件也是 Wrap，结果应该是 Wrap，max 取更小的值
+        // GrandchildComponentIs Wrap，MergedChildComponentIsAlso Wrap，ResultShouldBe Wrap，max TakeSmallerValue
         assert_eq!(
             final_result.width,
             DimensionValue::Wrap {
@@ -246,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_fill_parent_wrap_child() {
-        // 父组件 Fill {min: Some(Px(50)), max: Some(Px(200))} -> 子组件 Wrap {min: Some(Px(30)), max: Some(Px(150))}
+        // ParentComponent Fill {min: Some(Px(50)), max: Some(Px(200))} -> ChildComponent Wrap {min: Some(Px(30)), max: Some(Px(150))}
 
         let parent = Constraint::new(
             DimensionValue::Fill {
@@ -272,9 +273,9 @@ mod tests {
 
         let result = child.merge(&parent);
 
-        // 子组件是 Wrap，父组件是 Fill，结果应该是 Wrap
-        // min 保持子组件自己的值 (Px(30))
-        // max 应该是子组件和父组件的较小值 (Px(150))
+        // ChildComponentIs Wrap，ParentComponentIs Fill，ResultShouldBe Wrap
+        // min KeepChildComponentOwnValue (Px(30))
+        // max ShouldBeSmallerOfChildAndParent (Px(150))
         assert_eq!(
             result.width,
             DimensionValue::Wrap {
@@ -293,8 +294,8 @@ mod tests {
 
     #[test]
     fn test_fill_parent_wrap_child_no_child_min() {
-        // 测试子组件没有 min 的情况
-        // 父组件 Fill {min: Some(Px(50)), max: Some(Px(200))} -> 子组件 Wrap {min: None, max: Some(Px(150))}
+        // TestChildComponentHasNo min Situation
+        // ParentComponent Fill {min: Some(Px(50)), max: Some(Px(200))} -> ChildComponent Wrap {min: None, max: Some(Px(150))}
 
         let parent = Constraint::new(
             DimensionValue::Fill {
@@ -320,7 +321,7 @@ mod tests {
 
         let result = child.merge(&parent);
 
-        // 子组件是 Wrap，应该保持自己的 min (None)，不继承父组件的 min
+        // ChildComponentIs Wrap，ShouldKeepItsOwn min (None)，NotInheritFromParent min
         assert_eq!(
             result.width,
             DimensionValue::Wrap {
@@ -339,8 +340,8 @@ mod tests {
 
     #[test]
     fn test_fill_parent_wrap_child_no_parent_max() {
-        // 测试父组件没有 max 的情况
-        // 父组件 Fill {min: Some(Px(50)), max: None} -> 子组件 Wrap {min: Some(Px(30)), max: Some(Px(150))}
+        // TestParentComponentHasNo max Situation
+        // ParentComponent Fill {min: Some(Px(50)), max: None} -> ChildComponent Wrap {min: Some(Px(30)), max: Some(Px(150))}
 
         let parent = Constraint::new(
             DimensionValue::Fill {
@@ -366,7 +367,7 @@ mod tests {
 
         let result = child.merge(&parent);
 
-        // 子组件应该保持自己的约束
+        // ChildShouldKeepItsOwnConstraints
         assert_eq!(
             result.width,
             DimensionValue::Wrap {
@@ -385,8 +386,8 @@ mod tests {
 
     #[test]
     fn test_fixed_parent_wrap_child() {
-        // 测试 Fixed 父组件与 Wrap 子组件的合并
-        // 父组件 Fixed(Px(100)) -> 子组件 Wrap {min: Some(Px(30)), max: Some(Px(120))}
+        // Test Fixed ParentComponentWith Wrap ChildComponentMerge
+        // ParentComponent Fixed(Px(100)) -> ChildComponent Wrap {min: Some(Px(30)), max: Some(Px(120))}
 
         let parent = Constraint::new(
             DimensionValue::Fixed(Px(100)),
@@ -406,9 +407,9 @@ mod tests {
 
         let result = child.merge(&parent);
 
-        // 子组件应该保持 Wrap，但 max 被父组件的 Fixed 值限制
-        // min 保持子组件自己的值 (Px(30))
-        // max 应该是子组件 max 和父组件 Fixed 值的较小值 (Px(100))
+        // Child component should keep wrap，But max limited by parent component's fixed ValueLimit
+        // min KeepChildComponentOwnValue (Px(30))
+        // max should be child component max and parent component fixed smallervalue (Px(100))
         assert_eq!(
             result.width,
             DimensionValue::Wrap {
@@ -427,8 +428,8 @@ mod tests {
 
     #[test]
     fn test_fixed_parent_wrap_child_no_child_max() {
-        // 测试子组件没有 max 的情况
-        // 父组件 Fixed(Px(100)) -> 子组件 Wrap {min: Some(Px(30)), max: None}
+        // TestChildComponentHasNo max Situation
+        // ParentComponent Fixed(Px(100)) -> ChildComponent Wrap {min: Some(Px(30)), max: None}
 
         let parent = Constraint::new(
             DimensionValue::Fixed(Px(100)),
@@ -448,7 +449,7 @@ mod tests {
 
         let result = child.merge(&parent);
 
-        // 子组件应该保持 Wrap，父组件的 Fixed 值成为 max
+        // ChildComponentShouldKeep Wrap，ParentComponent's Fixed ValueBecomes max
         assert_eq!(
             result.width,
             DimensionValue::Wrap {
@@ -467,8 +468,8 @@ mod tests {
 
     #[test]
     fn test_fixed_parent_fill_child() {
-        // 测试 Fixed 父组件与 Fill 子组件的合并
-        // 父组件 Fixed(Px(100)) -> 子组件 Fill {min: Some(Px(30)), max: Some(Px(120))}
+        // Test Fixed ParentComponentWith Fill ChildComponentMerge
+        // ParentComponent Fixed(Px(100)) -> ChildComponent Fill {min: Some(Px(30)), max: Some(Px(120))}
 
         let parent = Constraint::new(
             DimensionValue::Fixed(Px(100)),
@@ -488,9 +489,9 @@ mod tests {
 
         let result = child.merge(&parent);
 
-        // 子组件应该保持 Fill，但 max 被父组件的 Fixed 值限制
-        // min 保持子组件自己的值 (Px(30))
-        // max 应该是子组件 max 和父组件 Fixed 值的较小值 (Px(100))
+        // ChildComponentShouldKeep Fill，But max LimitedByParentComponent's Fixed ValueLimit
+        // min KeepChildComponentOwnValue (Px(30))
+        // max ShouldBeChildComponent max AndParentComponent Fixed SmallerValue (Px(100))
         assert_eq!(
             result.width,
             DimensionValue::Fill {
@@ -509,8 +510,8 @@ mod tests {
 
     #[test]
     fn test_fixed_parent_fill_child_no_child_max() {
-        // 测试子组件没有 max 的情况
-        // 父组件 Fixed(Px(100)) -> 子组件 Fill {min: Some(Px(30)), max: None}
+        // TestChildComponentHasNo max Situation
+        // ParentComponent Fixed(Px(100)) -> ChildComponent Fill {min: Some(Px(30)), max: None}
 
         let parent = Constraint::new(
             DimensionValue::Fixed(Px(100)),
@@ -530,7 +531,7 @@ mod tests {
 
         let result = child.merge(&parent);
 
-        // 子组件应该保持 Fill，父组件的 Fixed 值成为 max
+        // ChildComponentShouldKeep Fill，ParentComponent's Fixed ValueBecomes max
         assert_eq!(
             result.width,
             DimensionValue::Fill {
@@ -549,8 +550,8 @@ mod tests {
 
     #[test]
     fn test_fixed_parent_fill_child_no_child_min() {
-        // 测试子组件没有 min 的情况
-        // 父组件 Fixed(Px(100)) -> 子组件 Fill {min: None, max: Some(Px(120))}
+        // TestChildComponentHasNo min Situation
+        // ParentComponent Fixed(Px(100)) -> ChildComponent Fill {min: None, max: Some(Px(120))}
 
         let parent = Constraint::new(
             DimensionValue::Fixed(Px(100)),
@@ -570,7 +571,7 @@ mod tests {
 
         let result = child.merge(&parent);
 
-        // 子组件应该保持 Fill，min 保持 None，max 被父组件限制
+        // ChildComponentShouldKeep Fill，min Keep None，max LimitedByParent
         assert_eq!(
             result.width,
             DimensionValue::Fill {

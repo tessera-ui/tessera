@@ -30,12 +30,11 @@ pub struct ComponentNode {
 }
 
 /// Contains metadata of the component node.
+#[derive(Default)]
 pub struct ComponentNodeMetaData {
     /// The computed data (size) of the node.
     /// None if the node is not computed yet.
     pub computed_data: Option<ComputedData>,
-    /// Cached computed data for each constraint applied to this node.
-    pub cached_computed_data: HashMap<Constraint, ComputedData>,
     /// The node's start position, relative to its parent.
     /// None if the node is not placed yet.
     pub rel_position: Option<PxPosition>,
@@ -45,35 +44,16 @@ pub struct ComponentNodeMetaData {
     pub abs_position: Option<PxPosition>,
     /// Optional basic drawable associated with this node.
     pub basic_drawable: Option<BasicDrawable>,
-    /// The constraint that this node has intrinsically (e.g., from its arguments).
-    /// This is merged with parent's constraint during layout.
-    /// Default is Constraint::NONE (Wrap/Wrap).
-    pub constraint: Constraint,
 }
 
 impl ComponentNodeMetaData {
     /// Creates a new `ComponentNodeMetaData` with default values.
     pub fn none() -> Self {
         Self {
-            cached_computed_data: HashMap::new(),
             computed_data: None,
             rel_position: None,
             abs_position: None,
             basic_drawable: None,
-            constraint: Constraint::NONE,
-        }
-    }
-}
-
-impl Default for ComponentNodeMetaData {
-    fn default() -> Self {
-        Self {
-            cached_computed_data: HashMap::new(),
-            computed_data: None,
-            rel_position: None,
-            abs_position: None,
-            basic_drawable: None,
-            constraint: Constraint::NONE, // Default intrinsic constraint
         }
     }
 }
@@ -110,7 +90,7 @@ pub struct MeasureInput<'a> {
     /// The component tree containing all nodes.
     pub tree: &'a ComponentNodeTree,
     /// The effective constraint for this node, merged with its parent's constraint.
-    pub effective_constraint: &'a Constraint,
+    pub parent_constraint: &'a Constraint,
     /// The children nodes of the current node.
     pub children_ids: &'a [indextree::NodeId],
     /// Metadata for all component nodes, used to access cached data and constraints.
@@ -163,29 +143,21 @@ pub fn measure_node(
         .ok_or(MeasurementError::NodeNotFoundInTree)?;
     let node_data = node_data_ref.get();
 
-    let node_intrinsic_constraint = component_node_metadatas
-        .get(&node_id)
-        .map_or(Constraint::NONE, |m| m.constraint);
-    let effective_constraint = node_intrinsic_constraint.merge(parent_constraint);
-
-    if let Some(metadata_entry) = component_node_metadatas.get(&node_id)
-        && let Some(cached_size) = metadata_entry
-            .cached_computed_data
-            .get(&effective_constraint)
-    {
-        debug!("Cache hit for node {node_id:?} with effective_constraint {effective_constraint:?}");
-        return Ok(*cached_size);
-    }
-
     let children: Vec<_> = node_id.children(tree).collect(); // No .as_ref() needed for &Arena
     let timer = Instant::now();
-    debug!("Measuring node {}", node_data.fn_name);
+
+    debug!(
+        "Measuring node {} with {} children, parent constraint: {:?}",
+        node_data.fn_name,
+        children.len(),
+        parent_constraint
+    );
 
     let size = if let Some(measure_fn) = &node_data.measure_fn {
         measure_fn(&MeasureInput {
             current_node_id: node_id,
             tree,
-            effective_constraint: &effective_constraint,
+            parent_constraint,
             children_ids: &children,
             metadatas: component_node_metadatas,
         })
@@ -193,23 +165,21 @@ pub fn measure_node(
         DEFAULT_LAYOUT_DESC(&MeasureInput {
             current_node_id: node_id,
             tree,
-            effective_constraint: &effective_constraint,
+            parent_constraint,
             children_ids: &children,
             metadatas: component_node_metadatas,
         })
     }?;
 
     debug!(
-        "Measured node {} in {:?}",
+        "Measured node {} in {:?} with size {:?}",
         node_data.fn_name,
-        timer.elapsed()
+        timer.elapsed(),
+        size
     );
 
     let mut metadata = component_node_metadatas.entry(node_id).or_default();
     metadata.computed_data = Some(size);
-    metadata
-        .cached_computed_data
-        .insert(effective_constraint, size);
 
     Ok(size)
 }
@@ -230,21 +200,19 @@ pub fn place_node(
 /// of the parent node with no offset. Children are measured concurrently using `measure_nodes`.
 pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
     if input.children_ids.is_empty() {
-        // If there are no children, the size depends on the effective_constraint
+        // If there are no children, the size depends on the parent_constraint
         // For Fixed, it's the fixed size. For Wrap/Fill, it's typically 0 if no content.
         // This part might need refinement based on how min constraints in Wrap/Fill should behave for empty nodes.
         // For now, returning ZERO, assuming intrinsic size of an empty node is zero before min constraints are applied.
         // The actual min size enforcement happens when the parent (or this node itself if it has intrinsic min)
         // considers its own DimensionValue.
-        return Ok(ComputedData::min_from_constraint(
-            input.effective_constraint,
-        ));
+        return Ok(ComputedData::min_from_constraint(input.parent_constraint));
     }
 
     let nodes_to_measure: Vec<(NodeId, Constraint)> = input
         .children_ids
         .iter()
-        .map(|&child_id| (child_id, *input.effective_constraint)) // Children inherit parent's effective constraint
+        .map(|&child_id| (child_id, *input.parent_constraint)) // Children inherit parent's effective constraint
         .collect();
 
     let children_results_map = measure_nodes(nodes_to_measure, input.tree, input.metadatas);
@@ -302,20 +270,20 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
     // If current node is Fixed, its size is fixed.
     // If current node is Wrap, its size is aggregate_size (clamped by its own min/max).
     // If current node is Fill, its size is aggregate_size (clamped by its own min/max, and parent's available space if parent was Fill).
-    // This final clamping/adjustment based on `effective_constraint` should ideally happen
+    // This final clamping/adjustment based on `parent_constraint` should ideally happen
     // when `ComputedData` is returned from `measure_node` itself, or by the caller of `measure_node`.
     // For DEFAULT_LAYOUT_DESC, it should return the size required by its children,
-    // and then `measure_node` will finalize it based on `effective_constraint`.
+    // and then `measure_node` will finalize it based on `parent_constraint`.
 
     // Let's refine: DEFAULT_LAYOUT_DESC should calculate the "natural" size based on children.
-    // Then, `measure_node` (or its caller) would apply the `effective_constraint` to this natural size.
+    // Then, `measure_node` (or its caller) would apply the `parent_constraint` to this natural size.
     // However, `measure_node` currently directly returns the result of `DEFAULT_LAYOUT_DESC` or custom `measure_fn`.
-    // So, `DEFAULT_LAYOUT_DESC` itself needs to consider `effective_constraint` for its final size.
+    // So, `DEFAULT_LAYOUT_DESC` itself needs to consider `parent_constraint` for its final size.
 
     let mut final_width = aggregate_size.width;
     let mut final_height = aggregate_size.height;
 
-    match input.effective_constraint.width {
+    match input.parent_constraint.width {
         DimensionValue::Fixed(w) => final_width = w,
         DimensionValue::Wrap { min, max } => {
             if let Some(min_w) = min {
@@ -338,7 +306,7 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
             // If children are not Fill, this node wraps them.
         }
     }
-    match input.effective_constraint.height {
+    match input.parent_constraint.height {
         DimensionValue::Fixed(h) => final_height = h,
         DimensionValue::Wrap { min, max } => {
             if let Some(min_h) = min {

@@ -26,10 +26,7 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             fn_name: stringify!(#fn_name).to_string(),
                             measure_fn: None,
                             state_handler_fn: None,
-                        },
-                        Constraint::NONE // Pass Constraint::NONE as the intrinsic_constraint
-                                         // The component's measure_fn will use its args
-                                         // to define its behavior and merge with parent constraint.
+                        }
                     );
             }
 

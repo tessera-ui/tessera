@@ -65,13 +65,13 @@ impl From<&str> for TextArgs {
 pub fn text(args: impl Into<TextArgs>) {
     let text_args: TextArgs = args.into();
     measure(Box::new(move |input| {
-        let max_width: Option<Px> = match input.effective_constraint.width {
+        let max_width: Option<Px> = match input.parent_constraint.width {
             DimensionValue::Fixed(w) => Some(w),
             DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
             DimensionValue::Fill { max, .. } => max, // Use max from Fill
         };
 
-        let max_height: Option<Px> = match input.effective_constraint.height {
+        let max_height: Option<Px> = match input.parent_constraint.height {
             DimensionValue::Fixed(h) => Some(h),
             DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
             DimensionValue::Fill { max, .. } => max, // Use max from Fill

@@ -78,13 +78,12 @@ impl ComponentTree {
     /// Add a new node to the tree
     /// Nodes now store their intrinsic constraints in their metadata.
     /// The `node_component` itself primarily holds the measure_fn.
-    pub fn add_node(&mut self, node_component: ComponentNode, intrinsic_constraint: Constraint) {
+    pub fn add_node(&mut self, node_component: ComponentNode) {
         let new_node_id = self.tree.new_node(node_component);
         if let Some(current_node_id) = self.node_queue.last_mut() {
             current_node_id.append(new_node_id, &mut self.tree);
         }
-        let mut metadata = ComponentNodeMetaData::none();
-        metadata.constraint = intrinsic_constraint;
+        let metadata = ComponentNodeMetaData::none();
         self.metadatas.insert(new_node_id, metadata);
         self.node_queue.push(new_node_id);
     }

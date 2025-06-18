@@ -8,6 +8,7 @@ pub struct Px(pub i32);
 
 impl Px {
     pub const ZERO: Self = Self(0);
+    pub const MAX: Self = Self(i32::MAX);
 
     /// Create a new Px instance
     pub const fn new(value: i32) -> Self {
