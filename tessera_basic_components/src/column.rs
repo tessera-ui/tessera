@@ -406,3 +406,36 @@ fn place_children_with_alignment(
         }
     }
 }
+
+/// A declarative macro to simplify the creation of a [`column`](crate::column::column) component.
+///
+/// The first argument is the `ColumnArgs` struct, followed by a variable number of
+/// child components. Each child expression will be converted to a `ColumnItem`
+/// using the `AsColumnItem` trait. This allows passing closures, `ColumnItem` instances,
+/// or `(FnOnce, weight)` tuples.
+///
+/// # Example
+/// ```ignore
+/// use tessera_basic_components::column::{column_ui, ColumnArgs, ColumnItem};
+/// use tessera_basic_components::text::text;
+///
+/// column_ui!(
+///     ColumnArgs::default(),
+///     || text("Hello".to_string()), // Closure
+///     (|| text("Weighted".to_string()), 0.5), // Weighted closure
+///     ColumnItem::new(Box::new(|| text("Item".to_string())), None) // ColumnItem instance
+/// );
+/// ```
+#[macro_export]
+macro_rules! column_ui {
+    ($args:expr $(, $child:expr)* $(,)?) => {
+        {
+            use $crate::column::AsColumnItem;
+            $crate::column::column($args, [
+                $(
+                    $child.into_column_item()
+                ),*
+            ])
+        }
+    };
+}

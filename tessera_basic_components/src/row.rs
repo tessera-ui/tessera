@@ -402,3 +402,36 @@ fn place_children_with_alignment(
         }
     }
 }
+
+/// A declarative macro to simplify the creation of a [`row`](crate::row::row) component.
+///
+/// The first argument is the `RowArgs` struct, followed by a variable number of
+/// child components. Each child expression will be converted to a `RowItem`
+/// using the `AsRowItem` trait. This allows passing closures, `RowItem` instances,
+/// or `(FnOnce, weight)` tuples.
+///
+/// # Example
+/// ```ignore
+/// use tessera_basic_components::row::{row_ui, RowArgs, RowItem};
+/// use tessera_basic_components::text::text;
+///
+/// row_ui!(
+///     RowArgs::default(),
+///     || text("Hello".to_string()), // Closure
+///     (|| text("Weighted".to_string()), 0.5), // Weighted closure
+///     RowItem::new(Box::new(|| text("Item".to_string())), None) // RowItem instance
+/// );
+/// ```
+#[macro_export]
+macro_rules! row_ui {
+    ($args:expr $(, $child:expr)* $(,)?) => {
+        {
+            use $crate::column::AsRowItem;
+            $crate::row::row($args, [
+                $(
+                    $child.into_row_item()
+                ),*
+            ])
+        }
+    };
+}
