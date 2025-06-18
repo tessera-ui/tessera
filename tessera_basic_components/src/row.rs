@@ -426,7 +426,7 @@ fn place_children_with_alignment(
 macro_rules! row_ui {
     ($args:expr $(, $child:expr)* $(,)?) => {
         {
-            use $crate::column::AsRowItem;
+            use $crate::row::AsRowItem;
             $crate::row::row($args, [
                 $(
                     $child.into_row_item()
