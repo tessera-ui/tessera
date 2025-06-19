@@ -415,12 +415,12 @@ fn place_children_with_alignment(
 /// use tessera_basic_components::row::{row_ui, RowArgs, RowItem};
 /// use tessera_basic_components::text::text;
 ///
-/// row_ui!(
+/// row_ui![
 ///     RowArgs::default(),
 ///     || text("Hello".to_string()), // Closure
 ///     (|| text("Weighted".to_string()), 0.5), // Weighted closure
 ///     RowItem::new(Box::new(|| text("Item".to_string())), None) // RowItem instance
-/// );
+/// ];
 /// ```
 #[macro_export]
 macro_rules! row_ui {

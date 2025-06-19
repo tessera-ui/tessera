@@ -5,7 +5,8 @@
 use tessera::{DimensionValue, Dp, Px, Renderer};
 use tessera_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    row::{RowArgsBuilder, row},
+    row::RowArgsBuilder,
+    row_ui, // Import macro from crate root
     surface::{SurfaceArgs, surface},
     text::{TextArgsBuilder, text},
 };
@@ -13,10 +14,11 @@ use tessera_macros::tessera;
 
 /// Create a small colored box
 #[tessera]
-fn small_box(text_content: &'static str, color: [f32; 4]) {
+fn small_box(text_content: &'static str, color_param: [f32; 4]) {
+    // Renamed color to color_param to avoid conflict
     surface(
         SurfaceArgs {
-            color,
+            color: color_param, // Use the renamed parameter
             corner_radius: 4.0,
             padding: Dp(4.0),
             width: Some(DimensionValue::Fixed(Px(40))),
@@ -60,15 +62,14 @@ fn app() {
                 },
                 None,
                 || {
-                    row(
+                    row_ui![
                         RowArgsBuilder::default()
                             .main_axis_alignment(MainAxisAlignment::End) // TestEndAlignment
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .build()
                             .unwrap(),
-                        [Box::new(|| small_box("X", [0.9, 0.2, 0.2, 1.0]))
-                            as Box<dyn FnOnce() + Send + Sync>],
-                    );
+                        || small_box("X", [0.9, 0.2, 0.2, 1.0])
+                    ];
                 },
             );
         },

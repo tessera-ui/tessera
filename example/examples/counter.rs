@@ -14,7 +14,8 @@ use tessera::Renderer;
 use tessera_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
-    row::{AsRowItem, RowArgsBuilder, row},
+    row::RowArgsBuilder,
+    row_ui,
     surface::{RippleState, SurfaceArgs, surface},
     text::{TextArgsBuilder, text},
 };
@@ -41,43 +42,41 @@ impl AppState {
 #[tessera]
 fn counter_app(app_state: Arc<AppState>) {
     {
-        let button_state = app_state.button_state.clone();
+        let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
         let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
+        let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
+
         surface(SurfaceArgs::default(), None, move || {
-            row(
+            row_ui![
                 RowArgsBuilder::default()
                     .main_axis_alignment(MainAxisAlignment::Start)
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .build()
                     .unwrap(),
-                [
-                    (move || {
-                        button(
-                            ButtonArgsBuilder::default()
-                                .on_click(Arc::new(move || {
-                                    // Increment the click count
-                                    app_state
-                                        .click_count
-                                        .fetch_add(1, atomic::Ordering::Relaxed);
-                                }))
-                                .build()
-                                .unwrap(),
-                            button_state,
-                            move || text("click me!"),
-                        )
-                    })
-                    .into_row_item(),
-                    (move || {
-                        text(
-                            TextArgsBuilder::default()
-                                .text(format!("Count: {}", click_count))
-                                .build()
-                                .unwrap(),
-                        )
-                    })
-                    .into_row_item(),
-                ],
-            );
+                move || {
+                    button(
+                        ButtonArgsBuilder::default()
+                            .on_click(Arc::new(move || {
+                                // Increment the click count
+                                app_state_clone // Use the cloned app_state
+                                    .click_count
+                                    .fetch_add(1, atomic::Ordering::Relaxed);
+                            }))
+                            .build()
+                            .unwrap(),
+                        button_state_clone, // Use the cloned button_state
+                        move || text("click me!"),
+                    )
+                },
+                move || {
+                    text(
+                        TextArgsBuilder::default()
+                            .text(format!("Count: {}", click_count))
+                            .build()
+                            .unwrap(),
+                    )
+                }
+            ];
         });
     }
 }
@@ -95,9 +94,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run the application
     Renderer::run({
-        let app_state = app_state.clone();
+        let app_state_main = app_state.clone(); // Clone for the main app loop
         move || {
-            counter_app(app_state.clone());
+            counter_app(app_state_main.clone());
         }
     })?;
 

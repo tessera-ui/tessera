@@ -289,9 +289,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 .max(min_width)
                 .min(max.unwrap_or(Px::MAX)),
             DimensionValue::Fill { min, max } => max
-                .expect(
-                    "Seems that you are trying to fill an infinite width, which is not allowed",
-                )
+                .expect("Seems that you are trying to fill an infinite width, which is not allowed")
                 .max(min_height)
                 .max(min.unwrap_or(Px(0))),
         };

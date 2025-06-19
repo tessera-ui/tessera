@@ -5,7 +5,8 @@
 use tessera::{DimensionValue, Dp, Px, Renderer};
 use tessera_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    row::{RowArgsBuilder, row},
+    row::RowArgsBuilder,
+    row_ui,
     surface::{SurfaceArgs, surface},
 };
 use tessera_macros::tessera;
@@ -41,13 +42,13 @@ fn app() {
                 },
                 None,
                 || {
-                    row(
+                    row_ui![
                         RowArgsBuilder::default()
                             .main_axis_alignment(MainAxisAlignment::Center) // Main Axis Alignment Mode
                             .cross_axis_alignment(CrossAxisAlignment::Center) // Cross Axis Alignment Mode
                             .build()
                             .unwrap(),
-                        [|| {
+                        || {
                             surface(
                                 SurfaceArgs {
                                     color: [1.0, 0.0, 0.0, 1.0], // Red
@@ -58,8 +59,8 @@ fn app() {
                                 None,
                                 || {},
                             );
-                        }],
-                    );
+                        }
+                    ];
                 },
             );
         },

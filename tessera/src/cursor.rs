@@ -15,7 +15,6 @@ const MIN_INERTIA_VELOCITY: f32 = 10.0; // Pixels per second, below this inertia
 const INERTIA_MIN_VELOCITY_THRESHOLD_FOR_START: f32 = 50.0; // Min velocity from gesture to start inertia
 const INERTIA_MOMENTUM_FACTOR: f32 = 1.0; // Multiplier for initial inertial velocity (usually 1.0)
 
-
 /// Single touch point tracking state
 #[derive(Debug, Clone)]
 struct TouchPointState {
@@ -86,9 +85,12 @@ impl CursorState {
 
     /// Processes active touch inertia and queues scroll events if necessary.
     fn process_and_queue_inertial_scroll(&mut self) {
-        if let Some(mut inertia_data) = self.active_inertia.take() { // Take ownership
+        if let Some(mut inertia_data) = self.active_inertia.take() {
+            // Take ownership
             let now = Instant::now();
-            let delta_time = now.duration_since(inertia_data.last_tick_time).as_secs_f32();
+            let delta_time = now
+                .duration_since(inertia_data.last_tick_time)
+                .as_secs_f32();
 
             let mut should_reinsert_inertia = true;
 
@@ -97,7 +99,8 @@ impl CursorState {
                 let scroll_delta_y = inertia_data.velocity_y * delta_time;
 
                 if scroll_delta_x.abs() > 0.01 || scroll_delta_y.abs() > 0.01 {
-                    self.push_event(CursorEvent { // This is now fine
+                    self.push_event(CursorEvent {
+                        // This is now fine
                         timestamp: now,
                         content: CursorEventContent::Scroll(ScrollEventConent {
                             delta_x: scroll_delta_x,
@@ -111,7 +114,9 @@ impl CursorState {
                 inertia_data.velocity_y *= decay_multiplier;
                 inertia_data.last_tick_time = now;
 
-                if inertia_data.velocity_x.abs() < MIN_INERTIA_VELOCITY && inertia_data.velocity_y.abs() < MIN_INERTIA_VELOCITY {
+                if inertia_data.velocity_x.abs() < MIN_INERTIA_VELOCITY
+                    && inertia_data.velocity_y.abs() < MIN_INERTIA_VELOCITY
+                {
                     should_reinsert_inertia = false; // Stop inertia
                 }
             } else {
@@ -119,13 +124,11 @@ impl CursorState {
                 // This can happen if called multiple times in the same instant.
             }
 
-
             if should_reinsert_inertia {
                 self.active_inertia = Some(inertia_data); // Put it back if still active
             }
         }
     }
-
 
     /// Custom a group of events
     ///
@@ -242,7 +245,6 @@ impl CursorState {
                     avg_velocity_y /= sample_count as f32;
                 }
 
-
                 let velocity_magnitude =
                     (avg_velocity_x * avg_velocity_x + avg_velocity_y * avg_velocity_y).sqrt();
 
@@ -262,7 +264,6 @@ impl CursorState {
             self.active_inertia = None; // Ensure inertia is cleared if touch_state is None
         }
 
-
         self.touch_points.remove(&touch_id);
         let release_event = CursorEvent {
             timestamp: now,
@@ -272,7 +273,7 @@ impl CursorState {
 
         if self.touch_points.is_empty() {
             if self.active_inertia.is_none() {
-                 self.update_position(None);
+                self.update_position(None);
             }
         }
     }

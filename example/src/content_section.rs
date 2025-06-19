@@ -1,7 +1,9 @@
 use tessera::DimensionValue;
 use tessera_basic_components::{
-    column::{AsColumnItem, ColumnArgsBuilder, column},
-    row::{AsRowItem, RowArgsBuilder, row},
+    column::ColumnArgsBuilder,
+    column_ui,
+    row::RowArgsBuilder,
+    row_ui,
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };
@@ -10,24 +12,20 @@ use tessera_macros::tessera;
 /// Header row component with two text items
 #[tessera]
 pub fn header_row() {
-    row(
+    row_ui![
         RowArgsBuilder::default().build().unwrap(),
-        [
-            ((|| text("Hello, this is tessera")), 1.0f32).into_row_item(),
-            ((|| text("Hello, this is another tessera")), 1.0f32).into_row_item(),
-        ],
-    )
+        (|| text("Hello, this is tessera"), 1.0f32),
+        (|| text("Hello, this is another tessera"), 1.0f32)
+    ]
 }
 
 /// Vertical text column component
 #[tessera]
 pub fn text_column() {
-    column(
+    column_ui!(
         ColumnArgsBuilder::default().build().unwrap(),
-        [
-            ((|| text("This is a column")), 1.0f32).into_column_item(),
-            ((|| text("Another item in column")), 1.0f32).into_column_item(),
-        ],
+        (|| text("This is a column"), 1.0f32),
+        (|| text("Another item in column"), 1.0f32)
     )
 }
 
@@ -47,12 +45,10 @@ pub fn content_section() {
             .unwrap(),
         None, // Non-interactive content section
         || {
-            column(
+            column_ui!(
                 ColumnArgsBuilder::default().build().unwrap(),
-                [
-                    (|| header_row()).into_column_item(),
-                    (|| text_column()).into_column_item(),
-                ],
+                || header_row(),
+                || text_column()
             );
         },
     )
