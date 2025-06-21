@@ -3,25 +3,27 @@ name = "example"
 version = "0.1.0"
 edition = "2024"
 
-[lib]
-crate-type = ["cdylib"]
-name = "example"
-
-[[bin]]
-name = "example"
-path = "src/lib.rs"
-
 [dependencies]
 tessera = { path = "../tessera" }
 tessera_macros = { path = "../tessera_macros" }
 tessera_basic_components = { path = "../tessera_basic_components" }
-rand = "0.9.1"
-tokio = { version = "1.45.1", features = ["full"] }
-log = "0.4.27"
-parking_lot = "0.12.4"
+rand = "0.8.5"
+tokio = { version = "1.32.0", features = ["full"] }
+log = "0.4.20"
+parking_lot = "0.12.1"
+winit = "0.29"
+wgpu = "0.19"
+env_logger = "0.11"
+pollster = "0.3"
+bytemuck = { version = "1.12", features = ["derive"] }
+image = "0.24"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-flexi_logger = { version = "0.31.0", features = ["async"] }
+flexi_logger = { version = "0.27.0", features = ["async"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.15.0"
+android_logger = "0.13.3"
+
+[[example]]
+name = "fluid_glass"
+path = "examples/fluid_glass.rs"
