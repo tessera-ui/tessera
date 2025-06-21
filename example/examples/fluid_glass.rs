@@ -6,6 +6,7 @@ use winit::{
     event::*,
     event_loop::{EventLoop},
     window::{Window, WindowBuilder},
+    keyboard::{PhysicalKey, KeyCode},
 };
 
 #[repr(C)]
@@ -50,14 +51,14 @@ const RECT_INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 struct GlassUniforms {
     rect_size_px: [f32; 2],
     corner_radius: f32,
+    dispersion_height: f32,
+    chroma_multiplier: f32,
     refraction_height: f32,
     refraction_amount: f32,
     eccentric_factor: f32,
-    dispersion_height: f32,
-    chroma_multiplier: f32,
 }
 
-struct State<'a> {
+struct FluidGlassState<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -65,25 +66,41 @@ struct State<'a> {
     size: winit::dpi::PhysicalSize<u32>,
     window: &'a Window,
 
+    // Background resources
     bg_render_pipeline: wgpu::RenderPipeline,
     bg_bind_group: wgpu::BindGroup,
 
+    // Glass effect resources
+    glass_render_pipeline: wgpu::RenderPipeline,
+    glass_bind_group_layout: wgpu::BindGroupLayout,
+    glass_bind_group: wgpu::BindGroup,
+
+    // Shared vertex/index buffers
     rect_vertex_buffer: wgpu::Buffer,
     rect_index_buffer: wgpu::Buffer,
     num_indices: u32,
 
-    bg_copy_texture: wgpu::Texture,
-    bg_copy_texture_view: wgpu::TextureView,
-    
+    // Uniform buffer
     glass_uniforms: GlassUniforms,
     glass_uniform_buffer: wgpu::Buffer,
-    glass_render_pipeline: wgpu::RenderPipeline,
-    glass_bind_group_layout: wgpu::BindGroupLayout,
+
+    // Background copy texture
+    bg_copy_texture: wgpu::Texture,
+    bg_copy_texture_view: wgpu::TextureView,
+
+    // Shared sampler
     sampler: wgpu::Sampler,
-    glass_bind_group: wgpu::BindGroup,
+
+    // Adjustable parameters
+    dispersion_height: f32,
+    chroma_multiplier: f32,
+    refraction_height: f32,
+    refraction_amount: f32,
+    eccentric_factor: f32,
+    corner_radius: f32,
 }
 
-impl<'a> State<'a> {
+impl<'a> FluidGlassState<'a> {
     async fn new(window: &'a Window) -> Self {
         let size = window.inner_size();
 
@@ -114,7 +131,7 @@ impl<'a> State<'a> {
         };
         surface.configure(&device, &config);
 
-        // --- Background Resources ---
+        // Create background resources
         let bg_image = image::load_from_memory(include_bytes!("assets/background.png")).unwrap();
         let bg_rgba = bg_image.to_rgba8();
         let dimensions = bg_image.dimensions();
@@ -206,8 +223,7 @@ impl<'a> State<'a> {
             multiview: None,
         });
 
-
-        // --- Glass Resources ---
+        // Create vertex/index buffers
         let rect_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Rect Vertex Buffer"),
             contents: bytemuck::cast_slice(RECT_VERTICES),
@@ -220,6 +236,7 @@ impl<'a> State<'a> {
         });
         let num_indices = RECT_INDICES.len() as u32;
 
+        // Create background copy texture
         let rect_pixel_width = (size.width as f32 * 0.5) as u32;
         let rect_pixel_height = (size.height as f32 * 0.5) as u32;
         let rect_pixel_size = wgpu::Extent3d {
@@ -227,30 +244,47 @@ impl<'a> State<'a> {
             height: rect_pixel_height.max(1),
             depth_or_array_layers: 1,
         };
-        let (bg_copy_texture, bg_copy_texture_view) = Self::create_copy_texture(&device, &config, rect_pixel_size);
 
+        let (bg_copy_texture, bg_copy_texture_view) = Self::create_copy_texture(&device, &config, rect_pixel_size);
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
+
+        // Initialize parameters - 基于Android版本的默认值
+        let dispersion_height = 0.0;       // 初始不启用色散
+        let chroma_multiplier = 1.0;       // 标准色彩
+        let refraction_height = 20.0;      // 折射高度
+        let refraction_amount = -60.0;     // 折射强度 (负值向内折射)
+        let eccentric_factor = 1.0;        // 偏心因子
+        let corner_radius = 30.0;          // 圆角半径
+
+        // Initialize uniforms
         let glass_uniforms = GlassUniforms {
             rect_size_px: [rect_pixel_width as f32, rect_pixel_height as f32],
-            corner_radius: 30.0,
-            refraction_height: 20.0,
-            refraction_amount: -60.0,
-            eccentric_factor: 1.0,
-            dispersion_height: 0.0,
-            chroma_multiplier: 1.0,
+            corner_radius,
+            dispersion_height,
+            chroma_multiplier,
+            refraction_height,
+            refraction_amount,
+            eccentric_factor,
         };
+
+        // Create uniform buffer
         let glass_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Glass Uniform Buffer"),
             contents: bytemuck::cast_slice(&[glass_uniforms]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        // Create glass effect bind group layout
         let glass_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("glass_bind_group_layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                    ty: wgpu::BindingType::Buffer { 
+                        ty: wgpu::BufferBindingType::Uniform, 
+                        has_dynamic_offset: false, 
+                        min_binding_size: None 
+                    },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
@@ -270,19 +304,29 @@ impl<'a> State<'a> {
                     count: None,
                 },
             ],
+            label: Some("glass_bind_group_layout"),
         });
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
         let glass_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &glass_bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: glass_uniform_buffer.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&bg_copy_texture_view) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&sampler) },
+                wgpu::BindGroupEntry { 
+                    binding: 0, 
+                    resource: glass_uniform_buffer.as_entire_binding() 
+                },
+                wgpu::BindGroupEntry { 
+                    binding: 1, 
+                    resource: wgpu::BindingResource::TextureView(&bg_copy_texture_view) 
+                },
+                wgpu::BindGroupEntry { 
+                    binding: 2, 
+                    resource: wgpu::BindingResource::Sampler(&sampler) 
+                },
             ],
             label: Some("glass_bind_group"),
         });
-        
+
+        // Create glass render pipeline
         let glass_shader = device.create_shader_module(wgpu::include_wgsl!("shaders/glass.wgsl"));
         let glass_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Glass Pipeline Layout"),
@@ -313,37 +357,124 @@ impl<'a> State<'a> {
         });
 
         Self {
-            window, surface, device, queue, config, size,
-            bg_render_pipeline, bg_bind_group,
-            rect_vertex_buffer, rect_index_buffer, num_indices,
-            bg_copy_texture, bg_copy_texture_view,
-            glass_uniforms, glass_uniform_buffer,
-            glass_render_pipeline, glass_bind_group_layout, sampler, glass_bind_group,
+            surface,
+            device,
+            queue,
+            config,
+            size,
+            window,
+            bg_render_pipeline,
+            bg_bind_group,
+            glass_render_pipeline,
+            glass_bind_group_layout,
+            glass_bind_group,
+            rect_vertex_buffer,
+            rect_index_buffer,
+            num_indices,
+            glass_uniforms,
+            glass_uniform_buffer,
+            bg_copy_texture,
+            bg_copy_texture_view,
+            sampler,
+            dispersion_height,
+            chroma_multiplier,
+            refraction_height,
+            refraction_amount,
+            eccentric_factor,
+            corner_radius,
         }
     }
 
-    fn create_copy_texture(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, texture_size: wgpu::Extent3d) -> (wgpu::Texture, wgpu::TextureView) {
+    fn create_copy_texture(
+        device: &wgpu::Device, 
+        config: &wgpu::SurfaceConfiguration, 
+        size: wgpu::Extent3d
+    ) -> (wgpu::Texture, wgpu::TextureView) {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("BG Copy Texture"),
-            size: texture_size,
+            size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: config.format,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING 
+                | wgpu::TextureUsages::COPY_DST 
+                | wgpu::TextureUsages::COPY_SRC 
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            label: Some("copy_texture"),
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         (texture, view)
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    fn update_uniforms(&mut self) {
+        // Update uniform values
+        self.glass_uniforms.dispersion_height = self.dispersion_height;
+        self.glass_uniforms.chroma_multiplier = self.chroma_multiplier;
+        self.glass_uniforms.refraction_height = self.refraction_height;
+        self.glass_uniforms.refraction_amount = self.refraction_amount;
+        self.glass_uniforms.eccentric_factor = self.eccentric_factor;
+        self.glass_uniforms.corner_radius = self.corner_radius;
+
+        self.queue.write_buffer(
+            &self.glass_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.glass_uniforms]),
+        );
+    }
+
+    fn handle_input(&mut self, event: &WindowEvent) -> bool {
+        match event {
+            WindowEvent::KeyboardInput {
+                event: KeyEvent {
+                    state: ElementState::Pressed,
+                    physical_key: PhysicalKey::Code(key),
+                    ..
+                },
+                ..
+            } => {
+                match key {
+                    KeyCode::KeyQ => { self.dispersion_height += 5.0; true }
+                    KeyCode::KeyA => { self.dispersion_height = (self.dispersion_height - 5.0).max(0.0); true }
+                    KeyCode::KeyW => { self.chroma_multiplier += 0.2; true }
+                    KeyCode::KeyS => { self.chroma_multiplier = (self.chroma_multiplier - 0.2).max(0.0); true }
+                    KeyCode::KeyE => { self.refraction_height += 5.0; true }
+                    KeyCode::KeyD => { self.refraction_height = (self.refraction_height - 5.0).max(0.0); true }
+                    KeyCode::KeyR => { self.refraction_amount += 10.0; true }
+                    KeyCode::KeyF => { self.refraction_amount -= 10.0; true }
+                    KeyCode::KeyT => { self.eccentric_factor = (self.eccentric_factor + 0.1).min(2.0); true }
+                    KeyCode::KeyG => { self.eccentric_factor = (self.eccentric_factor - 0.1).max(0.0); true }
+                    KeyCode::KeyY => { self.corner_radius += 5.0; true }
+                    KeyCode::KeyH => { self.corner_radius = (self.corner_radius - 5.0).max(0.0); true }
+                    KeyCode::KeyP => {
+                        println!("Current parameters (Fluid Glass):");
+                        println!("  Dispersion Height: {}", self.dispersion_height);
+                        println!("  Chroma Multiplier: {}", self.chroma_multiplier);
+                        println!("  Refraction Height: {}", self.refraction_height);
+                        println!("  Refraction Amount: {}", self.refraction_amount);
+                        println!("  Eccentric Factor: {}", self.eccentric_factor);
+                        println!("  Corner Radius: {}", self.corner_radius);
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            WindowEvent::Resized(physical_size) => {
+                self.resize(*physical_size);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
-            
+
+            // Recreate background copy texture with new size
             let rect_pixel_width = (new_size.width as f32 * 0.5) as u32;
             let rect_pixel_height = (new_size.height as f32 * 0.5) as u32;
             let rect_pixel_size = wgpu::Extent3d {
@@ -351,39 +482,58 @@ impl<'a> State<'a> {
                 height: rect_pixel_height.max(1),
                 depth_or_array_layers: 1,
             };
-            
-            let (new_texture, new_view) = Self::create_copy_texture(&self.device, &self.config, rect_pixel_size);
-            self.bg_copy_texture = new_texture;
-            self.bg_copy_texture_view = new_view;
-            
-            self.glass_uniforms.rect_size_px = [rect_pixel_width as f32, rect_pixel_height as f32];
-            self.queue.write_buffer(&self.glass_uniform_buffer, 0, bytemuck::cast_slice(&[self.glass_uniforms]));
 
+            let (bg_copy_texture, bg_copy_texture_view) = Self::create_copy_texture(&self.device, &self.config, rect_pixel_size);
+            self.bg_copy_texture = bg_copy_texture;
+            self.bg_copy_texture_view = bg_copy_texture_view;
+
+            // Update uniform buffer sizes
+            self.glass_uniforms.rect_size_px = [rect_pixel_width as f32, rect_pixel_height as f32];
+
+            // Recreate bind group with new texture
             self.glass_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &self.glass_bind_group_layout,
                 entries: &[
-                    wgpu::BindGroupEntry { binding: 0, resource: self.glass_uniform_buffer.as_entire_binding() },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&self.bg_copy_texture_view) },
-                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                    wgpu::BindGroupEntry { 
+                        binding: 0, 
+                        resource: self.glass_uniform_buffer.as_entire_binding() 
+                    },
+                    wgpu::BindGroupEntry { 
+                        binding: 1, 
+                        resource: wgpu::BindingResource::TextureView(&self.bg_copy_texture_view) 
+                    },
+                    wgpu::BindGroupEntry { 
+                        binding: 2, 
+                        resource: wgpu::BindingResource::Sampler(&self.sampler) 
+                    },
                 ],
-                label: Some("glass_bind_group (resized)"),
+                label: Some("glass_bind_group"),
             });
         }
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        // Update uniforms before rendering
+        self.update_uniforms();
+
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-        // 1. Render background
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
+        });
+
+        // 1. Render background to main surface
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Background Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 ..Default::default()
             });
@@ -392,33 +542,38 @@ impl<'a> State<'a> {
             render_pass.draw(0..4, 0..1);
         }
 
-        // 2. Copy the background area under the rect
-        let rect_pixel_width = (self.size.width as f32 * 0.5) as u32;
-        let rect_pixel_height = (self.size.height as f32 * 0.5) as u32;
+        // 2. Copy background section to bg_copy_texture
+        let rect_pixel_width = self.glass_uniforms.rect_size_px[0] as u32;
+        let rect_pixel_height = self.glass_uniforms.rect_size_px[1] as u32;
         let copy_x = (self.size.width - rect_pixel_width) / 2;
         let copy_y = (self.size.height - rect_pixel_height) / 2;
-        
-        if rect_pixel_width > 0 && rect_pixel_height > 0 {
-            encoder.copy_texture_to_texture(
-                wgpu::ImageCopyTexture {
-                    texture: &output.texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d { x: copy_x, y: copy_y, z: 0 },
-                    aspect: wgpu::TextureAspect::All,
-                },
-                self.bg_copy_texture.as_image_copy(),
-                wgpu::Extent3d { width: rect_pixel_width, height: rect_pixel_height, depth_or_array_layers: 1 },
-            );
-        }
 
-        // 3. Render the glass rect
+        encoder.copy_texture_to_texture(
+            wgpu::ImageCopyTexture {
+                texture: &output.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: copy_x, y: copy_y, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+            },
+            self.bg_copy_texture.as_image_copy(),
+            wgpu::Extent3d { 
+                width: rect_pixel_width, 
+                height: rect_pixel_height, 
+                depth_or_array_layers: 1 
+            },
+        );
+
+        // 3. Render glass effect over the background
         {
-             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Glass Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 ..Default::default()
             });
@@ -443,7 +598,16 @@ pub fn main() {
         .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
         .build(&event_loop).unwrap();
     
-    let mut state = pollster::block_on(State::new(&window));
+    let mut state = pollster::block_on(FluidGlassState::new(&window));
+    
+    println!("Controls (Fluid Glass):");
+    println!("  Q/A: Adjust dispersion height");
+    println!("  W/S: Adjust chroma multiplier");
+    println!("  E/D: Adjust refraction height");
+    println!("  R/F: Adjust refraction amount");
+    println!("  T/G: Adjust eccentric factor");
+    println!("  Y/H: Adjust corner radius");
+    println!("  P: Print current parameters");
     
     event_loop.run(move |event, elwt| {
         match event {
@@ -451,25 +615,19 @@ pub fn main() {
                 ref event,
                 window_id,
             } if window_id == state.window.id() => {
-                match event {
-                    WindowEvent::CloseRequested => elwt.exit(),
-                    WindowEvent::KeyboardInput {
-                        event: KeyEvent { logical_key: key, state: ElementState::Pressed, .. }, ..
-                    } => {
-                        if key == &winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape) {
-                            elwt.exit();
+                if !state.handle_input(event) {
+                    match event {
+                        WindowEvent::CloseRequested => elwt.exit(),
+                        WindowEvent::RedrawRequested => {
+                            match state.render() {
+                                Ok(_) => {}
+                                Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                                Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
+                                Err(e) => eprintln!("{:?}", e),
+                            }
                         }
+                        _ => {}
                     }
-                    WindowEvent::Resized(physical_size) => state.resize(*physical_size),
-                    WindowEvent::RedrawRequested => {
-                        match state.render() {
-                            Ok(_) => {}
-                            Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                            Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
-                            Err(e) => eprintln!("Render error: {:?}", e),
-                        }
-                    }
-                    _ => {}
                 }
             }
             Event::AboutToWait => {
