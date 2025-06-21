@@ -1,4 +1,4 @@
-use std::{iter, mem};
+use std::{iter, mem, time::Instant};
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 use image::GenericImageView;
@@ -49,13 +49,29 @@ const RECT_INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct GlassUniforms {
+    // Vector values
+    bleed_color: [f32; 4],
+    highlight_color: [f32; 4],
+    inner_shadow_color: [f32; 4],
+    
+    // vec2 types
     rect_size_px: [f32; 2],
+
+    // f32 types
     corner_radius: f32,
     dispersion_height: f32,
     chroma_multiplier: f32,
     refraction_height: f32,
     refraction_amount: f32,
     eccentric_factor: f32,
+    bleed_amount: f32,
+    highlight_size: f32,
+    highlight_smoothing: f32,
+    inner_shadow_radius: f32,
+    inner_shadow_smoothing: f32,
+    noise_amount: f32,
+    noise_scale: f32,
+    time: f32,
 }
 
 struct FluidGlassState<'a> {
@@ -65,6 +81,7 @@ struct FluidGlassState<'a> {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     window: &'a Window,
+    start_time: Instant,
 
     // Background resources
     bg_render_pipeline: wgpu::RenderPipeline,
@@ -98,11 +115,22 @@ struct FluidGlassState<'a> {
     refraction_amount: f32,
     eccentric_factor: f32,
     corner_radius: f32,
+    bleed_color: [f32; 4],
+    highlight_color: [f32; 4],
+    inner_shadow_color: [f32; 4],
+    bleed_amount: f32,
+    highlight_size: f32,
+    highlight_smoothing: f32,
+    inner_shadow_radius: f32,
+    inner_shadow_smoothing: f32,
+    noise_amount: f32,
+    noise_scale: f32,
 }
 
 impl<'a> FluidGlassState<'a> {
     async fn new(window: &'a Window) -> Self {
         let size = window.inner_size();
+        let start_time = Instant::now();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
         let surface = instance.create_surface(window).unwrap();
@@ -248,13 +276,27 @@ impl<'a> FluidGlassState<'a> {
         let (bg_copy_texture, bg_copy_texture_view) = Self::create_copy_texture(&device, &config, rect_pixel_size);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
 
-        // Initialize parameters - 基于Android版本的默认值
-        let dispersion_height = 0.0;       // 初始不启用色散
-        let chroma_multiplier = 1.0;       // 标准色彩
-        let refraction_height = 20.0;      // 折射高度
-        let refraction_amount = -60.0;     // 折射强度 (负值向内折射)
-        let eccentric_factor = 1.0;        // 偏心因子
-        let corner_radius = 30.0;          // 圆角半径
+        // Initialize parameters - a mix of Android and new defaults
+        // Based on user feedback, the default parameters have been adjusted.
+        // The primary glass effect (refraction) is preserved, while other
+        // effects like bleed, highlight, and inner shadow are disabled by default.
+        // A subtle noise is added for a slightly frosted look.
+        let dispersion_height = 0.0;
+        let chroma_multiplier = 1.0;
+        let refraction_height = 20.0;
+        let refraction_amount = -60.0;
+        let eccentric_factor = 1.0;
+        let corner_radius = 30.0;
+        let bleed_color = [1.0, 1.0, 1.0, 0.0]; // Disabled
+        let highlight_color = [1.0, 1.0, 1.0, 0.0]; // Disabled
+        let inner_shadow_color = [0.0, 0.0, 0.0, 0.0]; // Disabled
+        let bleed_amount = 0.0; // Disabled
+        let highlight_size = 0.0; // Disabled
+        let highlight_smoothing = 8.0;
+        let inner_shadow_radius = 0.0; // Disabled
+        let inner_shadow_smoothing = 2.0;
+        let noise_amount = 0.02;
+        let noise_scale = 1.5;
 
         // Initialize uniforms
         let glass_uniforms = GlassUniforms {
@@ -265,6 +307,17 @@ impl<'a> FluidGlassState<'a> {
             refraction_height,
             refraction_amount,
             eccentric_factor,
+            bleed_color,
+            highlight_color,
+            inner_shadow_color,
+            bleed_amount,
+            highlight_size,
+            highlight_smoothing,
+            inner_shadow_radius,
+            inner_shadow_smoothing,
+            noise_amount,
+            noise_scale,
+            time: 0.0,
         };
 
         // Create uniform buffer
@@ -363,6 +416,7 @@ impl<'a> FluidGlassState<'a> {
             config,
             size,
             window,
+            start_time,
             bg_render_pipeline,
             bg_bind_group,
             glass_render_pipeline,
@@ -382,6 +436,16 @@ impl<'a> FluidGlassState<'a> {
             refraction_amount,
             eccentric_factor,
             corner_radius,
+            bleed_color,
+            highlight_color,
+            inner_shadow_color,
+            bleed_amount,
+            highlight_size,
+            highlight_smoothing,
+            inner_shadow_radius,
+            inner_shadow_smoothing,
+            noise_amount,
+            noise_scale,
         }
     }
 
@@ -415,6 +479,18 @@ impl<'a> FluidGlassState<'a> {
         self.glass_uniforms.refraction_amount = self.refraction_amount;
         self.glass_uniforms.eccentric_factor = self.eccentric_factor;
         self.glass_uniforms.corner_radius = self.corner_radius;
+        self.glass_uniforms.bleed_color = self.bleed_color;
+        self.glass_uniforms.highlight_color = self.highlight_color;
+        self.glass_uniforms.inner_shadow_color = self.inner_shadow_color;
+        self.glass_uniforms.bleed_amount = self.bleed_amount;
+        self.glass_uniforms.highlight_size = self.highlight_size;
+        self.glass_uniforms.highlight_smoothing = self.highlight_smoothing;
+        self.glass_uniforms.inner_shadow_radius = self.inner_shadow_radius;
+        self.glass_uniforms.inner_shadow_smoothing = self.inner_shadow_smoothing;
+        self.glass_uniforms.noise_amount = self.noise_amount;
+        self.glass_uniforms.noise_scale = self.noise_scale;
+        self.glass_uniforms.time = self.start_time.elapsed().as_secs_f32();
+
 
         self.queue.write_buffer(
             &self.glass_uniform_buffer,
@@ -424,6 +500,7 @@ impl<'a> FluidGlassState<'a> {
     }
 
     fn handle_input(&mut self, event: &WindowEvent) -> bool {
+        let mut changed = true;
         match event {
             WindowEvent::KeyboardInput {
                 event: KeyEvent {
@@ -434,37 +511,63 @@ impl<'a> FluidGlassState<'a> {
                 ..
             } => {
                 match key {
-                    KeyCode::KeyQ => { self.dispersion_height += 5.0; true }
-                    KeyCode::KeyA => { self.dispersion_height = (self.dispersion_height - 5.0).max(0.0); true }
-                    KeyCode::KeyW => { self.chroma_multiplier += 0.2; true }
-                    KeyCode::KeyS => { self.chroma_multiplier = (self.chroma_multiplier - 0.2).max(0.0); true }
-                    KeyCode::KeyE => { self.refraction_height += 5.0; true }
-                    KeyCode::KeyD => { self.refraction_height = (self.refraction_height - 5.0).max(0.0); true }
-                    KeyCode::KeyR => { self.refraction_amount += 10.0; true }
-                    KeyCode::KeyF => { self.refraction_amount -= 10.0; true }
-                    KeyCode::KeyT => { self.eccentric_factor = (self.eccentric_factor + 0.1).min(2.0); true }
-                    KeyCode::KeyG => { self.eccentric_factor = (self.eccentric_factor - 0.1).max(0.0); true }
-                    KeyCode::KeyY => { self.corner_radius += 5.0; true }
-                    KeyCode::KeyH => { self.corner_radius = (self.corner_radius - 5.0).max(0.0); true }
+                    KeyCode::KeyQ => self.dispersion_height += 5.0,
+                    KeyCode::KeyA => self.dispersion_height = (self.dispersion_height - 5.0).max(0.0),
+                    KeyCode::KeyW => self.chroma_multiplier += 0.2,
+                    KeyCode::KeyS => self.chroma_multiplier = (self.chroma_multiplier - 0.2).max(0.0),
+                    KeyCode::KeyE => self.refraction_height += 5.0,
+                    KeyCode::KeyD => self.refraction_height = (self.refraction_height - 5.0).max(0.0),
+                    KeyCode::KeyR => self.refraction_amount += 10.0,
+                    KeyCode::KeyF => self.refraction_amount -= 10.0,
+                    KeyCode::KeyT => self.eccentric_factor = (self.eccentric_factor + 0.1).min(2.0),
+                    KeyCode::KeyG => self.eccentric_factor = (self.eccentric_factor - 0.1).max(0.0),
+                    KeyCode::KeyY => self.corner_radius += 5.0,
+                    KeyCode::KeyH => self.corner_radius = (self.corner_radius - 5.0).max(0.0),
+
+                    // New Controls
+                    KeyCode::KeyU => self.bleed_amount = (self.bleed_amount + 0.05).min(1.0),
+                    KeyCode::KeyJ => self.bleed_amount = (self.bleed_amount - 0.05).max(0.0),
+                    KeyCode::KeyI => self.highlight_size = (self.highlight_size + 0.05).min(1.0),
+                    KeyCode::KeyK => self.highlight_size = (self.highlight_size - 0.05).max(0.0),
+                    KeyCode::KeyO => self.inner_shadow_radius += 2.0,
+                    KeyCode::KeyL => self.inner_shadow_radius = (self.inner_shadow_radius - 2.0).max(0.0),
+                    KeyCode::KeyZ => self.noise_amount = (self.noise_amount + 0.01).min(0.5),
+                    KeyCode::KeyX => self.noise_amount = (self.noise_amount - 0.01).max(0.0),
+                    
+                    // Toggle Bleed Color
+                    KeyCode::Digit1 => self.bleed_color = if self.bleed_color[3] > 0.0 { [1.0, 1.0, 1.0, 0.0] } else { [0.8, 0.1, 0.2, 0.5] },
+                    // Toggle Highlight
+                    KeyCode::Digit2 => self.highlight_color[3] = if self.highlight_color[3] > 0.0 { 0.0 } else { 0.2 },
+                     // Toggle Inner Shadow
+                    KeyCode::Digit3 => self.inner_shadow_color[3] = if self.inner_shadow_color[3] > 0.0 { 0.0 } else { 0.5 },
+
+
                     KeyCode::KeyP => {
-                        println!("Current parameters (Fluid Glass):");
-                        println!("  Dispersion Height: {}", self.dispersion_height);
-                        println!("  Chroma Multiplier: {}", self.chroma_multiplier);
-                        println!("  Refraction Height: {}", self.refraction_height);
-                        println!("  Refraction Amount: {}", self.refraction_amount);
-                        println!("  Eccentric Factor: {}", self.eccentric_factor);
-                        println!("  Corner Radius: {}", self.corner_radius);
-                        true
+                        println!("\n--- Current Parameters (Fluid Glass) ---");
+                        println!("  Dispersion Height: {:.2}", self.dispersion_height);
+                        println!("  Chroma Multiplier: {:.2}", self.chroma_multiplier);
+                        println!("  Refraction Height: {:.2}", self.refraction_height);
+                        println!("  Refraction Amount: {:.2}", self.refraction_amount);
+                        println!("  Eccentric Factor:  {:.2}", self.eccentric_factor);
+                        println!("  Corner Radius:     {:.2}", self.corner_radius);
+                        println!("--- New Effects ---");
+                        println!("  Bleed Amount: {:.2} (Color: {:.2?})", self.bleed_amount, self.bleed_color);
+                        println!("  Highlight Size: {:.2} (Alpha: {:.2})", self.highlight_size, self.highlight_color[3]);
+                        println!("  Highlight Smoothing: {:.2}", self.highlight_smoothing);
+                        println!("  Inner Shadow Radius: {:.2} (Alpha: {:.2})", self.inner_shadow_radius, self.inner_shadow_color[3]);
+                        println!("  Inner Shadow Smoothing: {:.2}", self.inner_shadow_smoothing);
+                        println!("  Noise Amount: {:.2}", self.noise_amount);
+                        println!("--------------------------------------");
                     }
-                    _ => false,
+                    _ => changed = false,
                 }
             }
             WindowEvent::Resized(physical_size) => {
                 self.resize(*physical_size);
-                true
             }
-            _ => false,
+            _ => changed = false,
         }
+        changed
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -594,21 +697,30 @@ pub fn main() {
     env_logger::init();
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new()
-        .with_title("Fluid Glass Demo")
+        .with_title("Fluid Glass Demo - Enhanced")
         .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
         .build(&event_loop).unwrap();
     
     let mut state = pollster::block_on(FluidGlassState::new(&window));
     
-    println!("Controls (Fluid Glass):");
+    println!("--- Controls (Fluid Glass) ---");
     println!("  Q/A: Adjust dispersion height");
     println!("  W/S: Adjust chroma multiplier");
     println!("  E/D: Adjust refraction height");
     println!("  R/F: Adjust refraction amount");
     println!("  T/G: Adjust eccentric factor");
     println!("  Y/H: Adjust corner radius");
+    println!("--- New Effect Controls ---");
+    println!("  U/J: Adjust bleed amount");
+    println!("  I/K: Adjust highlight size");
+    println!("  O/L: Adjust inner shadow radius");
+    println!("  Z/X: Adjust noise amount");
+    println!("  1: Toggle bleed effect (Red)");
+    println!("  2: Toggle highlight effect");
+    println!("  3: Toggle inner shadow effect");
+    println!("--- General ---");
     println!("  P: Print current parameters");
-    
+
     event_loop.run(move |event, elwt| {
         match event {
             Event::WindowEvent {

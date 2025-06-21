@@ -1,11 +1,27 @@
 struct GlassUniforms {
+    // Vector values
+    bleed_color: vec4<f32>,
+    highlight_color: vec4<f32>,
+    inner_shadow_color: vec4<f32>,
+    
+    // vec2 types
     rect_size_px: vec2<f32>,
+
+    // f32 types
     corner_radius: f32,
     dispersion_height: f32,
     chroma_multiplier: f32,
     refraction_height: f32,
     refraction_amount: f32,
     eccentric_factor: f32,
+    bleed_amount: f32,
+    highlight_size: f32,
+    highlight_smoothing: f32,
+    inner_shadow_radius: f32,
+    inner_shadow_smoothing: f32,
+    noise_amount: f32,
+    noise_scale: f32,
+    time: f32,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: GlassUniforms;
@@ -89,6 +105,10 @@ fn saturate_color(color: vec4<f32>, amount: f32) -> vec4<f32> {
     return vec4<f32>(adjusted_srgb, color.a);
 }
 
+fn rand(co: vec2<f32>) -> f32 {
+    return fract(sin(dot(co.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+}
+
 fn refraction_color(coord: vec2<f32>, size: vec2<f32>, corner_radius: f32, eccentric_factor: f32, height: f32, amount: f32) -> vec4<f32> {
     let half_size = size * 0.5;
     let centered_coord = coord - half_size;
@@ -103,7 +123,6 @@ fn refraction_color(coord: vec2<f32>, size: vec2<f32>, corner_radius: f32, eccen
         let refracted_direction = normalize(normal + eccentric_factor * normalize(centered_coord));
         let refracted_coord = coord + refracted_distance * refracted_direction;
         
-        // 边界夹紧而不是返回黑色
         let clamped_coord = clamp(refracted_coord, vec2<f32>(0.0), size - vec2<f32>(1.0));
         let refracted_uv = clamped_coord / size;
         return textureSample(t_diffuse, s_diffuse, refracted_uv);
@@ -150,24 +169,20 @@ fn dispersion_color_on_refracted(coord: vec2<f32>, size: vec2<f32>, corner_radiu
                 green_color += refracted_color.g;
                 green_weight += 1.0;
             }
-            // 红色通道 (0.5 - 1.0)
             if (t >= 0.5 && t <= 1.0) {
                 red_color += refracted_color.r;
                 red_weight += 1.0;
             }
         }
         
-        // 归一化
         red_color = red_color / max(red_weight, 1.0);
         green_color = green_color / max(green_weight, 1.0);
         blue_color = blue_color / max(blue_weight, 1.0);
         
-        // 保持原始alpha
         let original_refracted = refraction_color(coord, size, corner_radius, uniforms.eccentric_factor, uniforms.refraction_height, uniforms.refraction_amount);
         
         return vec4<f32>(red_color, green_color, blue_color, original_refracted.a);
     } else {
-        // 在玻璃区域外，直接应用折射
         return refraction_color(coord, size, corner_radius, uniforms.eccentric_factor, uniforms.refraction_height, uniforms.refraction_amount);
     }
 }
@@ -175,12 +190,16 @@ fn dispersion_color_on_refracted(coord: vec2<f32>, size: vec2<f32>, corner_radiu
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let coord = in.uv * uniforms.rect_size_px;
-    
-    var color: vec4<f32>;
+    let half_size = uniforms.rect_size_px * 0.5;
+    let centered_coord = coord - half_size;
+    let sd = sd_rounded_rectangle(centered_coord, half_size, uniforms.corner_radius);
+
+    // 1. Get base refracted/dispersed color
+    var base_color: vec4<f32>;
     if (uniforms.dispersion_height > 0.0) {
-        color = dispersion_color_on_refracted(coord, uniforms.rect_size_px, uniforms.corner_radius, uniforms.dispersion_height);
+        base_color = dispersion_color_on_refracted(coord, uniforms.rect_size_px, uniforms.corner_radius, uniforms.dispersion_height);
     } else {
-        color = refraction_color(
+        base_color = refraction_color(
             coord, 
             uniforms.rect_size_px, 
             uniforms.corner_radius, 
@@ -189,16 +208,49 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             uniforms.refraction_amount
         );
     }
-    
-    color = saturate_color(color, uniforms.chroma_multiplier);
-    
-    let half_size = uniforms.rect_size_px * 0.5;
-    let centered_coord = coord - half_size;
-    let sd = sd_rounded_rectangle(centered_coord, half_size, uniforms.corner_radius);
-    
-    if (sd > 0.0) {
-        color.a = 0.0;
+
+    var color = base_color.rgb;
+
+    // 2. Apply Bleed/Tint
+    color = mix(color, uniforms.bleed_color.rgb, uniforms.bleed_amount * uniforms.bleed_color.a);
+
+    // 3. Apply Inner Shadow
+    if (uniforms.inner_shadow_color.a > 0.0) {
+        let shadow_dist = -sd;
+        let shadow_factor = pow(
+            1.0 - smoothstep(0.0, uniforms.inner_shadow_radius, shadow_dist), 
+            uniforms.inner_shadow_smoothing
+        );
+        let shadow_alpha = shadow_factor * uniforms.inner_shadow_color.a;
+        color = mix(color, uniforms.inner_shadow_color.rgb, shadow_alpha);
     }
     
-    return color;
+    // 4. Apply Highlight/Shine
+    if (uniforms.highlight_color.a > 0.0) {
+        let shine_pos_uv = vec2(0.25, 0.25);
+        let dist_to_shine = distance(in.uv, shine_pos_uv);
+        let highlight_factor = 1.0 - smoothstep(0.0, uniforms.highlight_size, dist_to_shine);
+        let highlight_alpha = pow(highlight_factor, uniforms.highlight_smoothing) * uniforms.highlight_color.a;
+        color += uniforms.highlight_color.rgb * highlight_alpha;
+    }
+
+    // 5. Apply saturation
+    color = saturate_color(vec4(color, base_color.a), uniforms.chroma_multiplier).rgb;
+    
+    // 6. Apply Noise/Grain
+    if (uniforms.noise_amount > 0.0) {
+        let grain = (rand(coord * uniforms.noise_scale + uniforms.time) - 0.5) * uniforms.noise_amount;
+        color += grain;
+    }
+
+    // 7. Final Alpha calculation and anti-aliasing
+    var final_color = vec4(color, base_color.a);
+    if (sd > 0.0) {
+        final_color.a = 0.0;
+    } else {
+        // Anti-alias the edge
+        final_color.a *= smoothstep(1.0, -1.0, sd);
+    }
+    
+    return final_color;
 }
