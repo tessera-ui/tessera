@@ -235,7 +235,7 @@ impl<'a> State<'a> {
             refraction_height: 20.0,
             refraction_amount: -60.0,
             eccentric_factor: 1.0,
-            dispersion_height: 30.0,
+            dispersion_height: 0.0,
             chroma_multiplier: 1.0,
         };
         let glass_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
