@@ -1,4 +1,4 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -11,9 +11,6 @@ static FONT_SYSTEM: OnceLock<RwLock<glyphon::FontSystem>> = OnceLock::new();
 
 #[cfg(target_os = "android")]
 fn init_font_system() -> RwLock<glyphon::FontSystem> {
-    let mut font_system = glyphon::FontSystem::new_with_fonts([fontdb::Source::Binary(Arc::new(
-        include_bytes!("../assets/fonts/NotoSansSC-Regular.otf"),
-    ))]);
     font_system.db_mut().load_fonts_dir("/system/fonts");
     font_system.db_mut().set_sans_serif_family("Roboto");
     font_system.db_mut().set_serif_family("Noto Serif");
@@ -26,11 +23,7 @@ fn init_font_system() -> RwLock<glyphon::FontSystem> {
 
 #[cfg(not(target_os = "android"))]
 fn init_font_system() -> RwLock<glyphon::FontSystem> {
-    RwLock::new(glyphon::FontSystem::new_with_fonts([
-        fontdb::Source::Binary(Arc::new(include_bytes!(
-            "../assets/fonts/NotoSansSC-Regular.otf"
-        ))),
-    ]))
+    RwLock::new(glyphon::FontSystem::new())
 }
 
 /// It costs a lot to create a glyphon font system, so we use a static one
