@@ -1,4 +1,3 @@
-mod basic_drawable;
 mod constraint;
 mod node;
 
@@ -8,7 +7,6 @@ use log::{debug, error};
 use rayon::prelude::*;
 
 use crate::{Px, cursor::CursorEvent, px::PxPosition, renderer::DrawCommand};
-pub use basic_drawable::{BasicDrawable, RippleProps, ShadowProps};
 pub use constraint::{Constraint, DimensionValue};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
@@ -100,7 +98,7 @@ impl ComponentTree {
         cursor_position: Option<PxPosition>,
         mut cursor_events: Vec<CursorEvent>,
         mut keyboard_events: Vec<winit::event::KeyEvent>,
-    ) -> Vec<DrawCommand> {
+    ) -> Vec<(PxPosition, [Px; 2], Box<dyn DrawCommand>)> {
         let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
             return vec![];
         };
@@ -198,7 +196,7 @@ fn compute_draw_commands_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
-) -> Vec<DrawCommand> {
+) -> Vec<(PxPosition, [Px; 2], Box<dyn DrawCommand>)> {
     compute_draw_commands_inner_parallel(PxPosition::ZERO, true, node_id, tree, metadatas)
 }
 
@@ -208,7 +206,7 @@ fn compute_draw_commands_inner_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
-) -> Vec<DrawCommand> {
+) -> Vec<(PxPosition, [Px; 2], Box<dyn DrawCommand>)> {
     let mut local_commands = Vec::new();
 
     // Accessing metadatas with get_mut. DashMap's get_mut returns a RefMut,
@@ -229,17 +227,15 @@ fn compute_draw_commands_inner_parallel(
         let self_pos = start_pos + rel_pos;
         entry.abs_position = Some(self_pos); // Modifying through RefMut
 
-        if let Some(drawable) = entry.basic_drawable.take() {
-            // Modifying through RefMut
-            let size = entry.computed_data.unwrap(); // Assuming computed_data is always Some after measure
-            let command = drawable.into_draw_command([size.width, size.height], self_pos);
-            local_commands.push(command);
+        if let Some(cmd) = entry.basic_drawable.take() {
+            let size = entry.computed_data.unwrap();
+            local_commands.push((self_pos, [size.width, size.height], cmd));
         }
     } // RefMut is dropped here, lock released if any
 
     // Recursive call, passing references
     let children: Vec<_> = node_id.children(tree).collect();
-    let child_results: Vec<Vec<DrawCommand>> = children
+    let child_results: Vec<Vec<_>> = children
         .into_par_iter()
         .map(|child| {
             compute_draw_commands_inner_parallel(

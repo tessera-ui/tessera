@@ -1,7 +1,9 @@
 use std::time::Instant;
 
-use tessera::{BasicDrawable, ComponentNodeMetaData, ComputedData, Dp, Px};
+use tessera::{ComponentNodeMetaData, ComputedData, Dp, Px};
 use tessera_macros::tessera;
+
+use crate::pipelines::ShapeCommand;
 
 const CURSOR_WIDRH: Dp = Dp(2.5);
 
@@ -16,17 +18,17 @@ pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
 
     measure(Box::new(move |input| {
         // Cursor is a rectangle with a fixed width and variable height
-        let drawable = BasicDrawable::Rect {
+        let drawable = ShapeCommand::Rect {
             color: [0.0, 0.0, 0.0, 1.0],
             corner_radius: 0.0,
             shadow: None,
         };
         // Add the drawable to the metadata
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(drawable);
+            metadata.basic_drawable = Some(Box::new(drawable));
         } else {
             let default_meta = ComponentNodeMetaData {
-                basic_drawable: Some(drawable),
+                basic_drawable: Some(Box::new(drawable)),
                 ..Default::default()
             };
             input.metadatas.insert(input.current_node_id, default_meta);

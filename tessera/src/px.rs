@@ -10,6 +10,11 @@ impl Px {
     pub const ZERO: Self = Self(0);
     pub const MAX: Self = Self(i32::MAX);
 
+    /// The raw i32 value
+    pub fn raw(self) -> i32 {
+        self.0
+    }
+
     /// Create a new Px instance
     pub const fn new(value: i32) -> Self {
         Px(value)

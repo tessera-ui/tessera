@@ -210,9 +210,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Start Simple Layout Alignment Demo");
     println!("Demorowandcolumndifferent alignment options for the component");
 
-    Renderer::run(|| {
-        app();
-    })?;
+    Renderer::run(
+        || {
+            app();
+        },
+        |gpu, gpu_queue, config, registry| {
+            tessera_basic_components::pipelines::register_pipelines(
+                gpu, gpu_queue, config, registry,
+            );
+        },
+    )?;
 
     Ok(())
 }

@@ -9,11 +9,8 @@ use indextree::NodeId;
 use log::debug;
 use rayon::prelude::*;
 
-use super::{
-    basic_drawable::BasicDrawable,
-    constraint::{Constraint, DimensionValue},
-};
-use crate::{Px, cursor::CursorEvent, px::PxPosition};
+use super::constraint::{Constraint, DimensionValue};
+use crate::{Px, cursor::CursorEvent, px::PxPosition, renderer::DrawCommand};
 
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component.
@@ -43,7 +40,7 @@ pub struct ComponentNodeMetaData {
     /// None if the node is not drawn yet.
     pub abs_position: Option<PxPosition>,
     /// Optional basic drawable associated with this node.
-    pub basic_drawable: Option<BasicDrawable>,
+    pub basic_drawable: Option<Box<dyn DrawCommand>>,
 }
 
 impl ComponentNodeMetaData {

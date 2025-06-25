@@ -6,11 +6,13 @@ use glyphon::Edit;
 use parking_lot::RwLock;
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::selection_highlight_rect::selection_highlight_rect;
+use crate::{
+    pipelines::{TextCommand, TextConstraint, TextData, write_font_system},
+    selection_highlight_rect::selection_highlight_rect,
+};
 use tessera::{
-    BasicDrawable, ComponentNodeMetaData, ComputedData, DimensionValue, Dp, Px, PxPosition,
-    TextConstraint, TextData, focus_state::Focus, measure_node, place_node, winit,
-    write_font_system,
+    ComponentNodeMetaData, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus,
+    measure_node, place_node, winit,
 };
 use tessera_macros::tessera;
 
@@ -338,16 +340,16 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                 }
             }
 
-            let drawable = BasicDrawable::Text {
+            let drawable = TextCommand {
                 data: text_data.clone(),
             };
             if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-                metadata.basic_drawable = Some(drawable);
+                metadata.basic_drawable = Some(Box::new(drawable));
             } else {
                 input.metadatas.insert(
                     input.current_node_id,
                     ComponentNodeMetaData {
-                        basic_drawable: Some(drawable),
+                        basic_drawable: Some(Box::new(drawable)),
                         ..Default::default()
                     },
                 );

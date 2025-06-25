@@ -93,12 +93,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Click the blue button to increment the counter!");
 
     // Run the application
-    Renderer::run({
-        let app_state_main = app_state.clone(); // Clone for the main app loop
-        move || {
-            counter_app(app_state_main.clone());
-        }
-    })?;
+    Renderer::run(
+        {
+            let app_state_main = app_state.clone(); // Clone for the main app loop
+            move || {
+                counter_app(app_state_main.clone());
+            }
+        },
+        |gpu, gpu_queue, config, registry| {
+            tessera_basic_components::pipelines::register_pipelines(
+                gpu, gpu_queue, config, registry,
+            );
+        },
+    )?;
 
     Ok(())
 }

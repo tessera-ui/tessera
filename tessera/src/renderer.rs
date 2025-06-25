@@ -6,8 +6,6 @@ use std::{sync::Arc, time::Instant};
 use log::{debug, warn};
 use parking_lot::Mutex;
 
-use crate::{Px, PxPosition, keyboard_state::KeyboardState, thread_utils};
-
 use app::WgpuApp;
 #[cfg(target_os = "android")]
 use winit::platform::android::{EventLoopBuilderExtAndroid, activity::AndroidApp};
@@ -20,18 +18,21 @@ use winit::{
 };
 
 use crate::{
+    Px, PxPosition,
     cursor::{CursorEvent, CursorEventContent, CursorState},
     dp::SCALE_FACTOR,
+    keyboard_state::KeyboardState,
     runtime::TesseraRuntime,
-    tokio_runtime,
+    thread_utils, tokio_runtime,
 };
 
-pub use drawer::{
-    DrawCommand, ShapeUniforms, ShapeVertex, TextConstraint, TextData, read_font_system,
-    write_font_system,
-};
+pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
 
-pub struct Renderer<F: Fn()> {
+pub struct Renderer<
+    F: Fn(),
+    R: Fn(&wgpu::Device, &wgpu::Queue, &wgpu::SurfaceConfiguration, &mut drawer::PipelineRegistry)
+        + Clone,
+> {
     /// WGPU app
     app: Arc<Mutex<Option<WgpuApp>>>,
     /// Entry UI Function
@@ -40,12 +41,19 @@ pub struct Renderer<F: Fn()> {
     cursor_state: CursorState,
     /// The state of the keyboard
     keyboard_state: KeyboardState,
+    /// Register pipelines function
+    register_pipelines_fn: R,
 }
 
-impl<F: Fn()> Renderer<F> {
+impl<
+    F: Fn(),
+    R: Fn(&wgpu::Device, &wgpu::Queue, &wgpu::SurfaceConfiguration, &mut drawer::PipelineRegistry)
+        + Clone,
+> Renderer<F, R>
+{
     #[cfg(not(target_os = "android"))]
     /// Create event loop and run application
-    pub fn run(entry_point: F) -> Result<(), EventLoopError> {
+    pub fn run(entry_point: F, register_pipelines_fn: R) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::new().unwrap();
         let app = Arc::new(Mutex::new(None));
         let cursor_state = CursorState::default();
@@ -55,6 +63,7 @@ impl<F: Fn()> Renderer<F> {
             entry_point,
             cursor_state,
             keyboard_state,
+            register_pipelines_fn,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -62,7 +71,11 @@ impl<F: Fn()> Renderer<F> {
 
     #[cfg(target_os = "android")]
     /// Create event loop and run application on Android
-    pub fn run(entry_point: F, android_app: AndroidApp) -> Result<(), EventLoopError> {
+    pub fn run(
+        entry_point: F,
+        register_pipelines_fn: R,
+        android_app: AndroidApp,
+    ) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::builder()
             .with_android_app(android_app)
             .build()
@@ -75,37 +88,19 @@ impl<F: Fn()> Renderer<F> {
             entry_point,
             cursor_state,
             keyboard_state,
+            register_pipelines_fn,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
     }
-
-    /// Create a renderer with custom touch scroll configuration
-    pub fn with_touch_config(entry_point: F, touch_enabled: bool, min_move_threshold: f32) -> Self {
-        let mut cursor_state = CursorState::default();
-        cursor_state.configure_touch_scroll(touch_enabled, min_move_threshold);
-
-        Self {
-            app: Arc::new(Mutex::new(None)),
-            entry_point,
-            cursor_state,
-            keyboard_state: KeyboardState::default(),
-        }
-    }
-
-    /// Configure touch scroll behavior
-    pub fn configure_touch_scroll(&mut self, enabled: bool, min_threshold: f32) {
-        self.cursor_state
-            .configure_touch_scroll(enabled, min_threshold);
-    }
-
-    /// Get current active touch count (for debugging)
-    pub fn active_touch_count(&self) -> usize {
-        self.cursor_state.active_touch_count()
-    }
 }
 
-impl<F: Fn()> ApplicationHandler for Renderer<F> {
+impl<
+    F: Fn(),
+    R: Fn(&wgpu::Device, &wgpu::Queue, &wgpu::SurfaceConfiguration, &mut drawer::PipelineRegistry)
+        + Clone,
+> ApplicationHandler for Renderer<F, R>
+{
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Just return if the app is already created
         if self.app.as_ref().lock().is_some() {
@@ -118,7 +113,8 @@ impl<F: Fn()> ApplicationHandler for Renderer<F> {
             .with_transparent(true);
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
-        let wgpu_app = tokio_runtime::get().block_on(WgpuApp::new(window));
+        let wgpu_app =
+            tokio_runtime::get().block_on(WgpuApp::new(window, self.register_pipelines_fn.clone()));
         self.app.lock().replace(wgpu_app);
     }
 

@@ -4,7 +4,7 @@ use log::{error, info};
 use parking_lot::RwLock;
 use winit::window::Window;
 
-use crate::dp::SCALE_FACTOR;
+use crate::{Px, PxPosition, dp::SCALE_FACTOR};
 
 use super::drawer::{DrawCommand, Drawer};
 
@@ -30,7 +30,15 @@ pub(crate) struct WgpuApp {
 
 impl WgpuApp {
     /// Create a new WGPU app, as the root of Tessera
-    pub(crate) async fn new(window: Arc<Window>) -> Self {
+    pub(crate) async fn new(
+        window: Arc<Window>,
+        register_pipelines_fn: impl FnOnce(
+            &wgpu::Device,
+            &wgpu::Queue,
+            &wgpu::SurfaceConfiguration,
+            &mut super::drawer::PipelineRegistry,
+        ),
+    ) -> Self {
         // Looking for gpus
         let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -108,7 +116,7 @@ impl WgpuApp {
         };
         surface.configure(&gpu, &config);
         // Create drawer
-        let drawer = Drawer::new(&gpu, &queue, &config);
+        let drawer = Drawer::new(&gpu, &queue, &config, register_pipelines_fn);
         // Set scale factor for dp conversion
         let scale_factor = window.scale_factor();
         info!("Window scale factor: {scale_factor}");
@@ -156,7 +164,7 @@ impl WgpuApp {
     /// Render the surface
     pub(crate) fn render(
         &mut self,
-        drawer_commands: impl IntoIterator<Item = DrawCommand>,
+        drawer_commands: impl IntoIterator<Item = (PxPosition, [Px; 2], Box<dyn DrawCommand>)>,
     ) -> Result<(), wgpu::SurfaceError> {
         // get a texture from surface
         let output = self.surface.get_current_texture()?;
@@ -183,23 +191,25 @@ impl WgpuApp {
         });
 
         // Begin frame for drawer
-        self.drawer.begin_frame();
+        self.drawer
+            .begin_pass(&self.gpu, &self.queue, &self.config, &mut render_pass);
 
-        // draw commands
-        for command in drawer_commands {
-            // Use the collected Vec
-            self.drawer.prepare_or_draw(
+        // submit draw commands
+        for (pos, size, command) in drawer_commands {
+            self.drawer.submit(
                 &self.gpu,
-                &self.config,
                 &self.queue,
+                &self.config,
                 &mut render_pass,
-                command,
+                &*command,
+                size,
+                pos,
             );
         }
         // we must call [Drawer::final_draw] to render drawers that need to be prepared
         // before drawing
         self.drawer
-            .final_draw(&self.gpu, &self.config, &self.queue, &mut render_pass);
+            .end_pass(&self.gpu, &self.queue, &self.config, &mut render_pass);
         // here we drop render_pass to release borrowed encoder
         drop(render_pass);
         // finish command buffer and submit it to gpu queue

@@ -1,4 +1,4 @@
-use crate::PxPosition;
+use tessera::PxPosition;
 
 pub fn pixel_to_ndc(pos: PxPosition, screen_size: [u32; 2]) -> [f32; 2] {
     let x = pos.x.to_f32() / screen_size[0] as f32 * 2.0 - 1.0;

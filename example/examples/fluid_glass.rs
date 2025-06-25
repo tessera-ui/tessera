@@ -1,12 +1,12 @@
-use std::{iter, mem, time::Instant};
 use bytemuck::{Pod, Zeroable};
-use wgpu::util::DeviceExt;
 use image::GenericImageView;
+use std::{iter, mem, sync::Arc, time::Instant};
+use wgpu::util::DeviceExt;
 use winit::{
     event::*,
-    event_loop::{EventLoop},
-    window::{Window, WindowBuilder},
-    keyboard::{PhysicalKey, KeyCode},
+    event_loop::{ControlFlow, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
+    window::Window,
 };
 
 #[repr(C)]
@@ -38,10 +38,22 @@ impl Vertex {
 }
 
 const RECT_VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.5, -0.5], uv: [0.0, 1.0] },
-    Vertex { position: [0.5, -0.5], uv: [1.0, 1.0] },
-    Vertex { position: [0.5, 0.5], uv: [1.0, 0.0] },
-    Vertex { position: [-0.5, 0.5], uv: [0.0, 0.0] },
+    Vertex {
+        position: [-0.5, -0.5],
+        uv: [0.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, -0.5],
+        uv: [1.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, 0.5],
+        uv: [1.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5],
+        uv: [0.0, 0.0],
+    },
 ];
 
 const RECT_INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
@@ -53,7 +65,7 @@ struct GlassUniforms {
     bleed_color: [f32; 4],
     highlight_color: [f32; 4],
     inner_shadow_color: [f32; 4],
-    
+
     // vec2 types
     rect_size_px: [f32; 2],
 
@@ -80,7 +92,7 @@ struct FluidGlassState<'a> {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
-    window: &'a Window,
+    window: Arc<Window>,
     start_time: Instant,
 
     // Background resources
@@ -127,26 +139,35 @@ struct FluidGlassState<'a> {
     noise_scale: f32,
 }
 
-impl<'a> FluidGlassState<'a> {
-    async fn new(window: &'a Window) -> Self {
+impl FluidGlassState<'_> {
+    async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
         let start_time = Instant::now();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
-        let surface = instance.create_surface(window).unwrap();
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let surface = unsafe {
+            instance
+                .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::from_window(&*window).unwrap())
+        }
+        .unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
             .unwrap();
 
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .request_device(&wgpu::DeviceDescriptor::default())
             .await
             .unwrap();
 
         let surface_caps = surface.get_capabilities(&adapter);
-        let surface_format = surface_caps.formats.iter().copied().find(|f| f.is_srgb()).unwrap_or(surface_caps.formats[0]);
-        
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.is_srgb())
+            .unwrap_or(surface_caps.formats[0]);
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             format: surface_format,
@@ -196,32 +217,39 @@ impl<'a> FluidGlassState<'a> {
         );
         let bg_texture_view = bg_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let bg_sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
-        let bg_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+        let bg_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-            label: Some("bg_bind_group_layout"),
-        });
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("bg_bind_group_layout"),
+            });
         let bg_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bg_bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&bg_texture_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&bg_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&bg_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&bg_sampler),
+                },
             ],
             label: Some("bg_bind_group"),
         });
@@ -237,18 +265,24 @@ impl<'a> FluidGlassState<'a> {
             layout: Some(&bg_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &bg_shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[],
+                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &bg_shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(config.format.into())],
+                compilation_options: Default::default(),
             }),
-            primitive: wgpu::PrimitiveState { topology: wgpu::PrimitiveTopology::TriangleStrip, ..Default::default() },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                ..Default::default()
+            },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         // Create vertex/index buffers
@@ -273,7 +307,8 @@ impl<'a> FluidGlassState<'a> {
             depth_or_array_layers: 1,
         };
 
-        let (bg_copy_texture, bg_copy_texture_view) = Self::create_copy_texture(&device, &config, rect_pixel_size);
+        let (bg_copy_texture, bg_copy_texture_view) =
+            Self::create_copy_texture(&device, &config, rect_pixel_size);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
 
         // Initialize parameters - a mix of Android and new defaults
@@ -328,52 +363,53 @@ impl<'a> FluidGlassState<'a> {
         });
 
         // Create glass effect bind group layout
-        let glass_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
-                        min_binding_size: None 
+        let glass_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-            label: Some("glass_bind_group_layout"),
-        });
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("glass_bind_group_layout"),
+            });
 
         let glass_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &glass_bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry { 
-                    binding: 0, 
-                    resource: glass_uniform_buffer.as_entire_binding() 
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: glass_uniform_buffer.as_entire_binding(),
                 },
-                wgpu::BindGroupEntry { 
-                    binding: 1, 
-                    resource: wgpu::BindingResource::TextureView(&bg_copy_texture_view) 
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&bg_copy_texture_view),
                 },
-                wgpu::BindGroupEntry { 
-                    binding: 2, 
-                    resource: wgpu::BindingResource::Sampler(&sampler) 
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
             label: Some("glass_bind_group"),
@@ -381,33 +417,38 @@ impl<'a> FluidGlassState<'a> {
 
         // Create glass render pipeline
         let glass_shader = device.create_shader_module(wgpu::include_wgsl!("shaders/glass.wgsl"));
-        let glass_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Glass Pipeline Layout"),
-            bind_group_layouts: &[&glass_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-        let glass_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Glass Render Pipeline"),
-            layout: Some(&glass_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &glass_shader,
-                entry_point: "vs_main",
-                buffers: &[Vertex::desc()],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &glass_shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        });
+        let glass_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Glass Pipeline Layout"),
+                bind_group_layouts: &[&glass_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let glass_render_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Glass Render Pipeline"),
+                layout: Some(&glass_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &glass_shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[Vertex::desc()],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &glass_shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.format,
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            });
 
         Self {
             surface,
@@ -450,9 +491,9 @@ impl<'a> FluidGlassState<'a> {
     }
 
     fn create_copy_texture(
-        device: &wgpu::Device, 
-        config: &wgpu::SurfaceConfiguration, 
-        size: wgpu::Extent3d
+        device: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        size: wgpu::Extent3d,
     ) -> (wgpu::Texture, wgpu::TextureView) {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size,
@@ -460,9 +501,9 @@ impl<'a> FluidGlassState<'a> {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: config.format,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING 
-                | wgpu::TextureUsages::COPY_DST 
-                | wgpu::TextureUsages::COPY_SRC 
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: Some("copy_texture"),
             view_formats: &[],
@@ -491,7 +532,6 @@ impl<'a> FluidGlassState<'a> {
         self.glass_uniforms.noise_scale = self.noise_scale;
         self.glass_uniforms.time = self.start_time.elapsed().as_secs_f32();
 
-
         self.queue.write_buffer(
             &self.glass_uniform_buffer,
             0,
@@ -503,20 +543,27 @@ impl<'a> FluidGlassState<'a> {
         let mut changed = true;
         match event {
             WindowEvent::KeyboardInput {
-                event: KeyEvent {
-                    state: ElementState::Pressed,
-                    physical_key: PhysicalKey::Code(key),
-                    ..
-                },
+                event:
+                    KeyEvent {
+                        state: ElementState::Pressed,
+                        physical_key: PhysicalKey::Code(key),
+                        ..
+                    },
                 ..
             } => {
                 match key {
                     KeyCode::KeyQ => self.dispersion_height += 5.0,
-                    KeyCode::KeyA => self.dispersion_height = (self.dispersion_height - 5.0).max(0.0),
+                    KeyCode::KeyA => {
+                        self.dispersion_height = (self.dispersion_height - 5.0).max(0.0)
+                    }
                     KeyCode::KeyW => self.chroma_multiplier += 0.2,
-                    KeyCode::KeyS => self.chroma_multiplier = (self.chroma_multiplier - 0.2).max(0.0),
+                    KeyCode::KeyS => {
+                        self.chroma_multiplier = (self.chroma_multiplier - 0.2).max(0.0)
+                    }
                     KeyCode::KeyE => self.refraction_height += 5.0,
-                    KeyCode::KeyD => self.refraction_height = (self.refraction_height - 5.0).max(0.0),
+                    KeyCode::KeyD => {
+                        self.refraction_height = (self.refraction_height - 5.0).max(0.0)
+                    }
                     KeyCode::KeyR => self.refraction_amount += 10.0,
                     KeyCode::KeyF => self.refraction_amount -= 10.0,
                     KeyCode::KeyT => self.eccentric_factor = (self.eccentric_factor + 0.1).min(2.0),
@@ -530,17 +577,36 @@ impl<'a> FluidGlassState<'a> {
                     KeyCode::KeyI => self.highlight_size = (self.highlight_size + 0.05).min(1.0),
                     KeyCode::KeyK => self.highlight_size = (self.highlight_size - 0.05).max(0.0),
                     KeyCode::KeyO => self.inner_shadow_radius += 2.0,
-                    KeyCode::KeyL => self.inner_shadow_radius = (self.inner_shadow_radius - 2.0).max(0.0),
+                    KeyCode::KeyL => {
+                        self.inner_shadow_radius = (self.inner_shadow_radius - 2.0).max(0.0)
+                    }
                     KeyCode::KeyZ => self.noise_amount = (self.noise_amount + 0.01).min(0.5),
                     KeyCode::KeyX => self.noise_amount = (self.noise_amount - 0.01).max(0.0),
-                    
-                    // Toggle Bleed Color
-                    KeyCode::Digit1 => self.bleed_color = if self.bleed_color[3] > 0.0 { [1.0, 1.0, 1.0, 0.0] } else { [0.8, 0.1, 0.2, 0.5] },
-                    // Toggle Highlight
-                    KeyCode::Digit2 => self.highlight_color[3] = if self.highlight_color[3] > 0.0 { 0.0 } else { 0.2 },
-                     // Toggle Inner Shadow
-                    KeyCode::Digit3 => self.inner_shadow_color[3] = if self.inner_shadow_color[3] > 0.0 { 0.0 } else { 0.5 },
 
+                    // Toggle Bleed Color
+                    KeyCode::Digit1 => {
+                        self.bleed_color = if self.bleed_color[3] > 0.0 {
+                            [1.0, 1.0, 1.0, 0.0]
+                        } else {
+                            [0.8, 0.1, 0.2, 0.5]
+                        }
+                    }
+                    // Toggle Highlight
+                    KeyCode::Digit2 => {
+                        self.highlight_color[3] = if self.highlight_color[3] > 0.0 {
+                            0.0
+                        } else {
+                            0.2
+                        }
+                    }
+                    // Toggle Inner Shadow
+                    KeyCode::Digit3 => {
+                        self.inner_shadow_color[3] = if self.inner_shadow_color[3] > 0.0 {
+                            0.0
+                        } else {
+                            0.5
+                        }
+                    }
 
                     KeyCode::KeyP => {
                         println!("\n--- Current Parameters (Fluid Glass) ---");
@@ -551,11 +617,23 @@ impl<'a> FluidGlassState<'a> {
                         println!("  Eccentric Factor:  {:.2}", self.eccentric_factor);
                         println!("  Corner Radius:     {:.2}", self.corner_radius);
                         println!("--- New Effects ---");
-                        println!("  Bleed Amount: {:.2} (Color: {:.2?})", self.bleed_amount, self.bleed_color);
-                        println!("  Highlight Size: {:.2} (Alpha: {:.2})", self.highlight_size, self.highlight_color[3]);
+                        println!(
+                            "  Bleed Amount: {:.2} (Color: {:.2?})",
+                            self.bleed_amount, self.bleed_color
+                        );
+                        println!(
+                            "  Highlight Size: {:.2} (Alpha: {:.2})",
+                            self.highlight_size, self.highlight_color[3]
+                        );
                         println!("  Highlight Smoothing: {:.2}", self.highlight_smoothing);
-                        println!("  Inner Shadow Radius: {:.2} (Alpha: {:.2})", self.inner_shadow_radius, self.inner_shadow_color[3]);
-                        println!("  Inner Shadow Smoothing: {:.2}", self.inner_shadow_smoothing);
+                        println!(
+                            "  Inner Shadow Radius: {:.2} (Alpha: {:.2})",
+                            self.inner_shadow_radius, self.inner_shadow_color[3]
+                        );
+                        println!(
+                            "  Inner Shadow Smoothing: {:.2}",
+                            self.inner_shadow_smoothing
+                        );
                         println!("  Noise Amount: {:.2}", self.noise_amount);
                         println!("--------------------------------------");
                     }
@@ -586,7 +664,8 @@ impl<'a> FluidGlassState<'a> {
                 depth_or_array_layers: 1,
             };
 
-            let (bg_copy_texture, bg_copy_texture_view) = Self::create_copy_texture(&self.device, &self.config, rect_pixel_size);
+            let (bg_copy_texture, bg_copy_texture_view) =
+                Self::create_copy_texture(&self.device, &self.config, rect_pixel_size);
             self.bg_copy_texture = bg_copy_texture;
             self.bg_copy_texture_view = bg_copy_texture_view;
 
@@ -597,17 +676,17 @@ impl<'a> FluidGlassState<'a> {
             self.glass_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &self.glass_bind_group_layout,
                 entries: &[
-                    wgpu::BindGroupEntry { 
-                        binding: 0, 
-                        resource: self.glass_uniform_buffer.as_entire_binding() 
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.glass_uniform_buffer.as_entire_binding(),
                     },
-                    wgpu::BindGroupEntry { 
-                        binding: 1, 
-                        resource: wgpu::BindingResource::TextureView(&self.bg_copy_texture_view) 
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&self.bg_copy_texture_view),
                     },
-                    wgpu::BindGroupEntry { 
-                        binding: 2, 
-                        resource: wgpu::BindingResource::Sampler(&self.sampler) 
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
                     },
                 ],
                 label: Some("glass_bind_group"),
@@ -620,11 +699,15 @@ impl<'a> FluidGlassState<'a> {
         self.update_uniforms();
 
         let output = self.surface.get_current_texture()?;
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Render Encoder"),
-        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
 
         // 1. Render background to main surface
         {
@@ -655,14 +738,23 @@ impl<'a> FluidGlassState<'a> {
             wgpu::ImageCopyTexture {
                 texture: &output.texture,
                 mip_level: 0,
-                origin: wgpu::Origin3d { x: copy_x, y: copy_y, z: 0 },
+                origin: wgpu::Origin3d {
+                    x: copy_x,
+                    y: copy_y,
+                    z: 0,
+                },
                 aspect: wgpu::TextureAspect::All,
             },
-            self.bg_copy_texture.as_image_copy(),
-            wgpu::Extent3d { 
-                width: rect_pixel_width, 
-                height: rect_pixel_height, 
-                depth_or_array_layers: 1 
+            wgpu::ImageCopyTexture {
+                texture: &self.bg_copy_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::Extent3d {
+                width: rect_pixel_width,
+                height: rect_pixel_height,
+                depth_or_array_layers: 1,
             },
         );
 
@@ -683,7 +775,8 @@ impl<'a> FluidGlassState<'a> {
             render_pass.set_pipeline(&self.glass_render_pipeline);
             render_pass.set_bind_group(0, &self.glass_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.rect_vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.rect_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass
+                .set_index_buffer(self.rect_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
@@ -696,13 +789,10 @@ impl<'a> FluidGlassState<'a> {
 pub fn main() {
     env_logger::init();
     let event_loop = EventLoop::new().unwrap();
-    let window = WindowBuilder::new()
-        .with_title("Fluid Glass Demo - Enhanced")
-        .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
-        .build(&event_loop).unwrap();
-    
-    let mut state = pollster::block_on(FluidGlassState::new(&window));
-    
+
+    let mut state: Option<FluidGlassState> = None;
+    let mut window: Option<Arc<Window>> = None;
+
     println!("--- Controls (Fluid Glass) ---");
     println!("  Q/A: Adjust dispersion height");
     println!("  W/S: Adjust chroma multiplier");
@@ -721,31 +811,44 @@ pub fn main() {
     println!("--- General ---");
     println!("  P: Print current parameters");
 
-    event_loop.run(move |event, elwt| {
-        match event {
-            Event::WindowEvent {
-                ref event,
-                window_id,
-            } if window_id == state.window.id() => {
-                if !state.handle_input(event) {
-                    match event {
-                        WindowEvent::CloseRequested => elwt.exit(),
-                        WindowEvent::RedrawRequested => {
-                            match state.render() {
+    event_loop
+        .run(move |event, elwt| {
+            elwt.set_control_flow(ControlFlow::Wait);
+
+            match event {
+                Event::Resumed => {
+                    let window_attributes = Window::default_attributes()
+                        .with_title("Fluid Glass Demo - Enhanced")
+                        .with_inner_size(winit::dpi::LogicalSize::new(800, 600));
+                    let w = Arc::new(elwt.create_window(window_attributes).unwrap());
+                    window = Some(w.clone());
+                    state = Some(pollster::block_on(FluidGlassState::new(w)));
+                }
+                Event::WindowEvent {
+                    ref event,
+                    window_id,
+                } if window.is_some() && window_id == window.as_ref().unwrap().id() => {
+                    let state = state.as_mut().unwrap();
+                    if !state.handle_input(event) {
+                        match event {
+                            WindowEvent::CloseRequested => elwt.exit(),
+                            WindowEvent::RedrawRequested => match state.render() {
                                 Ok(_) => {}
                                 Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
                                 Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
                                 Err(e) => eprintln!("{:?}", e),
-                            }
+                            },
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
+                Event::AboutToWait => {
+                    if let Some(w) = &window {
+                        w.request_redraw();
+                    }
+                }
+                _ => {}
             }
-            Event::AboutToWait => {
-                state.window.request_redraw();
-            }
-            _ => {}
-        }
-    }).unwrap();
+        })
+        .unwrap();
 }

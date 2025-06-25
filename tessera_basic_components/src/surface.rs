@@ -1,12 +1,15 @@
 use derive_builder::Builder;
 use std::sync::{Arc, atomic};
 use tessera::{
-    BasicDrawable, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    PressKeyEventType, Px, PxPosition, RippleProps, ShadowProps, measure_node, place_node,
+    ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
+    PxPosition, measure_node, place_node,
 };
 use tessera_macros::tessera;
 
-use crate::pos_misc::is_position_in_component;
+use crate::{
+    pipelines::{RippleProps, ShadowProps, ShapeCommand},
+    pos_misc::is_position_in_component,
+};
 
 /// State for managing ripple animation and hover effects
 pub struct RippleState {
@@ -241,7 +244,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             };
 
             if args_measure_clone.border_width > 0.0 {
-                BasicDrawable::RippleOutlinedRect {
+                ShapeCommand::RippleOutlinedRect {
                     color: args_measure_clone.border_color.unwrap_or(effective_color),
                     corner_radius: args_measure_clone.corner_radius,
                     shadow: args_measure_clone.shadow,
@@ -249,7 +252,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     ripple: ripple_props,
                 }
             } else {
-                BasicDrawable::RippleRect {
+                ShapeCommand::RippleRect {
                     color: effective_color,
                     corner_radius: args_measure_clone.corner_radius,
                     shadow: args_measure_clone.shadow,
@@ -259,14 +262,14 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         } else {
             // Non-interactive surface
             if args_measure_clone.border_width > 0.0 {
-                BasicDrawable::OutlinedRect {
+                ShapeCommand::OutlinedRect {
                     color: args_measure_clone.border_color.unwrap_or(effective_color),
                     corner_radius: args_measure_clone.corner_radius,
                     shadow: args_measure_clone.shadow,
                     border_width: args_measure_clone.border_width,
                 }
             } else {
-                BasicDrawable::Rect {
+                ShapeCommand::Rect {
                     color: effective_color,
                     corner_radius: args_measure_clone.corner_radius,
                     shadow: args_measure_clone.shadow,
@@ -275,7 +278,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         };
 
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(drawable);
+            metadata.basic_drawable = Some(Box::new(drawable));
         }
 
         // Calculate the final size of the surface

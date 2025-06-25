@@ -1,5 +1,6 @@
-use tessera::{DimensionValue, Px, ShadowProps};
+use tessera::{DimensionValue, Px};
 use tessera_basic_components::{
+    pipelines::ShadowProps,
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };

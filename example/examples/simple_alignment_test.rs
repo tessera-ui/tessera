@@ -83,9 +83,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Simple Alignment Test - Two boxes should be displayed on the right");
 
-    Renderer::run(|| {
-        app();
-    })?;
+    Renderer::run(
+        || {
+            app();
+        },
+        |gpu, gpu_queue, config, registry| {
+            tessera_basic_components::pipelines::register_pipelines(
+                gpu, gpu_queue, config, registry,
+            );
+        },
+    )?;
 
     Ok(())
 }

@@ -1,5 +1,7 @@
-use tessera::{BasicDrawable, ComponentNodeMetaData, ComputedData, Px};
+use tessera::{ComponentNodeMetaData, ComputedData, Px};
 use tessera_macros::tessera;
+
+use crate::pipelines::ShapeCommand;
 
 /// A single rectangular highlight for text selection
 ///
@@ -13,19 +15,19 @@ pub fn selection_highlight_rect(
     color: [f32; 4], // RGBA color with alpha for transparency
 ) {
     measure(Box::new(move |input| {
-        let drawable = BasicDrawable::Rect {
+        let drawable = ShapeCommand::Rect {
             color,
             corner_radius: 0.0, // Sharp corners for text selection
             shadow: None,       // No shadow for selection highlight
         };
 
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(drawable);
+            metadata.basic_drawable = Some(Box::new(drawable));
         } else {
             input.metadatas.insert(
                 input.current_node_id,
                 ComponentNodeMetaData {
-                    basic_drawable: Some(drawable),
+                    basic_drawable: Some(Box::new(drawable)),
                     ..Default::default()
                 },
             );

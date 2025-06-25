@@ -1,9 +1,12 @@
+mod command;
+
 use std::sync::OnceLock;
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tessera::{DrawablePipeline, PxPosition};
 
-use super::command::TextConstraint;
+pub use command::{TextCommand, TextConstraint};
 
 /// It costs a lot to create a glyphon font system, so we use a static one
 /// to share it every where and avoid creating it multiple times.
@@ -54,7 +57,7 @@ pub struct GlyphonTextRender {
     /// Glypthon swash cache
     swash_cache: glyphon::SwashCache,
     /// Buffer for text datas to render
-    buffer: Vec<TextData>,
+    buffer: Vec<(PxPosition, TextData)>,
 }
 
 impl GlyphonTextRender {
@@ -89,12 +92,12 @@ impl GlyphonTextRender {
     }
 
     /// Add a text data to the buffer, waiting to be drawn
-    pub fn push(&mut self, text_data: TextData) {
-        self.buffer.push(text_data);
+    pub fn push(&mut self, start_pos: PxPosition, text_data: TextData) {
+        self.buffer.push((start_pos, text_data));
     }
 
     /// Draw the text at the given position with the given color
-    pub fn draw(
+    pub fn draw_all_to_pass(
         &mut self,
         gpu: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
@@ -117,7 +120,7 @@ impl GlyphonTextRender {
                 &mut write_font_system(),
                 &mut self.atlas,
                 &self.viewport,
-                self.buffer.iter().map(|t| t.text_area()),
+                self.buffer.iter().map(|(pos, data)| data.text_area(*pos)),
                 &mut self.swash_cache,
             )
             .unwrap();
@@ -130,14 +133,35 @@ impl GlyphonTextRender {
     }
 }
 
+impl DrawablePipeline<TextCommand> for GlyphonTextRender {
+    fn draw(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        command: &TextCommand,
+        size: [tessera::Px; 2],
+        start_pos: PxPosition,
+    ) {
+        self.push(start_pos, command.data.clone());
+    }
+
+    fn end_pass(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        render_pass: &mut wgpu::RenderPass<'_>,
+    ) {
+        self.draw_all_to_pass(gpu, config, gpu_queue, render_pass);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TextData {
     /// glyphon text buffer
     text_buffer: glyphon::Buffer,
-    // we need fields below to construct a glyphon::TextArea
-    // don't ask me why we cannot just save a glyphon::TextArea, ask borrow checker
-    /// Position of the text, none if it is not computed yet
-    pub position: Option<crate::px::PxPosition>,
     /// Text area size
     pub size: [u32; 2],
 }
@@ -188,7 +212,6 @@ impl TextData {
         // build text data
         Self {
             text_buffer,
-            position: None,
             size: [run_width as u32, line_height as u32],
         }
     }
@@ -207,24 +230,22 @@ impl TextData {
         // build text data
         Self {
             text_buffer,
-            position: None,
             size: [run_width as u32, line_height as u32],
         }
     }
 
     /// Get the glyphon text area from the text data
-    fn text_area(&'_ self) -> glyphon::TextArea<'_> {
-        let pos = self.position.unwrap();
+    fn text_area(&'_ self, start_pos: PxPosition) -> glyphon::TextArea<'_> {
         let bounds = glyphon::TextBounds {
-            left: pos.x.0,
-            top: pos.y.0,
-            right: pos.x.0 + self.size[0] as i32,
-            bottom: pos.y.0 + self.size[1] as i32,
+            left: start_pos.x.raw(),
+            top: start_pos.y.raw(),
+            right: start_pos.x.raw() + self.size[0] as i32,
+            bottom: start_pos.y.raw() + self.size[1] as i32,
         };
         glyphon::TextArea {
             buffer: &self.text_buffer,
-            left: pos.x.to_f32(),
-            top: pos.y.to_f32(),
+            left: start_pos.x.to_f32(),
+            top: start_pos.y.to_f32(),
             scale: 1.0,
             bounds,
             default_color: glyphon::Color::rgb(0, 0, 0), // Black by default

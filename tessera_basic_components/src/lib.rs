@@ -1,7 +1,11 @@
 //! Contains the basic components of the Tessera ui framework.
+//!
+//! You must register pipelines by using [pipelines::register_pipelines] in tessera renderer's creation
+//! before using most these components.
 pub mod alignment;
 pub mod button;
 pub mod column;
+pub mod pipelines;
 mod pos_misc;
 pub mod row;
 pub mod scrollable;

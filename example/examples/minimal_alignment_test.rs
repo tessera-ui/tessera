@@ -70,9 +70,16 @@ fn app() {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Simplest Alignment Test：A red square should be in the center of the gray container");
 
-    Renderer::run(|| {
-        app();
-    })?;
+    Renderer::run(
+        || {
+            app();
+        },
+        |gpu, gpu_queue, config, registry| {
+            tessera_basic_components::pipelines::register_pipelines(
+                gpu, gpu_queue, config, registry,
+            );
+        },
+    )?;
 
     Ok(())
 }

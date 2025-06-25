@@ -17,7 +17,7 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #(#fn_attrs)*
         #fn_vis #fn_sig {
             {
-                use tessera::{TesseraRuntime, ComponentNode, Constraint};
+                use tessera::{TesseraRuntime, ComponentNode};
 
                 TesseraRuntime::write()
                     .component_tree
@@ -33,7 +33,7 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 
             let measure = {
-                use tessera::{BasicDrawable, ComponentNode, MeasureFn, TesseraRuntime};
+                use tessera::{MeasureFn, TesseraRuntime};
                 |fun: Box<MeasureFn>| {
                     TesseraRuntime::write()
                         .component_tree

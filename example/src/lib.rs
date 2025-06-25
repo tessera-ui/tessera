@@ -29,8 +29,16 @@ fn android_main(android_app: AndroidApp) {
     android_logger::init_once(Config::default().with_max_level(LevelFilter::Info));
     info!("Starting Android app...");
     let app_state = Arc::new(AppState::new());
-    Renderer::run(|| app(app_state.clone()), android_app.clone())
-        .unwrap_or_else(|err| error!("App failed to run: {}", err));
+    Renderer::run(
+        || app(app_state.clone()),
+        |gpu, gpu_queue, config, registry| {
+            tessera_basic_components::pipelines::register_pipelines(
+                gpu, gpu_queue, config, registry,
+            );
+        },
+        android_app.clone(),
+    )
+    .unwrap_or_else(|err| error!("App failed to run: {}", err));
 }
 
 #[allow(dead_code)]
@@ -48,6 +56,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // For now, use standard run method and note that touch scroll is automatically enabled with defaults
     // TODO: In future versions, we can create renderer with custom config first, then run it
-    Renderer::run(|| app(app_state.clone())).unwrap_or_else(|e| error!("App failed to run: {e}"));
+    Renderer::run(
+        || app(app_state.clone()),
+        |gpu, gpu_queue, config, registry| {
+            tessera_basic_components::pipelines::register_pipelines(
+                gpu, gpu_queue, config, registry,
+            );
+        },
+    )
+    .unwrap_or_else(|e| error!("App failed to run: {e}"));
     Ok(())
 }

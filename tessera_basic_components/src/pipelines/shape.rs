@@ -1,7 +1,16 @@
+mod command;
+
 use bytemuck::{Pod, Zeroable};
 use earcutr::earcut;
 use log::error;
+use tessera::{DrawablePipeline, Px, PxPosition};
 use wgpu::{include_wgsl, util::DeviceExt};
+
+use command::ShapeCommandComputed;
+
+use crate::pipelines::pos_misc::pixel_to_ndc;
+
+pub use command::{RippleProps, ShadowProps, ShapeCommand};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq)]
@@ -24,7 +33,7 @@ pub struct ShapeUniforms {
 /// Vertex for any shapes
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq)]
-pub struct Vertex {
+pub struct ShapeVertex {
     /// Position of the vertex(x, y, z)
     pub position: [f32; 3],
     /// Color of the vertex
@@ -33,7 +42,7 @@ pub struct Vertex {
     pub local_pos: [f32; 2],
 }
 
-impl Vertex {
+impl ShapeVertex {
     /// Describe the vertex attributes
     /// 0: position (x, y, z)
     /// 1: color (r, g, b)
@@ -54,7 +63,7 @@ impl Vertex {
     /// Describe the vertex buffer layout
     fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
-            array_stride: core::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            array_stride: core::mem::size_of::<ShapeVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &Self::ATTR,
         }
@@ -73,6 +82,9 @@ pub struct ShapePipeline {
     #[allow(unused)]
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
+    shape_uniform_alignment: u32,
+    current_shape_uniform_offset: u32,
+    max_shape_uniform_buffer_offset: u32,
 }
 
 // Define MAX_CONCURRENT_SHAPES, can be adjusted later
@@ -136,7 +148,7 @@ impl ShapePipeline {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
+                buffers: &[ShapeVertex::desc()],
                 compilation_options: Default::default(),
             },
             primitive: wgpu::PrimitiveState {
@@ -168,22 +180,33 @@ impl ShapePipeline {
             cache: None,
         });
 
+        let size_of_shape_uniforms = std::mem::size_of::<ShapeUniforms>() as u32;
+        let alignment = gpu.limits().min_uniform_buffer_offset_alignment;
+        let shape_uniform_alignment =
+            wgpu::util::align_to(size_of_shape_uniforms, alignment) as u32;
+
+        let max_shape_uniform_buffer_offset =
+            (MAX_CONCURRENT_SHAPES as u32 - 1) * shape_uniform_alignment;
+
         Self {
             pipeline,
             uniform_buffer,
             bind_group_layout,
             bind_group,
+            shape_uniform_alignment,
+            current_shape_uniform_offset: 0,
+            max_shape_uniform_buffer_offset,
         }
     }
 
-    pub fn draw(
+    fn draw_to_pass(
         &self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
         render_pass: &mut wgpu::RenderPass<'_>,
         vertex_data_in: &ShapeVertexData,
         uniforms: &ShapeUniforms,
-        dynamic_offset: wgpu::DynamicOffset,
+        dynamic_offset: u32,
     ) {
         let flat_polygon_vertices: Vec<f64> = vertex_data_in
             .polygon_vertices
@@ -200,14 +223,14 @@ impl ShapePipeline {
             return;
         }
 
-        let vertex_data: Vec<Vertex> = indices
+        let vertex_data: Vec<ShapeVertex> = indices
             .iter()
             .map(|&i| {
                 if i < vertex_data_in.polygon_vertices.len()
                     && i < vertex_data_in.vertex_colors.len()
                     && i < vertex_data_in.vertex_local_pos.len()
                 {
-                    Vertex::new(
+                    ShapeVertex::new(
                         vertex_data_in.polygon_vertices[i],
                         vertex_data_in.vertex_colors[i],
                         vertex_data_in.vertex_local_pos[i],
@@ -219,7 +242,7 @@ impl ShapePipeline {
                         && !vertex_data_in.vertex_colors.is_empty()
                         && !vertex_data_in.vertex_local_pos.is_empty()
                     {
-                        Vertex::new(
+                        ShapeVertex::new(
                             vertex_data_in.polygon_vertices[0],
                             vertex_data_in.vertex_colors[0],
                             vertex_data_in.vertex_local_pos[0],
@@ -227,7 +250,7 @@ impl ShapePipeline {
                     } else {
                         // This case should ideally not happen if inputs are validated
                         // Or handle it by returning early / logging a more severe error
-                        Vertex::new([0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0]) // Placeholder
+                        ShapeVertex::new([0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0]) // Placeholder
                     }
                 }
             })
@@ -253,5 +276,104 @@ impl ShapePipeline {
         render_pass.set_bind_group(0, &self.bind_group, &[dynamic_offset]);
         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         render_pass.draw(0..vertex_data.len() as u32, 0..1);
+    }
+}
+
+impl DrawablePipeline<ShapeCommand> for ShapePipeline {
+    fn begin_pass(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        render_pass: &mut wgpu::RenderPass<'_>,
+    ) {
+        self.current_shape_uniform_offset = 0;
+    }
+
+    fn draw(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        command: &ShapeCommand,
+        size: [Px; 2],
+        start_pos: PxPosition,
+    ) {
+        let command = ShapeCommandComputed::from_command(command.to_owned(), size, start_pos);
+        let positions: Vec<[f32; 2]> = command
+            .vertices
+            .iter()
+            .map(|v| {
+                pixel_to_ndc(
+                    PxPosition::from_f32_arr3(v.position),
+                    [config.width, config.height],
+                )
+            })
+            .collect();
+        let colors: Vec<[f32; 3]> = command.vertices.iter().map(|v| v.color).collect();
+        let local_positions: Vec<[f32; 2]> = command.vertices.iter().map(|v| v.local_pos).collect();
+
+        // Check if shadow needs to be drawn
+        // shadow_color[3] is alpha, render_params[2] is shadow_smoothness
+        let has_shadow =
+            command.uniforms.shadow_color[3] > 0.0 && command.uniforms.render_params[2] > 0.0;
+
+        if has_shadow {
+            let dynamic_offset = self.current_shape_uniform_offset;
+            if dynamic_offset > self.max_shape_uniform_buffer_offset {
+                panic!(
+                    "Shape uniform buffer overflow for shadow: offset {} > max {}",
+                    dynamic_offset, self.max_shape_uniform_buffer_offset
+                );
+            }
+
+            let mut uniforms_for_shadow = command.uniforms;
+            // Set render_mode to 2.0 for shadow
+            uniforms_for_shadow.render_params[3] = 2.0;
+
+            let vertex_data_for_shadow = ShapeVertexData {
+                polygon_vertices: &positions,
+                vertex_colors: &colors,
+                vertex_local_pos: &local_positions,
+            };
+
+            self.draw_to_pass(
+                gpu,
+                gpu_queue,
+                render_pass,
+                &vertex_data_for_shadow,
+                &uniforms_for_shadow,
+                dynamic_offset,
+            );
+            self.current_shape_uniform_offset += self.shape_uniform_alignment;
+        }
+
+        // Draw Object (Fill or Outline)
+        // The original 'uniforms' should have render_params[3] set to 0.0 (fill) or 1.0 (outline)
+        // and size_cr_border_width[3] to the border_width by the caller.
+        let dynamic_offset = self.current_shape_uniform_offset;
+        if dynamic_offset > self.max_shape_uniform_buffer_offset {
+            panic!(
+                "Shape uniform buffer overflow for object: offset {} > max {}",
+                dynamic_offset, self.max_shape_uniform_buffer_offset
+            );
+        }
+
+        let vertex_data_for_object = ShapeVertexData {
+            polygon_vertices: &positions,
+            vertex_colors: &colors,
+            vertex_local_pos: &local_positions,
+        };
+
+        self.draw_to_pass(
+            gpu,
+            gpu_queue,
+            render_pass,
+            &vertex_data_for_object,
+            &command.uniforms, // Use original uniforms for the object
+            dynamic_offset,
+        );
+        self.current_shape_uniform_offset += self.shape_uniform_alignment;
     }
 }

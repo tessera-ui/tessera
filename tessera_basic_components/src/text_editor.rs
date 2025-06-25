@@ -4,10 +4,11 @@ use derive_builder::Builder;
 use glyphon::{Action, Edit};
 use parking_lot::RwLock;
 
-use tessera::{CursorEventContent, DimensionValue, Dp, Px, PxPosition, write_font_system};
+use tessera::{CursorEventContent, DimensionValue, Dp, Px, PxPosition};
 use tessera_macros::tessera;
 
 use crate::{
+    pipelines::write_font_system,
     pos_misc::is_position_in_component,
     surface::{SurfaceArgsBuilder, surface},
     text_edit_core::{ClickType, map_key_event_to_action, text_edit_core},
