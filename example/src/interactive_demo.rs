@@ -22,7 +22,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                 TextArgsBuilder::default()
                     .text("Interactive Components Demo".to_string())
                     .size(tessera::Dp(24.0))
-                    .line_height(tessera::Dp(32.0))
+                    
                     .color(md_colors::ON_SURFACE)
                     .build()
                     .unwrap(),
@@ -36,7 +36,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                 TextArgsBuilder::default()
                     .text("Interactive Buttons with Hover Effects:".to_string())
                     .size(tessera::Dp(18.0))
-                    .line_height(tessera::Dp(24.0))
+                    
                     .color(md_colors::ON_SURFACE_VARIANT)
                     .build()
                     .unwrap(),
@@ -64,7 +64,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                                 .text("Primary Button (Hover Effect)".to_string())
                                 .color(md_colors::ON_SURFACE)
                                 .size(Dp(16.0))
-                                .line_height(Dp(20.0))
+                                
                                 .build()
                                 .unwrap(),
                         )
@@ -96,7 +96,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                                 .text("Success Button (Hover Effect)".to_string())
                                 .color(md_colors::ON_SURFACE)
                                 .size(Dp(16.0))
-                                .line_height(Dp(20.0))
+                                
                                 .build()
                                 .unwrap(),
                         )
@@ -128,7 +128,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                                 .text("Danger Button (Hover Effect)".to_string())
                                 .color(md_colors::ON_SURFACE)
                                 .size(Dp(16.0))
-                                .line_height(Dp(20.0))
+                                
                                 .build()
                                 .unwrap(),
                         )
@@ -144,7 +144,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                 TextArgsBuilder::default()
                     .text("Interactive Surfaces with Hover Effects:".to_string())
                     .size(tessera::Dp(18.0))
-                    .line_height(tessera::Dp(24.0))
+                    
                     .color(md_colors::ON_SURFACE_VARIANT)
                     .build()
                     .unwrap(),
@@ -177,7 +177,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                                 .text("Interactive Surface\nwith Hover Effect".to_string())
                                 .color(md_colors::ON_SURFACE)
                                 .size(Dp(14.0))
-                                .line_height(Dp(18.0))
+                                
                                 .build()
                                 .unwrap(),
                         )
@@ -205,7 +205,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                             .text("Non-interactive Surface\n(No Hover Effect)".to_string())
                             .color(md_colors::ON_SURFACE_VARIANT)
                             .size(Dp(14.0))
-                            .line_height(Dp(18.0))
+                            
                             .build()
                             .unwrap(),
                     )

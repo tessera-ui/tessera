@@ -49,12 +49,17 @@ pub struct TextEditorState {
 }
 
 impl TextEditorState {
-    pub fn new(size: Dp, line_height: Dp) -> Self {
+    pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
         Self::with_selection_color(size, line_height, [0.5, 0.7, 1.0, 0.4])
     }
 
-    pub fn with_selection_color(size: Dp, line_height: Dp, selection_color: [f32; 4]) -> Self {
-        let line_height_px: Px = line_height.into();
+    pub fn with_selection_color(
+        size: Dp,
+        line_height: Option<Dp>,
+        selection_color: [f32; 4],
+    ) -> Self {
+        let final_line_height = line_height.unwrap_or_else(|| Dp(size.0 * 1.2));
+        let line_height_px: Px = final_line_height.into();
         let mut buffer = glyphon::Buffer::new(
             &mut write_font_system(),
             glyphon::Metrics::new(size.to_pixels_f32(), line_height_px.to_f32()),

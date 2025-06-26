@@ -1,7 +1,7 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tessera::{DimensionValue, Px};
-use tessera_basic_components::text_editor::{TextEditorArgsBuilder, TextEditorState, text_editor};
+use tessera_basic_components::text_editor::{text_editor, TextEditorArgsBuilder, TextEditorState};
 use tessera_macros::tessera;
 
 use crate::material_colors::md_colors;
@@ -14,8 +14,8 @@ pub struct TextEditorsState {
 impl TextEditorsState {
     pub fn new() -> Self {
         Self {
-            editor_state: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), 50.0.into()))),
-            editor_state_2: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), 50.0.into()))),
+            editor_state: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), None))),
+            editor_state_2: Arc::new(RwLock::new(TextEditorState::new(50.0.into(), None))),
         }
     }
 }

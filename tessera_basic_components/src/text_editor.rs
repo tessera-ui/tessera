@@ -10,8 +10,8 @@ use tessera_macros::tessera;
 use crate::{
     pipelines::write_font_system,
     pos_misc::is_position_in_component,
-    surface::{SurfaceArgsBuilder, surface},
-    text_edit_core::{ClickType, map_key_event_to_action, text_edit_core},
+    surface::{surface, SurfaceArgsBuilder},
+    text_edit_core::{map_key_event_to_action, text_edit_core, ClickType},
 };
 
 // Re-export TextEditorState for convenience
@@ -41,7 +41,7 @@ pub use crate::text_edit_core::TextEditorState;
 ///     .unwrap();
 ///
 /// // Create the editor state
-/// let editor_state = Arc::new(RwLock::new(TextEditorState::new(Dp(10.0), Dp(16.0))));
+/// let editor_state = Arc::new(RwLock::new(TextEditorState::new(Dp(10.0), None)));
 ///
 /// // text_editor(editor_args_fixed, editor_state.clone());
 /// // text_editor(editor_args_fill_wrap, editor_state.clone());
@@ -107,7 +107,7 @@ pub struct TextEditorArgs {
 ///     .build()
 ///     .unwrap();
 ///
-/// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(12.0), Dp(18.0))));
+/// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(12.0), None)));
 /// // text_editor(args, state);
 /// ```
 #[tessera]

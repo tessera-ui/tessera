@@ -49,7 +49,6 @@ fn surface_showcase() {
                         TextArgsBuilder::default()
                             .text("Surface Components".to_string())
                             .size(tessera::Dp(24.0))
-                            .line_height(tessera::Dp(32.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
@@ -104,7 +103,6 @@ fn text_editor_showcase(state: Arc<AppState>) {
                         TextArgsBuilder::default()
                             .text("Text Editor Components".to_string())
                             .size(tessera::Dp(24.0))
-                            .line_height(tessera::Dp(32.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
@@ -153,7 +151,6 @@ fn animation_showcase(state: Arc<AppState>) {
                         TextArgsBuilder::default()
                             .text("Animation Components".to_string())
                             .size(tessera::Dp(24.0))
-                            .line_height(tessera::Dp(32.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
@@ -223,7 +220,6 @@ fn performance_showcase(state: Arc<AppState>) {
                         TextArgsBuilder::default()
                             .text("Performance Monitoring".to_string())
                             .size(tessera::Dp(24.0))
-                            .line_height(tessera::Dp(32.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
@@ -267,7 +263,6 @@ pub fn component_showcase(state: Arc<AppState>) {
                         TextArgsBuilder::default()
                             .text("Tessera UI Framework Component Showcase".to_string())
                             .size(tessera::Dp(24.0))
-                            .line_height(tessera::Dp(32.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),

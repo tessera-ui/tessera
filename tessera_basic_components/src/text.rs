@@ -14,7 +14,9 @@ use crate::pipelines::{TextCommand, TextConstraint, TextData};
 /// let args = TextArgsBuilder::default()
 ///     .text("Hello, World!".to_string())
 ///     .size(Dp(50.0)) // Example using Dp
-///     .line_height(Dp(50.0)) // Example using Dp
+///     // line_height is now 1.2 * size (60.0) by default.
+///     // You can still override it like this:
+///     // .line_height(Dp(70.0))
 ///     .build()
 ///     .unwrap();
 /// ```
@@ -26,8 +28,8 @@ pub struct TextArgs {
     pub color: [u8; 3],
     #[builder(default = "Dp(25.0)")]
     pub size: Dp,
-    #[builder(default = "Dp(25.0)")]
-    pub line_height: Dp,
+    #[builder(default, setter(strip_option))]
+    pub line_height: Option<Dp>,
 }
 
 impl From<String> for TextArgs {
@@ -55,7 +57,7 @@ impl From<&str> for TextArgs {
 /// let args = TextArgsBuilder::default()
 ///     .text("Hello, World!".to_string())
 ///     .size(Dp(50.0)) // Example using Dp
-///     .line_height(Dp(50.0)) // Example using Dp
+///     // line_height will be Dp(60.0) (1.2 * size) by default
 ///     .build()
 ///     .unwrap();
 /// text(args);
@@ -76,11 +78,15 @@ pub fn text(args: impl Into<TextArgs>) {
             DimensionValue::Fill { max, .. } => max, // Use max from Fill
         };
 
+        let line_height = text_args
+            .line_height
+            .unwrap_or_else(|| Dp(text_args.size.0 * 1.2));
+
         let text_data = TextData::new(
             text_args.text.clone(),
             text_args.color,
             text_args.size.to_pixels_f32(),
-            text_args.line_height.to_pixels_f32(),
+            line_height.to_pixels_f32(),
             TextConstraint {
                 max_width: max_width.map(|px| px.to_f32()),
                 max_height: max_height.map(|px| px.to_f32()),
