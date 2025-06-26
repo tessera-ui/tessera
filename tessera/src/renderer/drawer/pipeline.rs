@@ -1,7 +1,8 @@
-use std::any::{Any, TypeId};
+use std::any::Any;
 
 use crate::{Px, PxPosition, renderer::DrawCommand};
 
+#[allow(unused_variables)]
 pub trait DrawablePipeline<T: DrawCommand> {
     fn begin_pass(
         &mut self,

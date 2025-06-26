@@ -32,7 +32,7 @@ pub mod md_colors {
     pub const OUTLINE: [f32; 4] = [0.46, 0.46, 0.50, 1.0];
 
     /// Text colors (for light theme)
-    pub const ON_PRIMARY: [u8; 3] = [255, 255, 255]; // White text on primary
+
     pub const ON_SURFACE: [u8; 3] = [16, 16, 20]; // Dark text on light surface
     pub const ON_SURFACE_VARIANT: [u8; 3] = [73, 69, 79]; // Medium text
 
@@ -42,17 +42,4 @@ pub mod md_colors {
     /// Transparent versions for overlays
     pub const TERTIARY_TRANSPARENT: [f32; 4] = [0.047, 0.482, 0.239, 0.3];
     pub const SURFACE_CONTAINER_TRANSPARENT: [f32; 4] = [0.94, 0.94, 0.97, 0.9];
-}
-
-/// Helper functions for color manipulation
-pub mod color_utils {
-    /// Convert RGB values (0-255) to normalized RGBA (0.0-1.0)
-    pub fn rgb_to_rgba(r: u8, g: u8, b: u8, a: f32) -> [f32; 4] {
-        [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a]
-    }
-
-    /// Create a transparent version of a color
-    pub fn with_alpha(color: [f32; 4], alpha: f32) -> [f32; 4] {
-        [color[0], color[1], color[2], alpha]
-    }
 }

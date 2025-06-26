@@ -3,8 +3,9 @@ use image::GenericImageView;
 use std::{iter, mem, sync::Arc, time::Instant};
 use wgpu::util::DeviceExt;
 use winit::{
+    application::ApplicationHandler,
     event::*,
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::EventLoop,
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
@@ -92,6 +93,7 @@ struct FluidGlassState<'a> {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
+    #[allow(dead_code)]
     window: Arc<Window>,
     start_time: Instant,
 
@@ -201,14 +203,14 @@ impl FluidGlassState<'_> {
             view_formats: &[],
         });
         queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &bg_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             &bg_rgba,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * dimensions.0),
                 rows_per_image: Some(dimensions.1),
@@ -735,7 +737,7 @@ impl FluidGlassState<'_> {
         let copy_y = (self.size.height - rect_pixel_height) / 2;
 
         encoder.copy_texture_to_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &output.texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d {
@@ -745,7 +747,7 @@ impl FluidGlassState<'_> {
                 },
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &self.bg_copy_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
@@ -785,13 +787,54 @@ impl FluidGlassState<'_> {
         Ok(())
     }
 }
+struct App<'a> {
+    state: Option<FluidGlassState<'a>>,
+    window: Option<Arc<Window>>,
+}
+
+impl ApplicationHandler for App<'_> {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let window_attributes = Window::default_attributes()
+            .with_title("Fluid Glass Demo - Enhanced")
+            .with_inner_size(winit::dpi::LogicalSize::new(800, 600));
+        let w = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        self.window = Some(w.clone());
+        self.state = Some(pollster::block_on(FluidGlassState::new(w)));
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        if self.window.is_some() && window_id == self.window.as_ref().unwrap().id() {
+            let state = self.state.as_mut().unwrap();
+            if !state.handle_input(&event) {
+                match event {
+                    WindowEvent::CloseRequested => event_loop.exit(),
+                    WindowEvent::RedrawRequested => match state.render() {
+                        Ok(_) => {}
+                        Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                        Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
+                        Err(e) => eprintln!("{:?}", e),
+                    },
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+        if let Some(w) = &self.window {
+            w.request_redraw();
+        }
+    }
+}
 
 pub fn main() {
     env_logger::init();
     let event_loop = EventLoop::new().unwrap();
-
-    let mut state: Option<FluidGlassState> = None;
-    let mut window: Option<Arc<Window>> = None;
 
     println!("--- Controls (Fluid Glass) ---");
     println!("  Q/A: Adjust dispersion height");
@@ -811,44 +854,9 @@ pub fn main() {
     println!("--- General ---");
     println!("  P: Print current parameters");
 
-    event_loop
-        .run(move |event, elwt| {
-            elwt.set_control_flow(ControlFlow::Wait);
-
-            match event {
-                Event::Resumed => {
-                    let window_attributes = Window::default_attributes()
-                        .with_title("Fluid Glass Demo - Enhanced")
-                        .with_inner_size(winit::dpi::LogicalSize::new(800, 600));
-                    let w = Arc::new(elwt.create_window(window_attributes).unwrap());
-                    window = Some(w.clone());
-                    state = Some(pollster::block_on(FluidGlassState::new(w)));
-                }
-                Event::WindowEvent {
-                    ref event,
-                    window_id,
-                } if window.is_some() && window_id == window.as_ref().unwrap().id() => {
-                    let state = state.as_mut().unwrap();
-                    if !state.handle_input(event) {
-                        match event {
-                            WindowEvent::CloseRequested => elwt.exit(),
-                            WindowEvent::RedrawRequested => match state.render() {
-                                Ok(_) => {}
-                                Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                                Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
-                                Err(e) => eprintln!("{:?}", e),
-                            },
-                            _ => {}
-                        }
-                    }
-                }
-                Event::AboutToWait => {
-                    if let Some(w) = &window {
-                        w.request_redraw();
-                    }
-                }
-                _ => {}
-            }
-        })
-        .unwrap();
+    let mut app = App {
+        state: None,
+        window: None,
+    };
+    event_loop.run_app(&mut app).unwrap();
 }

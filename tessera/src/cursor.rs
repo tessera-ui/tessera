@@ -277,19 +277,6 @@ impl CursorState {
             }
         }
     }
-
-    /// Configure touch scroll parameters
-    pub fn configure_touch_scroll(&mut self, enabled: bool, min_threshold: f32) {
-        self.touch_scroll_config = TouchScrollConfig {
-            enabled,
-            min_move_threshold: min_threshold,
-        };
-    }
-
-    /// Get current active touch count
-    pub fn active_touch_count(&self) -> usize {
-        self.touch_points.len()
-    }
 }
 
 /// Respents a cursor event

@@ -133,6 +133,7 @@ impl GlyphonTextRender {
     }
 }
 
+#[allow(unused_variables)]
 impl DrawablePipeline<TextCommand> for GlyphonTextRender {
     fn draw(
         &mut self,

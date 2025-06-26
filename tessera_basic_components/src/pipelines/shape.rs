@@ -279,6 +279,7 @@ impl ShapePipeline {
     }
 }
 
+#[allow(unused_variables)]
 impl DrawablePipeline<ShapeCommand> for ShapePipeline {
     fn begin_pass(
         &mut self,
