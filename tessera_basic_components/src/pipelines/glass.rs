@@ -32,14 +32,11 @@ pub struct GlassPipeline {
     pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
+    scene_sampler_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl GlassPipeline {
-    pub fn new(
-        gpu: &wgpu::Device,
-        config: &wgpu::SurfaceConfiguration,
-        scene_sampler_bind_group_layout: &wgpu::BindGroupLayout,
-    ) -> Self {
+    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
         let shader = gpu.create_shader_module(wgpu::include_wgsl!("glass/glass.wgsl"));
 
         let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
@@ -72,9 +69,24 @@ impl GlassPipeline {
             label: Some("Glass Bind Group"),
         });
 
+        let scene_sampler_bind_group_layout =
+            gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Glass Scene Sampler Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                }],
+            });
+
         let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Glass Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout, scene_sampler_bind_group_layout],
+            bind_group_layouts: &[&bind_group_layout, &scene_sampler_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -108,6 +120,7 @@ impl GlassPipeline {
             pipeline,
             uniform_buffer,
             bind_group,
+            scene_sampler_bind_group_layout,
         }
     }
 }
@@ -120,10 +133,22 @@ impl DrawablePipeline<GlassCommand> for GlassPipeline {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass,
-        command: &GlassCommand,
+        _command: &GlassCommand,
         size: [Px; 2],
         start_pos: PxPosition,
+        scene_texture_view: Option<&wgpu::TextureView>,
     ) {
+        let scene_texture_view = scene_texture_view.expect("Glass component needs scene texture");
+
+        let scene_bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Glass Scene Bind Group"),
+            layout: &self.scene_sampler_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(scene_texture_view),
+            }],
+        });
+
         let screen_size = [config.width, config.height];
 
         let ndc_pos = pixel_to_ndc(start_pos, screen_size);
@@ -142,6 +167,7 @@ impl DrawablePipeline<GlassCommand> for GlassPipeline {
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.bind_group, &[]);
+        render_pass.set_bind_group(1, &scene_bind_group, &[]);
         render_pass.draw(0..6, 0..1);
     }
 }

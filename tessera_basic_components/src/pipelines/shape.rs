@@ -300,6 +300,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         command: &ShapeCommand,
         size: [Px; 2],
         start_pos: PxPosition,
+        _scene_texture_view: Option<&wgpu::TextureView>,
     ) {
         let command = ShapeCommandComputed::from_command(command.to_owned(), size, start_pos);
         let positions: Vec<[f32; 2]> = command

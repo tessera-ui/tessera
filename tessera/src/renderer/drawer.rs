@@ -52,8 +52,17 @@ impl Drawer {
         cmd: &dyn DrawCommand,
         size: [Px; 2],
         start_pos: PxPosition,
+        scene_texture_view: Option<&wgpu::TextureView>,
     ) {
-        self.pipeline_registry
-            .dispatch(gpu, queue, config, render_pass, cmd, size, start_pos);
+        self.pipeline_registry.dispatch(
+            gpu,
+            queue,
+            config,
+            render_pass,
+            cmd,
+            size,
+            start_pos,
+            scene_texture_view,
+        );
     }
 }

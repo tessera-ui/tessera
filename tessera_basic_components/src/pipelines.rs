@@ -16,6 +16,6 @@ pub fn register_pipelines(app: &mut tessera::renderer::WgpuApp) {
     app.drawer.pipeline_registry.register(text_pipeline);
     // Register glass pipeline
     let glass_pipeline =
-        glass::GlassPipeline::new(&app.gpu, &app.config, &app.scene_sampler_bind_group_layout);
+        glass::GlassPipeline::new(&app.gpu, &app.config);
     app.drawer.pipeline_registry.register(glass_pipeline);
 }

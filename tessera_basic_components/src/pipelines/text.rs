@@ -137,13 +137,14 @@ impl GlyphonTextRender {
 impl DrawablePipeline<TextCommand> for GlyphonTextRender {
     fn draw(
         &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
+        _gpu: &wgpu::Device,
+        _gpu_queue: &wgpu::Queue,
+        _config: &wgpu::SurfaceConfiguration,
+        _render_pass: &mut wgpu::RenderPass<'_>,
         command: &TextCommand,
-        size: [tessera::Px; 2],
+        _size: [tessera::Px; 2],
         start_pos: PxPosition,
+        _scene_texture_view: Option<&wgpu::TextureView>,
     ) {
         self.push(start_pos, command.data.clone());
     }

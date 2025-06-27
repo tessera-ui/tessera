@@ -4,8 +4,7 @@ use log::{error, info};
 use parking_lot::RwLock;
 use winit::window::Window;
 
-use crate::{Px, PxPosition, dp::SCALE_FACTOR};
-use crate::renderer::SCENE_TEXTURE_BIND_GROUP_SET;
+use crate::{dp::SCALE_FACTOR, Px, PxPosition};
 
 use super::drawer::{DrawCommand, Drawer, RenderRequirement};
 
@@ -13,7 +12,6 @@ use super::drawer::{DrawCommand, Drawer, RenderRequirement};
 struct PassTarget {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
-    bind_group: wgpu::BindGroup,
 }
 
 pub struct WgpuApp {
@@ -38,9 +36,6 @@ pub struct WgpuApp {
     // --- New ping-pong rendering resources ---
     pass_a: PassTarget,
     pass_b: PassTarget,
-
-    // Generic bind group layout for using render pass textures as sampling sources
-    pub scene_sampler_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl WgpuApp {
@@ -76,18 +71,20 @@ impl WgpuApp {
         };
         // Create a device and queue
         let (gpu, queue) = match adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                // WebGL backend does not support all features
-                required_limits: if cfg!(target_arch = "wasm32") {
-                    wgpu::Limits::downlevel_webgl2_defaults()
-                } else {
-                    wgpu::Limits::default()
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    required_features: wgpu::Features::empty(),
+                    // WebGL backend does not support all features
+                    required_limits: if cfg!(target_arch = "wasm32") {
+                        wgpu::Limits::downlevel_webgl2_defaults()
+                    } else {
+                        wgpu::Limits::default()
+                    },
+                    label: None,
+                    memory_hints: wgpu::MemoryHints::Performance,
+                    trace: wgpu::Trace::Off,
                 },
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
-            })
+            )
             .await
         {
             Ok((gpu, queue)) => (gpu, queue),
@@ -120,25 +117,9 @@ impl WgpuApp {
         };
         surface.configure(&gpu, &config);
 
-        // --- Create scene sampler bind group layout ---
-        let scene_sampler_bind_group_layout =
-            gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Scene Sampler Bind Group Layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                }],
-            });
-
         // --- Create Pass Targets (A and B) ---
-        let pass_a = Self::create_pass_target(&gpu, &config, &scene_sampler_bind_group_layout, "A");
-        let pass_b = Self::create_pass_target(&gpu, &config, &scene_sampler_bind_group_layout, "B");
+        let pass_a = Self::create_pass_target(&gpu, &config, "A");
+        let pass_b = Self::create_pass_target(&gpu, &config, "B");
 
         let drawer = Drawer::new();
         // Set scale factor for dp conversion
@@ -159,14 +140,12 @@ impl WgpuApp {
             drawer,
             pass_a,
             pass_b,
-            scene_sampler_bind_group_layout,
         }
     }
 
     fn create_pass_target(
         gpu: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
-        layout: &wgpu::BindGroupLayout,
         label_suffix: &str,
     ) -> PassTarget {
         let texture_descriptor = wgpu::TextureDescriptor {
@@ -188,19 +167,7 @@ impl WgpuApp {
         };
         let texture = gpu.create_texture(&texture_descriptor);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(&format!("Pass {} Bind Group", label_suffix)),
-            layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&view),
-            }],
-        });
-        PassTarget {
-            texture,
-            view,
-            bind_group,
-        }
+        PassTarget { texture, view }
     }
 
     pub fn register_pipelines(&mut self, register_fn: impl FnOnce(&mut Self)) {
@@ -227,18 +194,8 @@ impl WgpuApp {
             self.pass_a.texture.destroy();
             self.pass_b.texture.destroy();
 
-            self.pass_a = Self::create_pass_target(
-                &self.gpu,
-                &self.config,
-                &self.scene_sampler_bind_group_layout,
-                "A",
-            );
-            self.pass_b = Self::create_pass_target(
-                &self.gpu,
-                &self.config,
-                &self.scene_sampler_bind_group_layout,
-                "B",
-            );
+            self.pass_a = Self::create_pass_target(&self.gpu, &self.config, "A");
+            self.pass_b = Self::create_pass_target(&self.gpu, &self.config, "B");
         }
     }
 
@@ -325,6 +282,7 @@ impl WgpuApp {
                         &*cmd,
                         size,
                         pos,
+                        None,
                     );
                 }
                 self.drawer
@@ -357,10 +315,7 @@ impl WgpuApp {
                     ..Default::default()
                 });
 
-                // 4. Bind the background texture
-                pass.set_bind_group(SCENE_TEXTURE_BIND_GROUP_SET, &read_target.bind_group, &[]);
-
-                // 5. Draw the barrier command
+                // 4. Draw the barrier command
                 self.drawer
                     .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass);
                 self.drawer.submit(
@@ -371,6 +326,7 @@ impl WgpuApp {
                     &*barrier_command,
                     size,
                     pos,
+                    Some(&read_target.view),
                 );
                 self.drawer
                     .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);

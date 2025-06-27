@@ -31,6 +31,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
         command: &T,
         size: [Px; 2],
         start_pos: PxPosition,
+        scene_texture_view: Option<&wgpu::TextureView>,
     );
 }
 
@@ -60,6 +61,7 @@ pub trait ErasedDrawablePipeline {
         command: &dyn DrawCommand,
         size: [Px; 2],
         start_pos: PxPosition,
+        scene_texture_view: Option<&wgpu::TextureView>,
     ) -> bool;
 }
 
@@ -101,10 +103,19 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         command: &dyn DrawCommand,
         size: [Px; 2],
         start_pos: PxPosition,
+        scene_texture_view: Option<&wgpu::TextureView>,
     ) -> bool {
         if let Some(cmd) = (command as &dyn Any).downcast_ref::<T>() {
-            self.pipeline
-                .draw(gpu, gpu_queue, config, render_pass, cmd, size, start_pos);
+            self.pipeline.draw(
+                gpu,
+                gpu_queue,
+                config,
+                render_pass,
+                cmd,
+                size,
+                start_pos,
+                scene_texture_view,
+            );
             true
         } else {
             false
@@ -167,9 +178,19 @@ impl PipelineRegistry {
         cmd: &dyn DrawCommand,
         size: [Px; 2],
         start_pos: PxPosition,
+        scene_texture_view: Option<&wgpu::TextureView>,
     ) {
         for pipeline in self.pipelines.iter_mut() {
-            if pipeline.draw_erased(gpu, gpu_queue, config, render_pass, cmd, size, start_pos) {
+            if pipeline.draw_erased(
+                gpu,
+                gpu_queue,
+                config,
+                render_pass,
+                cmd,
+                size,
+                start_pos,
+                scene_texture_view,
+            ) {
                 return;
             }
         }
