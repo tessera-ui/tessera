@@ -92,7 +92,7 @@ pub const MAX_CONCURRENT_SHAPES: wgpu::BufferAddress = 256;
 
 impl ShapePipeline {
     pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
-        let shader = gpu.create_shader_module(include_wgsl!("shaders/shape.wgsl"));
+        let shader = gpu.create_shader_module(include_wgsl!("shape/shape.wgsl"));
 
         let uniform_alignment =
             gpu.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
