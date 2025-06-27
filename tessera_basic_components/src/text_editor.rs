@@ -10,8 +10,8 @@ use tessera_macros::tessera;
 use crate::{
     pipelines::write_font_system,
     pos_misc::is_position_in_component,
-    surface::{surface, SurfaceArgsBuilder},
-    text_edit_core::{map_key_event_to_action, text_edit_core, ClickType},
+    surface::{SurfaceArgsBuilder, surface},
+    text_edit_core::{ClickType, map_key_event_to_action, text_edit_core},
 };
 
 // Re-export TextEditorState for convenience

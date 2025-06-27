@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 
 pub use app::WgpuApp;
 #[cfg(target_os = "android")]
-use winit::platform::android::{activity::AndroidApp, EventLoopBuilderExtAndroid};
+use winit::platform::android::{EventLoopBuilderExtAndroid, activity::AndroidApp};
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
@@ -18,12 +18,12 @@ use winit::{
 };
 
 use crate::{
+    Px, PxPosition,
     cursor::{CursorEvent, CursorEventContent, CursorState},
     dp::SCALE_FACTOR,
     keyboard_state::KeyboardState,
     runtime::TesseraRuntime,
     thread_utils, tokio_runtime,
-    Px, PxPosition,
 };
 
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirement};

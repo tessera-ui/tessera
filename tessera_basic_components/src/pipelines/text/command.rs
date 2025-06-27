@@ -1,5 +1,5 @@
-use tessera::renderer::RenderRequirement;
 use tessera::DrawCommand;
+use tessera::renderer::RenderRequirement;
 
 use super::TextData;
 

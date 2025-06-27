@@ -18,7 +18,7 @@ pub use component_tree::{
 };
 pub use cursor::{CursorEvent, CursorEventContent, PressKeyEventType, ScrollEventConent};
 pub use indextree::{Arena, NodeId};
-pub use renderer::{DrawCommand, DrawablePipeline, PipelineRegistry, Renderer, RenderRequirement};
+pub use renderer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirement, Renderer};
 pub use runtime::TesseraRuntime;
 
 // re-export winit

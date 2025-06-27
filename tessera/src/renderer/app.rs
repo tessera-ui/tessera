@@ -4,9 +4,16 @@ use log::{error, info};
 use parking_lot::RwLock;
 use winit::window::Window;
 
-use crate::{ Px, PxPosition, dp::SCALE_FACTOR};
+use crate::{Px, PxPosition, dp::SCALE_FACTOR};
 
 use super::drawer::{DrawCommand, Drawer, RenderRequirement};
+
+// Render pass resources for ping-pong operation
+struct PassTarget {
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    bind_group: wgpu::BindGroup,
+}
 
 pub struct WgpuApp {
     /// Avoiding release the window
@@ -26,18 +33,18 @@ pub struct WgpuApp {
     size_changed: bool,
     /// draw pipelines
     pub drawer: Drawer,
-    /// Texture for the background pass
-    background_texture: wgpu::Texture,
-    background_texture_view: wgpu::TextureView,
-    pub background_bind_group_layout: wgpu::BindGroupLayout,
-    pub background_bind_group: wgpu::BindGroup,
+
+    // --- New ping-pong rendering resources ---
+    pass_a: PassTarget,
+    pass_b: PassTarget,
+
+    // Generic bind group layout for using render pass textures as sampling sources
+    pub scene_sampler_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl WgpuApp {
     /// Create a new WGPU app, as the root of Tessera
-    pub(crate) async fn new(
-        window: Arc<Window>,
-    ) -> Self {
+    pub(crate) async fn new(window: Arc<Window>) -> Self {
         // Looking for gpus
         let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -92,10 +99,7 @@ impl WgpuApp {
         let size = window.inner_size();
         let caps = surface.get_capabilities(&adapter);
         // Choose the present mode
-        let present_mode = /*if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
-            // Mailbox is the best choice for most cases, it allows for low latency and high FPS
-            wgpu::PresentMode::FifoRelaxed
-        } else */if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
+        let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
             // Fifo is the fallback, it is the most compatible and stable
             wgpu::PresentMode::Fifo
         } else {
@@ -114,29 +118,12 @@ impl WgpuApp {
             desired_maximum_frame_latency: 2,
         };
         surface.configure(&gpu, &config);
-        // Create drawer
-        // Create background texture and bind group
-        let background_texture_descriptor = wgpu::TextureDescriptor {
-            label: Some("Background Texture"),
-            size: wgpu::Extent3d {
-                width: config.width,
-                height: config.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: config.format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        };
-        let background_texture = gpu.create_texture(&background_texture_descriptor);
-        let background_texture_view = background_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let background_bind_group_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Background Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
+        // --- Create scene sampler bind group layout ---
+        let scene_sampler_bind_group_layout =
+            gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Scene Sampler Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
@@ -145,20 +132,12 @@ impl WgpuApp {
                         multisampled: false,
                     },
                     count: None,
-                },
-            ],
-        });
+                }],
+            });
 
-        let background_bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Background Bind Group"),
-            layout: &background_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&background_texture_view),
-                },
-            ],
-        });
+        // --- Create Pass Targets (A and B) ---
+        let pass_a = Self::create_pass_target(&gpu, &config, &scene_sampler_bind_group_layout, "A");
+        let pass_b = Self::create_pass_target(&gpu, &config, &scene_sampler_bind_group_layout, "B");
 
         let drawer = Drawer::new();
         // Set scale factor for dp conversion
@@ -177,10 +156,49 @@ impl WgpuApp {
             size,
             size_changed: false,
             drawer,
-            background_texture,
-            background_texture_view,
-            background_bind_group_layout,
-            background_bind_group,
+            pass_a,
+            pass_b,
+            scene_sampler_bind_group_layout,
+        }
+    }
+
+    fn create_pass_target(
+        gpu: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        layout: &wgpu::BindGroupLayout,
+        label_suffix: &str,
+    ) -> PassTarget {
+        let texture_descriptor = wgpu::TextureDescriptor {
+            label: Some(&format!("Pass {} Texture", label_suffix)),
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: config.format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        };
+        let texture = gpu.create_texture(&texture_descriptor);
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(&format!("Pass {} Bind Group", label_suffix)),
+            layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&view),
+            }],
+        });
+        PassTarget {
+            texture,
+            view,
+            bind_group,
         }
     }
 
@@ -203,38 +221,23 @@ impl WgpuApp {
         self.size
     }
 
-    pub(crate) fn resize_background_texture_if_needed(&mut self) {
+    pub(crate) fn resize_pass_targets_if_needed(&mut self) {
         if self.size_changed {
-            self.background_texture.destroy();
-            let background_texture_descriptor = wgpu::TextureDescriptor {
-                label: Some("Background Texture"),
-                size: wgpu::Extent3d {
-                    width: self.config.width,
-                    height: self.config.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: self.config.format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING
-                    | wgpu::TextureUsages::COPY_DST
-                    | wgpu::TextureUsages::COPY_SRC,
-                view_formats: &[],
-            };
-            self.background_texture = self.gpu.create_texture(&background_texture_descriptor);
-            self.background_texture_view = self
-                .background_texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-            self.background_bind_group = self.gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Background Bind Group"),
-                layout: &self.background_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.background_texture_view),
-                }],
-            });
+            self.pass_a.texture.destroy();
+            self.pass_b.texture.destroy();
+
+            self.pass_a = Self::create_pass_target(
+                &self.gpu,
+                &self.config,
+                &self.scene_sampler_bind_group_layout,
+                "A",
+            );
+            self.pass_b = Self::create_pass_target(
+                &self.gpu,
+                &self.config,
+                &self.scene_sampler_bind_group_layout,
+                "B",
+            );
         }
     }
 
@@ -243,7 +246,7 @@ impl WgpuApp {
         if self.size_changed {
             self.config.width = self.size.width;
             self.config.height = self.size.height;
-            self.resize_background_texture_if_needed();
+            self.resize_pass_targets_if_needed();
             self.surface.configure(&self.gpu, &self.config);
             self.size_changed = false;
         }
@@ -254,15 +257,8 @@ impl WgpuApp {
         &mut self,
         drawer_commands: impl IntoIterator<Item = (PxPosition, [Px; 2], Box<dyn DrawCommand>)>,
     ) -> Result<(), wgpu::SurfaceError> {
-        let commands: Vec<_> = drawer_commands.into_iter().collect();
-
-        // 1. Scan for requirements
-        let needs_multi_pass = commands.iter().any(|(_, _, cmd)| {
-            cmd.requirement() == RenderRequirement::SamplesBackground
-        });
-
-        let output = self.surface.get_current_texture()?;
-        let final_view = output
+        let output_frame = self.surface.get_current_texture()?;
+        let _output_view = output_frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
@@ -271,101 +267,43 @@ impl WgpuApp {
                 label: Some("Render Encoder"),
             });
 
-        // 2. Choose render path
-        if !needs_multi_pass {
-            // --- FAST PATH (Single Pass) ---
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Single Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &final_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                ..Default::default()
-            });
+        let texture_size = wgpu::Extent3d {
+            width: self.config.width,
+            height: self.config.height,
+            depth_or_array_layers: 1,
+        };
 
-            self.drawer
-                .begin_pass(&self.gpu, &self.queue, &self.config, &mut render_pass);
-            for (pos, size, command) in commands {
-                self.drawer.submit(
-                    &self.gpu,
-                    &self.queue,
-                    &self.config,
-                    &mut render_pass,
-                    &*command,
-                    size,
-                    pos,
-                );
-            }
-            self.drawer
-                .end_pass(&self.gpu, &self.queue, &self.config, &mut render_pass);
-        } else {
-            // --- DYNAMIC MULTI-PASS PATH ---
+        // 1. Initialization
+        let (mut read_target, mut write_target) = (&mut self.pass_a, &mut self.pass_b);
 
-            // --- Pass 1: Render all Standard commands to background_texture ---
-            {
-                let mut pass1 = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Background Pass"),
+        // Initial clear: Clear the first "canvas"
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Initial Clear Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &write_target.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        });
+
+        // 2. Main loop and command processing
+        let mut commands_iter = drawer_commands.into_iter().peekable();
+        while commands_iter.peek().is_some() {
+            // --- Step A: Batch all consecutive standard commands ---
+            let standard_batch: Vec<_> = commands_iter
+                .by_ref()
+                .take_while(|c| c.2.requirement() == RenderRequirement::Standard)
+                .collect();
+
+            if !standard_batch.is_empty() {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Standard Batch Pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &self.background_texture_view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    ..Default::default()
-                });
-
-                self.drawer
-                    .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass1);
-                for (pos, size, command) in commands.iter().filter(|c| {
-                    c.2.requirement() == RenderRequirement::Standard
-                }) {
-                    self.drawer.submit(
-                        &self.gpu,
-                        &self.queue,
-                        &self.config,
-                        &mut pass1,
-                        &**command,
-                        *size,
-                        *pos,
-                    );
-                }
-                self.drawer
-                    .end_pass(&self.gpu, &self.queue, &self.config, &mut pass1);
-            }
-
-            // --- Pass 2: Render all SamplesBackground commands to final screen, sampling background_texture ---
-            {
-                // Copy background to final output first, so we have a base to draw on
-                encoder.copy_texture_to_texture(
-                    wgpu::TexelCopyTextureInfo {
-                        texture: &self.background_texture,
-                        mip_level: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    wgpu::TexelCopyTextureInfo {
-                        texture: &output.texture,
-                        mip_level: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    wgpu::Extent3d {
-                        width: self.config.width,
-                        height: self.config.height,
-                        depth_or_array_layers: 1,
-                    },
-                );
-
-                let mut pass2 = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Overlay Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &final_view,
+                        view: &write_target.view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -375,30 +313,78 @@ impl WgpuApp {
                     ..Default::default()
                 });
 
-                pass2.set_bind_group(1, &self.background_bind_group, &[]);
-
                 self.drawer
-                    .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass2);
-                for (pos, size, command) in commands.iter().filter(|c| {
-                    c.2.requirement() == RenderRequirement::SamplesBackground
-                }) {
+                    .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass);
+                for (pos, size, cmd) in standard_batch {
                     self.drawer.submit(
                         &self.gpu,
                         &self.queue,
                         &self.config,
-                        &mut pass2,
-                        &**command,
-                        *size,
-                        *pos,
+                        &mut pass,
+                        &*cmd,
+                        size,
+                        pos,
                     );
                 }
                 self.drawer
-                    .end_pass(&self.gpu, &self.queue, &self.config, &mut pass2);
+                    .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);
+            }
+
+            // --- Step B: Process a single render barrier ---
+            if let Some((pos, size, barrier_command)) = commands_iter.next() {
+                // 1. Swap read and write targets (ping-pong operation)
+                std::mem::swap(&mut read_target, &mut write_target);
+
+                // 2. Copy the content of the new background (read_target) to the new canvas (write_target)
+                encoder.copy_texture_to_texture(
+                    read_target.texture.as_image_copy(),
+                    write_target.texture.as_image_copy(),
+                    texture_size,
+                );
+
+                // 3. Begin a new render pass to draw the barrier component
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Barrier Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &write_target.view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                });
+
+                // 4. Bind the background texture
+                pass.set_bind_group(1, &read_target.bind_group, &[]);
+
+                // 5. Draw the barrier command
+                self.drawer
+                    .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass);
+                self.drawer.submit(
+                    &self.gpu,
+                    &self.queue,
+                    &self.config,
+                    &mut pass,
+                    &*barrier_command,
+                    size,
+                    pos,
+                );
+                self.drawer
+                    .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);
             }
         }
 
+        // 3. Final output
+        encoder.copy_texture_to_texture(
+            write_target.texture.as_image_copy(),
+            output_frame.texture.as_image_copy(),
+            texture_size,
+        );
+
         self.queue.submit(Some(encoder.finish()));
-        output.present();
+        output_frame.present();
         Ok(())
     }
 }

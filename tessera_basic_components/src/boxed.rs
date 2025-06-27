@@ -1,6 +1,6 @@
+use crate::alignment::Alignment;
 use tessera::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node};
 use tessera_macros::tessera;
-use crate::alignment::Alignment;
 
 /// Arguments for the `Boxed` component.
 #[derive(Clone, Debug, Default)]
@@ -54,8 +54,14 @@ pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxe
 
     measure(Box::new(move |input| {
         let boxed_constraint = Constraint::new(
-            DimensionValue::Wrap { min: None, max: None },
-            DimensionValue::Wrap { min: None, max: None },
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
         );
         let effective_constraint = boxed_constraint.merge(input.parent_constraint);
 
@@ -98,10 +104,9 @@ pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxe
                         (max_width - child_size.width) / 2,
                         max_height - child_size.height,
                     ),
-                    Alignment::BottomEnd => (
-                        max_width - child_size.width,
-                        max_height - child_size.height,
-                    ),
+                    Alignment::BottomEnd => {
+                        (max_width - child_size.width, max_height - child_size.height)
+                    }
                 };
                 place_node(child_id, PxPosition::new(x, y), input.metadatas);
             }

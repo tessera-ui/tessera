@@ -38,7 +38,7 @@ impl GlassPipeline {
     pub fn new(
         gpu: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
-        background_bind_group_layout: &wgpu::BindGroupLayout,
+        scene_sampler_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let shader = gpu.create_shader_module(wgpu::include_wgsl!("glass/glass.wgsl"));
 
@@ -74,7 +74,7 @@ impl GlassPipeline {
 
         let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Glass Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout, background_bind_group_layout],
+            bind_group_layouts: &[&bind_group_layout, scene_sampler_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -125,7 +125,7 @@ impl DrawablePipeline<GlassCommand> for GlassPipeline {
         start_pos: PxPosition,
     ) {
         let screen_size = [config.width, config.height];
-        
+
         let ndc_pos = pixel_to_ndc(start_pos, screen_size);
         let ndc_size = [
             size[0].0 as f32 / screen_size[0] as f32 * 2.0,

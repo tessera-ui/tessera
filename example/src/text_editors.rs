@@ -1,7 +1,7 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tessera::{DimensionValue, Px};
-use tessera_basic_components::text_editor::{text_editor, TextEditorArgsBuilder, TextEditorState};
+use tessera_basic_components::text_editor::{TextEditorArgsBuilder, TextEditorState, text_editor};
 use tessera_macros::tessera;
 
 use crate::material_colors::md_colors;

@@ -7,9 +7,9 @@
 use tessera::{DimensionValue, Px, Renderer};
 use tessera_basic_components::{
     alignment::Alignment,
-    boxed::{boxed_ui, BoxedArgs},
-    glass::{glass, GlassArgsBuilder},
-    surface::{surface, SurfaceArgs},
+    boxed::{BoxedArgs, boxed_ui},
+    glass::{GlassArgsBuilder, glass},
+    surface::{SurfaceArgs, surface},
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
