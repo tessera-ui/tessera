@@ -334,7 +334,7 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
     }
 }
 
-/// 根据对齐方式放置子元素的辅助函数 (水平布局)
+/// A helper function to place children with alignment (horizontal layout).
 fn place_children_with_alignment(
     children_sizes: &[Option<ComputedData>],
     children_ids: &[tessera::NodeId],
@@ -348,7 +348,7 @@ fn place_children_with_alignment(
 ) {
     let available_space = (final_row_width - total_children_width).max(Px(0));
 
-    // 计算主轴起始位置和间距 (对于 Row，主轴是水平方向)
+    // Calculate start position and spacing on the main axis (horizontal for Row)
     let (mut current_x, spacing_between_children) = match main_axis_alignment {
         MainAxisAlignment::Start => (Px(0), Px(0)),
         MainAxisAlignment::Center => (available_space / 2, Px(0)),
@@ -384,7 +384,7 @@ fn place_children_with_alignment(
         if let Some(child_actual_size) = child_size_opt {
             let child_id = children_ids[i];
 
-            // 计算交叉轴位置 (对于 Row，交叉轴是垂直方向)
+            // Calculate position on the cross axis (vertical for Row)
             let y_offset = match cross_axis_alignment {
                 CrossAxisAlignment::Start => Px(0),
                 CrossAxisAlignment::Center => {
@@ -435,3 +435,5 @@ macro_rules! row_ui {
         }
     };
 }
+
+pub use crate::row_ui;

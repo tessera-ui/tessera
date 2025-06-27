@@ -10,6 +10,9 @@ name = "example"
 [[bin]]
 name = "example"
 path = "src/lib.rs"
+[[example]]
+name = "boxed_showcase"
+path = "examples/boxed_showcase.rs"
 
 [dependencies]
 tessera = { path = "../tessera" }

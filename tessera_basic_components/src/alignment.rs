@@ -1,19 +1,19 @@
-//! 定义布局组件的对齐方式
+//! Defines alignment options for layout components.
 
-/// 主轴对齐方式（沿着布局方向的对齐）
+/// Alignment along the main axis (the direction of layout).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MainAxisAlignment {
-    /// 起始位置对齐（左对齐或顶对齐）
+    /// Align to the start (left or top).
     Start,
-    /// 居中对齐
+    /// Align to the center.
     Center,
-    /// 结束位置对齐（右对齐或底对齐）
+    /// Align to the end (right or bottom).
     End,
-    /// 均匀分布，首尾留白
+    /// Distribute space evenly, with space at the start and end.
     SpaceEvenly,
-    /// 均匀分布，首尾不留白
+    /// Distribute space evenly, with no space at the start and end.
     SpaceBetween,
-    /// 均匀分布，首尾留半白
+    /// Distribute space evenly, with half-space at the start and end.
     SpaceAround,
 }
 
@@ -23,21 +23,41 @@ impl Default for MainAxisAlignment {
     }
 }
 
-/// 交叉轴对齐方式（垂直于布局方向的对齐）
+/// Alignment along the cross axis (perpendicular to the layout direction).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CrossAxisAlignment {
-    /// 起始位置对齐（左对齐或顶对齐）
+    /// Align to the start (left or top).
     Start,
-    /// 居中对齐
+    /// Align to the center.
     Center,
-    /// 结束位置对齐（右对齐或底对齐）
+    /// Align to the end (right or bottom).
     End,
-    /// 拉伸填充整个交叉轴
+    /// Stretch to fill the entire cross axis.
     Stretch,
 }
 
 impl Default for CrossAxisAlignment {
     fn default() -> Self {
         Self::Start
+    }
+}
+
+/// Specifies the alignment of a child within its parent.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Alignment {
+    TopStart,
+    TopCenter,
+    TopEnd,
+    CenterStart,
+    Center,
+    CenterEnd,
+    BottomStart,
+    BottomCenter,
+    BottomEnd,
+}
+
+impl Default for Alignment {
+    fn default() -> Self {
+        Self::Center
     }
 }
