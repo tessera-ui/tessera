@@ -4,7 +4,7 @@ mod dp;
 pub mod focus_state;
 mod keyboard_state;
 mod px;
-mod renderer;
+pub mod renderer;
 mod runtime;
 mod thread_utils;
 pub mod tokio_runtime;
@@ -18,7 +18,7 @@ pub use component_tree::{
 };
 pub use cursor::{CursorEvent, CursorEventContent, PressKeyEventType, ScrollEventConent};
 pub use indextree::{Arena, NodeId};
-pub use renderer::{DrawCommand, DrawablePipeline, PipelineRegistry, Renderer};
+pub use renderer::{DrawCommand, DrawablePipeline, PipelineRegistry, Renderer, RenderRequirement};
 pub use runtime::TesseraRuntime;
 
 // re-export winit

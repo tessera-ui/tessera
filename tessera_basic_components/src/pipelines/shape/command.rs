@@ -1,4 +1,4 @@
-use tessera::{DrawCommand, Px, PxPosition};
+use tessera::{DrawCommand, Px, PxPosition, RenderRequirement};
 
 use super::{ShapeUniforms, ShapeVertex};
 
@@ -54,6 +54,13 @@ pub enum ShapeCommand {
 impl DrawCommand for ShapeCommand {
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn requirement(&self) -> RenderRequirement {
+        // For now, all shapes are standard.
+        // If a shape like "GlassRect" is added, it would return SamplesBackground.
+        // e.g., match self { ShapeCommand::GlassRect { .. } => RenderRequirement::SamplesBackground, _ => RenderRequirement::Standard }
+        RenderRequirement::Standard
     }
 }
 

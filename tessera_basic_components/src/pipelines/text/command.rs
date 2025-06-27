@@ -1,3 +1,4 @@
+use tessera::renderer::RenderRequirement;
 use tessera::DrawCommand;
 
 use super::TextData;
@@ -7,6 +8,10 @@ pub struct TextCommand {
 }
 
 impl DrawCommand for TextCommand {
+    fn requirement(&self) -> RenderRequirement {
+        RenderRequirement::Standard
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

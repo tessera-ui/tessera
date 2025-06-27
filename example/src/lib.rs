@@ -31,10 +31,8 @@ fn android_main(android_app: AndroidApp) {
     let app_state = Arc::new(AppState::new());
     Renderer::run(
         || app(app_state.clone()),
-        |gpu, gpu_queue, config, registry| {
-            tessera_basic_components::pipelines::register_pipelines(
-                gpu, gpu_queue, config, registry,
-            );
+        |app| {
+            tessera_basic_components::pipelines::register_pipelines(app);
         },
         android_app.clone(),
     )
@@ -58,10 +56,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TODO: In future versions, we can create renderer with custom config first, then run it
     Renderer::run(
         || app(app_state.clone()),
-        |gpu, gpu_queue, config, registry| {
-            tessera_basic_components::pipelines::register_pipelines(
-                gpu, gpu_queue, config, registry,
-            );
+        |app| {
+            tessera_basic_components::pipelines::register_pipelines(app);
         },
     )
     .unwrap_or_else(|e| error!("App failed to run: {e}"));

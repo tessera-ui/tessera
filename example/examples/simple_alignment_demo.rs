@@ -214,10 +214,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         || {
             app();
         },
-        |gpu, gpu_queue, config, registry| {
-            tessera_basic_components::pipelines::register_pipelines(
-                gpu, gpu_queue, config, registry,
-            );
+        |app| {
+            tessera_basic_components::pipelines::register_pipelines(app);
         },
     )?;
 

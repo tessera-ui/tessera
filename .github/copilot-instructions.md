@@ -204,3 +204,15 @@ Tessera uses two measurement units for different purposes:
 - **`Px` (Physical Pixel)**: Used internally by the rendering engine for precise pixel-level calculations. You'll encounter this in measure functions and low-level operations.
 
 The framework automatically converts between `Dp` and `Px` based on screen scale factor. As a developer, primarily work with `Dp` for component dimensions.
+
+
+## ⚙️ Project-Specific Conventions
+
+This section documents specific configurations and patterns that might seem unusual but are intentional for the project's architecture.
+
+### `example` Crate Build Configuration
+
+-   **File**: `example/Cargo.toml`
+-   **Configuration**: This crate is intentionally configured with both a `[lib]` and a `[[bin]]` target pointing to the same `src/lib.rs` file.
+-   **Rationale**: This setup is necessary for our specific build and testing workflow, enabling `src/lib.rs` to function both as a library for other examples and as a runnable binary.
+-   **Action**: **Do not "fix" this.** The resulting compiler warning is expected and should be ignored. Do not remove the `[[bin]]` section from `example/Cargo.toml`.

@@ -2,33 +2,19 @@ mod command;
 mod pipeline;
 
 use crate::{Px, PxPosition};
-pub use command::DrawCommand;
+pub use command::{DrawCommand, RenderRequirement};
 pub use pipeline::{DrawablePipeline, PipelineRegistry};
 
 /// Drawer is a struct that handles pipelines and draw commands.
 pub struct Drawer {
-    pipeline_registry: PipelineRegistry,
+    pub pipeline_registry: PipelineRegistry,
 }
 
 impl Drawer {
     /// Create a new drawer
-    pub fn new(
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        register_pipelines_fn: impl FnOnce(
-            &wgpu::Device,
-            &wgpu::Queue,
-            &wgpu::SurfaceConfiguration,
-            &mut PipelineRegistry,
-        ),
-    ) -> Self {
-        let mut pipelines = PipelineRegistry::new();
-        register_pipelines_fn(gpu, queue, config, &mut pipelines);
-
-        // Create the drawer
+    pub fn new() -> Self {
         Self {
-            pipeline_registry: pipelines,
+            pipeline_registry: PipelineRegistry::new(),
         }
     }
 

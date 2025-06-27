@@ -204,8 +204,8 @@ fn app() {
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    Renderer::run(app, |gpu, gpu_queue, config, registry| {
-        tessera_basic_components::pipelines::register_pipelines(gpu, gpu_queue, config, registry);
+    Renderer::run(app, |app| {
+        tessera_basic_components::pipelines::register_pipelines(app);
     })?;
     Ok(())
 }

@@ -1,14 +1,14 @@
-mod app;
-mod drawer;
+pub mod app;
+pub mod drawer;
 
 use std::{sync::Arc, time::Instant};
 
 use log::{debug, warn};
 use parking_lot::Mutex;
 
-use app::WgpuApp;
+pub use app::WgpuApp;
 #[cfg(target_os = "android")]
-use winit::platform::android::{EventLoopBuilderExtAndroid, activity::AndroidApp};
+use winit::platform::android::{activity::AndroidApp, EventLoopBuilderExtAndroid};
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
@@ -18,21 +18,17 @@ use winit::{
 };
 
 use crate::{
-    Px, PxPosition,
     cursor::{CursorEvent, CursorEventContent, CursorState},
     dp::SCALE_FACTOR,
     keyboard_state::KeyboardState,
     runtime::TesseraRuntime,
     thread_utils, tokio_runtime,
+    Px, PxPosition,
 };
 
-pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
+pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirement};
 
-pub struct Renderer<
-    F: Fn(),
-    R: Fn(&wgpu::Device, &wgpu::Queue, &wgpu::SurfaceConfiguration, &mut drawer::PipelineRegistry)
-        + Clone,
-> {
+pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     /// WGPU app
     app: Arc<Mutex<Option<WgpuApp>>>,
     /// Entry UI Function
@@ -45,12 +41,7 @@ pub struct Renderer<
     register_pipelines_fn: R,
 }
 
-impl<
-    F: Fn(),
-    R: Fn(&wgpu::Device, &wgpu::Queue, &wgpu::SurfaceConfiguration, &mut drawer::PipelineRegistry)
-        + Clone,
-> Renderer<F, R>
-{
+impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     #[cfg(not(target_os = "android"))]
     /// Create event loop and run application
     pub fn run(entry_point: F, register_pipelines_fn: R) -> Result<(), EventLoopError> {
@@ -95,12 +86,7 @@ impl<
     }
 }
 
-impl<
-    F: Fn(),
-    R: Fn(&wgpu::Device, &wgpu::Queue, &wgpu::SurfaceConfiguration, &mut drawer::PipelineRegistry)
-        + Clone,
-> ApplicationHandler for Renderer<F, R>
-{
+impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Renderer<F, R> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Just return if the app is already created
         if self.app.as_ref().lock().is_some() {
@@ -112,9 +98,13 @@ impl<
             .with_title("Tessera")
             .with_transparent(true);
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let register_pipelines_fn = self.register_pipelines_fn.clone();
 
-        let wgpu_app =
-            tokio_runtime::get().block_on(WgpuApp::new(window, self.register_pipelines_fn.clone()));
+        let mut wgpu_app = tokio_runtime::get().block_on(WgpuApp::new(window));
+
+        // Register pipelines
+        wgpu_app.register_pipelines(register_pipelines_fn);
+
         self.app.lock().replace(wgpu_app);
     }
 
@@ -128,8 +118,11 @@ impl<
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        let mut app = self.app.lock();
-        let app = app.as_mut().unwrap();
+        let mut app_opt = self.app.lock();
+        let app = match app_opt.as_mut() {
+            Some(app) => app,
+            None => return,
+        };
 
         // Handle window events
         match event {

@@ -8,6 +8,7 @@ use tessera::{DimensionValue, Px, Renderer};
 use tessera_basic_components::{
     alignment::Alignment,
     boxed::{boxed_ui, BoxedArgs},
+    glass::{glass, GlassArgsBuilder},
     surface::{surface, SurfaceArgs},
 };
 
@@ -55,15 +56,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     None,
                     || {},
                 ),
+                // Add a Glass component to test the multi-pass rendering
+                || glass(
+                    GlassArgsBuilder::default()
+                        .width(DimensionValue::Fixed(Px(100)))
+                        .height(DimensionValue::Fixed(Px(100)))
+                        .build()
+                        .unwrap(),
+                ),
             );
         },
-        |gpu, gpu_queue, config, registry| {
-            tessera_basic_components::pipelines::register_pipelines(
-                gpu,
-                gpu_queue,
-                config,
-                registry,
-            );
+        |app| {
+            tessera_basic_components::pipelines::register_pipelines(app);
         },
     )?;
     Ok(())
