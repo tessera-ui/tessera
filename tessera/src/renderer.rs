@@ -28,6 +28,11 @@ use crate::{
 
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirement};
 
+/// The bind group set index where the scene texture is bound for pipelines that
+/// require `RenderRequirement::SamplesBackground`.
+///
+/// Pipelines that sample the background should expect the background texture at this set index.
+pub const SCENE_TEXTURE_BIND_GROUP_SET: u32 = 1;
 pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     /// WGPU app
     app: Arc<Mutex<Option<WgpuApp>>>,

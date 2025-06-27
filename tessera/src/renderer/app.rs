@@ -5,6 +5,7 @@ use parking_lot::RwLock;
 use winit::window::Window;
 
 use crate::{Px, PxPosition, dp::SCALE_FACTOR};
+use crate::renderer::SCENE_TEXTURE_BIND_GROUP_SET;
 
 use super::drawer::{DrawCommand, Drawer, RenderRequirement};
 
@@ -357,7 +358,7 @@ impl WgpuApp {
                 });
 
                 // 4. Bind the background texture
-                pass.set_bind_group(1, &read_target.bind_group, &[]);
+                pass.set_bind_group(SCENE_TEXTURE_BIND_GROUP_SET, &read_target.bind_group, &[]);
 
                 // 5. Draw the barrier command
                 self.drawer
