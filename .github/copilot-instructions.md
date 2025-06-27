@@ -13,7 +13,7 @@ These instructions define how GitHub Copilot should assist with this project. Th
 The `tessera` project uses a multi-crate workspace structure with clear separation of responsibilities:
 
 - **`tessera`**: Core framework functionality including component tree management, rendering, runtime, and basic types (`Dp`, `Px`, cursor/keyboard/scroll states)
-- **`tessera_basic_components`**: Ready-to-use UI components (layout: `row`/`column`, content: `Text`/`TextEditor`, functional: `spacer`/`surface`)
+- **`tessera_basic_components`**: Ready-to-use UI components (layout: `row`/`column`, content: `Text`/`TextEditor`, functional: `spacer`/`surface`) and their associated rendering pipelines.
 - **`tessera_macros`**: The `#[tessera]` procedural macro that simplifies component creation
 
 ## Tessera Framework Concepts
@@ -89,16 +89,30 @@ measure(Box::new(move |input| {
 - Positions children at (0, 0) relative to the component
 - Works well for simple container components
 
-### 🎨 Visual Rendering with BasicDrawable
+### 🎨 Pluggable Rendering with DrawCommands and Pipelines
 
-Components can render visual elements by setting a `BasicDrawable` in their `measure` function:
+Tessera features a pluggable rendering system. Instead of a fixed set of drawable items, components can issue any `DrawCommand`. These commands are then processed by a corresponding `DrawablePipeline` that is registered with the renderer.
+
+**Core Concepts:**
+
+1.  **`DrawCommand`**: A trait that marks a struct or enum as a drawable item. Components create instances of `DrawCommand` implementors to describe what should be rendered.
+2.  **`DrawablePipeline`**: A trait that defines the GPU logic for rendering a *specific* type of `DrawCommand`.
+3.  **`PipelineRegistry`**: The central registry where `DrawablePipeline`s are registered at application startup. The renderer uses this registry to dispatch each `DrawCommand` to the correct pipeline.
+
+This architecture allows developers to extend Tessera's rendering capabilities by creating their own commands and pipelines.
+
+**Example: Drawing a Rectangle**
+
+The `tessera_basic_components` crate provides `ShapeCommand` for drawing primitive shapes. Here's how a component would use it to draw a rectangle:
 
 ```rust
-measure(Box::new(move |input| {
-    // ... layout logic ...
+use tessera_basic_components::pipelines::shape::command::{ShapeCommand, ShadowProps};
 
-    // Define what to draw
-    let drawable = BasicDrawable::Rect {
+measure(Box::new(move |input| {
+    // ... layout logic to determine width and height ...
+
+    // Define what to draw using a specific DrawCommand
+    let command = ShapeCommand::Rect {
         color: [0.2, 0.5, 0.8, 1.0], // RGBA
         corner_radius: 8.0,
         shadow: Some(ShadowProps {
@@ -108,26 +122,21 @@ measure(Box::new(move |input| {
         }),
     };
 
-    // Apply drawable to component
+    // Apply the command to the component
     if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-        metadata.basic_drawable = Some(drawable);
+        metadata.set_draw_command(Box::new(command));
     }
 
     Ok(ComputedData { width, height })
 }));
 ```
 
-**Available BasicDrawable Types:**
-
-1. **`Rect`** - Filled rectangle with color, corner radius, optional shadow
-2. **`OutlinedRect`** - Border-only rectangle with configurable border width
-3. **`Text`** - Rendered text with font size, color, and text constraints
-
 **Rendering Notes:**
 
-- Set drawable in the same `measure` closure where you calculate size
-- Layout containers often don't need drawables (invisible)
-- Framework converts `BasicDrawable` to `DrawCommand`s using final position/size
+-   A component sets its `DrawCommand` within its `measure` closure.
+-   The command is boxed (`Box<dyn DrawCommand>`) to be stored in the component's metadata.
+-   Layout containers (like `column` or `row`) often don't have their own `DrawCommand`s, as they are invisible.
+-   Before using components from `tessera_basic_components`, you must register their pipelines (e.g., using `pipelines::register_pipelines`) with the `PipelineRegistry`.
 
 ### 🎯 Event Handling and State
 
