@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         || {
             boxed_ui!(
                 BoxedArgs {
-                    alignment: Alignment::BottomEnd,
+                    alignment: Alignment::Center,
                 },
                 // A large red surface at the bottom
                 || surface(

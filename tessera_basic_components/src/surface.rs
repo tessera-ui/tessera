@@ -196,21 +196,29 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             ),
         );
         // Measure the child with the computed constraint
-        let child_measurement = measure_node(
-            input.children_ids[0],
-            &child_constraint,
-            input.tree,
-            input.metadatas,
-        )?;
-        // place the child
-        place_node(
-            input.children_ids[0],
-            PxPosition {
-                x: args.padding.into(),
-                y: args.padding.into(),
-            },
-            input.metadatas,
-        );
+        let child_measurement = if !input.children_ids.is_empty() {
+            let child_measurement = measure_node(
+                input.children_ids[0],
+                &child_constraint,
+                input.tree,
+                input.metadatas,
+            )?;
+            // place the child
+            place_node(
+                input.children_ids[0],
+                PxPosition {
+                    x: args.padding.into(),
+                    y: args.padding.into(),
+                },
+                input.metadatas,
+            );
+            child_measurement
+        } else {
+            ComputedData {
+                width: Px(0),
+                height: Px(0),
+            }
+        };
         // Add drawable for the surface
         let is_hovered = ripple_state_for_measure
             .as_ref()
