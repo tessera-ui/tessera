@@ -258,8 +258,6 @@ pub fn scrollable(
                     let scroll_delta_x = event.delta_x;
                     let scroll_delta_y = event.delta_y;
 
-                    
-
                     // Calculate new target position using saturating arithmetic
                     let current_target = state_guard.target_position;
                     let new_target = current_target.saturating_offset(
@@ -276,8 +274,6 @@ pub fn scrollable(
                         args.vertical,
                         args.horizontal,
                     );
-
-                    
 
                     // Set constrained target position
                     state_guard.set_target_position(constrained_target);
@@ -319,7 +315,6 @@ fn constrain_position(
     vertical_scrollable: bool,
     horizontal_scrollable: bool,
 ) -> PxPosition {
-    
     let mut constrained = position;
 
     // Only apply constraints for scrollable directions
