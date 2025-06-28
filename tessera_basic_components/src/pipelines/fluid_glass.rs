@@ -48,7 +48,7 @@ impl FluidGlassPipeline {
     pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
         let shader = gpu.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Fluid Glass Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../fluid_glass/glass.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("fluid_glass/glass.wgsl").into()),
         });
 
         let sampler = gpu.create_sampler(&wgpu::SamplerDescriptor {
