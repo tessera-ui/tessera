@@ -4,7 +4,7 @@ use log::{error, info};
 use parking_lot::RwLock;
 use winit::window::Window;
 
-use crate::{dp::SCALE_FACTOR, Px, PxPosition};
+use crate::{Px, PxPosition, dp::SCALE_FACTOR};
 
 use super::drawer::{DrawCommand, Drawer, RenderRequirement};
 
@@ -71,20 +71,18 @@ impl WgpuApp {
         };
         // Create a device and queue
         let (gpu, queue) = match adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    required_features: wgpu::Features::empty(),
-                    // WebGL backend does not support all features
-                    required_limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
-                    } else {
-                        wgpu::Limits::default()
-                    },
-                    label: None,
-                    memory_hints: wgpu::MemoryHints::Performance,
-                    trace: wgpu::Trace::Off,
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                // WebGL backend does not support all features
+                required_limits: if cfg!(target_arch = "wasm32") {
+                    wgpu::Limits::downlevel_webgl2_defaults()
+                } else {
+                    wgpu::Limits::default()
                 },
-            )
+                label: None,
+                memory_hints: wgpu::MemoryHints::Performance,
+                trace: wgpu::Trace::Off,
+            })
             .await
         {
             Ok((gpu, queue)) => (gpu, queue),
@@ -249,17 +247,99 @@ impl WgpuApp {
         });
 
         // 2. Main loop and command processing
-        let mut commands_iter = drawer_commands.into_iter().peekable();
-        while commands_iter.peek().is_some() {
-            // --- Step A: Batch all consecutive standard commands ---
-            let standard_batch: Vec<_> = commands_iter
-                .by_ref()
-                .take_while(|c| c.2.requirement() == RenderRequirement::Standard)
-                .collect();
+        let mut commands_iter = drawer_commands.into_iter();
 
+        'main_loop: loop {
+            // --- Step A: Batch all consecutive standard commands ---
+            let mut standard_batch = Vec::new();
+            while let Some(command) = commands_iter.next() {
+                if command.2.requirement() == RenderRequirement::Standard {
+                    standard_batch.push(command);
+                } else {
+                    // This is a barrier command, first render the collected standard commands
+                    if !standard_batch.is_empty() {
+                        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("Standard Batch Pass"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &write_target.view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Load,
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            ..Default::default()
+                        });
+
+                        self.drawer
+                            .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass);
+                        for (pos, size, cmd) in standard_batch {
+                            self.drawer.submit(
+                                &self.gpu,
+                                &self.queue,
+                                &self.config,
+                                &mut pass,
+                                &*cmd,
+                                size,
+                                pos,
+                                None,
+                            );
+                        }
+                        self.drawer
+                            .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);
+                    }
+
+                    // Now process the barrier command
+                    // 1. Swap read and write targets (ping-pong operation)
+                    std::mem::swap(&mut read_target, &mut write_target);
+
+                    // 2. Copy the content of the new background (read_target) to the new canvas (write_target)
+                    encoder.copy_texture_to_texture(
+                        read_target.texture.as_image_copy(),
+                        write_target.texture.as_image_copy(),
+                        texture_size,
+                    );
+
+                    // 3. Begin a new render pass to draw the barrier component
+                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Barrier Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &write_target.view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        ..Default::default()
+                    });
+
+                    // 4. Draw the barrier command
+                    self.drawer
+                        .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass);
+                    let (pos, size, barrier_command) = command;
+                    self.drawer.submit(
+                        &self.gpu,
+                        &self.queue,
+                        &self.config,
+                        &mut pass,
+                        &*barrier_command,
+                        size,
+                        pos,
+                        Some(&read_target.view),
+                    );
+                    self.drawer
+                        .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);
+
+                    // Continue the main loop to process next commands
+                    continue 'main_loop;
+                }
+            }
+
+            // Render the last batch of standard commands if any
             if !standard_batch.is_empty() {
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Standard Batch Pass"),
+                    label: Some("Final Standard Batch Pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &write_target.view,
                         resolve_target: None,
@@ -289,48 +369,8 @@ impl WgpuApp {
                     .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);
             }
 
-            // --- Step B: Process a single render barrier ---
-            if let Some((pos, size, barrier_command)) = commands_iter.next() {
-                // 1. Swap read and write targets (ping-pong operation)
-                std::mem::swap(&mut read_target, &mut write_target);
-
-                // 2. Copy the content of the new background (read_target) to the new canvas (write_target)
-                encoder.copy_texture_to_texture(
-                    read_target.texture.as_image_copy(),
-                    write_target.texture.as_image_copy(),
-                    texture_size,
-                );
-
-                // 3. Begin a new render pass to draw the barrier component
-                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Barrier Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &write_target.view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    ..Default::default()
-                });
-
-                // 4. Draw the barrier command
-                self.drawer
-                    .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass);
-                self.drawer.submit(
-                    &self.gpu,
-                    &self.queue,
-                    &self.config,
-                    &mut pass,
-                    &*barrier_command,
-                    size,
-                    pos,
-                    Some(&read_target.view),
-                );
-                self.drawer
-                    .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);
-            }
+            // No more commands, break the main loop
+            break;
         }
 
         // 3. Final output

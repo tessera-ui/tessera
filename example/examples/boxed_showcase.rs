@@ -8,7 +8,7 @@ use tessera::{DimensionValue, Px, Renderer};
 use tessera_basic_components::{
     alignment::Alignment,
     boxed::{BoxedArgs, boxed_ui},
-    glass::{GlassArgsBuilder, glass},
+    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     surface::{SurfaceArgs, surface},
 };
 
@@ -56,9 +56,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     None,
                     || {},
                 ),
-                // Add a Glass component to test the multi-pass rendering
-                || glass(
-                    GlassArgsBuilder::default()
+                // Add a FluidGlass component to test the multi-pass rendering
+                || fluid_glass(
+                    FluidGlassArgsBuilder::default()
                         .width(DimensionValue::Fixed(Px(100)))
                         .height(DimensionValue::Fixed(Px(100)))
                         .build()
