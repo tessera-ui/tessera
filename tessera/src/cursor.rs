@@ -91,6 +91,8 @@ impl CursorState {
             let delta_time = now
                 .duration_since(inertia_data.last_tick_time)
                 .as_secs_f32();
+            
+            
 
             let mut should_reinsert_inertia = true;
 

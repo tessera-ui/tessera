@@ -96,13 +96,21 @@ impl ScrollableState {
 
         // Use simple velocity-based movement for consistent behavior
         // Higher smoothing = slower movement
-        let movement_factor = (1.0 - smoothing) * delta_time * 60.0;
+        let mut movement_factor = (1.0 - smoothing) * delta_time * 60.0;
 
+        // CRITICAL FIX: Clamp the movement factor to a maximum of 1.0.
+        // A factor greater than 1.0 causes the interpolation to overshoot the target,
+        // leading to oscillations that grow exponentially, causing the value explosion
+        // and overflow panic seen in the logs. Clamping ensures stability by
+        // preventing the position from moving past the target in a single frame.
+        if movement_factor > 1.0 {
+            movement_factor = 1.0;
+        }
         let old_position = self.child_position;
 
         self.child_position = PxPosition {
-            x: Px::from_f32(self.child_position.x.to_f32() + diff_x * movement_factor),
-            y: Px::from_f32(self.child_position.y.to_f32() + diff_y * movement_factor),
+            x: Px::saturating_from_f32(self.child_position.x.to_f32() + diff_x * movement_factor),
+            y: Px::saturating_from_f32(self.child_position.y.to_f32() + diff_y * movement_factor),
         };
 
         // Return true if position changed significantly
@@ -250,10 +258,14 @@ pub fn scrollable(
                     let scroll_delta_x = event.delta_x;
                     let scroll_delta_y = event.delta_y;
 
-                    // Calculate new target position
+                    
+
+                    // Calculate new target position using saturating arithmetic
                     let current_target = state_guard.target_position;
-                    let new_target = current_target
-                        .offset(Px::from_f32(scroll_delta_x), Px::from_f32(scroll_delta_y));
+                    let new_target = current_target.saturating_offset(
+                        Px::saturating_from_f32(scroll_delta_x),
+                        Px::saturating_from_f32(scroll_delta_y),
+                    );
 
                     // Apply bounds constraints immediately before setting target
                     let child_size = state_guard.child_size;
@@ -264,6 +276,8 @@ pub fn scrollable(
                         args.vertical,
                         args.horizontal,
                     );
+
+                    
 
                     // Set constrained target position
                     state_guard.set_target_position(constrained_target);
@@ -305,6 +319,7 @@ fn constrain_position(
     vertical_scrollable: bool,
     horizontal_scrollable: bool,
 ) -> PxPosition {
+    
     let mut constrained = position;
 
     // Only apply constraints for scrollable directions
@@ -314,8 +329,8 @@ fn constrain_position(
             constrained.x = Px::ZERO;
         }
         // Check if right edge of the child is out of bounds
-        if constrained.x + child_size.width < container_size.width {
-            constrained.x = container_size.width - child_size.width;
+        if constrained.x.saturating_add(child_size.width) < container_size.width {
+            constrained.x = container_size.width.saturating_sub(child_size.width);
         }
     } else {
         // Not horizontally scrollable, keep at zero
@@ -328,8 +343,8 @@ fn constrain_position(
             constrained.y = Px::ZERO;
         }
         // Check if bottom edge of the child is out of bounds
-        if constrained.y + child_size.height < container_size.height {
-            constrained.y = container_size.height - child_size.height;
+        if constrained.y.saturating_add(child_size.height) < container_size.height {
+            constrained.y = container_size.height.saturating_sub(child_size.height);
         }
     } else {
         // Not vertically scrollable, keep at zero

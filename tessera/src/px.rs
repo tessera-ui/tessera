@@ -41,9 +41,27 @@ impl Px {
         self.0 as f32
     }
 
-    /// Create from f32
+    /// Create from f32. Panics on overflow in debug builds.
     pub fn from_f32(value: f32) -> Self {
         Px(value as i32)
+    }
+
+    /// Create from f32, saturating at the numeric bounds instead of overflowing.
+    pub fn saturating_from_f32(value: f32) -> Self {
+        let clamped_value = value.clamp(i32::MIN as f32, i32::MAX as f32);
+        Px(clamped_value as i32)
+    }
+
+    /// Saturating integer addition. Computes `self + rhs`, saturating at the
+    /// numeric bounds instead of overflowing.
+    pub fn saturating_add(self, rhs: Self) -> Self {
+        Px(self.0.saturating_add(rhs.0))
+    }
+
+    /// Saturating integer subtraction. Computes `self - rhs`, saturating at
+    /// the numeric bounds instead of overflowing.
+    pub fn saturating_sub(self, rhs: Self) -> Self {
+        Px(self.0.saturating_sub(rhs.0))
     }
 }
 
@@ -63,11 +81,19 @@ impl PxPosition {
         Self { x, y }
     }
 
-    /// Offset the position
+    /// Offset the position. Panics on overflow in debug builds.
     pub fn offset(self, dx: Px, dy: Px) -> Self {
         Self {
-            x: Px(self.x.0 + dx.0),
-            y: Px(self.y.0 + dy.0),
+            x: self.x + dx,
+            y: self.y + dy,
+        }
+    }
+
+    /// Offset the position with saturating arithmetic.
+    pub fn saturating_offset(self, dx: Px, dy: Px) -> Self {
+        Self {
+            x: self.x.saturating_add(dx),
+            y: self.y.saturating_add(dy),
         }
     }
 
@@ -288,6 +314,22 @@ mod tests {
         assert_eq!(a - b, Px(5));
         assert_eq!(a * 2, Px(20));
         assert_eq!(a / 2, Px(5));
+    }
+
+    #[test]
+    fn test_px_saturating_arithmetic() {
+        let max = Px(i32::MAX);
+        let min = Px(i32::MIN);
+        assert_eq!(max.saturating_add(Px(1)), max);
+        assert_eq!(min.saturating_sub(Px(1)), min);
+    }
+
+    #[test]
+    fn test_saturating_from_f32() {
+        assert_eq!(Px::saturating_from_f32(f32::MAX), Px(i32::MAX));
+        assert_eq!(Px::saturating_from_f32(f32::MIN), Px(i32::MIN));
+        assert_eq!(Px::saturating_from_f32(100.5), Px(100));
+        assert_eq!(Px::saturating_from_f32(-100.5), Px(-100));
     }
 
     #[test]
