@@ -10,6 +10,7 @@ struct GlassUniforms {
 
     // f32 types
     corner_radius: f32,
+    g2_k_value: f32,
     dispersion_height: f32,
     chroma_multiplier: f32,
     refraction_height: f32,
@@ -69,26 +70,45 @@ fn normal_to_tangent(normal: vec2<f32>) -> vec2<f32> {
     return vec2<f32>(normal.y, -normal.x);
 }
 
-fn sd_rectangle(coord: vec2<f32>, half_size: vec2<f32>) -> f32 {
-    let d = abs(coord) - half_size;
-    let outside = length(max(d, vec2<f32>(0.0)));
-    let inside = min(max(d.x, d.y), 0.0);
-    return outside + inside;
-}
+// G2-like SDF for rounded corners using p-norm
+// p: point to sample
+// b: half-size of the box
+// r: corner radius
+// k: exponent for p-norm (k=2.0 for G1 circle, k>2.0 for G2-like superellipse)
+fn sdf_g2_rounded_box(p: vec2<f32>, b: vec2<f32>, r: f32, k: f32) -> f32 {
+    let q = abs(p) - b + r;
+    let v = max(q, vec2<f32>(0.0));
 
-fn sd_rounded_rectangle(coord: vec2<f32>, half_size: vec2<f32>, corner_radius: f32) -> f32 {
-    let inner_half_size = half_size - vec2<f32>(corner_radius);
-    return sd_rectangle(coord, inner_half_size) - corner_radius;
-}
+    // Fall back to standard circular SDF for k=2
+    if (abs(k - 2.0) < 0.001) {
+        return length(v) + min(max(q.x, q.y), 0.0) - r;
+    }
 
-fn grad_sd_rounded_rectangle(coord: vec2<f32>, half_size: vec2<f32>, corner_radius: f32) -> vec2<f32> {
-    let inner_half_size = half_size - vec2<f32>(corner_radius);
-    let corner_coord = abs(coord) - inner_half_size;
+    // P-norm for the corner distance
+    let dist_corner_shape = pow(pow(v.x, k) + pow(v.y, k), 1.0/k);
     
-    if (corner_coord.x >= 0.0 && corner_coord.y >= 0.0) {
-        return sign(coord) * normalize(corner_coord);
-    } else {
-        if (-corner_coord.x < -corner_coord.y) {
+    return dist_corner_shape + min(max(q.x, q.y), 0.0) - r;
+}
+
+// Gradient (for normal vector) of the G2 rounded box SDF
+fn grad_sd_g2_rounded_box(coord: vec2<f32>, half_size: vec2<f32>, r: f32, k: f32) -> vec2<f32> {
+    let inner_half_size = half_size - r;
+    let corner_coord = abs(coord) - inner_half_size;
+
+    if (corner_coord.x >= 0.0 && corner_coord.y >= 0.0) { // In a corner region
+        // The gradient direction of the p-norm is (x^(k-1), y^(k-1))
+        // Add a small epsilon to avoid pow(0, negative) which is NaN
+        let grad_dir = vec2<f32>(
+            pow(corner_coord.x + 0.0001, k - 1.0), 
+            pow(corner_coord.y + 0.0001, k - 1.0)
+        );
+
+        // Return the normalized gradient, preserving the original signs
+        return sign(coord) * normalize(grad_dir);
+
+    } else { // On a straight edge
+        // Determine if it's a vertical or horizontal edge based on which is closer to the center
+        if (corner_coord.x > corner_coord.y) {
             return sign(coord) * vec2<f32>(1.0, 0.0);
         } else {
             return sign(coord) * vec2<f32>(0.0, 1.0);
@@ -124,16 +144,16 @@ fn rand(co: vec2<f32>) -> f32 {
     return fract(sin(dot(co.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }
 
-fn refraction_color(local_coord: vec2<f32>, size: vec2<f32>, corner_radius: f32, eccentric_factor: f32, height: f32, amount: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
+fn refraction_color(local_coord: vec2<f32>, size: vec2<f32>, corner_radius: f32, k: f32, eccentric_factor: f32, height: f32, amount: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
-    let sd = sd_rounded_rectangle(centered_coord, half_size, corner_radius);
+    let sd = sdf_g2_rounded_box(centered_coord, half_size, corner_radius, k);
     
     var refracted_coord = local_coord;
     if (sd < 0.0 && -sd < height) {
         let max_grad_radius = max(min(half_size.x, half_size.y), corner_radius);
         let grad_radius = min(corner_radius * 1.5, max_grad_radius);
-        let normal = grad_sd_rounded_rectangle(centered_coord, half_size, grad_radius);
+        let normal = grad_sd_g2_rounded_box(centered_coord, half_size, grad_radius, k);
         
         let refracted_distance = circle_map(1.0 - (-sd / height)) * amount;
         let refracted_direction = normalize(normal + eccentric_factor * normalize(centered_coord));
@@ -144,15 +164,15 @@ fn refraction_color(local_coord: vec2<f32>, size: vec2<f32>, corner_radius: f32,
     return textureSample(t_diffuse, s_diffuse, sample_uv);
 }
 
-fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, corner_radius: f32, dispersion_height: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
+fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, corner_radius: f32, k: f32, dispersion_height: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
-    let sd = sd_rounded_rectangle(centered_coord, half_size, corner_radius);
+    let sd = sdf_g2_rounded_box(centered_coord, half_size, corner_radius, k);
     
-    let base_refracted = refraction_color(local_coord, size, corner_radius, uniforms.eccentric_factor, uniforms.refraction_height, uniforms.refraction_amount, rect_uv_start, px_to_uv_ratio);
+    let base_refracted = refraction_color(local_coord, size, corner_radius, k, uniforms.eccentric_factor, uniforms.refraction_height, uniforms.refraction_amount, rect_uv_start, px_to_uv_ratio);
 
     if (sd < 0.0 && -sd < dispersion_height && dispersion_height > 0.0) {
-        let normal = grad_sd_rounded_rectangle(centered_coord, half_size, corner_radius);
+        let normal = grad_sd_g2_rounded_box(centered_coord, half_size, corner_radius, k);
         let tangent = normal_to_tangent(normal);
         
         let dispersion_fraction = 1.0 - (-sd / dispersion_height);
@@ -173,7 +193,7 @@ fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, corner
         for (var i = 0; i < sample_count; i = i + 1) {
             let t = f32(i) / f32(sample_count - 1);
             let sample_coord = local_coord + tangent * (t - 0.5) * dispersion_width;
-            let refracted_c = refraction_color(sample_coord, size, corner_radius, uniforms.eccentric_factor, uniforms.refraction_height, uniforms.refraction_amount, rect_uv_start, px_to_uv_ratio);
+            let refracted_c = refraction_color(sample_coord, size, corner_radius, k, uniforms.eccentric_factor, uniforms.refraction_height, uniforms.refraction_amount, rect_uv_start, px_to_uv_ratio);
             
             if (t >= 0.0 && t <= 0.5) {
                 blue_color += refracted_c.b;
@@ -219,17 +239,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let local_coord = local_uv * uniforms.rect_size_px;
     let half_size = uniforms.rect_size_px * 0.5;
     let centered_coord = local_coord - half_size;
-    let sd = sd_rounded_rectangle(centered_coord, half_size, uniforms.corner_radius);
+    let k = uniforms.g2_k_value;
+    let sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
 
     // 1. Get base refracted/dispersed color
     var base_color: vec4<f32>;
     if (uniforms.dispersion_height > 0.0) {
-        base_color = dispersion_color_on_refracted(local_coord, uniforms.rect_size_px, uniforms.corner_radius, uniforms.dispersion_height, rect_uv_min, px_to_uv_ratio);
+        base_color = dispersion_color_on_refracted(local_coord, uniforms.rect_size_px, uniforms.corner_radius, k, uniforms.dispersion_height, rect_uv_min, px_to_uv_ratio);
     } else {
         base_color = refraction_color(
             local_coord, 
             uniforms.rect_size_px, 
             uniforms.corner_radius, 
+            k,
             uniforms.eccentric_factor, 
             uniforms.refraction_height, 
             uniforms.refraction_amount,

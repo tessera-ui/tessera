@@ -20,6 +20,7 @@ struct GlassUniforms {
 
     // f32 types
     corner_radius: f32,
+    g2_k_value: f32,
     dispersion_height: f32,
     chroma_multiplier: f32,
     refraction_height: f32,
@@ -33,7 +34,7 @@ struct GlassUniforms {
     noise_amount: f32,
     noise_scale: f32,
     time: f32,
-    _padding: [f32; 3], // Struct needs to be aligned to 16 bytes
+    _padding: [f32; 3], // Struct needs to be aligned to 16 bytes. (33 data f32s + 3 padding f32s = 36 total * 4 bytes/f32 = 144 bytes)
 }
 
 // --- Pipeline Definition ---
@@ -175,6 +176,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             rect_uv_bounds,
             rect_size_px: [size[0].0 as f32, size[1].0 as f32],
             corner_radius: args.corner_radius,
+            g2_k_value: args.g2_k_value,
             dispersion_height: args.dispersion_height,
             chroma_multiplier: args.chroma_multiplier,
             refraction_height: args.refraction_height,
