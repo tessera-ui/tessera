@@ -4,7 +4,7 @@
 //! determined by the largest child. It also shows how to use
 //! the `alignment` property to position the children.
 
-use tessera::{DimensionValue, Px, Renderer};
+use tessera::{DimensionValue, Dp, Renderer};
 use tessera_basic_components::{
     alignment::Alignment,
     boxed::{BoxedArgs, boxed_ui},
@@ -27,8 +27,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 || surface(
                     SurfaceArgs {
                         color: [1.0, 0.2, 0.2, 1.0],
-                        width: Some(DimensionValue::Fixed(Px(200))),
-                        height: Some(DimensionValue::Fixed(Px(120))),
+                        width: Some(DimensionValue::Fixed(Dp(1000.0).into())),
+                        height: Some(DimensionValue::Fixed(Dp(600.0).into())),
                         ..Default::default()
                     },
                     None,
@@ -38,8 +38,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 || surface(
                     SurfaceArgs {
                         color: [0.2, 1.0, 0.2, 0.8],
-                        width: Some(DimensionValue::Fixed(Px(120))),
-                        height: Some(DimensionValue::Fixed(Px(80))),
+                        width: Some(DimensionValue::Fixed(Dp(600.0).into())),
+                        height: Some(DimensionValue::Fixed(Dp(400.0).into())),
                         ..Default::default()
                     },
                     None,
@@ -49,8 +49,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 || surface(
                     SurfaceArgs {
                         color: [0.2, 0.4, 1.0, 0.7],
-                        width: Some(DimensionValue::Fixed(Px(60))),
-                        height: Some(DimensionValue::Fixed(Px(40))),
+                        width: Some(DimensionValue::Fixed(Dp(300.0).into())),
+                        height: Some(DimensionValue::Fixed(Dp(200.0).into())),
                         ..Default::default()
                     },
                     None,
@@ -59,8 +59,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Add a FluidGlass component to test the multi-pass rendering
                 || fluid_glass(
                     FluidGlassArgsBuilder::default()
-                        .width(DimensionValue::Fixed(Px(100)))
-                        .height(DimensionValue::Fixed(Px(100)))
+                        .width(DimensionValue::Fixed(Dp(500.0).into()))
+                        .height(DimensionValue::Fixed(Dp(500.0).into()))
+                        .build()
+                        .unwrap(),
+                ),
+                // Add a FluidGlass component to test the multi-pass rendering
+                || fluid_glass(
+                    FluidGlassArgsBuilder::default()
+                        .width(DimensionValue::Fixed(Dp(280.0).into()))
+                        .height(DimensionValue::Fixed(Dp(280.0).into()))
                         .build()
                         .unwrap(),
                 ),

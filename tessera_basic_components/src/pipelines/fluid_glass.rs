@@ -1,5 +1,6 @@
 use bytemuck::{Pod, Zeroable};
-use tessera::{Px, PxPosition, renderer::DrawablePipeline};
+use tessera::{renderer::DrawablePipeline, Px, PxPosition};
+use wgpu::util::DeviceExt;
 
 use crate::fluid_glass::FluidGlassCommand;
 
@@ -39,7 +40,6 @@ struct GlassUniforms {
 
 pub(crate) struct FluidGlassPipeline {
     pipeline: wgpu::RenderPipeline,
-    uniform_buffer: wgpu::Buffer,
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
 }
@@ -131,16 +131,8 @@ impl FluidGlassPipeline {
             cache: None,
         });
 
-        let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Fluid Glass Uniform Buffer"),
-            size: std::mem::size_of::<GlassUniforms>() as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         Self {
             pipeline,
-            uniform_buffer,
             bind_group_layout,
             sampler,
         }
@@ -151,7 +143,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
     fn draw(
         &mut self,
         gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
+        _queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass,
         command: &FluidGlassCommand,
@@ -199,14 +191,18 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             _padding: [0.0; 3],
         };
 
-        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+        let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Temporary Fluid Glass Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[uniforms]),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
 
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: self.uniform_buffer.as_entire_binding(),
+                    resource: uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
