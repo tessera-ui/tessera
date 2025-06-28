@@ -7,3 +7,6 @@ debug = true
 codegen-units = 1
 lto = true
 strip = true
+
+[profile.dev]
+opt-level = 1
