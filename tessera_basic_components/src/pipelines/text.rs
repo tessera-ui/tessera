@@ -145,6 +145,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
         _size: [tessera::Px; 2],
         start_pos: PxPosition,
         _scene_texture_view: Option<&wgpu::TextureView>,
+        _compute_registry: &mut tessera::renderer::compute::ComputePipelineRegistry,
     ) {
         self.push(start_pos, command.data.clone());
     }

@@ -1,6 +1,7 @@
 mod command;
 mod pipeline;
 
+use super::compute::ComputePipelineRegistry;
 use crate::{Px, PxPosition};
 pub use command::{DrawCommand, RenderRequirement};
 pub use pipeline::{DrawablePipeline, PipelineRegistry};
@@ -53,6 +54,7 @@ impl Drawer {
         size: [Px; 2],
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
+        compute_registry: &mut ComputePipelineRegistry,
     ) {
         self.pipeline_registry.dispatch(
             gpu,
@@ -63,6 +65,7 @@ impl Drawer {
             size,
             start_pos,
             scene_texture_view,
+            compute_registry,
         );
     }
 }

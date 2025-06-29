@@ -1,6 +1,9 @@
 use std::any::Any;
 
-use crate::{Px, PxPosition, renderer::DrawCommand};
+use crate::{
+    renderer::{compute::ComputePipelineRegistry, DrawCommand},
+    Px, PxPosition,
+};
 
 #[allow(unused_variables)]
 pub trait DrawablePipeline<T: DrawCommand> {
@@ -32,6 +35,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
         size: [Px; 2],
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
+        compute_registry: &mut ComputePipelineRegistry,
     );
 }
 
@@ -62,6 +66,7 @@ pub trait ErasedDrawablePipeline {
         size: [Px; 2],
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
+        compute_registry: &mut ComputePipelineRegistry,
     ) -> bool;
 }
 
@@ -104,6 +109,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         size: [Px; 2],
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
+        compute_registry: &mut ComputePipelineRegistry,
     ) -> bool {
         if let Some(cmd) = (command as &dyn Any).downcast_ref::<T>() {
             self.pipeline.draw(
@@ -115,6 +121,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
                 size,
                 start_pos,
                 scene_texture_view,
+                compute_registry,
             );
             true
         } else {
@@ -179,6 +186,7 @@ impl PipelineRegistry {
         size: [Px; 2],
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
+        compute_registry: &mut ComputePipelineRegistry,
     ) {
         for pipeline in self.pipelines.iter_mut() {
             if pipeline.draw_erased(
@@ -190,6 +198,7 @@ impl PipelineRegistry {
                 size,
                 start_pos,
                 scene_texture_view,
+                compute_registry,
             ) {
                 return;
             }

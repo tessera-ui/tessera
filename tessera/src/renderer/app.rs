@@ -4,9 +4,12 @@ use log::{error, info};
 use parking_lot::RwLock;
 use winit::window::Window;
 
-use crate::{Px, PxPosition, dp::SCALE_FACTOR};
+use crate::{dp::SCALE_FACTOR, Px, PxPosition};
 
-use super::drawer::{DrawCommand, Drawer, RenderRequirement};
+use super::{
+    compute::ComputePipelineRegistry,
+    drawer::{DrawCommand, Drawer, RenderRequirement},
+};
 
 // Render pass resources for ping-pong operation
 struct PassTarget {
@@ -32,6 +35,8 @@ pub struct WgpuApp {
     size_changed: bool,
     /// draw pipelines
     pub drawer: Drawer,
+    /// compute pipelines
+    pub compute_pipeline_registry: ComputePipelineRegistry,
 
     // --- New ping-pong rendering resources ---
     pass_a: PassTarget,
@@ -71,18 +76,20 @@ impl WgpuApp {
         };
         // Create a device and queue
         let (gpu, queue) = match adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                // WebGL backend does not support all features
-                required_limits: if cfg!(target_arch = "wasm32") {
-                    wgpu::Limits::downlevel_webgl2_defaults()
-                } else {
-                    wgpu::Limits::default()
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    required_features: wgpu::Features::empty(),
+                    // WebGL backend does not support all features
+                    required_limits: if cfg!(target_arch = "wasm32") {
+                        wgpu::Limits::downlevel_webgl2_defaults()
+                    } else {
+                        wgpu::Limits::default()
+                    },
+                    label: None,
+                    memory_hints: wgpu::MemoryHints::Performance,
+                    trace: wgpu::Trace::Off,
                 },
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
-            })
+            )
             .await
         {
             Ok((gpu, queue)) => (gpu, queue),
@@ -138,6 +145,7 @@ impl WgpuApp {
             drawer,
             pass_a,
             pass_b,
+            compute_pipeline_registry: ComputePipelineRegistry::new(),
         }
     }
 
@@ -283,6 +291,7 @@ impl WgpuApp {
                                 size,
                                 pos,
                                 None,
+                                &mut self.compute_pipeline_registry,
                             );
                         }
                         self.drawer
@@ -327,6 +336,7 @@ impl WgpuApp {
                         size,
                         pos,
                         Some(&read_target.view),
+                        &mut self.compute_pipeline_registry,
                     );
                     self.drawer
                         .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);
@@ -363,6 +373,7 @@ impl WgpuApp {
                         size,
                         pos,
                         None,
+                        &mut self.compute_pipeline_registry,
                     );
                 }
                 self.drawer

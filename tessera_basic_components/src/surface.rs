@@ -258,6 +258,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     shadow: args_measure_clone.shadow,
                     border_width: args_measure_clone.border_width,
                     ripple: ripple_props,
+                    segments_per_corner: 32,
                 }
             } else {
                 ShapeCommand::RippleRect {
@@ -265,6 +266,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     corner_radius: args_measure_clone.corner_radius,
                     shadow: args_measure_clone.shadow,
                     ripple: ripple_props,
+                    segments_per_corner: 32,
                 }
             }
         } else {
@@ -275,12 +277,14 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     corner_radius: args_measure_clone.corner_radius,
                     shadow: args_measure_clone.shadow,
                     border_width: args_measure_clone.border_width,
+                    segments_per_corner: 32,
                 }
             } else {
                 ShapeCommand::Rect {
                     color: effective_color,
                     corner_radius: args_measure_clone.corner_radius,
                     shadow: args_measure_clone.shadow,
+                    segments_per_corner: 32,
                 }
             }
         };

@@ -19,6 +19,7 @@ pub fn selection_highlight_rect(
             color,
             corner_radius: 0.0, // Sharp corners for text selection
             shadow: None,       // No shadow for selection highlight
+            segments_per_corner: 0, // Sharp corners for selection
         };
 
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {

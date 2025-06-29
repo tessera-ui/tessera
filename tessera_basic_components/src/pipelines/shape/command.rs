@@ -13,6 +13,10 @@ pub enum ShapeCommand {
         corner_radius: f32,
         /// Shadow properties of the rectangle
         shadow: Option<ShadowProps>,
+        /// The number of line segments used to approximate each corner for G2 smoothness.
+        /// More segments result in a smoother curve but require more computation.
+        /// A value of 16 or 32 is usually sufficient.
+        segments_per_corner: u32,
     },
     /// An outlined rectangle
     OutlinedRect {
@@ -24,6 +28,8 @@ pub enum ShapeCommand {
         shadow: Option<ShadowProps>,
         /// Width of the border
         border_width: f32,
+        /// The number of line segments used to approximate each corner for G2 smoothness.
+        segments_per_corner: u32,
     },
     /// A filled rectangle with ripple effect animation
     RippleRect {
@@ -35,6 +41,8 @@ pub enum ShapeCommand {
         shadow: Option<ShadowProps>,
         /// Ripple effect properties
         ripple: RippleProps,
+        /// The number of line segments used to approximate each corner for G2 smoothness.
+        segments_per_corner: u32,
     },
     /// An outlined rectangle with ripple effect animation
     RippleOutlinedRect {
@@ -48,6 +56,8 @@ pub enum ShapeCommand {
         border_width: f32,
         /// Ripple effect properties
         ripple: RippleProps,
+        /// The number of line segments used to approximate each corner for G2 smoothness.
+        segments_per_corner: u32,
     },
 }
 
@@ -57,9 +67,6 @@ impl DrawCommand for ShapeCommand {
     }
 
     fn requirement(&self) -> RenderRequirement {
-        // For now, all shapes are standard.
-        // If a shape like "GlassRect" is added, it would return SamplesBackground.
-        // e.g., match self { ShapeCommand::GlassRect { .. } => RenderRequirement::SamplesBackground, _ => RenderRequirement::Standard }
         RenderRequirement::Standard
     }
 }
@@ -111,6 +118,7 @@ impl ShapeCommandComputed {
                 color,
                 corner_radius,
                 shadow,
+                .. // segments_per_corner is not used by the CPU fallback
             } => {
                 rect_to_computed_draw_command(
                     size,
@@ -127,6 +135,7 @@ impl ShapeCommandComputed {
                 corner_radius,
                 shadow,
                 border_width,
+                .. // segments_per_corner is not used by the CPU fallback
             } => {
                 rect_to_computed_draw_command(
                     size,
@@ -143,6 +152,7 @@ impl ShapeCommandComputed {
                 corner_radius,
                 shadow,
                 ripple,
+                .. // segments_per_corner is not used by the CPU fallback
             } => {
                 ripple_rect_to_computed_draw_command(
                     size,
@@ -161,6 +171,7 @@ impl ShapeCommandComputed {
                 shadow,
                 border_width,
                 ripple,
+                .. // segments_per_corner is not used by the CPU fallback
             } => {
                 ripple_rect_to_computed_draw_command(
                     size,
@@ -181,7 +192,7 @@ impl ShapeCommandComputed {
 fn rect_to_computed_draw_command(
     size: [Px; 2],
     position: PxPosition,
-    primary_color_rgba: [f32; 4], // Changed from primary_color_rgb
+    primary_color_rgba: [f32; 4],
     corner_radius: f32,
     shadow: Option<ShadowProps>,
     border_width: f32,
@@ -197,8 +208,7 @@ fn rect_to_computed_draw_command(
         [-0.5, 0.5],  // Bottom-Left
     ];
 
-    // Vertex color is less important now as shader uses uniform primary_color
-    let vertex_color_placeholder_rgb = [0.0, 0.0, 0.0]; // Kept as RGB for vertex data
+    let vertex_color_placeholder_rgb = [0.0, 0.0, 0.0];
     let top_left = position.to_f32_arr3();
     let top_right = [top_left[0] + width.to_f32(), top_left[1], top_left[2]];
     let bottom_right = [
@@ -231,9 +241,6 @@ fn rect_to_computed_draw_command(
         },
     ];
 
-    // primary_color_rgba is now directly used
-    // let primary_rgba_color = [primary_color_rgb[0], primary_color_rgb[1], primary_color_rgb[2], 1.0f32];
-
     let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) = if let Some(s_props) = shadow {
         (s_props.color, s_props.offset, s_props.smoothness)
     } else {
@@ -242,15 +249,15 @@ fn rect_to_computed_draw_command(
 
     let uniforms = ShapeUniforms {
         size_cr_border_width: [width.to_f32(), height.to_f32(), corner_radius, border_width],
-        primary_color: primary_color_rgba, // Directly use the RGBA color
+        primary_color: primary_color_rgba,
         shadow_color: shadow_rgba_color,
         render_params: [
             shadow_offset_vec[0],
             shadow_offset_vec[1],
             shadow_smooth_val,
-            render_mode, // 0.0 for fill, 1.0 for outline
+            render_mode,
         ],
-        ripple_params: [0.0, 0.0, 0.0, 0.0], // No ripple for regular shapes
+        ripple_params: [0.0, 0.0, 0.0, 0.0],
         ripple_color: [0.0, 0.0, 0.0, 0.0],
     };
 
@@ -278,8 +285,7 @@ fn ripple_rect_to_computed_draw_command(
         [-0.5, 0.5],  // Bottom-Left
     ];
 
-    // Vertex color is less important now as shader uses uniform primary_color
-    let vertex_color_placeholder_rgb = [0.0, 0.0, 0.0]; // Kept as RGB for vertex data
+    let vertex_color_placeholder_rgb = [0.0, 0.0, 0.0];
     let top_left = position.to_f32_arr3();
     let top_right = [top_left[0] + width.to_f32(), top_left[1], top_left[2]];
     let bottom_right = [
@@ -318,11 +324,10 @@ fn ripple_rect_to_computed_draw_command(
         ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
     };
 
-    // Adjust render mode for ripple effects
     let ripple_render_mode = if render_mode == 0.0 {
-        3.0 // ripple_fill
+        3.0
     } else {
-        4.0 // ripple_outline
+        4.0
     };
 
     let uniforms = ShapeUniforms {

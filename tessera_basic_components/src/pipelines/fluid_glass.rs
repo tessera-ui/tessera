@@ -151,6 +151,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         size: [Px; 2],
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
+        _compute_registry: &mut tessera::renderer::compute::ComputePipelineRegistry,
     ) {
         let Some(scene_texture) = scene_texture_view else {
             return;

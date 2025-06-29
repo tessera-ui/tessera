@@ -1,5 +1,6 @@
 pub mod app;
 pub mod drawer;
+pub mod compute;
 
 use std::{sync::Arc, time::Instant};
 
@@ -27,6 +28,7 @@ use crate::{
 };
 
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirement};
+pub use compute::{ComputeCommand, ComputablePipeline, ComputePipelineRegistry};
 
 /// The bind group set index where the scene texture is bound for pipelines that
 /// require `RenderRequirement::SamplesBackground`.
