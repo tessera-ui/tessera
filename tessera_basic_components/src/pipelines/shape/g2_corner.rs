@@ -166,12 +166,6 @@ impl ComputablePipeline<G2RoundedRectCommand> for G2RoundedRectPipeline {
         }
 
         queue.submit(Some(encoder.finish()));
-        
-        // TODO: This is a temporary solution to make it work synchronously.
-        // This will cause performance hitches. We need to implement a proper
-        // async mechanism to get the result from the compute shader.
-        // device.poll(wgpu::Maintain::wait());
-
         self.cache.insert(*command, Arc::new(output_buffer));
     }
 
