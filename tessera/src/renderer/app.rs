@@ -4,7 +4,7 @@ use log::{error, info};
 use parking_lot::RwLock;
 use winit::window::Window;
 
-use crate::{dp::SCALE_FACTOR, Px, PxPosition};
+use crate::{Px, PxPosition, dp::SCALE_FACTOR};
 
 use super::{
     compute::ComputePipelineRegistry,
@@ -76,20 +76,18 @@ impl WgpuApp {
         };
         // Create a device and queue
         let (gpu, queue) = match adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    required_features: wgpu::Features::empty(),
-                    // WebGL backend does not support all features
-                    required_limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
-                    } else {
-                        wgpu::Limits::default()
-                    },
-                    label: None,
-                    memory_hints: wgpu::MemoryHints::Performance,
-                    trace: wgpu::Trace::Off,
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                // WebGL backend does not support all features
+                required_limits: if cfg!(target_arch = "wasm32") {
+                    wgpu::Limits::downlevel_webgl2_defaults()
+                } else {
+                    wgpu::Limits::default()
                 },
-            )
+                label: None,
+                memory_hints: wgpu::MemoryHints::Performance,
+                trace: wgpu::Trace::Off,
+            })
             .await
         {
             Ok((gpu, queue)) => (gpu, queue),

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use tessera::renderer::{ComputablePipeline};
+use tessera::renderer::ComputablePipeline;
 use wgpu::util::DeviceExt;
 
 use super::ShapeVertex;
@@ -190,11 +190,26 @@ impl ComputablePipeline<G2RoundedOutlineRectCommand> for G2RoundedOutlineRectPip
             label: Some("G2 Corner Outline Bind Group"),
             layout: &self.bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: size_buffer.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: radius_buffer.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: border_buffer.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 3, resource: segments_buffer.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 4, resource: output_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: size_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: radius_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: border_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: segments_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: output_buffer.as_entire_binding(),
+                },
             ],
         });
 
@@ -210,7 +225,7 @@ impl ComputablePipeline<G2RoundedOutlineRectCommand> for G2RoundedOutlineRectPip
             compute_pass.set_pipeline(&self.pipeline);
             compute_pass.set_bind_group(0, &bind_group, &[]);
             let workgroup_count = (command.segments_per_corner * 4 + 63) / 64;
-             if workgroup_count > 0 {
+            if workgroup_count > 0 {
                 compute_pass.dispatch_workgroups(workgroup_count, 1, 1);
             }
         }
@@ -220,7 +235,10 @@ impl ComputablePipeline<G2RoundedOutlineRectCommand> for G2RoundedOutlineRectPip
         self.cache.insert(*command, Arc::new(output_buffer));
     }
 
-    fn get_result(&self, command: &G2RoundedOutlineRectCommand) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+    fn get_result(
+        &self,
+        command: &G2RoundedOutlineRectCommand,
+    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
         self.cache
             .get(command)
             .map(|buffer| buffer.clone() as Arc<dyn std::any::Any + Send + Sync>)

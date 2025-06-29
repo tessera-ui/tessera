@@ -1,6 +1,6 @@
 pub mod app;
-pub mod drawer;
 pub mod compute;
+pub mod drawer;
 
 use std::{sync::Arc, time::Instant};
 
@@ -27,8 +27,8 @@ use crate::{
     thread_utils, tokio_runtime,
 };
 
+pub use compute::{ComputablePipeline, ComputeCommand, ComputePipelineRegistry};
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirement};
-pub use compute::{ComputeCommand, ComputablePipeline, ComputePipelineRegistry};
 
 /// The bind group set index where the scene texture is bound for pipelines that
 /// require `RenderRequirement::SamplesBackground`.
@@ -247,7 +247,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 let cursor_events = self.cursor_state.take_events();
                 let keyboard_events = self.keyboard_state.take_events();
                 let screen_size: [Px; 2] = [app.size().width.into(), app.size().height.into()];
-                let commands = component_tree.compute(
+                let (commands, window_requests) = component_tree.compute(
                     screen_size,
                     cursor_position,
                     cursor_events,
@@ -256,6 +256,13 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 let draw_cost = draw_timer.elapsed();
                 debug!("Draw commands computed in {draw_cost:?}");
                 component_tree.clear();
+                // After compute, check for cursor change requests
+                let new_cursor = window_requests
+                    .cursor_icon
+                    .get()
+                    .unwrap_or_else(|| winit::window::CursorIcon::Default);
+                app.window
+                    .set_cursor(winit::window::Cursor::Icon(new_cursor));
                 // timer for performance measurement
                 let render_timer = Instant::now();
                 // Render the commands

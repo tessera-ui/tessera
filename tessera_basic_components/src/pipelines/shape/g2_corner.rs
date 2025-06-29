@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc};
-use tessera::renderer::{ComputablePipeline}; // ComputeCommand is handled by blanket impl
+use std::sync::Arc;
+use tessera::renderer::ComputablePipeline; // ComputeCommand is handled by blanket impl
 use wgpu::util::DeviceExt;
 
 use super::ShapeVertex;
@@ -169,7 +169,10 @@ impl ComputablePipeline<G2RoundedRectCommand> for G2RoundedRectPipeline {
         self.cache.insert(*command, Arc::new(output_buffer));
     }
 
-    fn get_result(&self, command: &G2RoundedRectCommand) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+    fn get_result(
+        &self,
+        command: &G2RoundedRectCommand,
+    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
         self.cache
             .get(command)
             .map(|buffer| buffer.clone() as Arc<dyn std::any::Any + Send + Sync>)

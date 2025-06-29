@@ -324,11 +324,7 @@ fn ripple_rect_to_computed_draw_command(
         ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
     };
 
-    let ripple_render_mode = if render_mode == 0.0 {
-        3.0
-    } else {
-        4.0
-    };
+    let ripple_render_mode = if render_mode == 0.0 { 3.0 } else { 4.0 };
 
     let uniforms = ShapeUniforms {
         size_cr_border_width: [width.to_f32(), height.to_f32(), corner_radius, border_width],

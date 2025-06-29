@@ -340,6 +340,14 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 state.set_hovered(is_cursor_in_surface);
             }
 
+            // Set cursor to pointer if hovered and clickable
+            if is_cursor_in_surface && args_for_handler.on_click.is_some() {
+                input
+                    .requests
+                    .cursor_icon
+                    .set(Some(tessera::winit::window::CursorIcon::Pointer));
+            }
+
             // Handle mouse events
             if is_cursor_in_surface {
                 // Check for mouse press events to start ripple

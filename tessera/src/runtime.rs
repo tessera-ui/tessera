@@ -14,6 +14,8 @@ pub struct TesseraRuntime {
     pub component_tree: ComponentTree,
     /// The size of the window, by pixels
     pub window_size: [u32; 2],
+    /// The cursor icon requested by components in the current frame.
+    pub cursor_icon_request: Option<winit::window::CursorIcon>,
 }
 
 impl TesseraRuntime {

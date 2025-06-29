@@ -6,12 +6,16 @@ use std::{num::NonZero, time::Instant};
 use log::{debug, error};
 use rayon::prelude::*;
 
-use crate::{Px, cursor::CursorEvent, px::PxPosition, renderer::DrawCommand};
+use crate::{
+    cursor::CursorEvent,
+    px::{Px, PxPosition},
+    renderer::DrawCommand,
+};
 pub use constraint::{Constraint, DimensionValue};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
-    MeasureFn, MeasurementError, StateHandlerFn, StateHandlerInput, measure_node, measure_nodes,
-    place_node,
+    MeasureFn, MeasurementError, StateHandlerFn, StateHandlerInput, WindowRequests, measure_node,
+    measure_nodes, place_node,
 };
 
 /// Respents a component tree
@@ -98,9 +102,12 @@ impl ComponentTree {
         cursor_position: Option<PxPosition>,
         mut cursor_events: Vec<CursorEvent>,
         mut keyboard_events: Vec<winit::event::KeyEvent>,
-    ) -> Vec<(PxPosition, [Px; 2], Box<dyn DrawCommand>)> {
+    ) -> (
+        Vec<(PxPosition, [Px; 2], Box<dyn DrawCommand>)>,
+        WindowRequests,
+    ) {
         let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
-            return vec![];
+            return (vec![], WindowRequests::default());
         };
         let screen_constraint = Constraint::new(
             DimensionValue::Fixed(screen_size[0]),
@@ -120,7 +127,7 @@ impl ComponentTree {
                 error!(
                     "Root node ({root_node:?}) measurement failed: {e:?}. Aborting draw command computation."
                 );
-                return vec![]; // Early return if root measurement fails
+                return (vec![], WindowRequests::default()); // Early return if root measurement fails
             }
         }
 
@@ -136,6 +143,7 @@ impl ComponentTree {
         );
 
         let state_handler_timer = Instant::now();
+        let window_requests = WindowRequests::default();
         debug!("Start executing state handlers...");
         for node_id in root_node
             .reverse_traverse(&self.tree)
@@ -174,6 +182,7 @@ impl ComponentTree {
                     cursor_position: current_cursor_position,
                     cursor_events: &mut cursor_events,
                     keyboard_events: &mut keyboard_events,
+                    requests: &window_requests,
                 };
                 state_handler(input);
             } else {
@@ -186,7 +195,7 @@ impl ComponentTree {
             "State handlers executed in {:?}",
             state_handler_timer.elapsed()
         );
-        commands
+        (commands, window_requests)
     }
 }
 

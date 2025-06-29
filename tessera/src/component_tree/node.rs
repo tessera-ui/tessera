@@ -1,4 +1,5 @@
 use std::{
+    cell::Cell,
     collections::HashMap,
     ops::{Add, AddAssign},
     time::Instant,
@@ -8,6 +9,7 @@ use dashmap::DashMap;
 use indextree::NodeId;
 use log::debug;
 use rayon::prelude::*;
+use winit::window::CursorIcon;
 
 use super::constraint::{Constraint, DimensionValue};
 use crate::{Px, cursor::CursorEvent, px::PxPosition, renderer::DrawCommand};
@@ -94,6 +96,16 @@ pub struct MeasureInput<'a> {
     pub metadatas: &'a ComponentNodeMetaDatas,
 }
 
+/// A collection of requests that components can make to the windowing system for the current frame.
+/// This struct's lifecycle is confined to a single `compute` pass.
+#[derive(Default, Debug)]
+pub struct WindowRequests {
+    /// The cursor icon requested by a component. If multiple components request a cursor,
+    /// the last one to make a request in a frame "wins". This is achieved via a `Cell`
+    /// which allows interior mutability.
+    pub cursor_icon: Cell<Option<CursorIcon>>,
+}
+
 /// A `StateHandlerFn` is a function that handles state changes for a component.
 ///
 /// The rule of execution order is:
@@ -122,6 +134,8 @@ pub struct StateHandlerInput<'a> {
     pub cursor_events: &'a mut Vec<CursorEvent>,
     /// Keyboard events from the event loop, if any.
     pub keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
+    /// A context for making requests to the window for the current frame.
+    pub requests: &'a WindowRequests,
 }
 
 /// Measures a single node recursively, returning its size or an error.

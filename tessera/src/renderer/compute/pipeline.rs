@@ -1,8 +1,4 @@
-use std::{
-    any::Any,
-    hash::Hash,
-    sync::{Arc},
-};
+use std::{any::Any, hash::Hash, sync::Arc};
 use wgpu::{Device, Queue};
 
 use super::command::ComputeCommand;
@@ -53,11 +49,17 @@ pub trait ComputablePipeline<T: ComputeCommand + Hash + Eq>: Send + Sync {
 pub(crate) trait ErasedComputablePipeline: Send + Sync {
     /// Type-erased version of [`ComputablePipeline::dispatch_once`].
     /// It attempts to downcast the `command` to the concrete type its pipeline understands.
-    fn dispatch_once_erased(&mut self, device: &Device, queue: &Queue, command: &dyn ComputeCommand);
+    fn dispatch_once_erased(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        command: &dyn ComputeCommand,
+    );
 
     /// Type-erased version of [`ComputablePipeline::get_result`].
     /// It attempts to downcast the `command` before querying for a result.
-    fn get_result_erased(&self, command: &dyn ComputeCommand) -> Option<Arc<dyn Any + Send + Sync>>;
+    fn get_result_erased(&self, command: &dyn ComputeCommand)
+    -> Option<Arc<dyn Any + Send + Sync>>;
 }
 
 /// (Internal) A wrapper that implements `ErasedComputablePipeline` for a concrete `ComputablePipeline`.
@@ -66,14 +68,24 @@ struct ComputablePipelineImpl<T: ComputeCommand + Hash + Eq, P: ComputablePipeli
     _marker: std::marker::PhantomData<T>,
 }
 
-impl<T: ComputeCommand + Hash + Eq + 'static, P: ComputablePipeline<T> + 'static> ErasedComputablePipeline for ComputablePipelineImpl<T, P> {
-    fn dispatch_once_erased(&mut self, device: &Device, queue: &Queue, command: &dyn ComputeCommand) {
+impl<T: ComputeCommand + Hash + Eq + 'static, P: ComputablePipeline<T> + 'static>
+    ErasedComputablePipeline for ComputablePipelineImpl<T, P>
+{
+    fn dispatch_once_erased(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        command: &dyn ComputeCommand,
+    ) {
         if let Some(c) = command.as_any().downcast_ref::<T>() {
             self.pipeline.dispatch_once(device, queue, c);
         }
     }
 
-    fn get_result_erased(&self, command: &dyn ComputeCommand) -> Option<Arc<dyn Any + Send + Sync>> {
+    fn get_result_erased(
+        &self,
+        command: &dyn ComputeCommand,
+    ) -> Option<Arc<dyn Any + Send + Sync>> {
         if let Some(c) = command.as_any().downcast_ref::<T>() {
             self.pipeline.get_result(c)
         } else {

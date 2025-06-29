@@ -17,8 +17,8 @@ pub fn selection_highlight_rect(
     measure(Box::new(move |input| {
         let drawable = ShapeCommand::Rect {
             color,
-            corner_radius: 0.0, // Sharp corners for text selection
-            shadow: None,       // No shadow for selection highlight
+            corner_radius: 0.0,     // Sharp corners for text selection
+            shadow: None,           // No shadow for selection highlight
             segments_per_corner: 0, // Sharp corners for selection
         };
 

@@ -6,11 +6,14 @@ use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
 use earcutr::earcut;
-use log::error;
-use tessera::{renderer::{compute::ComputePipelineRegistry, DrawablePipeline}, Px, PxPosition};
-use wgpu::{include_wgsl, util::DeviceExt};
 use g2_corner::G2RoundedRectCommand;
 use g2_corner_outline::G2RoundedOutlineRectCommand;
+use log::error;
+use tessera::{
+    Px, PxPosition,
+    renderer::{DrawablePipeline, compute::ComputePipelineRegistry},
+};
+use wgpu::{include_wgsl, util::DeviceExt};
 
 use command::ShapeCommandComputed;
 
@@ -323,7 +326,7 @@ impl ShapePipeline {
         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         render_pass.draw(0..vertex_data.len() as u32, 0..1);
     }
-    
+
     fn draw_computed_buffer(
         &self,
         gpu_queue: &wgpu::Queue,
@@ -346,7 +349,10 @@ impl ShapePipeline {
         }
         render_pass.set_bind_group(0, &self.bind_group, &[dynamic_offset]);
         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        render_pass.draw(0..vertex_buffer.size() as u32 / std::mem::size_of::<ShapeVertex>() as u32, 0..1);
+        render_pass.draw(
+            0..vertex_buffer.size() as u32 / std::mem::size_of::<ShapeVertex>() as u32,
+            0..1,
+        );
     }
 }
 
@@ -376,21 +382,28 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
     ) {
         let mut handled = false;
 
-        if let ShapeCommand::Rect { color, shadow, corner_radius, segments_per_corner } = command {
+        if let ShapeCommand::Rect {
+            color,
+            shadow,
+            corner_radius,
+            segments_per_corner,
+        } = command
+        {
             let compute_command = G2RoundedRectCommand {
                 width: size[0].to_f32(),
                 height: size[1].to_f32(),
                 corner_radius: *corner_radius,
                 segments_per_corner: *segments_per_corner,
             };
-            
+
             compute_registry.dispatch_once(gpu, gpu_queue, &compute_command);
-            
-            let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) = if let Some(s_props) = shadow {
-                (s_props.color, s_props.offset, s_props.smoothness)
-            } else {
-                ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
-            };
+
+            let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) =
+                if let Some(s_props) = shadow {
+                    (s_props.color, s_props.offset, s_props.smoothness)
+                } else {
+                    ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
+                };
 
             let uniforms = ShapeUniforms {
                 size_cr_border_width: [size[0].to_f32(), size[1].to_f32(), *corner_radius, 0.0],
@@ -405,34 +418,49 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                 ripple_params: [0.0, 0.0, 0.0, 0.0],
                 ripple_color: [0.0, 0.0, 0.0, 0.0],
             };
-            
+
             let dynamic_offset = self.current_shape_uniform_offset;
             if dynamic_offset <= self.max_shape_uniform_buffer_offset {
                 if let Some(result) = compute_registry.get_result(&compute_command) {
                     if let Some(vertex_buffer) = result.downcast_ref::<Arc<wgpu::Buffer>>() {
-                        self.draw_computed_buffer(gpu_queue, render_pass, vertex_buffer, &uniforms, dynamic_offset, false);
+                        self.draw_computed_buffer(
+                            gpu_queue,
+                            render_pass,
+                            vertex_buffer,
+                            &uniforms,
+                            dynamic_offset,
+                            false,
+                        );
                         self.current_shape_uniform_offset += self.shape_uniform_alignment;
                         handled = true;
                     }
                 }
             } else {
-                 panic!("Shape uniform buffer overflow for Rect");
+                panic!("Shape uniform buffer overflow for Rect");
             }
-        } else if let ShapeCommand::RippleRect { color, shadow, corner_radius, ripple, segments_per_corner } = command {
+        } else if let ShapeCommand::RippleRect {
+            color,
+            shadow,
+            corner_radius,
+            ripple,
+            segments_per_corner,
+        } = command
+        {
             let compute_command = G2RoundedRectCommand {
                 width: size[0].to_f32(),
                 height: size[1].to_f32(),
                 corner_radius: *corner_radius,
                 segments_per_corner: *segments_per_corner,
             };
-            
+
             compute_registry.dispatch_once(gpu, gpu_queue, &compute_command);
-            
-            let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) = if let Some(s_props) = shadow {
-                (s_props.color, s_props.offset, s_props.smoothness)
-            } else {
-                ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
-            };
+
+            let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) =
+                if let Some(s_props) = shadow {
+                    (s_props.color, s_props.offset, s_props.smoothness)
+                } else {
+                    ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
+                };
 
             let uniforms = ShapeUniforms {
                 size_cr_border_width: [size[0].to_f32(), size[1].to_f32(), *corner_radius, 0.0],
@@ -444,41 +472,66 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                     shadow_smooth_val,
                     3.0, // render_mode for ripple_fill
                 ],
-                ripple_params: [ripple.center[0], ripple.center[1], ripple.radius, ripple.alpha],
+                ripple_params: [
+                    ripple.center[0],
+                    ripple.center[1],
+                    ripple.radius,
+                    ripple.alpha,
+                ],
                 ripple_color: [ripple.color[0], ripple.color[1], ripple.color[2], 0.0],
             };
-            
+
             let dynamic_offset = self.current_shape_uniform_offset;
             if dynamic_offset <= self.max_shape_uniform_buffer_offset {
                 if let Some(result) = compute_registry.get_result(&compute_command) {
                     if let Some(vertex_buffer) = result.downcast_ref::<Arc<wgpu::Buffer>>() {
-                        self.draw_computed_buffer(gpu_queue, render_pass, vertex_buffer, &uniforms, dynamic_offset, false);
+                        self.draw_computed_buffer(
+                            gpu_queue,
+                            render_pass,
+                            vertex_buffer,
+                            &uniforms,
+                            dynamic_offset,
+                            false,
+                        );
                         self.current_shape_uniform_offset += self.shape_uniform_alignment;
                         handled = true;
                     }
                 }
             } else {
-                 panic!("Shape uniform buffer overflow for RippleRect");
+                panic!("Shape uniform buffer overflow for RippleRect");
             }
-        } else if let ShapeCommand::OutlinedRect { color, shadow, corner_radius, border_width, segments_per_corner } = command {
-             let compute_command = G2RoundedOutlineRectCommand {
+        } else if let ShapeCommand::OutlinedRect {
+            color,
+            shadow,
+            corner_radius,
+            border_width,
+            segments_per_corner,
+        } = command
+        {
+            let compute_command = G2RoundedOutlineRectCommand {
                 width: size[0].to_f32(),
                 height: size[1].to_f32(),
                 corner_radius: *corner_radius,
                 border_width: *border_width,
                 segments_per_corner: *segments_per_corner,
             };
-            
+
             compute_registry.dispatch_once(gpu, gpu_queue, &compute_command);
 
-            let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) = if let Some(s_props) = shadow {
-                (s_props.color, s_props.offset, s_props.smoothness)
-            } else {
-                ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
-            };
+            let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) =
+                if let Some(s_props) = shadow {
+                    (s_props.color, s_props.offset, s_props.smoothness)
+                } else {
+                    ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
+                };
 
             let uniforms = ShapeUniforms {
-                size_cr_border_width: [size[0].to_f32(), size[1].to_f32(), *corner_radius, *border_width],
+                size_cr_border_width: [
+                    size[0].to_f32(),
+                    size[1].to_f32(),
+                    *corner_radius,
+                    *border_width,
+                ],
                 primary_color: *color,
                 shadow_color: shadow_rgba_color,
                 render_params: [
@@ -493,9 +546,16 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
             let dynamic_offset = self.current_shape_uniform_offset;
             if dynamic_offset <= self.max_shape_uniform_buffer_offset {
-                 if let Some(result) = compute_registry.get_result(&compute_command) {
+                if let Some(result) = compute_registry.get_result(&compute_command) {
                     if let Some(vertex_buffer) = result.downcast_ref::<Arc<wgpu::Buffer>>() {
-                        self.draw_computed_buffer(gpu_queue, render_pass, vertex_buffer, &uniforms, dynamic_offset, true);
+                        self.draw_computed_buffer(
+                            gpu_queue,
+                            render_pass,
+                            vertex_buffer,
+                            &uniforms,
+                            dynamic_offset,
+                            true,
+                        );
                         self.current_shape_uniform_offset += self.shape_uniform_alignment;
                         handled = true;
                     }
@@ -503,7 +563,15 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             } else {
                 panic!("Shape uniform buffer overflow for OutlinedRect");
             }
-        } else if let ShapeCommand::RippleOutlinedRect { color, shadow, corner_radius, border_width, ripple, segments_per_corner } = command {
+        } else if let ShapeCommand::RippleOutlinedRect {
+            color,
+            shadow,
+            corner_radius,
+            border_width,
+            ripple,
+            segments_per_corner,
+        } = command
+        {
             let compute_command = G2RoundedOutlineRectCommand {
                 width: size[0].to_f32(),
                 height: size[1].to_f32(),
@@ -511,17 +579,23 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                 border_width: *border_width,
                 segments_per_corner: *segments_per_corner,
             };
-            
+
             compute_registry.dispatch_once(gpu, gpu_queue, &compute_command);
 
-            let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) = if let Some(s_props) = shadow {
-                (s_props.color, s_props.offset, s_props.smoothness)
-            } else {
-                ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
-            };
+            let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) =
+                if let Some(s_props) = shadow {
+                    (s_props.color, s_props.offset, s_props.smoothness)
+                } else {
+                    ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
+                };
 
             let uniforms = ShapeUniforms {
-                size_cr_border_width: [size[0].to_f32(), size[1].to_f32(), *corner_radius, *border_width],
+                size_cr_border_width: [
+                    size[0].to_f32(),
+                    size[1].to_f32(),
+                    *corner_radius,
+                    *border_width,
+                ],
                 primary_color: *color,
                 shadow_color: shadow_rgba_color,
                 render_params: [
@@ -530,7 +604,12 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                     shadow_smooth_val,
                     4.0, // render_mode for ripple_outline
                 ],
-                ripple_params: [ripple.center[0], ripple.center[1], ripple.radius, ripple.alpha],
+                ripple_params: [
+                    ripple.center[0],
+                    ripple.center[1],
+                    ripple.radius,
+                    ripple.alpha,
+                ],
                 ripple_color: [ripple.color[0], ripple.color[1], ripple.color[2], 0.0],
             };
 
@@ -538,20 +617,27 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             if dynamic_offset <= self.max_shape_uniform_buffer_offset {
                 if let Some(result) = compute_registry.get_result(&compute_command) {
                     if let Some(vertex_buffer) = result.downcast_ref::<Arc<wgpu::Buffer>>() {
-                        self.draw_computed_buffer(gpu_queue, render_pass, vertex_buffer, &uniforms, dynamic_offset, true);
+                        self.draw_computed_buffer(
+                            gpu_queue,
+                            render_pass,
+                            vertex_buffer,
+                            &uniforms,
+                            dynamic_offset,
+                            true,
+                        );
                         self.current_shape_uniform_offset += self.shape_uniform_alignment;
                         handled = true;
                     }
                 }
             } else {
-                 panic!("Shape uniform buffer overflow for RippleOutlinedRect");
+                panic!("Shape uniform buffer overflow for RippleOutlinedRect");
             }
         }
 
         if handled {
             return;
         }
-        
+
         // --- Fallback for ALL shapes, or primary path for non-G2 shapes ---
         let computed_command = ShapeCommandComputed::from_command(command.clone(), size, start_pos);
         let positions: Vec<[f32; 2]> = computed_command
@@ -565,11 +651,15 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             })
             .collect();
         let colors: Vec<[f32; 3]> = computed_command.vertices.iter().map(|v| v.color).collect();
-        let local_positions: Vec<[f32; 2]> = computed_command.vertices.iter().map(|v| v.local_pos).collect();
+        let local_positions: Vec<[f32; 2]> = computed_command
+            .vertices
+            .iter()
+            .map(|v| v.local_pos)
+            .collect();
 
         // Check if shadow needs to be drawn
-        let has_shadow =
-            computed_command.uniforms.shadow_color[3] > 0.0 && computed_command.uniforms.render_params[2] > 0.0;
+        let has_shadow = computed_command.uniforms.shadow_color[3] > 0.0
+            && computed_command.uniforms.render_params[2] > 0.0;
 
         if has_shadow {
             let dynamic_offset = self.current_shape_uniform_offset;
@@ -599,7 +689,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             );
             self.current_shape_uniform_offset += self.shape_uniform_alignment;
         }
-        
+
         let dynamic_offset = self.current_shape_uniform_offset;
         if dynamic_offset > self.max_shape_uniform_buffer_offset {
             panic!(
