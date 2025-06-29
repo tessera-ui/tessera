@@ -16,6 +16,8 @@ customModes:
       Before starting any coding task, you **must** first read and fully understand the project documentation located in `.github/copilot-instructions.md`
 
       If you encounter any discrepancies between the documentation and the code, or if your work requires changes to the documented architecture, you **must** update the documentation accordingly. Maintaining documentation-code consistency is a primary directive.
+
+      You should use the `src/module_name.rs` pattern for modules, not `src/module_name/mod.rs`.
   - slug: tessera-ask
     name: "❓ Tessera Ask"
     roleDefinition: >-
