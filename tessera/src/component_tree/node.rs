@@ -1,5 +1,4 @@
 use std::{
-    cell::Cell,
     collections::HashMap,
     ops::{Add, AddAssign},
     time::Instant,
@@ -103,7 +102,7 @@ pub struct WindowRequests {
     /// The cursor icon requested by a component. If multiple components request a cursor,
     /// the last one to make a request in a frame "wins". This is achieved via a `Cell`
     /// which allows interior mutability.
-    pub cursor_icon: Cell<Option<CursorIcon>>,
+    pub cursor_icon: CursorIcon,
 }
 
 /// A `StateHandlerFn` is a function that handles state changes for a component.
@@ -135,7 +134,7 @@ pub struct StateHandlerInput<'a> {
     /// Keyboard events from the event loop, if any.
     pub keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
     /// A context for making requests to the window for the current frame.
-    pub requests: &'a WindowRequests,
+    pub requests: &'a mut WindowRequests,
 }
 
 /// Measures a single node recursively, returning its size or an error.

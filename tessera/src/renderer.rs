@@ -257,10 +257,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 debug!("Draw commands computed in {draw_cost:?}");
                 component_tree.clear();
                 // After compute, check for cursor change requests
-                let new_cursor = window_requests
-                    .cursor_icon
-                    .get()
-                    .unwrap_or_else(|| winit::window::CursorIcon::Default);
+                let new_cursor = window_requests.cursor_icon;
                 app.window
                     .set_cursor(winit::window::Cursor::Icon(new_cursor));
                 // timer for performance measurement

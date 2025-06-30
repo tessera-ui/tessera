@@ -2,7 +2,7 @@ use derive_builder::Builder;
 use std::sync::{Arc, atomic};
 use tessera::{
     ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
-    PxPosition, measure_node, place_node,
+    PxPosition, measure_node, place_node, winit::window::CursorIcon,
 };
 use tessera_macros::tessera;
 
@@ -342,10 +342,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
 
             // Set cursor to pointer if hovered and clickable
             if is_cursor_in_surface && args_for_handler.on_click.is_some() {
-                input
-                    .requests
-                    .cursor_icon
-                    .set(Some(tessera::winit::window::CursorIcon::Pointer));
+                input.requests.cursor_icon = CursorIcon::Pointer;
             }
 
             // Handle mouse events

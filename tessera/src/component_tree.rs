@@ -143,7 +143,7 @@ impl ComponentTree {
         );
 
         let state_handler_timer = Instant::now();
-        let window_requests = WindowRequests::default();
+        let mut window_requests = WindowRequests::default();
         debug!("Start executing state handlers...");
         for node_id in root_node
             .reverse_traverse(&self.tree)
@@ -182,7 +182,7 @@ impl ComponentTree {
                     cursor_position: current_cursor_position,
                     cursor_events: &mut cursor_events,
                     keyboard_events: &mut keyboard_events,
-                    requests: &window_requests,
+                    requests: &mut window_requests,
                 };
                 state_handler(input);
             } else {
