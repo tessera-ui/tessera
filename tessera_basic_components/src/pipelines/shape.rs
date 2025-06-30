@@ -2,8 +2,6 @@ mod command;
 pub mod g2_corner;
 pub mod g2_corner_outline;
 
-use std::sync::Arc;
-
 use bytemuck::{Pod, Zeroable};
 use earcutr::earcut;
 use g2_corner::G2RoundedRectCommand;
@@ -421,19 +419,19 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
             let dynamic_offset = self.current_shape_uniform_offset;
             if dynamic_offset <= self.max_shape_uniform_buffer_offset {
-                if let Some(result) = compute_registry.get_result(&compute_command) {
-                    if let Some(vertex_buffer) = result.downcast_ref::<Arc<wgpu::Buffer>>() {
-                        self.draw_computed_buffer(
-                            gpu_queue,
-                            render_pass,
-                            vertex_buffer,
-                            &uniforms,
-                            dynamic_offset,
-                            false,
-                        );
-                        self.current_shape_uniform_offset += self.shape_uniform_alignment;
-                        handled = true;
-                    }
+                if let Some(vertex_buffer) =
+                    compute_registry.get_result::<wgpu::Buffer>(&compute_command)
+                {
+                    self.draw_computed_buffer(
+                        gpu_queue,
+                        render_pass,
+                        &vertex_buffer,
+                        &uniforms,
+                        dynamic_offset,
+                        false,
+                    );
+                    self.current_shape_uniform_offset += self.shape_uniform_alignment;
+                    handled = true;
                 }
             } else {
                 panic!("Shape uniform buffer overflow for Rect");
@@ -483,19 +481,19 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
             let dynamic_offset = self.current_shape_uniform_offset;
             if dynamic_offset <= self.max_shape_uniform_buffer_offset {
-                if let Some(result) = compute_registry.get_result(&compute_command) {
-                    if let Some(vertex_buffer) = result.downcast_ref::<Arc<wgpu::Buffer>>() {
-                        self.draw_computed_buffer(
-                            gpu_queue,
-                            render_pass,
-                            vertex_buffer,
-                            &uniforms,
-                            dynamic_offset,
-                            false,
-                        );
-                        self.current_shape_uniform_offset += self.shape_uniform_alignment;
-                        handled = true;
-                    }
+                if let Some(vertex_buffer) =
+                    compute_registry.get_result::<wgpu::Buffer>(&compute_command)
+                {
+                    self.draw_computed_buffer(
+                        gpu_queue,
+                        render_pass,
+                        &vertex_buffer,
+                        &uniforms,
+                        dynamic_offset,
+                        false,
+                    );
+                    self.current_shape_uniform_offset += self.shape_uniform_alignment;
+                    handled = true;
                 }
             } else {
                 panic!("Shape uniform buffer overflow for RippleRect");
@@ -546,19 +544,19 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
             let dynamic_offset = self.current_shape_uniform_offset;
             if dynamic_offset <= self.max_shape_uniform_buffer_offset {
-                if let Some(result) = compute_registry.get_result(&compute_command) {
-                    if let Some(vertex_buffer) = result.downcast_ref::<Arc<wgpu::Buffer>>() {
-                        self.draw_computed_buffer(
-                            gpu_queue,
-                            render_pass,
-                            vertex_buffer,
-                            &uniforms,
-                            dynamic_offset,
-                            true,
-                        );
-                        self.current_shape_uniform_offset += self.shape_uniform_alignment;
-                        handled = true;
-                    }
+                if let Some(vertex_buffer) =
+                    compute_registry.get_result::<wgpu::Buffer>(&compute_command)
+                {
+                    self.draw_computed_buffer(
+                        gpu_queue,
+                        render_pass,
+                        &vertex_buffer,
+                        &uniforms,
+                        dynamic_offset,
+                        true,
+                    );
+                    self.current_shape_uniform_offset += self.shape_uniform_alignment;
+                    handled = true;
                 }
             } else {
                 panic!("Shape uniform buffer overflow for OutlinedRect");
@@ -615,19 +613,19 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
             let dynamic_offset = self.current_shape_uniform_offset;
             if dynamic_offset <= self.max_shape_uniform_buffer_offset {
-                if let Some(result) = compute_registry.get_result(&compute_command) {
-                    if let Some(vertex_buffer) = result.downcast_ref::<Arc<wgpu::Buffer>>() {
-                        self.draw_computed_buffer(
-                            gpu_queue,
-                            render_pass,
-                            vertex_buffer,
-                            &uniforms,
-                            dynamic_offset,
-                            true,
-                        );
-                        self.current_shape_uniform_offset += self.shape_uniform_alignment;
-                        handled = true;
-                    }
+                if let Some(vertex_buffer) =
+                    compute_registry.get_result::<wgpu::Buffer>(&compute_command)
+                {
+                    self.draw_computed_buffer(
+                        gpu_queue,
+                        render_pass,
+                        &vertex_buffer,
+                        &uniforms,
+                        dynamic_offset,
+                        true,
+                    );
+                    self.current_shape_uniform_offset += self.shape_uniform_alignment;
+                    handled = true;
                 }
             } else {
                 panic!("Shape uniform buffer overflow for RippleOutlinedRect");

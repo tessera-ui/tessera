@@ -147,17 +147,33 @@ impl ComputePipelineRegistry {
         }
     }
 
-    /// Queries all registered pipelines for the result of a command.
+    /// Queries all registered pipelines for the result of a command and downcasts it
+    /// to the specified type.
     ///
-    /// This method iterates through the pipelines and returns the first successful result it finds.
+    /// This method iterates through the pipelines, finds the first one that has a result
+    /// for the given `command`, and then attempts to downcast that result to the type `R`.
+    ///
     /// This implies that for any given `ComputeCommand` type, only one `ComputablePipeline`
     /// should be registered that can handle it.
-    pub fn get_result(&self, command: &dyn ComputeCommand) -> Option<Arc<dyn Any + Send + Sync>> {
-        for pipeline in self.pipelines.iter() {
-            if let Some(result) = pipeline.get_result_erased(command) {
-                return Some(result);
-            }
-        }
-        None
+    ///
+    /// # Type Parameters
+    ///
+    /// * `R`: The concrete result type expected from the computation.
+    pub fn get_result<R: 'static + Send + Sync>(
+        &self,
+        command: &dyn ComputeCommand,
+    ) -> Option<Arc<R>> {
+        self.pipelines
+            .iter()
+            .find_map(|p| p.get_result_erased(command))
+            .and_then(|any_result| {
+                // The convention is that the `Any` holds an `Arc<R>`.
+                // So we first try to downcast to `Arc<R>`. This returns `Result<Arc<Arc<R>>, _>`.
+                // Then we map the `Ok` value to flatten the Arc<Arc<R>> to Arc<R>.
+                any_result
+                    .downcast::<Arc<R>>()
+                    .ok()
+                    .map(|arc_arc_r| (*arc_arc_r).clone())
+            })
     }
 }
