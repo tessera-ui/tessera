@@ -14,6 +14,8 @@ static FONT_SYSTEM: OnceLock<RwLock<glyphon::FontSystem>> = OnceLock::new();
 
 #[cfg(target_os = "android")]
 fn init_font_system() -> RwLock<glyphon::FontSystem> {
+    let mut font_system = glyphon::FontSystem::new();
+
     font_system.db_mut().load_fonts_dir("/system/fonts");
     font_system.db_mut().set_sans_serif_family("Roboto");
     font_system.db_mut().set_serif_family("Noto Serif");
