@@ -188,7 +188,9 @@ impl ComponentTree {
                 };
                 state_handler(input);
                 // if state_handler set ime request, it's position must be None, and we set it here
-                if let Some(ref mut ime_request) = window_requests.ime_request {
+                if let Some(ref mut ime_request) = window_requests.ime_request
+                    && ime_request.position.is_none()
+                {
                     ime_request.position = Some(
                         self.metadatas
                             .get(&node_id)
