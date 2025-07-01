@@ -13,10 +13,6 @@ pub enum ShapeCommand {
         corner_radius: f32,
         /// Shadow properties of the rectangle
         shadow: Option<ShadowProps>,
-        /// The number of line segments used to approximate each corner for G2 smoothness.
-        /// More segments result in a smoother curve but require more computation.
-        /// A value of 16 or 32 is usually sufficient.
-        segments_per_corner: u32,
     },
     /// An outlined rectangle
     OutlinedRect {
@@ -28,8 +24,6 @@ pub enum ShapeCommand {
         shadow: Option<ShadowProps>,
         /// Width of the border
         border_width: f32,
-        /// The number of line segments used to approximate each corner for G2 smoothness.
-        segments_per_corner: u32,
     },
     /// A filled rectangle with ripple effect animation
     RippleRect {
@@ -41,8 +35,6 @@ pub enum ShapeCommand {
         shadow: Option<ShadowProps>,
         /// Ripple effect properties
         ripple: RippleProps,
-        /// The number of line segments used to approximate each corner for G2 smoothness.
-        segments_per_corner: u32,
     },
     /// An outlined rectangle with ripple effect animation
     RippleOutlinedRect {
@@ -56,8 +48,6 @@ pub enum ShapeCommand {
         border_width: f32,
         /// Ripple effect properties
         ripple: RippleProps,
-        /// The number of line segments used to approximate each corner for G2 smoothness.
-        segments_per_corner: u32,
     },
 }
 
@@ -118,7 +108,6 @@ impl ShapeCommandComputed {
                 color,
                 corner_radius,
                 shadow,
-                .. // segments_per_corner is not used by the CPU fallback
             } => {
                 rect_to_computed_draw_command(
                     size,
@@ -135,7 +124,6 @@ impl ShapeCommandComputed {
                 corner_radius,
                 shadow,
                 border_width,
-                .. // segments_per_corner is not used by the CPU fallback
             } => {
                 rect_to_computed_draw_command(
                     size,
@@ -152,7 +140,6 @@ impl ShapeCommandComputed {
                 corner_radius,
                 shadow,
                 ripple,
-                .. // segments_per_corner is not used by the CPU fallback
             } => {
                 ripple_rect_to_computed_draw_command(
                     size,
@@ -171,7 +158,6 @@ impl ShapeCommandComputed {
                 shadow,
                 border_width,
                 ripple,
-                .. // segments_per_corner is not used by the CPU fallback
             } => {
                 ripple_rect_to_computed_draw_command(
                     size,

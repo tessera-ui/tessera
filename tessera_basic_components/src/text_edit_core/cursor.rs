@@ -22,7 +22,6 @@ pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
             color: [0.0, 0.0, 0.0, 1.0],
             corner_radius: 0.0,
             shadow: None,
-            segments_per_corner: 0,
         };
         // Add the drawable to the metadata
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
