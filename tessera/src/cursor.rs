@@ -271,10 +271,8 @@ impl CursorState {
         };
         self.push_event(release_event);
 
-        if self.touch_points.is_empty() {
-            if self.active_inertia.is_none() {
-                self.update_position(None);
-            }
+        if self.touch_points.is_empty() && self.active_inertia.is_none() {
+            self.update_position(None);
         }
     }
 }

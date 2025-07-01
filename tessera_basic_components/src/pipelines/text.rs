@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tessera::{DrawablePipeline, PxPosition};
+use tessera::{DrawablePipeline, PxPosition, PxSize};
 
 pub use command::{TextCommand, TextConstraint};
 
@@ -144,7 +144,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
         _config: &wgpu::SurfaceConfiguration,
         _render_pass: &mut wgpu::RenderPass<'_>,
         command: &TextCommand,
-        _size: [tessera::Px; 2],
+        _size: PxSize,
         start_pos: PxPosition,
         _scene_texture_view: Option<&wgpu::TextureView>,
         _compute_registry: &mut tessera::renderer::compute::ComputePipelineRegistry,

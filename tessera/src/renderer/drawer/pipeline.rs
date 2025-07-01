@@ -1,7 +1,8 @@
 use std::any::Any;
 
 use crate::{
-    Px, PxPosition,
+    PxPosition,
+    px::PxSize,
     renderer::{DrawCommand, compute::ComputePipelineRegistry},
 };
 
@@ -32,7 +33,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         command: &T,
-        size: [Px; 2],
+        size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
         compute_registry: &mut ComputePipelineRegistry,
@@ -63,7 +64,7 @@ pub trait ErasedDrawablePipeline {
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         command: &dyn DrawCommand,
-        size: [Px; 2],
+        size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
         compute_registry: &mut ComputePipelineRegistry,
@@ -106,7 +107,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         command: &dyn DrawCommand,
-        size: [Px; 2],
+        size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
         compute_registry: &mut ComputePipelineRegistry,
@@ -132,6 +133,12 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
 
 pub struct PipelineRegistry {
     pub(crate) pipelines: Vec<Box<dyn ErasedDrawablePipeline>>,
+}
+
+impl Default for PipelineRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PipelineRegistry {
@@ -183,7 +190,7 @@ impl PipelineRegistry {
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         cmd: &dyn DrawCommand,
-        size: [Px; 2],
+        size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
         compute_registry: &mut ComputePipelineRegistry,

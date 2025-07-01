@@ -8,7 +8,7 @@ use g2_corner::G2RoundedRectCommand;
 use g2_corner_outline::G2RoundedOutlineRectCommand;
 use log::error;
 use tessera::{
-    Px, PxPosition,
+    PxPosition, PxSize,
     renderer::{DrawablePipeline, compute::ComputePipelineRegistry},
 };
 use wgpu::{include_wgsl, util::DeviceExt};
@@ -373,7 +373,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         command: &ShapeCommand,
-        size: [Px; 2],
+        size: PxSize,
         start_pos: PxPosition,
         _scene_texture_view: Option<&wgpu::TextureView>,
         compute_registry: &mut ComputePipelineRegistry,
@@ -388,8 +388,8 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         } = command
         {
             let compute_command = G2RoundedRectCommand {
-                width: size[0].to_f32(),
-                height: size[1].to_f32(),
+                width: size.width.to_f32(),
+                height: size.height.to_f32(),
                 corner_radius: *corner_radius,
                 segments_per_corner: *segments_per_corner,
             };
@@ -404,7 +404,12 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                 };
 
             let uniforms = ShapeUniforms {
-                size_cr_border_width: [size[0].to_f32(), size[1].to_f32(), *corner_radius, 0.0],
+                size_cr_border_width: [
+                    size.width.to_f32(),
+                    size.height.to_f32(),
+                    *corner_radius,
+                    0.0,
+                ],
                 primary_color: *color,
                 shadow_color: shadow_rgba_color,
                 render_params: [
@@ -445,8 +450,8 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         } = command
         {
             let compute_command = G2RoundedRectCommand {
-                width: size[0].to_f32(),
-                height: size[1].to_f32(),
+                width: size.width.to_f32(),
+                height: size.height.to_f32(),
                 corner_radius: *corner_radius,
                 segments_per_corner: *segments_per_corner,
             };
@@ -461,7 +466,12 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                 };
 
             let uniforms = ShapeUniforms {
-                size_cr_border_width: [size[0].to_f32(), size[1].to_f32(), *corner_radius, 0.0],
+                size_cr_border_width: [
+                    size.width.to_f32(),
+                    size.height.to_f32(),
+                    *corner_radius,
+                    0.0,
+                ],
                 primary_color: *color,
                 shadow_color: shadow_rgba_color,
                 render_params: [
@@ -507,8 +517,8 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         } = command
         {
             let compute_command = G2RoundedOutlineRectCommand {
-                width: size[0].to_f32(),
-                height: size[1].to_f32(),
+                width: size.width.to_f32(),
+                height: size.height.to_f32(),
                 corner_radius: *corner_radius,
                 border_width: *border_width,
                 segments_per_corner: *segments_per_corner,
@@ -525,8 +535,8 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
             let uniforms = ShapeUniforms {
                 size_cr_border_width: [
-                    size[0].to_f32(),
-                    size[1].to_f32(),
+                    size.width.to_f32(),
+                    size.height.to_f32(),
                     *corner_radius,
                     *border_width,
                 ],
@@ -571,8 +581,8 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         } = command
         {
             let compute_command = G2RoundedOutlineRectCommand {
-                width: size[0].to_f32(),
-                height: size[1].to_f32(),
+                width: size.width.to_f32(),
+                height: size.height.to_f32(),
                 corner_radius: *corner_radius,
                 border_width: *border_width,
                 segments_per_corner: *segments_per_corner,
@@ -589,8 +599,8 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
             let uniforms = ShapeUniforms {
                 size_cr_border_width: [
-                    size[0].to_f32(),
-                    size[1].to_f32(),
+                    size.width.to_f32(),
+                    size.height.to_f32(),
                     *corner_radius,
                     *border_width,
                 ],

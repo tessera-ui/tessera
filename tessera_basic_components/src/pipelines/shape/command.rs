@@ -1,4 +1,4 @@
-use tessera::{DrawCommand, Px, PxPosition, RenderRequirement};
+use tessera::{DrawCommand, PxPosition, PxSize, RenderRequirement};
 
 use super::{ShapeUniforms, ShapeVertex};
 
@@ -112,7 +112,7 @@ pub struct ShapeCommandComputed {
 }
 
 impl ShapeCommandComputed {
-    pub fn from_command(command: ShapeCommand, size: [Px; 2], position: PxPosition) -> Self {
+    pub fn from_command(command: ShapeCommand, size: PxSize, position: PxPosition) -> Self {
         match command {
             ShapeCommand::Rect {
                 color,
@@ -190,7 +190,7 @@ impl ShapeCommandComputed {
 
 /// Helper function to create Shape DrawCommand for both Rect and OutlinedRect
 fn rect_to_computed_draw_command(
-    size: [Px; 2],
+    size: PxSize,
     position: PxPosition,
     primary_color_rgba: [f32; 4],
     corner_radius: f32,
@@ -198,8 +198,8 @@ fn rect_to_computed_draw_command(
     border_width: f32,
     render_mode: f32,
 ) -> ShapeCommandComputed {
-    let width = size[0];
-    let height = size[1];
+    let width = size.width;
+    let height = size.height;
 
     let rect_local_pos = [
         [-0.5, -0.5], // Top-Left
@@ -266,7 +266,7 @@ fn rect_to_computed_draw_command(
 
 /// Helper function to create Shape DrawCommand for ripple effects
 fn ripple_rect_to_computed_draw_command(
-    size: [Px; 2],
+    size: PxSize,
     position: PxPosition,
     primary_color_rgba: [f32; 4],
     corner_radius: f32,
@@ -275,8 +275,8 @@ fn ripple_rect_to_computed_draw_command(
     render_mode: f32,
     ripple: RippleProps,
 ) -> ShapeCommandComputed {
-    let width = size[0];
-    let height = size[1];
+    let width = size.width;
+    let height = size.height;
 
     let rect_local_pos = [
         [-0.5, -0.5], // Top-Left

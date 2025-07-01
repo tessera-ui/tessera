@@ -1,5 +1,8 @@
 use bytemuck::{Pod, Zeroable};
-use tessera::{Px, PxPosition, renderer::DrawablePipeline};
+use tessera::{
+    PxPosition, PxSize,
+    renderer::{DrawablePipeline, compute::ComputePipelineRegistry},
+};
 use wgpu::util::DeviceExt;
 
 use crate::fluid_glass::FluidGlassCommand;
@@ -148,10 +151,10 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass,
         command: &FluidGlassCommand,
-        size: [Px; 2],
+        size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
-        _compute_registry: &mut tessera::renderer::compute::ComputePipelineRegistry,
+        _compute_registry: &mut ComputePipelineRegistry,
     ) {
         let Some(scene_texture) = scene_texture_view else {
             return;
@@ -166,8 +169,8 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         let rect_uv_bounds = [
             start_pos.x.0 as f32 / screen_w,
             start_pos.y.0 as f32 / screen_h,
-            (start_pos.x.0 + size[0].0) as f32 / screen_w,
-            (start_pos.y.0 + size[1].0) as f32 / screen_h,
+            (start_pos.x.0 + size.width.0) as f32 / screen_w,
+            (start_pos.y.0 + size.height.0) as f32 / screen_h,
         ];
 
         let uniforms = GlassUniforms {
@@ -175,7 +178,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             highlight_color: args.highlight_color,
             inner_shadow_color: args.inner_shadow_color,
             rect_uv_bounds,
-            rect_size_px: [size[0].0 as f32, size[1].0 as f32],
+            rect_size_px: [size.width.0 as f32, size.height.0 as f32],
             corner_radius: args.corner_radius,
             g2_k_value: args.g2_k_value,
             dispersion_height: args.dispersion_height,

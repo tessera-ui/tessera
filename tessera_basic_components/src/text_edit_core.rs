@@ -58,7 +58,7 @@ impl TextEditorState {
         line_height: Option<Dp>,
         selection_color: [f32; 4],
     ) -> Self {
-        let final_line_height = line_height.unwrap_or_else(|| Dp(size.0 * 1.2));
+        let final_line_height = line_height.unwrap_or(Dp(size.0 * 1.2));
         let line_height_px: Px = final_line_height.into();
         let mut buffer = glyphon::Buffer::new(
             &mut write_font_system(),

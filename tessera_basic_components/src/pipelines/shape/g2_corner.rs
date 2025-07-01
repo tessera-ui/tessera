@@ -159,7 +159,7 @@ impl ComputablePipeline<G2RoundedRectCommand> for G2RoundedRectPipeline {
             });
             compute_pass.set_pipeline(&self.pipeline);
             compute_pass.set_bind_group(0, &bind_group, &[]);
-            let workgroup_count = (command.segments_per_corner * 4 + 63) / 64;
+            let workgroup_count = (command.segments_per_corner * 4).div_ceil(64);
             if workgroup_count > 0 {
                 compute_pass.dispatch_workgroups(workgroup_count, 1, 1);
             }

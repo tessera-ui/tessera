@@ -78,9 +78,7 @@ pub fn text(args: impl Into<TextArgs>) {
             DimensionValue::Fill { max, .. } => max, // Use max from Fill
         };
 
-        let line_height = text_args
-            .line_height
-            .unwrap_or_else(|| Dp(text_args.size.0 * 1.2));
+        let line_height = text_args.line_height.unwrap_or(Dp(text_args.size.0 * 1.2));
 
         let text_data = TextData::new(
             text_args.text.clone(),

@@ -11,7 +11,12 @@ use rayon::prelude::*;
 use winit::window::CursorIcon;
 
 use super::constraint::{Constraint, DimensionValue};
-use crate::{Px, cursor::CursorEvent, px::PxPosition, renderer::DrawCommand};
+use crate::{
+    Px,
+    cursor::CursorEvent,
+    px::{PxPosition, PxSize},
+    renderer::DrawCommand,
+};
 
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component.
@@ -95,16 +100,6 @@ pub struct MeasureInput<'a> {
     pub metadatas: &'a ComponentNodeMetaDatas,
 }
 
-/// A collection of requests that components can make to the windowing system for the current frame.
-/// This struct's lifecycle is confined to a single `compute` pass.
-#[derive(Default, Debug)]
-pub struct WindowRequests {
-    /// The cursor icon requested by a component. If multiple components request a cursor,
-    /// the last one to make a request in a frame "wins". This is achieved via a `Cell`
-    /// which allows interior mutability.
-    pub cursor_icon: CursorIcon,
-}
-
 /// A `StateHandlerFn` is a function that handles state changes for a component.
 ///
 /// The rule of execution order is:
@@ -135,6 +130,31 @@ pub struct StateHandlerInput<'a> {
     pub keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
     /// A context for making requests to the window for the current frame.
     pub requests: &'a mut WindowRequests,
+}
+
+/// A collection of requests that components can make to the windowing system for the current frame.
+/// This struct's lifecycle is confined to a single `compute` pass.
+#[derive(Default, Debug)]
+pub struct WindowRequests {
+    /// The cursor icon requested by a component. If multiple components request a cursor,
+    /// the last one to make a request in a frame "wins", since it's executed later.
+    pub cursor_icon: CursorIcon,
+    pub ime_request: Option<ImeRequest>,
+}
+
+#[derive(Debug)]
+pub struct ImeRequest {
+    pub size: PxSize,
+    pub(crate) position: Option<PxPosition>, // should be setted in tessera node tree compute
+}
+
+impl ImeRequest {
+    pub fn new(size: PxSize) -> Self {
+        Self {
+            size,
+            position: None, // Position will be set during the compute phase
+        }
+    }
 }
 
 /// Measures a single node recursively, returning its size or an error.

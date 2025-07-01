@@ -19,10 +19,11 @@ use winit::{
 };
 
 use crate::{
-    Px, PxPosition,
+    PxPosition,
     cursor::{CursorEvent, CursorEventContent, CursorState},
     dp::SCALE_FACTOR,
     keyboard_state::KeyboardState,
+    px::PxSize,
     runtime::TesseraRuntime,
     thread_utils, tokio_runtime,
 };
@@ -246,7 +247,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 let cursor_position = self.cursor_state.position();
                 let cursor_events = self.cursor_state.take_events();
                 let keyboard_events = self.keyboard_state.take_events();
-                let screen_size: [Px; 2] = [app.size().width.into(), app.size().height.into()];
+                let screen_size: PxSize = app.size().into();
                 let (commands, window_requests) = component_tree.compute(
                     screen_size,
                     cursor_position,
@@ -256,10 +257,20 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 let draw_cost = draw_timer.elapsed();
                 debug!("Draw commands computed in {draw_cost:?}");
                 component_tree.clear();
+                // Handle the window requests
                 // After compute, check for cursor change requests
-                let new_cursor = window_requests.cursor_icon;
                 app.window
-                    .set_cursor(winit::window::Cursor::Icon(new_cursor));
+                    .set_cursor(winit::window::Cursor::Icon(window_requests.cursor_icon));
+                // Handle IME requests
+                if let Some(ime_request) = window_requests.ime_request {
+                    app.window.set_ime_allowed(true);
+                    app.window.set_ime_cursor_area::<PxPosition, PxSize>(
+                        ime_request.position.unwrap(),
+                        ime_request.size,
+                    );
+                } else {
+                    app.window.set_ime_allowed(false);
+                }
                 // timer for performance measurement
                 let render_timer = Instant::now();
                 // Render the commands

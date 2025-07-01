@@ -8,7 +8,7 @@ use rayon::prelude::*;
 
 use crate::{
     cursor::CursorEvent,
-    px::{Px, PxPosition},
+    px::{PxPosition, PxSize},
     renderer::DrawCommand,
 };
 pub use constraint::{Constraint, DimensionValue};
@@ -98,20 +98,20 @@ impl ComponentTree {
     /// Compute the ComponentTree into a list of DrawCommand
     pub fn compute(
         &mut self,
-        screen_size: [Px; 2],
+        screen_size: PxSize,
         cursor_position: Option<PxPosition>,
         mut cursor_events: Vec<CursorEvent>,
         mut keyboard_events: Vec<winit::event::KeyEvent>,
     ) -> (
-        Vec<(PxPosition, [Px; 2], Box<dyn DrawCommand>)>,
+        Vec<(PxPosition, PxSize, Box<dyn DrawCommand>)>,
         WindowRequests,
     ) {
         let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
             return (vec![], WindowRequests::default());
         };
         let screen_constraint = Constraint::new(
-            DimensionValue::Fixed(screen_size[0]),
-            DimensionValue::Fixed(screen_size[1]),
+            DimensionValue::Fixed(screen_size.width),
+            DimensionValue::Fixed(screen_size.height),
         );
 
         let measure_timer = Instant::now();
@@ -185,6 +185,15 @@ impl ComponentTree {
                     requests: &mut window_requests,
                 };
                 state_handler(input);
+                // if state_handler set ime request, it's position must be None, and we set it here
+                if let Some(ref mut ime_request) = window_requests.ime_request {
+                    ime_request.position = Some(
+                        self.metadatas
+                            .get(&node_id)
+                            .and_then(|m| m.abs_position)
+                            .unwrap(),
+                    )
+                }
             } else {
                 log::warn!(
                     "Computed data not found for node {node_id:?} during state handler execution."
@@ -205,7 +214,7 @@ fn compute_draw_commands_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
-) -> Vec<(PxPosition, [Px; 2], Box<dyn DrawCommand>)> {
+) -> Vec<(PxPosition, PxSize, Box<dyn DrawCommand>)> {
     compute_draw_commands_inner_parallel(PxPosition::ZERO, true, node_id, tree, metadatas)
 }
 
@@ -215,7 +224,7 @@ fn compute_draw_commands_inner_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
-) -> Vec<(PxPosition, [Px; 2], Box<dyn DrawCommand>)> {
+) -> Vec<(PxPosition, PxSize, Box<dyn DrawCommand>)> {
     let mut local_commands = Vec::new();
 
     // Accessing metadatas with get_mut. DashMap's get_mut returns a RefMut,
@@ -238,7 +247,14 @@ fn compute_draw_commands_inner_parallel(
 
         if let Some(cmd) = entry.basic_drawable.take() {
             let size = entry.computed_data.unwrap();
-            local_commands.push((self_pos, [size.width, size.height], cmd));
+            local_commands.push((
+                self_pos,
+                PxSize {
+                    width: size.width,
+                    height: size.height,
+                },
+                cmd,
+            ));
         }
     } // RefMut is dropped here, lock released if any
 

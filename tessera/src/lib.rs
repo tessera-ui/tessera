@@ -10,7 +10,7 @@ mod thread_utils;
 pub mod tokio_runtime;
 
 pub use crate::dp::Dp;
-pub use crate::px::{Px, PxPosition};
+pub use crate::px::{Px, PxPosition, PxSize};
 pub use component_tree::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComponentTree,
     ComputedData, Constraint, DimensionValue, MeasureFn, MeasurementError, StateHandlerFn,

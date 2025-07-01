@@ -4,7 +4,7 @@ use log::{error, info};
 use parking_lot::RwLock;
 use winit::window::Window;
 
-use crate::{Px, PxPosition, dp::SCALE_FACTOR};
+use crate::{PxPosition, dp::SCALE_FACTOR, px::PxSize};
 
 use super::{
     compute::ComputePipelineRegistry,
@@ -153,7 +153,7 @@ impl WgpuApp {
         label_suffix: &str,
     ) -> PassTarget {
         let texture_descriptor = wgpu::TextureDescriptor {
-            label: Some(&format!("Pass {} Texture", label_suffix)),
+            label: Some(&format!("Pass {label_suffix} Texture")),
             size: wgpu::Extent3d {
                 width: config.width,
                 height: config.height,
@@ -217,7 +217,7 @@ impl WgpuApp {
     /// Render the surface
     pub(crate) fn render(
         &mut self,
-        drawer_commands: impl IntoIterator<Item = (PxPosition, [Px; 2], Box<dyn DrawCommand>)>,
+        drawer_commands: impl IntoIterator<Item = (PxPosition, PxSize, Box<dyn DrawCommand>)>,
     ) -> Result<(), wgpu::SurfaceError> {
         let output_frame = self.surface.get_current_texture()?;
         let _output_view = output_frame
@@ -258,7 +258,7 @@ impl WgpuApp {
         'main_loop: loop {
             // --- Step A: Batch all consecutive standard commands ---
             let mut standard_batch = Vec::new();
-            while let Some(command) = commands_iter.next() {
+            for command in commands_iter.by_ref() {
                 if command.2.requirement() == RenderRequirement::Standard {
                     standard_batch.push(command);
                 } else {

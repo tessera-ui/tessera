@@ -159,6 +159,64 @@ impl PxPosition {
     }
 }
 
+/// Physical pixel size type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct PxSize {
+    pub width: Px,
+    pub height: Px,
+}
+
+impl PxSize {
+    /// Create a zero size
+    pub const ZERO: Self = Self {
+        width: Px(0),
+        height: Px(0),
+    };
+
+    /// Create a new size
+    pub const fn new(width: Px, height: Px) -> Self {
+        Self { width, height }
+    }
+
+    /// Convert to a f32 array (2D)
+    pub fn to_f32_arr2(self) -> [f32; 2] {
+        [self.width.0 as f32, self.height.0 as f32]
+    }
+}
+
+impl From<[Px; 2]> for PxSize {
+    fn from(size: [Px; 2]) -> Self {
+        Self {
+            width: size[0],
+            height: size[1],
+        }
+    }
+}
+
+impl From<PxSize> for winit::dpi::PhysicalSize<i32> {
+    fn from(size: PxSize) -> Self {
+        winit::dpi::PhysicalSize {
+            width: size.width.raw(),
+            height: size.height.raw(),
+        }
+    }
+}
+
+impl From<winit::dpi::PhysicalSize<u32>> for PxSize {
+    fn from(size: winit::dpi::PhysicalSize<u32>) -> Self {
+        Self {
+            width: Px(size.width as i32),
+            height: Px(size.height as i32),
+        }
+    }
+}
+
+impl From<PxSize> for winit::dpi::Size {
+    fn from(size: PxSize) -> Self {
+        winit::dpi::PhysicalSize::from(size).into()
+    }
+}
+
 impl std::ops::Add for Px {
     type Output = Self;
 
@@ -214,6 +272,21 @@ impl From<u32> for Px {
 impl From<Dp> for Px {
     fn from(dp: Dp) -> Self {
         Px::from_dp(dp)
+    }
+}
+
+impl From<PxPosition> for winit::dpi::PhysicalPosition<i32> {
+    fn from(pos: PxPosition) -> Self {
+        winit::dpi::PhysicalPosition {
+            x: pos.x.0,
+            y: pos.y.0,
+        }
+    }
+}
+
+impl From<PxPosition> for winit::dpi::Position {
+    fn from(pos: PxPosition) -> Self {
+        winit::dpi::PhysicalPosition::from(pos).into()
     }
 }
 

@@ -2,13 +2,19 @@ mod command;
 mod pipeline;
 
 use super::compute::ComputePipelineRegistry;
-use crate::{Px, PxPosition};
+use crate::{PxPosition, px::PxSize};
 pub use command::{DrawCommand, RenderRequirement};
 pub use pipeline::{DrawablePipeline, PipelineRegistry};
 
 /// Drawer is a struct that handles pipelines and draw commands.
 pub struct Drawer {
     pub pipeline_registry: PipelineRegistry,
+}
+
+impl Default for Drawer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Drawer {
@@ -51,7 +57,7 @@ impl Drawer {
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         cmd: &dyn DrawCommand,
-        size: [Px; 2],
+        size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
         compute_registry: &mut ComputePipelineRegistry,
