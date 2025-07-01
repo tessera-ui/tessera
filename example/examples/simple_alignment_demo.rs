@@ -18,7 +18,7 @@ fn color_box(text_content: &'static str, color: [f32; 4]) {
     surface(
         SurfaceArgs {
             color,
-            corner_radius: 8.0,
+            corner_radius: 25.0,
             padding: Dp(12.0),
             width: Some(DimensionValue::Fill {
                 min: None,
@@ -74,7 +74,7 @@ fn alignment_demo() {
                 surface(
                     SurfaceArgs {
                         color: [0.9, 0.9, 0.9, 1.0],
-                        corner_radius: 4.0,
+                        corner_radius: 25.0,
                         padding: Dp(8.0),
                         width: Some(DimensionValue::Fill {
                             min: None,
@@ -114,7 +114,7 @@ fn alignment_demo() {
                 surface(
                     SurfaceArgs {
                         color: [0.9, 0.9, 0.9, 1.0],
-                        corner_radius: 4.0,
+                        corner_radius: 25.0,
                         padding: Dp(8.0),
                         width: Some(DimensionValue::Fill {
                             min: None,
@@ -154,7 +154,7 @@ fn alignment_demo() {
                 surface(
                     SurfaceArgs {
                         color: [0.9, 0.9, 0.9, 1.0],
-                        corner_radius: 4.0,
+                        corner_radius: 25.0,
                         padding: Dp(8.0),
                         width: Some(DimensionValue::Fill {
                             min: None,

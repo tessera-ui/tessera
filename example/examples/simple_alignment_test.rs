@@ -19,7 +19,7 @@ fn small_box(text_content: &'static str, color_param: [f32; 4]) {
     surface(
         SurfaceArgs {
             color: color_param, // Use the renamed parameter
-            corner_radius: 4.0,
+            corner_radius: 25.0,
             padding: Dp(4.0),
             width: Some(DimensionValue::Fixed(Px(40))),
             height: Some(DimensionValue::Fixed(Px(40))),
@@ -54,7 +54,7 @@ fn app() {
             surface(
                 SurfaceArgs {
                     color: [0.9, 0.9, 0.9, 1.0], // Gray background to show container borders
-                    corner_radius: 4.0,
+                    corner_radius: 25.0,
                     padding: Dp(10.0),
                     width: Some(DimensionValue::Fixed(Px(800))), // Very Large Fixed Width
                     height: Some(DimensionValue::Fixed(Px(100))), // Fixed Height

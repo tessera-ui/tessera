@@ -16,11 +16,11 @@ pub struct FluidGlassArgs {
     pub highlight_color: [f32; 4],
     #[builder(default = "[0.0, 0.0, 0.0, 0.5]")]
     pub inner_shadow_color: [f32; 4],
-    #[builder(default = "16.0")]
+    #[builder(default = "25.0")]
     pub corner_radius: f32,
     #[builder(default = "3.0")]
     pub g2_k_value: f32,
-    #[builder(default = "8.0")]
+    #[builder(default = "25.0")]
     pub dispersion_height: f32,
     #[builder(default = "1.2")]
     pub chroma_multiplier: f32,

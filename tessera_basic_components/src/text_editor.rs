@@ -71,7 +71,7 @@ pub struct TextEditorArgs {
     #[builder(default = "None")]
     pub border_color: Option<[f32; 4]>,
     /// Corner radius in pixels. Defaults to 4.0.
-    #[builder(default = "4.0")]
+    #[builder(default = "0.0")]
     pub corner_radius: f32,
     /// Padding inside the text editor. Defaults to 5.0.
     #[builder(default = "Dp(5.0)")]

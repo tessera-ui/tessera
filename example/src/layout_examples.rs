@@ -16,7 +16,7 @@ pub fn outlined_surface_example() {
             .color(md_colors::SURFACE_CONTAINER_TRANSPARENT) // Material Design surface-container with opacity
             .border_width(5.0)
             .border_color(Some(md_colors::OUTLINE)) // Material Design outline color
-            .corner_radius(15.0)
+            .corner_radius(25.0)
             .width(DimensionValue::Fixed(Px(200)))
             .height(DimensionValue::Fixed(Px(100)))
             .padding(10.0.into())
@@ -40,7 +40,7 @@ pub fn transparent_surface_example() {
     surface(
         SurfaceArgsBuilder::default()
             .color(md_colors::TERTIARY_TRANSPARENT) // Material Design tertiary color with transparency
-            .corner_radius(10.0)
+            .corner_radius(25.0)
             .width(DimensionValue::Fixed(Px(150)))
             .height(DimensionValue::Fixed(Px(70)))
             .padding(5.0.into())

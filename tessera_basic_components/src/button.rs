@@ -16,7 +16,7 @@ pub struct ButtonArgs {
     #[builder(default)]
     pub hover_color: Option<[f32; 4]>,
     /// The corner radius of the button.
-    #[builder(default = "8.0")]
+    #[builder(default = "25.0")]
     pub corner_radius: f32,
     /// The padding of the button.
     #[builder(default = "Dp(12.0)")]

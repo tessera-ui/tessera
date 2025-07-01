@@ -27,7 +27,7 @@ fn surface_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
-            .corner_radius(10.0)
+            .corner_radius(25.0)
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
                 min: None,
@@ -79,7 +79,7 @@ fn text_editor_showcase(state: Arc<AppState>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(md_colors::SURFACE_CONTAINER)
-            .corner_radius(10.0)
+            .corner_radius(25.0)
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
                 min: None,
@@ -127,7 +127,7 @@ fn animation_showcase(state: Arc<AppState>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
-            .corner_radius(10.0)
+            .corner_radius(25.0)
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
                 min: None,
@@ -175,7 +175,7 @@ fn interactive_showcase(state: Arc<AppState>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
-            .corner_radius(10.0)
+            .corner_radius(25.0)
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
                 min: None,
@@ -196,7 +196,7 @@ fn performance_showcase(state: Arc<AppState>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
-            .corner_radius(10.0)
+            .corner_radius(25.0)
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
                 min: None,
@@ -249,7 +249,7 @@ pub fn component_showcase(state: Arc<AppState>) {
             surface(
                 SurfaceArgsBuilder::default()
                     .color(md_colors::PRIMARY_CONTAINER)
-                    .corner_radius(8.0)
+                    .corner_radius(25.0)
                     .padding(Dp(24.0))
                     .width(DimensionValue::Fill {
                         min: None,
