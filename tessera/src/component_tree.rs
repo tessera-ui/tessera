@@ -14,8 +14,8 @@ use crate::{
 pub use constraint::{Constraint, DimensionValue};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
-    MeasureFn, MeasurementError, StateHandlerFn, StateHandlerInput, WindowRequests, measure_node,
-    measure_nodes, place_node,
+    ImeRequest, MeasureFn, MeasurementError, StateHandlerFn, StateHandlerInput, WindowRequests,
+    measure_node, measure_nodes, place_node,
 };
 
 /// Respents a component tree

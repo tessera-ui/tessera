@@ -211,6 +211,15 @@ impl From<winit::dpi::PhysicalSize<u32>> for PxSize {
     }
 }
 
+impl From<crate::component_tree::ComputedData> for PxSize {
+    fn from(data: crate::component_tree::ComputedData) -> Self {
+        Self {
+            width: data.width,
+            height: data.height,
+        }
+    }
+}
+
 impl From<PxSize> for winit::dpi::Size {
     fn from(size: PxSize) -> Self {
         winit::dpi::PhysicalSize::from(size).into()

@@ -46,6 +46,8 @@ pub struct TextEditorState {
     last_click_position: Option<PxPosition>,
     click_count: u32,
     is_dragging: bool,
+    // For IME
+    pub(crate) preedit_string: Option<String>,
 }
 
 impl TextEditorState {
@@ -77,6 +79,7 @@ impl TextEditorState {
             last_click_position: None,
             click_count: 0,
             is_dragging: false,
+            preedit_string: None,
         }
     }
 

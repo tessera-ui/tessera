@@ -4,7 +4,7 @@ use derive_builder::Builder;
 use glyphon::{Action, Edit};
 use parking_lot::RwLock;
 
-use tessera::{CursorEventContent, DimensionValue, Dp, Px, PxPosition};
+use tessera::{CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, winit};
 use tessera_macros::tessera;
 
 use crate::{
@@ -300,20 +300,75 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
 
             // Handle keyboard events (only when focused)
             if state_for_handler.read().focus_handler().is_focused() {
-                let actions = input
-                    .keyboard_events
-                    .iter()
-                    .cloned()
-                    .filter_map(map_key_event_to_action)
-                    .flatten();
-                for action in actions {
-                    state_for_handler
-                        .write()
-                        .editor
-                        .action(&mut write_font_system(), action);
+                // Handle keyboard events
+                {
+                    let actions = input
+                        .keyboard_events
+                        .iter()
+                        .cloned()
+                        .filter_map(map_key_event_to_action)
+                        .flatten();
+                    for action in actions {
+                        state_for_handler
+                            .write()
+                            .editor_mut()
+                            .action(&mut write_font_system(), action);
+                    }
+                    // Block all keyboard events to prevent propagation
+                    input.keyboard_events.clear();
                 }
-                // Block all keyboard events to prevent propagation
-                input.keyboard_events.clear();
+
+                // Handle IME events
+                {
+                    let ime_events: Vec<_> = input.ime_events.drain(..).collect();
+
+                    for event in ime_events {
+                        let mut state = state_for_handler.write();
+                        match event {
+                            winit::event::Ime::Commit(text) => {
+                                // Clear preedit string if it exists
+                                if let Some(preedit_text) = state.preedit_string.take() {
+                                    for _ in 0..preedit_text.chars().count() {
+                                        state.editor_mut().action(
+                                            &mut write_font_system(),
+                                            glyphon::Action::Backspace,
+                                        );
+                                    }
+                                }
+                                // Insert the committed text
+                                for c in text.chars() {
+                                    state.editor_mut().action(
+                                        &mut write_font_system(),
+                                        glyphon::Action::Insert(c),
+                                    );
+                                }
+                            }
+                            winit::event::Ime::Preedit(text, _cursor_offset) => {
+                                // Remove the old preedit text if it exists
+                                if let Some(old_preedit) = state.preedit_string.take() {
+                                    for _ in 0..old_preedit.chars().count() {
+                                        state.editor_mut().action(
+                                            &mut write_font_system(),
+                                            glyphon::Action::Backspace,
+                                        );
+                                    }
+                                }
+                                // Insert the new preedit text
+                                for c in text.chars() {
+                                    state.editor_mut().action(
+                                        &mut write_font_system(),
+                                        glyphon::Action::Insert(c),
+                                    );
+                                }
+                                state.preedit_string = Some(text.to_string());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                // Request IME window
+                input.requests.ime_request = Some(ImeRequest::new(size.into()));
             }
         }));
     }
