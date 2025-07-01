@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tessera::{DrawablePipeline, PxPosition, PxSize};
+use tessera::{DrawablePipeline, PxPosition, PxSize, wgpu};
 
 pub use command::{TextCommand, TextConstraint};
 

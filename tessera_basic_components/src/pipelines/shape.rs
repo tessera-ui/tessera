@@ -10,8 +10,8 @@ use log::error;
 use tessera::{
     PxPosition, PxSize,
     renderer::{DrawablePipeline, compute::ComputePipelineRegistry},
+    wgpu::{self, include_wgsl, util::DeviceExt},
 };
-use wgpu::{include_wgsl, util::DeviceExt};
 
 use command::ShapeCommandComputed;
 

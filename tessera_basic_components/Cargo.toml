@@ -13,4 +13,3 @@ parking_lot = "0.12.4"
 tessera = { path = "../tessera" }
 tessera_macros = { path = "../tessera_macros" }
 unicode-segmentation = "1.12.0"
-wgpu = "25.0.2"

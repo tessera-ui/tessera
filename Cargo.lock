@@ -2803,7 +2803,6 @@ dependencies = [
  "tessera",
  "tessera_macros",
  "unicode-segmentation",
- "wgpu",
 ]
 
 [[package]]

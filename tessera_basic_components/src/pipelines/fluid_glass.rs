@@ -2,8 +2,8 @@ use bytemuck::{Pod, Zeroable};
 use tessera::{
     PxPosition, PxSize,
     renderer::{DrawablePipeline, compute::ComputePipelineRegistry},
+    wgpu::{self, util::DeviceExt},
 };
-use wgpu::util::DeviceExt;
 
 use crate::fluid_glass::FluidGlassCommand;
 

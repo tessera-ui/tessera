@@ -1,8 +1,12 @@
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::sync::Arc;
-use tessera::renderer::ComputablePipeline; // ComputeCommand is handled by blanket impl
-use wgpu::util::DeviceExt;
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
+use tessera::{
+    renderer::ComputablePipeline,
+    wgpu::{self, util::DeviceExt},
+};
 
 use super::ShapeVertex;
 

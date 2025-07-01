@@ -25,3 +25,5 @@ pub use runtime::TesseraRuntime;
 
 // re-export winit
 pub use winit;
+// re-export wgpu
+pub use wgpu;
