@@ -139,12 +139,20 @@ pub struct WindowRequests {
     /// The cursor icon requested by a component. If multiple components request a cursor,
     /// the last one to make a request in a frame "wins", since it's executed later.
     pub cursor_icon: CursorIcon,
+    /// An Input Method Editor (IME) request.
+    /// If multiple components request IME, the one from the "newer" component (which is
+    /// processed later in the state handling pass) will overwrite previous requests.
     pub ime_request: Option<ImeRequest>,
 }
 
+/// A request to the windowing system to open an Input Method Editor (IME).
+/// This is typically used for text input components.
 #[derive(Debug)]
 pub struct ImeRequest {
+    /// The size of the area where the IME is requested.
     pub size: PxSize,
+    /// The absolute position where the IME should be placed.
+    /// This is set internally by the component tree during the compute pass.
     pub(crate) position: Option<PxPosition>, // should be setted in tessera node tree compute
 }
 
