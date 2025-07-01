@@ -19,7 +19,7 @@ use winit::{
 };
 
 use crate::{
-    PxPosition,
+    ImeState, PxPosition,
     cursor::{CursorEvent, CursorEventContent, CursorState},
     dp::SCALE_FACTOR,
     keyboard_state::KeyboardState,
@@ -45,6 +45,8 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     cursor_state: CursorState,
     /// The state of the keyboard
     keyboard_state: KeyboardState,
+    /// The state of the IME
+    ime_state: ImeState,
     /// Register pipelines function
     register_pipelines_fn: R,
 }
@@ -57,12 +59,14 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let app = Arc::new(Mutex::new(None));
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
+        let ime_state = ImeState::default();
         let mut renderer = Self {
             app,
             entry_point,
             cursor_state,
             keyboard_state,
             register_pipelines_fn,
+            ime_state,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -82,12 +86,14 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let app = Arc::new(Mutex::new(None));
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
+        let ime_state = ImeState::default();
         let mut renderer = Self {
             app,
             entry_point,
             cursor_state,
             keyboard_state,
             register_pipelines_fn,
+            ime_state,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -221,6 +227,10 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
             WindowEvent::KeyboardInput { event, .. } => {
                 debug!("Keyboard input: {event:?}");
                 self.keyboard_state.push_event(event);
+            }
+            WindowEvent::Ime(ime_event) => {
+                debug!("IME event: {ime_event:?}");
+                self.ime_state.push_event(ime_event);
             }
             WindowEvent::RedrawRequested => {
                 // notify the windowing system before rendering

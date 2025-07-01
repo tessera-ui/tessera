@@ -2,6 +2,7 @@ mod component_tree;
 mod cursor;
 mod dp;
 pub mod focus_state;
+mod ime_state;
 mod keyboard_state;
 mod px;
 pub mod renderer;
@@ -17,6 +18,7 @@ pub use component_tree::{
     StateHandlerInput, measure_node, measure_nodes, place_node,
 };
 pub use cursor::{CursorEvent, CursorEventContent, PressKeyEventType, ScrollEventConent};
+pub use ime_state::ImeState;
 pub use indextree::{Arena, NodeId};
 pub use renderer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirement, Renderer};
 pub use runtime::TesseraRuntime;
