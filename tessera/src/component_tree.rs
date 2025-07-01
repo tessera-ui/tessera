@@ -102,6 +102,7 @@ impl ComponentTree {
         cursor_position: Option<PxPosition>,
         mut cursor_events: Vec<CursorEvent>,
         mut keyboard_events: Vec<winit::event::KeyEvent>,
+        mut ime_events: Vec<winit::event::Ime>,
     ) -> (
         Vec<(PxPosition, PxSize, Box<dyn DrawCommand>)>,
         WindowRequests,
@@ -183,6 +184,7 @@ impl ComponentTree {
                     cursor_events: &mut cursor_events,
                     keyboard_events: &mut keyboard_events,
                     requests: &mut window_requests,
+                    ime_events: &mut ime_events,
                 };
                 state_handler(input);
                 // if state_handler set ime request, it's position must be None, and we set it here

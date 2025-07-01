@@ -128,6 +128,8 @@ pub struct StateHandlerInput<'a> {
     pub cursor_events: &'a mut Vec<CursorEvent>,
     /// Keyboard events from the event loop, if any.
     pub keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
+    /// IME events from the event loop, if any.
+    pub ime_events: &'a mut Vec<winit::event::Ime>,
     /// A context for making requests to the window for the current frame.
     pub requests: &'a mut WindowRequests,
 }

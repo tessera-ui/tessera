@@ -257,12 +257,14 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 let cursor_position = self.cursor_state.position();
                 let cursor_events = self.cursor_state.take_events();
                 let keyboard_events = self.keyboard_state.take_events();
+                let ime_events = self.ime_state.take_events();
                 let screen_size: PxSize = app.size().into();
                 let (commands, window_requests) = component_tree.compute(
                     screen_size,
                     cursor_position,
                     cursor_events,
                     keyboard_events,
+                    ime_events,
                 );
                 let draw_cost = draw_timer.elapsed();
                 debug!("Draw commands computed in {draw_cost:?}");
