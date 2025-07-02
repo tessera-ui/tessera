@@ -2,7 +2,7 @@
 
 # **Tessera (WIP)**
 
-### Gui Is Not Special
+## Gui Is Not Special
 
 </div>
 
@@ -11,6 +11,47 @@
 Tessera is a declarative, immediate-mode UI framework for Rust. With a functional approach at its core, it aims to provide ultimate performance, flexibility, and extensibility.
 
 The project is currently in its early stages of development. Feel free to explore the latest progress through the [example code](https://www.google.com/search?q=example).
+
+## Roadmap
+
+Currently, the framework is in the early stages of development. The v0.1.0 roadmap includes:
+
+- **Core**: Implement framework core (tessera), including
+
+  - ~~Component tree~~
+  - ~~Measurement System~~
+  - ~~State Management~~
+  - ~~Renderer, including pluggable shader system~~
+  - ~~Basic types (`Dp`, `Px`)~~
+  - ~~Focus management~~
+  - ~~#[tessera] macro, for convenient component definition~~
+  - Event handling
+    - ~~Mouse events~~
+    - ~~Touch events~~
+    - ~~Raw Keyboard events~~
+    - IME event (windows, linux, macOS) (partially completed)
+    - IME event (android)
+    - IME event (ios)
+
+- **Basic Components**: Implement some basic components (tessera_basic_components), including
+
+  - ~~row~~
+  - ~~column~~
+  - ~~boxed~~
+  - ~~text~~
+  - ~~spacer~~
+  - text_editor (partially completed)
+  - ~~button~~
+  - ~~surface~~
+  - ~~fluid_glass~~
+  - ~~scrollable~~
+  - image
+  - checkbox
+  - radio
+  - switch
+  - slider
+  - progress
+  - dialog
 
 ## Core Features
 
@@ -115,21 +156,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Core Concepts
 
-1.  **Component Model**
-    `Tessera` components are regular Rust functions annotated with the `#[tessera]` macro. This macro integrates the component function into the framework's component tree. Inside the function body, you can call `measure` to customize layout logic, measure and place child component functions to build the UI hierarchy, and call `state_handler` to handle user interactions.
+1. **Component Model**
+   `Tessera` components are regular Rust functions annotated with the `#[tessera]` macro. This macro integrates the component function into the framework's component tree. Inside the function body, you can call `measure` to customize layout logic, measure and place child component functions to build the UI hierarchy, and call `state_handler` to handle user interactions.
 
-    `measure` and `state_handler` are automatically injected into the function context by the `tessera` macro and do not need to be imported.
+   `measure` and `state_handler` are automatically injected into the function context by the `tessera` macro and do not need to be imported.
 
-2.  **Layout & Measurement**
-    The UI layout is determined during the "measurement" phase. Each component can provide a `measure` closure, in which you can:
+2. **Layout & Measurement**
+   The UI layout is determined during the "measurement" phase. Each component can provide a `measure` closure, in which you can:
 
-    - Measure the size of child components (with constraints).
-    - Use `place_node` to determine the position of child components.
-    - Return the final size of the current component (`ComputedData`).
-      If no `measure` closure is provided, the framework defaults to stacking all child components at `(0, 0)` and setting the container size to the minimum size that envelops all children.
+   - Measure the size of child components (with constraints).
+   - Use `place_node` to determine the position of child components.
+   - Return the final size of the current component (`ComputedData`).
+     If no `measure` closure is provided, the framework defaults to stacking all child components at `(0, 0)` and setting the container size to the minimum size that envelops all children.
 
-3.  **State Management**
-    `Tessera` promotes an explicit state management pattern. Components are stateless; they receive shared state via parameters (usually `Arc<T>`). All state changes and event responses are handled within the `state_handler` closure, which makes the data flow unidirectional and predictable.
+3. **State Management**
+   `Tessera` promotes an explicit state management pattern. Components are stateless; they receive shared state via parameters (usually `Arc<T>`). All state changes and event responses are handled within the `state_handler` closure, which makes the data flow unidirectional and predictable.
 
 ## Getting Started
 
@@ -146,20 +187,20 @@ cargo run
 
 ### Running the Example on Android
 
-1.  **Install xbuild**
+1. **Install xbuild**
 
-    ```bash
-    cargo install xbuild
-    ```
+   ```bash
+   cargo install xbuild
+   ```
 
-2.  **Run the example**
+2. **Run the example**
 
-    ```bash
-    # Find your device ID
-    x devices
-    # Assuming device ID is adb:823c4f8b and architecture is arm64
-    x run -p example --arch arm64 --device adb:823c4f8b
-    ```
+   ```bash
+   # Find your device ID
+   x devices
+   # Assuming device ID is adb:823c4f8b and architecture is arm64
+   x run -p example --arch arm64 --device adb:823c4f8b
+   ```
 
 ## Workspace Structure
 
