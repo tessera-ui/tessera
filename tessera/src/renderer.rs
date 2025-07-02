@@ -9,7 +9,9 @@ use parking_lot::Mutex;
 
 pub use app::WgpuApp;
 #[cfg(target_os = "android")]
-use winit::platform::android::{EventLoopBuilderExtAndroid, activity::AndroidApp};
+use winit::platform::android::{
+    ActiveEventLoopExtAndroid, EventLoopBuilderExtAndroid, activity::AndroidApp,
+};
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
@@ -49,6 +51,9 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     ime_state: ImeState,
     /// Register pipelines function
     register_pipelines_fn: R,
+    #[cfg(target_os = "android")]
+    /// Android ime opened state
+    android_ime_opened: bool,
 }
 
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
@@ -94,6 +99,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             keyboard_state,
             register_pipelines_fn,
             ime_state,
+            android_ime_opened: false,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -276,12 +282,26 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 // Handle IME requests
                 if let Some(ime_request) = window_requests.ime_request {
                     app.window.set_ime_allowed(true);
+                    #[cfg(target_os = "android")]
+                    {
+                        if !self.android_ime_opened {
+                            show_soft_input(true, event_loop.android_app());
+                            self.android_ime_opened = true;
+                        }
+                    }
                     app.window.set_ime_cursor_area::<PxPosition, PxSize>(
                         ime_request.position.unwrap(),
                         ime_request.size,
                     );
                 } else {
                     app.window.set_ime_allowed(false);
+                    #[cfg(target_os = "android")]
+                    {
+                        if self.android_ime_opened {
+                            hide_soft_input(event_loop.android_app());
+                            self.android_ime_opened = false;
+                        }
+                    }
                 }
                 // timer for performance measurement
                 let render_timer = Instant::now();
@@ -314,5 +334,167 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
             }
             _ => (),
         }
+    }
+}
+
+// https://github.com/rust-mobile/android-activity/pull/178
+#[cfg(target_os = "android")]
+pub fn show_soft_input(show_implicit: bool, android_app: &AndroidApp) {
+    let ctx = android_app;
+
+    let jvm = unsafe { jni::JavaVM::from_raw(ctx.vm_as_ptr().cast()) }.unwrap();
+    let na = unsafe { jni::objects::JObject::from_raw(ctx.activity_as_ptr().cast()) };
+
+    let mut env = jvm.attach_current_thread().unwrap();
+    if env.exception_check().unwrap() {
+        return;
+    }
+    let class_ctxt = env.find_class("android/content/Context").unwrap();
+    if env.exception_check().unwrap() {
+        return;
+    }
+    let ims = env
+        .get_static_field(class_ctxt, "INPUT_METHOD_SERVICE", "Ljava/lang/String;")
+        .unwrap();
+    if env.exception_check().unwrap() {
+        return;
+    }
+
+    let im_manager = env
+        .call_method(
+            &na,
+            "getSystemService",
+            "(Ljava/lang/String;)Ljava/lang/Object;",
+            &[(&ims).into()],
+        )
+        .unwrap()
+        .l()
+        .unwrap();
+    if env.exception_check().unwrap() {
+        return;
+    }
+
+    let jni_window = env
+        .call_method(&na, "getWindow", "()Landroid/view/Window;", &[])
+        .unwrap()
+        .l()
+        .unwrap();
+    if env.exception_check().unwrap() {
+        return;
+    }
+    let view = env
+        .call_method(&jni_window, "getDecorView", "()Landroid/view/View;", &[])
+        .unwrap()
+        .l()
+        .unwrap();
+    if env.exception_check().unwrap() {
+        return;
+    }
+
+    let _ = env.call_method(
+        im_manager,
+        "showSoftInput",
+        "(Landroid/view/View;I)Z",
+        &[
+            jni::objects::JValue::Object(&view),
+            if show_implicit {
+                (ndk_sys::ANATIVEACTIVITY_SHOW_SOFT_INPUT_IMPLICIT as i32).into()
+            } else {
+                0i32.into()
+            },
+        ],
+    );
+    // showSoftInput can trigger exceptions if the keyboard is currently animating open/closed
+    if env.exception_check().unwrap() {
+        let _ = env.exception_clear();
+    }
+}
+
+#[cfg(target_os = "android")]
+pub fn hide_soft_input(android_app: &AndroidApp) {
+    use jni::objects::JValue;
+
+    let ctx = android_app;
+    let jvm = match unsafe { jni::JavaVM::from_raw(ctx.vm_as_ptr().cast()) } {
+        Ok(jvm) => jvm,
+        Err(_) => return, // Early exit if failing to get the JVM
+    };
+    let activity = unsafe { jni::objects::JObject::from_raw(ctx.activity_as_ptr().cast()) };
+
+    let mut env = match jvm.attach_current_thread() {
+        Ok(env) => env,
+        Err(_) => return,
+    };
+
+    // --- 1. Get the InputMethodManager ---
+    // This part is the same as in show_soft_input.
+    let class_ctxt = match env.find_class("android/content/Context") {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let ims_field =
+        match env.get_static_field(class_ctxt, "INPUT_METHOD_SERVICE", "Ljava/lang/String;") {
+            Ok(f) => f,
+            Err(_) => return,
+        };
+    let ims = match ims_field.l() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let im_manager = match env.call_method(
+        &activity,
+        "getSystemService",
+        "(Ljava/lang/String;)Ljava/lang/Object;",
+        &[(&ims).into()],
+    ) {
+        Ok(m) => match m.l() {
+            Ok(im) => im,
+            Err(_) => return,
+        },
+        Err(_) => return,
+    };
+
+    // --- 2. Get the current window's token ---
+    // This is the key step that differs from show_soft_input.
+    let window = match env.call_method(&activity, "getWindow", "()Landroid/view/Window;", &[]) {
+        Ok(w) => match w.l() {
+            Ok(win) => win,
+            Err(_) => return,
+        },
+        Err(_) => return,
+    };
+
+    let decor_view = match env.call_method(&window, "getDecorView", "()Landroid/view/View;", &[]) {
+        Ok(v) => match v.l() {
+            Ok(view) => view,
+            Err(_) => return,
+        },
+        Err(_) => return,
+    };
+
+    let window_token =
+        match env.call_method(&decor_view, "getWindowToken", "()Landroid/os/IBinder;", &[]) {
+            Ok(t) => match t.l() {
+                Ok(token) => token,
+                Err(_) => return,
+            },
+            Err(_) => return,
+        };
+
+    // --- 3. Call hideSoftInputFromWindow ---
+    let _ = env.call_method(
+        &im_manager,
+        "hideSoftInputFromWindow",
+        "(Landroid/os/IBinder;I)Z",
+        &[
+            JValue::Object(&window_token),
+            JValue::Int(0), // flags, usually 0
+        ],
+    );
+
+    // Hiding the keyboard can also cause exceptions, so we clear them.
+    if env.exception_check().unwrap_or(false) {
+        let _ = env.exception_clear();
     }
 }
