@@ -75,7 +75,7 @@ pub fn spacer(args: SpacerArgs) {
                 // If the effective constraint is Fill, it means the parent allows filling.
                 // However, a simple spacer has no content to expand beyond its minimum.
                 // The actual size it gets if parent is Fill and allocates space
-                // would be determined by the parent's layout logic (e.g. Row/Column giving it a Fixed size).
+                // would be determined by the parent's layout logic (e.g. row/column giving it a Fixed size).
                 // Here, based purely on `effective_spacer_constraint` being Fill,
                 // it should take at least its `min` value.
                 // If parent constraint was Fixed(v), merge would result in Fixed(v.clamp(min, max)).

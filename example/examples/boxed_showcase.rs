@@ -1,5 +1,5 @@
 //! An example showcasing the `Boxed` component.
-//! This demonstrates how multiple `Surface` components are stacked
+//! This demonstrates how multiple `surface` components are stacked
 //! within a `Boxed` container, with the container's size being
 //! determined by the largest child. It also shows how to use
 //! the `alignment` property to position the children.

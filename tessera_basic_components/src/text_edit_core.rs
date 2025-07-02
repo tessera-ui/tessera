@@ -211,11 +211,11 @@ impl TextEditorState {
 /// provides the proper size constraints and handles user interaction events.
 #[tessera]
 pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
-    // Text rendering with constraints from parent container
+    // text rendering with constraints from parent container
     {
         let state_clone = state.clone();
         measure(Box::new(move |input| {
-            // Surface provides constraints that should be respected for text layout
+            // surface provides constraints that should be respected for text layout
             let max_width_pixels: Option<Px> = match input.parent_constraint.width {
                 DimensionValue::Fixed(w) => Some(w),
                 DimensionValue::Wrap { max, .. } => max,

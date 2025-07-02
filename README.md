@@ -2,15 +2,13 @@
 
 # **Tessera (WIP)**
 
-## Gui Is Not Special
-
 </div>
 
 ## Introduction
 
 Tessera is a declarative, immediate-mode UI framework for Rust. With a functional approach at its core, it aims to provide ultimate performance, flexibility, and extensibility.
 
-The project is currently in its early stages of development. Feel free to explore the latest progress through the [example code](https://www.google.com/search?q=example).
+The project is currently in its early stages of development. Feel free to explore the latest progress through the [example code](example).
 
 ## Roadmap
 
@@ -56,8 +54,25 @@ Currently, the framework is in the early stages of development. The v0.1.0 roadm
 ## Core Features
 
 - **Declarative Component Model**: Define and compose components using simple functions with the `#[tessera]` macro, resulting in clean and intuitive code.
-- **Powerful and Flexible Layout System**: A constraint-based (`Fixed`, `Wrap`, `Fill`) layout engine, combined with built-in components like `Row` and `Column`, makes it easy to implement responsive layouts from simple to complex.
-- **Pluggable Rendering Engine**: With the `DrawCommand` and `DrawablePipeline` traits, developers can fully customize rendering logic and easily extend the framework to support new visual effects.
+- **Powerful and Flexible Layout System**: A constraint-based (`Fixed`, `Wrap`, `Fill`) layout engine, combined with components like `row` and `column` (inspired by Jetpack Compose), makes it easy to implement responsive layouts from simple to complex.
+
+<p align="center">
+    <img src="assets/alignment_showcase.png"/>
+</p>
+<p align="center" style="color: gray;"><em>Example of `row`, viewable in `example/alignment_showcase.rs`</em></p>
+
+- **Pluggable Shader Engine**: Shaders are first-class citizens in Tessera. The core of Tessera doesn't come with built-in drawing primitives like a "brush". Instead, it provides an easy-to-use WGPU rendering/compute pipeline plugin system, offering an experience closer to some game engines. This is intentional, for the following reasons:
+
+  - **The Advent of WGPU**: The emergence of WGPU and WGSL has made shader programming simpler, more efficient, and easily adaptable to mainstream GPU backends. Writing shaders directly is no longer a painful process.
+  - **Neumorphism**: In recent years, pure flat design has led to visual fatigue, and more applications are adopting neumorphic design styles. The main difference from the old skeuomorphism of the 2000s is its **hyper-realistic perfection**, which requires many visual effects that are difficult to implement uniformly, such as lighting, shadows, reflections, refractions, bloom, and perspective. Attempting to encapsulate a perfect "brush" to achieve these effects is very difficult and inelegant.
+  - **Flexibility**: With custom shaders, we can easily implement advanced effects like custom lighting, shadows, particle systems, etc., without relying on the framework's built-in drawing tools.
+  - **GPU Compute**: One of the biggest advantages of WGPU over its predecessors is that compute shaders are first-class citizens. A future-oriented framework should take full advantage of this. By using custom compute shaders, we can perform complex computational tasks such as image processing and physics simulations, which are often unacceptably inefficient to perform on the CPU.
+
+<p align="center">
+    <img src="assets/boxed_showcase.png">
+</p>
+<p align="center" style="color: gray;"><em>Using custom shaders instead of a built-in brush allows us to easily achieve advanced glass effects like this. This example can be found in `example/boxed_showcase.rs`.</em></p>
+
 - **Decentralized Component Design**: Thanks to the pluggable rendering pipeline, `tessera` itself does not include any built-in components. While `tessera_basic_components` provides a set of common components, you are free to mix and match or create your own component libraries.
 - **Explicit State Management**: Components are stateless. State is passed in explicitly as parameters (usually in the form of `Arc<Lock<State>>` due to the highly parallel design), and interaction logic is handled within the `state_handler` closure, making data flow clear and controllable.
 - **Parallelized By Design**: The framework utilizes parallel processing in its core. For example, the size measurement of the component tree uses Rayon for parallel computation to improve the performance of complex UIs.
@@ -67,92 +82,62 @@ Currently, the framework is in the early stages of development. The v0.1.0 roadm
 Here is a simple counter application using `tessera_basic_components` that demonstrates the basic usage of `Tessera`.
 
 ```rust
-use std::sync::{
-    Arc,
-    atomic::{self, AtomicU32},
-};
-use tessera::Renderer;
-use tessera_basic_components::{
-    alignment::{CrossAxisAlignment, MainAxisAlignment},
-    button::{ButtonArgsBuilder, button},
-    row::{RowArgsBuilder, row_ui},
-    surface::{RippleState, SurfaceArgs, surface},
-    text::{TextArgsBuilder, text},
-};
-use tessera_macros::tessera;
-
-/// Application State
-struct AppState {
-    click_count: AtomicU32,
-    button_state: Arc<RippleState>,
-}
-
-impl AppState {
-    fn new() -> Self {
-        Self {
-            click_count: AtomicU32::new(0),
-            button_state: Arc::new(RippleState::new()),
-        }
-    }
-}
-
-/// Main application component
+/// Main counter application component
 #[tessera]
 fn counter_app(app_state: Arc<AppState>) {
-    // Use surface as the root container
-    surface(SurfaceArgs::default(), None, move || {
-        // Use the row_ui! macro to create a horizontal layout
-        row_ui![
-            RowArgsBuilder::default()
-                .main_axis_alignment(MainAxisAlignment::Center)
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .build()
-                .unwrap(),
-            // Button component
+    {
+        let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
+        let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
+        let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
+
+        surface(
+            SurfaceArgs {
+                color: [1.0, 1.0, 1.0, 1.0], // White background
+                padding: Dp(25.0),
+                ..Default::default()
+            },
+            None,
             move || {
-                button(
-                    ButtonArgsBuilder::default()
-                        .on_click(Arc::new(move || {
-                            // Update state
-                            app_state
-                                .click_count
-                                .fetch_add(1, atomic::Ordering::Relaxed);
-                        }))
+                row_ui![
+                    RowArgsBuilder::default()
+                        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
                         .build()
                         .unwrap(),
-                    app_state.button_state.clone(),
-                    move || text("Click Me!"),
-                )
+                    move || {
+                        button(
+                            ButtonArgsBuilder::default()
+                                .on_click(Arc::new(move || {
+                                    // Increment the click count
+                                    app_state_clone // Use the cloned app_state
+                                        .click_count
+                                        .fetch_add(1, atomic::Ordering::Relaxed);
+                                }))
+                                .build()
+                                .unwrap(),
+                            button_state_clone, // Use the cloned button_state
+                            move || text("click me!"),
+                        )
+                    },
+                    move || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text(format!("Count: {}", click_count))
+                                .build()
+                                .unwrap(),
+                        )
+                    }
+                ];
             },
-            // Text component to display the count
-            move || {
-                let count = app_state.click_count.load(atomic::Ordering::Relaxed);
-                text(
-                    format!("Count: {}", count),
-                )
-            }
-        ];
-    });
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create application state
-    let app_state = Arc::new(AppState::new());
-
-    // Run the application
-    Renderer::run(
-        move || {
-            counter_app(app_state.clone());
-        },
-        |app| {
-            // Register rendering pipelines for basic components
-            tessera_basic_components::pipelines::register_pipelines(app);
-        },
-    )?;
-
-    Ok(())
+        );
+    }
 }
 ```
+
+<p align="center">
+    <img src="assets/counter.png"/>
+</p>
+<p align="center" style="color: gray;"><em>This example can be found in `example/counter.rs`</em></p>
 
 ## Core Concepts
 
@@ -207,6 +192,6 @@ cargo run
 Tessera uses a multi-crate workspace structure with a clear separation of responsibilities:
 
 - **`tessera`**: The core functionality of the framework, including the component tree, renderer, runtime, basic types (`Dp`, `Px`), and event handling.
-- **`tessera_basic_components`**: Provides a set of ready-to-use UI components (like `Row`, `Column`, `Text`, `Button`, `Surface`) and their rendering pipelines.
+- **`tessera_basic_components`**: Provides a set of ready-to-use UI components (like `row`, `column`, `text`, `button`, `surface`) and their rendering pipelines.
 - **`tessera_macros`**: Contains the `#[tessera]` procedural macro, which greatly simplifies component definition.
 - **`example`**: An example project demonstrating how to build applications with the `Tessera` framework.

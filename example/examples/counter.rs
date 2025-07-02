@@ -10,7 +10,7 @@ use std::sync::{
     atomic::{self, AtomicU32},
 };
 
-use tessera::Renderer;
+use tessera::{Dp, Renderer};
 use tessera_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
@@ -25,7 +25,7 @@ use tessera_macros::tessera;
 struct AppState {
     /// Click counter
     click_count: AtomicU32,
-    /// Button ripple state
+    /// button ripple state
     button_state: Arc<RippleState>,
 }
 
@@ -46,38 +46,46 @@ fn counter_app(app_state: Arc<AppState>) {
         let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
         let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
 
-        surface(SurfaceArgs::default(), None, move || {
-            row_ui![
-                RowArgsBuilder::default()
-                    .main_axis_alignment(MainAxisAlignment::Start)
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .build()
-                    .unwrap(),
-                move || {
-                    button(
-                        ButtonArgsBuilder::default()
-                            .on_click(Arc::new(move || {
-                                // Increment the click count
-                                app_state_clone // Use the cloned app_state
-                                    .click_count
-                                    .fetch_add(1, atomic::Ordering::Relaxed);
-                            }))
-                            .build()
-                            .unwrap(),
-                        button_state_clone, // Use the cloned button_state
-                        move || text("click me!"),
-                    )
-                },
-                move || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text(format!("Count: {}", click_count))
-                            .build()
-                            .unwrap(),
-                    )
-                }
-            ];
-        });
+        surface(
+            SurfaceArgs {
+                color: [1.0, 1.0, 1.0, 1.0], // White background
+                padding: Dp(25.0),
+                ..Default::default()
+            },
+            None,
+            move || {
+                row_ui![
+                    RowArgsBuilder::default()
+                        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .build()
+                        .unwrap(),
+                    move || {
+                        button(
+                            ButtonArgsBuilder::default()
+                                .on_click(Arc::new(move || {
+                                    // Increment the click count
+                                    app_state_clone // Use the cloned app_state
+                                        .click_count
+                                        .fetch_add(1, atomic::Ordering::Relaxed);
+                                }))
+                                .build()
+                                .unwrap(),
+                            button_state_clone, // Use the cloned button_state
+                            move || text("click me!"),
+                        )
+                    },
+                    move || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text(format!("Count: {}", click_count))
+                                .build()
+                                .unwrap(),
+                        )
+                    }
+                ];
+            },
+        );
     }
 }
 

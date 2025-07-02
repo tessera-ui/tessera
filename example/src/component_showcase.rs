@@ -21,7 +21,7 @@ use crate::{
     text_editors::{text_editor_1, text_editor_2},
 };
 
-/// Surface examples showcase
+/// surface examples showcase
 #[tessera]
 fn surface_showcase() {
     surface(
@@ -47,7 +47,7 @@ fn surface_showcase() {
                 || {
                     text(
                         TextArgsBuilder::default()
-                            .text("Surface Components".to_string())
+                            .text("surface Components".to_string())
                             .size(tessera::Dp(24.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
@@ -70,7 +70,7 @@ fn surface_showcase() {
     )
 }
 
-/// Text editor showcase
+/// text editor showcase
 #[tessera]
 fn text_editor_showcase(state: Arc<AppState>) {
     let editor_state_clone = state.text_editors_state.editor_state.clone();
@@ -101,7 +101,7 @@ fn text_editor_showcase(state: Arc<AppState>) {
                 || {
                     text(
                         TextArgsBuilder::default()
-                            .text("Text Editor Components".to_string())
+                            .text("text Editor Components".to_string())
                             .size(tessera::Dp(24.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
@@ -271,10 +271,10 @@ pub fn component_showcase(state: Arc<AppState>) {
             )
         },
         || create_spacer(24)(),
-        // Surface components
+        // surface components
         || surface_showcase(),
         || create_spacer(24)(),
-        // Text editor components
+        // text editor components
         {
             let state_clone = state.clone();
             move || text_editor_showcase(state_clone.clone())

@@ -88,7 +88,7 @@ pub struct TextEditorArgs {
 }
 
 /// A text editor component with two-layer architecture:
-/// - Surface layer: provides visual container, minimum size, and click area
+/// - surface layer: provides visual container, minimum size, and click area
 /// - Core layer: handles text rendering and editing logic
 ///
 /// This design solves the issue where empty text editors had zero width and couldn't be clicked.
@@ -119,13 +119,13 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
         state.write().set_selection_color(selection_color);
     }
 
-    // Surface layer - provides visual container and minimum size guarantee
+    // surface layer - provides visual container and minimum size guarantee
     {
         let state_for_surface = state.clone();
         let args_for_surface = editor_args.clone();
         surface(
             create_surface_args(&args_for_surface, &state_for_surface),
-            None, // Text editors are not interactive at surface level
+            None, // text editors are not interactive at surface level
             move || {
                 // Core layer - handles text rendering and editing logic
                 text_edit_core(state_for_surface.clone());

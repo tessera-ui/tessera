@@ -77,11 +77,11 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
                                 .width(DimensionValue::Fill {
                                     min: None,
                                     max: None,
-                                }) // Row Fill Container Width
+                                }) // row Fill Container Width
                                 .height(DimensionValue::Wrap {
                                     min: None,
                                     max: None,
-                                }) // Row Height Adapts to Content
+                                }) // row Height Adapts to Content
                                 .main_axis_alignment(alignment) // Directly use different main axis alignments
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .build()
@@ -136,11 +136,11 @@ fn app() {
                             height: DimensionValue::Fixed(Px(30)),
                         })
                     }) as Box<dyn FnOnce() + Send + Sync>,
-                    // Row Alignment Demo Title
+                    // row Alignment Demo Title
                     Box::new(|| {
                         text(
                             TextArgsBuilder::default()
-                                .text("Row Main Axis Alignment:".to_string())
+                                .text("row Main Axis Alignment:".to_string())
                                 .size(Dp(18.0))
                                 .color([60, 60, 60])
                                 .build()

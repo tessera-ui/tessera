@@ -161,7 +161,7 @@ impl Default for SurfaceArgs {
     }
 }
 
-/// Surface component, a basic container that can have its own size constraints.
+/// surface component, a basic container that can have its own size constraints.
 /// If args contains an on_click callback, a ripple_state must be provided for interactive behavior.
 #[tessera]
 pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child: impl FnOnce()) {
@@ -170,7 +170,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
     let args_measure_clone = args.clone();
 
     measure(Box::new(move |input| {
-        // Determine Surface's intrinsic constraint based on args
+        // Determine surface's intrinsic constraint based on args
         let surface_intrinsic_width = args_measure_clone.width.unwrap_or(DimensionValue::Wrap {
             min: None,
             max: None,

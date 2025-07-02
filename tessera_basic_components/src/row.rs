@@ -27,7 +27,7 @@ impl Default for RowArgs {
     }
 }
 
-/// Represents a child item within a Row layout.
+/// Represents a child item within a row layout.
 pub struct RowItem {
     /// Optional weight for flexible space distribution
     pub weight: Option<f32>,
@@ -103,7 +103,7 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
         let mut children_sizes = vec![None; N];
         let mut max_child_height = Px(0);
 
-        // For Row, main axis is horizontal, so check width for weight distribution
+        // For row, main axis is horizontal, so check width for weight distribution
         let should_use_weight_for_width = match row_effective_constraint.width {
             DimensionValue::Fixed(_) => true,
             DimensionValue::Fill { max: Some(_), .. } => true,
@@ -194,7 +194,7 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
             }
 
             let final_row_width = available_width_for_children;
-            // Row's height is determined by its own effective constraint, or by wrapping content if no explicit max.
+            // row's height is determined by its own effective constraint, or by wrapping content if no explicit max.
             let final_row_height = match row_effective_constraint.height {
                 DimensionValue::Fixed(h) => h,
                 DimensionValue::Fill { max: Some(h), .. } => h,
@@ -348,7 +348,7 @@ fn place_children_with_alignment(
 ) {
     let available_space = (final_row_width - total_children_width).max(Px(0));
 
-    // Calculate start position and spacing on the main axis (horizontal for Row)
+    // Calculate start position and spacing on the main axis (horizontal for row)
     let (mut current_x, spacing_between_children) = match main_axis_alignment {
         MainAxisAlignment::Start => (Px(0), Px(0)),
         MainAxisAlignment::Center => (available_space / 2, Px(0)),
@@ -384,7 +384,7 @@ fn place_children_with_alignment(
         if let Some(child_actual_size) = child_size_opt {
             let child_id = children_ids[i];
 
-            // Calculate position on the cross axis (vertical for Row)
+            // Calculate position on the cross axis (vertical for row)
             let y_offset = match cross_axis_alignment {
                 CrossAxisAlignment::Start => Px(0),
                 CrossAxisAlignment::Center => {

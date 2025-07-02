@@ -23,7 +23,7 @@ pub mod md_colors {
     /// Error color - used for error states and destructive actions
     pub const ERROR: [f32; 4] = [0.725, 0.094, 0.075, 1.0]; // Red
 
-    /// Surface colors for backgrounds and containers (Light theme)
+    /// surface colors for backgrounds and containers (Light theme)
     pub const SURFACE: [f32; 4] = [0.98, 0.98, 1.0, 1.0]; // Light surface
     pub const SURFACE_CONTAINER: [f32; 4] = [0.94, 0.94, 0.97, 1.0]; // Elevated light surface
     pub const SURFACE_VARIANT: [f32; 4] = [0.90, 0.90, 0.94, 1.0]; // Alternative light surface
@@ -31,7 +31,7 @@ pub mod md_colors {
     /// Outline colors for borders and dividers
     pub const OUTLINE: [f32; 4] = [0.46, 0.46, 0.50, 1.0];
 
-    /// Text colors (for light theme)
+    /// text colors (for light theme)
 
     pub const ON_SURFACE: [u8; 3] = [16, 16, 20]; // Dark text on light surface
     pub const ON_SURFACE_VARIANT: [u8; 3] = [73, 69, 79]; // Medium text

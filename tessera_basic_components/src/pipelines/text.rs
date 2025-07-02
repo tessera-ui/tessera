@@ -167,7 +167,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
 pub struct TextData {
     /// glyphon text buffer
     text_buffer: glyphon::Buffer,
-    /// Text area size
+    /// text area size
     pub size: [u32; 2],
 }
 

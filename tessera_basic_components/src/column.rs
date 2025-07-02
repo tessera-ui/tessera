@@ -27,7 +27,7 @@ impl Default for ColumnArgs {
     }
 }
 
-/// Represents a child item within a Column layout.
+/// Represents a child item within a column layout.
 pub struct ColumnItem {
     /// Optional weight for flexible space distribution
     pub weight: Option<f32>,
@@ -196,7 +196,7 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
             }
 
             let final_column_height = available_height_for_children;
-            // Column's width is determined by its own effective constraint, or by wrapping content if no explicit max.
+            // column's width is determined by its own effective constraint, or by wrapping content if no explicit max.
             let final_column_width = match column_effective_constraint.width {
                 DimensionValue::Fixed(w) => w,
                 DimensionValue::Fill { max: Some(w), .. } => w,
@@ -296,7 +296,7 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                     if let Some(max_w) = max {
                         w = w.min(max_w);
                     }
-                    // Column's own max for Fill
+                    // column's own max for Fill
                     // If Fill has no max, it behaves like Wrap for width determination
                     else {
                         w = max_child_width;

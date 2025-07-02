@@ -13,7 +13,7 @@ These instructions define how GitHub Copilot should assist with this project. Th
 The `tessera` project uses a multi-crate workspace structure with clear separation of responsibilities:
 
 - **`tessera`**: Core framework functionality including component tree management, rendering, runtime, and basic types (`Dp`, `Px`, cursor/keyboard/scroll states)
-- **`tessera_basic_components`**: Ready-to-use UI components (layout: `row`/`column`, content: `Text`/`TextEditor`, functional: `spacer`/`surface`) and their associated rendering pipelines.
+- **`tessera_basic_components`**: Ready-to-use UI components (layout: `row`/`column`, content: `text`/`TextEditor`, functional: `spacer`/`surface`) and their associated rendering pipelines.
 - **`tessera_macros`**: The `#[tessera]` procedural macro that simplifies component creation
 
 ## Tessera Framework Concepts
