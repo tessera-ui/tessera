@@ -26,12 +26,26 @@ impl RippleDemoStates {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct CheckboxState {
+    pub checked: Arc<RwLock<bool>>,
+}
+
+impl CheckboxState {
+    pub fn new() -> Self {
+        Self {
+            checked: Arc::new(RwLock::new(false)),
+        }
+    }
+}
+
 pub struct AppState {
     pub metrics: Arc<PerformanceMetrics>,
     pub anim_spacer_state: Arc<AnimSpacerState>,
     pub text_editors_state: TextEditorsState,
     pub scrollable_state: Arc<RwLock<ScrollableState>>,
     pub ripple_states: RippleDemoStates,
+    pub checkbox_state: CheckboxState,
 }
 
 impl AppState {
@@ -42,6 +56,7 @@ impl AppState {
             text_editors_state: TextEditorsState::new(),
             scrollable_state: Arc::new(RwLock::new(ScrollableState::new())),
             ripple_states: RippleDemoStates::new(),
+            checkbox_state: CheckboxState::new(),
         }
     }
 }

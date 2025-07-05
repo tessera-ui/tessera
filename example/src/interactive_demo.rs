@@ -2,8 +2,11 @@ use std::sync::Arc;
 use tessera::{DimensionValue, Dp, Px};
 use tessera_basic_components::{
     button::{ButtonArgsBuilder, button},
+    checkbox::{CheckboxArgsBuilder, checkbox},
     column::ColumnArgsBuilder,
     column_ui,
+    row::RowArgsBuilder,
+    row_ui,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -17,7 +20,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
     column_ui!(
         ColumnArgsBuilder::default().build().unwrap(),
         // Title
-        move || {
+        || {
             text(
                 TextArgsBuilder::default()
                     .text("Interactive Components Demo".to_string())
@@ -42,8 +45,9 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         },
         // Primary button with hover effect
         {
-            let state = app_state.ripple_states.primary.clone();
+            let app_state = app_state.clone();
             move || {
+                let state = app_state.ripple_states.primary.clone();
                 button(
                     ButtonArgsBuilder::default()
                         .color(md_colors::PRIMARY) // Material Design primary color
@@ -73,8 +77,9 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         || (create_spacer(8))(),
         // Success button with hover effect
         {
-            let state = app_state.ripple_states.success.clone();
+            let app_state = app_state.clone();
             move || {
+                let state = app_state.ripple_states.success.clone();
                 button(
                     ButtonArgsBuilder::default()
                         .color(md_colors::TERTIARY) // Material Design tertiary color
@@ -104,8 +109,9 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         || (create_spacer(8))(),
         // Danger button with hover effect
         {
-            let state = app_state.ripple_states.danger.clone();
+            let app_state = app_state.clone();
             move || {
+                let state = app_state.ripple_states.danger.clone();
                 button(
                     ButtonArgsBuilder::default()
                         .color(md_colors::ERROR) // Material Design error color
@@ -131,6 +137,45 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                 )
             }
         },
+        || (create_spacer(16))(),
+        // Checkbox section
+        {
+            let app_state = app_state.clone();
+            move || {
+                let checked = *app_state.checkbox_state.checked.read();
+                let on_toggle = {
+                    let checked_arc = app_state.checkbox_state.checked.clone();
+                    Arc::new(move |new_checked| {
+                        *checked_arc.write() = new_checked;
+                    })
+                };
+
+                row_ui!(
+                    RowArgsBuilder::default()
+                        .cross_axis_alignment(
+                            tessera_basic_components::alignment::CrossAxisAlignment::Center
+                        )
+                        .build()
+                        .unwrap(),
+                    move || checkbox(
+                        CheckboxArgsBuilder::default()
+                            .checked(checked)
+                            .on_toggle(on_toggle)
+                            .build()
+                            .unwrap()
+                    ),
+                    || create_spacer(8)(),
+                    move || {
+                        let label = if checked {
+                            "Checkbox is ON"
+                        } else {
+                            "Checkbox is OFF"
+                        };
+                        text(label)
+                    }
+                )
+            }
+        },
         // Spacer
         || (create_spacer(16))(),
         // Interactive surfaces section
@@ -146,8 +191,9 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         },
         // Custom interactive surface with hover effect
         {
-            let state = app_state.ripple_states.custom.clone();
+            let app_state = app_state.clone();
             move || {
+                let state = app_state.ripple_states.custom.clone();
                 surface(
                     SurfaceArgsBuilder::default()
                         .color(md_colors::SECONDARY) // Material Design secondary color

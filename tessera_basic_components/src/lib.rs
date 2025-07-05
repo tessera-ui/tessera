@@ -6,6 +6,7 @@ pub mod fluid_glass;
 pub mod alignment;
 pub mod boxed;
 pub mod button;
+pub mod checkbox;
 pub mod column;
 pub mod image;
 

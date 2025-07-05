@@ -101,7 +101,7 @@ fn text_editor_showcase(state: Arc<AppState>) {
                 || {
                     text(
                         TextArgsBuilder::default()
-                            .text("text Editor Components".to_string())
+                            .text("Text Editor Components".to_string())
                             .size(tessera::Dp(24.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
