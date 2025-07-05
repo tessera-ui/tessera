@@ -5,7 +5,6 @@ pub mod drawer;
 use std::{sync::Arc, time::Instant};
 
 use log::{debug, warn};
-use parking_lot::Mutex;
 
 pub use app::WgpuApp;
 #[cfg(target_os = "android")]
@@ -40,7 +39,7 @@ pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirem
 pub const SCENE_TEXTURE_BIND_GROUP_SET: u32 = 1;
 pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     /// WGPU app
-    app: Arc<Mutex<Option<WgpuApp>>>,
+    app: Option<WgpuApp>,
     /// Entry UI Function
     entry_point: F,
     /// The state of the cursor
@@ -61,7 +60,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     /// Create event loop and run application
     pub fn run(entry_point: F, register_pipelines_fn: R) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::new().unwrap();
-        let app = Arc::new(Mutex::new(None));
+        let app = None;
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
@@ -109,7 +108,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Renderer<F, R> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Just return if the app is already created
-        if self.app.as_ref().lock().is_some() {
+        if self.app.is_some() {
             return;
         }
 
@@ -125,7 +124,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         // Register pipelines
         wgpu_app.register_pipelines(register_pipelines_fn);
 
-        self.app.lock().replace(wgpu_app);
+        self.app = Some(wgpu_app);
     }
 
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
@@ -138,8 +137,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        let mut app_opt = self.app.lock();
-        let app = match app_opt.as_mut() {
+        let app = match self.app.as_mut() {
             Some(app) => app,
             None => return,
         };

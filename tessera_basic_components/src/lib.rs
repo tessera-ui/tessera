@@ -7,6 +7,7 @@ pub mod alignment;
 pub mod boxed;
 pub mod button;
 pub mod column;
+pub mod image;
 
 pub mod pipelines;
 pub mod pos_misc;

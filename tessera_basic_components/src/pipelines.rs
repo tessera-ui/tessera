@@ -3,6 +3,8 @@ mod pos_misc;
 mod shape;
 mod text;
 
+pub mod image;
+
 pub use shape::{RippleProps, ShadowProps, ShapeCommand};
 pub use text::{TextCommand, TextConstraint, TextData, read_font_system, write_font_system};
 
@@ -16,4 +18,7 @@ pub fn register_pipelines(app: &mut tessera::renderer::WgpuApp) {
     // Register fluid glass pipeline
     let fluid_glass_pipeline = fluid_glass::FluidGlassPipeline::new(&app.gpu, &app.config);
     app.drawer.pipeline_registry.register(fluid_glass_pipeline);
+    // Register image pipeline
+    let image_pipeline = image::ImagePipeline::new(&app.gpu, &app.config);
+    app.drawer.pipeline_registry.register(image_pipeline);
 }

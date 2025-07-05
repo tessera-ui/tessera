@@ -20,6 +20,16 @@ impl Default for DimensionValue {
     }
 }
 
+impl DimensionValue {
+    pub fn to_max_px(&self, default: Px) -> Px {
+        match self {
+            DimensionValue::Fixed(value) => *value,
+            DimensionValue::Wrap { max, .. } => max.unwrap_or(default),
+            DimensionValue::Fill { max, .. } => max.unwrap_or(default),
+        }
+    }
+}
+
 /// Represents layout constraints for a component node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Constraint {

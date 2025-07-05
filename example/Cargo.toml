@@ -11,10 +11,6 @@ name = "example"
 name = "example"
 path = "src/lib.rs"
 
-[[example]]
-name = "boxed_showcase"
-path = "examples/boxed_showcase.rs"
-
 [dependencies]
 tessera = { path = "../tessera" }
 tessera_macros = { path = "../tessera_macros" }
@@ -31,7 +27,7 @@ bytemuck = { version = "1.12", features = ["derive"] }
 image = "0.25.6"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-flexi_logger = { version = "0.31.1", features = ["async"] }
+flexi_logger = { version = "0.31.1", features = ["async", "trc"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15.0"

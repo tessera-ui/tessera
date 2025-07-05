@@ -108,68 +108,60 @@ impl ShapeCommandComputed {
                 color,
                 corner_radius,
                 shadow,
-            } => {
-                rect_to_computed_draw_command(
-                    size,
-                    position,
-                    color, // RGBA
-                    corner_radius,
-                    shadow,
-                    0.0, // border_width for fill is 0
-                    0.0, // render_mode for fill is 0.0
-                )
-            }
+            } => rect_to_computed_draw_command(
+                size,
+                position,
+                color, // RGBA
+                corner_radius,
+                shadow,
+                0.0, // border_width for fill is 0
+                0.0, // render_mode for fill is 0.0
+            ),
             ShapeCommand::OutlinedRect {
                 color,
                 corner_radius,
                 shadow,
                 border_width,
-            } => {
-                rect_to_computed_draw_command(
-                    size,
-                    position,
-                    color, // RGBA, This color is for the border
-                    corner_radius,
-                    shadow,
-                    border_width,
-                    1.0, // render_mode for outline is 1.0
-                )
-            }
+            } => rect_to_computed_draw_command(
+                size,
+                position,
+                color, // RGBA, This color is for the border
+                corner_radius,
+                shadow,
+                border_width,
+                1.0, // render_mode for outline is 1.0
+            ),
             ShapeCommand::RippleRect {
                 color,
                 corner_radius,
                 shadow,
                 ripple,
-            } => {
-                ripple_rect_to_computed_draw_command(
-                    size,
-                    position,
-                    color,
-                    corner_radius,
-                    shadow,
-                    0.0, // border_width for fill is 0
-                    0.0, // render_mode for fill is 0.0
-                    ripple,
-                )
-            }
+            } => ripple_rect_to_computed_draw_command(
+                size,
+                position,
+                color,
+                corner_radius,
+                shadow,
+                0.0, // border_width for fill is 0
+                0.0, // render_mode for fill is 0.0
+                ripple,
+            ),
             ShapeCommand::RippleOutlinedRect {
                 color,
                 corner_radius,
                 shadow,
                 border_width,
                 ripple,
-            } => {
-                ripple_rect_to_computed_draw_command(
-                    size,
-                    position,
-                    color,
-                    corner_radius,
-                    shadow,
-                    border_width,
-                    1.0, // render_mode for outline is 1.0
-                    ripple,
-                )
-            }
+            } => ripple_rect_to_computed_draw_command(
+                size,
+                position,
+                color,
+                corner_radius,
+                shadow,
+                border_width,
+                1.0, // render_mode for outline is 1.0
+                ripple,
+            ),
         }
     }
 }
