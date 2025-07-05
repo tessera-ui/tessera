@@ -44,7 +44,7 @@ Currently, the framework is in the early stages of development. The v0.1.0 roadm
   - ~~fluid_glass~~
   - ~~scrollable~~
   - ~~image~~
-  - checkbox
+  - ~~checkbox~~
   - radio
   - switch
   - slider
