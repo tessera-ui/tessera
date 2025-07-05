@@ -1,9 +1,11 @@
-use crate::pipelines::image::{ImageCommand, ImageData};
+use std::sync::Arc;
+
 use derive_builder::Builder;
 use image::GenericImageView;
-use std::sync::Arc;
 use tessera::{ComputedData, Constraint, DimensionValue, Px};
 use tessera_macros::tessera;
+
+use crate::pipelines::image::{ImageCommand, ImageData};
 
 /// Source of the image data.
 #[derive(Clone, Debug)]

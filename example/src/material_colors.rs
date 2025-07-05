@@ -23,23 +23,26 @@ pub mod md_colors {
     /// Error color - used for error states and destructive actions
     pub const ERROR: [f32; 4] = [0.725, 0.094, 0.075, 1.0]; // Red
 
-    /// surface colors for backgrounds and containers (Light theme)
+    /// Surface color for backgrounds and containers (Light theme).
     pub const SURFACE: [f32; 4] = [0.98, 0.98, 1.0, 1.0]; // Light surface
+    /// Surface container color for elevated surfaces (Light theme).
     pub const SURFACE_CONTAINER: [f32; 4] = [0.94, 0.94, 0.97, 1.0]; // Elevated light surface
+    /// Surface variant color for alternative surfaces (Light theme).
     pub const SURFACE_VARIANT: [f32; 4] = [0.90, 0.90, 0.94, 1.0]; // Alternative light surface
 
-    /// Outline colors for borders and dividers
+    /// Outline color for borders and dividers.
     pub const OUTLINE: [f32; 4] = [0.46, 0.46, 0.50, 1.0];
 
-    /// text colors (for light theme)
-
+    /// Text color for components on top of a surface color (light theme).
     pub const ON_SURFACE: [u8; 3] = [16, 16, 20]; // Dark text on light surface
+    /// Variant of the text color for components on top of a surface color (light theme).
     pub const ON_SURFACE_VARIANT: [u8; 3] = [73, 69, 79]; // Medium text
 
-    /// Ripple effect color
+    /// Ripple effect color.
     pub const RIPPLE: [f32; 3] = [1.0, 1.0, 1.0]; // White ripple for dark surfaces
 
-    /// Transparent versions for overlays
+    /// Transparent version of the tertiary color for overlays.
     pub const TERTIARY_TRANSPARENT: [f32; 4] = [0.047, 0.482, 0.239, 0.3];
+    /// Transparent version of the surface container color for overlays.
     pub const SURFACE_CONTAINER_TRANSPARENT: [f32; 4] = [0.94, 0.94, 0.97, 0.9];
 }
