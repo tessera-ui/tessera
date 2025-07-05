@@ -57,7 +57,7 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
 - **强大而灵活的布局系统**：基于约束（`Fixed`、`Wrap`、`Fill`）的布局引擎，结合 `row` 和 `column` 等组件（灵感来自 Jetpack Compose），可以轻松实现从简单到复杂的响应式布局。
 
 <p align="center">
-    <img src="../assets/alignment_showcase.png"/>
+    <img alt="row alignment showcase" src="../assets/alignment_showcase.png"/>
 </p>
 <p align="center" style="color: gray;"><em>`row` 的示例，可在 `example/alignment_showcase.rs` 中查看</em></p>
 
@@ -69,7 +69,7 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
   - **GPU 计算**：WGPU 相对于其前辈的最大优势之一是计算着色器是一等公民。一个面向未来的框架应该充分利用这一点。通过使用自定义计算着色器，我们可以执行复杂的计算任务，例如图像处理和物理模拟，这些任务在 CPU 上执行通常效率低得令人无法接受。
 
 <p align="center">
-    <img src="../assets/boxed_showcase.png">
+    <img alt="boxed component showcase with glass effect" src="../assets/boxed_showcase.png">
 </p>
 <p align="center" style="color: gray;"><em>使用自定义着色器代替内置画刷，可以轻松实现类似这样的高级玻璃效果。此示例可在 `example/boxed_showcase.rs` 中找到。</em></p>
 
@@ -135,7 +135,7 @@ fn counter_app(app_state: Arc<AppState>) {
 ```
 
 <p align="center">
-    <img src="../assets/counter.png"/>
+    <img alt="counter component example" src="../assets/counter.png"/>
 </p>
 <p align="center" style="color: gray;"><em>此示例可在 `example/counter.rs` 中找到</em></p>
 
