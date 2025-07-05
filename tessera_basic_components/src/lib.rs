@@ -17,6 +17,7 @@ pub mod scrollable;
 pub mod selection_highlight_rect;
 pub mod spacer;
 pub mod surface;
+pub mod switch;
 pub mod text;
 pub mod text_edit_core;
 pub mod text_editor;

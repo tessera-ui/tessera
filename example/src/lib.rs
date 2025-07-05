@@ -8,6 +8,7 @@ mod layout_examples;
 mod material_colors;
 mod misc;
 mod performance_display;
+mod switch_showcase;
 mod text_editors;
 
 use std::sync::Arc;

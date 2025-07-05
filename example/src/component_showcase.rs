@@ -18,6 +18,7 @@ use crate::{
     material_colors::md_colors,
     misc::create_spacer,
     performance_display::perf_display,
+    switch_showcase::switch_showcase,
     text_editors::{text_editor_1, text_editor_2},
 };
 
@@ -278,6 +279,12 @@ pub fn component_showcase(state: Arc<AppState>) {
         {
             let state_clone = state.clone();
             move || text_editor_showcase(state_clone.clone())
+        },
+        || create_spacer(24)(),
+        // Switch component
+        {
+            let state_clone = state.clone();
+            move || switch_showcase(state_clone.switch_state.state.clone())
         },
         || create_spacer(24)(),
         // Interactive components

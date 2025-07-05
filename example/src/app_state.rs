@@ -1,6 +1,8 @@
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
-use tessera_basic_components::scrollable::ScrollableState;
+use tessera_basic_components::{
+    scrollable::ScrollableState, switch::SwitchState as BasicSwitchState,
+};
 
 use crate::{
     animated_spacer::AnimSpacerState, performance_display::PerformanceMetrics,
@@ -39,6 +41,19 @@ impl CheckboxState {
     }
 }
 
+#[derive(Clone)]
+pub struct SwitchState {
+    pub state: Arc<Mutex<BasicSwitchState>>,
+}
+
+impl SwitchState {
+    pub fn new() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(BasicSwitchState::new(false))),
+        }
+    }
+}
+
 pub struct AppState {
     pub metrics: Arc<PerformanceMetrics>,
     pub anim_spacer_state: Arc<AnimSpacerState>,
@@ -46,6 +61,7 @@ pub struct AppState {
     pub scrollable_state: Arc<RwLock<ScrollableState>>,
     pub ripple_states: RippleDemoStates,
     pub checkbox_state: CheckboxState,
+    pub switch_state: SwitchState,
 }
 
 impl AppState {
@@ -57,6 +73,7 @@ impl AppState {
             scrollable_state: Arc::new(RwLock::new(ScrollableState::new())),
             ripple_states: RippleDemoStates::new(),
             checkbox_state: CheckboxState::new(),
+            switch_state: SwitchState::new(),
         }
     }
 }
