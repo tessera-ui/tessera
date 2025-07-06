@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.gif" alt="Tessera Logo" width="128"/>
+
 # **Tessera (WIP)**
 
 </div>
