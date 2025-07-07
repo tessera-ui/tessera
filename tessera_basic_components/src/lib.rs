@@ -15,6 +15,7 @@ pub mod pos_misc;
 pub mod row;
 pub mod scrollable;
 pub mod selection_highlight_rect;
+pub mod slider;
 pub mod spacer;
 pub mod surface;
 pub mod switch;

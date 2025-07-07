@@ -78,7 +78,7 @@ fn counter_app(app_state: Arc<AppState>) {
                     move || {
                         text(
                             TextArgsBuilder::default()
-                                .text(format!("Count: {}", click_count))
+                                .text(format!("Count: {click_count}"))
                                 .build()
                                 .unwrap(),
                         )
