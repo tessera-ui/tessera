@@ -6,7 +6,6 @@
 
 [![简体中文][readme-cn-badge]][readme-cn-url]
 [![Stars][stars-badge]][stars-url]
-[![Release][release-badge]][release-url]
 [![Logo][logo-badge]][logo-url]
 [![tesssera][tessera-badge]][tessera-url]
 [![basic components][tessera-basic-components-badge]][tessera-basic-components-url]
@@ -17,8 +16,6 @@
 [readme-cn-url]: docs/README_zh-CN.md
 [stars-badge]: https://img.shields.io/github/stars/shadow3aaa/tessera?style=for-the-badge&logo=github
 [stars-url]: https://github.com/shadow3aaa/tessera
-[release-badge]: https://img.shields.io/github/v/release/shadow3aaa/tessera?style=for-the-badge&logo=rust
-[release-url]: https://github.com/shadow3aaa/fas-rs/releases/latest
 [logo-badge]: https://img.shields.io/badge/logo-source-blue?style=for-the-badge&logo=rust
 [logo-url]: tessera_logo
 [tessera-badge]: https://img.shields.io/badge/tessera-source-blue?style=for-the-badge&logo=rust
