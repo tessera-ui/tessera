@@ -1,9 +1,10 @@
 use crate::alignment::Alignment;
+use derive_builder::Builder;
 use tessera::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node};
 use tessera_macros::tessera;
 
 /// Arguments for the `Boxed` component.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Builder)]
 pub struct BoxedArgs {
     /// The alignment of children within the `Boxed` container.
     pub alignment: Alignment,

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["example", "tessera", "tessera_basic_components", "tessera_macros"]
+members = ["example", "tessera", "tessera_logo", "tessera_basic_components", "tessera_macros"]
 
 [profile.release]
 debug = true
