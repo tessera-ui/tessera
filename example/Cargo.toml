@@ -17,17 +17,17 @@ tessera_macros = { path = "../tessera_macros" }
 tessera_basic_components = { path = "../tessera_basic_components" }
 rand = "0.9.1"
 tokio = { version = "1.45.1", features = ["full"] }
-log = "0.4.20"
-parking_lot = "0.12.1"
+log = "0.4.27"
+parking_lot = "0.12.4"
 winit = "0.30.11"
 wgpu = "25.0.2"
 env_logger = "0.11.8"
 pollster = "0.4.0"
-bytemuck = { version = "1.12", features = ["derive"] }
+bytemuck = { version = "1.23.1", features = ["derive"] }
 image = "0.25.6"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-flexi_logger = { version = "0.31.1", features = ["async", "trc"] }
+flexi_logger = { version = "0.31.2", features = ["async", "trc"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.15.0"
+android_logger = "0.15.1"

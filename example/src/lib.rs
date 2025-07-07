@@ -47,8 +47,6 @@ fn main() {}
 #[allow(dead_code)]
 #[cfg(not(target_os = "android"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use tessera::renderer::TesseraConfig;
-
     let _logger = flexi_logger::Logger::try_with_env()?
         .write_mode(flexi_logger::WriteMode::Async)
         .start()?;

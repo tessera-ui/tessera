@@ -11,15 +11,15 @@ tessera_macros = { path = "../tessera_macros" }
 tessera_basic_components = { path = "../tessera_basic_components" }
 rand = "0.9.1"
 rand_pcg = "0.9.0"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.46.1", features = ["full"] }
 log = "0.4"
 derive_builder = "0.20"
 lyon = "1.0"
 glam = "0.30.4"
 parking_lot = "0.12"
-env_logger = "0.11"
+env_logger = "0.11.8"
 pollster = "0.4.0"
-bytemuck = { version = "1.12", features = ["derive"] }
+bytemuck = { version = "1.23.1", features = ["derive"] }
 image = "0.25"
 delaunator = "1.0.2"
 flexi_logger = { version = "0.31.2", features = ["async", "trc"] }
