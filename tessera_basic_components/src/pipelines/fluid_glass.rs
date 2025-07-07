@@ -49,7 +49,7 @@ pub(crate) struct FluidGlassPipeline {
 }
 
 impl FluidGlassPipeline {
-    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
+    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
         let shader = gpu.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Fluid Glass Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("fluid_glass/glass.wgsl").into()),
@@ -130,7 +130,11 @@ impl FluidGlassPipeline {
                 ..Default::default()
             },
             depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
             multiview: None,
             cache: None,
         });

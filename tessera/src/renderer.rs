@@ -32,6 +32,24 @@ use crate::{
 pub use compute::{ComputablePipeline, ComputeCommand, ComputePipelineRegistry};
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirement};
 
+/// Configuration for the Tessera runtime and renderer.
+#[derive(Clone)]
+pub struct TesseraConfig {
+    /// The number of samples to use for MSAA.
+    ///
+    /// Common values are 1, 2, 4, 8.
+    /// A value of 1 effectively disables MSAA.
+    /// Note: The GPU must support the chosen sample count.
+    pub sample_count: u32,
+}
+
+impl Default for TesseraConfig {
+    /// Creates a default configuration with 4x MSAA enabled.
+    fn default() -> Self {
+        Self { sample_count: 4 }
+    }
+}
+
 /// The bind group set index where the scene texture is bound for pipelines that
 /// require `RenderRequirement::SamplesBackground`.
 ///
@@ -50,6 +68,8 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     ime_state: ImeState,
     /// Register pipelines function
     register_pipelines_fn: R,
+    /// Tessera configuration
+    config: TesseraConfig,
     #[cfg(target_os = "android")]
     /// Android ime opened state
     android_ime_opened: bool,
@@ -57,8 +77,17 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
 
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     #[cfg(not(target_os = "android"))]
-    /// Create event loop and run application
     pub fn run(entry_point: F, register_pipelines_fn: R) -> Result<(), EventLoopError> {
+        Self::run_with_config(entry_point, register_pipelines_fn, Default::default())
+    }
+
+    #[cfg(not(target_os = "android"))]
+    /// Create event loop and run application
+    pub fn run_with_config(
+        entry_point: F,
+        register_pipelines_fn: R,
+        config: TesseraConfig,
+    ) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::new().unwrap();
         let app = None;
         let cursor_state = CursorState::default();
@@ -71,11 +100,13 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             keyboard_state,
             register_pipelines_fn,
             ime_state,
+            config,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
     }
 
+    #[cfg(target_os = "android")]
     #[cfg(target_os = "android")]
     /// Create event loop and run application on Android
     pub fn run(
@@ -83,11 +114,27 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         register_pipelines_fn: R,
         android_app: AndroidApp,
     ) -> Result<(), EventLoopError> {
+        Self::run_with_config(
+            entry_point,
+            register_pipelines_fn,
+            android_app,
+            Default::default(),
+        )
+    }
+
+    #[cfg(target_os = "android")]
+    /// Create event loop and run application on Android
+    pub fn run_with_config(
+        entry_point: F,
+        register_pipelines_fn: R,
+        android_app: AndroidApp,
+        config: TesseraConfig,
+    ) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::builder()
             .with_android_app(android_app)
             .build()
             .unwrap();
-        let app = Arc::new(Mutex::new(None));
+        let app = None;
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
@@ -99,6 +146,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             register_pipelines_fn,
             ime_state,
             android_ime_opened: false,
+            config,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -119,7 +167,8 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         let register_pipelines_fn = self.register_pipelines_fn.clone();
 
-        let mut wgpu_app = tokio_runtime::get().block_on(WgpuApp::new(window));
+        let mut wgpu_app =
+            tokio_runtime::get().block_on(WgpuApp::new(window, self.config.sample_count));
 
         // Register pipelines
         wgpu_app.register_pipelines(register_pipelines_fn);

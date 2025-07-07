@@ -70,7 +70,7 @@ pub struct CrystalPipeline {
 }
 
 impl CrystalPipeline {
-    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
+    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
         let shader = gpu.create_shader_module(wgpu::include_wgsl!("../shaders/crystal.wgsl"));
 
         let bind_group_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -114,7 +114,11 @@ impl CrystalPipeline {
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
             multiview: None,
             cache: None,
         });
@@ -211,8 +215,8 @@ pub fn crystal_shard(args: CrystalShardArgs) {
         let mut points = Vec::with_capacity(NUM_POINTS);
 
         for _ in 0..NUM_POINTS {
-            let r = RADIUS * rng.gen::<f32>().sqrt();
-            let theta = rng.gen::<f32>() * 2.0 * std::f32::consts::PI;
+            let r = RADIUS * rng.random::<f32>().sqrt();
+            let theta = rng.random::<f32>() * 2.0 * std::f32::consts::PI;
             points.push(Point {
                 x: (center[0] + r * theta.cos()) as f64,
                 y: (center[1] + r * theta.sin()) as f64,
@@ -242,9 +246,9 @@ pub fn crystal_shard(args: CrystalShardArgs) {
 
             // Generate a random normal for each triangle to give a faceted, 3D look.
             let mut normal: [f32; 3] = [
-                rng.gen_range(-1.0..1.0),
-                rng.gen_range(-1.0..1.0),
-                rng.gen_range(0.5..1.0), // Bias towards pointing "out" of the screen
+                rng.random_range(-1.0..1.0),
+                rng.random_range(-1.0..1.0),
+                rng.random_range(0.5..1.0), // Bias towards pointing "out" of the screen
             ];
             let len = (normal[0].powi(2) + normal[1].powi(2) + normal[2].powi(2)).sqrt();
             if len > 0.0 {

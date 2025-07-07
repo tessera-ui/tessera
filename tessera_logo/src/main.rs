@@ -24,11 +24,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             tessera_basic_components::pipelines::register_pipelines(renderer);
 
             // Register our custom crystal pipeline
-            let crystal_pipeline = logo::CrystalPipeline::new(&renderer.gpu, &renderer.config);
+            let crystal_pipeline =
+                logo::CrystalPipeline::new(&renderer.gpu, &renderer.config, renderer.sample_count);
             renderer.drawer.pipeline_registry.register(crystal_pipeline);
 
-            let background_pipeline =
-                background::BackgroundPipeline::new(&renderer.gpu, &renderer.config);
+            let background_pipeline = background::BackgroundPipeline::new(
+                &renderer.gpu,
+                &renderer.config,
+                renderer.sample_count,
+            );
             renderer
                 .drawer
                 .pipeline_registry

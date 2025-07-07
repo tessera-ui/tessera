@@ -68,14 +68,23 @@ impl GlyphonTextRender {
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
+        sample_count: u32,
     ) -> Self {
         // Create glyphon cache
         let cache = glyphon::Cache::new(gpu);
         // Create a font atlas
         let mut atlas = glyphon::TextAtlas::new(gpu, queue, &cache, config.format);
         // Create text renderer
-        let text_renderer =
-            glyphon::TextRenderer::new(&mut atlas, gpu, wgpu::MultisampleState::default(), None);
+        let text_renderer = glyphon::TextRenderer::new(
+            &mut atlas,
+            gpu,
+            wgpu::MultisampleState {
+                count: sample_count,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            None,
+        );
         // Create glyphon Viewport
         let viewport = glyphon::Viewport::new(gpu, &cache);
         // Create swash cache

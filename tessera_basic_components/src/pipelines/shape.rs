@@ -93,7 +93,7 @@ pub struct ShapePipeline {
 pub const MAX_CONCURRENT_SHAPES: wgpu::BufferAddress = 256;
 
 impl ShapePipeline {
-    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
+    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
         let shader = gpu.create_shader_module(include_wgsl!("shape/shape.wgsl"));
 
         let uniform_alignment =
@@ -164,7 +164,7 @@ impl ShapePipeline {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: 1,
+                count: sample_count,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },

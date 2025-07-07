@@ -41,11 +41,16 @@ pub struct WgpuApp {
     // --- New ping-pong rendering resources ---
     pass_a: PassTarget,
     pass_b: PassTarget,
+
+    // --- MSAA resources ---
+    pub sample_count: u32,
+    msaa_texture: Option<wgpu::Texture>,
+    msaa_view: Option<wgpu::TextureView>,
 }
 
 impl WgpuApp {
     /// Create a new WGPU app, as the root of Tessera
-    pub(crate) async fn new(window: Arc<Window>) -> Self {
+    pub(crate) async fn new(window: Arc<Window>, sample_count: u32) -> Self {
         // Looking for gpus
         let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -120,6 +125,28 @@ impl WgpuApp {
         };
         surface.configure(&gpu, &config);
 
+        // --- Create MSAA Target ---
+        let (msaa_texture, msaa_view) = if sample_count > 1 {
+            let texture = gpu.create_texture(&wgpu::TextureDescriptor {
+                label: Some("MSAA Framebuffer"),
+                size: wgpu::Extent3d {
+                    width: config.width,
+                    height: config.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count,
+                dimension: wgpu::TextureDimension::D2,
+                format: config.format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            (Some(texture), Some(view))
+        } else {
+            (None, None)
+        };
+
         // --- Create Pass Targets (A and B) ---
         let pass_a = Self::create_pass_target(&gpu, &config, "A");
         let pass_b = Self::create_pass_target(&gpu, &config, "B");
@@ -144,6 +171,9 @@ impl WgpuApp {
             pass_a,
             pass_b,
             compute_pipeline_registry: ComputePipelineRegistry::new(),
+            sample_count,
+            msaa_texture,
+            msaa_view,
         }
     }
 
@@ -200,6 +230,29 @@ impl WgpuApp {
 
             self.pass_a = Self::create_pass_target(&self.gpu, &self.config, "A");
             self.pass_b = Self::create_pass_target(&self.gpu, &self.config, "B");
+
+            if self.sample_count > 1 {
+                if let Some(t) = self.msaa_texture.take() {
+                    t.destroy()
+                }
+                let texture = self.gpu.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("MSAA Framebuffer"),
+                    size: wgpu::Extent3d {
+                        width: self.config.width,
+                        height: self.config.height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: self.sample_count,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: self.config.format,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
+                });
+                let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+                self.msaa_texture = Some(texture);
+                self.msaa_view = Some(view);
+            }
         }
     }
 
@@ -239,11 +292,16 @@ impl WgpuApp {
         let (mut read_target, mut write_target) = (&mut self.pass_a, &mut self.pass_b);
 
         // Initial clear: Clear the first "canvas"
+        let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
+            (msaa_view, Some(&write_target.view))
+        } else {
+            (&write_target.view, None)
+        };
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Initial Clear Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &write_target.view,
-                resolve_target: None,
+                view,
+                resolve_target,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                     store: wgpu::StoreOp::Store,
@@ -264,11 +322,16 @@ impl WgpuApp {
                 } else {
                     // This is a barrier command, first render the collected standard commands
                     if !standard_batch.is_empty() {
+                        let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
+                            (msaa_view, Some(&write_target.view))
+                        } else {
+                            (&write_target.view, None)
+                        };
                         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("Standard Batch Pass"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &write_target.view,
-                                resolve_target: None,
+                                view,
+                                resolve_target,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Load,
                                     store: wgpu::StoreOp::Store,
@@ -308,11 +371,16 @@ impl WgpuApp {
                     );
 
                     // 3. Begin a new render pass to draw the barrier component
+                    let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
+                        (msaa_view, Some(&write_target.view))
+                    } else {
+                        (&write_target.view, None)
+                    };
                     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("Barrier Pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &write_target.view,
-                            resolve_target: None,
+                            view,
+                            resolve_target,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Load,
                                 store: wgpu::StoreOp::Store,
@@ -346,11 +414,16 @@ impl WgpuApp {
 
             // Render the last batch of standard commands if any
             if !standard_batch.is_empty() {
+                let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
+                    (msaa_view, Some(&write_target.view))
+                } else {
+                    (&write_target.view, None)
+                };
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Final Standard Batch Pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &write_target.view,
-                        resolve_target: None,
+                        view,
+                        resolve_target,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
                             store: wgpu::StoreOp::Store,
