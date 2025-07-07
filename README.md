@@ -66,7 +66,7 @@ Currently, the framework is in the early stages of development. The v0.1.0 roadm
   - ~~checkbox~~
   - radio
   - ~~switch~~
-  - slider
+  - ~~slider~~
   - progress
   - dialog
 
