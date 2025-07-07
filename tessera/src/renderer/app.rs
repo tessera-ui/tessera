@@ -182,8 +182,9 @@ impl WgpuApp {
         config: &wgpu::SurfaceConfiguration,
         label_suffix: &str,
     ) -> PassTarget {
+        let label = format!("Pass {label_suffix} Texture");
         let texture_descriptor = wgpu::TextureDescriptor {
-            label: Some(&format!("Pass {label_suffix} Texture")),
+            label: Some(&label),
             size: wgpu::Extent3d {
                 width: config.width,
                 height: config.height,
