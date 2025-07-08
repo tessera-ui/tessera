@@ -1,12 +1,12 @@
 //! You must register pipelines by using [pipelines::register_pipelines] in tessera renderer's creation
 //! before using most these components.
 
-pub mod fluid_glass;
 pub mod alignment;
 pub mod boxed;
 pub mod button;
 pub mod checkbox;
 pub mod column;
+pub mod fluid_glass;
 pub mod image;
 pub mod pipelines;
 pub mod pos_misc;

@@ -3,7 +3,8 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tessera::{
-    ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, PxPosition,
+    ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
+    PxPosition, winit::window::CursorIcon,
 };
 use tessera_macros::tessera;
 
@@ -118,20 +119,23 @@ pub fn switch(args: impl Into<SwitchArgs>) {
             }
         }
 
-        let clicks = input
-            .cursor_events
-            .iter()
-            .filter(|e| {
-                matches!(
-                    &e.content,
-                    CursorEventContent::Pressed(PressKeyEventType::Left)
-                )
-            })
-            .count();
-        if clicks > 0 {
-            // The component's only job is to report the intent to toggle.
-            // The parent component is responsible for actually changing the state.
-            on_toggle(!checked);
+        let size = input.computed_data;
+        let is_cursor_in = if let Some(pos) = input.cursor_position {
+            pos.x.0 >= 0 && pos.x.0 < size.width.0 && pos.y.0 >= 0 && pos.y.0 < size.height.0
+        } else {
+            false
+        };
+
+        if is_cursor_in {
+            input.requests.cursor_icon = CursorIcon::Pointer;
+        }
+
+        for e in input.cursor_events.iter() {
+            if let CursorEventContent::Pressed(PressKeyEventType::Left) = &e.content {
+                if is_cursor_in {
+                    on_toggle(!checked);
+                }
+            }
         }
     }));
 
