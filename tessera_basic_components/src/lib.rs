@@ -6,6 +6,7 @@ pub mod boxed;
 pub mod button;
 pub mod checkbox;
 pub mod column;
+pub mod dialog;
 pub mod fluid_glass;
 pub mod image;
 pub mod pipelines;
