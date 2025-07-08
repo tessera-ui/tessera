@@ -3,7 +3,6 @@ resolver = "3"
 members = ["example", "tessera", "tessera_logo", "tessera_basic_components", "tessera_macros"]
 
 [profile.release]
-debug = true
 codegen-units = 1
 lto = true
 strip = true
