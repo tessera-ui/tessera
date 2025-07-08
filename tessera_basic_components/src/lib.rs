@@ -10,6 +10,7 @@ pub mod fluid_glass;
 pub mod image;
 pub mod pipelines;
 pub mod pos_misc;
+pub mod progress;
 pub mod row;
 pub mod scrollable;
 pub mod selection_highlight_rect;
