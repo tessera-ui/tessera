@@ -71,7 +71,7 @@ Currently, the framework is in the early stages of development. The v0.1.0 roadm
   - ~~switch~~
   - ~~slider~~
   - ~~progress~~
-  - dialog
+  - ~~dialog~~
 
 ## Core Features
 
