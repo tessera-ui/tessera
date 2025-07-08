@@ -67,7 +67,7 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
   - radio
   - ~~switch~~
   - ~~slider~~
-  - progress
+  - ~~progress~~
   - dialog
 
 ## 核心特性
