@@ -47,100 +47,44 @@ pub fn write_font_system() -> RwLockWriteGuard<'static, glyphon::FontSystem> {
 
 /// A text renderer
 pub struct GlyphonTextRender {
-    /// Glypthon text renderer
-    text_renderer: glyphon::TextRenderer,
-    /// Glypthon font atlas
+    /// Glyphon font atlas, a heavy-weight, shared resource.
     atlas: glyphon::TextAtlas,
-    /// Glypthon cache
+    /// Glyphon cache, a heavy-weight, shared resource.
     #[allow(unused)]
     cache: glyphon::Cache,
-    /// Glypthon viewport
+    /// Glyphon viewport, holds screen-size related buffers.
     viewport: glyphon::Viewport,
-    /// Glypthon swash cache
+    /// Glyphon swash cache, a CPU-side cache for glyph rasterization.
     swash_cache: glyphon::SwashCache,
-    /// Buffer for text datas to render
-    buffer: Vec<(PxPosition, TextData)>,
+    /// The multisample state, needed for creating temporary renderers.
+    msaa: wgpu::MultisampleState,
 }
 
 impl GlyphonTextRender {
-    /// Create a new text renderer
+    /// Create a new text renderer pipeline.
     pub fn new(
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         sample_count: u32,
     ) -> Self {
-        // Create glyphon cache
         let cache = glyphon::Cache::new(gpu);
-        // Create a font atlas
-        let mut atlas = glyphon::TextAtlas::new(gpu, queue, &cache, config.format);
-        // Create text renderer
-        let text_renderer = glyphon::TextRenderer::new(
-            &mut atlas,
-            gpu,
-            wgpu::MultisampleState {
-                count: sample_count,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            None,
-        );
-        // Create glyphon Viewport
+        let atlas = glyphon::TextAtlas::new(gpu, queue, &cache, config.format);
         let viewport = glyphon::Viewport::new(gpu, &cache);
-        // Create swash cache
         let swash_cache = glyphon::SwashCache::new();
-        // Create a buffer for text datas
-        let buffer = Vec::new();
+        let msaa = wgpu::MultisampleState {
+            count: sample_count,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        };
 
         Self {
-            text_renderer,
             atlas,
             cache,
             viewport,
             swash_cache,
-            buffer,
+            msaa,
         }
-    }
-
-    /// Add a text data to the buffer, waiting to be drawn
-    pub fn push(&mut self, start_pos: PxPosition, text_data: TextData) {
-        self.buffer.push((start_pos, text_data));
-    }
-
-    /// Draw the text at the given position with the given color
-    pub fn draw_all_to_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        config: &wgpu::SurfaceConfiguration,
-        queue: &wgpu::Queue,
-        render_pass: &mut wgpu::RenderPass<'_>,
-    ) {
-        // Update the viewport
-        self.viewport.update(
-            queue,
-            glyphon::Resolution {
-                width: config.width,
-                height: config.height,
-            },
-        );
-        // Prepare the text renderer
-        self.text_renderer
-            .prepare(
-                gpu,
-                queue,
-                &mut write_font_system(),
-                &mut self.atlas,
-                &self.viewport,
-                self.buffer.iter().map(|(pos, data)| data.text_area(*pos)),
-                &mut self.swash_cache,
-            )
-            .unwrap();
-        // Do the rendering
-        self.text_renderer
-            .render(&self.atlas, &self.viewport, render_pass)
-            .unwrap();
-        // Clear the buffer
-        self.buffer.clear();
     }
 }
 
@@ -148,27 +92,47 @@ impl GlyphonTextRender {
 impl DrawablePipeline<TextCommand> for GlyphonTextRender {
     fn draw(
         &mut self,
-        _gpu: &wgpu::Device,
-        _gpu_queue: &wgpu::Queue,
-        _config: &wgpu::SurfaceConfiguration,
-        _render_pass: &mut wgpu::RenderPass<'_>,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        render_pass: &mut wgpu::RenderPass<'_>,
         command: &TextCommand,
         _size: PxSize,
         start_pos: PxPosition,
         _scene_texture_view: Option<&wgpu::TextureView>,
         _compute_registry: &mut tessera::renderer::compute::ComputePipelineRegistry,
     ) {
-        self.push(start_pos, command.data.clone());
-    }
+        // Create a new, temporary TextRenderer for each draw call.
+        // This is necessary to avoid state conflicts when rendering multiple
+        // text elements interleaved with other components. It correctly
+        // isolates the `prepare` call for each text block.
+        let mut text_renderer = glyphon::TextRenderer::new(&mut self.atlas, gpu, self.msaa, None);
 
-    fn end_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-    ) {
-        self.draw_all_to_pass(gpu, config, gpu_queue, render_pass);
+        self.viewport.update(
+            gpu_queue,
+            glyphon::Resolution {
+                width: config.width,
+                height: config.height,
+            },
+        );
+
+        let text_areas = std::iter::once(command.data.text_area(start_pos));
+
+        text_renderer
+            .prepare(
+                gpu,
+                gpu_queue,
+                &mut write_font_system(),
+                &mut self.atlas,
+                &self.viewport,
+                text_areas,
+                &mut self.swash_cache,
+            )
+            .unwrap();
+
+        text_renderer
+            .render(&self.atlas, &self.viewport, render_pass)
+            .unwrap();
     }
 }
 

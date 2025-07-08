@@ -3,15 +3,15 @@ use std::sync::{Arc, RwLock};
 use tessera::{DimensionValue, Dp, Px, Renderer};
 use tessera_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    button::{button, ButtonArgsBuilder},
+    button::{ButtonArgsBuilder, button},
     column::ColumnArgsBuilder,
     column_ui,
-    dialog::{dialog_provider, DialogProviderArgsBuilder},
+    dialog::{DialogProviderArgsBuilder, dialog_provider},
     row::RowArgsBuilder,
     row_ui,
-    spacer::{spacer, SpacerArgsBuilder},
-    surface::{surface, RippleState, SurfaceArgsBuilder},
-    text::{text, TextArgsBuilder},
+    spacer::{SpacerArgsBuilder, spacer},
+    surface::{RippleState, SurfaceArgsBuilder, surface},
+    text::{TextArgsBuilder, text},
 };
 
 #[derive(Default)]
@@ -41,8 +41,14 @@ fn app(app_state: Arc<RwLock<AppState>>) {
                 RowArgsBuilder::default()
                     .main_axis_alignment(MainAxisAlignment::Center)
                     .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .width(DimensionValue::Fill { min: None, max: None })
-                    .height(DimensionValue::Fill { min: None, max: None })
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None
+                    })
+                    .height(DimensionValue::Fill {
+                        min: None,
+                        max: None
+                    })
                     .build()
                     .unwrap(),
                 || {
@@ -77,8 +83,14 @@ fn app(app_state: Arc<RwLock<AppState>>) {
                 RowArgsBuilder::default()
                     .main_axis_alignment(MainAxisAlignment::Center)
                     .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .width(DimensionValue::Fill { min: None, max: None })
-                    .height(DimensionValue::Fill { min: None, max: None })
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None
+                    })
+                    .height(DimensionValue::Fill {
+                        min: None,
+                        max: None
+                    })
                     .build()
                     .unwrap(),
                 || {
@@ -113,8 +125,10 @@ fn app(app_state: Arc<RwLock<AppState>>) {
                                     button(
                                         ButtonArgsBuilder::default()
                                             .on_click(Arc::new(move || {
-                                                state_for_dialog_content.write().unwrap().show_dialog =
-                                                    false;
+                                                state_for_dialog_content
+                                                    .write()
+                                                    .unwrap()
+                                                    .show_dialog = false;
                                             }))
                                             .build()
                                             .unwrap(),
