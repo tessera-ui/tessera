@@ -143,7 +143,7 @@ fn app() {
                     (move || {
                         fluid_glass(
                             FluidGlassArgsBuilder::default()
-                                .blur_radius(5.0)
+                                .blur_radius(10.0)
                                 .width(DimensionValue::Fixed(Px(350)))
                                 .height(DimensionValue::Fixed(Px(250)))
                                 .corner_radius(20.0)

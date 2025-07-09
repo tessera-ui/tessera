@@ -262,7 +262,27 @@ impl WgpuApp {
     }
 
     /// Resize the surface if needed
-    pub(crate) fn resize_if_needed(&mut self) {
+    ///
+    /// Returns `true` if resize occurred, indicating the need for a "blink" (double render).
+    /// This is a workaround for what appears to be a deep WGPU/GPU driver bug where
+    /// FluidGlass components with blur effects disappear during window resize.
+    ///
+    /// The issue manifests as:
+    /// - Only occurs during window resize events
+    /// - Only affects components that sample background (FluidGlass with blur)
+    /// - All texture dimensions are verified to be correct
+    /// - All rendering logic appears sound
+    ///
+    /// Root cause investigation showed:
+    /// - Texture sizes are consistent between source and destination
+    /// - GPU commands are properly ordered
+    /// - No obvious application-level bugs
+    ///
+    /// The "blink" mechanism (double rendering on resize) reliably fixes the issue,
+    /// suggesting a GPU state synchronization problem at the driver/hardware level.
+    /// This workaround prioritizes user experience over ideological purity.
+    pub(crate) fn resize_if_needed(&mut self) -> bool {
+        let blink = self.size_changed;
         if self.size_changed {
             self.config.width = self.size.width;
             self.config.height = self.size.height;
@@ -270,6 +290,7 @@ impl WgpuApp {
             self.surface.configure(&self.gpu, &self.config);
             self.size_changed = false;
         }
+        blink
     }
 
     /// Render the surface

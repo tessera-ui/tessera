@@ -18,7 +18,7 @@ pub struct FluidGlassArgs {
     pub inner_shadow_color: [f32; 4],
     #[builder(default = "25.0")]
     pub corner_radius: f32,
-    #[builder(default = "0.1")]
+    #[builder(default = "0.0")]
     pub blur_radius: f32,
     #[builder(default = "3.0")]
     pub g2_k_value: f32,

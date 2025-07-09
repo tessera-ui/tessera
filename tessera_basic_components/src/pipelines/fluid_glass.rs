@@ -225,7 +225,6 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             blur_storage = Some((final_texture, final_view));
             &blur_storage.as_ref().unwrap().1
         } else {
-            blur_storage = None;
             original_scene_texture
         };
 

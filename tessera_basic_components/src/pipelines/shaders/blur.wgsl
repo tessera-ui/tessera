@@ -12,10 +12,13 @@ struct Uniforms {
 fn gaussian_blur(coord: vec2<u32>, direction: vec2<f32>, texture_size: vec2<u32>) -> vec4<f32> {
     var total = vec4<f32>(0.0);
     var total_weight = 0.0;
-    let radius = i32(uniforms.radius);
+    
+    // Use the original float radius for better precision
+    let float_radius = uniforms.radius;
+    let radius = i32(ceil(float_radius));
 
-    let clamped_radius = clamp(radius, 0, 15);
-    let sigma = f32(clamped_radius) / 3.0; // Standard deviation
+    let clamped_radius = clamp(radius, 1, 15); // Minimum radius of 1 to avoid division by zero
+    let sigma = max(float_radius / 3.0, 0.5); // Minimum sigma to avoid division by zero
     let two_sigma_squared = 2.0 * sigma * sigma;
 
     for (var i = -clamped_radius; i <= clamped_radius; i = i + 1) {
