@@ -64,14 +64,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .build()
                         .unwrap(),
                 ),
-                // Add a FluidGlass component to test the multi-pass rendering
-                || fluid_glass(
-                    FluidGlassArgsBuilder::default()
-                        .width(DimensionValue::Fixed(Dp(280.0).into()))
-                        .height(DimensionValue::Fixed(Dp(280.0).into()))
-                        .build()
-                        .unwrap(),
-                ),
             );
         },
         |app| {

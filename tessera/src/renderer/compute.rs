@@ -30,5 +30,5 @@
 pub mod command;
 pub mod pipeline;
 
-pub use command::ComputeCommand;
-pub use pipeline::{ComputablePipeline, ComputePipelineRegistry};
+pub use command::AsyncComputeCommand;
+pub use pipeline::{AsyncComputablePipeline, ComputePipelineRegistry, SyncComputablePipeline};

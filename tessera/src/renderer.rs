@@ -29,7 +29,9 @@ use crate::{
     thread_utils, tokio_runtime,
 };
 
-pub use compute::{ComputablePipeline, ComputeCommand, ComputePipelineRegistry};
+pub use compute::{
+    AsyncComputablePipeline, AsyncComputeCommand, ComputePipelineRegistry, SyncComputablePipeline,
+};
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirement};
 
 /// Configuration for the Tessera runtime and renderer.

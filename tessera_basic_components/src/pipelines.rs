@@ -1,3 +1,4 @@
+pub mod blur;
 pub(crate) mod fluid_glass;
 mod pos_misc;
 mod shape;
@@ -23,4 +24,7 @@ pub fn register_pipelines(app: &mut tessera::renderer::WgpuApp) {
     // Register image pipeline
     let image_pipeline = image::ImagePipeline::new(&app.gpu, &app.config, app.sample_count);
     app.drawer.pipeline_registry.register(image_pipeline);
+    // Register blur pipeline
+    let blur_pipeline = blur::pipeline::BlurPipeline::new(&app.gpu);
+    app.compute_pipeline_registry.register_sync(blur_pipeline);
 }

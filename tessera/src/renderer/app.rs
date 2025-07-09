@@ -115,7 +115,7 @@ impl WgpuApp {
         info!("Using present mode: {present_mode:?}");
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
-            format: caps.formats[0],
+            format: wgpu::TextureFormat::Rgba8Unorm,
             width: size.width,
             height: size.height,
             present_mode,
@@ -137,6 +137,7 @@ impl WgpuApp {
                 mip_level_count: 1,
                 sample_count,
                 dimension: wgpu::TextureDimension::D2,
+                // Use surface format to match pass targets
                 format: config.format,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
@@ -193,11 +194,13 @@ impl WgpuApp {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
+            // Use surface format for compatibility with final copy operations
             format: config.format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::COPY_SRC,
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::STORAGE_BINDING,
             view_formats: &[],
         };
         let texture = gpu.create_texture(&texture_descriptor);
@@ -246,6 +249,7 @@ impl WgpuApp {
                     mip_level_count: 1,
                     sample_count: self.sample_count,
                     dimension: wgpu::TextureDimension::D2,
+                    // Use surface format to match pass targets
                     format: self.config.format,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                     view_formats: &[],
