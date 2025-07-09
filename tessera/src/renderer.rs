@@ -155,6 +155,123 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     }
 }
 
+impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
+    /// Render a single frame - either to surface or offscreen
+    fn execute_render_frame(
+        entry_point: &F,
+        cursor_state: &mut CursorState,
+        keyboard_state: &mut KeyboardState,
+        ime_state: &mut ImeState,
+        #[cfg(target_os = "android")] android_ime_opened: &mut bool,
+        app: &mut WgpuApp,
+        #[cfg(target_os = "android")] event_loop: &ActiveEventLoop,
+        offscreen: bool,
+    ) {
+        // notify the windowing system before rendering
+        // this will help winit to properly schedule and make assumptions about its internal state
+        app.window.pre_present_notify();
+        // and tell runtime the new size
+        TesseraRuntime::write().window_size = app.size().into();
+        // render the surface
+        // timer for performance measurement
+        let tree_timer = Instant::now();
+        // build the component tree
+        debug!("Building component tree...");
+        entry_point();
+        let build_tree_cost = tree_timer.elapsed();
+        debug!("Component tree built in {build_tree_cost:?}");
+        // get the component tree from the runtime
+        let component_tree = &mut TesseraRuntime::write().component_tree;
+        // timer for performance measurement
+        let draw_timer = Instant::now();
+        // Compute the draw commands then we can clear component tree for next build
+        debug!("Computing draw commands...");
+        let cursor_position = cursor_state.position();
+        let cursor_events = cursor_state.take_events();
+        let keyboard_events = keyboard_state.take_events();
+        let ime_events = ime_state.take_events();
+        let screen_size: PxSize = app.size().into();
+        let (commands, window_requests) = component_tree.compute(
+            screen_size,
+            cursor_position,
+            cursor_events,
+            keyboard_events,
+            ime_events,
+        );
+        let draw_cost = draw_timer.elapsed();
+        debug!("Draw commands computed in {draw_cost:?}");
+        component_tree.clear();
+        // Handle the window requests
+        // After compute, check for cursor change requests
+        app.window
+            .set_cursor(winit::window::Cursor::Icon(window_requests.cursor_icon));
+        // Handle IME requests
+        if let Some(ime_request) = window_requests.ime_request {
+            app.window.set_ime_allowed(true);
+            #[cfg(target_os = "android")]
+            {
+                if !*android_ime_opened {
+                    show_soft_input(true, event_loop.android_app());
+                    *android_ime_opened = true;
+                }
+            }
+            app.window.set_ime_cursor_area::<PxPosition, PxSize>(
+                ime_request.position.unwrap(),
+                ime_request.size,
+            );
+        } else {
+            app.window.set_ime_allowed(false);
+            #[cfg(target_os = "android")]
+            {
+                if *android_ime_opened {
+                    hide_soft_input(event_loop.android_app());
+                    *android_ime_opened = false;
+                }
+            }
+        }
+        // timer for performance measurement
+        let render_timer = Instant::now();
+        // Render the commands
+        if offscreen {
+            debug!("Rendering draw commands to offscreen...");
+            app.render_offscreen(commands);
+        } else {
+            debug!("Rendering draw commands...");
+            app.render(commands).unwrap();
+        }
+        let render_cost = render_timer.elapsed();
+        debug!(
+            "Rendered {} in {render_cost:?}",
+            if offscreen { "offscreen" } else { "to surface" }
+        );
+
+        // Only show performance stats and request redraw for surface renders
+        if !offscreen {
+            // print frame statistics
+            let fps = 1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32();
+            if fps < 60.0 {
+                warn!(
+                    "Jank detected! Frame statistics:
+    Build tree cost: {:?}
+    Draw commands cost: {:?}
+    Render cost: {:?}
+    Total frame cost: {:?}
+    Fps: {:.2}
+",
+                    build_tree_cost,
+                    draw_cost,
+                    render_cost,
+                    build_tree_cost + draw_cost + render_cost,
+                    1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32()
+                );
+            }
+
+            // Currently we render every frame
+            app.window.request_redraw();
+        }
+    }
+}
+
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Renderer<F, R> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Just return if the app is already created
@@ -292,110 +409,42 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 // This workaround addresses a deep GPU/driver synchronization issue
                 // where FluidGlass blur effects disappear on the first frame after resize.
                 let blink = app.resize_if_needed();
-                let mut draw = || {
-                    // notify the windowing system before rendering
-                    // this will help winit to properly schedule and make assumptions about its internal state
-                    app.window.pre_present_notify();
-                    // and tell runtime the new size
-                    TesseraRuntime::write().window_size = app.size().into();
-                    // render the surface
-                    // timer for performance measurement
-                    let tree_timer = Instant::now();
-                    // build the component tree
-                    debug!("Building component tree...");
-                    (self.entry_point)();
-                    let build_tree_cost = tree_timer.elapsed();
-                    debug!("Component tree built in {build_tree_cost:?}");
-                    // get the component tree from the runtime
-                    let component_tree = &mut TesseraRuntime::write().component_tree;
-                    // timer for performance measurement
-                    let draw_timer = Instant::now();
-                    // Compute the draw commands then we can clear component tree for next build
-                    debug!("Computing draw commands...");
-                    let cursor_position = self.cursor_state.position();
-                    let cursor_events = self.cursor_state.take_events();
-                    let keyboard_events = self.keyboard_state.take_events();
-                    let ime_events = self.ime_state.take_events();
-                    let screen_size: PxSize = app.size().into();
-                    let (commands, window_requests) = component_tree.compute(
-                        screen_size,
-                        cursor_position,
-                        cursor_events,
-                        keyboard_events,
-                        ime_events,
-                    );
-                    let draw_cost = draw_timer.elapsed();
-                    debug!("Draw commands computed in {draw_cost:?}");
-                    component_tree.clear();
-                    // Handle the window requests
-                    // After compute, check for cursor change requests
-                    app.window
-                        .set_cursor(winit::window::Cursor::Icon(window_requests.cursor_icon));
-                    // Handle IME requests
-                    if let Some(ime_request) = window_requests.ime_request {
-                        app.window.set_ime_allowed(true);
-                        #[cfg(target_os = "android")]
-                        {
-                            if !self.android_ime_opened {
-                                show_soft_input(true, event_loop.android_app());
-                                self.android_ime_opened = true;
-                            }
-                        }
-                        app.window.set_ime_cursor_area::<PxPosition, PxSize>(
-                            ime_request.position.unwrap(),
-                            ime_request.size,
-                        );
-                    } else {
-                        app.window.set_ime_allowed(false);
-                        #[cfg(target_os = "android")]
-                        {
-                            if self.android_ime_opened {
-                                hide_soft_input(event_loop.android_app());
-                                self.android_ime_opened = false;
-                            }
-                        }
-                    }
-                    // timer for performance measurement
-                    let render_timer = Instant::now();
-                    // Render the commands
-                    debug!("Rendering draw commands...");
-                    app.render(commands).unwrap();
-                    let render_cost = render_timer.elapsed();
-                    debug!("Rendered in {render_cost:?}");
-                    // print frame statistics
-                    let fps = 1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32();
-                    if fps < 60.0 {
-                        warn!(
-                            "Jank detected! Frame statistics:
-    Build tree cost: {:?}
-    Draw commands cost: {:?}
-    Render cost: {:?}
-    Total frame cost: {:?}
-    Fps: {:.2}
-",
-                            build_tree_cost,
-                            draw_cost,
-                            render_cost,
-                            build_tree_cost + draw_cost + render_cost,
-                            1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32()
-                        );
-                    }
-
-                    // Currently we render every frame
-                    app.window.request_redraw();
-                };
 
                 // The "blink" workaround: double render after resize to fix FluidGlass blur disappearing.
-                // This is an entire shit and double cost everything when resize, however, it works, particularly, I guess.
-                // First render: GPU state may still be transitioning, effects may be incorrect.
-                // Second render: GPU state is stable, all effects render correctly.
-                // This is a pragmatic solution to what appears to be a WGPU/driver-level bug.
-                // TODO: Find the ACTUAL root cause of this issue.
+                // IMPROVED: First render goes to offscreen texture (no present), second render to surface.
+                // This eliminates the visible flicker while still stabilizing GPU state.
+                // First render: GPU state may still be transitioning, effects may be incorrect -> render offscreen
+                // Second render: GPU state is stable, all effects render correctly -> render to surface
                 if blink {
-                    draw(); // First pass: stabilize GPU state
+                    // First pass: render offscreen to stabilize GPU state (no present)
+                    debug!("Blink: First pass - rendering offscreen to stabilize GPU state");
+                    Self::execute_render_frame(
+                        &self.entry_point,
+                        &mut self.cursor_state,
+                        &mut self.keyboard_state,
+                        &mut self.ime_state,
+                        #[cfg(target_os = "android")]
+                        &mut self.android_ime_opened,
+                        app,
+                        #[cfg(target_os = "android")]
+                        event_loop,
+                        true,
+                    );
                 }
-                // Normal draw (or second draw after blink)
-                draw();
+
+                // Normal render (or second render after blink) - this one presents to screen
+                Self::execute_render_frame(
+                    &self.entry_point,
+                    &mut self.cursor_state,
+                    &mut self.keyboard_state,
+                    &mut self.ime_state,
+                    #[cfg(target_os = "android")]
+                    &mut self.android_ime_opened,
+                    app,
+                    #[cfg(target_os = "android")]
+                    event_loop,
+                    false,
+                );
             }
             _ => (),
         }
