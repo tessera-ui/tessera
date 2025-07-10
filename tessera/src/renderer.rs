@@ -165,7 +165,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         #[cfg(target_os = "android")] android_ime_opened: &mut bool,
         app: &mut WgpuApp,
         #[cfg(target_os = "android")] event_loop: &ActiveEventLoop,
-        offscreen: bool,
     ) {
         // notify the windowing system before rendering
         // this will help winit to properly schedule and make assumptions about its internal state
@@ -232,43 +231,32 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         // timer for performance measurement
         let render_timer = Instant::now();
         // Render the commands
-        if offscreen {
-            debug!("Rendering draw commands to offscreen...");
-            app.render_offscreen(commands);
-        } else {
-            debug!("Rendering draw commands...");
-            app.render(commands).unwrap();
-        }
+        debug!("Rendering draw commands...");
+        app.render(commands).unwrap();
         let render_cost = render_timer.elapsed();
-        debug!(
-            "Rendered {} in {render_cost:?}",
-            if offscreen { "offscreen" } else { "to surface" }
-        );
+        debug!("Rendered to surface in {render_cost:?}");
 
-        // Only show performance stats and request redraw for surface renders
-        if !offscreen {
-            // print frame statistics
-            let fps = 1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32();
-            if fps < 60.0 {
-                warn!(
-                    "Jank detected! Frame statistics:
+        // print frame statistics
+        let fps = 1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32();
+        if fps < 60.0 {
+            warn!(
+                "Jank detected! Frame statistics:
     Build tree cost: {:?}
     Draw commands cost: {:?}
     Render cost: {:?}
     Total frame cost: {:?}
     Fps: {:.2}
 ",
-                    build_tree_cost,
-                    draw_cost,
-                    render_cost,
-                    build_tree_cost + draw_cost + render_cost,
-                    1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32()
-                );
-            }
-
-            // Currently we render every frame
-            app.window.request_redraw();
+                build_tree_cost,
+                draw_cost,
+                render_cost,
+                build_tree_cost + draw_cost + render_cost,
+                1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32()
+            );
         }
+
+        // Currently we render every frame
+        app.window.request_redraw();
     }
 }
 
@@ -405,34 +393,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 self.ime_state.push_event(ime_event);
             }
             WindowEvent::RedrawRequested => {
-                // Check if we need to "blink" (double render) due to resize.
-                // This workaround addresses a deep GPU/driver synchronization issue
-                // where FluidGlass blur effects disappear on the first frame after resize.
-                let blink = app.resize_if_needed();
-
-                // The "blink" workaround: double render after resize to fix FluidGlass blur disappearing.
-                // IMPROVED: First render goes to offscreen texture (no present), second render to surface.
-                // This eliminates the visible flicker while still stabilizing GPU state.
-                // First render: GPU state may still be transitioning, effects may be incorrect -> render offscreen
-                // Second render: GPU state is stable, all effects render correctly -> render to surface
-                if blink {
-                    // First pass: render offscreen to stabilize GPU state (no present)
-                    debug!("Blink: First pass - rendering offscreen to stabilize GPU state");
-                    Self::execute_render_frame(
-                        &self.entry_point,
-                        &mut self.cursor_state,
-                        &mut self.keyboard_state,
-                        &mut self.ime_state,
-                        #[cfg(target_os = "android")]
-                        &mut self.android_ime_opened,
-                        app,
-                        #[cfg(target_os = "android")]
-                        event_loop,
-                        true,
-                    );
-                }
-
-                // Normal render (or second render after blink) - this one presents to screen
+                app.resize_if_needed();
                 Self::execute_render_frame(
                     &self.entry_point,
                     &mut self.cursor_state,
@@ -443,7 +404,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                     app,
                     #[cfg(target_os = "android")]
                     event_loop,
-                    false,
                 );
             }
             _ => (),

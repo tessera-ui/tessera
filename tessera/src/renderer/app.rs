@@ -47,9 +47,6 @@ pub struct WgpuApp {
     msaa_texture: Option<wgpu::Texture>,
     msaa_view: Option<wgpu::TextureView>,
 
-    // --- Blink workaround resources ---
-    /// Offscreen texture for first blink render (doesn't get presented)
-    blink_offscreen_texture: PassTarget,
 }
 
 impl WgpuApp {
@@ -156,9 +153,6 @@ impl WgpuApp {
         let pass_a = Self::create_pass_target(&gpu, &config, "A");
         let pass_b = Self::create_pass_target(&gpu, &config, "B");
 
-        // --- Create Blink Offscreen Target ---
-        let blink_offscreen_texture = Self::create_pass_target(&gpu, &config, "BlinkOffscreen");
-
         let drawer = Drawer::new();
         // Set scale factor for dp conversion
         let scale_factor = window.scale_factor();
@@ -182,7 +176,6 @@ impl WgpuApp {
             sample_count,
             msaa_texture,
             msaa_view,
-            blink_offscreen_texture,
         }
     }
 
@@ -239,12 +232,9 @@ impl WgpuApp {
         if self.size_changed {
             self.pass_a.texture.destroy();
             self.pass_b.texture.destroy();
-            self.blink_offscreen_texture.texture.destroy();
 
             self.pass_a = Self::create_pass_target(&self.gpu, &self.config, "A");
             self.pass_b = Self::create_pass_target(&self.gpu, &self.config, "B");
-            self.blink_offscreen_texture =
-                Self::create_pass_target(&self.gpu, &self.config, "BlinkOffscreen");
 
             if self.sample_count > 1 {
                 if let Some(t) = self.msaa_texture.take() {
@@ -272,28 +262,8 @@ impl WgpuApp {
         }
     }
 
-    /// Resize the surface if needed
-    ///
-    /// Returns `true` if resize occurred, indicating the need for a "blink" (double render).
-    /// This is a workaround for what appears to be a deep WGPU/GPU driver bug where
-    /// FluidGlass components with blur effects disappear during window resize.
-    ///
-    /// The issue manifests as:
-    /// - Only occurs during window resize events
-    /// - Only affects components that sample background (FluidGlass with blur)
-    /// - All texture dimensions are verified to be correct
-    /// - All rendering logic appears sound
-    ///
-    /// Root cause investigation showed:
-    /// - Texture sizes are consistent between source and destination
-    /// - GPU commands are properly ordered
-    /// - No obvious application-level bugs
-    ///
-    /// The "blink" mechanism (double rendering on resize) reliably fixes the issue,
-    /// suggesting a GPU state synchronization problem at the driver/hardware level.
-    /// This workaround prioritizes user experience over ideological purity.
-    pub(crate) fn resize_if_needed(&mut self) -> bool {
-        let blink = self.size_changed;
+    /// Resize the surface if needed.
+    pub(crate) fn resize_if_needed(&mut self) {
         if self.size_changed {
             self.config.width = self.size.width;
             self.config.height = self.size.height;
@@ -301,44 +271,17 @@ impl WgpuApp {
             self.surface.configure(&self.gpu, &self.config);
             self.size_changed = false;
         }
-        blink
     }
 
-    /// Render the surface
+    /// Render the surface.
     pub(crate) fn render(
         &mut self,
         drawer_commands: impl IntoIterator<Item = (PxPosition, PxSize, Box<dyn DrawCommand>)>,
     ) -> Result<(), wgpu::SurfaceError> {
-        self.render_internal(drawer_commands, None)
-    }
-
-    /// Render to offscreen texture (for blink workaround)
-    pub(crate) fn render_offscreen(
-        &mut self,
-        drawer_commands: impl IntoIterator<Item = (PxPosition, PxSize, Box<dyn DrawCommand>)>,
-    ) {
-        // Clone the view to avoid borrow issues
-        let offscreen_view = self.blink_offscreen_texture.view.clone();
-        let _ = self.render_internal(drawer_commands, Some(&offscreen_view));
-    }
-
-    /// Internal render method that can render to surface or offscreen
-    fn render_internal(
-        &mut self,
-        drawer_commands: impl IntoIterator<Item = (PxPosition, PxSize, Box<dyn DrawCommand>)>,
-        offscreen_target: Option<&wgpu::TextureView>,
-    ) -> Result<(), wgpu::SurfaceError> {
-        let (output_frame, _surface_view) = if offscreen_target.is_some() {
-            // Render to offscreen - no surface frame needed
-            (None, None)
-        } else {
-            // Render to surface
-            let frame = self.surface.get_current_texture()?;
-            let view = frame
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-            (Some(frame), Some(view))
-        };
+        let output_frame = self.surface.get_current_texture()?;
+        let _surface_view = output_frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .gpu
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -519,13 +462,7 @@ impl WgpuApp {
         }
 
         // 3. Final output
-        let final_destination = if let Some(_offscreen_view) = offscreen_target {
-            // Render to offscreen texture
-            self.blink_offscreen_texture.texture.as_image_copy()
-        } else {
-            // Render to surface
-            output_frame.as_ref().unwrap().texture.as_image_copy()
-        };
+        let final_destination = output_frame.texture.as_image_copy();
 
         encoder.copy_texture_to_texture(
             write_target.texture.as_image_copy(),
@@ -535,10 +472,7 @@ impl WgpuApp {
 
         self.queue.submit(Some(encoder.finish()));
 
-        // Only present if rendering to surface (not offscreen)
-        if let Some(frame) = output_frame {
-            frame.present();
-        }
+        output_frame.present();
 
         Ok(())
     }
