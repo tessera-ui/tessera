@@ -9,7 +9,7 @@ env_logger = "0.11.8"
 log = "0.4.27"
 parking_lot = "0.12.3"
 tokio = { version = "1.45.1", features = ["full"] }
-wgpu = "25.0.2"
+wgpu = "26.0.0"
 indextree = "4.7.4"
 rayon = "1.10.0"
 dashmap = "6.1.0"
