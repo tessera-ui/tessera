@@ -3,7 +3,7 @@ use tessera::{
     PxPosition, PxSize,
     renderer::{
         DrawablePipeline,
-        compute::{ComputePipelineRegistry, SyncComputablePipeline},
+        compute::{ComputePipelineRegistry, ComputablePipeline},
     },
     wgpu::{self, util::DeviceExt},
 };

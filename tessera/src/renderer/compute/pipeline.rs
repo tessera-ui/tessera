@@ -11,7 +11,7 @@ use wgpu::{Device, Queue};
 ///
 /// This system is designed for immediate, blocking execution of commands, often involving
 /// borrowed data. It's suitable for one-off tasks like post-processing effects.
-pub trait SyncComputablePipeline: Send + Sync + 'static {
+pub trait ComputablePipeline: Send + Sync + 'static {
     /// The command type associated with this pipeline.
     /// It can have a lifetime `'a`, which will be tied to the `dispatch_sync` call.
     type Command<'a>: Send + Sync;

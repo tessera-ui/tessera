@@ -22,4 +22,4 @@
 pub mod command;
 pub mod pipeline;
 
-pub use pipeline::{ComputePipelineRegistry, SyncComputablePipeline};
+pub use pipeline::{ComputePipelineRegistry, ComputablePipeline};

@@ -1,6 +1,6 @@
 use std::{any::Any, sync::Arc};
 use tessera::{
-    renderer::compute::SyncComputablePipeline,
+    renderer::compute::ComputablePipeline,
     wgpu::{self, util::DeviceExt},
 };
 
@@ -91,7 +91,7 @@ impl BlurPipeline {
     }
 }
 
-impl SyncComputablePipeline for BlurPipeline {
+impl ComputablePipeline for BlurPipeline {
     type Command<'a> = BlurCommand<'a>;
 
     fn dispatch_sync<'a>(
