@@ -321,6 +321,7 @@ impl WgpuApp {
                 label: Some("Initial Clear Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -370,6 +371,7 @@ impl WgpuApp {
                         label: Some("Render Pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view,
+                            depth_slice: None,
                             resolve_target,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Load,
@@ -435,6 +437,7 @@ impl WgpuApp {
                         label: Some("Compute Output Clear"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: &self.compute_output.view,
+                            depth_slice: None,
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
