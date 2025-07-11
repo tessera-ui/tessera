@@ -5,49 +5,76 @@ use tessera_macros::tessera;
 
 use crate::pipelines::blur::command::BlurCommand;
 
+/// Arguments for the `fluid_glass` component, providing extensive control over its appearance.
+///
+/// This struct uses the builder pattern for easy construction.
 #[derive(Builder, Clone)]
 #[builder(build_fn(validate = "Self::validate"), pattern = "owned", setter(into))]
 pub struct FluidGlassArgs {
+    /// The color that bleeds from the edges, creating a soft glow effect.
+    /// Format is `[R, G, B, A]`. Defaults to a subtle red.
     #[builder(default = "[1.0, 0.0, 0.0, 0.1]")]
     pub bleed_color: [f32; 4],
+    /// The color of the highlight along the top edge of the glass.
+    /// Format is `[R, G, B, A]`. Defaults to a semi-transparent white.
     #[builder(default = "[1.0, 1.0, 1.0, 0.5]")]
     pub highlight_color: [f32; 4],
+    /// The color of the inner shadow, which adds depth to the component.
+    /// Format is `[R, G, B, A]`. Defaults to a semi-transparent black.
     #[builder(default = "[0.0, 0.0, 0.0, 0.5]")]
     pub inner_shadow_color: [f32; 4],
+    /// The radius of the component's corners.
     #[builder(default = "25.0")]
     pub corner_radius: f32,
+    /// The radius for the background blur effect. A value of `0.0` disables the blur.
     #[builder(default = "0.0")]
     pub blur_radius: f32,
+    /// The G2 K-value, influencing the dispersion effect's shape.
     #[builder(default = "3.0")]
     pub g2_k_value: f32,
+    /// The height of the chromatic dispersion effect.
     #[builder(default = "25.0")]
     pub dispersion_height: f32,
+    /// Multiplier for the chromatic aberration, enhancing the color separation effect.
     #[builder(default = "1.2")]
     pub chroma_multiplier: f32,
+    /// The height of the refraction effect, simulating light bending through the glass.
     #[builder(default = "24.0")]
     pub refraction_height: f32,
+    /// The amount of refraction to apply.
     #[builder(default = "32.0")]
     pub refraction_amount: f32,
+    /// Controls the shape and eccentricity of the highlight.
     #[builder(default = "0.2")]
     pub eccentric_factor: f32,
+    /// Controls how far the `bleed_color` spreads from the edges.
     #[builder(default = "0.5")]
     pub bleed_amount: f32,
+    /// The size of the highlight at the top of the component.
     #[builder(default = "0.4")]
     pub highlight_size: f32,
+    /// The smoothness of the highlight's falloff.
     #[builder(default = "2.0")]
     pub highlight_smoothing: f32,
+    /// The radius of the inner shadow.
     #[builder(default = "32.0")]
     pub inner_shadow_radius: f32,
+    /// The smoothness of the inner shadow's falloff.
     #[builder(default = "2.0")]
     pub inner_shadow_smoothing: f32,
+    /// The amount of noise to apply over the surface, adding texture.
     #[builder(default = "0.02")]
     pub noise_amount: f32,
+    /// The scale of the noise pattern.
     #[builder(default = "1.0")]
     pub noise_scale: f32,
+    /// A time value, typically used to animate the noise or other effects.
     #[builder(default = "0.0")]
     pub time: f32,
+    /// The optional width of the component, defined as a `DimensionValue`.
     #[builder(default, setter(strip_option))]
     pub width: Option<DimensionValue>,
+    /// The optional height of the component, defined as a `DimensionValue`.
     #[builder(default, setter(strip_option))]
     pub height: Option<DimensionValue>,
 }
