@@ -7,6 +7,22 @@ use super::command::ComputeCommand;
 /// rendering and compute passes managed by the renderer.
 pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     /// Dispatches the compute command within an active `ComputePass`.
+    ///
+    /// # Arguments
+    ///
+    /// * `input_view`: A view of the texture providing input data for the compute shader.
+    ///   This is typically the result of the previous rendering or compute pass.
+    /// * `output_view`: A view of the texture where the compute shader will write its output.
+    ///
+    /// # Texture Format Convention
+    ///
+    /// Due to `wgpu` limitations, textures with an sRGB format cannot be used as storage
+    /// textures (`STORAGE_BINDING`), which is a requirement for compute shader outputs.
+    /// Therefore, the `output_view` provided to this method is guaranteed to have a
+    /// non-sRGB format that supports storage writes.
+    ///
+    /// **By convention, all compute pipelines in this framework must be designed to write to
+    /// a texture with the `wgpu::TextureFormat::Rgba8Unorm` format.**
     fn dispatch(
         &mut self,
         device: &wgpu::Device,

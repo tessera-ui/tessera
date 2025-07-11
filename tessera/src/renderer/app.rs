@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use log::{error, info};
 use parking_lot::RwLock;
+use wgpu::TextureFormat;
 use winit::window::Window;
 
 use crate::{PxPosition, dp::SCALE_FACTOR, px::PxSize, renderer::command::Command};
@@ -115,7 +116,7 @@ impl WgpuApp {
         info!("Using present mode: {present_mode:?}");
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
-            format: wgpu::TextureFormat::Rgba8Unorm,
+            format: caps.formats[0],
             width: size.width,
             height: size.height,
             present_mode,
@@ -151,7 +152,8 @@ impl WgpuApp {
         // --- Create Pass Targets (A and B and Compute) ---
         let pass_a = Self::create_pass_target(&gpu, &config, "A");
         let pass_b = Self::create_pass_target(&gpu, &config, "B");
-        let compute_output = Self::create_pass_target(&gpu, &config, "Compute");
+        let compute_output =
+            Self::create_compute_pass_target(&gpu, &config, TextureFormat::Rgba8Unorm, "Compute");
 
         let drawer = Drawer::new();
 
@@ -202,8 +204,37 @@ impl WgpuApp {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::COPY_SRC
-                | wgpu::TextureUsages::STORAGE_BINDING,
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        };
+        let texture = gpu.create_texture(&texture_descriptor);
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        PassTarget { texture, view }
+    }
+
+    fn create_compute_pass_target(
+        gpu: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        format: TextureFormat,
+        label_suffix: &str,
+    ) -> PassTarget {
+        let label = format!("Compute {label_suffix} Texture");
+        let texture_descriptor = wgpu::TextureDescriptor {
+            label: Some(&label),
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         };
         let texture = gpu.create_texture(&texture_descriptor);
@@ -238,7 +269,12 @@ impl WgpuApp {
 
             self.pass_a = Self::create_pass_target(&self.gpu, &self.config, "A");
             self.pass_b = Self::create_pass_target(&self.gpu, &self.config, "B");
-            self.compute_output = Self::create_pass_target(&self.gpu, &self.config, "Compute");
+            self.compute_output = Self::create_compute_pass_target(
+                &self.gpu,
+                &self.config,
+                TextureFormat::Rgba8Unorm,
+                "Compute",
+            );
 
             if self.sample_count > 1 {
                 if let Some(t) = self.msaa_texture.take() {
