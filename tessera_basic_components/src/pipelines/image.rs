@@ -33,12 +33,9 @@ pub struct ImageCommand {
 }
 
 impl DrawCommand for ImageCommand {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn requirement(&self) -> tessera::RenderRequirement {
-        tessera::RenderRequirement::Standard
+    fn barrier(&self) -> Option<tessera::BarrierRequirement> {
+        // This command does not require any specific barriers.
+        None
     }
 }
 
@@ -157,7 +154,7 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
         size: PxSize,
         start_pos: PxPosition,
         _scene_texture_view: Option<&wgpu::TextureView>,
-        _compute_registry: &mut tessera::renderer::compute::ComputePipelineRegistry,
+        _compute_texture_view: &wgpu::TextureView,
     ) {
         let resources = self
             .resources

@@ -1,4 +1,4 @@
-use tessera::{DrawCommand, PxPosition, PxSize, RenderRequirement};
+use tessera::{DrawCommand, PxPosition, PxSize};
 
 use super::{ShapeUniforms, ShapeVertex};
 
@@ -52,12 +52,9 @@ pub enum ShapeCommand {
 }
 
 impl DrawCommand for ShapeCommand {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn requirement(&self) -> RenderRequirement {
-        RenderRequirement::Standard
+    fn barrier(&self) -> Option<tessera::BarrierRequirement> {
+        // No specific barrier requirements for shape commands
+        None
     }
 }
 

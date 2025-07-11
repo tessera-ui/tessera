@@ -26,5 +26,5 @@ pub fn register_pipelines(app: &mut tessera::renderer::WgpuApp) {
     app.drawer.pipeline_registry.register(image_pipeline);
     // Register blur pipeline
     let blur_pipeline = blur::pipeline::BlurPipeline::new(&app.gpu);
-    app.compute_pipeline_registry.register_sync(blur_pipeline);
+    app.compute_pipeline_registry.register(blur_pipeline);
 }

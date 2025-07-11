@@ -286,7 +286,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         };
 
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(Box::new(drawable));
+            metadata.push_draw_command(drawable);
         }
 
         // Calculate the final size of the surface

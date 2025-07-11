@@ -11,8 +11,8 @@ use crate::{
     selection_highlight_rect::selection_highlight_rect,
 };
 use tessera::{
-    ComponentNodeMetaData, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus,
-    measure_node, place_node, winit,
+    ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus, measure_node, place_node,
+    winit,
 };
 use tessera_macros::tessera;
 
@@ -352,15 +352,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                 data: text_data.clone(),
             };
             if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-                metadata.basic_drawable = Some(Box::new(drawable));
-            } else {
-                input.metadatas.insert(
-                    input.current_node_id,
-                    ComponentNodeMetaData {
-                        basic_drawable: Some(Box::new(drawable)),
-                        ..Default::default()
-                    },
-                );
+                metadata.push_draw_command(drawable);
             }
 
             // Return constrained size - respect maximum height to prevent overflow

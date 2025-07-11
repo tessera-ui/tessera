@@ -1,71 +1,116 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    sync::Arc,
-};
-use wgpu::{Device, Queue};
+use super::command::ComputeCommand;
 
-// --- Synchronous Compute System ---
-
-/// A trait for a GPU compute pipeline that executes a command synchronously.
+/// A unified trait for a GPU compute pipeline.
 ///
-/// This system is designed for immediate, blocking execution of commands, often involving
-/// borrowed data. It's suitable for one-off tasks like post-processing effects.
-pub trait ComputablePipeline: Send + Sync + 'static {
-    /// The command type associated with this pipeline.
-    /// It can have a lifetime `'a`, which will be tied to the `dispatch_sync` call.
-    type Command<'a>: Send + Sync;
-
-    /// Dispatches a command and blocks until the computation is complete, returning the result.
-    fn dispatch_sync<'a>(
+/// This pipeline operates within a given `wgpu::ComputePass` and dispatches a specific
+/// `ComputeCommand`. It's designed to be part of a larger, strictly sequenced series of
+/// rendering and compute passes managed by the renderer.
+pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
+    /// Dispatches the compute command within an active `ComputePass`.
+    fn dispatch(
         &mut self,
-        device: &Device,
-        queue: &Queue,
-        command: &Self::Command<'a>,
-    ) -> Option<Arc<dyn Any + Send + Sync>>;
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        compute_pass: &mut wgpu::ComputePass<'_>,
+        command: &C,
+        input_view: &wgpu::TextureView,
+        output_view: &wgpu::TextureView,
+    );
 }
 
-// --- Registry ---
+/// An internal, type-erased version of `ComputablePipeline` for dynamic dispatch.
+pub(crate) trait ErasedComputablePipeline: Send + Sync {
+    /// Dispatches a type-erased compute command.
+    fn dispatch_erased(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        compute_pass: &mut wgpu::ComputePass<'_>,
+        command: &dyn ComputeCommand,
+        input_view: &wgpu::TextureView,
+        output_view: &wgpu::TextureView,
+    );
+}
+
+/// A wrapper to implement `ErasedComputablePipeline` for any `ComputablePipeline`.
+struct ComputablePipelineImpl<C: ComputeCommand, P: ComputablePipeline<C>> {
+    pipeline: P,
+    _command: std::marker::PhantomData<C>,
+}
+
+impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipeline
+    for ComputablePipelineImpl<C, P>
+{
+    fn dispatch_erased(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        compute_pass: &mut wgpu::ComputePass<'_>,
+        command: &dyn ComputeCommand,
+        input_view: &wgpu::TextureView,
+        output_view: &wgpu::TextureView,
+    ) {
+        if let Some(command) = command.as_any().downcast_ref::<C>() {
+            self.pipeline.dispatch(
+                device,
+                queue,
+                config,
+                compute_pass,
+                command,
+                input_view,
+                output_view,
+            );
+        }
+    }
+}
 
 /// A registry for all compute pipelines.
 #[derive(Default)]
 pub struct ComputePipelineRegistry {
-    sync_pipelines: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
+    pipelines: Vec<Box<dyn ErasedComputablePipeline>>,
 }
 
 impl ComputePipelineRegistry {
     pub fn new() -> Self {
-        Self {
-            sync_pipelines: HashMap::new(),
+        Self::default()
+    }
+
+    /// Registers a new compute pipeline.
+    pub fn register<C: ComputeCommand + 'static>(
+        &mut self,
+        pipeline: impl ComputablePipeline<C> + 'static,
+    ) {
+        let erased_pipeline = Box::new(ComputablePipelineImpl {
+            pipeline,
+            _command: std::marker::PhantomData,
+        });
+        self.pipelines.push(erased_pipeline);
+    }
+
+    /// Dispatches a command to its corresponding registered pipeline.
+    pub(crate) fn dispatch_erased(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        compute_pass: &mut wgpu::ComputePass<'_>,
+        command: &dyn ComputeCommand,
+        input_view: &wgpu::TextureView,
+        output_view: &wgpu::TextureView,
+    ) {
+        for pipeline in self.pipelines.iter_mut() {
+            pipeline.dispatch_erased(
+                device,
+                queue,
+                config,
+                compute_pass,
+                command,
+                input_view,
+                output_view,
+            );
         }
-    }
-
-    // --- Sync Methods ---
-
-    /// Registers a new synchronous compute pipeline.
-    pub fn register_sync<P>(&mut self, pipeline: P)
-    where
-        P: Any + Send + Sync,
-    {
-        self.sync_pipelines
-            .insert(TypeId::of::<P>(), Box::new(pipeline));
-    }
-
-    /// Retrieves a mutable reference to a registered synchronous pipeline by its type.
-    ///
-    /// This enables static dispatch for synchronous operations.
-    ///
-    /// # Panics
-    /// Panics if the requested pipeline type is not registered.
-    pub fn get_sync<P: Any + Send + Sync>(&mut self) -> &mut P {
-        self.sync_pipelines
-            .get_mut(&TypeId::of::<P>())
-            .and_then(|b| b.downcast_mut::<P>())
-            .unwrap_or_else(|| {
-                panic!(
-                    "Requested synchronous pipeline {} not registered",
-                    std::any::type_name::<P>()
-                )
-            })
     }
 }

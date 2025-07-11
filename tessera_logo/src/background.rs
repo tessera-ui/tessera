@@ -1,13 +1,12 @@
 use bytemuck::{Pod, Zeroable};
 use derive_builder::Builder;
-use std::any::Any;
 use std::sync::Arc;
 use tessera::{
     place_node,
     wgpu::{self, util::DeviceExt},
     winit::window::CursorIcon,
     ComputedData, Constraint, CursorEventContent, DimensionValue, DrawCommand, DrawablePipeline,
-    PressKeyEventType, Px, PxPosition, PxSize, RenderRequirement, StateHandlerInput,
+    PressKeyEventType, Px, PxPosition, PxSize, StateHandlerInput,
 };
 use tessera_basic_components::{
     alignment::Alignment, boxed::BoxedItem, pos_misc::is_position_in_component,
@@ -20,11 +19,8 @@ pub struct BackgroundCommand {
 }
 
 impl DrawCommand for BackgroundCommand {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn requirement(&self) -> RenderRequirement {
-        RenderRequirement::Standard
+    fn barrier(&self) -> Option<tessera::BarrierRequirement> {
+        None
     }
 }
 
@@ -117,7 +113,7 @@ impl DrawablePipeline<BackgroundCommand> for BackgroundPipeline {
         size: PxSize,
         _start_pos: PxPosition,
         _scene_texture_view: Option<&wgpu::TextureView>,
-        _compute_registry: &mut tessera::renderer::ComputePipelineRegistry,
+        _compute_texture_view: &wgpu::TextureView,
     ) {
         let uniforms = Uniforms {
             time: command.time,
@@ -176,7 +172,7 @@ pub fn background<const N: usize>(args: BackgroundArgs, children: [BoxedItem; N]
         };
 
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(Box::new(BackgroundCommand { time: args.time }));
+            metadata.push_draw_command(BackgroundCommand { time: args.time });
         }
 
         let child_constraint =

@@ -1,8 +1,10 @@
 //! An example showcasing the `Boxed` component.
-//! This demonstrates how multiple `surface` components are stacked
-//! within a `Boxed` container, with the container's size being
-//! determined by the largest child. It also shows how to use
-//! the `alignment` property to position the children.
+//!
+//! This example demonstrates:
+//! 1. Stacking multiple `surface` components within a `Boxed` container.
+//! 2. How the `Boxed` container's size is determined by its largest child.
+//! 3. Using the `alignment` property to position children within the container.
+//! 4. Stacking `fluid_glass` components to test multi-pass rendering.
 
 use tessera::{DimensionValue, Dp, Renderer};
 use tessera_basic_components::{
@@ -56,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     None,
                     || {},
                 ),
-                // Add a FluidGlass component to test the multi-pass rendering
+                // Add multiple FluidGlass components to test multi-pass rendering.
                 || fluid_glass(
                     FluidGlassArgsBuilder::default()
                         .blur_radius(5.0)
@@ -65,7 +67,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .build()
                         .unwrap(),
                 ),
-                // Add a FluidGlass component to test the multi-pass rendering
                 || fluid_glass(
                     FluidGlassArgsBuilder::default()
                         .blur_radius(5.0)

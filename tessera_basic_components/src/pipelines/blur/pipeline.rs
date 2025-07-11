@@ -1,4 +1,3 @@
-use std::{any::Any, sync::Arc};
 use tessera::{
     renderer::compute::ComputablePipeline,
     wgpu::{self, util::DeviceExt},
@@ -91,15 +90,17 @@ impl BlurPipeline {
     }
 }
 
-impl ComputablePipeline for BlurPipeline {
-    type Command<'a> = BlurCommand<'a>;
-
-    fn dispatch_sync<'a>(
+impl ComputablePipeline<BlurCommand> for BlurPipeline {
+    fn dispatch(
         &mut self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        command: &Self::Command<'a>,
-    ) -> Option<Arc<dyn Any + Send + Sync>> {
+        _queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        compute_pass: &mut wgpu::ComputePass<'_>,
+        command: &BlurCommand,
+        input_view: &wgpu::TextureView,
+        output_view: &wgpu::TextureView,
+    ) {
         let uniforms = BlurUniforms {
             radius: command.radius,
             direction_x: command.direction.0,
@@ -121,35 +122,18 @@ impl ComputablePipeline for BlurPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(command.source_view),
+                    resource: wgpu::BindingResource::TextureView(input_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(command.dest_view),
+                    resource: wgpu::BindingResource::TextureView(output_view),
                 },
             ],
             label: Some("blur_bind_group"),
         });
 
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Blur Command Encoder"),
-        });
-
-        {
-            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Blur Compute Pass"),
-                timestamp_writes: None,
-            });
-            compute_pass.set_pipeline(&self.pipeline);
-            compute_pass.set_bind_group(0, &bind_group, &[]);
-            // The workgroup size in the shader is 8x8, so we divide by 8.
-            // We use integer division with rounding up to cover the whole texture.
-            let (width, height) = command.size;
-            compute_pass.dispatch_workgroups(width.div_ceil(8), height.div_ceil(8), 1);
-        }
-
-        queue.submit(Some(encoder.finish()));
-
-        None
+        compute_pass.set_pipeline(&self.pipeline);
+        compute_pass.set_bind_group(0, &bind_group, &[]);
+        compute_pass.dispatch_workgroups(config.width.div_ceil(8), config.height.div_ceil(8), 1);
     }
 }

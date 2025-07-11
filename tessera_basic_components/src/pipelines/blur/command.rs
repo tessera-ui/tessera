@@ -1,15 +1,28 @@
-use tessera::wgpu;
+use tessera::{BarrierRequirement, ComputeCommand};
 
 /// A synchronous command to execute a gaussian blur.
-pub struct BlurCommand<'a> {
-    /// The texture view to be used as the source for the blur.
-    pub source_view: &'a wgpu::TextureView,
-    /// The texture view to write the blur result into.
-    pub dest_view: &'a wgpu::TextureView,
-    /// The radius of the blur.
+/// BlurCommand only describes blur parameters
+pub struct BlurCommand {
+    /// Blur radius.
     pub radius: f32,
-    /// The direction of the blur: (1.0, 0.0) for horizontal, (0.0, 1.0) for vertical.
+    /// Blur direction: (1.0, 0.0) for horizontal, (0.0, 1.0) for vertical.
     pub direction: (f32, f32),
-    /// The size of the texture to be blurred (width, height).
-    pub size: (u32, u32),
+    /// Whether this is the first pass of the blur.
+    /// If true, the command will become a barrier command,
+    /// and the output texture will be cleared before the command is executed.
+    /// If false, the command will not clear the output texture,
+    /// and will use the previous texture as input.
+    /// This is useful for multi-pass blurs,
+    /// since blur always requires two passes.
+    pub first_pass: bool,
+}
+
+impl ComputeCommand for BlurCommand {
+    fn barrier(&self) -> Option<tessera::BarrierRequirement> {
+        if self.first_pass {
+            Some(BarrierRequirement::SampleBackground)
+        } else {
+            None
+        }
+    }
 }

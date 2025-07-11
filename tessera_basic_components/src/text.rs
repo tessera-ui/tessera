@@ -1,5 +1,5 @@
 use derive_builder::Builder;
-use tessera::{ComponentNodeMetaData, ComputedData, DimensionValue, Dp, Px};
+use tessera::{ComputedData, DimensionValue, Dp, Px};
 use tessera_macros::tessera;
 
 use crate::pipelines::{TextCommand, TextConstraint, TextData};
@@ -94,16 +94,9 @@ pub fn text(args: impl Into<TextArgs>) {
         let size = text_data.size;
         let drawable = TextCommand { data: text_data };
 
+        // Use the new unified command system to add the text rendering command
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(Box::new(drawable));
-        } else {
-            // This branch might be less common if metadatas are pre-populated or entry().or_default() is used.
-            // However, keeping it for safety if a node_id somehow exists without prior metadata entry.
-            let default_meta = ComponentNodeMetaData {
-                basic_drawable: Some(Box::new(drawable)),
-                ..Default::default()
-            };
-            input.metadatas.insert(input.current_node_id, default_meta);
+            metadata.push_draw_command(drawable);
         }
 
         Ok(ComputedData {

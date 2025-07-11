@@ -1,31 +1,73 @@
+//! Draw command traits and barrier requirements.
+//!
+//! This module defines the core traits and types for graphics rendering commands
+//! in the unified command system.
+
 use std::any::Any;
 
-/// Defines the rendering requirements for a DrawCommand.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RenderRequirement {
-    /// Standard rendering, does not need to sample the background.
-    Standard,
-    /// Requires sampling the background texture.
+/// Specifies synchronization requirements for rendering operations.
+///
+/// Barrier requirements ensure proper ordering of rendering operations when
+/// commands need to sample from previously rendered content.
+pub enum BarrierRequirement {
+    /// Command needs to sample from the background (previously rendered content).
     ///
-    /// When a command specifies this requirement, the renderer treats it as a render barrier.
-    /// It provides the result of all previous draw calls as a texture bound to the bind group set
-    /// defined by `crate::renderer::SCENE_TEXTURE_BIND_GROUP_SET`.
-    SamplesBackground,
+    /// This triggers a texture copy operation before the command is executed,
+    /// making the previous frame's content available for sampling in shaders.
+    SampleBackground,
 }
 
-/// A command that can be executed by the renderer's `Drawer`.
+/// Trait providing type erasure capabilities for command objects.
 ///
-/// This trait is the primary interface for components to submit their rendering needs to the
-/// renderer. Each `DrawCommand` is responsible for declaring its rendering requirements, which
-/// allows the renderer to optimize and organize the render passes dynamically.
-pub trait DrawCommand: Any + Send + Sync {
-    /// Returns this `DrawCommand` as a `&dyn Any`.
+/// This trait allows commands to be stored and passed around as trait objects
+/// while still providing access to their concrete types when needed for
+/// pipeline dispatch.
+pub trait AsAny {
+    /// Returns a reference to the concrete type as `&dyn Any`.
     fn as_any(&self) -> &dyn Any;
+}
 
-    /// Specifies the rendering requirement for this command.
+/// Blanket implementation of `AsAny` for all types that implement `Any`.
+impl<T: Any> AsAny for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Trait for graphics rendering commands that can be processed by draw pipelines.
+///
+/// Implement this trait for structs that represent graphics operations such as
+/// shape drawing, text rendering, image display, or custom visual effects.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use crate::renderer::drawer::DrawCommand;
+///
+/// struct RectangleCommand {
+///     color: [f32; 4],
+///     corner_radius: f32,
+/// }
+///
+/// impl DrawCommand for RectangleCommand {
+///     // Most commands don't need barriers
+///     fn barrier(&self) -> Option<BarrierRequirement> {
+///         None
+///     }
+/// }
+/// ```
+pub trait DrawCommand: AsAny + Send + Sync {
+    /// Specifies barrier requirements for this draw operation.
     ///
-    /// The renderer uses this information to structure the render loop. For example, if
-    /// `RenderRequirement::SamplesBackground` is returned, the renderer will ensure that
-    /// the current scene is available as a texture for the command's pipeline to sample from.
-    fn requirement(&self) -> RenderRequirement;
+    /// Return `Some(BarrierRequirement::SampleBackground)` if your command needs
+    /// to sample from previously rendered content (e.g., for blur effects or
+    /// other post-processing operations).
+    ///
+    /// # Returns
+    ///
+    /// - `None` for standard rendering operations (default)
+    /// - `Some(BarrierRequirement::SampleBackground)` for operations that sample previous content
+    fn barrier(&self) -> Option<BarrierRequirement> {
+        None
+    }
 }

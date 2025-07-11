@@ -1,10 +1,4 @@
-use std::any::Any;
-
-use crate::{
-    PxPosition,
-    px::PxSize,
-    renderer::{DrawCommand, compute::ComputePipelineRegistry},
-};
+use crate::{PxPosition, px::PxSize, renderer::DrawCommand};
 
 #[allow(unused_variables)]
 pub trait DrawablePipeline<T: DrawCommand> {
@@ -14,6 +8,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        compute_texture_view: &wgpu::TextureView,
     ) {
     }
 
@@ -23,6 +18,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        compute_texture_view: &wgpu::TextureView,
     ) {
     }
 
@@ -36,7 +32,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
         size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
-        compute_registry: &mut ComputePipelineRegistry,
+        compute_texture_view: &wgpu::TextureView,
     );
 }
 
@@ -47,6 +43,7 @@ pub trait ErasedDrawablePipeline {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        compute_texture_view: &wgpu::TextureView,
     );
 
     fn end_pass(
@@ -55,6 +52,7 @@ pub trait ErasedDrawablePipeline {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        compute_texture_view: &wgpu::TextureView,
     );
 
     fn draw_erased(
@@ -67,7 +65,7 @@ pub trait ErasedDrawablePipeline {
         size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
-        compute_registry: &mut ComputePipelineRegistry,
+        compute_texture_view: &wgpu::TextureView,
     ) -> bool;
 }
 
@@ -85,9 +83,10 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        compute_texture_view: &wgpu::TextureView,
     ) {
         self.pipeline
-            .begin_pass(gpu, gpu_queue, config, render_pass);
+            .begin_pass(gpu, gpu_queue, config, render_pass, compute_texture_view);
     }
 
     fn end_pass(
@@ -96,8 +95,10 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        compute_texture_view: &wgpu::TextureView,
     ) {
-        self.pipeline.end_pass(gpu, gpu_queue, config, render_pass);
+        self.pipeline
+            .end_pass(gpu, gpu_queue, config, render_pass, compute_texture_view);
     }
 
     fn draw_erased(
@@ -110,9 +111,9 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
-        compute_registry: &mut ComputePipelineRegistry,
+        compute_texture_view: &wgpu::TextureView,
     ) -> bool {
-        if let Some(cmd) = (command as &dyn Any).downcast_ref::<T>() {
+        if let Some(cmd) = command.as_any().downcast_ref::<T>() {
             self.pipeline.draw(
                 gpu,
                 gpu_queue,
@@ -122,7 +123,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
                 size,
                 start_pos,
                 scene_texture_view,
-                compute_registry,
+                compute_texture_view,
             );
             true
         } else {
@@ -165,9 +166,10 @@ impl PipelineRegistry {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        compute_texture_view: &wgpu::TextureView,
     ) {
         for pipeline in self.pipelines.iter_mut() {
-            pipeline.begin_pass(gpu, gpu_queue, config, render_pass);
+            pipeline.begin_pass(gpu, gpu_queue, config, render_pass, compute_texture_view);
         }
     }
 
@@ -177,9 +179,10 @@ impl PipelineRegistry {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        compute_texture_view: &wgpu::TextureView,
     ) {
         for pipeline in self.pipelines.iter_mut() {
-            pipeline.end_pass(gpu, gpu_queue, config, render_pass);
+            pipeline.end_pass(gpu, gpu_queue, config, render_pass, compute_texture_view);
         }
     }
 
@@ -193,7 +196,7 @@ impl PipelineRegistry {
         size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
-        compute_registry: &mut ComputePipelineRegistry,
+        compute_texture_view: &wgpu::TextureView,
     ) {
         for pipeline in self.pipelines.iter_mut() {
             if pipeline.draw_erased(
@@ -205,7 +208,7 @@ impl PipelineRegistry {
                 size,
                 start_pos,
                 scene_texture_view,
-                compute_registry,
+                compute_texture_view,
             ) {
                 return;
             }

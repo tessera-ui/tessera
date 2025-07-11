@@ -2,10 +2,9 @@ use bytemuck::{Pod, Zeroable};
 use delaunator::{triangulate, Point};
 use derive_builder::Builder;
 use rand::{Rng, SeedableRng};
-use std::any::Any;
 use tessera::{
     wgpu::{self, util::DeviceExt},
-    ComputedData, DrawCommand, DrawablePipeline, Px, PxPosition, PxSize, RenderRequirement,
+    ComputedData, DrawCommand, DrawablePipeline, Px, PxPosition, PxSize,
 };
 use tessera_macros::tessera;
 
@@ -17,12 +16,9 @@ pub struct CrystalCommand {
 }
 
 impl DrawCommand for CrystalCommand {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn requirement(&self) -> RenderRequirement {
-        RenderRequirement::Standard
+    fn barrier(&self) -> Option<tessera::BarrierRequirement> {
+        // This command does not require a barrier
+        None
     }
 }
 
@@ -141,7 +137,7 @@ impl DrawablePipeline<CrystalCommand> for CrystalPipeline {
         size: PxSize,
         start_pos: PxPosition,
         _scene_texture_view: Option<&wgpu::TextureView>,
-        _compute_registry: &mut tessera::renderer::ComputePipelineRegistry,
+        _compute_texture_view: &wgpu::TextureView,
     ) {
         if command.vertices.is_empty() {
             return;
@@ -278,7 +274,7 @@ pub fn crystal_shard(args: CrystalShardArgs) {
         };
 
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(Box::new(command));
+            metadata.push_draw_command(command);
         }
 
         Ok(ComputedData {

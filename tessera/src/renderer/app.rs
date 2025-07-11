@@ -4,12 +4,9 @@ use log::{error, info};
 use parking_lot::RwLock;
 use winit::window::Window;
 
-use crate::{PxPosition, dp::SCALE_FACTOR, px::PxSize};
+use crate::{PxPosition, dp::SCALE_FACTOR, px::PxSize, renderer::command::Command};
 
-use super::{
-    compute::ComputePipelineRegistry,
-    drawer::{DrawCommand, Drawer, RenderRequirement},
-};
+use super::{compute::ComputePipelineRegistry, drawer::Drawer};
 
 // Render pass resources for ping-pong operation
 struct PassTarget {
@@ -47,6 +44,8 @@ pub struct WgpuApp {
     msaa_texture: Option<wgpu::Texture>,
     msaa_view: Option<wgpu::TextureView>,
 
+    /// Dedicated output target for compute pipeline
+    compute_output: PassTarget,
 }
 
 impl WgpuApp {
@@ -149,11 +148,13 @@ impl WgpuApp {
             (None, None)
         };
 
-        // --- Create Pass Targets (A and B) ---
+        // --- Create Pass Targets (A and B and Compute) ---
         let pass_a = Self::create_pass_target(&gpu, &config, "A");
         let pass_b = Self::create_pass_target(&gpu, &config, "B");
+        let compute_output = Self::create_pass_target(&gpu, &config, "Compute");
 
         let drawer = Drawer::new();
+
         // Set scale factor for dp conversion
         let scale_factor = window.scale_factor();
         info!("Window scale factor: {scale_factor}");
@@ -176,6 +177,7 @@ impl WgpuApp {
             sample_count,
             msaa_texture,
             msaa_view,
+            compute_output,
         }
     }
 
@@ -232,9 +234,11 @@ impl WgpuApp {
         if self.size_changed {
             self.pass_a.texture.destroy();
             self.pass_b.texture.destroy();
+            self.compute_output.texture.destroy();
 
             self.pass_a = Self::create_pass_target(&self.gpu, &self.config, "A");
             self.pass_b = Self::create_pass_target(&self.gpu, &self.config, "B");
+            self.compute_output = Self::create_pass_target(&self.gpu, &self.config, "Compute");
 
             if self.sample_count > 1 {
                 if let Some(t) = self.msaa_texture.take() {
@@ -273,15 +277,24 @@ impl WgpuApp {
         }
     }
 
-    /// Render the surface.
+    /// Render the surface using the unified command system.
+    ///
+    /// This method processes a stream of commands (both draw and compute) and renders
+    /// them to the surface using a multi-pass rendering approach with ping-pong buffers.
+    /// Commands that require barriers will trigger texture copies between passes.
+    ///
+    /// # Arguments
+    /// * `commands` - An iterable of (Command, PxSize, PxPosition) tuples representing
+    ///   the rendering operations to perform.
+    ///
+    /// # Returns
+    /// * `Ok(())` if rendering succeeds
+    /// * `Err(wgpu::SurfaceError)` if there are issues with the surface
     pub(crate) fn render(
         &mut self,
-        drawer_commands: impl IntoIterator<Item = (PxPosition, PxSize, Box<dyn DrawCommand>)>,
+        commands: impl IntoIterator<Item = (Command, PxSize, PxPosition)>,
     ) -> Result<(), wgpu::SurfaceError> {
         let output_frame = self.surface.get_current_texture()?;
-        let _surface_view = output_frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .gpu
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -294,96 +307,67 @@ impl WgpuApp {
             depth_or_array_layers: 1,
         };
 
-        // 1. Initialization
+        // Initialization
         let (mut read_target, mut write_target) = (&mut self.pass_a, &mut self.pass_b);
 
-        // Initial clear: Clear the first "canvas"
-        let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
-            (msaa_view, Some(&write_target.view))
-        } else {
-            (&write_target.view, None)
-        };
-        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Initial Clear Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                resolve_target,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            ..Default::default()
-        });
+        // Initial clear pass
+        {
+            let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
+                (msaa_view, Some(&write_target.view))
+            } else {
+                (&write_target.view, None)
+            };
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Initial Clear Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+            self.drawer.begin_pass(
+                &self.gpu,
+                &self.queue,
+                &self.config,
+                &mut rpass,
+                &self.compute_output.view,
+            );
+            self.drawer.end_pass(
+                &self.gpu,
+                &self.queue,
+                &self.config,
+                &mut rpass,
+                &self.compute_output.view,
+            );
+        }
 
-        // 2. Main loop and command processing
-        let mut commands_iter = drawer_commands.into_iter();
+        // Main command processing loop with barrier handling
+        let mut commands_iter = commands.into_iter().peekable();
+        while let Some((command, size, start_pos)) = commands_iter.next() {
+            // Handle barrier requirements by swapping buffers and copying content
+            if command.barrier().is_some() {
+                std::mem::swap(&mut read_target, &mut write_target);
+                encoder.copy_texture_to_texture(
+                    read_target.texture.as_image_copy(),
+                    write_target.texture.as_image_copy(),
+                    texture_size,
+                );
+            }
 
-        'main_loop: loop {
-            // --- Step A: Batch all consecutive standard commands ---
-            let mut standard_batch = Vec::new();
-            for command in commands_iter.by_ref() {
-                if command.2.requirement() == RenderRequirement::Standard {
-                    standard_batch.push(command);
-                } else {
-                    // This is a barrier command, first render the collected standard commands
-                    if !standard_batch.is_empty() {
-                        let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
-                            (msaa_view, Some(&write_target.view))
-                        } else {
-                            (&write_target.view, None)
-                        };
-                        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("Standard Batch Pass"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view,
-                                resolve_target,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Load,
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            })],
-                            ..Default::default()
-                        });
-
-                        self.drawer
-                            .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass);
-                        for (pos, size, cmd) in standard_batch {
-                            self.drawer.submit(
-                                &self.gpu,
-                                &self.queue,
-                                &self.config,
-                                &mut pass,
-                                &*cmd,
-                                size,
-                                pos,
-                                None,
-                                &mut self.compute_pipeline_registry,
-                            );
-                        }
-                        self.drawer
-                            .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);
-                    }
-
-                    // Now process the barrier command
-                    // 1. Swap read and write targets (ping-pong operation)
-                    std::mem::swap(&mut read_target, &mut write_target);
-
-                    // 2. Copy the content of the new background (read_target) to the new canvas (write_target)
-                    encoder.copy_texture_to_texture(
-                        read_target.texture.as_image_copy(),
-                        write_target.texture.as_image_copy(),
-                        texture_size,
-                    );
-
-                    // 3. Begin a new render pass to draw the barrier component
+            match command {
+                // Process draw commands using the graphics pipeline
+                Command::Draw(command) => {
                     let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
                         (msaa_view, Some(&write_target.view))
                     } else {
                         (&write_target.view, None)
                     };
-                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("Barrier Pass"),
+                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Render Pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view,
                             resolve_target,
@@ -394,84 +378,116 @@ impl WgpuApp {
                         })],
                         ..Default::default()
                     });
+                    self.drawer.begin_pass(
+                        &self.gpu,
+                        &self.queue,
+                        &self.config,
+                        &mut rpass,
+                        &self.compute_output.view,
+                    );
 
-                    // 4. Draw the barrier command
-                    self.drawer
-                        .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass);
-                    let (pos, size, barrier_command) = command;
+                    // Submit the first command
                     self.drawer.submit(
                         &self.gpu,
                         &self.queue,
                         &self.config,
-                        &mut pass,
-                        &*barrier_command,
+                        &mut rpass,
+                        &*command,
                         size,
-                        pos,
+                        start_pos,
                         Some(&read_target.view),
-                        &mut self.compute_pipeline_registry,
+                        &self.compute_output.view,
                     );
-                    self.drawer
-                        .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);
 
-                    // Continue the main loop to process next commands
-                    continue 'main_loop;
-                }
-            }
-
-            // Render the last batch of standard commands if any
-            if !standard_batch.is_empty() {
-                let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
-                    (msaa_view, Some(&write_target.view))
-                } else {
-                    (&write_target.view, None)
-                };
-                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Final Standard Batch Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view,
-                        resolve_target,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    ..Default::default()
-                });
-
-                self.drawer
-                    .begin_pass(&self.gpu, &self.queue, &self.config, &mut pass);
-                for (pos, size, cmd) in standard_batch {
-                    self.drawer.submit(
+                    // Batch subsequent draw commands that don't require barriers
+                    while let Some((Command::Draw(command), _, _)) = commands_iter.peek() {
+                        if command.barrier().is_some() {
+                            break; // Break if a barrier is required
+                        }
+                        if let Some((Command::Draw(command), size, start_pos)) =
+                            commands_iter.next()
+                        {
+                            self.drawer.submit(
+                                &self.gpu,
+                                &self.queue,
+                                &self.config,
+                                &mut rpass,
+                                &*command,
+                                size,
+                                start_pos,
+                                Some(&read_target.view),
+                                &self.compute_output.view,
+                            );
+                        }
+                    }
+                    self.drawer.end_pass(
                         &self.gpu,
                         &self.queue,
                         &self.config,
-                        &mut pass,
-                        &*cmd,
-                        size,
-                        pos,
-                        None,
-                        &mut self.compute_pipeline_registry,
+                        &mut rpass,
+                        &self.compute_output.view,
                     );
                 }
-                self.drawer
-                    .end_pass(&self.gpu, &self.queue, &self.config, &mut pass);
-            }
+                // Process compute commands using the compute pipeline
+                Command::Compute(command) => {
+                    // Clear compute output target before compute
+                    let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Compute Output Clear"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &self.compute_output.view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        ..Default::default()
+                    });
+                    drop(rpass);
 
-            // No more commands, break the main loop
-            break;
+                    let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                        label: Some("Compute Pass"),
+                        timestamp_writes: None,
+                    });
+                    self.compute_pipeline_registry.dispatch_erased(
+                        &self.gpu,
+                        &self.queue,
+                        &self.config,
+                        &mut cpass,
+                        &*command,
+                        &read_target.view,
+                        &self.compute_output.view,
+                    );
+
+                    // Batch subsequent compute commands that don't require barriers
+                    while let Some((Command::Compute(command), _, _)) = commands_iter.peek() {
+                        if command.barrier().is_some() {
+                            break; // Break if a barrier is required
+                        }
+                        if let Some((Command::Compute(command), _, _)) = commands_iter.next() {
+                            self.compute_pipeline_registry.dispatch_erased(
+                                &self.gpu,
+                                &self.queue,
+                                &self.config,
+                                &mut cpass,
+                                &*command,
+                                &read_target.view,
+                                &self.compute_output.view,
+                            );
+                        }
+                    }
+                }
+            }
         }
 
-        // 3. Final output
-        let final_destination = output_frame.texture.as_image_copy();
-
+        // Final copy to surface
         encoder.copy_texture_to_texture(
             write_target.texture.as_image_copy(),
-            final_destination,
+            output_frame.texture.as_image_copy(),
             texture_size,
         );
 
         self.queue.submit(Some(encoder.finish()));
-
         output_frame.present();
 
         Ok(())

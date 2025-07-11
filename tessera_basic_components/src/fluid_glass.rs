@@ -1,11 +1,9 @@
 use derive_builder::Builder;
-use std::any::Any;
-use tessera::renderer::{DrawCommand, RenderRequirement};
-use tessera::{
-    ComponentNodeMetaData, ComputedData, Constraint, DimensionValue, Px, PxPosition, measure_node,
-    place_node,
-};
+use tessera::renderer::DrawCommand;
+use tessera::{ComputedData, Constraint, DimensionValue, Px, PxPosition, measure_node, place_node};
 use tessera_macros::tessera;
+
+use crate::pipelines::blur::command::BlurCommand;
 
 #[derive(Builder, Clone)]
 #[builder(build_fn(validate = "Self::validate"), pattern = "owned", setter(into))]
@@ -73,11 +71,9 @@ pub struct FluidGlassCommand {
 }
 
 impl DrawCommand for FluidGlassCommand {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn requirement(&self) -> RenderRequirement {
-        RenderRequirement::SamplesBackground
+    fn barrier(&self) -> Option<tessera::BarrierRequirement> {
+        // Fluid glass aquires the scene texture, so it needs to sample the background
+        Some(tessera::BarrierRequirement::SampleBackground)
     }
 }
 
@@ -117,20 +113,29 @@ pub fn fluid_glass(args: FluidGlassArgs) {
             }
         };
 
+        if args.blur_radius > 0.0 {
+            let blur_command = BlurCommand {
+                radius: args.blur_radius,
+                direction: (1.0, 0.0), // Horizontal
+                first_pass: true,
+            };
+            let blur_command2 = BlurCommand {
+                radius: args.blur_radius,
+                direction: (0.0, 1.0), // Vertical
+                first_pass: false,
+            };
+            if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
+                metadata.push_compute_command(blur_command);
+                metadata.push_compute_command(blur_command2);
+            }
+        }
+
         let drawable = FluidGlassCommand {
             args: args_measure_clone.clone(),
         };
 
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(Box::new(drawable));
-        } else {
-            input.metadatas.insert(
-                input.current_node_id,
-                ComponentNodeMetaData {
-                    basic_drawable: Some(Box::new(drawable)),
-                    ..Default::default()
-                },
-            );
+            metadata.push_draw_command(drawable);
         }
 
         let min_width = child_measurement.width;

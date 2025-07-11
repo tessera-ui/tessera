@@ -224,7 +224,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
                 corner_radius: track_height.0 as f32 / 2.0,
                 shadow: None,
             };
-            metadata.basic_drawable = Some(Box::new(inactive_track_command));
+            metadata.push_draw_command(inactive_track_command);
         }
 
         Ok(ComputedData {

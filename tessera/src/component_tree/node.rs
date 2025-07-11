@@ -12,10 +12,14 @@ use winit::window::CursorIcon;
 
 use super::constraint::{Constraint, DimensionValue};
 use crate::{
+    // Command traits for the new unified rendering system
+    ComputeCommand,
+    DrawCommand,
     Px,
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
-    renderer::DrawCommand,
+    // New unified Command enum that replaces separate draw/compute command handling
+    renderer::Command,
 };
 
 /// A ComponentNode is a node in the component tree.
@@ -45,8 +49,13 @@ pub struct ComponentNodeMetaData {
     /// This will be computed during drawing command's generation.
     /// None if the node is not drawn yet.
     pub abs_position: Option<PxPosition>,
-    /// Optional basic drawable associated with this node.
-    pub basic_drawable: Option<Box<dyn DrawCommand>>,
+    /// Commands associated with this node.
+    ///
+    /// This stores both draw and compute commands in a unified vector using the
+    /// new `Command` enum. Commands are collected during the measure phase and
+    /// executed during rendering. The order of commands in this vector determines
+    /// their execution order.
+    pub(crate) commands: Vec<Command>,
 }
 
 impl ComponentNodeMetaData {
@@ -56,8 +65,49 @@ impl ComponentNodeMetaData {
             computed_data: None,
             rel_position: None,
             abs_position: None,
-            basic_drawable: None,
+            commands: Vec::new(),
         }
+    }
+
+    /// Pushes a draw command to the node's metadata.
+    ///
+    /// Draw commands are responsible for rendering visual content (shapes, text, images).
+    /// This method wraps the command in the unified `Command::Draw` variant and adds it
+    /// to the command queue. Commands are executed in the order they are added.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// metadata.push_draw_command(ShapeCommand::Rect {
+    ///     color: [1.0, 0.0, 0.0, 1.0],
+    ///     corner_radius: 8.0,
+    ///     shadow: None,
+    /// });
+    /// ```
+    pub fn push_draw_command(&mut self, command: impl DrawCommand + 'static) {
+        let command = Box::new(command);
+        let command = command as Box<dyn DrawCommand>;
+        let command = Command::Draw(command);
+        self.commands.push(command);
+    }
+
+    /// Pushes a compute command to the node's metadata.
+    ///
+    /// Compute commands perform GPU computation tasks (post-processing effects,
+    /// complex calculations). This method wraps the command in the unified
+    /// `Command::Compute` variant and adds it to the command queue.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// metadata.push_compute_command(BlurCommand {
+    ///     radius: 5.0,
+    ///     sigma: 2.0,
+    /// });
+    /// ```
+    pub fn push_compute_command(&mut self, command: impl ComputeCommand + 'static) {
+        let command = Box::new(command);
+        let command = command as Box<dyn ComputeCommand>;
+        let command = Command::Compute(command);
+        self.commands.push(command);
     }
 }
 

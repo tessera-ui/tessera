@@ -187,7 +187,7 @@ pub fn switch(args: impl Into<SwitchArgs>) {
             shadow: None,
         };
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(Box::new(track_command));
+            metadata.push_draw_command(track_command);
         }
 
         Ok(ComputedData {

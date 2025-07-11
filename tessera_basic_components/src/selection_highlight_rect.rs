@@ -1,4 +1,4 @@
-use tessera::{ComponentNodeMetaData, ComputedData, Px};
+use tessera::{ComputedData, Px};
 use tessera_macros::tessera;
 
 use crate::pipelines::ShapeCommand;
@@ -22,15 +22,7 @@ pub fn selection_highlight_rect(
         };
 
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(Box::new(drawable));
-        } else {
-            input.metadatas.insert(
-                input.current_node_id,
-                ComponentNodeMetaData {
-                    basic_drawable: Some(Box::new(drawable)),
-                    ..Default::default()
-                },
-            );
+            metadata.push_draw_command(drawable);
         }
 
         // Return the specified size

@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use tessera::{ComponentNodeMetaData, ComputedData, Dp, Px};
+use tessera::{ComputedData, Dp, Px};
 use tessera_macros::tessera;
 
 use crate::pipelines::ShapeCommand;
@@ -25,13 +25,7 @@ pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
         };
         // Add the drawable to the metadata
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.basic_drawable = Some(Box::new(drawable));
-        } else {
-            let default_meta = ComponentNodeMetaData {
-                basic_drawable: Some(Box::new(drawable)),
-                ..Default::default()
-            };
-            input.metadatas.insert(input.current_node_id, default_meta);
+            metadata.push_draw_command(drawable);
         }
         // Return the computed data for the cursor
         Ok(ComputedData {

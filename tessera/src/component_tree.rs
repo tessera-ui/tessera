@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use crate::{
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
-    renderer::DrawCommand,
+    renderer::Command,
 };
 pub use constraint::{Constraint, DimensionValue};
 pub use node::{
@@ -95,7 +95,15 @@ impl ComponentTree {
         self.node_queue.pop();
     }
 
-    /// Compute the ComponentTree into a list of DrawCommand
+    /// Compute the ComponentTree into a list of rendering commands
+    ///
+    /// This method processes the component tree through three main phases:
+    /// 1. **Measure Phase**: Calculate sizes and positions for all components
+    /// 2. **Command Generation**: Extract draw commands from component metadata
+    /// 3. **State Handling**: Process user interactions and events
+    ///
+    /// Returns a tuple of (commands, window_requests) where commands contain
+    /// the rendering instructions with their associated sizes and positions.
     pub fn compute(
         &mut self,
         screen_size: PxSize,
@@ -103,10 +111,7 @@ impl ComponentTree {
         mut cursor_events: Vec<CursorEvent>,
         mut keyboard_events: Vec<winit::event::KeyEvent>,
         mut ime_events: Vec<winit::event::Ime>,
-    ) -> (
-        Vec<(PxPosition, PxSize, Box<dyn DrawCommand>)>,
-        WindowRequests,
-    ) {
+    ) -> (Vec<(Command, PxSize, PxPosition)>, WindowRequests) {
         let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
             return (vec![], WindowRequests::default());
         };
@@ -211,13 +216,19 @@ impl ComponentTree {
     }
 }
 
-// This function seems to take &ComponentNodeTree and &ComponentNodeMetaDatas, which is consistent.
-// Internally, it uses metadatas.get_mut(&node_id). DashMap allows this with &self.
+/// Parallel computation of draw commands from the component tree
+///
+/// This function traverses the component tree and extracts rendering commands
+/// from each node's metadata. It uses parallel processing for better performance
+/// when dealing with large component trees.
+///
+/// The function maintains thread-safety by using DashMap's concurrent access
+/// capabilities, allowing multiple threads to safely read and modify metadata.
 fn compute_draw_commands_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
-) -> Vec<(PxPosition, PxSize, Box<dyn DrawCommand>)> {
+) -> Vec<(Command, PxSize, PxPosition)> {
     compute_draw_commands_inner_parallel(PxPosition::ZERO, true, node_id, tree, metadatas)
 }
 
@@ -227,58 +238,51 @@ fn compute_draw_commands_inner_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
-) -> Vec<(PxPosition, PxSize, Box<dyn DrawCommand>)> {
+) -> Vec<(Command, PxSize, PxPosition)> {
     let mut local_commands = Vec::new();
 
-    // Accessing metadatas with get_mut. DashMap's get_mut returns a RefMut,
-    // which is fine with an immutable reference to the DashMap itself (&DashMap).
+    // Process current node's metadata and extract its rendering commands
     if let Some(mut entry) = metadatas.get_mut(&node_id) {
+        // Calculate absolute position: root nodes start at origin, others use relative positioning
         let rel_pos = match entry.rel_position {
             Some(pos) => pos,
-            None => {
-                if is_root {
-                    // If it's the root node and rel_position is None, we assume it starts at [0, 0]
-                    PxPosition::ZERO
-                } else {
-                    // If not root and rel_position is None, we skip this node
-                    return local_commands;
-                }
-            }
+            None if is_root => PxPosition::ZERO,
+            _ => return local_commands, // Skip nodes without position data
         };
         let self_pos = start_pos + rel_pos;
-        entry.abs_position = Some(self_pos); // Modifying through RefMut
+        entry.abs_position = Some(self_pos);
 
-        if let Some(cmd) = entry.basic_drawable.take() {
-            let size = entry.computed_data.unwrap();
-            local_commands.push((
-                self_pos,
-                PxSize {
-                    width: size.width,
-                    height: size.height,
-                },
-                cmd,
-            ));
+        // Extract size from computed data, defaulting to zero if unavailable
+        let size = entry
+            .computed_data
+            .map(|d| PxSize {
+                width: d.width,
+                height: d.height,
+            })
+            .unwrap_or_default();
+
+        // Drain all commands from this node and add them to the output
+        // Note: Commands are now stored directly as Command enum instead of boxed trait objects
+        for cmd in entry.commands.drain(..) {
+            local_commands.push((cmd, size, self_pos));
         }
-    } // RefMut is dropped here, lock released if any
+    }
 
-    // Recursive call, passing references
+    // Process all child nodes in parallel for better performance
     let children: Vec<_> = node_id.children(tree).collect();
     let child_results: Vec<Vec<_>> = children
         .into_par_iter()
         .map(|child| {
-            compute_draw_commands_inner_parallel(
-                metadatas
-                    .get(&node_id)
-                    .and_then(|m| m.abs_position)
-                    .unwrap_or(start_pos), // Get self_pos again for children
-                false,
-                child,
-                tree,
-                metadatas,
-            )
+            // Use current node's absolute position as starting point for children
+            let self_pos = metadatas
+                .get(&node_id)
+                .and_then(|m| m.abs_position)
+                .unwrap_or(start_pos);
+            compute_draw_commands_inner_parallel(self_pos, false, child, tree, metadatas)
         })
         .collect();
 
+    // Flatten all child commands into the local command list
     for child_cmds in child_results {
         local_commands.extend(child_cmds);
     }

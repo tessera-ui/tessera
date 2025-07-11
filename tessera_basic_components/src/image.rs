@@ -112,7 +112,7 @@ pub fn image(args: impl Into<ImageArgs>) {
             .metadatas
             .entry(input.current_node_id)
             .or_default()
-            .basic_drawable = Some(Box::new(image_command));
+            .push_draw_command(image_command);
 
         Ok(ComputedData { width, height })
     }));

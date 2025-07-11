@@ -1,14 +1,10 @@
 use bytemuck::{Pod, Zeroable};
 use tessera::{
     PxPosition, PxSize,
-    renderer::{
-        DrawablePipeline,
-        compute::{ComputePipelineRegistry, ComputablePipeline},
-    },
+    renderer::DrawablePipeline,
     wgpu::{self, util::DeviceExt},
 };
 
-use super::blur;
 use crate::fluid_glass::FluidGlassCommand;
 
 // --- Uniforms ---
@@ -155,80 +151,16 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
     fn draw(
         &mut self,
         gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
+        _queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass,
+        render_pass: &mut wgpu::RenderPass<'_>,
         command: &FluidGlassCommand,
         size: PxSize,
         start_pos: PxPosition,
         scene_texture_view: Option<&wgpu::TextureView>,
-        compute_registry: &mut ComputePipelineRegistry,
+        compute_texture_view: &wgpu::TextureView,
     ) {
-        let Some(original_scene_texture) = scene_texture_view else {
-            return;
-        };
-
         let args = &command.args;
-
-        // This will own the blurred texture/view if created, ensuring it lives long enough.
-        let blur_storage: Option<(wgpu::Texture, wgpu::TextureView)>;
-
-        let scene_texture = if args.blur_radius > 0.0 {
-            // 1. Create intermediate texture for two-pass blur.
-            let texture_descriptor = wgpu::TextureDescriptor {
-                label: Some("Blur Intermediate Texture"),
-                size: wgpu::Extent3d {
-                    width: config.width,
-                    height: config.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: config.format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
-                view_formats: &[],
-            };
-            let intermediate_texture = gpu.create_texture(&texture_descriptor);
-            let intermediate_view =
-                intermediate_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            // 2. Create final blur destination texture.
-            let final_texture = gpu.create_texture(&texture_descriptor);
-            let final_view = final_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            // 3. Get the blur pipeline from the registry.
-            let blur_pipeline = compute_registry.get_sync::<blur::pipeline::BlurPipeline>();
-
-            // 4. First pass: horizontal blur from original to intermediate
-            let horizontal_blur_command = blur::command::BlurCommand {
-                source_view: original_scene_texture,
-                dest_view: &intermediate_view,
-                radius: args.blur_radius,
-                direction: (1.0, 0.0), // Horizontal
-                size: (config.width, config.height),
-            };
-            blur_pipeline.dispatch_sync(gpu, queue, &horizontal_blur_command);
-
-            // 5. Second pass: vertical blur from intermediate to final
-            let vertical_blur_command = blur::command::BlurCommand {
-                source_view: &intermediate_view,
-                dest_view: &final_view,
-                radius: args.blur_radius,
-                direction: (0.0, 1.0), // Vertical
-                size: (config.width, config.height),
-            };
-            blur_pipeline.dispatch_sync(gpu, queue, &vertical_blur_command);
-
-            // 6. Store both textures to ensure they live long enough
-            // We only return a reference to the final result
-            blur_storage = Some((final_texture, final_view));
-            &blur_storage.as_ref().unwrap().1
-        } else {
-            original_scene_texture
-        };
-
-        // Per the user's request, we calculate the rectangle's bounds in UV space.
         let screen_w = config.width as f32;
         let screen_h = config.height as f32;
 
@@ -269,6 +201,12 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
+        let source_view = if args.blur_radius == 0.0 {
+            scene_texture_view.unwrap()
+        } else {
+            compute_texture_view
+        };
+
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.bind_group_layout,
             entries: &[
@@ -278,7 +216,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(scene_texture),
+                    resource: wgpu::BindingResource::TextureView(source_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,

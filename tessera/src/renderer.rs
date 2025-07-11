@@ -1,4 +1,5 @@
 pub mod app;
+pub mod command;
 pub mod compute;
 pub mod drawer;
 
@@ -29,8 +30,9 @@ use crate::{
     thread_utils, tokio_runtime,
 };
 
-pub use compute::{ComputePipelineRegistry, ComputablePipeline};
-pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry, RenderRequirement};
+pub use command::Command;
+pub use compute::{ComputablePipeline, ComputePipelineRegistry};
+pub use drawer::{BarrierRequirement, DrawCommand, DrawablePipeline, PipelineRegistry};
 
 /// Configuration for the Tessera runtime and renderer.
 #[derive(Clone)]
@@ -50,11 +52,6 @@ impl Default for TesseraConfig {
     }
 }
 
-/// The bind group set index where the scene texture is bound for pipelines that
-/// require `RenderRequirement::SamplesBackground`.
-///
-/// Pipelines that sample the background should expect the background texture at this set index.
-pub const SCENE_TEXTURE_BIND_GROUP_SET: u32 = 1;
 pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     /// WGPU app
     app: Option<WgpuApp>,
@@ -106,7 +103,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         event_loop.run_app(&mut renderer)
     }
 
-    #[cfg(target_os = "android")]
     #[cfg(target_os = "android")]
     /// Create event loop and run application on Android
     pub fn run(
