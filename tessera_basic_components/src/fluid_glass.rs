@@ -144,12 +144,10 @@ pub fn fluid_glass(args: FluidGlassArgs) {
             let blur_command = BlurCommand {
                 radius: args.blur_radius,
                 direction: (1.0, 0.0), // Horizontal
-                first_pass: true,
             };
             let blur_command2 = BlurCommand {
                 radius: args.blur_radius,
                 direction: (0.0, 1.0), // Vertical
-                first_pass: false,
             };
             if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
                 metadata.push_compute_command(blur_command);

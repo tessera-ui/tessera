@@ -289,7 +289,6 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
-        compute_texture_view: &wgpu::TextureView,
     ) {
         self.current_shape_uniform_offset = 0;
     }
@@ -303,8 +302,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         command: &ShapeCommand,
         size: PxSize,
         start_pos: PxPosition,
-        scene_texture_view: Option<&wgpu::TextureView>,
-        compute_texture_view: &wgpu::TextureView,
+        _scene_texture_view: &wgpu::TextureView,
     ) {
         // --- Fallback for ALL shapes, or primary path for non-G2 shapes ---
         let computed_command = ShapeCommandComputed::from_command(command.clone(), size, start_pos);

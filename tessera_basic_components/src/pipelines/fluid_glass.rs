@@ -157,8 +157,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         command: &FluidGlassCommand,
         size: PxSize,
         start_pos: PxPosition,
-        scene_texture_view: Option<&wgpu::TextureView>,
-        compute_texture_view: &wgpu::TextureView,
+        scene_texture_view: &wgpu::TextureView,
     ) {
         let args = &command.args;
         let screen_w = config.width as f32;
@@ -201,12 +200,6 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
-        let source_view = if args.blur_radius == 0.0 {
-            scene_texture_view.unwrap()
-        } else {
-            compute_texture_view
-        };
-
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.bind_group_layout,
             entries: &[
@@ -216,7 +209,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(source_view),
+                    resource: wgpu::BindingResource::TextureView(scene_texture_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,

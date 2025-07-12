@@ -153,8 +153,7 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
         command: &ImageCommand,
         size: PxSize,
         start_pos: PxPosition,
-        _scene_texture_view: Option<&wgpu::TextureView>,
-        _compute_texture_view: &wgpu::TextureView,
+        _scene_texture_view: &wgpu::TextureView,
     ) {
         let resources = self
             .resources
@@ -170,7 +169,7 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format: config.format,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                     label: Some("diffuse_texture"),
                     view_formats: &[],

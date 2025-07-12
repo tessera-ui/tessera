@@ -44,22 +44,22 @@ fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: f32, k: f32) -> f32 {
 
     var dist_corner_shape: f32;
     // Use a small epsilon for comparing k to 2.0 to handle potential float inaccuracies
-    if (abs(k - 2.0) < 0.001) { // G1 behavior (standard circle)
+    if abs(k - 2.0) < 0.001 { // G1 behavior (standard circle)
         dist_corner_shape = length(vec2f(v_x, v_y));
     } else { // G2-like behavior with exponent k
-        if (v_x == 0.0 && v_y == 0.0) {
+        if v_x == 0.0 && v_y == 0.0 {
             dist_corner_shape = 0.0;
         } else {
-            dist_corner_shape = pow(pow(v_x, k) + pow(v_y, k), 1.0/k);
+            dist_corner_shape = pow(pow(v_x, k) + pow(v_y, k), 1.0 / k);
         }
     }
-    
+
     return dist_corner_shape + min(max(q.x, q.y), 0.0) - r;
 }
 
 // Calculate ripple effect based on distance from ripple center
 fn calculate_ripple_effect(dist_to_center: f32, ripple_radius: f32) -> f32 {
-    if (ripple_radius <= 0.0) {
+    if ripple_radius <= 0.0 {
         return 0.0;
     }
     
@@ -71,7 +71,7 @@ fn calculate_ripple_effect(dist_to_center: f32, ripple_radius: f32) -> f32 {
     
     // Smooth falloff to avoid harsh edges
     let smooth_falloff = smoothstep(0.0, 0.3, ripple_wave) * smoothstep(1.5, 0.8, normalized_dist);
-    
+
     return clamp(smooth_falloff, 0.0, 1.0);
 }
 
@@ -107,7 +107,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     var final_color: vec4f;
 
-    if (render_mode == 2.0) { // --- Draw Shadow ---
+    if render_mode == 2.0 { // --- Draw Shadow ---
         let p_scaled_shadow_space = p_scaled_object_space - shadow_offset;
         let dist_shadow = sdf_g2_rounded_box(p_scaled_shadow_space, rect_half_size, corner_radius, G2_K_VALUE);
 
@@ -117,10 +117,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
         // Softness/blur for the shadow
         let shadow_soft_alpha = smoothstep(shadow_smoothness, 0.0, dist_shadow);
-        
+
         let combined_shadow_alpha = shadow_alpha * shadow_soft_alpha;
 
-        if (combined_shadow_alpha <= 0.001) {
+        if combined_shadow_alpha <= 0.001 {
             discard;
         }
         final_color = vec4f(shadow_color_uniform.rgb, shadow_color_uniform.a * combined_shadow_alpha);
@@ -129,16 +129,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let dist_object = sdf_g2_rounded_box(p_scaled_object_space, rect_half_size, corner_radius, G2_K_VALUE);
         let aa_width_object = fwidth(dist_object);
 
-        if (render_mode == 0.0) { // --- Draw Fill ---
+        if render_mode == 0.0 { // --- Draw Fill ---
             let object_alpha = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
 
-            if (object_alpha <= 0.001) {
+            if object_alpha <= 0.001 {
                 discard;
             }
             final_color = vec4f(primary_color_uniform.rgb, primary_color_uniform.a * object_alpha);
 
-        } else if (render_mode == 1.0) { // --- Draw Outline ---
-            if (border_width <= 0.0) {
+        } else if render_mode == 1.0 { // --- Draw Outline ---
+            if border_width <= 0.0 {
                 discard;
             }
             // Alpha for the outer edge of the border
@@ -149,15 +149,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             // The outline alpha is the difference
             let outline_alpha = alpha_outer_edge - alpha_inner_edge;
 
-            if (outline_alpha <= 0.001) {
+            if outline_alpha <= 0.001 {
                 discard;
             }
             final_color = vec4f(primary_color_uniform.rgb, primary_color_uniform.a * max(0.0, outline_alpha));
 
-        } else if (render_mode == 3.0) { // --- Draw Ripple Fill ---
+        } else if render_mode == 3.0 { // --- Draw Ripple Fill ---
             let object_alpha = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
 
-            if (object_alpha <= 0.001) {
+            if object_alpha <= 0.001 {
                 discard;
             }
 
@@ -177,11 +177,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             // Blend primary color with ripple effect
             let base_color = vec3f(primary_color_uniform.rgb);
             let blended_color = mix(base_color, ripple_color_rgb, ripple_final_alpha);
-            
+
             final_color = vec4f(blended_color, primary_color_uniform.a * object_alpha);
 
-        } else if (render_mode == 4.0) { // --- Draw Ripple Outline ---
-            if (border_width <= 0.0) {
+        } else if render_mode == 4.0 { // --- Draw Ripple Outline ---
+            if border_width <= 0.0 {
                 discard;
             }
             // Alpha for the outer edge of the border
@@ -192,7 +192,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             // The outline alpha is the difference
             let outline_alpha = alpha_outer_edge - alpha_inner_edge;
 
-            if (outline_alpha <= 0.001) {
+            if outline_alpha <= 0.001 {
                 discard;
             }
 
@@ -212,7 +212,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             // Blend primary color with ripple effect
             let base_color = vec3f(primary_color_uniform.rgb);
             let blended_color = mix(base_color, ripple_color_rgb, ripple_final_alpha);
-            
+
             final_color = vec4f(blended_color, primary_color_uniform.a * max(0.0, outline_alpha));
 
         } else {

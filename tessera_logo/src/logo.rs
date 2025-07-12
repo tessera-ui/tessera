@@ -136,8 +136,7 @@ impl DrawablePipeline<CrystalCommand> for CrystalPipeline {
         command: &CrystalCommand,
         size: PxSize,
         start_pos: PxPosition,
-        _scene_texture_view: Option<&wgpu::TextureView>,
-        _compute_texture_view: &wgpu::TextureView,
+        _scene_texture_view: &wgpu::TextureView,
     ) {
         if command.vertices.is_empty() {
             return;

@@ -23,7 +23,7 @@ impl BlurPipeline {
     pub fn new(device: &wgpu::Device) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Blur Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/blur.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("blur.wgsl").into()),
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

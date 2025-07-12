@@ -112,8 +112,7 @@ impl DrawablePipeline<BackgroundCommand> for BackgroundPipeline {
         command: &BackgroundCommand,
         size: PxSize,
         _start_pos: PxPosition,
-        _scene_texture_view: Option<&wgpu::TextureView>,
-        _compute_texture_view: &wgpu::TextureView,
+        _scene_texture_view: &wgpu::TextureView,
     ) {
         let uniforms = Uniforms {
             time: command.time,

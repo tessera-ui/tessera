@@ -32,19 +32,19 @@ fn gaussian_blur(coord: vec2<u32>, direction: vec2<f32>, texture_size: vec2<u32>
         // Calculate Gaussian weight
         let distance_squared = f32(i * i);
         let weight = exp(-distance_squared / two_sigma_squared);
-        
+
         let sample_color = textureLoad(source_texture, vec2<u32>(sample_coord), 0);
         total = total + sample_color * weight;
         total_weight = total_weight + weight;
     }
-    
+
     return total / total_weight;
 }
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let output_size = textureDimensions(dest_texture);
-    if (global_id.x >= output_size.x || global_id.y >= output_size.y) {
+    if global_id.x >= output_size.x || global_id.y >= output_size.y {
         return;
     }
 

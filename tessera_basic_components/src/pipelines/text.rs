@@ -99,8 +99,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
         command: &TextCommand,
         size: PxSize,
         start_pos: PxPosition,
-        scene_texture_view: Option<&wgpu::TextureView>,
-        compute_texture_view: &wgpu::TextureView,
+        _scene_texture_view: &wgpu::TextureView,
     ) {
         // Create a new, temporary TextRenderer for each draw call.
         // This is necessary to avoid state conflicts when rendering multiple

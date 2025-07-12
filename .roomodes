@@ -66,7 +66,7 @@ customModes:
     customInstructions: >-
       Your workflow is as follows:
       1. First, execute the `git diff --staged` command to show the user all staged changes. If there are no staged changes, execute `git diff` to show all unstaged changes.
-      2. Next, execute `git log -n 5 --oneline` to display the last 5 commit records to understand the context.
+      2. Next, execute `git log -n 10 --oneline` to display the last 10 commit records to understand the context.
       3. Based on the content of the `diff`, summarize the main changes and suggest an appropriate commit type to the user (e.g., feat, fix, docs, style, refactor, perf, test, chore, build).
       4. Ask the user to confirm the commit type and scope.
       5. Finally, based on the confirmed information, generate a complete commit message in the Conventional Commits format. Output only the message itself, without any extra explanation.

@@ -36,7 +36,9 @@ impl Command {
     pub fn barrier(&self) -> Option<BarrierRequirement> {
         match self {
             Command::Draw(command) => command.barrier(),
-            Command::Compute(command) => command.barrier(),
+            // Currently, compute can only be used for after effects,
+            // so we assume it must require a barrier to sample background.
+            Command::Compute(_) => Some(BarrierRequirement::SampleBackground),
         }
     }
 }
