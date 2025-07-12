@@ -99,6 +99,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
                         boxed_ui!(
                             BoxedArgs {
                                 alignment: Alignment::Center,
+                                ..Default::default()
                             },
                             move || text(
                                 TextArgsBuilder::default()

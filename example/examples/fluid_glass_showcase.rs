@@ -53,6 +53,7 @@ fn app() {
             boxed(
                 BoxedArgs {
                     alignment: Alignment::Center,
+                    ..Default::default()
                 },
                 [
                     // Background content layer
