@@ -1,3 +1,5 @@
+use crate::compute::resource::ComputeResourceManager;
+
 use super::command::ComputeCommand;
 
 /// A unified trait for a GPU compute pipeline.
@@ -30,6 +32,7 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
         config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &C,
+        resource_manager: &mut ComputeResourceManager,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     );
@@ -45,6 +48,7 @@ pub(crate) trait ErasedComputablePipeline: Send + Sync {
         config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &dyn ComputeCommand,
+        resource_manager: &mut ComputeResourceManager,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     );
@@ -66,6 +70,7 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
         config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &dyn ComputeCommand,
+        resource_manager: &mut ComputeResourceManager,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
@@ -76,6 +81,7 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
                 config,
                 compute_pass,
                 command,
+                resource_manager,
                 input_view,
                 output_view,
             );
@@ -114,6 +120,7 @@ impl ComputePipelineRegistry {
         config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &dyn ComputeCommand,
+        resource_manager: &mut ComputeResourceManager,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
@@ -124,6 +131,7 @@ impl ComputePipelineRegistry {
                 config,
                 compute_pass,
                 command,
+                resource_manager,
                 input_view,
                 output_view,
             );

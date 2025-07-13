@@ -202,6 +202,8 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 &child_constraint,
                 input.tree,
                 input.metadatas,
+                input.compute_resource_manager.clone(),
+                input.gpu,
             )?;
             // place the child
             place_node(

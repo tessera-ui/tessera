@@ -3,7 +3,7 @@ use tessera::renderer::DrawCommand;
 use tessera::{ComputedData, Constraint, DimensionValue, Px, PxPosition, measure_node, place_node};
 use tessera_macros::tessera;
 
-use crate::pipelines::blur::command::BlurCommand;
+use crate::pipelines::{blur::command::BlurCommand, contrast::ContrastCommand, mean::MeanCommand};
 
 /// Arguments for the `fluid_glass` component, providing extensive control over its appearance.
 ///
@@ -71,6 +71,9 @@ pub struct FluidGlassArgs {
     /// A time value, typically used to animate the noise or other effects.
     #[builder(default = "0.0")]
     pub time: f32,
+    /// The contrast adjustment factor.
+    #[builder(default, setter(strip_option))]
+    pub contrast: Option<f32>,
     /// The optional width of the component, defined as a `DimensionValue`.
     #[builder(default, setter(strip_option))]
     pub width: Option<DimensionValue>,
@@ -126,6 +129,8 @@ pub fn fluid_glass(args: FluidGlassArgs) {
                 &effective_glass_constraint,
                 input.tree,
                 input.metadatas,
+                input.compute_resource_manager.clone(),
+                input.gpu,
             )?;
             place_node(
                 input.children_ids[0],
@@ -152,6 +157,17 @@ pub fn fluid_glass(args: FluidGlassArgs) {
             if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
                 metadata.push_compute_command(blur_command);
                 metadata.push_compute_command(blur_command2);
+            }
+        }
+
+        if let Some(contrast_value) = args.contrast {
+            let mean_command =
+                MeanCommand::new(input.gpu, &mut input.compute_resource_manager.write());
+            let contrast_command =
+                ContrastCommand::new(contrast_value, mean_command.result_buffer_ref());
+            if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
+                metadata.push_compute_command(mean_command);
+                metadata.push_compute_command(contrast_command);
             }
         }
 

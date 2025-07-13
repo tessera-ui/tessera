@@ -185,6 +185,8 @@ pub fn background<const N: usize>(args: BackgroundArgs, children: [BoxedItem; N]
                     &child_constraint,
                     input.tree,
                     input.metadatas,
+                    input.compute_resource_manager.clone(),
+                    input.gpu,
                 )?;
 
                 let (x, y) = match args.alignment {

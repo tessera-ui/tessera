@@ -157,6 +157,8 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
                     &parent_offered_constraint_for_child,
                     input.tree,
                     input.metadatas,
+                    input.compute_resource_manager.clone(),
+                    input.gpu,
                 )?;
 
                 children_sizes[child_idx] = Some(child_result);
@@ -186,6 +188,8 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
                         &parent_offered_constraint_for_child,
                         input.tree,
                         input.metadatas,
+                        input.compute_resource_manager.clone(),
+                        input.gpu,
                     )?;
 
                     children_sizes[child_idx] = Some(child_result);
@@ -254,6 +258,8 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
                     &parent_offered_constraint_for_child,
                     input.tree,
                     input.metadatas,
+                    input.compute_resource_manager.clone(),
+                    input.gpu,
                 )?;
 
                 children_sizes[i] = Some(child_result);

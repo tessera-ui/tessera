@@ -1,24 +1,22 @@
 use std::{
     collections::HashMap,
     ops::{Add, AddAssign},
+    sync::Arc,
     time::Instant,
 };
 
 use dashmap::DashMap;
 use indextree::NodeId;
 use log::debug;
+use parking_lot::RwLock;
 use rayon::prelude::*;
 use winit::window::CursorIcon;
 
 use super::constraint::{Constraint, DimensionValue};
 use crate::{
-    // Command traits for the new unified rendering system
-    ComputeCommand,
-    DrawCommand,
-    Px,
+    ComputeCommand, ComputeResourceManager, DrawCommand, Px,
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
-    // New unified Command enum that replaces separate draw/compute command handling
     renderer::Command,
 };
 
@@ -148,6 +146,10 @@ pub struct MeasureInput<'a> {
     pub children_ids: &'a [indextree::NodeId],
     /// Metadata for all component nodes, used to access cached data and constraints.
     pub metadatas: &'a ComponentNodeMetaDatas,
+    /// Compute resources manager
+    pub compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
+    /// Gpu device
+    pub gpu: &'a wgpu::Device,
 }
 
 /// A `StateHandlerFn` is a function that handles state changes for a component.
@@ -227,6 +229,8 @@ pub fn measure_node(
     parent_constraint: &Constraint,
     tree: &ComponentNodeTree,
     component_node_metadatas: &ComponentNodeMetaDatas,
+    compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
+    gpu: &wgpu::Device,
 ) -> Result<ComputedData, MeasurementError> {
     let node_data_ref = tree
         .get(node_id)
@@ -250,6 +254,8 @@ pub fn measure_node(
             parent_constraint,
             children_ids: &children,
             metadatas: component_node_metadatas,
+            compute_resource_manager,
+            gpu,
         })
     } else {
         DEFAULT_LAYOUT_DESC(&MeasureInput {
@@ -258,6 +264,8 @@ pub fn measure_node(
             parent_constraint,
             children_ids: &children,
             metadatas: component_node_metadatas,
+            compute_resource_manager,
+            gpu,
         })
     }?;
 
@@ -305,7 +313,13 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
         .map(|&child_id| (child_id, *input.parent_constraint)) // Children inherit parent's effective constraint
         .collect();
 
-    let children_results_map = measure_nodes(nodes_to_measure, input.tree, input.metadatas);
+    let children_results_map = measure_nodes(
+        nodes_to_measure,
+        input.tree,
+        input.metadatas,
+        input.compute_resource_manager.clone(),
+        input.gpu,
+    );
 
     let mut aggregate_size = ComputedData::ZERO;
     let mut first_error: Option<MeasurementError> = None;
@@ -426,6 +440,8 @@ pub fn measure_nodes(
     nodes_to_measure: Vec<(NodeId, Constraint)>,
     tree: &ComponentNodeTree,
     component_node_metadatas: &ComponentNodeMetaDatas,
+    compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
+    gpu: &wgpu::Device,
 ) -> HashMap<NodeId, Result<ComputedData, MeasurementError>> {
     if nodes_to_measure.is_empty() {
         return HashMap::new();
@@ -433,7 +449,14 @@ pub fn measure_nodes(
     nodes_to_measure
         .into_par_iter()
         .map(|(node_id, parent_constraint)| {
-            let result = measure_node(node_id, &parent_constraint, tree, component_node_metadatas);
+            let result = measure_node(
+                node_id,
+                &parent_constraint,
+                tree,
+                component_node_metadatas,
+                compute_resource_manager.clone(),
+                gpu,
+            );
             (node_id, result)
         })
         .collect::<HashMap<NodeId, Result<ComputedData, MeasurementError>>>()

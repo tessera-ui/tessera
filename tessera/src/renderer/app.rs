@@ -5,7 +5,10 @@ use parking_lot::RwLock;
 use wgpu::TextureFormat;
 use winit::window::Window;
 
-use crate::{ComputeCommand, PxPosition, dp::SCALE_FACTOR, px::PxSize, renderer::command::Command};
+use crate::{
+    ComputeCommand, PxPosition, compute::resource::ComputeResourceManager, dp::SCALE_FACTOR,
+    px::PxSize, renderer::command::Command,
+};
 
 use super::{compute::ComputePipelineRegistry, drawer::Drawer};
 
@@ -45,10 +48,11 @@ pub struct WgpuApp {
     msaa_texture: Option<wgpu::Texture>,
     msaa_view: Option<wgpu::TextureView>,
 
-    /// Dedicated output target for compute pipeline
+    // --- Compute resources ---
     compute_target_a: PassTarget,
     compute_target_b: PassTarget,
     compute_commands: Vec<Box<dyn ComputeCommand>>,
+    pub resource_manager: Arc<RwLock<ComputeResourceManager>>,
 }
 
 impl WgpuApp {
@@ -186,6 +190,7 @@ impl WgpuApp {
             compute_target_a,
             compute_target_b,
             compute_commands: Vec::new(),
+            resource_manager: Arc::new(RwLock::new(ComputeResourceManager::new())),
         }
     }
 
@@ -415,6 +420,7 @@ impl WgpuApp {
                         &self.gpu,
                         &self.queue,
                         &self.config,
+                        &mut self.resource_manager.write(),
                         &read_target.view,
                         &self.compute_target_a,
                         &self.compute_target_b,
@@ -517,6 +523,7 @@ impl WgpuApp {
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
+        resource_manager: &mut ComputeResourceManager,
         // The initial scene content
         scene_view: &'a wgpu::TextureView,
         // Ping-pong targets
@@ -560,6 +567,7 @@ impl WgpuApp {
                     config,
                     &mut cpass,
                     &*command,
+                    resource_manager,
                     read_view,
                     &write_target.view,
                 );

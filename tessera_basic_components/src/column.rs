@@ -158,6 +158,8 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                     &parent_offered_constraint_for_child,
                     input.tree,
                     input.metadatas,
+                    input.compute_resource_manager.clone(),
+                    input.gpu,
                 )?;
 
                 children_sizes[child_idx] = Some(child_result);
@@ -188,6 +190,8 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                         &parent_offered_constraint_for_child,
                         input.tree,
                         input.metadatas,
+                        input.compute_resource_manager.clone(),
+                        input.gpu,
                     )?;
 
                     children_sizes[child_idx] = Some(child_result);
@@ -256,6 +260,8 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                     &parent_offered_constraint_for_child,
                     input.tree,
                     input.metadatas,
+                    input.compute_resource_manager.clone(),
+                    input.gpu,
                 )?;
 
                 children_sizes[i] = Some(child_result);

@@ -1,12 +1,14 @@
 mod constraint;
 mod node;
 
-use std::{num::NonZero, time::Instant};
+use std::{num::NonZero, sync::Arc, time::Instant};
 
 use log::debug;
+use parking_lot::RwLock;
 use rayon::prelude::*;
 
 use crate::{
+    ComputeResourceManager,
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
     renderer::Command,
@@ -111,6 +113,8 @@ impl ComponentTree {
         mut cursor_events: Vec<CursorEvent>,
         mut keyboard_events: Vec<winit::event::KeyEvent>,
         mut ime_events: Vec<winit::event::Ime>,
+        compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
+        gpu: &wgpu::Device,
     ) -> (Vec<(Command, PxSize, PxPosition)>, WindowRequests) {
         let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
             return (vec![], WindowRequests::default());
@@ -125,7 +129,14 @@ impl ComponentTree {
 
         // Call measure_node with &self.tree and &self.metadatas
         // Handle the Result from measure_node
-        match measure_node(root_node, &screen_constraint, &self.tree, &self.metadatas) {
+        match measure_node(
+            root_node,
+            &screen_constraint,
+            &self.tree,
+            &self.metadatas,
+            compute_resource_manager,
+            gpu,
+        ) {
             Ok(_root_computed_data) => {
                 debug!("Component tree measured in {:?}", measure_timer.elapsed());
             }

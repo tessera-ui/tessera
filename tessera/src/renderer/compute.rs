@@ -28,6 +28,8 @@
 
 pub mod command;
 pub mod pipeline;
+pub mod resource;
 
 pub use command::ComputeCommand;
 pub use pipeline::{ComputablePipeline, ComputePipelineRegistry};
+pub use resource::{ComputeResource, ComputeResourceManager, ComputeResourceRef};

@@ -22,7 +22,10 @@ pub use ime_state::ImeState;
 pub use indextree::{Arena, NodeId};
 pub use renderer::{
     Command, Renderer,
-    compute::{self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry},
+    compute::{
+        self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry, ComputeResource,
+        ComputeResourceManager, ComputeResourceRef,
+    },
     drawer::{self, BarrierRequirement, DrawCommand, DrawablePipeline, PipelineRegistry, command},
 };
 pub use runtime::TesseraRuntime;

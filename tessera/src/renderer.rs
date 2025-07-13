@@ -184,12 +184,17 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let keyboard_events = keyboard_state.take_events();
         let ime_events = ime_state.take_events();
         let screen_size: PxSize = app.size().into();
+        // Clear any existing compute resources
+        app.resource_manager.write().clear();
+        // Compute the draw commands
         let (commands, window_requests) = component_tree.compute(
             screen_size,
             cursor_position,
             cursor_events,
             keyboard_events,
             ime_events,
+            app.resource_manager.clone(),
+            &app.gpu,
         );
         let draw_cost = draw_timer.elapsed();
         debug!("Draw commands computed in {draw_cost:?}");
@@ -226,6 +231,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let render_timer = Instant::now();
         // Render the commands
         debug!("Rendering draw commands...");
+        // Render the commands to the surface
         app.render(commands).unwrap();
         let render_cost = render_timer.elapsed();
         debug!("Rendered to surface in {render_cost:?}");

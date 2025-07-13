@@ -321,6 +321,8 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                         input.parent_constraint,
                         input.tree,
                         input.metadatas,
+                        input.compute_resource_manager.clone(),
+                        input.gpu,
                     );
                     place_node(
                         rect_node_id,
@@ -343,6 +345,8 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                         input.parent_constraint,
                         input.tree,
                         input.metadatas,
+                        input.compute_resource_manager.clone(),
+                        input.gpu,
                     );
                     place_node(cursor_node_id, cursor_pos, input.metadatas);
                 }

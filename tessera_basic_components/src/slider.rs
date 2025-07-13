@@ -193,6 +193,8 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
             &active_track_constraint,
             input.tree,
             input.metadatas,
+            input.compute_resource_manager.clone(),
+            input.gpu,
         )?;
         place_node(
             active_track_id,
@@ -205,8 +207,14 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
             DimensionValue::Fixed(args.thumb_size.to_px()),
             DimensionValue::Fixed(args.thumb_size.to_px()),
         );
-        let thumb_size =
-            tessera::measure_node(thumb_id, &thumb_constraint, input.tree, input.metadatas)?;
+        let thumb_size = tessera::measure_node(
+            thumb_id,
+            &thumb_constraint,
+            input.tree,
+            input.metadatas,
+            input.compute_resource_manager.clone(),
+            input.gpu,
+        )?;
 
         // Calculate thumb position
         let thumb_x = (self_width - thumb_size.width).to_f32() * args.value;

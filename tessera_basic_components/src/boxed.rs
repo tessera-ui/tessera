@@ -82,6 +82,8 @@ pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxe
                 &effective_constraint,
                 input.tree,
                 input.metadatas,
+                input.compute_resource_manager.clone(),
+                input.gpu,
             )?;
             max_child_width = max_child_width.max(child_result.width);
             max_child_height = max_child_height.max(child_result.height);

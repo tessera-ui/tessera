@@ -151,8 +151,14 @@ pub fn switch(args: impl Into<SwitchArgs>) {
                 max: None,
             },
         );
-        let thumb_size =
-            tessera::measure_node(thumb_id, &thumb_constraint, input.tree, input.metadatas)?;
+        let thumb_size = tessera::measure_node(
+            thumb_id,
+            &thumb_constraint,
+            input.tree,
+            input.metadatas,
+            input.compute_resource_manager.clone(),
+            input.gpu,
+        )?;
 
         let self_width_px = args.width.to_px();
         let self_height_px = args.height.to_px();

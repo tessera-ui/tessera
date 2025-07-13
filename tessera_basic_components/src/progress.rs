@@ -86,7 +86,14 @@ pub fn progress(args: impl Into<ProgressArgs>) {
             DimensionValue::Fixed(self_width),
             DimensionValue::Fixed(self_height),
         );
-        tessera::measure_node(track_id, &track_constraint, input.tree, input.metadatas)?;
+        tessera::measure_node(
+            track_id,
+            &track_constraint,
+            input.tree,
+            input.metadatas,
+            input.compute_resource_manager.clone(),
+            input.gpu,
+        )?;
         place_node(track_id, PxPosition::new(Px(0), Px(0)), input.metadatas);
 
         // Measure and place the progress fill based on the `value`.
@@ -100,6 +107,8 @@ pub fn progress(args: impl Into<ProgressArgs>) {
             &progress_constraint,
             input.tree,
             input.metadatas,
+            input.compute_resource_manager.clone(),
+            input.gpu,
         )?;
         place_node(progress_id, PxPosition::new(Px(0), Px(0)), input.metadatas);
 

@@ -1,5 +1,7 @@
 pub mod blur;
+pub mod contrast;
 pub(crate) mod fluid_glass;
+pub mod mean;
 mod pos_misc;
 mod shape;
 mod text;
@@ -27,4 +29,12 @@ pub fn register_pipelines(app: &mut tessera::renderer::WgpuApp) {
     // Register blur pipeline
     let blur_pipeline = blur::pipeline::BlurPipeline::new(&app.gpu);
     app.compute_pipeline_registry.register(blur_pipeline);
+
+    // Register mean pipeline
+    let mean_pipeline = mean::MeanPipeline::new(&app.gpu);
+    app.compute_pipeline_registry.register(mean_pipeline);
+
+    // Register contrast pipeline
+    let contrast_pipeline = contrast::ContrastPipeline::new(&app.gpu);
+    app.compute_pipeline_registry.register(contrast_pipeline);
 }

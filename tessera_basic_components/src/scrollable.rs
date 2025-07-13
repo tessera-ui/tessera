@@ -172,6 +172,8 @@ pub fn scrollable(
                 &child_constraint,
                 input.tree,
                 input.metadatas,
+                input.compute_resource_manager.clone(),
+                input.gpu,
             )?;
             // Update the child position and size in the state
             state.write().child_size = child_measurement;
