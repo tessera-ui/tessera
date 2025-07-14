@@ -8,6 +8,7 @@ pub mod checkbox;
 pub mod column;
 pub mod dialog;
 pub mod fluid_glass;
+pub mod glass_button;
 pub mod image;
 pub mod pipelines;
 pub mod pos_misc;
