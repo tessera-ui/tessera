@@ -73,7 +73,7 @@ impl Default for ButtonArgs {
 /// use tessera_basic_components::button::{button, ButtonArgsBuilder};
 /// use tessera_basic_components::text::{text, TextArgsBuilder};
 /// use tessera_basic_components::surface::RippleState;
-/// use tessera::Dp;
+/// use tessera::{Dp, Color};
 /// use std::sync::Arc;
 ///
 /// let ripple_state = Arc::new(RippleState::new());
