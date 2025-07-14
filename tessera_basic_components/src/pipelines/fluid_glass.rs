@@ -36,7 +36,14 @@ struct GlassUniforms {
     noise_amount: f32,
     noise_scale: f32,
     time: f32,
-    _padding: [f32; 1], // Struct needs to be aligned to 16 bytes.
+
+    // Ripple effect properties
+    ripple_center: [f32; 2],
+    ripple_radius: f32,
+    ripple_alpha: f32,
+    ripple_strength: f32,
+
+    _padding: [f32; 3], // Struct needs to be aligned to 16 bytes.
 }
 
 // --- Pipeline Definition ---
@@ -189,7 +196,13 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             noise_amount: args.noise_amount,
             noise_scale: args.noise_scale,
             time: args.time,
-            _padding: [0.0; 1],
+
+            ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]),
+            ripple_radius: args.ripple_radius.unwrap_or(0.0),
+            ripple_alpha: args.ripple_alpha.unwrap_or(0.0),
+            ripple_strength: args.ripple_strength.unwrap_or(0.0),
+
+            _padding: [0.0; 3],
         };
 
         let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {

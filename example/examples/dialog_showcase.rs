@@ -7,10 +7,11 @@ use tessera_basic_components::{
     column::ColumnArgsBuilder,
     column_ui,
     dialog::{DialogProviderArgsBuilder, dialog_provider},
+    ripple_state::RippleState,
     row::RowArgsBuilder,
     row_ui,
     spacer::{SpacerArgsBuilder, spacer},
-    surface::{RippleState, SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 

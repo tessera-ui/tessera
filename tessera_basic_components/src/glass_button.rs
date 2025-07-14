@@ -3,9 +3,10 @@ use std::sync::Arc;
 use tessera::{Color, DimensionValue, Dp};
 use tessera_macros::tessera;
 
-use crate::fluid_glass::{FluidGlassArgsBuilder, fluid_glass};
-use crate::surface::{RippleState, SurfaceArgsBuilder, surface};
-use crate::{boxed::BoxedArgsBuilder, boxed_ui};
+use crate::{
+    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    ripple_state::RippleState,
+};
 
 /// Arguments for the `glass_button` component.
 #[derive(Builder, Clone, Default)]
@@ -85,6 +86,14 @@ pub fn glass_button(
     let args: GlassButtonArgs = args.into();
 
     let mut glass_args_builder = FluidGlassArgsBuilder::default();
+    if let Some((progress, center)) = ripple_state.get_animation_progress() {
+        let ripple_alpha = (1.0 - progress) * 0.3; // Fade out
+        glass_args_builder = glass_args_builder
+            .ripple_center(center)
+            .ripple_radius(progress)
+            .ripple_alpha(ripple_alpha)
+            .ripple_strength(progress);
+    }
 
     if let Some(width) = args.width {
         glass_args_builder = glass_args_builder.width(width);
@@ -115,39 +124,12 @@ pub fn glass_button(
         .noise_amount(args.noise_amount)
         .noise_scale(args.noise_scale)
         .time(args.time)
-        .build()
-        .unwrap();
+        .padding(args.padding);
+    let glass_args = if let Some(on_click) = args.on_click {
+        glass_args.on_click(on_click).build().unwrap()
+    } else {
+        glass_args.build().unwrap()
+    };
 
-    let surface_args = SurfaceArgsBuilder::default()
-        .color(Color::new(0.0, 0.0, 0.0, 0.0)) // Transparent surface
-        .width(DimensionValue::Wrap {
-            min: None,
-            max: None,
-        })
-        .height(DimensionValue::Wrap {
-            min: None,
-            max: None,
-        })
-        .padding(args.padding)
-        .on_click(args.on_click.clone())
-        .ripple_color(args.ripple_color)
-        .corner_radius(args.corner_radius)
-        .build()
-        .unwrap();
-
-    let boxed_args = BoxedArgsBuilder::default()
-        .width(DimensionValue::Wrap {
-            min: None,
-            max: None,
-        })
-        .height(DimensionValue::Wrap {
-            min: None,
-            max: None,
-        })
-        .build()
-        .unwrap();
-
-    surface(surface_args, Some(ripple_state), move || {
-        boxed_ui!(boxed_args, move || fluid_glass(glass_args), child);
-    });
+    fluid_glass(glass_args, Some(ripple_state), child);
 }

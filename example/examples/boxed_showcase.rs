@@ -67,6 +67,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .height(DimensionValue::Fixed(Dp(500.0).into()))
                         .build()
                         .unwrap(),
+                    None,
+                    || {},
                 ),
                 || fluid_glass(
                     FluidGlassArgsBuilder::default()
@@ -75,6 +77,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .height(DimensionValue::Fixed(Dp(250.0).into()))
                         .build()
                         .unwrap(),
+                    None,
+                    || {},
                 ),
             );
         },

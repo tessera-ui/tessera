@@ -8,7 +8,7 @@ use crate::{
     animated_spacer::AnimSpacerState, performance_display::PerformanceMetrics,
     text_editors::TextEditorsState,
 };
-use tessera_basic_components::surface::RippleState;
+use tessera_basic_components::ripple_state::RippleState;
 
 pub struct RippleDemoStates {
     pub primary: Arc<RippleState>,

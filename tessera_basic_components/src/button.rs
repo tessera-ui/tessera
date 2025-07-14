@@ -3,7 +3,8 @@ use std::sync::Arc;
 use tessera::{Color, DimensionValue, Dp};
 use tessera_macros::tessera;
 
-use crate::surface::{RippleState, SurfaceArgsBuilder, surface};
+use crate::ripple_state::RippleState;
+use crate::surface::{SurfaceArgsBuilder, surface};
 
 /// Arguments for the `button` component.
 #[derive(Builder, Clone)]

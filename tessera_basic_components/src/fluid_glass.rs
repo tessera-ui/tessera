@@ -1,11 +1,17 @@
 use derive_builder::Builder;
-use tessera::renderer::DrawCommand;
+use std::sync::Arc;
 use tessera::{
-    Color, ComputedData, Constraint, DimensionValue, Px, PxPosition, measure_node, place_node,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
+    PxPosition, measure_node, place_node, renderer::DrawCommand, winit::window::CursorIcon,
 };
 use tessera_macros::tessera;
 
-use crate::pipelines::{blur::command::BlurCommand, contrast::ContrastCommand, mean::MeanCommand};
+use crate::{
+    padding_utils::remove_padding_from_dimension,
+    pipelines::{blur::command::BlurCommand, contrast::ContrastCommand, mean::MeanCommand},
+    pos_misc::is_position_in_component,
+    ripple_state::RippleState,
+};
 
 /// Arguments for the `fluid_glass` component, providing extensive control over its appearance.
 ///
@@ -81,6 +87,22 @@ pub struct FluidGlassArgs {
     /// The optional height of the component, defined as a `DimensionValue`.
     #[builder(default, setter(strip_option))]
     pub height: Option<DimensionValue>,
+
+    #[builder(default = "Dp(0.0)")]
+    pub padding: Dp,
+
+    // Ripple effect properties
+    #[builder(default, setter(strip_option))]
+    pub ripple_center: Option<[f32; 2]>,
+    #[builder(default, setter(strip_option))]
+    pub ripple_radius: Option<f32>,
+    #[builder(default, setter(strip_option))]
+    pub ripple_alpha: Option<f32>,
+    #[builder(default, setter(strip_option))]
+    pub ripple_strength: Option<f32>,
+
+    #[builder(default, setter(strip_option, into = false))]
+    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl FluidGlassArgsBuilder {
@@ -109,7 +131,12 @@ impl DrawCommand for FluidGlassCommand {
 }
 
 #[tessera]
-pub fn fluid_glass(args: FluidGlassArgs) {
+pub fn fluid_glass(
+    args: FluidGlassArgs,
+    ripple_state: Option<Arc<RippleState>>,
+    child: impl FnOnce(),
+) {
+    (child)();
     let args_measure_clone = args.clone();
     measure(Box::new(move |input| {
         let glass_intrinsic_width = args_measure_clone.width.unwrap_or(DimensionValue::Wrap {
@@ -124,10 +151,21 @@ pub fn fluid_glass(args: FluidGlassArgs) {
             Constraint::new(glass_intrinsic_width, glass_intrinsic_height);
         let effective_glass_constraint = glass_intrinsic_constraint.merge(input.parent_constraint);
 
+        let child_constraint = Constraint::new(
+            remove_padding_from_dimension(
+                effective_glass_constraint.width,
+                args_measure_clone.padding.into(),
+            ),
+            remove_padding_from_dimension(
+                effective_glass_constraint.height,
+                args_measure_clone.padding.into(),
+            ),
+        );
+
         let child_measurement = if !input.children_ids.is_empty() {
             let child_measurement = measure_node(
                 input.children_ids[0],
-                &effective_glass_constraint,
+                &child_constraint,
                 input.tree,
                 input.metadatas,
                 input.compute_resource_manager.clone(),
@@ -135,7 +173,10 @@ pub fn fluid_glass(args: FluidGlassArgs) {
             )?;
             place_node(
                 input.children_ids[0],
-                PxPosition { x: Px(0), y: Px(0) },
+                PxPosition {
+                    x: args.padding.into(),
+                    y: args.padding.into(),
+                },
                 input.metadatas,
             );
             child_measurement
@@ -180,8 +221,9 @@ pub fn fluid_glass(args: FluidGlassArgs) {
             metadata.push_draw_command(drawable);
         }
 
-        let min_width = child_measurement.width;
-        let min_height = child_measurement.height;
+        let padding_px: Px = args_measure_clone.padding.into();
+        let min_width = child_measurement.width + padding_px * 2;
+        let min_height = child_measurement.height + padding_px * 2;
         let width = match effective_glass_constraint.width {
             DimensionValue::Fixed(value) => value,
             DimensionValue::Wrap { min, max } => min
@@ -208,4 +250,40 @@ pub fn fluid_glass(args: FluidGlassArgs) {
         };
         Ok(ComputedData { width, height })
     }));
+
+    if let Some(on_click) = args.on_click {
+        let ripple_state = ripple_state.clone();
+        state_handler(Box::new(move |input| {
+            let size = input.computed_data;
+            let cursor_pos_option = input.cursor_position;
+            let is_cursor_in = cursor_pos_option
+                .map(|pos| is_position_in_component(size, pos))
+                .unwrap_or(false);
+
+            if is_cursor_in {
+                input.requests.cursor_icon = CursorIcon::Pointer;
+            }
+
+            if is_cursor_in {
+                if let Some(_event) = input.cursor_events.iter().find(|e| {
+                    matches!(
+                        e.content,
+                        CursorEventContent::Pressed(PressKeyEventType::Left)
+                    )
+                }) {
+                    if let Some(ripple_state) = &ripple_state {
+                        if let Some(pos) = input.cursor_position {
+                            let size = input.computed_data;
+                            let normalized_pos = [
+                                pos.x.to_f32() / size.width.to_f32(),
+                                pos.y.to_f32() / size.height.to_f32(),
+                            ];
+                            ripple_state.start_animation(normalized_pos);
+                        }
+                    }
+                    on_click();
+                }
+            }
+        }));
+    }
 }

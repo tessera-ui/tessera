@@ -161,6 +161,8 @@ fn app() {
                                 .inner_shadow_radius(0.0)
                                 .build()
                                 .unwrap(),
+                            None,
+                            || {},
                         )
                     })
                     .into_boxed_item(),

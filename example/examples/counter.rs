@@ -14,9 +14,10 @@ use tessera::{Color, Dp, Renderer};
 use tessera_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
+    ripple_state::RippleState,
     row::RowArgsBuilder,
     row_ui,
-    surface::{RippleState, SurfaceArgs, surface},
+    surface::{SurfaceArgs, surface},
     text::{TextArgsBuilder, text},
 };
 use tessera_macros::tessera;

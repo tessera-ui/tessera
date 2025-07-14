@@ -5,7 +5,8 @@ use tessera_basic_components::{
     boxed::BoxedArgs,
     boxed_ui,
     glass_button::{GlassButtonArgsBuilder, glass_button},
-    surface::{RippleState, SurfaceArgsBuilder, surface},
+    ripple_state::RippleState,
+    surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 use tessera_macros::tessera;
