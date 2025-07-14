@@ -28,6 +28,32 @@ impl DimensionValue {
             DimensionValue::Fill { max, .. } => max.unwrap_or(default),
         }
     }
+
+    /// Returns the maximum value of this dimension, if defined.
+    ///
+    /// If the dimension is `Fixed`, it returns the fixed value.
+    /// If it is `Wrap` or `Fill`, it returns the `max` value
+    /// if defined, otherwise `None`.
+    pub fn get_max(&self) -> Option<Px> {
+        match self {
+            DimensionValue::Fixed(value) => Some(*value),
+            DimensionValue::Wrap { max, .. } => *max,
+            DimensionValue::Fill { max, .. } => *max,
+        }
+    }
+
+    /// Returns the minimum value of this dimension, if defined.
+    ///
+    /// If the dimension is `Fixed`, it returns the fixed value.
+    /// If it is `Wrap` or `Fill`, it returns the `min` value
+    /// if defined, otherwise `None`.
+    pub fn get_min(&self) -> Option<Px> {
+        match self {
+            DimensionValue::Fixed(value) => Some(*value),
+            DimensionValue::Wrap { min, .. } => *min,
+            DimensionValue::Fill { min, .. } => *min,
+        }
+    }
 }
 
 /// Represents layout constraints for a component node.

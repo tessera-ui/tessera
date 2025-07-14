@@ -239,7 +239,10 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
                 // Parent (row) offers Wrap for width and its effective height
                 let parent_offered_constraint_for_child = Constraint::new(
                     match row_effective_constraint.width {
-                        DimensionValue::Fixed(v) => DimensionValue::Wrap { min: None, max: Some(v) },
+                        DimensionValue::Fixed(v) => DimensionValue::Wrap {
+                            min: None,
+                            max: Some(v),
+                        },
                         DimensionValue::Fill { max, .. } => DimensionValue::Wrap { min: None, max },
                         DimensionValue::Wrap { max, .. } => DimensionValue::Wrap { min: None, max },
                     },
