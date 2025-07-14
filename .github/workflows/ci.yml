@@ -22,5 +22,7 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Install rust-script
+      run: cargo install rust-script
     - name: Check formatting
-      run: cargo fmt --all -- --check
+      run: cargo fmt --all -- --check && rust-script scripts\check-imports.rs .
