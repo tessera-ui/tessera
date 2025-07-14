@@ -4,7 +4,7 @@ use derive_builder::Builder;
 use glyphon::{Action, Edit};
 use parking_lot::RwLock;
 
-use tessera::{CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, winit};
+use tessera::{Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, winit};
 use tessera_macros::tessera;
 
 use crate::{
@@ -63,13 +63,13 @@ pub struct TextEditorArgs {
     pub min_height: Option<Dp>,
     /// Background color of the text editor (RGBA). Defaults to light gray.
     #[builder(default = "None")]
-    pub background_color: Option<[f32; 4]>,
+    pub background_color: Option<Color>,
     /// Border width in pixels. Defaults to 1.0.
     #[builder(default = "1.0")]
     pub border_width: f32,
     /// Border color (RGBA). Defaults to gray.
     #[builder(default = "None")]
-    pub border_color: Option<[f32; 4]>,
+    pub border_color: Option<Color>,
     /// Corner radius in pixels. Defaults to 4.0.
     #[builder(default = "0.0")]
     pub corner_radius: f32,
@@ -78,13 +78,13 @@ pub struct TextEditorArgs {
     pub padding: Dp,
     /// Border color when focused (RGBA). Defaults to blue.
     #[builder(default = "None")]
-    pub focus_border_color: Option<[f32; 4]>,
+    pub focus_border_color: Option<Color>,
     /// Background color when focused (RGBA). Defaults to white.
     #[builder(default = "None")]
-    pub focus_background_color: Option<[f32; 4]>,
+    pub focus_background_color: Option<Color>,
     /// Color for text selection highlight (RGBA). Defaults to light blue with transparency.
-    #[builder(default = "Some([0.5, 0.7, 1.0, 0.4])")]
-    pub selection_color: Option<[f32; 4]>,
+    #[builder(default = "Some(Color::new(0.5, 0.7, 1.0, 0.4))")]
+    pub selection_color: Option<Color>,
 }
 
 /// A text editor component with two-layer architecture:
@@ -423,13 +423,14 @@ fn create_surface_args(
 fn determine_background_color(
     args: &TextEditorArgs,
     state: &Arc<RwLock<TextEditorState>>,
-) -> [f32; 4] {
+) -> Color {
     if state.read().focus_handler().is_focused() {
         args.focus_background_color
             .or(args.background_color)
-            .unwrap_or([1.0, 1.0, 1.0, 1.0]) // Default white when focused
+            .unwrap_or(Color::WHITE) // Default white when focused
     } else {
-        args.background_color.unwrap_or([0.95, 0.95, 0.95, 1.0]) // Default light gray when not focused
+        args.background_color
+            .unwrap_or(Color::new(0.95, 0.95, 0.95, 1.0)) // Default light gray when not focused
     }
 }
 
@@ -442,13 +443,13 @@ fn determine_border_width(args: &TextEditorArgs, _state: &Arc<RwLock<TextEditorS
 fn determine_border_color(
     args: &TextEditorArgs,
     state: &Arc<RwLock<TextEditorState>>,
-) -> Option<[f32; 4]> {
+) -> Option<Color> {
     if state.read().focus_handler().is_focused() {
         args.focus_border_color
             .or(args.border_color)
-            .or(Some([0.0, 0.5, 1.0, 1.0])) // Default blue focus border
+            .or(Some(Color::new(0.0, 0.5, 1.0, 1.0))) // Default blue focus border
     } else {
-        args.border_color.or(Some([0.7, 0.7, 0.7, 1.0])) // Default gray border
+        args.border_color.or(Some(Color::new(0.7, 0.7, 0.7, 1.0))) // Default gray border
     }
 }
 
@@ -458,9 +459,9 @@ impl TextEditorArgs {
     pub fn simple() -> Self {
         TextEditorArgsBuilder::default()
             .min_width(Some(Dp(120.0)))
-            .background_color(Some([1.0, 1.0, 1.0, 1.0]))
+            .background_color(Some(Color::WHITE))
             .border_width(1.0)
-            .border_color(Some([0.7, 0.7, 0.7, 1.0]))
+            .border_color(Some(Color::new(0.7, 0.7, 0.7, 1.0)))
             .corner_radius(4.0)
             .build()
             .unwrap()
@@ -470,14 +471,14 @@ impl TextEditorArgs {
     pub fn outlined() -> Self {
         Self::simple()
             .with_border_width(2.0)
-            .with_focus_border_color([0.0, 0.5, 1.0, 1.0])
+            .with_focus_border_color(Color::new(0.0, 0.5, 1.0, 1.0))
     }
 
     /// Create a text editor with no border (minimal style)
     pub fn minimal() -> Self {
         TextEditorArgsBuilder::default()
             .min_width(Some(Dp(120.0)))
-            .background_color(Some([1.0, 1.0, 1.0, 1.0]))
+            .background_color(Some(Color::WHITE))
             .border_width(0.0)
             .corner_radius(0.0)
             .build()
@@ -507,7 +508,7 @@ impl TextEditorArgs {
         self
     }
 
-    pub fn with_background_color(mut self, color: [f32; 4]) -> Self {
+    pub fn with_background_color(mut self, color: Color) -> Self {
         self.background_color = Some(color);
         self
     }
@@ -517,7 +518,7 @@ impl TextEditorArgs {
         self
     }
 
-    pub fn with_border_color(mut self, color: [f32; 4]) -> Self {
+    pub fn with_border_color(mut self, color: Color) -> Self {
         self.border_color = Some(color);
         self
     }
@@ -532,17 +533,17 @@ impl TextEditorArgs {
         self
     }
 
-    pub fn with_focus_border_color(mut self, color: [f32; 4]) -> Self {
+    pub fn with_focus_border_color(mut self, color: Color) -> Self {
         self.focus_border_color = Some(color);
         self
     }
 
-    pub fn with_focus_background_color(mut self, color: [f32; 4]) -> Self {
+    pub fn with_focus_background_color(mut self, color: Color) -> Self {
         self.focus_background_color = Some(color);
         self
     }
 
-    pub fn with_selection_color(mut self, color: [f32; 4]) -> Self {
+    pub fn with_selection_color(mut self, color: Color) -> Self {
         self.selection_color = Some(color);
         self
     }

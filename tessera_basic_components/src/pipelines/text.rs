@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tessera::{DrawablePipeline, PxPosition, PxSize, wgpu};
+use tessera::{Color, DrawablePipeline, PxPosition, PxSize, wgpu};
 
 pub use command::{TextCommand, TextConstraint};
 
@@ -150,7 +150,7 @@ impl TextData {
     /// before rendering its return value
     pub fn new(
         text: String,
-        color: [u8; 3],
+        color: Color,
         size: f32,
         line_height: f32,
         constraint: TextConstraint,
@@ -160,7 +160,12 @@ impl TextData {
             &mut write_font_system(),
             glyphon::Metrics::new(size, line_height),
         );
-        let color = glyphon::Color::rgb(color[0], color[1], color[2]);
+        let color = glyphon::Color::rgba(
+            (color.r * 255.0) as u8,
+            (color.g * 255.0) as u8,
+            (color.b * 255.0) as u8,
+            (color.a * 255.0) as u8,
+        );
         text_buffer.set_wrap(&mut write_font_system(), glyphon::Wrap::Glyph);
         text_buffer.set_size(
             &mut write_font_system(),

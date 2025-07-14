@@ -6,7 +6,7 @@
 //! 3. Using the `alignment` property to position children within the container.
 //! 4. Stacking `fluid_glass` components to test multi-pass rendering.
 
-use tessera::{DimensionValue, Dp, Renderer};
+use tessera::{Color, DimensionValue, Dp, Renderer};
 use tessera_basic_components::{
     alignment::Alignment,
     boxed::{BoxedArgs, boxed_ui},
@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // A large red surface at the bottom
                 || surface(
                     SurfaceArgs {
-                        color: [1.0, 0.2, 0.2, 1.0],
+                        color: Color::new(1.0, 0.2, 0.2, 1.0),
                         width: Some(DimensionValue::Fixed(Dp(1000.0).into())),
                         height: Some(DimensionValue::Fixed(Dp(600.0).into())),
                         ..Default::default()
@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // A medium green surface in the middle
                 || surface(
                     SurfaceArgs {
-                        color: [0.2, 1.0, 0.2, 0.8],
+                        color: Color::new(0.2, 1.0, 0.2, 0.8),
                         width: Some(DimensionValue::Fixed(Dp(600.0).into())),
                         height: Some(DimensionValue::Fixed(Dp(400.0).into())),
                         ..Default::default()
@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // A small blue surface on top
                 || surface(
                     SurfaceArgs {
-                        color: [0.2, 0.4, 1.0, 0.7],
+                        color: Color::new(0.2, 0.4, 1.0, 0.7),
                         width: Some(DimensionValue::Fixed(Dp(300.0).into())),
                         height: Some(DimensionValue::Fixed(Dp(200.0).into())),
                         ..Default::default()

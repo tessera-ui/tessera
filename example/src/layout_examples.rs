@@ -1,4 +1,4 @@
-use tessera::{DimensionValue, Px};
+use tessera::{Color, DimensionValue, Px};
 use tessera_basic_components::{
     pipelines::ShadowProps,
     surface::{SurfaceArgsBuilder, surface},
@@ -21,7 +21,7 @@ pub fn outlined_surface_example() {
             .height(DimensionValue::Fixed(Px(100)))
             .padding(10.0.into())
             .shadow(Some(ShadowProps {
-                color: [0.0, 0.0, 0.0, 0.5],
+                color: Color::new(0.0, 0.0, 0.0, 0.5),
                 offset: [3.0, 3.0],
                 smoothness: 5.0,
             }))

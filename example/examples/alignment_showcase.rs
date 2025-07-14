@@ -1,6 +1,6 @@
 //! Layout Alignment Showcase
 
-use tessera::{DimensionValue, Dp, Px, Renderer};
+use tessera::{Color, DimensionValue, Dp, Px, Renderer};
 use tessera_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{AsColumnItem, ColumnArgsBuilder, column},
@@ -13,7 +13,7 @@ use tessera_macros::tessera;
 
 /// Create a small colored box
 #[tessera]
-fn small_box(text_content: &'static str, color: [f32; 4]) {
+fn small_box(text_content: &'static str, color: Color) {
     surface(
         SurfaceArgs {
             color,
@@ -28,7 +28,7 @@ fn small_box(text_content: &'static str, color: [f32; 4]) {
             text(
                 TextArgsBuilder::default()
                     .text(text_content.to_string())
-                    .color([255, 255, 255])
+                    .color(Color::WHITE)
                     .size(Dp(12.0))
                     .build()
                     .unwrap(),
@@ -53,7 +53,7 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
                     TextArgsBuilder::default()
                         .text(title.to_string())
                         .size(Dp(14.0))
-                        .color([80, 80, 80])
+                        .color(Color::from_rgb_u8(80, 80, 80))
                         .build()
                         .unwrap(),
                 )
@@ -63,7 +63,7 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
             (move || {
                 surface(
                     SurfaceArgs {
-                        color: [0.9, 0.9, 0.9, 1.0], // Gray background to see borders clearly
+                        color: Color::new(0.9, 0.9, 0.9, 1.0), // Gray background to see borders clearly
                         corner_radius: 25.0,
                         padding: Dp(10.0),
                         width: Some(DimensionValue::Fixed(Px(400))), // Sufficient Fixed Width
@@ -87,9 +87,9 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
                                 .build()
                                 .unwrap(),
                             [
-                                (|| small_box("1", [0.2, 0.6, 0.9, 1.0])).into_row_item(),
-                                (|| small_box("2", [0.9, 0.2, 0.2, 1.0])).into_row_item(),
-                                (|| small_box("3", [0.2, 0.8, 0.3, 1.0])).into_row_item(),
+                                (|| small_box("1", Color::new(0.2, 0.6, 0.9, 1.0))).into_row_item(),
+                                (|| small_box("2", Color::new(0.9, 0.2, 0.2, 1.0))).into_row_item(),
+                                (|| small_box("3", Color::new(0.2, 0.8, 0.3, 1.0))).into_row_item(),
                             ],
                         );
                     },
@@ -105,7 +105,7 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
 fn app() {
     surface(
         SurfaceArgs {
-            color: [1.0, 1.0, 1.0, 1.0], // White Background
+            color: Color::WHITE, // White Background
             padding: Dp(20.0),
             ..Default::default()
         },
@@ -124,7 +124,7 @@ fn app() {
                             TextArgsBuilder::default()
                                 .text("Tessera Alignment Demo".to_string())
                                 .size(Dp(24.0))
-                                .color([40, 40, 40])
+                                .color(Color::from_rgb_u8(40, 40, 40))
                                 .build()
                                 .unwrap(),
                         )
@@ -142,7 +142,7 @@ fn app() {
                             TextArgsBuilder::default()
                                 .text("row Main Axis Alignment:".to_string())
                                 .size(Dp(18.0))
-                                .color([60, 60, 60])
+                                .color(Color::from_rgb_u8(60, 60, 60))
                                 .build()
                                 .unwrap(),
                         )

@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use tessera::{ComputedData, Dp, Px};
+use tessera::{Color, ComputedData, Dp, Px};
 use tessera_macros::tessera;
 
 use crate::pipelines::ShapeCommand;
@@ -19,7 +19,7 @@ pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
     measure(Box::new(move |input| {
         // Cursor is a rectangle with a fixed width and variable height
         let drawable = ShapeCommand::Rect {
-            color: [0.0, 0.0, 0.0, 1.0],
+            color: Color::BLACK,
             corner_radius: 0.0,
             shadow: None,
         };

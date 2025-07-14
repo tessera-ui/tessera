@@ -1,6 +1,8 @@
 use derive_builder::Builder;
 use tessera::renderer::DrawCommand;
-use tessera::{ComputedData, Constraint, DimensionValue, Px, PxPosition, measure_node, place_node};
+use tessera::{
+    Color, ComputedData, Constraint, DimensionValue, Px, PxPosition, measure_node, place_node,
+};
 use tessera_macros::tessera;
 
 use crate::pipelines::{blur::command::BlurCommand, contrast::ContrastCommand, mean::MeanCommand};
@@ -15,16 +17,16 @@ pub struct FluidGlassArgs {
     /// The alpha channel uniquely and directly controls the tint strength.
     /// `A=0.0` means no tint (100% background visibility).
     /// `A=1.0` means full tint (100% color visibility).
-    #[builder(default = "[0.5, 0.5, 0.5, 0.1]")]
-    pub tint_color: [f32; 4],
+    #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
+    pub tint_color: Color,
     /// The color of the highlight along the top edge of the glass.
     /// Format is `[R, G, B, A]`. Defaults to a semi-transparent white.
-    #[builder(default = "[1.0, 1.0, 1.0, 0.5]")]
-    pub highlight_color: [f32; 4],
+    #[builder(default = "Color::new(1.0, 1.0, 1.0, 0.5)")]
+    pub highlight_color: Color,
     /// The color of the inner shadow, which adds depth to the component.
     /// Format is `[R, G, B, A]`. Defaults to a semi-transparent black.
-    #[builder(default = "[0.0, 0.0, 0.0, 0.5]")]
-    pub inner_shadow_color: [f32; 4],
+    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.5)")]
+    pub inner_shadow_color: Color,
     /// The radius of the component's corners.
     #[builder(default = "25.0")]
     pub corner_radius: f32,

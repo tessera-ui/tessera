@@ -11,8 +11,8 @@ use crate::{
     selection_highlight_rect::selection_highlight_rect,
 };
 use tessera::{
-    ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus, measure_node, place_node,
-    winit,
+    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus, measure_node,
+    place_node, winit,
 };
 use tessera_macros::tessera;
 
@@ -39,7 +39,7 @@ pub struct TextEditorState {
     pub(crate) editor: glyphon::Editor<'static>,
     bink_timer: Instant,
     focus_handler: Focus,
-    pub(crate) selection_color: [f32; 4],
+    pub(crate) selection_color: Color,
     pub(crate) current_selection_rects: Vec<RectDef>,
     // Click tracking for double/triple click detection
     last_click_time: Option<Instant>,
@@ -52,14 +52,10 @@ pub struct TextEditorState {
 
 impl TextEditorState {
     pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
-        Self::with_selection_color(size, line_height, [0.5, 0.7, 1.0, 0.4])
+        Self::with_selection_color(size, line_height, Color::new(0.5, 0.7, 1.0, 0.4))
     }
 
-    pub fn with_selection_color(
-        size: Dp,
-        line_height: Option<Dp>,
-        selection_color: [f32; 4],
-    ) -> Self {
+    pub fn with_selection_color(size: Dp, line_height: Option<Dp>, selection_color: Color) -> Self {
         let final_line_height = line_height.unwrap_or(Dp(size.0 * 1.2));
         let line_height_px: Px = final_line_height.into();
         let mut buffer = glyphon::Buffer::new(
@@ -130,7 +126,7 @@ impl TextEditorState {
         self.bink_timer = Instant::now();
     }
 
-    pub fn selection_color(&self) -> [f32; 4] {
+    pub fn selection_color(&self) -> Color {
         self.selection_color
     }
 
@@ -138,7 +134,7 @@ impl TextEditorState {
         &self.current_selection_rects
     }
 
-    pub fn set_selection_color(&mut self, color: [f32; 4]) {
+    pub fn set_selection_color(&mut self, color: Color) {
         self.selection_color = color;
     }
 

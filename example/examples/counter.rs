@@ -10,7 +10,7 @@ use std::sync::{
     atomic::{self, AtomicU32},
 };
 
-use tessera::{Dp, Renderer};
+use tessera::{Color, Dp, Renderer};
 use tessera_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
@@ -48,7 +48,7 @@ fn counter_app(app_state: Arc<AppState>) {
 
         surface(
             SurfaceArgs {
-                color: [1.0, 1.0, 1.0, 1.0], // White background
+                color: Color::WHITE, // White background
                 padding: Dp(25.0),
                 ..Default::default()
             },

@@ -1,6 +1,6 @@
 use derive_builder::Builder;
 use std::sync::Arc;
-use tessera::{DimensionValue, Dp};
+use tessera::{Color, DimensionValue, Dp};
 use tessera_macros::tessera;
 
 use crate::surface::{RippleState, SurfaceArgsBuilder, surface};
@@ -10,11 +10,11 @@ use crate::surface::{RippleState, SurfaceArgsBuilder, surface};
 #[builder(pattern = "owned")]
 pub struct ButtonArgs {
     /// The fill color of the button (RGBA).
-    #[builder(default = "[0.2, 0.5, 0.8, 1.0]")]
-    pub color: [f32; 4],
+    #[builder(default = "Color::new(0.2, 0.5, 0.8, 1.0)")]
+    pub color: Color,
     /// The hover color of the button (RGBA). If None, no hover effect is applied.
     #[builder(default)]
-    pub hover_color: Option<[f32; 4]>,
+    pub hover_color: Option<Color>,
     /// The corner radius of the button.
     #[builder(default = "25.0")]
     pub corner_radius: f32,
@@ -30,14 +30,14 @@ pub struct ButtonArgs {
     /// The click callback function
     pub on_click: Arc<dyn Fn() + Send + Sync>,
     /// The ripple color (RGB) for the button.
-    #[builder(default = "[1.0, 1.0, 1.0]")]
-    pub ripple_color: [f32; 3],
+    #[builder(default = "Color::from_rgb(1.0, 1.0, 1.0)")]
+    pub ripple_color: Color,
     /// Width of the border. If > 0, an outline will be drawn.
     #[builder(default = "0.0")]
     pub border_width: f32,
     /// Optional color for the border (RGBA). If None and border_width > 0, `color` will be used.
     #[builder(default)]
-    pub border_color: Option<[f32; 4]>,
+    pub border_color: Option<Color>,
 }
 
 impl std::fmt::Debug for ButtonArgs {
@@ -78,7 +78,7 @@ impl Default for ButtonArgs {
 ///
 /// let ripple_state = Arc::new(RippleState::new());
 /// let args = ButtonArgsBuilder::default()
-///     .color([0.1, 0.7, 0.3, 1.0]) // Green button
+///     .color(Color::new(0.1, 0.7, 0.3, 1.0)) // Green button
 ///     .padding(Dp(16.0))
 ///     .on_click(Arc::new(|| println!("Button clicked!")))
 ///     .build()
@@ -87,7 +87,7 @@ impl Default for ButtonArgs {
 /// button(args, ripple_state, || {
 ///     text(TextArgsBuilder::default()
 ///         .text("Click me!".to_string())
-///         .color([255, 255, 255])
+///         .color(Color::from_rgb_u8(255, 255, 255))
 ///         .build()
 ///         .unwrap());
 /// });
@@ -132,7 +132,7 @@ impl ButtonArgs {
     /// Create a primary button with default blue styling
     pub fn primary(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
         ButtonArgsBuilder::default()
-            .color([0.2, 0.5, 0.8, 1.0]) // Blue
+            .color(Color::new(0.2, 0.5, 0.8, 1.0)) // Blue
             .on_click(on_click)
             .build()
             .unwrap()
@@ -141,7 +141,7 @@ impl ButtonArgs {
     /// Create a secondary button with gray styling
     pub fn secondary(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
         ButtonArgsBuilder::default()
-            .color([0.6, 0.6, 0.6, 1.0]) // Gray
+            .color(Color::new(0.6, 0.6, 0.6, 1.0)) // Gray
             .on_click(on_click)
             .build()
             .unwrap()
@@ -150,7 +150,7 @@ impl ButtonArgs {
     /// Create a success button with green styling
     pub fn success(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
         ButtonArgsBuilder::default()
-            .color([0.1, 0.7, 0.3, 1.0]) // Green
+            .color(Color::new(0.1, 0.7, 0.3, 1.0)) // Green
             .on_click(on_click)
             .build()
             .unwrap()
@@ -159,7 +159,7 @@ impl ButtonArgs {
     /// Create a danger button with red styling
     pub fn danger(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
         ButtonArgsBuilder::default()
-            .color([0.8, 0.2, 0.2, 1.0]) // Red
+            .color(Color::new(0.8, 0.2, 0.2, 1.0)) // Red
             .on_click(on_click)
             .build()
             .unwrap()
@@ -168,12 +168,12 @@ impl ButtonArgs {
 
 /// Builder methods for fluent API
 impl ButtonArgs {
-    pub fn with_color(mut self, color: [f32; 4]) -> Self {
+    pub fn with_color(mut self, color: Color) -> Self {
         self.color = color;
         self
     }
 
-    pub fn with_hover_color(mut self, hover_color: [f32; 4]) -> Self {
+    pub fn with_hover_color(mut self, hover_color: Color) -> Self {
         self.hover_color = Some(hover_color);
         self
     }
@@ -198,12 +198,12 @@ impl ButtonArgs {
         self
     }
 
-    pub fn with_ripple_color(mut self, ripple_color: [f32; 3]) -> Self {
+    pub fn with_ripple_color(mut self, ripple_color: Color) -> Self {
         self.ripple_color = ripple_color;
         self
     }
 
-    pub fn with_border(mut self, width: f32, color: Option<[f32; 4]>) -> Self {
+    pub fn with_border(mut self, width: f32, color: Option<Color>) -> Self {
         self.border_width = width;
         self.border_color = color;
         self

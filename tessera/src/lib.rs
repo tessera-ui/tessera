@@ -1,3 +1,4 @@
+pub mod color;
 mod component_tree;
 mod cursor;
 mod dp;
@@ -10,6 +11,7 @@ mod runtime;
 mod thread_utils;
 pub mod tokio_runtime;
 
+pub use crate::color::Color;
 pub use crate::dp::Dp;
 pub use crate::px::{Px, PxPosition, PxSize};
 pub use component_tree::{

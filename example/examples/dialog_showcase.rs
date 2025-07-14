@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use tessera::{DimensionValue, Dp, Px, Renderer};
+use tessera::{Color, DimensionValue, Dp, Px, Renderer};
 use tessera_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
@@ -96,7 +96,7 @@ fn app(app_state: Arc<RwLock<AppState>>) {
                 || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .color([0.2, 0.2, 0.2, 1.0])
+                            .color(Color::new(0.2, 0.2, 0.2, 1.0))
                             .corner_radius(10.0)
                             .padding(Dp(20.0))
                             .build()

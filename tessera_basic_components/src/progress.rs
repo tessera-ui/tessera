@@ -1,6 +1,6 @@
 use crate::surface::{SurfaceArgsBuilder, surface};
 use derive_builder::Builder;
-use tessera::{ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, place_node};
+use tessera::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, place_node};
 use tessera_macros::tessera;
 
 /// Arguments for the `progress` component.
@@ -20,12 +20,12 @@ pub struct ProgressArgs {
     pub height: Dp,
 
     /// The color of the active part of the track.
-    #[builder(default = "[0.2, 0.5, 0.8, 1.0]")]
-    pub progress_color: [f32; 4],
+    #[builder(default = "Color::new(0.2, 0.5, 0.8, 1.0)")]
+    pub progress_color: Color,
 
     /// The color of the inactive part of the track.
-    #[builder(default = "[0.8, 0.8, 0.8, 1.0]")]
-    pub track_color: [f32; 4],
+    #[builder(default = "Color::new(0.8, 0.8, 0.8, 1.0)")]
+    pub track_color: Color,
 
     /// The corner radius of the progress bar.
     #[builder(default = "4.0")]

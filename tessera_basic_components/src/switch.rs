@@ -3,7 +3,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tessera::{
-    ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
     PxPosition, winit::window::CursorIcon,
 };
 use tessera_macros::tessera;
@@ -56,14 +56,14 @@ pub struct SwitchArgs {
     #[builder(default = "Dp(32.0)")]
     pub height: Dp,
 
-    #[builder(default = "[0.8, 0.8, 0.8, 1.0]")]
-    pub track_color: [f32; 4],
+    #[builder(default = "Color::new(0.8, 0.8, 0.8, 1.0)")]
+    pub track_color: Color,
 
-    #[builder(default = "[0.6, 0.7, 0.9, 1.0]")]
-    pub track_checked_color: [f32; 4],
+    #[builder(default = "Color::new(0.6, 0.7, 0.9, 1.0)")]
+    pub track_checked_color: Color,
 
-    #[builder(default = "[1.0, 1.0, 1.0, 1.0]")]
-    pub thumb_color: [f32; 4],
+    #[builder(default = "Color::WHITE")]
+    pub thumb_color: Color,
 
     #[builder(default = "Dp(3.0)")]
     pub thumb_padding: Dp,

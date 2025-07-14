@@ -1,6 +1,6 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
-use tessera::{DimensionValue, Px};
+use tessera::{Color, DimensionValue, Px};
 use tessera_basic_components::text_editor::{TextEditorArgsBuilder, TextEditorState, text_editor};
 use tessera_macros::tessera;
 
@@ -30,12 +30,12 @@ pub fn text_editor_1(state: Arc<RwLock<TextEditorState>>) {
                 min: None,
                 max: None,
             }))
-            .selection_color(Some([
-                md_colors::PRIMARY[0],
-                md_colors::PRIMARY[1],
-                md_colors::PRIMARY[2],
+            .selection_color(Some(Color::new(
+                md_colors::PRIMARY.r,
+                md_colors::PRIMARY.g,
+                md_colors::PRIMARY.b,
                 0.4,
-            ])) // Material Design primary color with transparency
+            ))) // Material Design primary color with transparency
             .build()
             .unwrap(),
         state,

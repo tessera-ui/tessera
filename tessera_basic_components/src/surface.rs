@@ -1,7 +1,7 @@
 use derive_builder::Builder;
 use std::sync::{Arc, atomic};
 use tessera::{
-    ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
     PxPosition, measure_node, place_node, winit::window::CursorIcon,
 };
 use tessera_macros::tessera;
@@ -95,11 +95,11 @@ impl RippleState {
 #[builder(pattern = "owned")]
 pub struct SurfaceArgs {
     /// The fill color of the surface (RGBA).
-    #[builder(default = "[0.4745, 0.5255, 0.7961, 1.0]")]
-    pub color: [f32; 4],
+    #[builder(default = "Color::new(0.4745, 0.5255, 0.7961, 1.0)")]
+    pub color: Color,
     /// The hover color of the surface (RGBA). If None, no hover effect is applied.
     #[builder(default)]
-    pub hover_color: Option<[f32; 4]>,
+    pub hover_color: Option<Color>,
     /// The corner radius of the surface.
     #[builder(default = "0.0")]
     pub corner_radius: f32,
@@ -120,13 +120,13 @@ pub struct SurfaceArgs {
     pub border_width: f32,
     /// Optional color for the border (RGBA). If None and border_width > 0, `color` will be used.
     #[builder(default)]
-    pub border_color: Option<[f32; 4]>,
+    pub border_color: Option<Color>,
     /// Optional click callback function. If provided, surface becomes interactive with ripple effect.
     #[builder(default)]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// The ripple color (RGB) for interactive surfaces.
-    #[builder(default = "[1.0, 1.0, 1.0]")]
-    pub ripple_color: [f32; 3],
+    #[builder(default = "Color::from_rgb(1.0, 1.0, 1.0)")]
+    pub ripple_color: Color,
 }
 
 impl std::fmt::Debug for SurfaceArgs {

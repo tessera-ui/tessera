@@ -1,6 +1,6 @@
 use derive_builder::Builder;
 use std::sync::Arc;
-use tessera::{DimensionValue, Dp};
+use tessera::{Color, DimensionValue, Dp};
 use tessera_macros::tessera;
 
 use crate::{
@@ -23,20 +23,20 @@ pub struct CheckboxArgs {
     #[builder(default = "Dp(24.0)")]
     pub size: Dp,
 
-    #[builder(default = "[0.8, 0.8, 0.8, 1.0]")]
-    pub color: [f32; 4],
+    #[builder(default = "Color::new(0.8, 0.8, 0.8, 1.0)")]
+    pub color: Color,
 
-    #[builder(default = "[0.6, 0.7, 0.9, 1.0]")]
-    pub checked_color: [f32; 4],
+    #[builder(default = "Color::new(0.6, 0.7, 0.9, 1.0)")]
+    pub checked_color: Color,
 
-    #[builder(default = "[119, 72, 146]")]
-    pub checkmark_color: [u8; 3],
+    #[builder(default = "Color::from_rgb_u8(119, 72, 146)")]
+    pub checkmark_color: Color,
 
     #[builder(default = "4.0")]
     pub corner_radius: f32,
 
     #[builder(default)]
-    pub hover_color: Option<[f32; 4]>,
+    pub hover_color: Option<Color>,
 }
 
 impl std::fmt::Debug for CheckboxArgs {
@@ -91,7 +91,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
                 surface(
                     SurfaceArgsBuilder::default()
                         .padding(Dp(2.0))
-                        .color([0.0; 4])
+                        .color(Color::TRANSPARENT)
                         .build()
                         .unwrap(),
                     None,

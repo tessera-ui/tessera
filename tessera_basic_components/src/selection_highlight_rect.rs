@@ -1,4 +1,4 @@
-use tessera::{ComputedData, Px};
+use tessera::{Color, ComputedData, Px};
 use tessera_macros::tessera;
 
 use crate::pipelines::ShapeCommand;
@@ -12,7 +12,7 @@ use crate::pipelines::ShapeCommand;
 pub fn selection_highlight_rect(
     width: Px,
     height: Px,
-    color: [f32; 4], // RGBA color with alpha for transparency
+    color: Color, // RGBA color with alpha for transparency
 ) {
     measure(Box::new(move |input| {
         let drawable = ShapeCommand::Rect {

@@ -1,4 +1,4 @@
-use tessera::{DrawCommand, PxPosition, PxSize};
+use tessera::{Color, DrawCommand, PxPosition, PxSize};
 
 use super::{ShapeUniforms, ShapeVertex};
 
@@ -8,7 +8,7 @@ pub enum ShapeCommand {
     /// A filled rectangle
     Rect {
         /// Color of the rectangle (RGBA)
-        color: [f32; 4],
+        color: Color,
         /// Corner radius of the rectangle
         corner_radius: f32,
         /// Shadow properties of the rectangle
@@ -17,7 +17,7 @@ pub enum ShapeCommand {
     /// An outlined rectangle
     OutlinedRect {
         /// Color of the border (RGBA)
-        color: [f32; 4],
+        color: Color,
         /// Corner radius of the rectangle
         corner_radius: f32,
         /// Shadow properties of the rectangle (applied to the outline shape)
@@ -28,7 +28,7 @@ pub enum ShapeCommand {
     /// A filled rectangle with ripple effect animation
     RippleRect {
         /// Color of the rectangle (RGBA)
-        color: [f32; 4],
+        color: Color,
         /// Corner radius of the rectangle
         corner_radius: f32,
         /// Shadow properties of the rectangle
@@ -39,7 +39,7 @@ pub enum ShapeCommand {
     /// An outlined rectangle with ripple effect animation
     RippleOutlinedRect {
         /// Color of the border (RGBA)
-        color: [f32; 4],
+        color: Color,
         /// Corner radius of the rectangle
         corner_radius: f32,
         /// Shadow properties of the rectangle (applied to the outline shape)
@@ -62,7 +62,7 @@ impl DrawCommand for ShapeCommand {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShadowProps {
     /// Color of the shadow (RGBA)
-    pub color: [f32; 4],
+    pub color: Color,
     /// Offset of the shadow in the format [x, y]
     pub offset: [f32; 2],
     /// Smoothness of the shadow, typically a value between 0.0 and 1.0
@@ -79,7 +79,7 @@ pub struct RippleProps {
     /// Alpha value for the ripple effect (0.0 to 1.0)
     pub alpha: f32,
     /// Color of the ripple effect (RGB)
-    pub color: [f32; 3],
+    pub color: Color,
 }
 
 impl Default for RippleProps {
@@ -88,7 +88,7 @@ impl Default for RippleProps {
             center: [0.0, 0.0],
             radius: 0.0,
             alpha: 0.0,
-            color: [1.0, 1.0, 1.0],
+            color: Color::WHITE,
         }
     }
 }
@@ -167,7 +167,7 @@ impl ShapeCommandComputed {
 fn rect_to_computed_draw_command(
     size: PxSize,
     position: PxPosition,
-    primary_color_rgba: [f32; 4],
+    primary_color_rgba: Color,
     corner_radius: f32,
     shadow: Option<ShadowProps>,
     border_width: f32,
@@ -219,13 +219,13 @@ fn rect_to_computed_draw_command(
     let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) = if let Some(s_props) = shadow {
         (s_props.color, s_props.offset, s_props.smoothness)
     } else {
-        ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
+        (Color::TRANSPARENT, [0.0, 0.0], 0.0)
     };
 
     let uniforms = ShapeUniforms {
         size_cr_border_width: [width.to_f32(), height.to_f32(), corner_radius, border_width],
-        primary_color: primary_color_rgba,
-        shadow_color: shadow_rgba_color,
+        primary_color: primary_color_rgba.into(),
+        shadow_color: shadow_rgba_color.into(),
         render_params: [
             shadow_offset_vec[0],
             shadow_offset_vec[1],
@@ -243,7 +243,7 @@ fn rect_to_computed_draw_command(
 fn ripple_rect_to_computed_draw_command(
     size: PxSize,
     position: PxPosition,
-    primary_color_rgba: [f32; 4],
+    primary_color_rgba: Color,
     corner_radius: f32,
     shadow: Option<ShadowProps>,
     border_width: f32,
@@ -294,7 +294,7 @@ fn ripple_rect_to_computed_draw_command(
     ];
 
     let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) = if let Some(s_props) = shadow {
-        (s_props.color, s_props.offset, s_props.smoothness)
+        (s_props.color.into(), s_props.offset, s_props.smoothness)
     } else {
         ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
     };
@@ -303,7 +303,7 @@ fn ripple_rect_to_computed_draw_command(
 
     let uniforms = ShapeUniforms {
         size_cr_border_width: [width.to_f32(), height.to_f32(), corner_radius, border_width],
-        primary_color: primary_color_rgba,
+        primary_color: primary_color_rgba.into(),
         shadow_color: shadow_rgba_color,
         render_params: [
             shadow_offset_vec[0],
@@ -317,7 +317,7 @@ fn ripple_rect_to_computed_draw_command(
             ripple.radius,
             ripple.alpha,
         ],
-        ripple_color: [ripple.color[0], ripple.color[1], ripple.color[2], 0.0],
+        ripple_color: [ripple.color.r, ripple.color.g, ripple.color.b, 0.0],
     };
 
     ShapeCommandComputed { vertices, uniforms }

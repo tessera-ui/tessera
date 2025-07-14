@@ -1,6 +1,6 @@
 //! Fluid Glass Showcase
 
-use tessera::{DimensionValue, Dp, Px, Renderer};
+use tessera::{Color, DimensionValue, Dp, Px, Renderer};
 use tessera_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{AsBoxedItem, BoxedArgs, boxed},
@@ -15,7 +15,7 @@ use tessera_macros::tessera;
 
 /// Create a small colored box
 #[tessera]
-fn small_box(color: [f32; 4]) {
+fn small_box(color: Color) {
     surface(
         SurfaceArgs {
             color,
@@ -36,7 +36,7 @@ fn app() {
     // A surface to hold everything
     surface(
         SurfaceArgs {
-            color: [0.1, 0.1, 0.2, 1.0], // Dark background to make the effect more visible
+            color: Color::new(0.1, 0.1, 0.2, 1.0), // Dark background to make the effect more visible
             width: Some(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -82,11 +82,16 @@ fn app() {
                                             .build()
                                             .unwrap(),
                                         [
-                                            (|| small_box([0.2, 0.6, 0.9, 1.0])).into_row_item(),
-                                            (|| small_box([0.9, 0.2, 0.2, 1.0])).into_row_item(),
-                                            (|| small_box([0.2, 0.8, 0.3, 1.0])).into_row_item(),
-                                            (|| small_box([0.9, 0.8, 0.2, 1.0])).into_row_item(),
-                                            (|| small_box([0.8, 0.2, 0.8, 1.0])).into_row_item(),
+                                            (|| small_box(Color::new(0.2, 0.6, 0.9, 1.0)))
+                                                .into_row_item(),
+                                            (|| small_box(Color::new(0.9, 0.2, 0.2, 1.0)))
+                                                .into_row_item(),
+                                            (|| small_box(Color::new(0.2, 0.8, 0.3, 1.0)))
+                                                .into_row_item(),
+                                            (|| small_box(Color::new(0.9, 0.8, 0.2, 1.0)))
+                                                .into_row_item(),
+                                            (|| small_box(Color::new(0.8, 0.2, 0.8, 1.0)))
+                                                .into_row_item(),
                                         ],
                                     )
                                 })
@@ -108,7 +113,7 @@ fn app() {
                                                     .to_string(),
                                             )
                                             .size(Dp(18.0))
-                                            .color([255, 255, 255])
+                                            .color(Color::WHITE)
                                             .build()
                                             .unwrap(),
                                     )
@@ -129,9 +134,12 @@ fn app() {
                                             .build()
                                             .unwrap(),
                                         [
-                                            (|| small_box([0.3, 0.5, 1.0, 1.0])).into_row_item(),
-                                            (|| small_box([1.0, 0.3, 0.3, 1.0])).into_row_item(),
-                                            (|| small_box([0.3, 1.0, 0.3, 1.0])).into_row_item(),
+                                            (|| small_box(Color::new(0.3, 0.5, 1.0, 1.0)))
+                                                .into_row_item(),
+                                            (|| small_box(Color::new(1.0, 0.3, 0.3, 1.0)))
+                                                .into_row_item(),
+                                            (|| small_box(Color::new(0.3, 1.0, 0.3, 1.0)))
+                                                .into_row_item(),
                                         ],
                                     )
                                 })
@@ -148,8 +156,8 @@ fn app() {
                                 .width(DimensionValue::Fixed(Px(350)))
                                 .height(DimensionValue::Fixed(Px(250)))
                                 .corner_radius(20.0)
-                                .highlight_color([1.0, 1.0, 1.0, 0.3])
-                                .tint_color([0.8, 0.9, 1.0, 0.2])
+                                .highlight_color(Color::new(1.0, 1.0, 1.0, 0.3))
+                                .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
                                 .inner_shadow_radius(0.0)
                                 .build()
                                 .unwrap(),

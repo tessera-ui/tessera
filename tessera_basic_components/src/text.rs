@@ -1,5 +1,5 @@
 use derive_builder::Builder;
-use tessera::{ComputedData, DimensionValue, Dp, Px};
+use tessera::{Color, ComputedData, DimensionValue, Dp, Px};
 use tessera_macros::tessera;
 
 use crate::pipelines::{TextCommand, TextConstraint, TextData};
@@ -24,8 +24,8 @@ use crate::pipelines::{TextCommand, TextConstraint, TextData};
 #[builder(pattern = "owned")]
 pub struct TextArgs {
     pub text: String,
-    #[builder(default = "[0, 0, 0]")] // Default color is black
-    pub color: [u8; 3],
+    #[builder(default = "Color::BLACK")] // Default color is black
+    pub color: Color,
     #[builder(default = "Dp(25.0)")]
     pub size: Dp,
     #[builder(default, setter(strip_option))]

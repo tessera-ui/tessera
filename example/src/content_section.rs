@@ -1,4 +1,4 @@
-use tessera::DimensionValue;
+use tessera::{Color, DimensionValue};
 use tessera_basic_components::{
     column::ColumnArgsBuilder,
     column_ui,
@@ -36,7 +36,7 @@ pub fn content_section() {
         SurfaceArgsBuilder::default()
             .corner_radius(25.0)
             .padding(20.0.into())
-            .color([0.8, 0.8, 0.9, 1.0]) // Light purple fill, RGBA
+            .color(Color::new(0.8, 0.8, 0.9, 1.0)) // Light purple fill, RGBA
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,

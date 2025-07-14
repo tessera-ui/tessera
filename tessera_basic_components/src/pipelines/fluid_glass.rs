@@ -170,9 +170,9 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         ];
 
         let uniforms = GlassUniforms {
-            tint_color: args.tint_color,
-            highlight_color: args.highlight_color,
-            inner_shadow_color: args.inner_shadow_color,
+            tint_color: args.tint_color.into(),
+            highlight_color: args.highlight_color.into(),
+            inner_shadow_color: args.inner_shadow_color.into(),
             rect_uv_bounds,
             rect_size_px: [size.width.0 as f32, size.height.0 as f32],
             corner_radius: args.corner_radius,

@@ -7,7 +7,7 @@ use derive_builder::Builder;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tessera::{
-    ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
     focus_state::Focus, place_node,
 };
 use tessera_macros::tessera;
@@ -56,16 +56,16 @@ pub struct SliderArgs {
     pub track_height: Dp,
 
     /// The color of the active part of the track (from start to thumb).
-    #[builder(default = "[0.2, 0.5, 0.8, 1.0]")]
-    pub active_track_color: [f32; 4],
+    #[builder(default = "Color::new(0.2, 0.5, 0.8, 1.0)")]
+    pub active_track_color: Color,
 
     /// The color of the inactive part of the track (from thumb to end).
-    #[builder(default = "[0.8, 0.8, 0.8, 1.0]")]
-    pub inactive_track_color: [f32; 4],
+    #[builder(default = "Color::new(0.8, 0.8, 0.8, 1.0)")]
+    pub inactive_track_color: Color,
 
     /// The color of the draggable thumb.
-    #[builder(default = "[1.0, 1.0, 1.0, 1.0]")]
-    pub thumb_color: [f32; 4],
+    #[builder(default = "Color::WHITE")]
+    pub thumb_color: Color,
 
     /// The diameter of the draggable thumb.
     #[builder(default = "Dp(16.0)")]

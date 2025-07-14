@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera::{DimensionValue, winit};
+use tessera::{Color, DimensionValue, winit};
 use tessera_macros::tessera;
 
 use crate::surface::{SurfaceArgsBuilder, surface};
@@ -38,7 +38,7 @@ pub fn dialog_provider(
         // and triggering the close request.
         surface(
             SurfaceArgsBuilder::default()
-                .color([0.0, 0.0, 0.0, 1.0])
+                .color(Color::BLACK)
                 .on_click(Some(args.on_close_request))
                 .width(DimensionValue::Fill {
                     min: None,
