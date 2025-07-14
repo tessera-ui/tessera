@@ -1,6 +1,6 @@
 struct GlassUniforms {
     // Vector values
-    bleed_color: vec4<f32>,
+    tint_color: vec4<f32>,
     highlight_color: vec4<f32>,
     inner_shadow_color: vec4<f32>,
     rect_uv_bounds: vec4<f32>, // x_min, y_min, x_max, y_max
@@ -16,7 +16,6 @@ struct GlassUniforms {
     refraction_height: f32,
     refraction_amount: f32,
     eccentric_factor: f32,
-    bleed_amount: f32,
     highlight_size: f32,
     highlight_smoothing: f32,
     inner_shadow_radius: f32,
@@ -262,8 +261,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     var color = base_color.rgb;
 
-    // 2. Apply Bleed/Tint
-    color = mix(color, uniforms.bleed_color.rgb, uniforms.bleed_amount * uniforms.bleed_color.a);
+    // 2. Apply Tint
+    let tint_weight = uniforms.tint_color.a;
+    if (tint_weight > 0.0) {
+        color = mix(color, uniforms.tint_color.rgb, tint_weight);
+    }
 
     // 3. Apply Inner Shadow
     if (uniforms.inner_shadow_color.a > 0.0) {

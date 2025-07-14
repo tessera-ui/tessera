@@ -149,7 +149,7 @@ fn app() {
                                 .height(DimensionValue::Fixed(Px(250)))
                                 .corner_radius(20.0)
                                 .highlight_color([1.0, 1.0, 1.0, 0.3])
-                                .bleed_color([0.8, 0.9, 1.0, 0.2])
+                                .tint_color([0.8, 0.9, 1.0, 0.2])
                                 .inner_shadow_radius(0.0)
                                 .build()
                                 .unwrap(),

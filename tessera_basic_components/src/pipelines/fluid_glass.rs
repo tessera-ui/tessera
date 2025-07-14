@@ -13,7 +13,7 @@ use crate::fluid_glass::FluidGlassCommand;
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct GlassUniforms {
     // Vector values
-    bleed_color: [f32; 4],
+    tint_color: [f32; 4],
     highlight_color: [f32; 4],
     inner_shadow_color: [f32; 4],
     rect_uv_bounds: [f32; 4], // x_min, y_min, x_max, y_max
@@ -29,7 +29,6 @@ struct GlassUniforms {
     refraction_height: f32,
     refraction_amount: f32,
     eccentric_factor: f32,
-    bleed_amount: f32,
     highlight_size: f32,
     highlight_smoothing: f32,
     inner_shadow_radius: f32,
@@ -37,7 +36,7 @@ struct GlassUniforms {
     noise_amount: f32,
     noise_scale: f32,
     time: f32,
-    _padding: [f32; 3], // Struct needs to be aligned to 16 bytes. (33 data f32s + 3 padding f32s = 36 total * 4 bytes/f32 = 144 bytes)
+    _padding: [f32; 1], // Struct needs to be aligned to 16 bytes.
 }
 
 // --- Pipeline Definition ---
@@ -171,7 +170,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         ];
 
         let uniforms = GlassUniforms {
-            bleed_color: args.bleed_color,
+            tint_color: args.tint_color,
             highlight_color: args.highlight_color,
             inner_shadow_color: args.inner_shadow_color,
             rect_uv_bounds,
@@ -183,7 +182,6 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             refraction_height: args.refraction_height,
             refraction_amount: args.refraction_amount,
             eccentric_factor: args.eccentric_factor,
-            bleed_amount: args.bleed_amount,
             highlight_size: args.highlight_size,
             highlight_smoothing: args.highlight_smoothing,
             inner_shadow_radius: args.inner_shadow_radius,
@@ -191,7 +189,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             noise_amount: args.noise_amount,
             noise_scale: args.noise_scale,
             time: args.time,
-            _padding: [0.0; 3],
+            _padding: [0.0; 1],
         };
 
         let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {

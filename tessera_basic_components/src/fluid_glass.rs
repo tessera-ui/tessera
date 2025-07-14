@@ -11,10 +11,12 @@ use crate::pipelines::{blur::command::BlurCommand, contrast::ContrastCommand, me
 #[derive(Builder, Clone)]
 #[builder(build_fn(validate = "Self::validate"), pattern = "owned", setter(into))]
 pub struct FluidGlassArgs {
-    /// The color that bleeds from the edges, creating a soft glow effect.
-    /// Format is `[R, G, B, A]`. Defaults to a subtle red.
-    #[builder(default = "[1.0, 0.0, 0.0, 0.1]")]
-    pub bleed_color: [f32; 4],
+    /// The tint color of the glass.
+    /// The alpha channel uniquely and directly controls the tint strength.
+    /// `A=0.0` means no tint (100% background visibility).
+    /// `A=1.0` means full tint (100% color visibility).
+    #[builder(default = "[0.5, 0.5, 0.5, 0.1]")]
+    pub tint_color: [f32; 4],
     /// The color of the highlight along the top edge of the glass.
     /// Format is `[R, G, B, A]`. Defaults to a semi-transparent white.
     #[builder(default = "[1.0, 1.0, 1.0, 0.5]")]
@@ -47,9 +49,6 @@ pub struct FluidGlassArgs {
     /// Controls the shape and eccentricity of the highlight.
     #[builder(default = "0.2")]
     pub eccentric_factor: f32,
-    /// Controls how far the `bleed_color` spreads from the edges.
-    #[builder(default = "0.5")]
-    pub bleed_amount: f32,
     /// The size of the highlight at the top of the component.
     #[builder(default = "0.4")]
     pub highlight_size: f32,
