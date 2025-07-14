@@ -112,14 +112,7 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
         };
 
         if should_use_weight_for_width {
-            let available_width_for_children = match row_effective_constraint.width {
-                DimensionValue::Fixed(w) => w,
-                DimensionValue::Fill { max: Some(w), .. } => w,
-                DimensionValue::Wrap { max: Some(w), .. } => w,
-                _ => unreachable!(
-                    "Width should be constrained if should_use_weight_for_width is true"
-                ),
-            };
+            let available_width_for_children = row_effective_constraint.width.get_max().unwrap();
 
             let mut weighted_children_indices = Vec::new();
             let mut unweighted_children_indices = Vec::new();
@@ -146,7 +139,7 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
                 let parent_offered_constraint_for_child = Constraint::new(
                     DimensionValue::Wrap {
                         min: None,
-                        max: None,
+                        max: row_effective_constraint.width.get_max(),
                     },
                     row_effective_constraint.height,
                 );
@@ -245,9 +238,10 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
 
                 // Parent (row) offers Wrap for width and its effective height
                 let parent_offered_constraint_for_child = Constraint::new(
-                    DimensionValue::Wrap {
-                        min: None,
-                        max: None,
+                    match row_effective_constraint.width {
+                        DimensionValue::Fixed(v) => DimensionValue::Wrap { min: None, max: Some(v) },
+                        DimensionValue::Fill { max, .. } => DimensionValue::Wrap { min: None, max },
+                        DimensionValue::Wrap { max, .. } => DimensionValue::Wrap { min: None, max },
                     },
                     row_effective_constraint.height,
                 );

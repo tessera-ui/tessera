@@ -112,14 +112,7 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
         };
 
         if should_use_weight_for_height {
-            let available_height_for_children = match column_effective_constraint.height {
-                DimensionValue::Fixed(h) => h,
-                DimensionValue::Fill { max: Some(h), .. } => h,
-                DimensionValue::Wrap { max: Some(h), .. } => h,
-                _ => unreachable!(
-                    "Height should be constrained if should_use_weight_for_height is true"
-                ),
-            };
+            let available_height_for_children = column_effective_constraint.height.get_max().unwrap();
 
             let mut weighted_children_indices = Vec::new();
             let mut unweighted_children_indices = Vec::new();
@@ -148,7 +141,7 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                     column_effective_constraint.width,
                     DimensionValue::Wrap {
                         min: None,
-                        max: None,
+                        max: column_effective_constraint.height.get_max(),
                     },
                 );
 
@@ -250,7 +243,7 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                     column_effective_constraint.width,
                     DimensionValue::Wrap {
                         min: None,
-                        max: None,
+                        max: column_effective_constraint.height.get_max(),
                     },
                 );
 
