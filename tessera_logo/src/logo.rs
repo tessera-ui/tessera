@@ -1,10 +1,10 @@
 use bytemuck::{Pod, Zeroable};
-use delaunator::{triangulate, Point};
+use delaunator::{Point, triangulate};
 use derive_builder::Builder;
 use rand::{Rng, SeedableRng};
 use tessera::{
-    wgpu::{self, util::DeviceExt},
     ComputedData, DrawCommand, DrawablePipeline, Px, PxPosition, PxSize,
+    wgpu::{self, util::DeviceExt},
 };
 use tessera_macros::tessera;
 

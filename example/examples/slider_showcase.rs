@@ -1,5 +1,6 @@
-use parking_lot::Mutex;
 use std::sync::Arc;
+
+use parking_lot::Mutex;
 use tessera::{Color, Dp, Renderer};
 use tessera_basic_components::{
     alignment::MainAxisAlignment,

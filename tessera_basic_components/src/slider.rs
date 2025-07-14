@@ -1,16 +1,18 @@
-use crate::{
-    pipelines::{ShadowProps, ShapeCommand},
-    pos_misc::is_position_in_component,
-    surface::{SurfaceArgsBuilder, surface},
-};
+use std::sync::Arc;
+
 use derive_builder::Builder;
 use parking_lot::Mutex;
-use std::sync::Arc;
 use tessera::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
     focus_state::Focus, place_node,
 };
 use tessera_macros::tessera;
+
+use crate::{
+    pipelines::{ShadowProps, ShapeCommand},
+    pos_misc::is_position_in_component,
+    surface::{SurfaceArgsBuilder, surface},
+};
 
 /// State for the `slider` component.
 pub struct SliderState {

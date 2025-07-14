@@ -1,5 +1,6 @@
-use parking_lot::RwLock;
 use std::sync::Arc;
+
+use parking_lot::RwLock;
 use tessera::{Color, DimensionValue, Px};
 use tessera_basic_components::text_editor::{TextEditorArgsBuilder, TextEditorState, text_editor};
 use tessera_macros::tessera;

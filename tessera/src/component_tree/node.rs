@@ -12,13 +12,14 @@ use parking_lot::RwLock;
 use rayon::prelude::*;
 use winit::window::CursorIcon;
 
-use super::constraint::{Constraint, DimensionValue};
 use crate::{
     ComputeCommand, ComputeResourceManager, DrawCommand, Px,
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
     renderer::Command,
 };
+
+use super::constraint::{Constraint, DimensionValue};
 
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component.
@@ -74,7 +75,7 @@ impl ComponentNodeMetaData {
     /// to the command queue. Commands are executed in the order they are added.
     ///
     /// # Example
-    /// ```rust,ignore
+    /// ```ignore
     /// metadata.push_draw_command(ShapeCommand::Rect {
     ///     color: [1.0, 0.0, 0.0, 1.0],
     ///     corner_radius: 8.0,
@@ -95,7 +96,7 @@ impl ComponentNodeMetaData {
     /// `Command::Compute` variant and adds it to the command queue.
     ///
     /// # Example
-    /// ```rust,ignore
+    /// ```ignore
     /// metadata.push_compute_command(BlurCommand {
     ///     radius: 5.0,
     ///     sigma: 2.0,

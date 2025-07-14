@@ -1,10 +1,13 @@
-use derive_builder::Builder;
 use std::sync::Arc;
+
+use derive_builder::Builder;
 use tessera::{Color, DimensionValue, Dp};
 use tessera_macros::tessera;
 
-use crate::ripple_state::RippleState;
-use crate::surface::{SurfaceArgsBuilder, surface};
+use crate::{
+    ripple_state::RippleState,
+    surface::{SurfaceArgsBuilder, surface},
+};
 
 /// Arguments for the `button` component.
 #[derive(Builder, Clone)]
@@ -70,10 +73,10 @@ impl Default for ButtonArgs {
 /// Interactive button component that wraps custom child components with ripple effect.
 ///
 /// # Example
-/// ```no_run
+/// ```
 /// use tessera_basic_components::button::{button, ButtonArgsBuilder};
 /// use tessera_basic_components::text::{text, TextArgsBuilder};
-/// use tessera_basic_components::surface::RippleState;
+/// use tessera_basic_components::ripple_state::RippleState;
 /// use tessera::{Dp, Color};
 /// use std::sync::Arc;
 ///

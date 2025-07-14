@@ -1,16 +1,17 @@
-use crate::{
-    background::{background, BackgroundArgsBuilder},
-    logo::{crystal_shard, CrystalShardArgsBuilder},
-};
-use std::sync::Arc;
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
+
 use tessera::Px;
 use tessera_basic_components::{
     alignment::Alignment,
-    boxed::{boxed, AsBoxedItem, BoxedArgsBuilder},
-    spacer::{spacer, SpacerArgsBuilder},
+    boxed::{AsBoxedItem, BoxedArgsBuilder, boxed},
+    spacer::{SpacerArgsBuilder, spacer},
 };
 use tessera_macros::tessera;
+
+use crate::{
+    background::{BackgroundArgsBuilder, background},
+    logo::{CrystalShardArgsBuilder, crystal_shard},
+};
 
 #[derive(Debug)]
 pub struct AppState {

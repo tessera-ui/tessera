@@ -50,7 +50,7 @@ impl From<&str> for TextArgs {
 /// Basic text component.
 ///
 /// # Example
-/// ```no_run
+/// ```
 /// use tessera_basic_components::text::{text, TextArgs, TextArgsBuilder};
 /// use tessera::Dp;
 /// // a simple hello world text, in black

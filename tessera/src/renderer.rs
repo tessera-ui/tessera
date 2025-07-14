@@ -6,12 +6,6 @@ pub mod drawer;
 use std::{sync::Arc, time::Instant};
 
 use log::{debug, warn};
-
-pub use app::WgpuApp;
-#[cfg(target_os = "android")]
-use winit::platform::android::{
-    ActiveEventLoopExtAndroid, EventLoopBuilderExtAndroid, activity::AndroidApp,
-};
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
@@ -30,9 +24,15 @@ use crate::{
     thread_utils, tokio_runtime,
 };
 
+pub use app::WgpuApp;
 pub use command::Command;
 pub use compute::{ComputablePipeline, ComputePipelineRegistry};
 pub use drawer::{BarrierRequirement, DrawCommand, DrawablePipeline, PipelineRegistry};
+
+#[cfg(target_os = "android")]
+use winit::platform::android::{
+    ActiveEventLoopExtAndroid, EventLoopBuilderExtAndroid, activity::AndroidApp,
+};
 
 /// Configuration for the Tessera runtime and renderer.
 #[derive(Clone)]

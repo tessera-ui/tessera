@@ -1,7 +1,10 @@
-use crate::alignment::Alignment;
 use derive_builder::Builder;
 use tessera::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node};
 use tessera_macros::tessera;
+
+use crate::alignment::Alignment;
+
+pub use crate::boxed_ui;
 
 /// Arguments for the `Boxed` component.
 #[derive(Clone, Debug, Builder)]
@@ -188,5 +191,3 @@ macro_rules! boxed_ui {
         }
     };
 }
-
-pub use crate::boxed_ui;

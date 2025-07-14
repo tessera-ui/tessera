@@ -7,6 +7,7 @@ pub mod command;
 mod pipeline;
 
 use crate::{PxPosition, px::PxSize};
+
 pub use command::{BarrierRequirement, DrawCommand};
 pub use pipeline::{DrawablePipeline, PipelineRegistry};
 

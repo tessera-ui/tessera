@@ -1,5 +1,10 @@
-use std::hash::{Hash, Hasher};
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
+
+use bytemuck::{Pod, Zeroable};
 use tessera::{DrawCommand, PxPosition, PxSize, renderer::drawer::DrawablePipeline, wgpu};
 
 #[derive(Debug, Clone)]
@@ -39,15 +44,11 @@ impl DrawCommand for ImageCommand {
     }
 }
 
-use bytemuck::{Pod, Zeroable};
-
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct ImageUniforms {
     rect: [f32; 4],
 }
-
-use std::collections::HashMap;
 
 struct ImageResources {
     bind_group: wgpu::BindGroup,

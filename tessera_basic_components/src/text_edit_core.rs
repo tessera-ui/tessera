@@ -4,17 +4,17 @@ use std::{sync::Arc, time::Instant};
 
 use glyphon::Edit;
 use parking_lot::RwLock;
+use tessera::{
+    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus, measure_node,
+    place_node, winit,
+};
+use tessera_macros::tessera;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
     pipelines::{TextCommand, TextConstraint, TextData, write_font_system},
     selection_highlight_rect::selection_highlight_rect,
 };
-use tessera::{
-    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus, measure_node,
-    place_node, winit,
-};
-use tessera_macros::tessera;
 
 /// Definition of a rectangular selection highlight
 #[derive(Clone, Debug)]

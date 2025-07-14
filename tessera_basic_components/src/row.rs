@@ -1,7 +1,10 @@
-use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 use derive_builder::Builder;
 use tessera::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node};
 use tessera_macros::tessera;
+
+use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
+
+pub use crate::row_ui;
 
 /// Arguments for the `row` component.
 #[derive(Builder, Clone, Debug)]
@@ -414,9 +417,9 @@ fn place_children_with_alignment(
 /// or `(FnOnce, weight)` tuples.
 ///
 /// # Example
-/// ```ignore
-/// use tessera_basic_components::row::{row_ui, RowArgs, RowItem};
-/// use tessera_basic_components::text::text;
+///
+/// ```
+/// use tessera_basic_components::{row::{row_ui, RowArgs, RowItem}, text::text};
 ///
 /// row_ui![
 ///     RowArgs::default(),
@@ -438,5 +441,3 @@ macro_rules! row_ui {
         }
     };
 }
-
-pub use crate::row_ui;

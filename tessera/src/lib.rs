@@ -11,9 +11,16 @@ mod runtime;
 mod thread_utils;
 pub mod tokio_runtime;
 
-pub use crate::color::Color;
-pub use crate::dp::Dp;
-pub use crate::px::{Px, PxPosition, PxSize};
+pub use indextree::{Arena, NodeId};
+pub use wgpu;
+pub use winit;
+
+pub use crate::{
+    color::Color,
+    dp::Dp,
+    px::{Px, PxPosition, PxSize},
+};
+
 pub use component_tree::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComponentTree,
     ComputedData, Constraint, DimensionValue, ImeRequest, MeasureFn, MeasurementError,
@@ -21,7 +28,6 @@ pub use component_tree::{
 };
 pub use cursor::{CursorEvent, CursorEventContent, PressKeyEventType, ScrollEventConent};
 pub use ime_state::ImeState;
-pub use indextree::{Arena, NodeId};
 pub use renderer::{
     Command, Renderer,
     compute::{
@@ -33,6 +39,4 @@ pub use renderer::{
 pub use runtime::TesseraRuntime;
 
 // re-export winit
-pub use winit;
 // re-export wgpu
-pub use wgpu;

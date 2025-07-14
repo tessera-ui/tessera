@@ -15,11 +15,12 @@ use std::sync::Arc;
 
 use log::error;
 use tessera::Renderer;
-#[cfg(target_os = "android")]
-use tessera::winit::platform::android::activity::AndroidApp;
 
 use app::app;
 use app_state::AppState;
+
+#[cfg(target_os = "android")]
+use tessera::winit::platform::android::activity::AndroidApp;
 
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]

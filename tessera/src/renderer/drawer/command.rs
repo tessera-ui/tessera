@@ -41,8 +41,8 @@ impl<T: Any> AsAny for T {
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// use crate::renderer::drawer::DrawCommand;
+/// ```
+/// use tessera::{BarrierRequirement, DrawCommand};
 ///
 /// struct RectangleCommand {
 ///     color: [f32; 4],

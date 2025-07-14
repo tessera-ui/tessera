@@ -1,7 +1,10 @@
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
 use derive_builder::Builder;
 use parking_lot::Mutex;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
 use tessera::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
     PxPosition, winit::window::CursorIcon,

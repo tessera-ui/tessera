@@ -8,9 +8,9 @@ use tessera::{
     wgpu::{self, include_wgsl, util::DeviceExt},
 };
 
-use command::ShapeCommandComputed;
-
 use crate::pipelines::pos_misc::pixel_to_ndc;
+
+use command::ShapeCommandComputed;
 
 pub use command::{RippleProps, ShadowProps, ShapeCommand};
 
@@ -252,7 +252,8 @@ impl ShapePipeline {
                     } else {
                         // This case should ideally not happen if inputs are validated
                         // Or handle it by returning early / logging a more severe error
-                        ShapeVertex::new([0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0]) // Placeholder
+                        ShapeVertex::new([0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0])
+                        // Placeholder
                     }
                 }
             })

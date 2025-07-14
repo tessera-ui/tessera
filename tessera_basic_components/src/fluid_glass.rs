@@ -1,5 +1,6 @@
-use derive_builder::Builder;
 use std::sync::Arc;
+
+use derive_builder::Builder;
 use tessera::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
     PxPosition, measure_node, place_node, renderer::DrawCommand, winit::window::CursorIcon,

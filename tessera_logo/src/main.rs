@@ -2,8 +2,9 @@ mod app;
 mod background;
 mod logo;
 
-use log::error;
 use std::sync::Arc;
+
+use log::error;
 use tessera::Renderer;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

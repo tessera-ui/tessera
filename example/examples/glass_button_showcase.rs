@@ -1,4 +1,5 @@
 use std::sync::Arc;
+
 use tessera::{Color, DimensionValue, Dp, Renderer};
 use tessera_basic_components::{
     alignment::Alignment,

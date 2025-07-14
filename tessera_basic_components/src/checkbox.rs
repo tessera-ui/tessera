@@ -1,5 +1,6 @@
-use derive_builder::Builder;
 use std::sync::Arc;
+
+use derive_builder::Builder;
 use tessera::{Color, DimensionValue, Dp};
 use tessera_macros::tessera;
 

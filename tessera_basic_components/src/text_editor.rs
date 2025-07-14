@@ -3,7 +3,6 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use glyphon::{Action, Edit};
 use parking_lot::RwLock;
-
 use tessera::{Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, winit};
 use tessera_macros::tessera;
 
@@ -14,8 +13,9 @@ use crate::{
     text_edit_core::{ClickType, map_key_event_to_action, text_edit_core},
 };
 
-// Re-export TextEditorState for convenience
 pub use crate::text_edit_core::TextEditorState;
+
+// Re-export TextEditorState for convenience
 
 /// Arguments for the `text_editor` component.
 ///

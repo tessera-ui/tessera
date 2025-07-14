@@ -1,8 +1,9 @@
-use parking_lot::RwLock;
 use std::{
     sync::{Arc, atomic},
     time::Instant,
 };
+
+use parking_lot::RwLock;
 use tessera_basic_components::text::text;
 use tessera_macros::tessera;
 
