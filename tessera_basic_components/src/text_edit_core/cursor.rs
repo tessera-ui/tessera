@@ -1,3 +1,9 @@
+//! Text cursor component for the text edit core system.
+//!
+//! This module provides a blinking cursor component used within text editing interfaces.
+//! The cursor provides visual feedback for text insertion point and blinks at regular
+//! intervals to maintain user attention.
+
 use std::time::Instant;
 
 use tessera::{Color, ComputedData, Dp, Px};
@@ -5,29 +11,66 @@ use tessera_macros::tessera;
 
 use crate::pipelines::ShapeCommand;
 
+/// Width of the text cursor in device-independent pixels.
 const CURSOR_WIDRH: Dp = Dp(2.5);
 
-/// A blink cursor component for text editor.
+/// A blinking cursor component for text editing interfaces.
+///
+/// This component renders a vertical line cursor that blinks on and off at regular
+/// intervals to indicate the text insertion point. The cursor automatically handles
+/// its own blinking animation based on the provided timer.
+///
+/// # Parameters
+///
+/// * `height_px` - The height of the cursor in pixels, typically matching the line height
+/// * `bink_timer` - Timer used to control the blinking animation cycle
+///
+/// # Blinking Behavior
+///
+/// The cursor follows a 1-second blinking cycle:
+/// - Visible for 500ms
+/// - Hidden for 500ms
+/// - Repeats continuously
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use std::time::Instant;
+/// use tessera::Px;
+///
+/// // Create a cursor with line height and current time
+/// cursor(Px(20.0), Instant::now());
+/// ```
+///
+/// # Rendering
+///
+/// The cursor is rendered as a solid black rectangle with:
+/// - Fixed width of 2.5 device-independent pixels
+/// - Variable height matching the text line height
+/// - No corner radius (sharp rectangular appearance)
+/// - No shadow effects
 #[tessera]
 pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
-    // skip the cursor based on the timer
-    // to make it blink
+    // Skip rendering the cursor during the "off" phase of the blink cycle
+    // to create the blinking effect (visible for 500ms, hidden for 500ms)
     if bink_timer.elapsed().as_millis() % 1000 < 500 {
         return;
     }
 
     measure(Box::new(move |input| {
-        // Cursor is a rectangle with a fixed width and variable height
+        // Create a rectangular cursor shape with fixed width and variable height
         let drawable = ShapeCommand::Rect {
             color: Color::BLACK,
             corner_radius: 0.0,
             shadow: None,
         };
-        // Add the drawable to the metadata
+
+        // Add the cursor drawable to the component's metadata for rendering
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
             metadata.push_draw_command(drawable);
         }
-        // Return the computed data for the cursor
+
+        // Return the computed dimensions for layout calculation
         Ok(ComputedData {
             width: CURSOR_WIDRH.into(),
             height: height_px,

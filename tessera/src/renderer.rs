@@ -1,3 +1,189 @@
+//! # Tessera Renderer
+//!
+//! The core rendering system for the Tessera UI framework. This module provides the main
+//! [`Renderer`] struct that manages the application lifecycle, event handling, and rendering
+//! pipeline for cross-platform UI applications.
+//!
+//! ## Overview
+//!
+//! The renderer is built on top of WGPU and winit, providing:
+//! - Cross-platform window management (Windows, Linux, macOS, Android)
+//! - Event handling (mouse, touch, keyboard, IME)
+//! - Pluggable rendering pipeline system
+//! - Component tree management and rendering
+//! - Performance monitoring and optimization
+//!
+//! ## Architecture
+//!
+//! The renderer follows a modular architecture with several key components:
+//!
+//! - **[`app`]**: WGPU application management and surface handling
+//! - **[`command`]**: Rendering command abstraction
+//! - **[`compute`]**: Compute shader pipeline management
+//! - **[`drawer`]**: Drawing pipeline management and execution
+//!
+//! ## Basic Usage
+//!
+//! The most common way to use the renderer is through the [`Renderer::run`] method:
+//!
+//! ```rust,no_run
+//! use tessera::Renderer;
+//!
+//! // Define your UI entry point
+//! fn my_app() {
+//!     // Your UI components go here
+//! }
+//!
+//! // Run the application
+//! Renderer::run(
+//!     my_app,  // Entry point function
+//!     |_app| {
+//!         // Register rendering pipelines
+//!         // tessera_basic_components::pipelines::register_pipelines(app);
+//!     }
+//! ).unwrap();
+//! ```
+//!
+//! ## Configuration
+//!
+//! You can customize the renderer behavior using [`TesseraConfig`]:
+//!
+//! ```rust,no_run
+//! use tessera::{Renderer, renderer::TesseraConfig};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let config = TesseraConfig {
+//!     sample_count: 8,  // 8x MSAA
+//! };
+//!
+//! Renderer::run_with_config(
+//!     || { /* my_app */ },
+//!     |_app| { /* register_pipelines */ },
+//!     config
+//! )?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Platform Support
+//!
+//! ### Desktop Platforms (Windows, Linux, macOS)
+//!
+//! ```rust,ignore
+//! use tessera::Renderer;
+//! use tessera_macros::tessera;
+//!
+//! #[tessera] // You need to mark every component function with `#[tessera_macros::tessera]`
+//! fn entry_point() {}
+//! fn register_pipelines(_: &mut tessera::renderer::WgpuApp) {}
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! Renderer::run(entry_point, register_pipelines)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Android
+//!
+//! ```rust,no_run
+//! use tessera::Renderer;
+//! # #[cfg(target_os = "android")]
+//! use winit::platform::android::activity::AndroidApp;
+//!
+//! fn entry_point() {}
+//! fn register_pipelines(_: &mut tessera::renderer::WgpuApp) {}
+//!
+//! # #[cfg(target_os = "android")]
+//! fn android_main(android_app: AndroidApp) {
+//!     Renderer::run(entry_point, register_pipelines, android_app).unwrap();
+//! }
+//! ```
+//!
+//! ## Event Handling
+//!
+//! The renderer automatically handles various input events:
+//!
+//! - **Mouse Events**: Click, move, scroll, enter/leave
+//! - **Touch Events**: Multi-touch support with gesture recognition
+//! - **Keyboard Events**: Key press/release, with platform-specific handling
+//! - **IME Events**: Input method support for international text input
+//!
+//! Events are processed and forwarded to the component tree for handling.
+//!
+//! ## Performance Monitoring
+//!
+//! The renderer includes built-in performance monitoring that logs frame statistics
+//! when performance drops below 60 FPS:
+//!
+//! ```text
+//! WARN Jank detected! Frame statistics:
+//!     Build tree cost: 2.1ms
+//!     Draw commands cost: 1.8ms
+//!     Render cost: 12.3ms
+//!     Total frame cost: 16.2ms
+//!     Fps: 61.73
+//! ```
+//!
+//! ## Examples
+//!
+//! ### Simple Counter Application
+//!
+//! ```rust,ignore
+//! use std::sync::{Arc, atomic::{AtomicU32, Ordering}};
+//!
+//! use tessera::{Renderer, Color, Dp};
+//! use tessera_macros::tessera;
+//!
+//! struct AppState {
+//!     count: AtomicU32,
+//! }
+//!
+//! #[tessera] // You need to mark every component function with `#[tessera_macros::tessera]`
+//! fn counter_app(state: Arc<AppState>) {
+//!     let _count = state.count.load(Ordering::Relaxed);
+//!     // Your UI components would go here
+//!     // This is a simplified example without actual UI components
+//! }
+//!
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let state = Arc::new(AppState {
+//!         count: AtomicU32::new(0),
+//!     });
+//!
+//!     Renderer::run(
+//!         move || counter_app(state.clone()),
+//!         |_app| {
+//!             // Register your rendering pipelines here
+//!             // tessera_basic_components::pipelines::register_pipelines(app);
+//!         }
+//!     )?;
+//!     
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ### Custom Rendering Pipeline
+//!
+//! ```rust,no_run
+//! use tessera::{Renderer, renderer::WgpuApp};
+//!
+//! fn register_custom_pipelines(app: &mut WgpuApp) {
+//!     // Register basic components first
+//!     // tessera_basic_components::pipelines::register_pipelines(app);
+//!     
+//!     // Add your custom pipelines
+//!     // app.drawer.register_pipeline("my_custom_shader", my_pipeline);
+//! }
+//!
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     Renderer::run(
+//!         || { /* your UI */ },
+//!         register_custom_pipelines
+//!     )?;
+//!     Ok(())
+//! }
+//! ```
+
 pub mod app;
 pub mod command;
 pub mod compute;
@@ -35,13 +221,46 @@ use winit::platform::android::{
 };
 
 /// Configuration for the Tessera runtime and renderer.
+///
+/// This struct allows you to customize various aspects of the renderer's behavior,
+/// including anti-aliasing settings and other rendering parameters.
+///
+/// # Examples
+///
+/// ```
+/// use tessera::renderer::TesseraConfig;
+///
+/// // Default configuration (4x MSAA)
+/// let config = TesseraConfig::default();
+///
+/// // Custom configuration with 8x MSAA
+/// let config = TesseraConfig {
+///     sample_count: 8,
+/// };
+///
+/// // Disable MSAA for better performance
+/// let config = TesseraConfig {
+///     sample_count: 1,
+/// };
+/// ```
 #[derive(Clone)]
 pub struct TesseraConfig {
-    /// The number of samples to use for MSAA.
+    /// The number of samples to use for Multi-Sample Anti-Aliasing (MSAA).
     ///
-    /// Common values are 1, 2, 4, 8.
-    /// A value of 1 effectively disables MSAA.
-    /// Note: The GPU must support the chosen sample count.
+    /// MSAA helps reduce aliasing artifacts (jagged edges) in rendered graphics
+    /// by sampling multiple points per pixel and averaging the results.
+    ///
+    /// ## Supported Values
+    /// - `1`: Disables MSAA (best performance, lower quality)
+    /// - `2`: 2x MSAA (moderate performance impact)
+    /// - `4`: 4x MSAA (balanced quality/performance - default)
+    /// - `8`: 8x MSAA (high quality, higher performance cost)
+    ///
+    /// ## Notes
+    /// - Higher sample counts provide better visual quality but consume more GPU resources
+    /// - The GPU must support the chosen sample count; unsupported values may cause errors
+    /// - Mobile devices may have limited support for higher sample counts
+    /// - Consider using lower values on resource-constrained devices
     pub sample_count: u32,
 }
 
@@ -52,34 +271,135 @@ impl Default for TesseraConfig {
     }
 }
 
+/// The main renderer struct that manages the application lifecycle and rendering.
+///
+/// The `Renderer` is the core component of the Tessera UI framework, responsible for:
+/// - Managing the application window and WGPU context
+/// - Handling input events (mouse, touch, keyboard, IME)
+/// - Coordinating the component tree building and rendering process
+/// - Managing rendering pipelines and resources
+///
+/// ## Type Parameters
+///
+/// - `F`: The entry point function type that defines your UI. Must implement `Fn()`.
+/// - `R`: The pipeline registration function type. Must implement `Fn(&mut WgpuApp) + Clone + 'static`.
+///
+/// ## Lifecycle
+///
+/// The renderer follows this lifecycle:
+/// 1. **Initialization**: Create window, initialize WGPU context, register pipelines
+/// 2. **Event Loop**: Handle window events, input events, and render requests
+/// 3. **Frame Rendering**: Build component tree → Compute draw commands → Render to surface
+/// 4. **Cleanup**: Automatic cleanup when the application exits
+///
+/// ## Thread Safety
+///
+/// The renderer runs on the main thread and coordinates with other threads for:
+/// - Component tree building (potentially parallelized)
+/// - Resource management
+/// - Event processing
+///
+/// ## Examples
+///
+/// See the module-level documentation for usage examples.
 pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
-    /// WGPU app
+    /// The WGPU application context, initialized after window creation
     app: Option<WgpuApp>,
-    /// Entry UI Function
+    /// The entry point function that defines the root of your UI component tree
     entry_point: F,
-    /// The state of the cursor
+    /// Tracks cursor/mouse position and button states
     cursor_state: CursorState,
-    /// The state of the keyboard
+    /// Tracks keyboard key states and events
     keyboard_state: KeyboardState,
-    /// The state of the IME
+    /// Tracks Input Method Editor (IME) state for international text input
     ime_state: ImeState,
-    /// Register pipelines function
+    /// Function called during initialization to register rendering pipelines
     register_pipelines_fn: R,
-    /// Tessera configuration
+    /// Configuration settings for the renderer
     config: TesseraConfig,
     #[cfg(target_os = "android")]
-    /// Android ime opened state
+    /// Android-specific state tracking whether the soft keyboard is currently open
     android_ime_opened: bool,
 }
 
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     #[cfg(not(target_os = "android"))]
+    /// Runs the Tessera application with default configuration on desktop platforms.
+    ///
+    /// This is the most convenient way to start a Tessera application on Windows, Linux, or macOS.
+    /// It uses the default [`TesseraConfig`] settings (4x MSAA).
+    ///
+    /// # Parameters
+    ///
+    /// - `entry_point`: A function that defines your UI. This function will be called every frame
+    ///   to build the component tree. It should contain your root UI components.
+    /// - `register_pipelines_fn`: A function that registers rendering pipelines with the WGPU app.
+    ///   Typically, you'll call `tessera_basic_components::pipelines::register_pipelines(app)` here.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when the application exits normally, or an `EventLoopError` if the
+    /// event loop fails to start or encounters a critical error.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use tessera::Renderer;
+    ///
+    /// fn my_ui() {
+    ///     // Your UI components go here
+    /// }
+    ///
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     Renderer::run(
+    ///         my_ui,
+    ///         |_app| {
+    ///             // Register your rendering pipelines here
+    ///             // tessera_basic_components::pipelines::register_pipelines(app);
+    ///         }
+    ///     )?;
+    ///     Ok(())
+    /// }
+    /// ```
     pub fn run(entry_point: F, register_pipelines_fn: R) -> Result<(), EventLoopError> {
         Self::run_with_config(entry_point, register_pipelines_fn, Default::default())
     }
 
     #[cfg(not(target_os = "android"))]
-    /// Create event loop and run application
+    /// Runs the Tessera application with custom configuration on desktop platforms.
+    ///
+    /// This method allows you to customize the renderer behavior through [`TesseraConfig`].
+    /// Use this when you need to adjust settings like MSAA sample count or other rendering parameters.
+    ///
+    /// # Parameters
+    ///
+    /// - `entry_point`: A function that defines your UI
+    /// - `register_pipelines_fn`: A function that registers rendering pipelines
+    /// - `config`: Custom configuration for the renderer
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when the application exits normally, or an `EventLoopError` if the
+    /// event loop fails to start.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use tessera::{Renderer, renderer::TesseraConfig};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = TesseraConfig {
+    ///     sample_count: 8,  // 8x MSAA for higher quality
+    /// };
+    ///
+    /// Renderer::run_with_config(
+    ///     || { /* my_ui */ },
+    ///     |_app| { /* register_pipelines */ },
+    ///     config
+    /// )?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn run_with_config(
         entry_point: F,
         register_pipelines_fn: R,
@@ -104,7 +424,40 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     }
 
     #[cfg(target_os = "android")]
-    /// Create event loop and run application on Android
+    /// Runs the Tessera application with default configuration on Android.
+    ///
+    /// This method is specifically for Android applications and requires an `AndroidApp` instance
+    /// that is typically provided by the `android_main` function.
+    ///
+    /// # Parameters
+    ///
+    /// - `entry_point`: A function that defines your UI
+    /// - `register_pipelines_fn`: A function that registers rendering pipelines
+    /// - `android_app`: The Android application context
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when the application exits normally, or an `EventLoopError` if the
+    /// event loop fails to start.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use tessera::Renderer;
+    /// use winit::platform::android::activity::AndroidApp;
+    ///
+    /// fn my_ui() {}
+    /// fn register_pipelines(_: &mut tessera::renderer::WgpuApp) {}
+    ///
+    /// #[unsafe(no_mangle)]
+    /// fn android_main(android_app: AndroidApp) {
+    ///     Renderer::run(
+    ///         my_ui,
+    ///         register_pipelines,
+    ///         android_app
+    ///     ).unwrap();
+    /// }
+    /// ```
     pub fn run(
         entry_point: F,
         register_pipelines_fn: R,
@@ -119,7 +472,45 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     }
 
     #[cfg(target_os = "android")]
-    /// Create event loop and run application on Android
+    /// Runs the Tessera application with custom configuration on Android.
+    ///
+    /// This method allows you to customize the renderer behavior on Android through [`TesseraConfig`].
+    ///
+    /// # Parameters
+    ///
+    /// - `entry_point`: A function that defines your UI
+    /// - `register_pipelines_fn`: A function that registers rendering pipelines
+    /// - `android_app`: The Android application context
+    /// - `config`: Custom configuration for the renderer
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when the application exits normally, or an `EventLoopError` if the
+    /// event loop fails to start.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use tessera::{Renderer, renderer::TesseraConfig};
+    /// use winit::platform::android::activity::AndroidApp;
+    ///
+    /// fn my_ui() {}
+    /// fn register_pipelines(_: &mut tessera::renderer::WgpuApp) {}
+    ///
+    /// #[unsafe(no_mangle)]
+    /// fn android_main(android_app: AndroidApp) {
+    ///     let config = TesseraConfig {
+    ///         sample_count: 2,  // Lower MSAA for mobile performance
+    ///     };
+    ///     
+    ///     Renderer::run_with_config(
+    ///         my_ui,
+    ///         register_pipelines,
+    ///         android_app,
+    ///         config
+    ///     ).unwrap();
+    /// }
+    /// ```
     pub fn run_with_config(
         entry_point: F,
         register_pipelines_fn: R,
@@ -150,7 +541,40 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
 }
 
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
-    /// Render a single frame - either to surface or offscreen
+    /// Executes a single frame rendering cycle.
+    ///
+    /// This is the core rendering method that orchestrates the entire frame rendering process.
+    /// It follows a three-phase approach:
+    ///
+    /// 1. **Component Tree Building**: Calls the entry point function to build the UI component tree
+    /// 2. **Draw Command Computation**: Processes the component tree to generate rendering commands
+    /// 3. **Surface Rendering**: Executes the commands to render the final frame
+    ///
+    /// ## Performance Monitoring
+    ///
+    /// This method includes built-in performance monitoring that logs detailed timing information
+    /// when frame rates drop below 60 FPS, helping identify performance bottlenecks.
+    ///
+    /// ## Parameters
+    ///
+    /// - `entry_point`: The UI entry point function to build the component tree
+    /// - `cursor_state`: Mutable reference to cursor/mouse state for event processing
+    /// - `keyboard_state`: Mutable reference to keyboard state for event processing
+    /// - `ime_state`: Mutable reference to IME state for text input processing
+    /// - `android_ime_opened`: (Android only) Tracks soft keyboard state
+    /// - `app`: Mutable reference to the WGPU application context
+    /// - `event_loop`: (Android only) Event loop for IME management
+    ///
+    /// ## Frame Timing Breakdown
+    ///
+    /// - **Build Tree Cost**: Time spent building the component tree
+    /// - **Draw Commands Cost**: Time spent computing rendering commands
+    /// - **Render Cost**: Time spent executing GPU rendering commands
+    ///
+    /// ## Thread Safety
+    ///
+    /// This method runs on the main thread but coordinates with other threads for
+    /// component tree processing and resource management.
     fn execute_render_frame(
         entry_point: &F,
         cursor_state: &mut CursorState,
@@ -260,7 +684,36 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     }
 }
 
+/// Implementation of winit's `ApplicationHandler` trait for the Tessera renderer.
+///
+/// This implementation handles the application lifecycle events from winit, including
+/// window creation, suspension/resumption, and various window events. It bridges the
+/// gap between winit's event system and Tessera's component-based UI framework.
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Renderer<F, R> {
+    /// Called when the application is resumed or started.
+    ///
+    /// This method is responsible for:
+    /// - Creating the application window with appropriate attributes
+    /// - Initializing the WGPU context and surface
+    /// - Registering rendering pipelines
+    /// - Setting up the initial application state
+    ///
+    /// On desktop platforms, this is typically called once at startup.
+    /// On mobile platforms (especially Android), this may be called multiple times
+    /// as the app is suspended and resumed.
+    ///
+    /// ## Window Configuration
+    ///
+    /// The window is created with:
+    /// - Title: "Tessera"
+    /// - Transparency: Enabled (allows for transparent backgrounds)
+    /// - Default size and position (platform-dependent)
+    ///
+    /// ## Pipeline Registration
+    ///
+    /// After WGPU initialization, the `register_pipelines_fn` is called to set up
+    /// all rendering pipelines. This typically includes basic component pipelines
+    /// and any custom shaders your application requires.
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Just return if the app is already created
         if self.app.is_some() {
@@ -283,10 +736,65 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         self.app = Some(wgpu_app);
     }
 
+    /// Called when the application is suspended.
+    ///
+    /// This method should handle cleanup and state preservation when the application
+    /// is being suspended (e.g., on mobile platforms when the app goes to background).
+    ///
+    /// ## Current Status
+    ///
+    /// This method is currently not fully implemented (`todo!`). In a complete
+    /// implementation, it should:
+    /// - Save application state
+    /// - Release GPU resources if necessary
+    /// - Prepare for potential termination
+    ///
+    /// ## Platform Considerations
+    ///
+    /// - **Desktop**: Rarely called, mainly during shutdown
+    /// - **Android**: Called when app goes to background
+    /// - **iOS**: Called during app lifecycle transitions
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
         todo!("Handle suspend event");
     }
 
+    /// Handles window-specific events from the windowing system.
+    ///
+    /// This method processes all window events including user input, window state changes,
+    /// and rendering requests. It's the main event processing hub that translates winit
+    /// events into Tessera's internal event system.
+    ///
+    /// ## Event Categories
+    ///
+    /// ### Window Management
+    /// - `CloseRequested`: User requested to close the window
+    /// - `Resized`: Window size changed
+    /// - `ScaleFactorChanged`: Display scaling changed (high-DPI support)
+    ///
+    /// ### Input Events
+    /// - `CursorMoved`: Mouse cursor position changed
+    /// - `CursorLeft`: Mouse cursor left the window
+    /// - `MouseInput`: Mouse button press/release
+    /// - `MouseWheel`: Mouse wheel scrolling
+    /// - `Touch`: Touch screen interactions (mobile)
+    /// - `KeyboardInput`: Keyboard key press/release
+    /// - `Ime`: Input Method Editor events (international text input)
+    ///
+    /// ### Rendering
+    /// - `RedrawRequested`: System requests a frame to be rendered
+    ///
+    /// ## Event Processing Flow
+    ///
+    /// 1. **Input Events**: Captured and stored in respective state managers
+    /// 2. **State Updates**: Internal state (cursor, keyboard, IME) is updated
+    /// 3. **Rendering**: On redraw requests, the full rendering pipeline is executed
+    ///
+    /// ## Platform-Specific Handling
+    ///
+    /// Some events have platform-specific behavior, particularly:
+    /// - Touch events (mobile platforms)
+    /// - IME events (different implementations per platform)
+    /// - Scale factor changes (high-DPI displays)
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
@@ -411,6 +919,43 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
     }
 }
 
+/// Shows the Android soft keyboard (virtual keyboard).
+///
+/// This function uses JNI to interact with the Android system to display the soft keyboard.
+/// It's specifically designed for Android applications and handles the complex JNI calls
+/// required to show the input method.
+///
+/// ## Parameters
+///
+/// - `show_implicit`: Whether to show the keyboard implicitly (without explicit user action)
+/// - `android_app`: Reference to the Android application context
+///
+/// ## Platform Support
+///
+/// This function is only available on Android (`target_os = "android"`). It will not be
+/// compiled on other platforms.
+///
+/// ## Error Handling
+///
+/// The function includes comprehensive error handling for JNI operations. If any JNI
+/// call fails, the function will return early without crashing the application.
+/// Exception handling is also included to clear any Java exceptions that might occur.
+///
+/// ## Implementation Notes
+///
+/// This implementation is based on the android-activity crate and follows the pattern
+/// established in: https://github.com/rust-mobile/android-activity/pull/178
+///
+/// The function performs these steps:
+/// 1. Get the Java VM and activity context
+/// 2. Find the InputMethodManager system service
+/// 3. Get the current window's decor view
+/// 4. Call `showSoftInput` on the InputMethodManager
+///
+/// ## Usage
+///
+/// This function is typically called internally by the renderer when IME input is requested.
+/// You generally don't need to call this directly in application code.
 // https://github.com/rust-mobile/android-activity/pull/178
 #[cfg(target_os = "android")]
 pub fn show_soft_input(show_implicit: bool, android_app: &AndroidApp) {
@@ -484,6 +1029,45 @@ pub fn show_soft_input(show_implicit: bool, android_app: &AndroidApp) {
     }
 }
 
+/// Hides the Android soft keyboard (virtual keyboard).
+///
+/// This function uses JNI to interact with the Android system to hide the soft keyboard.
+/// It's the counterpart to [`show_soft_input`] and handles the complex JNI calls required
+/// to dismiss the input method.
+///
+/// ## Parameters
+///
+/// - `android_app`: Reference to the Android application context
+///
+/// ## Platform Support
+///
+/// This function is only available on Android (`target_os = "android"`). It will not be
+/// compiled on other platforms.
+///
+/// ## Error Handling
+///
+/// Like [`show_soft_input`], this function includes comprehensive error handling for JNI
+/// operations. If any step fails, the function returns early without crashing. Java
+/// exceptions are also properly handled and cleared.
+///
+/// ## Implementation Details
+///
+/// The function performs these steps:
+/// 1. Get the Java VM and activity context
+/// 2. Find the InputMethodManager system service
+/// 3. Get the current window and its decor view
+/// 4. Get the window token from the decor view
+/// 5. Call `hideSoftInputFromWindow` on the InputMethodManager
+///
+/// ## Usage
+///
+/// This function is typically called internally by the renderer when IME input is no longer
+/// needed. You generally don't need to call this directly in application code.
+///
+/// ## Relationship to show_soft_input
+///
+/// This function is designed to work in tandem with [`show_soft_input`]. The renderer
+/// automatically manages the keyboard visibility based on IME requests from components.
 #[cfg(target_os = "android")]
 pub fn hide_soft_input(android_app: &AndroidApp) {
     use jni::objects::JValue;

@@ -14,7 +14,7 @@ use crate::{BarrierRequirement, ComputeCommand, DrawCommand};
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```rust,ignore
 /// // Creating a draw command
 /// let draw_cmd = Command::Draw(Box::new(ShapeCommand::Rect { /* ... */ }));
 ///

@@ -1,87 +1,390 @@
+//! Physical pixel coordinate system for Tessera UI framework.
+//!
+//! This module provides types and operations for working with physical pixel coordinates,
+//! positions, and sizes. Physical pixels represent actual screen pixels and are used
+//! internally by the rendering system.
+//!
+//! # Key Types
+//!
+//! - [`Px`] - A single physical pixel coordinate value that supports negative values for scrolling
+//! - [`PxPosition`] - A 2D position in physical pixel space (x, y coordinates)
+//! - [`PxSize`] - A 2D size in physical pixel space (width, height dimensions)
+//!
+//! # Coordinate System
+//!
+//! The coordinate system uses:
+//! - Origin (0, 0) at the top-left corner
+//! - X-axis increases to the right
+//! - Y-axis increases downward
+//! - Negative coordinates are supported for scrolling and off-screen positioning
+//!
+//! # Conversion
+//!
+//! Physical pixels can be converted to and from density-independent pixels ([`Dp`]):
+//! - Use [`Px::from_dp`] to convert from Dp to Px
+//! - Use [`Px::to_dp`] to convert from Px to Dp
+//!
+//! # Example
+//!
+//! ```
+//! use tessera::px::{Px, PxPosition, PxSize};
+//! use tessera::dp::Dp;
+//!
+//! // Create pixel values
+//! let x = Px::new(100);
+//! let y = Px::new(200);
+//!
+//! // Create a position
+//! let position = PxPosition::new(x, y);
+//!
+//! // Create a size
+//! let size = PxSize::new(Px::new(300), Px::new(400));
+//!
+//! // Arithmetic operations
+//! let offset_position = position.offset(Px::new(10), Px::new(-5));
+//!
+//! // Convert between Dp and Px
+//! let dp_value = Dp::new(16.0);
+//! let px_value = Px::from_dp(dp_value);
+//! ```
+
 use std::ops::{AddAssign, Neg};
 
 use crate::dp::{Dp, SCALE_FACTOR};
 
-/// Physical pixel coordinate type, supports negative values for scrolling
+/// A physical pixel coordinate value.
+///
+/// This type represents a single coordinate value in physical pixel space. Physical pixels
+/// correspond directly to screen pixels and are used internally by the rendering system.
+/// Unlike density-independent pixels ([`Dp`]), physical pixels are not scaled based on
+/// screen density.
+///
+/// # Features
+///
+/// - Supports negative values for scrolling and off-screen positioning
+/// - Provides arithmetic operations (addition, subtraction, multiplication, division)
+/// - Includes saturating arithmetic to prevent overflow
+/// - Converts to/from density-independent pixels ([`Dp`])
+/// - Converts to/from floating-point values with overflow protection
+///
+/// # Examples
+///
+/// ```
+/// use tessera::px::Px;
+///
+/// // Create pixel values
+/// let px1 = Px::new(100);
+/// let px2 = Px::new(-50); // Negative values supported
+///
+/// // Arithmetic operations
+/// let sum = px1 + px2; // Px(50)
+/// let doubled = px1 * 2; // Px(200)
+///
+/// // Saturating arithmetic prevents overflow
+/// let max_px = Px::new(i32::MAX);
+/// let safe_add = max_px.saturating_add(Px::new(1)); // Still Px(i32::MAX)
+///
+/// // Convert to absolute value for rendering
+/// let abs_value = Px::new(-10).abs(); // 0 (negative becomes 0)
+/// ```
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct Px(pub i32);
 
 impl Px {
+    /// A constant representing zero pixels.
     pub const ZERO: Self = Self(0);
+
+    /// A constant representing the maximum possible pixel value.
     pub const MAX: Self = Self(i32::MAX);
 
-    /// The raw i32 value
+    /// Returns the raw i32 value.
+    ///
+    /// This provides direct access to the underlying integer value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::Px;
+    ///
+    /// let px = Px::new(42);
+    /// assert_eq!(px.raw(), 42);
+    /// ```
     pub fn raw(self) -> i32 {
         self.0
     }
 
-    /// Create a new Px instance
+    /// Creates a new `Px` instance from an i32 value.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The pixel value as an i32. Negative values are allowed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::Px;
+    ///
+    /// let positive = Px::new(100);
+    /// let negative = Px::new(-50);
+    /// let zero = Px::new(0);
+    /// ```
     pub const fn new(value: i32) -> Self {
         Px(value)
     }
 
-    /// Convert from Dp to Px
+    /// Converts from density-independent pixels ([`Dp`]) to physical pixels.
+    ///
+    /// This conversion uses the current scale factor to determine how many physical
+    /// pixels correspond to the given Dp value. The scale factor is typically
+    /// determined by the screen's pixel density.
+    ///
+    /// # Arguments
+    ///
+    /// * `dp` - The density-independent pixel value to convert
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::Px;
+    /// use tessera::dp::Dp;
+    ///
+    /// let dp_value = Dp::new(16.0);
+    /// let px_value = Px::from_dp(dp_value);
+    /// ```
     pub fn from_dp(dp: Dp) -> Self {
         Px(dp.to_pixels_f64() as i32)
     }
 
-    /// Convert to Dp
+    /// Converts from physical pixels to density-independent pixels ([`Dp`]).
+    ///
+    /// This conversion uses the current scale factor to determine the Dp value
+    /// that corresponds to this physical pixel value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::Px;
+    ///
+    /// let px_value = Px::new(32);
+    /// let dp_value = px_value.to_dp();
+    /// ```
     pub fn to_dp(self) -> Dp {
         let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
         Dp((self.0 as f64) / scale_factor)
     }
 
-    /// Get absolute value (used for coordinate conversion during rendering)
+    /// Returns the absolute value as a u32, clamping negative values to 0.
+    ///
+    /// This method is primarily used for coordinate conversion during rendering,
+    /// where negative coordinates need to be handled appropriately.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::Px;
+    ///
+    /// assert_eq!(Px::new(10).abs(), 10);
+    /// assert_eq!(Px::new(-5).abs(), 0);
+    /// assert_eq!(Px::new(0).abs(), 0);
+    /// ```
     pub fn abs(self) -> u32 {
         self.0.max(0) as u32
     }
 
-    /// Convert to f32
+    /// Converts the pixel value to f32.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::Px;
+    ///
+    /// let px = Px::new(42);
+    /// assert_eq!(px.to_f32(), 42.0);
+    /// ```
     pub fn to_f32(self) -> f32 {
         self.0 as f32
     }
 
-    /// Create from f32. Panics on overflow in debug builds.
+    /// Creates a `Px` from an f32 value.
+    ///
+    /// # Panics
+    ///
+    /// This function may panic on overflow in debug builds when the f32 value
+    /// cannot be represented as an i32.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::Px;
+    ///
+    /// let px = Px::from_f32(42.7);
+    /// assert_eq!(px.raw(), 42);
+    /// ```
     pub fn from_f32(value: f32) -> Self {
         Px(value as i32)
     }
 
-    /// Create from f32, saturating at the numeric bounds instead of overflowing.
+    /// Creates a `Px` from an f32 value, saturating at the numeric bounds instead of overflowing.
+    ///
+    /// This is the safe alternative to [`from_f32`](Self::from_f32) that handles overflow
+    /// by clamping the value to the valid i32 range.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::Px;
+    ///
+    /// let normal = Px::saturating_from_f32(42.7);
+    /// assert_eq!(normal.raw(), 42);
+    ///
+    /// let max_val = Px::saturating_from_f32(f32::MAX);
+    /// assert_eq!(max_val.raw(), i32::MAX);
+    ///
+    /// let min_val = Px::saturating_from_f32(f32::MIN);
+    /// assert_eq!(min_val.raw(), i32::MIN);
+    /// ```
     pub fn saturating_from_f32(value: f32) -> Self {
         let clamped_value = value.clamp(i32::MIN as f32, i32::MAX as f32);
         Px(clamped_value as i32)
     }
 
-    /// Saturating integer addition. Computes `self + rhs`, saturating at the
-    /// numeric bounds instead of overflowing.
+    /// Saturating integer addition.
+    ///
+    /// Computes `self + rhs`, saturating at the numeric bounds instead of overflowing.
+    /// This prevents integer overflow by clamping the result to the valid i32 range.
+    ///
+    /// # Arguments
+    ///
+    /// * `rhs` - The right-hand side value to add
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::Px;
+    ///
+    /// let a = Px::new(10);
+    /// let b = Px::new(5);
+    /// assert_eq!(a.saturating_add(b), Px::new(15));
+    ///
+    /// // Prevents overflow
+    /// let max = Px::new(i32::MAX);
+    /// assert_eq!(max.saturating_add(Px::new(1)), max);
+    /// ```
     pub fn saturating_add(self, rhs: Self) -> Self {
         Px(self.0.saturating_add(rhs.0))
     }
 
-    /// Saturating integer subtraction. Computes `self - rhs`, saturating at
-    /// the numeric bounds instead of overflowing.
+    /// Saturating integer subtraction.
+    ///
+    /// Computes `self - rhs`, saturating at the numeric bounds instead of overflowing.
+    /// This prevents integer underflow by clamping the result to the valid i32 range.
+    ///
+    /// # Arguments
+    ///
+    /// * `rhs` - The right-hand side value to subtract
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::Px;
+    ///
+    /// let a = Px::new(10);
+    /// let b = Px::new(5);
+    /// assert_eq!(a.saturating_sub(b), Px::new(5));
+    ///
+    /// // Prevents underflow
+    /// let min = Px::new(i32::MIN);
+    /// assert_eq!(min.saturating_sub(Px::new(1)), min);
+    /// ```
     pub fn saturating_sub(self, rhs: Self) -> Self {
         Px(self.0.saturating_sub(rhs.0))
     }
 }
 
-/// Physical pixel position type
+/// A 2D position in physical pixel space.
+///
+/// This type represents a position with x and y coordinates in physical pixel space.
+/// Physical pixels correspond directly to screen pixels and are used internally
+/// by the rendering system.
+///
+/// # Coordinate System
+///
+/// - Origin (0, 0) is at the top-left corner
+/// - X-axis increases to the right
+/// - Y-axis increases downward
+/// - Negative coordinates are supported for scrolling and off-screen positioning
+///
+/// # Examples
+///
+/// ```
+/// use tessera::px::{Px, PxPosition};
+///
+/// // Create a position
+/// let position = PxPosition::new(Px::new(100), Px::new(200));
+///
+/// // Offset the position
+/// let offset_position = position.offset(Px::new(10), Px::new(-5));
+///
+/// // Calculate distance between positions
+/// let other_position = PxPosition::new(Px::new(103), Px::new(196));
+/// let distance = position.distance_to(other_position);
+///
+/// // Arithmetic operations
+/// let sum = position + other_position;
+/// let diff = position - other_position;
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PxPosition {
+    /// The x-coordinate in physical pixels
     pub x: Px,
+    /// The y-coordinate in physical pixels
     pub y: Px,
 }
 
 impl PxPosition {
-    /// Create a zero position
+    /// A constant representing the zero position (0, 0).
     pub const ZERO: Self = Self { x: Px(0), y: Px(0) };
 
-    /// Create a new position
+    /// Creates a new position from x and y coordinates.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - The x-coordinate in physical pixels
+    /// * `y` - The y-coordinate in physical pixels
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::new(Px::new(100), Px::new(200));
+    /// assert_eq!(position.x, Px::new(100));
+    /// assert_eq!(position.y, Px::new(200));
+    /// ```
     pub const fn new(x: Px, y: Px) -> Self {
         Self { x, y }
     }
 
-    /// Offset the position. Panics on overflow in debug builds.
+    /// Offsets the position by the given deltas.
+    ///
+    /// # Panics
+    ///
+    /// This function may panic on overflow in debug builds.
+    ///
+    /// # Arguments
+    ///
+    /// * `dx` - The x-axis offset in physical pixels
+    /// * `dy` - The y-axis offset in physical pixels
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::new(Px::new(10), Px::new(20));
+    /// let offset_position = position.offset(Px::new(5), Px::new(-3));
+    /// assert_eq!(offset_position, PxPosition::new(Px::new(15), Px::new(17)));
+    /// ```
     pub fn offset(self, dx: Px, dy: Px) -> Self {
         Self {
             x: self.x + dx,
@@ -89,7 +392,29 @@ impl PxPosition {
         }
     }
 
-    /// Offset the position with saturating arithmetic.
+    /// Offsets the position with saturating arithmetic.
+    ///
+    /// This prevents overflow by clamping the result to the valid coordinate range.
+    ///
+    /// # Arguments
+    ///
+    /// * `dx` - The x-axis offset in physical pixels
+    /// * `dy` - The y-axis offset in physical pixels
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::new(Px::new(10), Px::new(20));
+    /// let offset_position = position.saturating_offset(Px::new(5), Px::new(-3));
+    /// assert_eq!(offset_position, PxPosition::new(Px::new(15), Px::new(17)));
+    ///
+    /// // Prevents overflow
+    /// let max_position = PxPosition::new(Px::new(i32::MAX), Px::new(i32::MAX));
+    /// let safe_offset = max_position.saturating_offset(Px::new(1), Px::new(1));
+    /// assert_eq!(safe_offset, max_position);
+    /// ```
     pub fn saturating_offset(self, dx: Px, dy: Px) -> Self {
         Self {
             x: self.x.saturating_add(dx),
@@ -97,24 +422,81 @@ impl PxPosition {
         }
     }
 
-    /// Calculate the distance to another point
+    /// Calculates the Euclidean distance to another position.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The other position to calculate distance to
+    ///
+    /// # Returns
+    ///
+    /// The distance as a floating-point value
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let pos1 = PxPosition::new(Px::new(0), Px::new(0));
+    /// let pos2 = PxPosition::new(Px::new(3), Px::new(4));
+    /// assert_eq!(pos1.distance_to(pos2), 5.0);
+    /// ```
     pub fn distance_to(self, other: Self) -> f32 {
         let dx = (self.x.0 - other.x.0) as f32;
         let dy = (self.y.0 - other.y.0) as f32;
         (dx * dx + dy * dy).sqrt()
     }
 
-    /// Convert to a f32 array (2D)
+    /// Converts the position to a 2D f32 array.
+    ///
+    /// # Returns
+    ///
+    /// An array `[x, y]` where both coordinates are converted to f32
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::new(Px::new(10), Px::new(20));
+    /// assert_eq!(position.to_f32_arr2(), [10.0, 20.0]);
+    /// ```
     pub fn to_f32_arr2(self) -> [f32; 2] {
         [self.x.0 as f32, self.y.0 as f32]
     }
 
-    /// Convert to a f32 array (3D)
+    /// Converts the position to a 3D f32 array with z=0.
+    ///
+    /// # Returns
+    ///
+    /// An array `[x, y, 0.0]` where x and y are converted to f32 and z is 0.0
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::new(Px::new(10), Px::new(20));
+    /// assert_eq!(position.to_f32_arr3(), [10.0, 20.0, 0.0]);
+    /// ```
     pub fn to_f32_arr3(self) -> [f32; 3] {
         [self.x.0 as f32, self.y.0 as f32, 0.0]
     }
 
-    /// Create from a f32 array (2D)
+    /// Creates a position from a 2D f32 array.
+    ///
+    /// # Arguments
+    ///
+    /// * `arr` - An array `[x, y]` where both values will be converted to i32
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::from_f32_arr2([10.5, 20.7]);
+    /// assert_eq!(position, PxPosition::new(Px::new(10), Px::new(20)));
+    /// ```
     pub fn from_f32_arr2(arr: [f32; 2]) -> Self {
         Self {
             x: Px::new(arr[0] as i32),
@@ -122,8 +504,20 @@ impl PxPosition {
         }
     }
 
-    /// Create from a f32 array (3D)
-    /// Note: The third element will be ignored
+    /// Creates a position from a 3D f32 array, ignoring the z component.
+    ///
+    /// # Arguments
+    ///
+    /// * `arr` - An array `[x, y, z]` where only x and y are used
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::from_f32_arr3([10.5, 20.7, 30.9]);
+    /// assert_eq!(position, PxPosition::new(Px::new(10), Px::new(20)));
+    /// ```
     pub fn from_f32_arr3(arr: [f32; 3]) -> Self {
         Self {
             x: Px::new(arr[0] as i32),
@@ -131,17 +525,56 @@ impl PxPosition {
         }
     }
 
-    /// Convert to a f64 array (2D)
+    /// Converts the position to a 2D f64 array.
+    ///
+    /// # Returns
+    ///
+    /// An array `[x, y]` where both coordinates are converted to f64
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::new(Px::new(10), Px::new(20));
+    /// assert_eq!(position.to_f64_arr2(), [10.0, 20.0]);
+    /// ```
     pub fn to_f64_arr2(self) -> [f64; 2] {
         [self.x.0 as f64, self.y.0 as f64]
     }
 
-    /// Convert to a f64 array (3D)
+    /// Converts the position to a 3D f64 array with z=0.
+    ///
+    /// # Returns
+    ///
+    /// An array `[x, y, 0.0]` where x and y are converted to f64 and z is 0.0
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::new(Px::new(10), Px::new(20));
+    /// assert_eq!(position.to_f64_arr3(), [10.0, 20.0, 0.0]);
+    /// ```
     pub fn to_f64_arr3(self) -> [f64; 3] {
         [self.x.0 as f64, self.y.0 as f64, 0.0]
     }
 
-    /// Create from a f64 array (2D)
+    /// Creates a position from a 2D f64 array.
+    ///
+    /// # Arguments
+    ///
+    /// * `arr` - An array `[x, y]` where both values will be converted to i32
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::from_f64_arr2([10.5, 20.7]);
+    /// assert_eq!(position, PxPosition::new(Px::new(10), Px::new(20)));
+    /// ```
     pub fn from_f64_arr2(arr: [f64; 2]) -> Self {
         Self {
             x: Px::new(arr[0] as i32),
@@ -149,8 +582,20 @@ impl PxPosition {
         }
     }
 
-    /// Create from a f64 array (3D)
-    /// Note: The third element will be ignored
+    /// Creates a position from a 3D f64 array, ignoring the z component.
+    ///
+    /// # Arguments
+    ///
+    /// * `arr` - An array `[x, y, z]` where only x and y are used
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::from_f64_arr3([10.5, 20.7, 30.9]);
+    /// assert_eq!(position, PxPosition::new(Px::new(10), Px::new(20)));
+    /// ```
     pub fn from_f64_arr3(arr: [f64; 3]) -> Self {
         Self {
             x: Px::new(arr[0] as i32),
@@ -159,26 +604,79 @@ impl PxPosition {
     }
 }
 
-/// Physical pixel size type
+/// A 2D size in physical pixel space.
+///
+/// This type represents dimensions (width and height) in physical pixel space.
+/// Physical pixels correspond directly to screen pixels and are used internally
+/// by the rendering system.
+///
+/// # Examples
+///
+/// ```
+/// use tessera::px::{Px, PxSize};
+///
+/// // Create a size
+/// let size = PxSize::new(Px::new(300), Px::new(200));
+///
+/// // Convert to array formats for graphics APIs
+/// let f32_array = size.to_f32_arr2();
+/// assert_eq!(f32_array, [300.0, 200.0]);
+///
+/// // Create from array
+/// let from_array = PxSize::from([Px::new(400), Px::new(300)]);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct PxSize {
+    /// The width in physical pixels
     pub width: Px,
+    /// The height in physical pixels
     pub height: Px,
 }
 
 impl PxSize {
-    /// Create a zero size
+    /// A constant representing zero size (0×0).
     pub const ZERO: Self = Self {
         width: Px(0),
         height: Px(0),
     };
 
-    /// Create a new size
+    /// Creates a new size from width and height.
+    ///
+    /// # Arguments
+    ///
+    /// * `width` - The width in physical pixels
+    /// * `height` - The height in physical pixels
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxSize};
+    ///
+    /// let size = PxSize::new(Px::new(300), Px::new(200));
+    /// assert_eq!(size.width, Px::new(300));
+    /// assert_eq!(size.height, Px::new(200));
+    /// ```
     pub const fn new(width: Px, height: Px) -> Self {
         Self { width, height }
     }
 
-    /// Convert to a f32 array (2D)
+    /// Converts the size to a 2D f32 array.
+    ///
+    /// This is useful for interfacing with graphics APIs that expect
+    /// floating-point size values.
+    ///
+    /// # Returns
+    ///
+    /// An array `[width, height]` where both dimensions are converted to f32
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::px::{Px, PxSize};
+    ///
+    /// let size = PxSize::new(Px::new(300), Px::new(200));
+    /// assert_eq!(size.to_f32_arr2(), [300.0, 200.0]);
+    /// ```
     pub fn to_f32_arr2(self) -> [f32; 2] {
         [self.width.0 as f32, self.height.0 as f32]
     }

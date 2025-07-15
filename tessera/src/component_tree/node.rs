@@ -75,7 +75,7 @@ impl ComponentNodeMetaData {
     /// to the command queue. Commands are executed in the order they are added.
     ///
     /// # Example
-    /// ```ignore
+    /// ```rust,ignore
     /// metadata.push_draw_command(ShapeCommand::Rect {
     ///     color: [1.0, 0.0, 0.0, 1.0],
     ///     corner_radius: 8.0,
@@ -96,7 +96,7 @@ impl ComponentNodeMetaData {
     /// `Command::Compute` variant and adds it to the command queue.
     ///
     /// # Example
-    /// ```ignore
+    /// ```rust,ignore
     /// metadata.push_compute_command(BlurCommand {
     ///     radius: 5.0,
     ///     sigma: 2.0,
