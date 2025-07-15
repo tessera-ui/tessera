@@ -6,6 +6,8 @@ use tessera_basic_components::{
     boxed::BoxedArgs,
     boxed_ui,
     glass_button::{GlassButtonArgsBuilder, glass_button},
+    image::{ImageArgsBuilder, ImageSource, image, load_image_from_source},
+    pipelines::image::ImageData,
     ripple_state::RippleState,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -13,7 +15,8 @@ use tessera_basic_components::{
 use tessera_macros::tessera;
 
 #[tessera]
-fn app(ripple_state: Arc<RippleState>) {
+fn app(ripple_state: Arc<RippleState>, image_resource: &ImageData) {
+    let image_resource = image_resource.clone();
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fill {
@@ -42,16 +45,24 @@ fn app(ripple_state: Arc<RippleState>) {
                     },
                 },
                 move || {
+                    image(
+                        ImageArgsBuilder::default()
+                            .data(image_resource)
+                            .build()
+                            .unwrap(),
+                    );
+                },
+                move || {
                     let button_args = GlassButtonArgsBuilder::default()
                         .on_click(Arc::new(|| println!("Glass Button 1 clicked!")))
                         .tint_color(Color::from_rgba_u8(0, 0, 255, 25))
                         .width(DimensionValue::Fixed(Dp(200.0).into()))
                         .height(DimensionValue::Fixed(Dp(100.0).into()))
+                        .noise_amount(0.0)
                         .padding(Dp(15.0))
                         .corner_radius(25.0)
                         .inner_shadow_radius(0.0)
                         .highlight_size(0.0)
-                        .blur_radius(4.0)
                         .contrast(0.6)
                         .build()
                         .unwrap();
@@ -72,11 +83,16 @@ fn app(ripple_state: Arc<RippleState>) {
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ripple_state = Arc::new(RippleState::new());
+    let image_path = format!(
+        "{}/examples/assets/scarlet_ut.jpg",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let image_data = load_image_from_source(&ImageSource::Path(image_path))?;
 
     Renderer::run(
         {
             move || {
-                app(ripple_state.clone());
+                app(ripple_state.clone(), &image_data);
             }
         },
         |app| {
