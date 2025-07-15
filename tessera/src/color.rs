@@ -247,7 +247,7 @@ impl Color {
     /// use tessera::Color;
     ///
     /// let color = Color::new(0.5, 0.3, 0.8, 1.0);
-    /// let semi_transparent_color = color.alpha(0.5);
+    /// let semi_transparent_color = color.with_alpha(0.5);
     ///
     /// assert_eq!(semi_transparent_color.a, 0.5);
     /// ```
