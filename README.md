@@ -26,7 +26,7 @@
 [ci-badge]: https://img.shields.io/github/actions/workflow/status/shadow3aaa/tessera/ci.yml?style=for-the-badge&label=CI&logo=githubactions
 [ci-url]: https://github.com/shadow3aaa/tessera/actions/workflows/ci.yml
 [logo-badge]: https://img.shields.io/badge/logo-source-blue?style=for-the-badge&logo=rust
-[logo-url]: tessera-ui-logo
+[logo-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-logo
 [tessera-badge]: https://img.shields.io/badge/tessera-source-blue?style=for-the-badge&logo=rust
 [tessera-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-docs-url]: https://shadow3aaa.github.io/tessera/tessera
@@ -34,11 +34,11 @@
 [tessera-macros-docs-url]: https://shadow3aaa.github.io/tessera/tessera_macros
 [tessera-basic-components-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera_basic_components-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-basic-components-docs-url]: https://shadow3aaa.github.io/tessera/tessera_basic_components
-[tessera-url]: tessera-ui
+[tessera-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui
 [tessera-basic-components-badge]: https://img.shields.io/badge/basic%20components-source-blue?style=for-the-badge&logo=rust
-[tessera-basic-components-url]: tessera-ui-basic-components
+[tessera-basic-components-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-basic-components
 [tessera-macros-badge]: https://img.shields.io/badge/tessera_macros-source-blue?style=for-the-badge&logo=rust
-[tessera-macros-url]: tessera-ui-macros
+[tessera-macros-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros
 
 ## Introduction
 
@@ -229,7 +229,7 @@ Tessera uses a multi-crate workspace structure with a clear separation of respon
 
 - **`tessera`**: The core functionality of the framework, including the component tree, renderer, runtime, basic types (`Dp`, `Px`), and event handling.
 - **`tessera_basic_components`**: Provides a set of ready-to-use UI components (like `row`, `column`, `text`, `button`, `surface`) and their rendering pipelines.
-- **`tessera_macros`**: Contains the `#[tessera]` procedural macro, which greatly simplifies component definition. [Documentation](tessera_macros/README.md)
+- **`tessera_macros`**: Contains the `#[tessera]` procedural macro, which greatly simplifies component definition. [Documentation](https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros/README.md)
 - **`example`**: An example project demonstrating how to build applications with the `Tessera` framework.
 
 ## License

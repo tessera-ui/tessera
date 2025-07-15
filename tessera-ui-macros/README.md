@@ -172,4 +172,4 @@ This crate is part of the larger Tessera project. For contribution guidelines, p
 
 ## License
 
-This project is licensed under the same terms as the main Tessera framework. See the [LICENSE](../LICENSE) file for details.
+This project is licensed under the same terms as the main Tessera framework. See the [LICENSE](https://github.com/shadow3aaa/tessera/blob/main/LICENSE) file for details.

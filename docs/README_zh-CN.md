@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="../tessera-ui-logo">
+<a href="https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-logo">
     <img src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
 <a/>
 
@@ -26,7 +26,7 @@
 [ci-badge]: https://img.shields.io/github/actions/workflow/status/shadow3aaa/tessera/ci.yml?style=for-the-badge&label=CI&logo=githubactions
 [ci-url]: https://github.com/shadow3aaa/tessera/actions/workflows/ci.yml
 [logo-badge]: https://img.shields.io/badge/logo-source-blue?style=for-the-badge&logo=rust
-[logo-url]: ../tessera-ui-logo
+[logo-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-logo
 [tessera-badge]: https://img.shields.io/badge/tessera-source-blue?style=for-the-badge&logo=rust
 [tessera-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-docs-url]: https://shadow3aaa.github.io/tessera/tessera
@@ -34,17 +34,17 @@
 [tessera-macros-docs-url]: https://shadow3aaa.github.io/tessera/tessera_macros
 [tessera-basic-components-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera_basic_components-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-basic-components-docs-url]: https://shadow3aaa.github.io/tessera/tessera_basic_components
-[tessera-url]: ../tessera-ui
+[tessera-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui
 [tessera-basic-components-badge]: https://img.shields.io/badge/basic%20components-source-blue?style=for-the-badge&logo=rust
-[tessera-basic-components-url]: ../tessera-ui-basic-components
+[tessera-basic-components-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-basic-components
 [tessera-macros-badge]: https://img.shields.io/badge/tessera_macros-source-blue?style=for-the-badge&logo=rust
-[tessera-macros-url]: ../tessera-ui-macros
+[tessera-macros-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros
 
 ## 简介
 
 Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其核心采用函数式设计，旨在提供极致的性能、灵活性和可扩展性。
 
-该项目目前处于早期开发阶段。欢迎通过[示例代码](../example)探索最新进展。
+该项目目前处于早期开发阶段。欢迎通过[示例代码](https://github.com/shadow3aaa/tessera/blob/main/example)探索最新进展。
 
 ## 路线图
 
@@ -234,4 +234,4 @@ Tessera 使用多 crate 的工作区结构，职责分明：
 
 ## 许可证
 
-Tessera 采用 [MIT 许可证](../LICENSE) 或 [Apache 2.0 许可证](../LICENSE)双重许可。
+Tessera 采用 [MIT 许可证](https://github.com/shadow3aaa/tessera/blob/main/LICENSE) 或 [Apache 2.0 许可证](https://github.com/shadow3aaa/tessera/blob/main/LICENSE)双重许可。
