@@ -1,7 +1,8 @@
 [package]
 name = "tessera_basic_components"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
 bytemuck = "1.23.1"

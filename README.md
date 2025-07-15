@@ -231,3 +231,7 @@ Tessera uses a multi-crate workspace structure with a clear separation of respon
 - **`tessera_basic_components`**: Provides a set of ready-to-use UI components (like `row`, `column`, `text`, `button`, `surface`) and their rendering pipelines.
 - **`tessera_macros`**: Contains the `#[tessera]` procedural macro, which greatly simplifies component definition. [Documentation](tessera_macros/README.md)
 - **`example`**: An example project demonstrating how to build applications with the `Tessera` framework.
+
+## License
+
+Tessera is licensed under either of the [MIT License](LICENSE) or the [Apache License 2.0](LICENSE).

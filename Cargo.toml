@@ -2,6 +2,10 @@
 resolver = "3"
 members = ["example", "tessera", "tessera_logo", "tessera_basic_components", "tessera_macros"]
 
+[workspace.package]
+license = "MIT OR Apache-2.0"
+edition = "2024"
+
 [profile.release]
 codegen-units = 1
 lto = true

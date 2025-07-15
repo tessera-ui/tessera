@@ -231,3 +231,7 @@ Tessera 使用多 crate 的工作区结构，职责分明：
 - **`tessera_basic_components`**：提供一组即用型 UI 组件（如 `row`、`column`、`text`、`button`、`surface`）及其渲染管线。
 - **`tessera_macros`**：包含 `#[tessera]` 过程宏，极大地简化了组件的定义。[文档](../tessera_macros/docs/README_zh-CN.md)
 - **`example`**：一个示例项目，演示如何使用 `Tessera` 框架构建应用程序。
+
+## 许可证
+
+Tessera 采用 [MIT 许可证](../LICENSE) 或 [Apache 2.0 许可证](../LICENSE)双重许可。
