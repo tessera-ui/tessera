@@ -10,8 +10,11 @@ description = "Basic components for tessera-ui"
 bytemuck = "1.23.1"
 derive_builder = "0.20.2"
 earcutr = "0.5.0"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-glyphon = { git = "https://github.com/shadow3aaa/glyphon" }
+image = { version = "0.25", default-features = false, features = [
+    "png",
+    "jpeg",
+] }
+glyphon = { package = "glyphon-tessera-fork", version = "0.9.0" }
 log = "0.4.27"
 parking_lot = "0.12.4"
 tessera-ui = "0.1.3"
