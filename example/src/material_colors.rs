@@ -4,7 +4,7 @@
 //! across the Tessera UI framework example application.
 //!
 //! Colors are based on the Material Design 3 color system:
-//! https://m3.material.io/styles/color/the-color-system/tokens
+//! <https://m3.material.io/styles/color/the-color-system/tokens>
 
 /// Material Design 3 Core Color Palette
 pub mod md_colors {
