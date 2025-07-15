@@ -873,9 +873,9 @@ dependencies = [
  "parking_lot",
  "pollster",
  "rand 0.9.1",
- "tessera-ui 0.1.3",
+ "tessera-ui 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tessera-ui-basic-components",
- "tessera-ui-macros 0.1.0",
+ "tessera-ui-macros 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio",
  "wgpu",
  "winit",
@@ -3130,9 +3130,9 @@ dependencies = [
  "pollster",
  "rand 0.9.1",
  "rand_pcg",
- "tessera-ui 0.1.3",
+ "tessera-ui 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tessera-ui-basic-components",
- "tessera-ui-macros 0.1.0",
+ "tessera-ui-macros 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio",
 ]
 
