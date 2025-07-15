@@ -48,6 +48,8 @@ impl DrawCommand for ImageCommand {
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct ImageUniforms {
     rect: [f32; 4],
+    is_bgra: u32,
+    _padding: [u32; 3],
 }
 
 struct ImageResources {
@@ -92,7 +94,7 @@ impl ImagePipeline {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -236,6 +238,10 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
                 }
             });
 
+        let is_bgra = matches!(
+            config.format,
+            wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+        );
         let uniforms = ImageUniforms {
             rect: [
                 (start_pos.x.0 as f32 / config.width as f32) * 2.0 - 1.0
@@ -245,6 +251,8 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
                 size.width.0 as f32 / config.width as f32,
                 size.height.0 as f32 / config.height as f32,
             ],
+            is_bgra: if is_bgra { 1 } else { 0 },
+            _padding: [0; 3],
         };
         gpu_queue.write_buffer(&resources.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
 
