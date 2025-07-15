@@ -27,6 +27,7 @@
 //! quote = "1.0"
 //! clap = { version = "4.0", features = ["derive"] }
 //! ignore = "0.4"
+//! rayon = "1.10.0"
 //! ```
 
 use std::{
@@ -36,14 +37,15 @@ use std::{
     process::Command,
 };
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use clap::Parser;
 use colored::Colorize;
 use ignore::WalkBuilder;
 use itertools::Itertools;
 use proc_macro2::Span;
 use quote::quote;
-use syn::{File, Item, UseTree, Visibility, spanned::Spanned};
+use rayon::prelude::*;
+use syn::{spanned::Spanned, File, Item, UseTree, Visibility};
 
 /// Checks and fixes `use` statements in Rust files and directories, respecting .gitignore.
 #[derive(Parser, Debug)]
@@ -137,65 +139,62 @@ impl UseNode {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let mut failed_items = Vec::new();
 
-    let mut files_to_process = HashSet::new();
-    for path in &cli.paths {
-        for result in WalkBuilder::new(path).build() {
-            match result {
-                Ok(entry) => {
-                    if entry.file_type().map_or(false, |ft| ft.is_file()) {
-                        if entry.path().extension().map_or(false, |ext| ext == "rs") {
-                            files_to_process.insert(entry.into_path());
+    let files_to_process: Vec<PathBuf> = cli
+        .paths
+        .par_iter()
+        .flat_map(|path| {
+            WalkBuilder::new(path)
+                .build()
+                .filter_map(Result::ok)
+                .filter(|e| e.file_type().map_or(false, |ft| ft.is_file()))
+                .filter(|e| e.path().extension().map_or(false, |ext| ext == "rs"))
+                .map(|e| e.into_path())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    let results: Vec<_> = files_to_process
+        .into_par_iter()
+        .map(|file_path| {
+            let result = if cli.fix {
+                fix_file(&file_path)
+                    .map(|changed| {
+                        if changed {
+                            "Fixed".cyan().to_string()
+                        } else {
+                            "Correctly formatted".green().to_string()
                         }
-                    }
-                }
-                Err(err) => eprintln!("ERROR processing path: {}", err),
+                    })
+                    .map_err(|e| format!("Failed to fix: {}", e))
+            } else {
+                check_file(&file_path)
+                    .map(|_| "Check passed".green().to_string())
+                    .map_err(|e| format!("Check failed: {}", e))
+            };
+            (file_path, result)
+        })
+        .collect();
+
+    let mut failed_items = Vec::new();
+    for (file_path, result) in results {
+        match result {
+            Ok(status) => {
+                let icon = if status.contains("Fixed") {
+                    "🔧"
+                } else {
+                    "✅"
+                };
+                println!("{} {} - {}", icon, status, file_path.display());
+            }
+            Err(e) => {
+                println!("❌ {} - {}: {}", "Error".red(), file_path.display(), e);
+                failed_items.push(file_path);
             }
         }
     }
 
-    let mut has_failure = false;
-    for file_path in files_to_process {
-        if cli.fix {
-            match fix_file(&file_path) {
-                Ok(true) => println!("🔧 {} - {}", "Fixed".cyan(), file_path.display()),
-                Ok(false) => println!(
-                    "✅ {} - {}",
-                    "Correctly formatted".green(),
-                    file_path.display()
-                ),
-                Err(e) => {
-                    println!(
-                        "❌ {} - {}: {}",
-                        "Failed to fix".red(),
-                        file_path.display(),
-                        e
-                    );
-                    failed_items.push(file_path);
-                    has_failure = true;
-                }
-            }
-        } else {
-            match check_file(&file_path) {
-                Ok(_) => {
-                    println!("✅ {} - {}", "Check passed".green(), file_path.display());
-                }
-                Err(e) => {
-                    println!(
-                        "❌ {} - {}: {}",
-                        "Check failed".red(),
-                        file_path.display(),
-                        e
-                    );
-                    failed_items.push(file_path);
-                    has_failure = true;
-                }
-            }
-        }
-    }
-
-    if has_failure {
+    if !failed_items.is_empty() {
         bail!("Failed to process {} files.", failed_items.len());
     }
 
