@@ -12,17 +12,20 @@ use crate::fluid_glass::FluidGlassCommand;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct GlassUniforms {
-    // Vector values
+    // Grouped by alignment to match WGSL std140 layout rules.
+    // vec4s
     tint_color: [f32; 4],
     highlight_color: [f32; 4],
     inner_shadow_color: [f32; 4],
-    rect_uv_bounds: [f32; 4], // x_min, y_min, x_max, y_max
+    rect_uv_bounds: [f32; 4],
 
-    // vec2 types
+    // vec2s
     rect_size_px: [f32; 2],
+    ripple_center: [f32; 2],
 
-    // f32 types
+    // f32s
     corner_radius: f32,
+    shape_type: f32,
     g2_k_value: f32,
     dispersion_height: f32,
     chroma_multiplier: f32,
@@ -36,14 +39,14 @@ struct GlassUniforms {
     noise_amount: f32,
     noise_scale: f32,
     time: f32,
-
-    // Ripple effect properties
-    ripple_center: [f32; 2],
     ripple_radius: f32,
     ripple_alpha: f32,
     ripple_strength: f32,
 
-    _padding: [f32; 3], // Struct needs to be aligned to 16 bytes.
+    // Padding to ensure the struct is aligned to 16 bytes.
+    // Total size: 4*16 (vec4s) + 2*8 (vec2s) + 18*4 (f32s) = 64 + 16 + 72 = 152 bytes.
+    // Padded to 160 bytes.
+    _padding: [f32; 2],
 }
 
 // --- Pipeline Definition ---
@@ -177,12 +180,25 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         ];
 
         let uniforms = GlassUniforms {
+            // vec4s
             tint_color: args.tint_color.into(),
             highlight_color: args.highlight_color.into(),
             inner_shadow_color: args.inner_shadow_color.into(),
             rect_uv_bounds,
+
+            // vec2s
             rect_size_px: [size.width.0 as f32, size.height.0 as f32],
-            corner_radius: args.corner_radius,
+            ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]),
+
+            // f32s
+            corner_radius: match args.shape {
+                crate::shape_def::Shape::RoundedRectangle { corner_radius } => corner_radius,
+                crate::shape_def::Shape::Ellipse => 0.0,
+            },
+            shape_type: match args.shape {
+                crate::shape_def::Shape::RoundedRectangle { .. } => 0.0,
+                crate::shape_def::Shape::Ellipse => 1.0,
+            },
             g2_k_value: args.g2_k_value,
             dispersion_height: args.dispersion_height,
             chroma_multiplier: args.chroma_multiplier,
@@ -196,13 +212,11 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             noise_amount: args.noise_amount,
             noise_scale: args.noise_scale,
             time: args.time,
-
-            ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]),
             ripple_radius: args.ripple_radius.unwrap_or(0.0),
             ripple_alpha: args.ripple_alpha.unwrap_or(0.0),
             ripple_strength: args.ripple_strength.unwrap_or(0.0),
 
-            _padding: [0.0; 3],
+            _padding: [0.0; 2],
         };
 
         let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {

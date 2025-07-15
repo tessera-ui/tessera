@@ -11,6 +11,7 @@ use tessera_macros::tessera;
 use crate::{
     pipelines::{ShadowProps, ShapeCommand},
     pos_misc::is_position_in_component,
+    shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
 
@@ -101,7 +102,9 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(args.active_track_color)
-            .corner_radius(args.track_height.0 as f32 / 2.0f32)
+            .shape(Shape::RoundedRectangle {
+                corner_radius: args.track_height.0 as f32 / 2.0f32,
+            })
             .build()
             .unwrap(),
         None,
@@ -114,7 +117,9 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
             .width(DimensionValue::Fixed(args.thumb_size.to_px()))
             .height(DimensionValue::Fixed(args.thumb_size.to_px()))
             .color(args.thumb_color)
-            .corner_radius(args.thumb_size.0 as f32 / 2.0f32)
+            .shape(Shape::RoundedRectangle {
+                corner_radius: args.thumb_size.0 as f32 / 2.0f32,
+            })
             .shadow(args.thumb_shadow)
             .build()
             .unwrap(),

@@ -12,6 +12,7 @@ use crate::{
     pipelines::{RippleProps, ShadowProps, ShapeCommand},
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
+    shape_def::Shape,
 };
 
 /// Arguments for the `surface` component.
@@ -24,9 +25,9 @@ pub struct SurfaceArgs {
     /// The hover color of the surface (RGBA). If None, no hover effect is applied.
     #[builder(default)]
     pub hover_color: Option<Color>,
-    /// The corner radius of the surface.
-    #[builder(default = "0.0")]
-    pub corner_radius: f32,
+    /// The shape of the surface.
+    #[builder(default = "Shape::RoundedRectangle { corner_radius: 0.0 }")]
+    pub shape: Shape,
     /// The shadow properties of the surface.
     #[builder(default)]
     pub shadow: Option<ShadowProps>,
@@ -58,7 +59,7 @@ impl std::fmt::Debug for SurfaceArgs {
         f.debug_struct("SurfaceArgs")
             .field("color", &self.color)
             .field("hover_color", &self.hover_color)
-            .field("corner_radius", &self.corner_radius)
+            .field("shape", &self.shape)
             .field("shadow", &self.shadow)
             .field("padding", &self.padding)
             .field("width", &self.width)
@@ -177,36 +178,73 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 RippleProps::default()
             };
 
-            if args_measure_clone.border_width > 0.0 {
-                ShapeCommand::RippleOutlinedRect {
-                    color: args_measure_clone.border_color.unwrap_or(effective_color),
-                    corner_radius: args_measure_clone.corner_radius,
-                    shadow: args_measure_clone.shadow,
-                    border_width: args_measure_clone.border_width,
-                    ripple: ripple_props,
+            match args_measure_clone.shape {
+                Shape::RoundedRectangle { corner_radius } => {
+                    if args_measure_clone.border_width > 0.0 {
+                        ShapeCommand::RippleOutlinedRect {
+                            color: args_measure_clone.border_color.unwrap_or(effective_color),
+                            corner_radius,
+                            shadow: args_measure_clone.shadow,
+                            border_width: args_measure_clone.border_width,
+                            ripple: ripple_props,
+                        }
+                    } else {
+                        ShapeCommand::RippleRect {
+                            color: effective_color,
+                            corner_radius,
+                            shadow: args_measure_clone.shadow,
+                            ripple: ripple_props,
+                        }
+                    }
                 }
-            } else {
-                ShapeCommand::RippleRect {
-                    color: effective_color,
-                    corner_radius: args_measure_clone.corner_radius,
-                    shadow: args_measure_clone.shadow,
-                    ripple: ripple_props,
+                Shape::Ellipse => {
+                    // Ripples are not currently supported on Ellipses, fall back to non-ripple
+                    if args_measure_clone.border_width > 0.0 {
+                        ShapeCommand::OutlinedEllipse {
+                            color: args_measure_clone.border_color.unwrap_or(effective_color),
+                            shadow: args_measure_clone.shadow,
+                            border_width: args_measure_clone.border_width,
+                        }
+                    } else {
+                        ShapeCommand::Ellipse {
+                            color: effective_color,
+                            shadow: args_measure_clone.shadow,
+                        }
+                    }
                 }
             }
         } else {
             // Non-interactive surface
-            if args_measure_clone.border_width > 0.0 {
-                ShapeCommand::OutlinedRect {
-                    color: args_measure_clone.border_color.unwrap_or(effective_color),
-                    corner_radius: args_measure_clone.corner_radius,
-                    shadow: args_measure_clone.shadow,
-                    border_width: args_measure_clone.border_width,
+            match args_measure_clone.shape {
+                Shape::RoundedRectangle { corner_radius } => {
+                    if args_measure_clone.border_width > 0.0 {
+                        ShapeCommand::OutlinedRect {
+                            color: args_measure_clone.border_color.unwrap_or(effective_color),
+                            corner_radius,
+                            shadow: args_measure_clone.shadow,
+                            border_width: args_measure_clone.border_width,
+                        }
+                    } else {
+                        ShapeCommand::Rect {
+                            color: effective_color,
+                            corner_radius,
+                            shadow: args_measure_clone.shadow,
+                        }
+                    }
                 }
-            } else {
-                ShapeCommand::Rect {
-                    color: effective_color,
-                    corner_radius: args_measure_clone.corner_radius,
-                    shadow: args_measure_clone.shadow,
+                Shape::Ellipse => {
+                    if args_measure_clone.border_width > 0.0 {
+                        ShapeCommand::OutlinedEllipse {
+                            color: args_measure_clone.border_color.unwrap_or(effective_color),
+                            shadow: args_measure_clone.shadow,
+                            border_width: args_measure_clone.border_width,
+                        }
+                    } else {
+                        ShapeCommand::Ellipse {
+                            color: effective_color,
+                            shadow: args_measure_clone.shadow,
+                        }
+                    }
                 }
             }
         };

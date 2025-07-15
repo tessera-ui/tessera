@@ -9,8 +9,8 @@ use tessera_basic_components::{
     image::{ImageArgsBuilder, ImageSource, image, load_image_from_source},
     pipelines::image::ImageData,
     ripple_state::RippleState,
+    shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
 };
 use tessera_macros::tessera;
 
@@ -55,26 +55,19 @@ fn app(ripple_state: Arc<RippleState>, image_resource: &ImageData) {
                 move || {
                     let button_args = GlassButtonArgsBuilder::default()
                         .on_click(Arc::new(|| println!("Glass Button 1 clicked!")))
-                        .tint_color(Color::from_rgba_u8(0, 0, 255, 25))
-                        .width(DimensionValue::Fixed(Dp(200.0).into()))
-                        .height(DimensionValue::Fixed(Dp(100.0).into()))
+                        .tint_color(Color::GREEN.with_alpha(0.2))
+                        .width(DimensionValue::Fixed(Dp(50.0).into()))
+                        .height(DimensionValue::Fixed(Dp(50.0).into()))
                         .noise_amount(0.0)
                         .padding(Dp(15.0))
-                        .corner_radius(25.0)
+                        .shape(Shape::Ellipse)
                         .inner_shadow_radius(0.0)
                         .highlight_size(0.0)
                         .contrast(0.6)
                         .build()
                         .unwrap();
 
-                    glass_button(button_args, ripple_state.clone(), move || {
-                        text(
-                            TextArgsBuilder::default()
-                                .text("Shimmery Button".to_string())
-                                .build()
-                                .unwrap(),
-                        );
-                    });
+                    glass_button(button_args, ripple_state.clone(), move || {});
                 },
             )
         },

@@ -2,7 +2,10 @@ use derive_builder::Builder;
 use tessera::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, place_node};
 use tessera_macros::tessera;
 
-use crate::surface::{SurfaceArgsBuilder, surface};
+use crate::{
+    shape_def::Shape,
+    surface::{SurfaceArgsBuilder, surface},
+};
 
 /// Arguments for the `progress` component.
 #[derive(Builder, Clone, Debug)]
@@ -28,9 +31,9 @@ pub struct ProgressArgs {
     #[builder(default = "Color::new(0.8, 0.8, 0.8, 1.0)")]
     pub track_color: Color,
 
-    /// The corner radius of the progress bar.
-    #[builder(default = "4.0")]
-    pub corner_radius: f32,
+    /// The shape of the progress bar.
+    #[builder(default = "Shape::RoundedRectangle{ corner_radius: 4.0 }")]
+    pub shape: Shape,
 }
 
 #[tessera]
@@ -41,7 +44,7 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(args.track_color)
-            .corner_radius(args.corner_radius)
+            .shape(args.shape)
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -60,7 +63,7 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(args.progress_color)
-            .corner_radius(args.corner_radius)
+            .shape(args.shape)
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,

@@ -7,6 +7,7 @@ use tessera_basic_components::{
     column::{AsColumnItem, ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     row::{AsRowItem, RowArgsBuilder, row},
+    shape_def::Shape,
     spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, surface},
     text::{TextArgsBuilder, text},
@@ -19,7 +20,9 @@ fn small_box(color: Color) {
     surface(
         SurfaceArgs {
             color,
-            corner_radius: 25.0,
+            shape: Shape::RoundedRectangle {
+                corner_radius: 25.0,
+            },
             padding: Dp(8.0),
             width: Some(DimensionValue::Fixed(Px(40))),
             height: Some(DimensionValue::Fixed(Px(40))),
@@ -155,7 +158,9 @@ fn app() {
                                 .blur_radius(10.0)
                                 .width(DimensionValue::Fixed(Px(350)))
                                 .height(DimensionValue::Fixed(Px(250)))
-                                .corner_radius(20.0)
+                                .shape(Shape::RoundedRectangle {
+                                    corner_radius: 20.0,
+                                })
                                 .highlight_color(Color::new(1.0, 1.0, 1.0, 0.3))
                                 .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
                                 .inner_shadow_radius(0.0)

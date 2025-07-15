@@ -7,6 +7,7 @@ use tessera_macros::tessera;
 use crate::{
     alignment::Alignment,
     boxed::{BoxedArgs, boxed_ui},
+    shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -33,8 +34,8 @@ pub struct CheckboxArgs {
     #[builder(default = "Color::from_rgb_u8(119, 72, 146)")]
     pub checkmark_color: Color,
 
-    #[builder(default = "4.0")]
-    pub corner_radius: f32,
+    #[builder(default = "Shape::RoundedRectangle{ corner_radius: 4.0 }")]
+    pub shape: Shape,
 
     #[builder(default)]
     pub hover_color: Option<Color>,
@@ -49,7 +50,7 @@ impl std::fmt::Debug for CheckboxArgs {
             .field("color", &self.color)
             .field("checked_color", &self.checked_color)
             .field("checkmark_color", &self.checkmark_color)
-            .field("corner_radius", &self.corner_radius)
+            .field("shape", &self.shape)
             .field("hover_color", &self.hover_color)
             .finish()
     }
@@ -82,7 +83,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
                 args.color
             })
             .hover_color(args.hover_color)
-            .corner_radius(args.corner_radius)
+            .shape(args.shape)
             .on_click(Some(on_click))
             .build()
             .unwrap(),

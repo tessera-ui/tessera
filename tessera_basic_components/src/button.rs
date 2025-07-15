@@ -6,6 +6,7 @@ use tessera_macros::tessera;
 
 use crate::{
     ripple_state::RippleState,
+    shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
 
@@ -19,9 +20,9 @@ pub struct ButtonArgs {
     /// The hover color of the button (RGBA). If None, no hover effect is applied.
     #[builder(default)]
     pub hover_color: Option<Color>,
-    /// The corner radius of the button.
-    #[builder(default = "25.0")]
-    pub corner_radius: f32,
+    /// The shape of the button.
+    #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0 }")]
+    pub shape: Shape,
     /// The padding of the button.
     #[builder(default = "Dp(12.0)")]
     pub padding: Dp,
@@ -49,7 +50,7 @@ impl std::fmt::Debug for ButtonArgs {
         f.debug_struct("ButtonArgs")
             .field("color", &self.color)
             .field("hover_color", &self.hover_color)
-            .field("corner_radius", &self.corner_radius)
+            .field("shape", &self.shape)
             .field("padding", &self.padding)
             .field("width", &self.width)
             .field("height", &self.height)
@@ -121,7 +122,7 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
     builder
         .color(args.color)
         .hover_color(args.hover_color)
-        .corner_radius(args.corner_radius)
+        .shape(args.shape)
         .padding(args.padding)
         .border_width(args.border_width)
         .border_color(args.border_color)
@@ -187,8 +188,8 @@ impl ButtonArgs {
         self
     }
 
-    pub fn with_corner_radius(mut self, corner_radius: f32) -> Self {
-        self.corner_radius = corner_radius;
+    pub fn with_shape(mut self, shape: Shape) -> Self {
+        self.shape = shape;
         self
     }
 

@@ -24,7 +24,7 @@ pub struct ShapeUniforms {
     // vec4f: r, g, b, a (shadow color)
     pub shadow_color: [f32; 4],
     // vec4f: shadow_offset.x, shadow_offset.y, shadow_smoothness, render_mode
-    // render_mode: 0.0 = fill, 1.0 = outline, 2.0 = shadow, 3.0 = ripple_fill, 4.0 = ripple_outline
+    // render_mode: 0.0 = fill, 1.0 = outline, 2.0 = shadow, 3.0 = ripple_fill, 4.0 = ripple_outline, 5.0 = ellipse_fill, 6.0 = ellipse_outline
     pub render_params: [f32; 4],
     // vec4f: ripple_center.x, ripple_center.y, ripple_radius, ripple_alpha
     pub ripple_params: [f32; 4],

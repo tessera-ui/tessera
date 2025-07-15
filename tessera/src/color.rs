@@ -234,6 +234,32 @@ impl Color {
     pub fn to_array(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
+
+    /// Sets the alpha (transparency) component of the color.
+    ///
+    /// # Returns
+    ///
+    /// A new `Color` instance with the updated alpha value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera::Color;
+    ///
+    /// let color = Color::new(0.5, 0.3, 0.8, 1.0);
+    /// let semi_transparent_color = color.alpha(0.5);
+    ///
+    /// assert_eq!(semi_transparent_color.a, 0.5);
+    /// ```
+    #[inline]
+    pub fn with_alpha(self, alpha: f32) -> Self {
+        Self {
+            r: self.r,
+            g: self.g,
+            b: self.b,
+            a: alpha,
+        }
+    }
 }
 
 /// The default color is fully transparent.

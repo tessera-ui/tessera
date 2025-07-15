@@ -49,6 +49,22 @@ pub enum ShapeCommand {
         /// Ripple effect properties
         ripple: RippleProps,
     },
+    /// A filled ellipse
+    Ellipse {
+        /// Color of the ellipse (RGBA)
+        color: Color,
+        /// Shadow properties of the ellipse
+        shadow: Option<ShadowProps>,
+    },
+    /// An outlined ellipse
+    OutlinedEllipse {
+        /// Color of the border (RGBA)
+        color: Color,
+        /// Shadow properties of the ellipse (applied to the outline shape)
+        shadow: Option<ShadowProps>,
+        /// Width of the border
+        border_width: f32,
+    },
 }
 
 impl DrawCommand for ShapeCommand {
@@ -158,6 +174,25 @@ impl ShapeCommandComputed {
                 border_width,
                 1.0, // render_mode for outline is 1.0
                 ripple,
+            ),
+            ShapeCommand::Ellipse { color, shadow } => rect_to_computed_draw_command(
+                size, position, color,
+                -1.0, // Use negative corner_radius to signify an ellipse to the shader
+                shadow, 0.0, // border_width for fill is 0
+                0.0, // render_mode for fill
+            ),
+            ShapeCommand::OutlinedEllipse {
+                color,
+                shadow,
+                border_width,
+            } => rect_to_computed_draw_command(
+                size,
+                position,
+                color,
+                -1.0, // Use negative corner_radius to signify an ellipse to the shader
+                shadow,
+                border_width,
+                1.0, // render_mode for outline
             ),
         }
     }

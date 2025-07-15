@@ -7,6 +7,7 @@ use tessera_macros::tessera;
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     ripple_state::RippleState,
+    shape_def::Shape,
 };
 
 /// Arguments for the `glass_button` component.
@@ -40,8 +41,8 @@ pub struct GlassButtonArgs {
     pub highlight_color: Color,
     #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.5)")]
     pub inner_shadow_color: Color,
-    #[builder(default = "25.0")]
-    pub corner_radius: f32,
+    #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0 }")]
+    pub shape: Shape,
     #[builder(default = "0.0")]
     pub blur_radius: f32,
     #[builder(default = "3.0")]
@@ -110,7 +111,7 @@ pub fn glass_button(
         .tint_color(args.tint_color)
         .highlight_color(args.highlight_color)
         .inner_shadow_color(args.inner_shadow_color)
-        .corner_radius(args.corner_radius)
+        .shape(args.shape)
         .blur_radius(args.blur_radius)
         .g2_k_value(args.g2_k_value)
         .dispersion_height(args.dispersion_height)

@@ -1,15 +1,18 @@
 struct GlassUniforms {
-    // Vector values
+    // Grouped by alignment to match Rust struct and std140 layout.
+    // vec4s
     tint_color: vec4<f32>,
     highlight_color: vec4<f32>,
     inner_shadow_color: vec4<f32>,
-    rect_uv_bounds: vec4<f32>, // x_min, y_min, x_max, y_max
+    rect_uv_bounds: vec4<f32>,
 
-    // vec2 types
+    // vec2s
     rect_size_px: vec2<f32>,
+    ripple_center: vec2<f32>,
 
-    // f32 types
+    // f32s
     corner_radius: f32,
+    shape_type: f32,
     g2_k_value: f32,
     dispersion_height: f32,
     chroma_multiplier: f32,
@@ -23,9 +26,6 @@ struct GlassUniforms {
     noise_amount: f32,
     noise_scale: f32,
     time: f32,
-
-    // Ripple effect properties
-    ripple_center: vec2<f32>,
     ripple_radius: f32,
     ripple_alpha: f32,
     ripple_strength: f32,
@@ -73,50 +73,47 @@ fn normal_to_tangent(normal: vec2<f32>) -> vec2<f32> {
     return vec2<f32>(normal.y, -normal.x);
 }
 
-// G2-like SDF for rounded corners using p-norm
-// p: point to sample
-// b: half-size of the box
-// r: corner radius
-// k: exponent for p-norm (k=2.0 for G1 circle, k>2.0 for G2-like superellipse)
 fn sdf_g2_rounded_box(p: vec2<f32>, b: vec2<f32>, r: f32, k: f32) -> f32 {
     let q = abs(p) - b + r;
     let v = max(q, vec2<f32>(0.0));
 
-    // Fall back to standard circular SDF for k=2
     if abs(k - 2.0) < 0.001 {
         return length(v) + min(max(q.x, q.y), 0.0) - r;
     }
 
-    // P-norm for the corner distance
     let dist_corner_shape = pow(pow(v.x, k) + pow(v.y, k), 1.0 / k);
 
     return dist_corner_shape + min(max(q.x, q.y), 0.0) - r;
 }
 
-// Gradient (for normal vector) of the G2 rounded box SDF
+fn sdf_ellipse(p: vec2<f32>, r: vec2<f32>) -> f32 {
+    if (r.x <= 0.0 || r.y <= 0.0) {
+        return 1.0e6;
+    }
+    return (length(p / r) - 1.0) * min(r.x, r.y);
+}
+
 fn grad_sd_g2_rounded_box(coord: vec2<f32>, half_size: vec2<f32>, r: f32, k: f32) -> vec2<f32> {
     let inner_half_size = half_size - r;
     let corner_coord = abs(coord) - inner_half_size;
 
-    if corner_coord.x >= 0.0 && corner_coord.y >= 0.0 { // In a corner region
-        // The gradient direction of the p-norm is (x^(k-1), y^(k-1))
-        // Add a small epsilon to avoid pow(0, negative) which is NaN
+    if corner_coord.x >= 0.0 && corner_coord.y >= 0.0 {
         let grad_dir = vec2<f32>(
             pow(corner_coord.x + 0.0001, k - 1.0),
             pow(corner_coord.y + 0.0001, k - 1.0)
         );
-
-        // Return the normalized gradient, preserving the original signs
         return sign(coord) * normalize(grad_dir);
-
-    } else { // On a straight edge
-        // Determine if it's a vertical or horizontal edge based on which is closer to the center
+    } else {
         if corner_coord.x > corner_coord.y {
             return sign(coord) * vec2<f32>(1.0, 0.0);
         } else {
             return sign(coord) * vec2<f32>(0.0, 1.0);
         }
     }
+}
+
+fn grad_sd_ellipse(coord: vec2<f32>, r: vec2<f32>) -> vec2<f32> {
+    return normalize(coord / (r * r));
 }
 
 fn to_linear_srgb(srgb: vec3<f32>) -> vec3<f32> {
@@ -147,19 +144,30 @@ fn rand(co: vec2<f32>) -> f32 {
     return fract(sin(dot(co.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }
 
-fn refraction_color(local_coord: vec2<f32>, size: vec2<f32>, corner_radius: f32, k: f32, eccentric_factor: f32, height: f32, amount: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
+fn refraction_color(local_coord: vec2<f32>, size: vec2<f32>, k: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
-    let sd = sdf_g2_rounded_box(centered_coord, half_size, corner_radius, k);
+
+    var sd: f32;
+    if (uniforms.shape_type == 1.0) {
+        sd = sdf_ellipse(centered_coord, half_size);
+    } else {
+        sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
+    }
 
     var refracted_coord = local_coord;
-    if sd < 0.0 && -sd < height {
-        let max_grad_radius = max(min(half_size.x, half_size.y), corner_radius);
-        let grad_radius = min(corner_radius * 1.5, max_grad_radius);
-        let normal = grad_sd_g2_rounded_box(centered_coord, half_size, grad_radius, k);
+    if sd < 0.0 && -sd < uniforms.refraction_height {
+        var normal: vec2<f32>;
+        if (uniforms.shape_type == 1.0) {
+            normal = grad_sd_ellipse(centered_coord, half_size);
+        } else {
+            let max_grad_radius = max(min(half_size.x, half_size.y), uniforms.corner_radius);
+            let grad_radius = min(uniforms.corner_radius * 1.5, max_grad_radius);
+            normal = grad_sd_g2_rounded_box(centered_coord, half_size, grad_radius, k);
+        }
 
-        let refracted_distance = circle_map(1.0 - (-sd / height)) * amount;
-        let refracted_direction = normalize(normal + eccentric_factor * normalize(centered_coord));
+        let refracted_distance = circle_map(1.0 - (-sd / uniforms.refraction_height)) * uniforms.refraction_amount;
+        let refracted_direction = normalize(normal + uniforms.eccentric_factor * normalize(centered_coord));
         refracted_coord = local_coord + refracted_distance * refracted_direction;
     }
 
@@ -167,19 +175,30 @@ fn refraction_color(local_coord: vec2<f32>, size: vec2<f32>, corner_radius: f32,
     return textureSample(t_diffuse, s_diffuse, sample_uv);
 }
 
-fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, corner_radius: f32, k: f32, dispersion_height: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
+fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, k: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
-    let sd = sdf_g2_rounded_box(centered_coord, half_size, corner_radius, k);
+    
+    var sd: f32;
+    if (uniforms.shape_type == 1.0) {
+        sd = sdf_ellipse(centered_coord, half_size);
+    } else {
+        sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
+    }
 
-    let base_refracted = refraction_color(local_coord, size, corner_radius, k, uniforms.eccentric_factor, uniforms.refraction_height, uniforms.refraction_amount, rect_uv_start, px_to_uv_ratio);
+    let base_refracted = refraction_color(local_coord, size, k, rect_uv_start, px_to_uv_ratio);
 
-    if sd < 0.0 && -sd < dispersion_height && dispersion_height > 0.0 {
-        let normal = grad_sd_g2_rounded_box(centered_coord, half_size, corner_radius, k);
+    if sd < 0.0 && -sd < uniforms.dispersion_height && uniforms.dispersion_height > 0.0 {
+        var normal: vec2<f32>;
+        if (uniforms.shape_type == 1.0) {
+            normal = grad_sd_ellipse(centered_coord, half_size);
+        } else {
+            normal = grad_sd_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
+        }
         let tangent = normal_to_tangent(normal);
 
-        let dispersion_fraction = 1.0 - (-sd / dispersion_height);
-        let dispersion_width = dispersion_height * 2.0 * pow(circle_map(dispersion_fraction), 2.0);
+        let dispersion_fraction = 1.0 - (-sd / uniforms.dispersion_height);
+        let dispersion_width = uniforms.dispersion_height * 2.0 * pow(circle_map(dispersion_fraction), 2.0);
 
         if dispersion_width < 2.0 {
             return base_refracted;
@@ -196,7 +215,7 @@ fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, corner
         for (var i = 0; i < sample_count; i = i + 1) {
             let t = f32(i) / f32(sample_count - 1);
             let sample_coord = local_coord + tangent * (t - 0.5) * dispersion_width;
-            let refracted_c = refraction_color(sample_coord, size, corner_radius, k, uniforms.eccentric_factor, uniforms.refraction_height, uniforms.refraction_amount, rect_uv_start, px_to_uv_ratio);
+            let refracted_c = refraction_color(sample_coord, size, k, rect_uv_start, px_to_uv_ratio);
 
             if t >= 0.0 && t <= 0.5 {
                 blue_color += refracted_c.b;
@@ -242,21 +261,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let half_size = uniforms.rect_size_px * 0.5;
     let centered_coord = local_coord - half_size;
     let k = uniforms.g2_k_value;
-    let sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
+    
+    var sd: f32;
+    if (uniforms.shape_type == 1.0) {
+        sd = sdf_ellipse(centered_coord, half_size);
+    } else {
+        sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
+    }
 
-    // 1. Get base refracted/dispersed color
     var base_color: vec4<f32>;
     if uniforms.dispersion_height > 0.0 {
-        base_color = dispersion_color_on_refracted(local_coord, uniforms.rect_size_px, uniforms.corner_radius, k, uniforms.dispersion_height, rect_uv_min, px_to_uv_ratio);
+        base_color = dispersion_color_on_refracted(local_coord, uniforms.rect_size_px, k, rect_uv_min, px_to_uv_ratio);
     } else {
         base_color = refraction_color(
             local_coord,
             uniforms.rect_size_px,
-            uniforms.corner_radius,
             k,
-            uniforms.eccentric_factor,
-            uniforms.refraction_height,
-            uniforms.refraction_amount,
             rect_uv_min,
             px_to_uv_ratio
         );
@@ -264,32 +284,23 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     var color = base_color.rgb;
 
-    // 2. Apply Ripple
-    // To maintain a circular ripple, we must correct for the aspect ratio by
-    // calculating the distance in pixel space rather than UV space.
     let p_pixel = local_uv * uniforms.rect_size_px;
     let center_pixel = uniforms.ripple_center * uniforms.rect_size_px;
     let dist_pixels = distance(p_pixel, center_pixel);
     
-    // The ripple radius is also in normalized space, so we scale it.
-    // We use the smaller dimension to ensure the ripple doesn't get cut off.
     let min_dimension = min(uniforms.rect_size_px.x, uniforms.rect_size_px.y);
     let radius_pixels = uniforms.ripple_radius * min_dimension;
 
     if dist_pixels < radius_pixels {
         let ripple_factor = 1.0 - dist_pixels / radius_pixels;
-        // You can use ripple_factor to affect other properties like refraction
-        // For now, we'll just add a highlight
         color += vec3<f32>(1.0, 1.0, 1.0) * ripple_factor * uniforms.ripple_alpha;
     }
 
-    // 3. Apply Tint
     let tint_weight = uniforms.tint_color.a;
     if tint_weight > 0.0 {
         color = mix(color, uniforms.tint_color.rgb, tint_weight);
     }
 
-    // 4. Apply Inner Shadow
     if uniforms.inner_shadow_color.a > 0.0 {
         let shadow_dist = -sd;
         let shadow_factor = pow(
@@ -300,7 +311,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         color = mix(color, uniforms.inner_shadow_color.rgb, shadow_alpha);
     }
     
-    // 5. Apply Highlight/Shine
     if uniforms.highlight_color.a > 0.0 {
         let shine_pos_uv = vec2(0.25, 0.25);
         let dist_to_shine = distance(local_uv, shine_pos_uv);
@@ -309,21 +319,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         color += uniforms.highlight_color.rgb * highlight_alpha;
     }
 
-    // 6. Apply saturation
     color = saturate_color(vec4(color, base_color.a), uniforms.chroma_multiplier).rgb;
     
-    // 7. Apply Noise/Grain
     if uniforms.noise_amount > 0.0 {
         let grain = (rand(local_coord * uniforms.noise_scale + uniforms.time) - 0.5) * uniforms.noise_amount;
         color += grain;
     }
 
-    // 8. Final Alpha calculation and anti-aliasing
     var final_color = vec4(color, base_color.a);
     if sd > 0.0 {
         final_color.a = 0.0;
     } else {
-        // Anti-alias the edge
         final_color.a *= smoothstep(1.0, -1.0, sd);
     }
 

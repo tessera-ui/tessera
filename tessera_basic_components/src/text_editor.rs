@@ -9,6 +9,7 @@ use tessera_macros::tessera;
 use crate::{
     pipelines::write_font_system,
     pos_misc::is_position_in_component,
+    shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text_edit_core::{ClickType, map_key_event_to_action, text_edit_core},
 };
@@ -70,9 +71,9 @@ pub struct TextEditorArgs {
     /// Border color (RGBA). Defaults to gray.
     #[builder(default = "None")]
     pub border_color: Option<Color>,
-    /// Corner radius in pixels. Defaults to 4.0.
-    #[builder(default = "0.0")]
-    pub corner_radius: f32,
+    /// The shape of the text editor.
+    #[builder(default = "Shape::RoundedRectangle { corner_radius: 4.0 }")]
+    pub shape: Shape,
     /// Padding inside the text editor. Defaults to 5.0.
     #[builder(default = "Dp(5.0)")]
     pub padding: Dp,
@@ -413,7 +414,7 @@ fn create_surface_args(
         .color(determine_background_color(args, state))
         .border_width(determine_border_width(args, state))
         .border_color(determine_border_color(args, state))
-        .corner_radius(args.corner_radius)
+        .shape(args.shape)
         .padding(args.padding)
         .build()
         .unwrap()
@@ -462,7 +463,7 @@ impl TextEditorArgs {
             .background_color(Some(Color::WHITE))
             .border_width(1.0)
             .border_color(Some(Color::new(0.7, 0.7, 0.7, 1.0)))
-            .corner_radius(4.0)
+            .shape(Shape::RoundedRectangle { corner_radius: 4.0 })
             .build()
             .unwrap()
     }
@@ -480,7 +481,7 @@ impl TextEditorArgs {
             .min_width(Some(Dp(120.0)))
             .background_color(Some(Color::WHITE))
             .border_width(0.0)
-            .corner_radius(0.0)
+            .shape(Shape::RoundedRectangle { corner_radius: 0.0 })
             .build()
             .unwrap()
     }
@@ -523,8 +524,8 @@ impl TextEditorArgs {
         self
     }
 
-    pub fn with_corner_radius(mut self, radius: f32) -> Self {
-        self.corner_radius = radius;
+    pub fn with_shape(mut self, shape: Shape) -> Self {
+        self.shape = shape;
         self
     }
 

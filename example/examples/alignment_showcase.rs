@@ -5,6 +5,7 @@ use tessera_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{AsColumnItem, ColumnArgsBuilder, column},
     row::{AsRowItem, RowArgsBuilder, row},
+    shape_def::Shape,
     spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, surface},
     text::{TextArgsBuilder, text},
@@ -17,7 +18,9 @@ fn small_box(text_content: &'static str, color: Color) {
     surface(
         SurfaceArgs {
             color,
-            corner_radius: 25.0,
+            shape: Shape::RoundedRectangle {
+                corner_radius: 25.0,
+            },
             padding: Dp(8.0),
             width: Some(DimensionValue::Fixed(Px(40))),
             height: Some(DimensionValue::Fixed(Px(40))),
@@ -64,7 +67,9 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
                 surface(
                     SurfaceArgs {
                         color: Color::new(0.9, 0.9, 0.9, 1.0), // Gray background to see borders clearly
-                        corner_radius: 25.0,
+                        shape: Shape::RoundedRectangle {
+                            corner_radius: 25.0,
+                        },
                         padding: Dp(10.0),
                         width: Some(DimensionValue::Fixed(Px(400))), // Sufficient Fixed Width
                         height: Some(DimensionValue::Fixed(Px(70))),

@@ -12,6 +12,7 @@ use crate::{
     pipelines::{blur::command::BlurCommand, contrast::ContrastCommand, mean::MeanCommand},
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
+    shape_def::Shape,
 };
 
 /// Arguments for the `fluid_glass` component, providing extensive control over its appearance.
@@ -34,9 +35,9 @@ pub struct FluidGlassArgs {
     /// Format is `[R, G, B, A]`. Defaults to a semi-transparent black.
     #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.5)")]
     pub inner_shadow_color: Color,
-    /// The radius of the component's corners.
-    #[builder(default = "25.0")]
-    pub corner_radius: f32,
+    /// The shape of the component, an enum that can be `RoundedRectangle` or `Ellipse`.
+    #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0 }")]
+    pub shape: Shape,
     /// The radius for the background blur effect. A value of `0.0` disables the blur.
     #[builder(default = "0.0")]
     pub blur_radius: f32,

@@ -10,6 +10,7 @@ use tessera_basic_components::{
     ripple_state::RippleState,
     row::RowArgsBuilder,
     row_ui,
+    shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -98,7 +99,9 @@ fn app(app_state: Arc<RwLock<AppState>>) {
                     surface(
                         SurfaceArgsBuilder::default()
                             .color(Color::new(0.2, 0.2, 0.2, 1.0))
-                            .corner_radius(10.0)
+                            .shape(Shape::RoundedRectangle {
+                                corner_radius: 10.0,
+                            })
                             .padding(Dp(20.0))
                             .build()
                             .unwrap(),

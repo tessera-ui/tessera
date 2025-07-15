@@ -13,6 +13,7 @@ use tessera_macros::tessera;
 
 use crate::{
     pipelines::ShapeCommand,
+    shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
 
@@ -93,7 +94,9 @@ pub fn switch(args: impl Into<SwitchArgs>) {
             .width(DimensionValue::Fixed(thumb_size.to_px()))
             .height(DimensionValue::Fixed(thumb_size.to_px()))
             .color(args.thumb_color)
-            .corner_radius(thumb_size.0 as f32 / 2.0)
+            .shape(Shape::RoundedRectangle {
+                corner_radius: thumb_size.0 as f32 / 2.0,
+            })
             .build()
             .unwrap(),
         None,

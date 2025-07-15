@@ -8,6 +8,7 @@ use tessera_basic_components::{
     column_ui,
     row::RowArgsBuilder,
     row_ui,
+    shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -53,7 +54,9 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                     ButtonArgsBuilder::default()
                         .color(md_colors::PRIMARY) // Material Design primary color
                         .hover_color(Some(Color::new(0.3, 0.6, 0.9, 1.0))) // Lighter blue on hover
-                        .corner_radius(25.0)
+                        .shape(Shape::RoundedRectangle {
+                            corner_radius: 25.0,
+                        })
                         .padding(Dp(12.0))
                         .on_click(Arc::new(|| {
                             println!("Primary button clicked!");
@@ -85,7 +88,9 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                     ButtonArgsBuilder::default()
                         .color(md_colors::TERTIARY) // Material Design tertiary color
                         .hover_color(Some(Color::new(0.2, 0.8, 0.4, 1.0))) // Lighter green on hover
-                        .corner_radius(25.0)
+                        .shape(Shape::RoundedRectangle {
+                            corner_radius: 25.0,
+                        })
                         .padding(Dp(12.0))
                         .on_click(Arc::new(|| {
                             println!("Success button clicked!");
@@ -117,7 +122,9 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                     ButtonArgsBuilder::default()
                         .color(md_colors::ERROR) // Material Design error color
                         .hover_color(Some(Color::new(0.9, 0.3, 0.3, 1.0))) // Lighter red on hover
-                        .corner_radius(25.0)
+                        .shape(Shape::RoundedRectangle {
+                            corner_radius: 25.0,
+                        })
                         .padding(Dp(12.0))
                         .on_click(Arc::new(|| {
                             println!("Danger button clicked!");
@@ -200,7 +207,9 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                         .color(md_colors::SECONDARY) // Material Design secondary color
                         .hover_color(Some(Color::new(0.6, 0.7, 0.9, 1.0))) // Lighter color on hover
                         .ripple_color(md_colors::RIPPLE) // Material Design ripple
-                        .corner_radius(25.0)
+                        .shape(Shape::RoundedRectangle {
+                            corner_radius: 25.0,
+                        })
                         .padding(Dp(16.0))
                         .width(DimensionValue::Fixed(Px(250)))
                         .height(DimensionValue::Fixed(Px(80)))
@@ -232,7 +241,9 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
             surface(
                 SurfaceArgsBuilder::default()
                     .color(md_colors::SURFACE_VARIANT) // Material Design surface-variant
-                    .corner_radius(25.0)
+                    .shape(Shape::RoundedRectangle {
+                        corner_radius: 25.0,
+                    })
                     .padding(Dp(12.0))
                     .width(DimensionValue::Fixed(Px(200)))
                     .height(DimensionValue::Fixed(Px(60)))

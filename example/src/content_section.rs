@@ -4,6 +4,7 @@ use tessera_basic_components::{
     column_ui,
     row::RowArgsBuilder,
     row_ui,
+    shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };
@@ -34,7 +35,9 @@ pub fn text_column() {
 pub fn content_section() {
     surface(
         SurfaceArgsBuilder::default()
-            .corner_radius(25.0)
+            .shape(Shape::RoundedRectangle {
+                corner_radius: 25.0,
+            })
             .padding(20.0.into())
             .color(Color::new(0.8, 0.8, 0.9, 1.0)) // Light purple fill, RGBA
             .width(DimensionValue::Fill {

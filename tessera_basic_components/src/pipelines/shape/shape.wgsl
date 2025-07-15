@@ -2,6 +2,7 @@ struct ShapeUniforms {
     size_cr_border_width: vec4f, // size.xy, corner_radius, border_width
     primary_color: vec4f,      // fill_color or border_color
     shadow_color: vec4f,       // shadow_color
+    // render_mode: 0.0: fill, 1.0: outline, 2.0: shadow, 3.0: ripple_fill, 4.0: ripple_outline, 5.0: ellipse_fill, 6.0: ellipse_outline
     render_params: vec4f,      // shadow_offset.xy, shadow_smoothness, render_mode
     ripple_params: vec4f,      // ripple_center.xy, ripple_radius, ripple_alpha
     ripple_color: vec4f,       // ripple_color.rgb, unused
@@ -57,6 +58,19 @@ fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: f32, k: f32) -> f32 {
     return dist_corner_shape + min(max(q.x, q.y), 0.0) - r;
 }
 
+// SDF for an ellipse
+// p: point to sample
+// r: radii of the ellipse
+fn sdf_ellipse(p: vec2f, r: vec2f) -> f32 {
+    if (r.x <= 0.0 || r.y <= 0.0) {
+        // Return a large value to prevent rendering if radii are invalid
+        return 1.0e6;
+    }
+    // Scales the distance to be in pixel units, which is important for anti-aliasing.
+    return (length(p / r) - 1.0) * min(r.x, r.y);
+}
+
+
 // Calculate ripple effect based on distance from ripple center
 fn calculate_ripple_effect(dist_to_center: f32, ripple_radius: f32) -> f32 {
     if ripple_radius <= 0.0 {
@@ -109,7 +123,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     if render_mode == 2.0 { // --- Draw Shadow ---
         let p_scaled_shadow_space = p_scaled_object_space - shadow_offset;
-        let dist_shadow = sdf_g2_rounded_box(p_scaled_shadow_space, rect_half_size, corner_radius, G2_K_VALUE);
+        var dist_shadow: f32;
+        if (corner_radius < 0.0) {
+            dist_shadow = sdf_ellipse(p_scaled_shadow_space, rect_half_size);
+        } else {
+            dist_shadow = sdf_g2_rounded_box(p_scaled_shadow_space, rect_half_size, corner_radius, G2_K_VALUE);
+        }
 
         // Anti-aliasing for shadow edge
         let aa_width_shadow = fwidth(dist_shadow);
@@ -126,7 +145,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         final_color = vec4f(shadow_color_uniform.rgb, shadow_color_uniform.a * combined_shadow_alpha);
 
     } else { // --- Draw Object (Fill or Outline) ---
-        let dist_object = sdf_g2_rounded_box(p_scaled_object_space, rect_half_size, corner_radius, G2_K_VALUE);
+        var dist_object: f32;
+        if (corner_radius < 0.0) {
+            dist_object = sdf_ellipse(p_scaled_object_space, rect_half_size);
+        } else {
+            dist_object = sdf_g2_rounded_box(p_scaled_object_space, rect_half_size, corner_radius, G2_K_VALUE);
+        }
         let aa_width_object = fwidth(dist_object);
 
         if render_mode == 0.0 { // --- Draw Fill ---

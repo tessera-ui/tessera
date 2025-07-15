@@ -19,6 +19,7 @@ pub use ripple_state::RippleState;
 pub mod row;
 pub mod scrollable;
 pub mod selection_highlight_rect;
+pub mod shape_def;
 pub mod slider;
 pub mod spacer;
 pub mod surface;
