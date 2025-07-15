@@ -13,4 +13,4 @@ readme = "README.md"
 [dependencies]
 quote = "1.0.40"
 syn = "2.0.101"
-tessera-ui = { path = "../tessera-ui" }
+tessera-ui = "0.1.3"
