@@ -3,7 +3,7 @@
 [![简体中文][readme-cn-badge]][readme-cn-url]
 
 [readme-cn-badge]: https://img.shields.io/badge/README-简体中文-blue.svg?style=for-the-badge&logo=readme
-[readme-cn-url]: docs/README_zh-CN.md
+[readme-cn-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros/docs/README_zh-CN.md
 
 The `tessera_macros` crate provides procedural macros for the [Tessera UI framework](https://github.com/shadow3aaa/tessera). Currently, it contains the `#[tessera]` attribute macro, which is essential for creating components in the Tessera framework.
 

@@ -1,7 +1,7 @@
 <div align="center">
 
-<a href="../tessera_logo">
-    <img src="../assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
+<a href="../tessera-ui-logo">
+    <img src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
 <a/>
 
 # **Tessera (开发中)**
@@ -20,13 +20,13 @@
 </div>
 
 [readme-en-badge]: https://img.shields.io/badge/README-English-blue.svg?style=for-the-badge&logo=readme
-[readme-en-url]: ../README.md
+[readme-en-url]: https://github.com/shadow3aaa/tessera/blob/main/README.md
 [stars-badge]: https://img.shields.io/github/stars/shadow3aaa/tessera?style=for-the-badge&logo=github
 [stars-url]: https://github.com/shadow3aaa/tessera
 [ci-badge]: https://img.shields.io/github/actions/workflow/status/shadow3aaa/tessera/ci.yml?style=for-the-badge&label=CI&logo=githubactions
 [ci-url]: https://github.com/shadow3aaa/tessera/actions/workflows/ci.yml
 [logo-badge]: https://img.shields.io/badge/logo-source-blue?style=for-the-badge&logo=rust
-[logo-url]: ../tessera_logo
+[logo-url]: ../tessera-ui-logo
 [tessera-badge]: https://img.shields.io/badge/tessera-source-blue?style=for-the-badge&logo=rust
 [tessera-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-docs-url]: https://shadow3aaa.github.io/tessera/tessera
@@ -34,11 +34,11 @@
 [tessera-macros-docs-url]: https://shadow3aaa.github.io/tessera/tessera_macros
 [tessera-basic-components-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera_basic_components-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-basic-components-docs-url]: https://shadow3aaa.github.io/tessera/tessera_basic_components
-[tessera-url]: ../tessera
+[tessera-url]: ../tessera-ui
 [tessera-basic-components-badge]: https://img.shields.io/badge/basic%20components-source-blue?style=for-the-badge&logo=rust
-[tessera-basic-components-url]: ../tessera_basic_components
+[tessera-basic-components-url]: ../tessera-ui-basic-components
 [tessera-macros-badge]: https://img.shields.io/badge/tessera_macros-source-blue?style=for-the-badge&logo=rust
-[tessera-macros-url]: ../tessera_macros
+[tessera-macros-url]: ../tessera-ui-macros
 
 ## 简介
 
@@ -93,7 +93,7 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
 - **强大而灵活的布局系统**：基于约束（`Fixed`、`Wrap`、`Fill`）的布局引擎，结合 `row` 和 `column` 等组件（灵感来自 Jetpack Compose），可以轻松实现从简单到复杂的响应式布局。
 
 <p align="center">
-    <img alt="row alignment showcase" src="../assets/alignment_showcase.png"/>
+    <img alt="row alignment showcase" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/alignment_showcase.png"/>
 </p>
 <p align="center" style="color: gray;"><em>`row` 的示例，可在 `example/alignment_showcase.rs` 中查看</em></p>
 
@@ -105,7 +105,7 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
   - **GPU 计算**：WGPU 相对于其前辈的最大优势之一是计算着色器是一等公民。一个面向未来的框架应该充分利用这一点。通过使用自定义计算着色器，我们可以执行复杂的计算任务，例如图像处理和物理模拟，这些任务在 CPU 上执行通常效率低得令人无法接受。
 
 <p align="center">
-    <img alt="boxed component showcase with glass effect" src="../assets/boxed_showcase.png">
+    <img alt="boxed component showcase with glass effect" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/boxed_showcase.png">
 </p>
 <p align="center" style="color: gray;"><em>使用自定义着色器代替内置画刷，可以轻松实现类似这样的高级玻璃效果。此示例可在 `example/boxed_showcase.rs` 中找到。</em></p>
 
@@ -171,7 +171,7 @@ fn counter_app(app_state: Arc<AppState>) {
 ```
 
 <p align="center">
-    <img alt="counter component example" src="../assets/counter.png"/>
+    <img alt="counter component example" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/counter.png"/>
 </p>
 <p align="center" style="color: gray;"><em>此示例可在 `example/counter.rs` 中找到</em></p>
 
@@ -229,7 +229,7 @@ Tessera 使用多 crate 的工作区结构，职责分明：
 
 - **`tessera`**：框架的核心功能，包括组件树、渲染器、运行时、基本类型（`Dp`、`Px`）和事件处理。
 - **`tessera_basic_components`**：提供一组即用型 UI 组件（如 `row`、`column`、`text`、`button`、`surface`）及其渲染管线。
-- **`tessera_macros`**：包含 `#[tessera]` 过程宏，极大地简化了组件的定义。[文档](../tessera_macros/docs/README_zh-CN.md)
+- **`tessera_macros`**：包含 `#[tessera]` 过程宏，极大地简化了组件的定义。[文档](https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros/docs/README_zh-CN.md)
 - **`example`**：一个示例项目，演示如何使用 `Tessera` 框架构建应用程序。
 
 ## 许可证

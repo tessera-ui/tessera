@@ -1,7 +1,7 @@
 <div align="center">
 
-<a href="tessera_logo">
-    <img src="assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
+<a href="tessera-ui-logo">
+    <img src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
 <a/>
 
 # **Tessera (WIP)**
@@ -20,13 +20,13 @@
 </div>
 
 [readme-cn-badge]: https://img.shields.io/badge/README-简体中文-blue.svg?style=for-the-badge&logo=readme
-[readme-cn-url]: docs/README_zh-CN.md
+[readme-cn-url]: https://github.com/shadow3aaa/tessera/blob/main/docs/README_zh-CN.md
 [stars-badge]: https://img.shields.io/github/stars/shadow3aaa/tessera?style=for-the-badge&logo=github
 [stars-url]: https://github.com/shadow3aaa/tessera
 [ci-badge]: https://img.shields.io/github/actions/workflow/status/shadow3aaa/tessera/ci.yml?style=for-the-badge&label=CI&logo=githubactions
 [ci-url]: https://github.com/shadow3aaa/tessera/actions/workflows/ci.yml
 [logo-badge]: https://img.shields.io/badge/logo-source-blue?style=for-the-badge&logo=rust
-[logo-url]: tessera_logo
+[logo-url]: tessera-ui-logo
 [tessera-badge]: https://img.shields.io/badge/tessera-source-blue?style=for-the-badge&logo=rust
 [tessera-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-docs-url]: https://shadow3aaa.github.io/tessera/tessera
@@ -34,11 +34,11 @@
 [tessera-macros-docs-url]: https://shadow3aaa.github.io/tessera/tessera_macros
 [tessera-basic-components-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera_basic_components-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-basic-components-docs-url]: https://shadow3aaa.github.io/tessera/tessera_basic_components
-[tessera-url]: tessera
+[tessera-url]: tessera-ui
 [tessera-basic-components-badge]: https://img.shields.io/badge/basic%20components-source-blue?style=for-the-badge&logo=rust
-[tessera-basic-components-url]: tessera_basic_components
+[tessera-basic-components-url]: tessera-ui-basic-components
 [tessera-macros-badge]: https://img.shields.io/badge/tessera_macros-source-blue?style=for-the-badge&logo=rust
-[tessera-macros-url]: tessera_macros
+[tessera-macros-url]: tessera-ui-macros
 
 ## Introduction
 
@@ -93,7 +93,7 @@ Currently, the framework is in the early stages of development. The v0.1.0 roadm
 - **Powerful and Flexible Layout System**: A constraint-based (`Fixed`, `Wrap`, `Fill`) layout engine, combined with components like `row` and `column` (inspired by Jetpack Compose), makes it easy to implement responsive layouts from simple to complex.
 
 <p align="center">
-    <img alt="row alignment showcase" src="assets/alignment_showcase.png"/>
+    <img alt="row alignment showcase" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/alignment_showcase.png"/>
 </p>
 <p align="center" style="color: gray;"><em>Example of `row`, viewable in `example/alignment_showcase.rs`</em></p>
 
@@ -105,7 +105,7 @@ Currently, the framework is in the early stages of development. The v0.1.0 roadm
   - **GPU Compute**: One of the biggest advantages of WGPU over its predecessors is that compute shaders are first-class citizens. A future-oriented framework should take full advantage of this. By using custom compute shaders, we can perform complex computational tasks such as image processing and physics simulations, which are often unacceptably inefficient to perform on the CPU.
 
 <p align="center">
-    <img alt="boxed component showcase with glass effect" src="assets/boxed_showcase.png">
+    <img alt="boxed component showcase with glass effect" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/boxed_showcase.png">
 </p>
 <p align="center" style="color: gray;"><em>Using custom shaders instead of a built-in brush allows us to easily achieve advanced glass effects like this. This example can be found in `example/boxed_showcase.rs`.</em></p>
 
@@ -171,7 +171,7 @@ fn counter_app(app_state: Arc<AppState>) {
 ```
 
 <p align="center">
-    <img alt="counter component example" src="assets/counter.png"/>
+    <img alt="counter component example" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/counter.png"/>
 </p>
 <p align="center" style="color: gray;"><em>This example can be found in `example/counter.rs`</em></p>
 

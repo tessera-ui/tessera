@@ -6,7 +6,7 @@ It utilizes Tessera's rendering capabilities and custom shaders (WGSL) to create
 
 ## Preview
 
-![Tessera Logo Preview](../assets/logo.gif)
+![Tessera Logo Preview](https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/logo.gif)
 
 ## How to Run
 

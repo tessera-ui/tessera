@@ -3,7 +3,7 @@
 [![English][readme-en-badge]][readme-en-url]
 
 [readme-en-badge]: https://img.shields.io/badge/README-English-blue.svg?style=for-the-badge&logo=readme
-[readme-en-url]: ../README.md
+[readme-en-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros/README.md
 
 `tessera_macros` crate 为 [Tessera UI 框架](https://github.com/shadow3aaa/tessera) 提供了过程宏。目前，它包含 `#[tessera]` 属性宏，这对于在 Tessera 框架中创建组件至关重要。
 
