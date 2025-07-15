@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="../assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
+<a href="../tessera_logo">
+    <img src="../assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
+<a/>
 
 # **Tessera (开发中)**
 
@@ -9,7 +11,11 @@
 [![CI][ci-badge]][ci-url]
 [![Logo][logo-badge]][logo-url]
 [![tesssera][tessera-badge]][tessera-url]
+[![tessera macros][tessera-macros-badge]][tessera-macros-url]
 [![basic components][tessera-basic-components-badge]][tessera-basic-components-url]
+[![tessera docs][tessera-docs-badge]][tessera-docs-url]
+[![tessera_macros docs][tessera-macros-docs-badge]][tessera-macros-docs-url]
+[![tessera_basic_components docs][tessera-basic-components-docs-badge]][tessera-basic-components-docs-url]
 
 </div>
 
@@ -22,9 +28,17 @@
 [logo-badge]: https://img.shields.io/badge/logo-source-blue?style=for-the-badge&logo=rust
 [logo-url]: ../tessera_logo
 [tessera-badge]: https://img.shields.io/badge/tessera-source-blue?style=for-the-badge&logo=rust
+[tessera-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera-blue.svg?style=for-the-badge&logo=docsdotrs
+[tessera-docs-url]: https://shadow3aaa.github.io/tessera/tessera
+[tessera-macros-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera_macros-blue.svg?style=for-the-badge&logo=docsdotrs
+[tessera-macros-docs-url]: https://shadow3aaa.github.io/tessera/tessera_macros
+[tessera-basic-components-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera_basic_components-blue.svg?style=for-the-badge&logo=docsdotrs
+[tessera-basic-components-docs-url]: https://shadow3aaa.github.io/tessera/tessera_basic_components
 [tessera-url]: ../tessera
 [tessera-basic-components-badge]: https://img.shields.io/badge/basic%20components-source-blue?style=for-the-badge&logo=rust
 [tessera-basic-components-url]: ../tessera_basic_components
+[tessera-macros-badge]: https://img.shields.io/badge/tessera_macros-source-blue?style=for-the-badge&logo=rust
+[tessera-macros-url]: ../tessera_macros
 
 ## 简介
 
@@ -215,5 +229,5 @@ Tessera 使用多 crate 的工作区结构，职责分明：
 
 - **`tessera`**：框架的核心功能，包括组件树、渲染器、运行时、基本类型（`Dp`、`Px`）和事件处理。
 - **`tessera_basic_components`**：提供一组即用型 UI 组件（如 `row`、`column`、`text`、`button`、`surface`）及其渲染管线。
-- **`tessera_macros`**：包含 `#[tessera]` 过程宏，极大地简化了组件的定义。
+- **`tessera_macros`**：包含 `#[tessera]` 过程宏，极大地简化了组件的定义。[文档](../tessera_macros/docs/README_zh-CN.md)
 - **`example`**：一个示例项目，演示如何使用 `Tessera` 框架构建应用程序。

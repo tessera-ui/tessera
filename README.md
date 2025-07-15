@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
+<a href="tessera_logo">
+    <img src="assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
+<a/>
 
 # **Tessera (WIP)**
 
@@ -8,8 +10,12 @@
 [![Stars][stars-badge]][stars-url]
 [![CI][ci-badge]][ci-url]
 [![Logo][logo-badge]][logo-url]
-[![tesssera][tessera-badge]][tessera-url]
+[![tessera][tessera-badge]][tessera-url]
+[![tessera macros][tessera-macros-badge]][tessera-macros-url]
 [![basic components][tessera-basic-components-badge]][tessera-basic-components-url]
+[![tessera docs][tessera-docs-badge]][tessera-docs-url]
+[![tessera_macros docs][tessera-macros-docs-badge]][tessera-macros-docs-url]
+[![tessera_basic_components docs][tessera-basic-components-docs-badge]][tessera-basic-components-docs-url]
 
 </div>
 
@@ -22,9 +28,17 @@
 [logo-badge]: https://img.shields.io/badge/logo-source-blue?style=for-the-badge&logo=rust
 [logo-url]: tessera_logo
 [tessera-badge]: https://img.shields.io/badge/tessera-source-blue?style=for-the-badge&logo=rust
+[tessera-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera-blue.svg?style=for-the-badge&logo=docsdotrs
+[tessera-docs-url]: https://shadow3aaa.github.io/tessera/tessera
+[tessera-macros-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera_macros-blue.svg?style=for-the-badge&logo=docsdotrs
+[tessera-macros-docs-url]: https://shadow3aaa.github.io/tessera/tessera_macros
+[tessera-basic-components-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera_basic_components-blue.svg?style=for-the-badge&logo=docsdotrs
+[tessera-basic-components-docs-url]: https://shadow3aaa.github.io/tessera/tessera_basic_components
 [tessera-url]: tessera
 [tessera-basic-components-badge]: https://img.shields.io/badge/basic%20components-source-blue?style=for-the-badge&logo=rust
 [tessera-basic-components-url]: tessera_basic_components
+[tessera-macros-badge]: https://img.shields.io/badge/tessera_macros-source-blue?style=for-the-badge&logo=rust
+[tessera-macros-url]: tessera_macros
 
 ## Introduction
 
@@ -215,5 +229,5 @@ Tessera uses a multi-crate workspace structure with a clear separation of respon
 
 - **`tessera`**: The core functionality of the framework, including the component tree, renderer, runtime, basic types (`Dp`, `Px`), and event handling.
 - **`tessera_basic_components`**: Provides a set of ready-to-use UI components (like `row`, `column`, `text`, `button`, `surface`) and their rendering pipelines.
-- **`tessera_macros`**: Contains the `#[tessera]` procedural macro, which greatly simplifies component definition.
+- **`tessera_macros`**: Contains the `#[tessera]` procedural macro, which greatly simplifies component definition. [Documentation](tessera_macros/README.md)
 - **`example`**: An example project demonstrating how to build applications with the `Tessera` framework.
