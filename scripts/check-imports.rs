@@ -37,7 +37,7 @@ use std::{
     process::Command,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::Parser;
 use colored::Colorize;
 use ignore::WalkBuilder;
@@ -45,7 +45,7 @@ use itertools::Itertools;
 use proc_macro2::Span;
 use quote::quote;
 use rayon::prelude::*;
-use syn::{spanned::Spanned, File, Item, UseTree, Visibility};
+use syn::{File, Item, UseTree, Visibility, spanned::Spanned};
 
 /// Checks and fixes `use` statements in Rust files and directories, respecting .gitignore.
 #[derive(Parser, Debug)]
