@@ -33,8 +33,10 @@
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
+    io::{self, Write},
     path::{Path, PathBuf},
     process::Command,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::{Result, bail};
@@ -154,30 +156,28 @@ fn main() -> Result<()> {
         })
         .collect();
 
-    let results: Vec<_> = files_to_process
-        .into_par_iter()
-        .map(|file_path| {
-            let result = if cli.fix {
-                fix_file(&file_path)
-                    .map(|changed| {
-                        if changed {
-                            "Fixed".cyan().to_string()
-                        } else {
-                            "Correctly formatted".green().to_string()
-                        }
-                    })
-                    .map_err(|e| format!("Failed to fix: {}", e))
-            } else {
-                check_file(&file_path)
-                    .map(|_| "Check passed".green().to_string())
-                    .map_err(|e| format!("Check failed: {}", e))
-            };
-            (file_path, result)
-        })
-        .collect();
+    let failed_items = Arc::new(Mutex::new(Vec::new()));
+    let print_mutex = Arc::new(Mutex::new(()));
 
-    let mut failed_items = Vec::new();
-    for (file_path, result) in results {
+    files_to_process.into_par_iter().for_each(|file_path| {
+        let result = if cli.fix {
+            fix_file(&file_path)
+                .map(|changed| {
+                    if changed {
+                        "Fixed".cyan().to_string()
+                    } else {
+                        "Correctly formatted".green().to_string()
+                    }
+                })
+                .map_err(|e| format!("Failed to fix: {}", e))
+        } else {
+            check_file(&file_path)
+                .map(|_| "Check passed".green().to_string())
+                .map_err(|e| format!("Check failed: {}", e))
+        };
+
+        // Print result immediately after processing each file
+        let _lock = print_mutex.lock().unwrap();
         match result {
             Ok(status) => {
                 let icon = if status.contains("Fixed") {
@@ -186,14 +186,17 @@ fn main() -> Result<()> {
                     "✅"
                 };
                 println!("{} {} - {}", icon, status, file_path.display());
+                io::stdout().flush().unwrap();
             }
             Err(e) => {
                 println!("❌ {} - {}: {}", "Error".red(), file_path.display(), e);
-                failed_items.push(file_path);
+                io::stdout().flush().unwrap();
+                failed_items.lock().unwrap().push(file_path);
             }
         }
-    }
+    });
 
+    let failed_items = Arc::try_unwrap(failed_items).unwrap().into_inner().unwrap();
     if !failed_items.is_empty() {
         bail!("Failed to process {} files.", failed_items.len());
     }
