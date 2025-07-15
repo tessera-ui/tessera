@@ -1,5 +1,5 @@
-use tessera::{Color, DimensionValue};
-use tessera_basic_components::{
+use tessera_ui::{Color, DimensionValue};
+use tessera_ui_basic_components::{
     column::ColumnArgsBuilder,
     column_ui,
     row::RowArgsBuilder,
@@ -8,7 +8,7 @@ use tessera_basic_components::{
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 /// Header row component with two text items
 #[tessera]

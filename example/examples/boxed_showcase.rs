@@ -6,8 +6,8 @@
 //! 3. Using the `alignment` property to position children within the container.
 //! 4. Stacking `fluid_glass` components to test multi-pass rendering.
 
-use tessera::{Color, DimensionValue, Dp, Renderer};
-use tessera_basic_components::{
+use tessera_ui::{Color, DimensionValue, Dp, Renderer};
+use tessera_ui_basic_components::{
     alignment::Alignment,
     boxed::{BoxedArgs, boxed_ui},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
@@ -83,7 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         },
         |app| {
-            tessera_basic_components::pipelines::register_pipelines(app);
+            tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
     )?;
     Ok(())

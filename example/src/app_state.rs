@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
-use tessera_basic_components::{
+use tessera_ui_basic_components::{
     ripple_state::RippleState, scrollable::ScrollableState, switch::SwitchState as BasicSwitchState,
 };
 

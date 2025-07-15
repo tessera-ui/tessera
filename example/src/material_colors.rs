@@ -8,7 +8,7 @@
 
 /// Material Design 3 Core Color Palette
 pub mod md_colors {
-    use tessera::Color;
+    use tessera_ui::Color;
     /// Primary color - used for key components like buttons, active states
     pub const PRIMARY: Color = Color::new(0.255, 0.384, 0.686, 1.0); // Blue
 

@@ -873,9 +873,9 @@ dependencies = [
  "parking_lot",
  "pollster",
  "rand 0.9.1",
- "tessera",
- "tessera_basic_components",
- "tessera_macros",
+ "tessera-ui",
+ "tessera-ui-basic-components",
+ "tessera-ui-macros",
  "tokio",
  "wgpu",
  "winit",
@@ -3051,7 +3051,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tessera"
+name = "tessera-ui"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
@@ -3073,7 +3073,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "tessera-logo"
+name = "tessera-ui-basic-components"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "derive_builder",
+ "earcutr",
+ "glyphon",
+ "image",
+ "log",
+ "parking_lot",
+ "tessera-ui",
+ "tessera-ui-macros",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "tessera-ui-logo"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
@@ -3089,35 +3105,19 @@ dependencies = [
  "pollster",
  "rand 0.9.1",
  "rand_pcg",
- "tessera",
- "tessera_basic_components",
- "tessera_macros",
+ "tessera-ui",
+ "tessera-ui-basic-components",
+ "tessera-ui-macros",
  "tokio",
 ]
 
 [[package]]
-name = "tessera_basic_components"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "derive_builder",
- "earcutr",
- "glyphon",
- "image",
- "log",
- "parking_lot",
- "tessera",
- "tessera_macros",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "tessera_macros"
+name = "tessera-ui-macros"
 version = "0.1.0"
 dependencies = [
  "quote",
  "syn",
- "tessera",
+ "tessera-ui",
 ]
 
 [[package]]

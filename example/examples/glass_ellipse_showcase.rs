@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
-use tessera::{Color, DimensionValue, Dp, Renderer};
-use tessera_basic_components::{
+use tessera_ui::{Color, DimensionValue, Dp, Renderer};
+use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{AsColumnItem, ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     ripple_state::RippleState,
     surface::{SurfaceArgs, surface},
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 #[tessera]
 fn app() {
@@ -16,7 +16,7 @@ fn app() {
     let glass_args = FluidGlassArgsBuilder::default()
         .width(DimensionValue::Fixed(Dp(100.0).into()))
         .height(DimensionValue::Fixed(Dp(100.0).into()))
-        .shape(tessera_basic_components::shape_def::Shape::Ellipse)
+        .shape(tessera_ui_basic_components::shape_def::Shape::Ellipse)
         .blur_radius(5.0)
         .tint_color(Color::new(0.2, 0.3, 0.8, 0.1))
         .build()
@@ -43,7 +43,7 @@ fn app() {
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     Renderer::run(app, |app| {
-        tessera_basic_components::pipelines::register_pipelines(app);
+        tessera_ui_basic_components::pipelines::register_pipelines(app);
     })?;
     Ok(())
 }

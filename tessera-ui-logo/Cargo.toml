@@ -1,0 +1,26 @@
+[package]
+name = "tessera-ui-logo"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tessera-ui = { path = "../tessera-ui" }
+tessera-ui-macros = { path = "../tessera-ui-macros" }
+tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
+rand = "0.9.1"
+rand_pcg = "0.9.0"
+tokio = { version = "1.46.1", features = ["full"] }
+log = "0.4"
+derive_builder = "0.20"
+lyon = "1.0"
+glam = "0.30.4"
+parking_lot = "0.12"
+env_logger = "0.11.8"
+pollster = "0.4.0"
+bytemuck = { version = "1.23.1", features = ["derive"] }
+image = "0.25"
+delaunator = "1.0.2"
+flexi_logger = { version = "0.31.2", features = ["async", "trc"] }

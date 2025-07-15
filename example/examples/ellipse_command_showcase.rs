@@ -1,5 +1,5 @@
-use tessera::{Color, DimensionValue, Dp, Renderer};
-use tessera_basic_components::{
+use tessera_ui::{Color, DimensionValue, Dp, Renderer};
+use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{AsColumnItem, ColumnArgsBuilder, column},
     pipelines::shape::ShadowProps,
@@ -7,7 +7,7 @@ use tessera_basic_components::{
     spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgsBuilder, surface},
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 #[tessera]
 fn app() {
@@ -101,7 +101,7 @@ fn app() {
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     Renderer::run(app, |app| {
-        tessera_basic_components::pipelines::register_pipelines(app);
+        tessera_ui_basic_components::pipelines::register_pipelines(app);
     })?;
     Ok(())
 }

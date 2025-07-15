@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use tessera::{DimensionValue, Dp};
-use tessera_basic_components::{
+use tessera_ui::{DimensionValue, Dp};
+use tessera_ui_basic_components::{
     column::ColumnArgsBuilder,
     column_ui,
     row::RowArgsBuilder,
@@ -10,7 +10,7 @@ use tessera_basic_components::{
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 use crate::{
     animated_spacer::anim_spacer,
@@ -53,7 +53,7 @@ fn surface_showcase() {
                     text(
                         TextArgsBuilder::default()
                             .text("surface Components".to_string())
-                            .size(tessera::Dp(24.0))
+                            .size(tessera_ui::Dp(24.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
@@ -109,7 +109,7 @@ fn text_editor_showcase(state: Arc<AppState>) {
                     text(
                         TextArgsBuilder::default()
                             .text("Text Editor Components".to_string())
-                            .size(tessera::Dp(24.0))
+                            .size(tessera_ui::Dp(24.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
@@ -159,7 +159,7 @@ fn animation_showcase(state: Arc<AppState>) {
                     text(
                         TextArgsBuilder::default()
                             .text("Animation Components".to_string())
-                            .size(tessera::Dp(24.0))
+                            .size(tessera_ui::Dp(24.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
@@ -232,7 +232,7 @@ fn performance_showcase(state: Arc<AppState>) {
                     text(
                         TextArgsBuilder::default()
                             .text("Performance Monitoring".to_string())
-                            .size(tessera::Dp(24.0))
+                            .size(tessera_ui::Dp(24.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),
@@ -277,7 +277,7 @@ pub fn component_showcase(state: Arc<AppState>) {
                     text(
                         TextArgsBuilder::default()
                             .text("Tessera UI Framework Component Showcase".to_string())
-                            .size(tessera::Dp(24.0))
+                            .size(tessera_ui::Dp(24.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),

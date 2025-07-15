@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use tessera::{Color, DimensionValue, Dp, Renderer};
-use tessera_basic_components::{
+use tessera_ui::{Color, DimensionValue, Dp, Renderer};
+use tessera_ui_basic_components::{
     alignment::Alignment,
     boxed::BoxedArgs,
     boxed_ui,
@@ -12,7 +12,7 @@ use tessera_basic_components::{
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 #[tessera]
 fn app(ripple_state: Arc<RippleState>, image_resource: &ImageData) {
@@ -89,7 +89,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
         |app| {
-            tessera_basic_components::pipelines::register_pipelines(app);
+            tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
     )?;
 

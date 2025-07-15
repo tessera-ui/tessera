@@ -14,13 +14,13 @@ mod text_editors;
 use std::sync::Arc;
 
 use log::error;
-use tessera::Renderer;
+use tessera_ui::Renderer;
 
 use app::app;
 use app_state::AppState;
 
 #[cfg(target_os = "android")]
-use tessera::winit::platform::android::activity::AndroidApp;
+use tessera_ui::winit::platform::android::activity::AndroidApp;
 
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
@@ -34,7 +34,7 @@ fn android_main(android_app: AndroidApp) {
     Renderer::run(
         || app(app_state.clone()),
         |app| {
-            tessera_basic_components::pipelines::register_pipelines(app);
+            tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
         android_app.clone(),
     )
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Renderer::run(
         || app(app_state.clone()),
         |app| {
-            tessera_basic_components::pipelines::register_pipelines(app);
+            tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
     )
     .unwrap_or_else(|e| error!("App failed to run: {e}"));

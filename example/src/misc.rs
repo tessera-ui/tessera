@@ -1,5 +1,5 @@
-use tessera::{DimensionValue, Px};
-use tessera_basic_components::spacer::{SpacerArgsBuilder, spacer};
+use tessera_ui::{DimensionValue, Px};
+use tessera_ui_basic_components::spacer::{SpacerArgsBuilder, spacer};
 
 /// Creates a spacer with specified height
 pub fn create_spacer(height: i32) -> impl FnOnce() {

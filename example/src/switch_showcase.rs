@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tessera::{DimensionValue, Dp};
-use tessera_basic_components::{
+use tessera_ui::{DimensionValue, Dp};
+use tessera_ui_basic_components::{
     column::ColumnArgsBuilder,
     column_ui,
     row::RowArgsBuilder,
@@ -12,7 +12,7 @@ use tessera_basic_components::{
     switch::{SwitchArgsBuilder, SwitchState, switch},
     text::{TextArgsBuilder, text},
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 use crate::{material_colors::md_colors, misc::create_spacer};
 
@@ -46,7 +46,7 @@ pub fn switch_showcase(state: Arc<Mutex<SwitchState>>) {
                     text(
                         TextArgsBuilder::default()
                             .text("Switch Component".to_string())
-                            .size(tessera::Dp(24.0))
+                            .size(tessera_ui::Dp(24.0))
                             .color(md_colors::ON_SURFACE)
                             .build()
                             .unwrap(),

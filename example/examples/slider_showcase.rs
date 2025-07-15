@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tessera::{Color, Dp, Renderer};
-use tessera_basic_components::{
+use tessera_ui::{Color, Dp, Renderer};
+use tessera_ui_basic_components::{
     alignment::MainAxisAlignment,
     column::ColumnArgsBuilder,
     column_ui,
@@ -12,7 +12,7 @@ use tessera_basic_components::{
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 struct AppState {
     slider_value: Arc<Mutex<f32>>,
@@ -58,9 +58,9 @@ fn app(state: Arc<AppState>) {
                         RowArgsBuilder::default()
                             .main_axis_alignment(MainAxisAlignment::SpaceBetween)
                             .cross_axis_alignment(
-                                tessera_basic_components::alignment::CrossAxisAlignment::Center
+                                tessera_ui_basic_components::alignment::CrossAxisAlignment::Center
                             )
-                            .width(tessera::DimensionValue::Fixed(Dp(300.0).to_px()))
+                            .width(tessera_ui::DimensionValue::Fixed(Dp(300.0).to_px()))
                             .build()
                             .unwrap(),
                         move || {
@@ -111,7 +111,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
         |app| {
-            tessera_basic_components::pipelines::register_pipelines(app);
+            tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
     )?;
 

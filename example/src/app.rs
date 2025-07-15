@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use tessera::{DimensionValue, Dp};
-use tessera_basic_components::{
+use tessera_ui::{DimensionValue, Dp};
+use tessera_ui_basic_components::{
     scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 use crate::{
     app_state::AppState, component_showcase::component_showcase, material_colors::md_colors,

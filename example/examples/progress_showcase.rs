@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tessera::{Color, Dp, renderer::Renderer};
-use tessera_basic_components::{
+use tessera_ui::{Color, Dp, renderer::Renderer};
+use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{ColumnArgsBuilder, column_ui},
     progress::{ProgressArgsBuilder, progress},
@@ -11,7 +11,7 @@ use tessera_basic_components::{
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 struct AppState {
     value: Arc<Mutex<f32>>,
@@ -64,7 +64,7 @@ fn app(state: Arc<AppState>) {
                     },
                     || spacer(
                         SpacerArgsBuilder::default()
-                            .height(tessera::DimensionValue::Fixed(Dp(20.0).to_px()))
+                            .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
                             .build()
                             .unwrap()
                     ),
@@ -83,7 +83,7 @@ fn app(state: Arc<AppState>) {
                     },
                     || spacer(
                         SpacerArgsBuilder::default()
-                            .height(tessera::DimensionValue::Fixed(Dp(10.0).to_px()))
+                            .height(tessera_ui::DimensionValue::Fixed(Dp(10.0).to_px()))
                             .build()
                             .unwrap()
                     ),
@@ -119,7 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
         |app| {
-            tessera_basic_components::pipelines::register_pipelines(app);
+            tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
     )?;
 

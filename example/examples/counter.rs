@@ -10,8 +10,8 @@ use std::sync::{
     atomic::{self, AtomicU32},
 };
 
-use tessera::{Color, Dp, Renderer};
-use tessera_basic_components::{
+use tessera_ui::{Color, Dp, Renderer};
+use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
     ripple_state::RippleState,
@@ -20,7 +20,7 @@ use tessera_basic_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgsBuilder, text},
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 /// Shared application state
 struct AppState {
@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
         |app| {
-            tessera_basic_components::pipelines::register_pipelines(app);
+            tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
     )?;
 

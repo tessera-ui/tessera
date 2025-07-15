@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
-use tessera::{Color, DimensionValue, Dp, Px, Renderer};
-use tessera_basic_components::{
+use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer};
+use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
     column::ColumnArgsBuilder,
@@ -169,7 +169,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             move || app(app_state.clone())
         },
         |renderer| {
-            tessera_basic_components::pipelines::register_pipelines(renderer);
+            tessera_ui_basic_components::pipelines::register_pipelines(renderer);
         },
     )?;
 

@@ -1,5 +1,5 @@
-use tessera::{DimensionValue, Dp, Renderer};
-use tessera_basic_components::{
+use tessera_ui::{DimensionValue, Dp, Renderer};
+use tessera_ui_basic_components::{
     image::{ImageArgsBuilder, ImageSource, image, load_image_from_source},
     surface::{SurfaceArgsBuilder, surface},
 };
@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         },
         |app| {
-            tessera_basic_components::pipelines::register_pipelines(app);
+            tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
     )?;
     Ok(())

@@ -1,11 +1,11 @@
-use tessera::{Color, DimensionValue, Px};
-use tessera_basic_components::{
+use tessera_ui::{Color, DimensionValue, Px};
+use tessera_ui_basic_components::{
     pipelines::ShadowProps,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 use crate::material_colors::md_colors;
 

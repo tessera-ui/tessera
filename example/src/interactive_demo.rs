@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use tessera::{Color, DimensionValue, Dp, Px};
-use tessera_basic_components::{
+use tessera_ui::{Color, DimensionValue, Dp, Px};
+use tessera_ui_basic_components::{
     button::{ButtonArgsBuilder, button},
     checkbox::{CheckboxArgsBuilder, checkbox},
     column::ColumnArgsBuilder,
@@ -12,7 +12,7 @@ use tessera_basic_components::{
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
-use tessera_macros::tessera;
+use tessera_ui_macros::tessera;
 
 use crate::{app_state::AppState, material_colors::md_colors, misc::create_spacer};
 
@@ -26,7 +26,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
             text(
                 TextArgsBuilder::default()
                     .text("Interactive Components Demo".to_string())
-                    .size(tessera::Dp(24.0))
+                    .size(tessera_ui::Dp(24.0))
                     .color(md_colors::ON_SURFACE)
                     .build()
                     .unwrap(),
@@ -39,7 +39,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
             text(
                 TextArgsBuilder::default()
                     .text("Interactive Buttons with Hover Effects:".to_string())
-                    .size(tessera::Dp(18.0))
+                    .size(tessera_ui::Dp(18.0))
                     .color(md_colors::ON_SURFACE_VARIANT)
                     .build()
                     .unwrap(),
@@ -161,7 +161,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                 row_ui!(
                     RowArgsBuilder::default()
                         .cross_axis_alignment(
-                            tessera_basic_components::alignment::CrossAxisAlignment::Center
+                            tessera_ui_basic_components::alignment::CrossAxisAlignment::Center
                         )
                         .build()
                         .unwrap(),
@@ -191,7 +191,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
             text(
                 TextArgsBuilder::default()
                     .text("Interactive Surfaces with Hover Effects:".to_string())
-                    .size(tessera::Dp(18.0))
+                    .size(tessera_ui::Dp(18.0))
                     .color(md_colors::ON_SURFACE_VARIANT)
                     .build()
                     .unwrap(),

@@ -3,9 +3,9 @@ use std::{
     time::Instant,
 };
 
-use tessera::{DimensionValue, Px};
-use tessera_basic_components::spacer::{SpacerArgsBuilder, spacer};
-use tessera_macros::tessera;
+use tessera_ui::{DimensionValue, Px};
+use tessera_ui_basic_components::spacer::{SpacerArgsBuilder, spacer};
+use tessera_ui_macros::tessera;
 
 pub struct AnimSpacerState {
     pub height: atomic::AtomicI32,
