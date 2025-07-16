@@ -232,6 +232,10 @@ Tessera 使用多 crate 的工作区结构，职责分明：
 - **`tessera_macros`**：包含 `#[tessera]` 过程宏，极大地简化了组件的定义。[文档](https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros/docs/README_zh-CN.md)
 - **`example`**：一个示例项目，演示如何使用 `Tessera` 框架构建应用程序。
 
+## 贡献
+
+请阅读 [贡献指南](CONTRIBUTING_zh-CN.md) 了解如何为项目做出贡献。
+
 ## 许可证
 
 Tessera 采用 [MIT 许可证](https://github.com/shadow3aaa/tessera/blob/main/LICENSE) 或 [Apache 2.0 许可证](https://github.com/shadow3aaa/tessera/blob/main/LICENSE)双重许可。

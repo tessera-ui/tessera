@@ -232,6 +232,10 @@ Tessera uses a multi-crate workspace structure with a clear separation of respon
 - **`tessera_macros`**: Contains the `#[tessera]` procedural macro, which greatly simplifies component definition. [Documentation](https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros/README.md)
 - **`example`**: An example project demonstrating how to build applications with the `Tessera` framework.
 
+## Contributing
+
+Read the [Contributing Guide](CONTRIBUTING.md) for details on how to contribute to the project.
+
 ## License
 
 Tessera is licensed under either of the [MIT License](LICENSE) or the [Apache License 2.0](LICENSE).
