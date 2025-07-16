@@ -48,44 +48,35 @@ The project is currently in its early stages of development. Feel free to explor
 
 ## Roadmap
 
-Currently, the framework is in the early stages of development. The v0.1.0 roadmap includes:
+The roadmap is now organized by crate:
 
-- **Core**: Implement framework core (tessera), including
+### tessera-ui (v0.2.0 roadmap)
 
-  - ~~Component tree~~
-  - ~~Measurement System~~
-  - ~~State Management~~
-  - ~~Renderer, including pluggable shader system~~
-  - ~~Basic types (`Dp`, `Px`)~~
-  - ~~Focus management~~
-  - ~~#[tessera] macro, for convenient component definition~~
-  - Event handling
-    - ~~Mouse events~~
-    - ~~Touch events~~
-    - ~~Raw Keyboard events~~
-    - IME event (windows, linux, macOS) (partially completed)
-    - IME event (android)
-    - IME event (ios)
+- IME event (windows, linux, macOS) (partially completed)
+- IME event (android)
+- IME event (ios)
+- Window minimize handling & callback API
+- Window close callback API
 
-- **Basic Components**: Implement some basic components (tessera_basic_components), including
+### tessera-ui-basic-components (v0.1.0 roadmap)
 
-  - ~~row~~
-  - ~~column~~
-  - ~~boxed~~
-  - ~~text~~
-  - ~~spacer~~
-  - text_editor (partially completed)
-  - ~~button~~
-  - ~~surface~~
-  - ~~fluid_glass~~
-  - ~~scrollable~~
-  - ~~image~~
-  - ~~checkbox~~
-  - radio
-  - ~~switch~~
-  - ~~slider~~
-  - ~~progress~~
-  - ~~dialog~~
+- ~~row~~
+- ~~column~~
+- ~~boxed~~
+- ~~text~~
+- ~~spacer~~
+- text_editor (partially completed)
+- ~~button~~
+- ~~surface~~
+- ~~fluid_glass~~
+- ~~scrollable~~
+- ~~image~~
+- ~~checkbox~~
+- radio
+- ~~switch~~
+- ~~slider~~
+- ~~progress~~
+- ~~dialog~~
 
 ## Core Features
 
