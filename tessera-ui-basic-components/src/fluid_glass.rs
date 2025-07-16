@@ -60,13 +60,13 @@ pub struct FluidGlassArgs {
     #[builder(default = "0.2")]
     pub eccentric_factor: f32,
     /// The size of the highlight at the top of the component.
-    #[builder(default = "0.4")]
+    #[builder(default = "0.0")]
     pub highlight_size: f32,
     /// The smoothness of the highlight's falloff.
     #[builder(default = "2.0")]
     pub highlight_smoothing: f32,
     /// The radius of the inner shadow.
-    #[builder(default = "32.0")]
+    #[builder(default = "0.0")]
     pub inner_shadow_radius: f32,
     /// The smoothness of the inner shadow's falloff.
     #[builder(default = "2.0")]
