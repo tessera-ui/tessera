@@ -9,6 +9,7 @@ pub mod column;
 pub mod dialog;
 pub mod fluid_glass;
 pub mod glass_button;
+pub mod glass_slider;
 pub mod image;
 pub mod padding_utils;
 pub mod pipelines;
