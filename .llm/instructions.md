@@ -1,6 +1,6 @@
-# GitHub Copilot Instructions
+# Instructions
 
-This document defines how Copilot should assist in the Tessera project to ensure code and documentation are consistent with project architecture, style, and best practices.
+This document defines how You should assist in the Tessera project to ensure code and documentation are consistent with project architecture, style, and best practices.
 
 ---
 
