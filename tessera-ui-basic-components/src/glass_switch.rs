@@ -197,7 +197,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
             input.compute_resource_manager.clone(),
             input.gpu,
         );
-        let track_size = sizes_map
+        let _track_size = sizes_map
             .get(&track_id)
             .and_then(|r| r.as_ref().ok())
             .expect("track measurement failed");
