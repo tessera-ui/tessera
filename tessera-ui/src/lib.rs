@@ -169,7 +169,7 @@ mod ime_state;
 mod keyboard_state;
 pub mod px;
 pub mod renderer;
-mod runtime;
+pub mod runtime;
 mod thread_utils;
 pub mod tokio_runtime;
 

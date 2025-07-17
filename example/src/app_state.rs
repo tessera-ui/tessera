@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
 use tessera_ui_basic_components::{
-    ripple_state::RippleState, scrollable::ScrollableState, switch::SwitchState as BasicSwitchState,
+    checkbox::{CheckboxState as UiCheckboxState, CheckmarkState},
+    ripple_state::RippleState,
+    scrollable::ScrollableState,
+    switch::SwitchState as BasicSwitchState,
 };
 
 use crate::{
@@ -28,15 +31,17 @@ impl RippleDemoStates {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct CheckboxState {
-    pub checked: Arc<RwLock<bool>>,
+    pub checked: Arc<RwLock<bool>>,  // Separate for demo logic
+    pub state: Arc<UiCheckboxState>, // Holds ripple+checkmark state
 }
 
 impl CheckboxState {
     pub fn new() -> Self {
         Self {
             checked: Arc::new(RwLock::new(false)),
+            state: Arc::new(UiCheckboxState::new(false)),
         }
     }
 }

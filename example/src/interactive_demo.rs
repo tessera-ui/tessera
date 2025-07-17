@@ -147,6 +147,16 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         },
         || (create_spacer(16))(),
         // Checkbox section
+        || {
+            text(
+                TextArgsBuilder::default()
+                    .text("Animated Checkboxes with Custom Checkmark:".to_string())
+                    .size(tessera_ui::Dp(18.0))
+                    .color(md_colors::ON_SURFACE_VARIANT)
+                    .build()
+                    .unwrap(),
+            )
+        },
         {
             let app_state = app_state.clone();
             move || {
@@ -169,17 +179,24 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                         CheckboxArgsBuilder::default()
                             .checked(checked)
                             .on_toggle(on_toggle)
+                            .state(Some(app_state.checkbox_state.state.clone()))
                             .build()
                             .unwrap()
                     ),
                     || create_spacer(8)(),
                     move || {
                         let label = if checked {
-                            "Checkbox is ON"
+                            "Checkbox is ON (GPU-rendered checkmark)"
                         } else {
-                            "Checkbox is OFF"
+                            "Checkbox is OFF (Click to see animation)"
                         };
-                        text(label)
+                        text(
+                            TextArgsBuilder::default()
+                                .text(label.to_string())
+                                .color(md_colors::ON_SURFACE)
+                                .build()
+                                .unwrap(),
+                        )
                     }
                 )
             }
