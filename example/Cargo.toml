@@ -13,8 +13,8 @@ name = "example"
 path = "src/lib.rs"
 
 [dependencies]
-tessera-ui = "0.1.3"
-tessera-ui-macros = "0.1.0"
+tessera-ui = { path = "../tessera-ui" }
+tessera-ui-macros = { path = "../tessera-ui-macros" }
 tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
 rand = "0.9.1"
 tokio = { version = "1.45.1", features = ["full"] }

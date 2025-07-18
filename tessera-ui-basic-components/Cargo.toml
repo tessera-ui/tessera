@@ -17,6 +17,6 @@ image = { version = "0.25", default-features = false, features = [
 glyphon = { package = "glyphon-tessera-fork", version = "0.9.0" }
 log = "0.4.27"
 parking_lot = "0.12.4"
-tessera-ui = "0.1.3"
-tessera-ui-macros = "0.1.0"
+tessera-ui = { path = "../tessera-ui" }
+tessera-ui-macros = { path = "../tessera-ui-macros" }
 unicode-segmentation = "1.12.0"
