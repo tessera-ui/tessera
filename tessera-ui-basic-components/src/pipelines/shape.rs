@@ -284,12 +284,11 @@ impl ShapePipeline {
 
 #[allow(unused_variables)]
 impl DrawablePipeline<ShapeCommand> for ShapePipeline {
-    fn begin_pass(
+    fn begin_frame(
         &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
+        _gpu: &wgpu::Device,
+        _gpu_queue: &wgpu::Queue,
+        _config: &wgpu::SurfaceConfiguration,
     ) {
         self.current_shape_uniform_offset = 0;
     }
