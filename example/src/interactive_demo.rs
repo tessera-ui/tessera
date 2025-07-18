@@ -6,6 +6,7 @@ use tessera_ui_basic_components::{
     checkbox::{CheckboxArgsBuilder, checkbox},
     column::ColumnArgsBuilder,
     column_ui,
+    glass_button::{GlassButtonArgs, glass_button},
     row::RowArgsBuilder,
     row_ui,
     shape_def::Shape,
@@ -201,7 +202,100 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                 )
             }
         },
-        // Spacer
+        // Small spacer between buttons
+        || (create_spacer(8))(),
+        // Glass Buttons Section
+        {
+            let app_state = app_state.clone();
+            move || {
+                let state = app_state.ripple_states.primary.clone();
+                glass_button(
+                    GlassButtonArgs::primary(Arc::new(|| {
+                        println!("Primary Glass button clicked!");
+                    })),
+                    state,
+                    || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Primary Glass Button".to_string())
+                                .color(md_colors::ON_SURFACE)
+                                .size(Dp(16.0))
+                                .build()
+                                .unwrap(),
+                        )
+                    },
+                )
+            }
+        },
+        || (create_spacer(8))(),
+        {
+            let app_state = app_state.clone();
+            move || {
+                let state = app_state.ripple_states.primary.clone(); // secondary 没有单独 ripple_state，复用 primary
+                glass_button(
+                    GlassButtonArgs::secondary(Arc::new(|| {
+                        println!("Secondary Glass button clicked!");
+                    })),
+                    state,
+                    || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Secondary Glass Button".to_string())
+                                .color(md_colors::ON_SURFACE)
+                                .size(Dp(16.0))
+                                .build()
+                                .unwrap(),
+                        )
+                    },
+                )
+            }
+        },
+        || (create_spacer(8))(),
+        {
+            let app_state = app_state.clone();
+            move || {
+                let state = app_state.ripple_states.success.clone();
+                glass_button(
+                    GlassButtonArgs::success(Arc::new(|| {
+                        println!("Success Glass button clicked!");
+                    })),
+                    state,
+                    || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Success Glass Button".to_string())
+                                .color(md_colors::ON_SURFACE)
+                                .size(Dp(16.0))
+                                .build()
+                                .unwrap(),
+                        )
+                    },
+                )
+            }
+        },
+        || (create_spacer(8))(),
+        {
+            let app_state = app_state.clone();
+            move || {
+                let state = app_state.ripple_states.danger.clone();
+                glass_button(
+                    GlassButtonArgs::danger(Arc::new(|| {
+                        println!("Danger Glass button clicked!");
+                    })),
+                    state,
+                    || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Danger Glass Button".to_string())
+                                .color(md_colors::ON_SURFACE)
+                                .size(Dp(16.0))
+                                .build()
+                                .unwrap(),
+                        )
+                    },
+                )
+            }
+        },
         || (create_spacer(16))(),
         // Interactive surfaces section
         || {
