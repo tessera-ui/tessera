@@ -142,6 +142,9 @@ fn main() -> Result<()> {
     run_or_preview_cmd(cli.dry_run, "git", &["commit", "-m", &release_commit_msg])?;
     let tag = format!("{}-v{}", cli.package, new_version);
     run_or_preview_cmd(cli.dry_run, "git", &["tag", &tag])?;
+    // Push commit and tag to remote
+    run_or_preview_cmd(cli.dry_run, "git", &["push"])?;
+    run_or_preview_cmd(cli.dry_run, "git", &["push", "--tags"])?;
 
     // 2. path->version dependency changes and temporary commit
     for (file, old, new) in &modified_files {
