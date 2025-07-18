@@ -397,6 +397,9 @@ impl WgpuApp {
                 .end_pass(&self.gpu, &self.queue, &self.config, &mut rpass);
         }
 
+        // Frame-level begin for all pipelines
+        self.drawer.pipeline_registry.begin_all_frames(&self.gpu, &self.queue, &self.config);
+
         // Main command processing loop with barrier handling
         let mut commands_iter = commands.into_iter().peekable();
         let mut scene_texture_view = &read_target.view;
@@ -502,6 +505,9 @@ impl WgpuApp {
                 }
             }
         }
+
+        // Frame-level end for all pipelines
+        self.drawer.pipeline_registry.end_all_frames(&self.gpu, &self.queue, &self.config);
 
         // Final copy to surface
         encoder.copy_texture_to_texture(

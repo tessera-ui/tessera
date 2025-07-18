@@ -157,15 +157,20 @@ use crate::{PxPosition, px::PxSize, renderer::DrawCommand};
 ///
 /// # Lifecycle Methods
 ///
-/// The pipeline system provides three lifecycle hooks:
+/// The pipeline system provides five lifecycle hooks, executed in the following order:
 ///
-/// - [`begin_pass()`](Self::begin_pass): Called once at the start of the render pass
-/// - [`draw()`](Self::draw): Called for each command of type `T`
-/// - [`end_pass()`](Self::end_pass): Called once at the end of the render pass
+/// 1. [`begin_frame()`](Self::begin_frame): Called once at the start of a new frame, before any render passes.
+/// 2. [`begin_pass()`](Self::begin_pass): Called at the start of each render pass that involves this pipeline.
+/// 3. [`draw()`](Self::draw): Called for each command of type `T` within a render pass.
+/// 4. [`end_pass()`](Self::end_pass): Called at the end of each render pass that involved this pipeline.
+/// 5. [`end_frame()`](Self::end_frame): Called once at the end of the frame, after all render passes are complete.
+///
+/// Typically, `begin_pass`, `draw`, and `end_pass` are used for the core rendering logic within a pass,
+/// while `begin_frame` and `end_frame` are used for setup and teardown that spans the entire frame.
 ///
 /// # Implementation Notes
 ///
-/// - Only the [`draw()`](Self::draw) method is required; others have default empty implementations
+/// - Only the [`draw()`](Self::draw) method is required; others have default empty implementations.
 /// - Pipelines should be stateless between frames when possible
 /// - Resource management should prefer reuse over recreation
 /// - Consider batching multiple commands for better performance
@@ -175,6 +180,37 @@ use crate::{PxPosition, px::PxSize, renderer::DrawCommand};
 /// See the module-level documentation for a complete implementation example.
 #[allow(unused_variables)]
 pub trait DrawablePipeline<T: DrawCommand> {
+    /// Called once at the beginning of the frame, before any render passes.
+    ///
+    /// This method is the first hook in the pipeline's frame lifecycle. It's invoked
+    /// after a new `CommandEncoder` has been created but before any rendering occurs.
+    /// It's ideal for per-frame setup that is not tied to a specific `wgpu::RenderPass`.
+    ///
+    /// Since this method is called outside a render pass, it cannot be used for drawing
+    /// commands. However, it can be used for operations like:
+    ///
+    /// - Updating frame-global uniform buffers (e.g., with time or resolution data)
+    ///   using [`wgpu::Queue::write_buffer`].
+    /// - Preparing or resizing buffers that will be used throughout the frame.
+    /// - Performing CPU-side calculations needed for the frame.
+    ///
+    /// # Parameters
+    ///
+    /// * `gpu` - The WGPU device, for resource creation.
+    /// * `gpu_queue` - The WGPU queue, for submitting buffer writes.
+    /// * `config` - The current surface configuration.
+    ///
+    /// # Default Implementation
+    ///
+    /// The default implementation does nothing.
+    fn begin_frame(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+    ) {
+    }
+
     /// Called once at the beginning of the render pass.
     ///
     /// Use this method to perform one-time setup operations that apply to all
@@ -195,34 +231,6 @@ pub trait DrawablePipeline<T: DrawCommand> {
     ///
     /// The default implementation does nothing, which is suitable for most pipelines.
     fn begin_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-    ) {
-    }
-
-    /// Called once at the end of the render pass.
-    ///
-    /// Use this method to perform cleanup operations or finalize rendering
-    /// for all draw commands of this type in the current frame. This is useful for:
-    ///
-    /// - Cleaning up temporary resources
-    /// - Finalizing multi-pass rendering operations
-    /// - Submitting batched draw calls
-    ///
-    /// # Parameters
-    ///
-    /// * `gpu` - The WGPU device for creating resources
-    /// * `gpu_queue` - The WGPU queue for submitting commands
-    /// * `config` - Current surface configuration
-    /// * `render_pass` - The active render pass
-    ///
-    /// # Default Implementation
-    ///
-    /// The default implementation does nothing, which is suitable for most pipelines.
-    fn end_pass(
         &mut self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
@@ -298,6 +306,63 @@ pub trait DrawablePipeline<T: DrawCommand> {
         start_pos: PxPosition,
         scene_texture_view: &wgpu::TextureView,
     );
+
+    /// Called once at the end of the render pass.
+    ///
+    /// Use this method to perform cleanup operations or finalize rendering
+    /// for all draw commands of this type in the current frame. This is useful for:
+    ///
+    /// - Cleaning up temporary resources
+    /// - Finalizing multi-pass rendering operations
+    /// - Submitting batched draw calls
+    ///
+    /// # Parameters
+    ///
+    /// * `gpu` - The WGPU device for creating resources
+    /// * `gpu_queue` - The WGPU queue for submitting commands
+    /// * `config` - Current surface configuration
+    /// * `render_pass` - The active render pass
+    ///
+    /// # Default Implementation
+    ///
+    /// The default implementation does nothing, which is suitable for most pipelines.
+    fn end_pass(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        render_pass: &mut wgpu::RenderPass<'_>,
+    ) {
+    }
+
+    /// Called once at the end of the frame, after all render passes are complete.
+    ///
+    /// This method is the final hook in the pipeline's frame lifecycle. It's invoked
+    /// after all `begin_pass`, `draw`, and `end_pass` calls for the frame have
+    /// completed, but before the frame's command buffer is submitted to the GPU.
+    ///
+    /// It's suitable for frame-level cleanup or finalization tasks, such as:
+    ///
+    /// - Reading data back from the GPU (though this can be slow and should be used sparingly).
+    /// - Cleaning up temporary resources created in `begin_frame`.
+    /// - Preparing data for the next frame.
+    ///
+    /// # Parameters
+    ///
+    /// * `gpu` - The WGPU device.
+    /// * `gpu_queue` - The WGPU queue.
+    /// * `config` - The current surface configuration.
+    ///
+    /// # Default Implementation
+    ///
+    /// The default implementation does nothing.
+    fn end_frame(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+    ) {
+    }
 }
 
 /// Internal trait for type erasure of drawable pipelines.
@@ -314,6 +379,18 @@ pub trait DrawablePipeline<T: DrawCommand> {
 /// This trait is automatically implemented for any type that implements
 /// [`DrawablePipeline<T>`] through the [`DrawablePipelineImpl`] wrapper.
 pub trait ErasedDrawablePipeline {
+    fn begin_frame(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+    );
+    fn end_frame(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+    );
     fn begin_pass(
         &mut self,
         gpu: &wgpu::Device,
@@ -351,6 +428,24 @@ struct DrawablePipelineImpl<T: DrawCommand, P: DrawablePipeline<T>> {
 impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawablePipeline
     for DrawablePipelineImpl<T, P>
 {
+    fn begin_frame(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+    ) {
+        self.pipeline.begin_frame(gpu, gpu_queue, config);
+    }
+
+    fn end_frame(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+    ) {
+        self.pipeline.end_frame(gpu, gpu_queue, config);
+    }
+
     fn begin_pass(
         &mut self,
         gpu: &wgpu::Device,
@@ -535,6 +630,28 @@ impl PipelineRegistry {
     ) {
         for pipeline in self.pipelines.iter_mut() {
             pipeline.end_pass(gpu, gpu_queue, config, render_pass);
+        }
+    }
+
+    pub(crate) fn begin_all_frames(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+    ) {
+        for pipeline in self.pipelines.iter_mut() {
+            pipeline.begin_frame(gpu, gpu_queue, config);
+        }
+    }
+
+    pub(crate) fn end_all_frames(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+    ) {
+        for pipeline in self.pipelines.iter_mut() {
+            pipeline.end_frame(gpu, gpu_queue, config);
         }
     }
 
