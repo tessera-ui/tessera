@@ -75,6 +75,45 @@ pub struct GlassButtonArgs {
     pub contrast: Option<f32>,
 }
 
+/// Convenience constructors for common glass button styles
+impl GlassButtonArgs {
+    /// Create a primary glass button with default blue tint
+    pub fn primary(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        GlassButtonArgsBuilder::default()
+            .on_click(on_click)
+            .tint_color(Color::new(0.2, 0.5, 0.8, 0.2)) // Blue tint
+            .build()
+            .unwrap()
+    }
+
+    /// Create a secondary glass button with gray tint
+    pub fn secondary(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        GlassButtonArgsBuilder::default()
+            .on_click(on_click)
+            .tint_color(Color::new(0.6, 0.6, 0.6, 0.2)) // Gray tint
+            .build()
+            .unwrap()
+    }
+
+    /// Create a success glass button with green tint
+    pub fn success(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        GlassButtonArgsBuilder::default()
+            .on_click(on_click)
+            .tint_color(Color::new(0.1, 0.7, 0.3, 0.2)) // Green tint
+            .build()
+            .unwrap()
+    }
+
+    /// Create a danger glass button with red tint
+    pub fn danger(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        GlassButtonArgsBuilder::default()
+            .on_click(on_click)
+            .tint_color(Color::new(0.8, 0.2, 0.2, 0.2)) // Red tint
+            .build()
+            .unwrap()
+    }
+}
+
 /// An interactive button with a fluid glass background and a ripple effect.
 ///
 /// This component is a composite of `fluid_glass` for the visuals and a transparent
