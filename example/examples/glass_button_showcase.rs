@@ -61,8 +61,6 @@ fn app(ripple_state: Arc<RippleState>, image_resource: &ImageData) {
                         .noise_amount(0.0)
                         .padding(Dp(15.0))
                         .shape(Shape::Ellipse)
-                        .inner_shadow_radius(0.0)
-                        .highlight_size(0.0)
                         .contrast(0.6)
                         .build()
                         .unwrap();

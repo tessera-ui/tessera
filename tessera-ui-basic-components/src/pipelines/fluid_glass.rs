@@ -12,18 +12,16 @@ use crate::fluid_glass::FluidGlassCommand;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct GlassUniforms {
-    // Grouped by alignment to match WGSL std140 layout rules.
-    // vec4s
+    // Alignment and size follow WGSL std140 rules.
+    // vec4s (2 × 16 = 32 bytes, 16-byte aligned)
     tint_color: [f32; 4],
-    highlight_color: [f32; 4],
-    inner_shadow_color: [f32; 4],
     rect_uv_bounds: [f32; 4],
 
-    // vec2s
+    // vec2s (2 × 8 = 16 bytes, 8-byte aligned)
     rect_size_px: [f32; 2],
     ripple_center: [f32; 2],
 
-    // f32s
+    // f32s (14 × 4 = 56 bytes, 4-byte aligned)
     corner_radius: f32,
     shape_type: f32,
     g2_k_value: f32,
@@ -32,10 +30,6 @@ struct GlassUniforms {
     refraction_height: f32,
     refraction_amount: f32,
     eccentric_factor: f32,
-    highlight_size: f32,
-    highlight_smoothing: f32,
-    inner_shadow_radius: f32,
-    inner_shadow_smoothing: f32,
     noise_amount: f32,
     noise_scale: f32,
     time: f32,
@@ -44,8 +38,8 @@ struct GlassUniforms {
     ripple_strength: f32,
 
     // Padding to ensure the struct is aligned to 16 bytes.
-    // Total size: 4*16 (vec4s) + 2*8 (vec2s) + 18*4 (f32s) = 64 + 16 + 72 = 152 bytes.
-    // Padded to 160 bytes.
+    // Total size: 32 + 16 + 56 = 104 bytes.
+    // std140 requires struct size to be a multiple of 16 bytes. 104 % 16 = 8, so we add 8 bytes padding.
     _padding: [f32; 2],
 }
 
@@ -180,17 +174,10 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         ];
 
         let uniforms = GlassUniforms {
-            // vec4s
             tint_color: args.tint_color.into(),
-            highlight_color: args.highlight_color.into(),
-            inner_shadow_color: args.inner_shadow_color.into(),
             rect_uv_bounds,
-
-            // vec2s
             rect_size_px: [size.width.0 as f32, size.height.0 as f32],
             ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]),
-
-            // f32s
             corner_radius: match args.shape {
                 crate::shape_def::Shape::RoundedRectangle { corner_radius } => corner_radius,
                 crate::shape_def::Shape::Ellipse => 0.0,
@@ -205,17 +192,12 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             refraction_height: args.refraction_height,
             refraction_amount: args.refraction_amount,
             eccentric_factor: args.eccentric_factor,
-            highlight_size: args.highlight_size,
-            highlight_smoothing: args.highlight_smoothing,
-            inner_shadow_radius: args.inner_shadow_radius,
-            inner_shadow_smoothing: args.inner_shadow_smoothing,
             noise_amount: args.noise_amount,
             noise_scale: args.noise_scale,
             time: args.time,
             ripple_radius: args.ripple_radius.unwrap_or(0.0),
             ripple_alpha: args.ripple_alpha.unwrap_or(0.0),
             ripple_strength: args.ripple_strength.unwrap_or(0.0),
-
             _padding: [0.0; 2],
         };
 

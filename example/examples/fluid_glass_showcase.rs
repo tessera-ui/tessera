@@ -161,9 +161,7 @@ fn app() {
                                 .shape(Shape::RoundedRectangle {
                                     corner_radius: 20.0,
                                 })
-                                .highlight_color(Color::new(1.0, 1.0, 1.0, 0.3))
                                 .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
-                                .inner_shadow_radius(0.0)
                                 .build()
                                 .unwrap(),
                             None,

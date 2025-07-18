@@ -27,14 +27,6 @@ pub struct FluidGlassArgs {
     /// `A=1.0` means full tint (100% color visibility).
     #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
     pub tint_color: Color,
-    /// The color of the highlight along the top edge of the glass.
-    /// Format is `[R, G, B, A]`. Defaults to a semi-transparent white.
-    #[builder(default = "Color::new(1.0, 1.0, 1.0, 0.5)")]
-    pub highlight_color: Color,
-    /// The color of the inner shadow, which adds depth to the component.
-    /// Format is `[R, G, B, A]`. Defaults to a semi-transparent black.
-    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.5)")]
-    pub inner_shadow_color: Color,
     /// The shape of the component, an enum that can be `RoundedRectangle` or `Ellipse`.
     #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0 }")]
     pub shape: Shape,
@@ -59,18 +51,6 @@ pub struct FluidGlassArgs {
     /// Controls the shape and eccentricity of the highlight.
     #[builder(default = "0.2")]
     pub eccentric_factor: f32,
-    /// The size of the highlight at the top of the component.
-    #[builder(default = "0.0")]
-    pub highlight_size: f32,
-    /// The smoothness of the highlight's falloff.
-    #[builder(default = "2.0")]
-    pub highlight_smoothing: f32,
-    /// The radius of the inner shadow.
-    #[builder(default = "0.0")]
-    pub inner_shadow_radius: f32,
-    /// The smoothness of the inner shadow's falloff.
-    #[builder(default = "2.0")]
-    pub inner_shadow_smoothing: f32,
     /// The amount of noise to apply over the surface, adding texture.
     #[builder(default = "0.02")]
     pub noise_amount: f32,

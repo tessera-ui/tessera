@@ -37,10 +37,6 @@ pub struct GlassButtonArgs {
     // Glass visual properties
     #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
     pub tint_color: Color,
-    #[builder(default = "Color::new(1.0, 1.0, 1.0, 0.5)")]
-    pub highlight_color: Color,
-    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.5)")]
-    pub inner_shadow_color: Color,
     #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0 }")]
     pub shape: Shape,
     #[builder(default = "0.0")]
@@ -55,16 +51,6 @@ pub struct GlassButtonArgs {
     pub refraction_height: f32,
     #[builder(default = "32.0")]
     pub refraction_amount: f32,
-    #[builder(default = "0.2")]
-    pub eccentric_factor: f32,
-    #[builder(default = "0.4")]
-    pub highlight_size: f32,
-    #[builder(default = "2.0")]
-    pub highlight_smoothing: f32,
-    #[builder(default = "32.0")]
-    pub inner_shadow_radius: f32,
-    #[builder(default = "2.0")]
-    pub inner_shadow_smoothing: f32,
     #[builder(default = "0.02")]
     pub noise_amount: f32,
     #[builder(default = "1.0")]
@@ -148,8 +134,6 @@ pub fn glass_button(
 
     let glass_args = glass_args_builder
         .tint_color(args.tint_color)
-        .highlight_color(args.highlight_color)
-        .inner_shadow_color(args.inner_shadow_color)
         .shape(args.shape)
         .blur_radius(args.blur_radius)
         .g2_k_value(args.g2_k_value)
@@ -157,11 +141,6 @@ pub fn glass_button(
         .chroma_multiplier(args.chroma_multiplier)
         .refraction_height(args.refraction_height)
         .refraction_amount(args.refraction_amount)
-        .eccentric_factor(args.eccentric_factor)
-        .highlight_size(args.highlight_size)
-        .highlight_smoothing(args.highlight_smoothing)
-        .inner_shadow_radius(args.inner_shadow_radius)
-        .inner_shadow_smoothing(args.inner_shadow_smoothing)
         .noise_amount(args.noise_amount)
         .noise_scale(args.noise_scale)
         .time(args.time)

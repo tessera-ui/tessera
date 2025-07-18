@@ -2,8 +2,6 @@ struct GlassUniforms {
     // Grouped by alignment to match Rust struct and std140 layout.
     // vec4s
     tint_color: vec4<f32>,
-    highlight_color: vec4<f32>,
-    inner_shadow_color: vec4<f32>,
     rect_uv_bounds: vec4<f32>,
 
     // vec2s
@@ -19,10 +17,6 @@ struct GlassUniforms {
     refraction_height: f32,
     refraction_amount: f32,
     eccentric_factor: f32,
-    highlight_size: f32,
-    highlight_smoothing: f32,
-    inner_shadow_radius: f32,
-    inner_shadow_smoothing: f32,
     noise_amount: f32,
     noise_scale: f32,
     time: f32,
@@ -299,24 +293,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let tint_weight = uniforms.tint_color.a;
     if tint_weight > 0.0 {
         color = mix(color, uniforms.tint_color.rgb, tint_weight);
-    }
-
-    if uniforms.inner_shadow_color.a > 0.0 {
-        let shadow_dist = -sd;
-        let shadow_factor = pow(
-            1.0 - smoothstep(0.0, uniforms.inner_shadow_radius, shadow_dist),
-            uniforms.inner_shadow_smoothing
-        );
-        let shadow_alpha = shadow_factor * uniforms.inner_shadow_color.a;
-        color = mix(color, uniforms.inner_shadow_color.rgb, shadow_alpha);
-    }
-    
-    if uniforms.highlight_color.a > 0.0 {
-        let shine_pos_uv = vec2(0.25, 0.25);
-        let dist_to_shine = distance(local_uv, shine_pos_uv);
-        let highlight_factor = 1.0 - smoothstep(0.0, uniforms.highlight_size, dist_to_shine);
-        let highlight_alpha = pow(highlight_factor, uniforms.highlight_smoothing) * uniforms.highlight_color.a;
-        color += uniforms.highlight_color.rgb * highlight_alpha;
     }
 
     color = saturate_color(vec4(color, base_color.a), uniforms.chroma_multiplier).rgb;

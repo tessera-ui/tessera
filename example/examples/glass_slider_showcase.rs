@@ -69,7 +69,6 @@ fn app(state: Arc<AppState>) {
                                     .value(value)
                                     .on_change(on_change_clone)
                                     .tint_color(Color::new(0.2, 0.7, 1.0, 0.18))
-                                    .highlight_color(Color::new(1.0, 1.0, 1.0, 0.5))
                                     .blur_radius(8.0)
                                     .build()
                                     .unwrap(),

@@ -64,10 +64,6 @@ pub struct GlassSliderArgs {
     #[builder(default = "Color::new(0.5, 0.7, 1.0, 0.18)")]
     pub tint_color: Color,
 
-    /// Glass highlight color for the track.
-    #[builder(default = "Color::new(1.0, 1.0, 1.0, 0.5)")]
-    pub highlight_color: Color,
-
     /// Glass blur radius for the track.
     #[builder(default = "8.0")]
     pub blur_radius: f32,
@@ -91,7 +87,6 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
             .width(DimensionValue::Fixed(args.width.to_px()))
             .height(DimensionValue::Fixed(args.track_height.to_px()))
             .tint_color(args.tint_color)
-            .highlight_color(args.highlight_color)
             .blur_radius(args.blur_radius)
             .g2_k_value(2.0)
             .shape(Shape::RoundedRectangle {
@@ -109,7 +104,6 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
             .width(DimensionValue::Fixed(args.thumb_size.to_px()))
             .height(DimensionValue::Fixed(args.thumb_size.to_px()))
             .tint_color(Color::new(1.0, 1.0, 1.0, 0.7))
-            .highlight_color(args.highlight_color)
             .blur_radius(args.blur_radius)
             .shape(Shape::RoundedRectangle {
                 corner_radius: args.thumb_size.0 as f32 / 2.0,
