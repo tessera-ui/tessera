@@ -2,10 +2,8 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
 use tessera_ui_basic_components::{
-    checkbox::{CheckboxState as UiCheckboxState, CheckmarkState},
-    ripple_state::RippleState,
-    scrollable::ScrollableState,
-    switch::SwitchState as BasicSwitchState,
+    checkbox::CheckboxState as UiCheckboxState, ripple_state::RippleState,
+    scrollable::ScrollableState, switch::SwitchState as BasicSwitchState,
 };
 
 use crate::{
