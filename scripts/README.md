@@ -22,3 +22,4 @@ rust-script scripts/check-imports.rs --help
 ## Available Scripts
 
 - [`check-imports.rs`](check-imports.rs): Checks and fixes `use` statements in Rust files and directories, respecting .gitignore.
+- [`release-package.rs`](release-package.rs): Workspace-aware release tool for tessera. Bumps version, generates changelog, replaces path dependencies with version, and supports dry-run and no-garbage-commit publish to crates.io.
