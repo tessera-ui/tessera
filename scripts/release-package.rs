@@ -108,7 +108,7 @@ fn main() -> Result<()> {
     let modified_files = replace_path_with_version_in_workspace(
         &workspace,
         &cli.package,
-        &new_version,
+        &old_version,
         &package_versions,
     )?;
 
