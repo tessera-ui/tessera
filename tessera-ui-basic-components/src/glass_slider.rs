@@ -145,7 +145,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
                     state.is_dragging = true;
 
                     if let Some(pos) = input.cursor_position {
-                        let thumb_half_width = args.thumb_size.to_px().0 as f32 / 2.0;
+                        let thumb_half_width = args.thumb_size.to_px().to_f32() as f32 / 2.0;
                         let effective_width =
                             input.computed_data.width.0 as f32 - thumb_half_width * 2.0;
                         let v =
@@ -162,7 +162,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
 
         if state.is_dragging {
             if let Some(pos) = input.cursor_position {
-                let thumb_half_width = args.thumb_size.to_px().0 as f32 / 2.0;
+                let thumb_half_width = args.thumb_size.to_px().to_f32() as f32 / 2.0;
                 let effective_width = input.computed_data.width.0 as f32 - thumb_half_width * 2.0;
                 let v = ((pos.x.0 as f32 - thumb_half_width) / effective_width).clamp(0.0, 1.0);
                 new_value = Some(v);

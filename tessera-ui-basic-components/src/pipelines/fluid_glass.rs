@@ -199,7 +199,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             }
             .into(),
             border_width: if let Some(border) = args.border {
-                border.width.to_px().0 as f32
+                border.width.to_px().to_f32() as f32
             } else {
                 0.0
             },

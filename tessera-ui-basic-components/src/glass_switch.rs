@@ -12,7 +12,7 @@ use tessera_ui::{
 use tessera_ui_macros::tessera;
 
 use crate::{
-    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
     shape_def::Shape,
 };
 
@@ -72,6 +72,20 @@ pub struct GlassSwitchArgs {
     #[builder(default = "1.0")]
     pub thumb_off_alpha: f32,
 
+    /// Border for the thumb
+    #[builder(
+        default = "Some(GlassBorder::new(Dp(2.0), Color::BLUE.with_alpha(0.5)))",
+        setter(strip_option)
+    )]
+    pub thumb_border: Option<GlassBorder>,
+
+    /// Border for the track
+    #[builder(
+        default = "Some(GlassBorder::new(Dp(2.0), Color::WHITE.with_alpha(0.5)))",
+        setter(strip_option)
+    )]
+    pub track_border: Option<GlassBorder>,
+
     /// Padding around the thumb
     #[builder(default = "Dp(3.0)")]
     pub thumb_padding: Dp,
@@ -94,39 +108,37 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
         b: args.track_off_color.b + (args.track_on_color.b - args.track_off_color.b) * progress,
         a: args.track_off_color.a + (args.track_on_color.a - args.track_off_color.a) * progress,
     };
-    fluid_glass(
-        FluidGlassArgsBuilder::default()
-            .width(DimensionValue::Fixed(args.width.to_px()))
-            .height(DimensionValue::Fixed(args.height.to_px()))
-            .tint_color(track_color)
-            .blur_radius(10.0)
-            .shape(Shape::Ellipse)
-            .blur_radius(8.0)
-            .build()
-            .unwrap(),
-        None,
-        || {},
-    );
+    let mut arg = FluidGlassArgsBuilder::default()
+        .width(DimensionValue::Fixed(args.width.to_px()))
+        .height(DimensionValue::Fixed(args.height.to_px()))
+        .tint_color(track_color)
+        .blur_radius(10.0)
+        .shape(Shape::RoundedRectangle {
+            corner_radius: args.height.to_px().to_f32() / 2.0,
+            g2_k_value: 2.0,
+        })
+        .blur_radius(8.0);
+    if let Some(border) = args.track_border {
+        arg = arg.border(border);
+    }
+    let track_glass_arg = arg.build().unwrap();
+    fluid_glass(track_glass_arg, None, || {});
 
     // Thumb (slider) is always white, opacity changes with progress
     let thumb_alpha =
         args.thumb_off_alpha + (args.thumb_on_alpha - args.thumb_off_alpha) * progress;
     let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
-    fluid_glass(
-        FluidGlassArgsBuilder::default()
-            .width(DimensionValue::Fixed(thumb_size.to_px()))
-            .height(DimensionValue::Fixed(thumb_size.to_px()))
-            .tint_color(thumb_color)
-            .refraction_height(1.0)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: args.height.0 as f32 / 2.0,
-                g2_k_value: 2.0, // Use G1 corners here specifically
-            })
-            .build()
-            .unwrap(),
-        None,
-        || {},
-    );
+    let mut thumb_glass_arg = FluidGlassArgsBuilder::default()
+        .width(DimensionValue::Fixed(thumb_size.to_px()))
+        .height(DimensionValue::Fixed(thumb_size.to_px()))
+        .tint_color(thumb_color)
+        .refraction_height(1.0)
+        .shape(Shape::Ellipse);
+    if let Some(border) = args.thumb_border {
+        thumb_glass_arg = thumb_glass_arg.border(border);
+    }
+    let thumb_glass_arg = thumb_glass_arg.build().unwrap();
+    fluid_glass(thumb_glass_arg, None, || {});
 
     let on_toggle = args.on_toggle.clone();
     let state = args.state.clone();
