@@ -1,3 +1,11 @@
+## [v0.2.0] - 2025-07-19 +08:00
+
+### Changes
+- feat(glass_switch): add border support and enhance visuals
+- feat(shape): add configurable G2-like corner continuity
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v0.1.0...tessera-ui-basic-components-v0.2.0)
+
 ## [v0.1.0] - 2025-07-19 +08:00
 
 ### Changes
