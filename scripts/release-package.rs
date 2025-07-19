@@ -38,12 +38,8 @@ struct Cli {
     #[arg(value_enum)]
     bump: BumpType,
 
-    /// Dry run (default: true)
-    #[arg(long, default_value_t = true, conflicts_with = "execute")]
-    dry_run: bool,
-
     /// Actually perform the release
-    #[arg(long, conflicts_with = "dry_run")]
+    #[arg(long)]
     execute: bool,
 }
 
@@ -117,53 +113,54 @@ fn main() -> Result<()> {
     let changelog_path_str = changelog_path.to_str().unwrap();
     let old_changelog = std::fs::read_to_string(&changelog_path).unwrap_or_default();
     let new_changelog = format!("{}\n{}", changelog, old_changelog);
+    let dry_run = !cli.execute;
     write_or_preview_file(
-        cli.dry_run,
+        dry_run,
         changelog_path_str,
         &new_changelog,
         Some(&old_changelog),
     )?;
-    run_or_preview_cmd(cli.dry_run, "git", &["add", changelog_path_str])?;
+    run_or_preview_cmd(dry_run, "git", &["add", changelog_path_str])?;
 
     // 1. bump version number, commit, tag
     doc["package"]["version"] = value(new_version.clone());
     write_or_preview_file(
-        cli.dry_run,
+        dry_run,
         cargo_toml_path.to_str().unwrap(),
         &doc.to_string(),
         Some(&fs::read_to_string(&cargo_toml_path)?),
     )?;
     run_or_preview_cmd(
-        cli.dry_run,
+        dry_run,
         "git",
         &["add", cargo_toml_path.to_str().unwrap()],
     )?;
     let release_commit_msg = format!("release({}): v{}", cli.package, new_version);
-    run_or_preview_cmd(cli.dry_run, "git", &["commit", "-m", &release_commit_msg])?;
+    run_or_preview_cmd(dry_run, "git", &["commit", "-m", &release_commit_msg])?;
     let tag = format!("{}-v{}", cli.package, new_version);
-    run_or_preview_cmd(cli.dry_run, "git", &["tag", &tag])?;
+    run_or_preview_cmd(dry_run, "git", &["tag", &tag])?;
     // Push commit and tag to remote
-    run_or_preview_cmd(cli.dry_run, "git", &["push"])?;
-    run_or_preview_cmd(cli.dry_run, "git", &["push", "--tags"])?;
+    run_or_preview_cmd(dry_run, "git", &["push"])?;
+    run_or_preview_cmd(dry_run, "git", &["push", "--tags"])?;
 
     // 2. path->version dependency changes and temporary commit
     for (file, old, new) in &modified_files {
-        write_or_preview_file(cli.dry_run, file, new, Some(old))?;
-        run_or_preview_cmd(cli.dry_run, "git", &["add", file])?;
+        write_or_preview_file(dry_run, file, new, Some(old))?;
+        run_or_preview_cmd(dry_run, "git", &["add", file])?;
     }
     let temp_commit_msg = "chore: replace path dependencies with version for publish";
-    run_or_preview_cmd(cli.dry_run, "git", &["commit", "-m", temp_commit_msg])?;
+    run_or_preview_cmd(dry_run, "git", &["commit", "-m", temp_commit_msg])?;
 
     // 3. publish
-    run_or_preview_cmd(cli.dry_run, "cargo", &["publish", "-p", &cli.package])?;
+    run_or_preview_cmd(dry_run, "cargo", &["publish", "-p", &cli.package])?;
 
     // 4. reset to tag
-    run_or_preview_cmd(cli.dry_run, "git", &["reset", "--hard", &tag])?;
+    run_or_preview_cmd(dry_run, "git", &["reset", "--hard", &tag])?;
 
-    if cli.dry_run {
+    if dry_run {
         // File diff preview
         for (file, old, new) in &modified_files {
-            write_or_preview_file(cli.dry_run, file, new, Some(old))?;
+            write_or_preview_file(dry_run, file, new, Some(old))?;
         }
         // Remove ChangeLog Preview Start/End output
     } else {
