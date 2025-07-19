@@ -159,46 +159,67 @@ fn main() -> Result<()> {
     let failed_items = Arc::new(Mutex::new(Vec::new()));
     let print_mutex = Arc::new(Mutex::new(()));
 
-    files_to_process.into_par_iter().for_each(|file_path| {
+    // Collect all file paths that need rustfmt
+    let mut fmt_targets = Vec::new();
+
+    for file_path in &files_to_process {
         let result = if cli.fix {
-            fix_file(&file_path)
-                .map(|changed| {
+            match fix_file(file_path) {
+                Ok(changed) => {
+                    fmt_targets.push(file_path.clone());
                     if changed {
                         "Fixed".cyan().to_string()
                     } else {
                         "Correctly formatted".green().to_string()
                     }
-                })
-                .map_err(|e| format!("Failed to fix: {}", e))
+                }
+                Err(e) => {
+                    drop(print_mutex.lock().unwrap());
+                    println!("❌ {} - {}: {}", "Error".red(), file_path.display(), e);
+                    io::stdout().flush().unwrap();
+                    failed_items.lock().unwrap().push(file_path.clone());
+                    continue;
+                }
+            }
         } else {
-            check_file(&file_path)
-                .map(|_| "Check passed".green().to_string())
-                .map_err(|e| format!("Check failed: {}", e))
+            match check_file(file_path) {
+                Ok(_) => "Check passed".green().to_string(),
+                Err(e) => {
+                    drop(print_mutex.lock().unwrap());
+                    println!("❌ {} - {}: {}", "Error".red(), file_path.display(), e);
+                    io::stdout().flush().unwrap();
+                    failed_items.lock().unwrap().push(file_path.clone());
+                    continue;
+                }
+            }
         };
 
-        // Print result immediately after processing each file
         let _lock = print_mutex.lock().unwrap();
-        match result {
-            Ok(status) => {
-                let icon = if status.contains("Fixed") {
-                    "🔧"
-                } else {
-                    "✅"
-                };
-                println!("{} {} - {}", icon, status, file_path.display());
-                io::stdout().flush().unwrap();
-            }
-            Err(e) => {
-                println!("❌ {} - {}: {}", "Error".red(), file_path.display(), e);
-                io::stdout().flush().unwrap();
-                failed_items.lock().unwrap().push(file_path);
-            }
-        }
-    });
+        let icon = if result.contains("Fixed") {
+            "🔧"
+        } else {
+            "✅"
+        };
+        println!("{} {} - {}", icon, result, file_path.display());
+        io::stdout().flush().unwrap();
+    }
 
     let failed_items = Arc::try_unwrap(failed_items).unwrap().into_inner().unwrap();
     if !failed_items.is_empty() {
         bail!("Failed to process {} files.", failed_items.len());
+    }
+
+    // Batch format all files that need it
+    if cli.fix && !fmt_targets.is_empty() {
+        let mut cmd = Command::new("rustfmt");
+        cmd.arg("--edition=2024");
+        for path in &fmt_targets {
+            cmd.arg(path);
+        }
+        let status = cmd.status()?;
+        if !status.success() {
+            bail!("Failed to run rustfmt on files: {:?}", fmt_targets);
+        }
     }
 
     Ok(())
@@ -270,14 +291,6 @@ fn fix_file(path: &Path) -> Result<bool> {
     let final_content = final_lines.join("\n") + "\n";
 
     fs::write(path, &final_content)?;
-
-    let rustfmt_status = Command::new("rustfmt")
-        .arg("--edition=2024")
-        .arg(path)
-        .status()?;
-    if !rustfmt_status.success() {
-        bail!("Failed to run `rustfmt` on the file: {:?}", path);
-    }
 
     Ok(true)
 }
