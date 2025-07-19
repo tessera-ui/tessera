@@ -296,9 +296,6 @@ fn replace_path_with_version_in_workspace(
 ) -> Result<Vec<(String, String, String)>> {
     let mut modified = Vec::new();
     for member in &workspace.members {
-        if member == target_package {
-            continue; // Skip the target package itself
-        }
         let path = std::path::Path::new(member);
         let cargo_toml = path.join("Cargo.toml");
         if !cargo_toml.exists() {
