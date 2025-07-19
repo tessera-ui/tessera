@@ -198,17 +198,20 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     }
                 }
                 Shape::Ellipse => {
-                    // Ripples are not currently supported on Ellipses, fall back to non-ripple
                     if args_measure_clone.border_width > 0.0 {
-                        ShapeCommand::OutlinedEllipse {
+                        ShapeCommand::RippleOutlinedRect {
                             color: args_measure_clone.border_color.unwrap_or(effective_color),
+                            corner_radius: -1.0, // Use negative radius to signify ellipse
                             shadow: args_measure_clone.shadow,
                             border_width: args_measure_clone.border_width,
+                            ripple: ripple_props,
                         }
                     } else {
-                        ShapeCommand::Ellipse {
+                        ShapeCommand::RippleRect {
                             color: effective_color,
+                            corner_radius: -1.0, // Use negative radius to signify ellipse
                             shadow: args_measure_clone.shadow,
+                            ripple: ripple_props,
                         }
                     }
                 }
