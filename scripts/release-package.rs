@@ -104,7 +104,6 @@ fn main() -> Result<()> {
     let modified_files = replace_path_with_version_in_workspace(
         &workspace,
         &cli.package,
-        &new_version,
         &package_versions,
     )?;
 
@@ -293,11 +292,13 @@ impl Workspace {
 fn replace_path_with_version_in_workspace(
     workspace: &Workspace,
     target_package: &str,
-    target_version: &str,
     package_versions: &std::collections::HashMap<String, String>,
 ) -> Result<Vec<(String, String, String)>> {
     let mut modified = Vec::new();
     for member in &workspace.members {
+        if member == target_package {
+            continue; // Skip the target package itself
+        }
         let path = std::path::Path::new(member);
         let cargo_toml = path.join("Cargo.toml");
         if !cargo_toml.exists() {
@@ -309,16 +310,7 @@ fn replace_path_with_version_in_workspace(
             if let Some(table) = doc.get_mut(section).and_then(|t| t.as_table_like_mut()) {
                 let keys: Vec<_> = table.iter().map(|(k, _)| k.to_string()).collect();
                 for dep in keys {
-                    if dep == target_package && member == target_package {
-                        if let Some(item) = table.get_mut(&dep) {
-                            if let Some(dep_table) = item.as_table_like_mut() {
-                                if dep_table.remove("path").is_some() {
-                                    dep_table.insert("version", value(target_version));
-                                    changed = true;
-                                }
-                            }
-                        }
-                    } else if let Some(ver) = package_versions.get(&dep) {
+                    if let Some(ver) = package_versions.get(&dep) {
                         if let Some(item) = table.get_mut(&dep) {
                             if let Some(dep_table) = item.as_table_like_mut() {
                                 if dep_table.remove("path").is_some() {
