@@ -2,7 +2,6 @@ struct Uniforms {
     radius: f32,
     direction_x: f32, // 1.0 for horizontal, 0.0 for vertical
     direction_y: f32, // 0.0 for horizontal, 1.0 for vertical
-    _padding: f32,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
