@@ -104,7 +104,7 @@ fn main() -> Result<()> {
     let modified_files = replace_path_with_version_in_workspace(
         &workspace,
         &cli.package,
-        &old_version,
+        &new_version,
         &package_versions,
     )?;
 
@@ -309,7 +309,7 @@ fn replace_path_with_version_in_workspace(
             if let Some(table) = doc.get_mut(section).and_then(|t| t.as_table_like_mut()) {
                 let keys: Vec<_> = table.iter().map(|(k, _)| k.to_string()).collect();
                 for dep in keys {
-                    if dep == target_package {
+                    if dep == target_package && member == target_package {
                         if let Some(item) = table.get_mut(&dep) {
                             if let Some(dep_table) = item.as_table_like_mut() {
                                 if dep_table.remove("path").is_some() {
