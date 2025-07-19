@@ -102,14 +102,6 @@ fn main() -> Result<()> {
     };
     let changelog = generate_changelog(&new_version, &commits, latest_tag.as_deref(), &cli.package);
 
-    // Replace all path dependencies of this package with version dependencies
-    let package_versions = workspace.collect_versions()?;
-    let modified_files = replace_path_with_version_in_workspace(
-        &workspace,
-        &cli.package,
-        &package_versions,
-    )?;
-
     // Generate and write (or prepend) ChangeLog to <package>/CHANGELOG.md
     let changelog_path = package_path.join("CHANGELOG.md");
     let changelog_path_str = changelog_path.to_str().unwrap();
@@ -149,6 +141,14 @@ fn main() -> Result<()> {
     // Push commit and tag to remote
     run_or_preview_cmd(dry_run, "git", &["push"])?;
     run_or_preview_cmd(dry_run, "git", &["push", "--tags"])?;
+
+    // Replace all path dependencies of this package with version dependencies
+    let package_versions = workspace.collect_versions()?;
+    let modified_files = replace_path_with_version_in_workspace(
+        &workspace,
+        &cli.package,
+        &package_versions,
+    )?;
 
     // 2. path->version dependency changes and temporary commit
     for (file, old, new) in &modified_files {
