@@ -408,7 +408,7 @@ impl ComputePipelineRegistry {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```
     /// use tessera_ui::renderer::compute::ComputePipelineRegistry;
     ///
     /// let registry = ComputePipelineRegistry::new();

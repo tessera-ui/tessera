@@ -590,6 +590,8 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         // and tell runtime the new size
         TesseraRuntime::write().window_size = app.size().into();
         // render the surface
+        // Clear any registered callbacks
+        TesseraRuntime::write().clear_frame_callbacks();
         // timer for performance measurement
         let tree_timer = Instant::now();
         // build the component tree
@@ -597,8 +599,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         entry_point();
         let build_tree_cost = tree_timer.elapsed();
         debug!("Component tree built in {build_tree_cost:?}");
-        // get the component tree from the runtime
-        let component_tree = &mut TesseraRuntime::write().component_tree;
         // timer for performance measurement
         let draw_timer = Instant::now();
         // Compute the draw commands then we can clear component tree for next build
@@ -611,7 +611,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         // Clear any existing compute resources
         app.resource_manager.write().clear();
         // Compute the draw commands
-        let (commands, window_requests) = component_tree.compute(
+        let (commands, window_requests) = TesseraRuntime::write().component_tree.compute(
             screen_size,
             cursor_position,
             cursor_events,
@@ -622,7 +622,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         );
         let draw_cost = draw_timer.elapsed();
         debug!("Draw commands computed in {draw_cost:?}");
-        component_tree.clear();
+        TesseraRuntime::write().component_tree.clear();
         // Handle the window requests
         // After compute, check for cursor change requests
         app.window
@@ -653,6 +653,11 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         }
         // timer for performance measurement
         let render_timer = Instant::now();
+        // skip actual rendering if window is minimized
+        if TesseraRuntime::read().window_minimized {
+            app.window.request_redraw();
+            return;
+        }
         // Render the commands
         debug!("Rendering draw commands...");
         // Render the commands to the surface
@@ -813,8 +818,17 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
             }
             WindowEvent::Resized(size) => {
                 if size.width == 0 || size.height == 0 {
-                    todo!("Handle minimize");
+                    // Window minimize handling & callback API
+                    if !TesseraRuntime::write().window_minimized {
+                        TesseraRuntime::write().window_minimized = true;
+                        TesseraRuntime::read().trigger_minimize_callbacks(true);
+                    }
                 } else {
+                    // Window (un)minimize handling & callback API
+                    if TesseraRuntime::write().window_minimized {
+                        TesseraRuntime::write().window_minimized = false;
+                        TesseraRuntime::read().trigger_minimize_callbacks(false);
+                    }
                     app.resize(size);
                 }
             }

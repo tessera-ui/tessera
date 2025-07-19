@@ -131,6 +131,12 @@ pub struct TesseraRuntime {
     /// the last request takes precedence. Components should coordinate cursor
     /// changes or use a priority system if needed.
     pub cursor_icon_request: Option<winit::window::CursorIcon>,
+
+    /// Called when the window minimize state changes.
+    on_minimize_callbacks: Vec<Box<dyn Fn(bool) + Send + Sync>>,
+
+    /// Whether the window is currently minimized.
+    pub(crate) window_minimized: bool,
 }
 
 impl TesseraRuntime {
@@ -227,5 +233,25 @@ impl TesseraRuntime {
         TESSERA_RUNTIME
             .get_or_init(|| RwLock::new(Self::default()))
             .write()
+    }
+
+    /// Registers a per-frame callback for minimize state changes.
+    /// Components should call this every frame they wish to be notified.
+    pub fn on_minimize(&mut self, callback: impl Fn(bool) + Send + Sync + 'static) {
+        self.on_minimize_callbacks.push(Box::new(callback));
+    }
+
+    /// Clears all per-frame registered callbacks.
+    /// Must be called by the event loop at the beginning of each frame.
+    pub fn clear_frame_callbacks(&mut self) {
+        self.on_minimize_callbacks.clear();
+    }
+
+    /// Triggers all registered callbacks (global and per-frame).
+    /// Called by the event loop when a minimize event is detected.
+    pub fn trigger_minimize_callbacks(&self, minimized: bool) {
+        for callback in &self.on_minimize_callbacks {
+            callback(minimized);
+        }
     }
 }

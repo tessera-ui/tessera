@@ -548,7 +548,7 @@ impl PipelineRegistry {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```
     /// use tessera_ui::renderer::drawer::PipelineRegistry;
     ///
     /// let registry = PipelineRegistry::new();

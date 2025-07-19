@@ -6,19 +6,19 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```
 //! use tessera_ui_macros::tessera;
 //!
 //! #[tessera]
 //! fn my_component() {
 //!     // Component logic here
-//!     // The macro provides access to `measure` and `state_handler` functions
+//!     // The macro provides access to `measure`, `state_handler` and `on_minimize` functions
 //! }
 //! ```
 //!
 //! The `#[tessera]` macro automatically:
 //! - Registers the function as a component in the Tessera component tree
-//! - Injects `measure` and `state_handler` functions into the component scope
+//! - Injects `measure`, `state_handler` and `on_minimize` functions into the component scope
 //! - Handles component tree management (adding/removing nodes)
 //! - Provides error safety by wrapping the function body
 
@@ -30,7 +30,7 @@ use syn::{ItemFn, parse_macro_input};
 ///
 /// This macro performs several key transformations:
 /// 1. Registers the function as a node in the Tessera component tree
-/// 2. Injects `measure` and `state_handler` functions into the component scope
+/// 2. Injects `measure`, `state_handler` and `on_minimize` functions into the component scope
 /// 3. Manages component tree lifecycle (push/pop operations)
 /// 4. Provides error safety by wrapping the original function body
 ///
@@ -42,6 +42,7 @@ use syn::{ItemFn, parse_macro_input};
 /// ## Generated Code
 ///
 /// The macro generates code that:
+///
 /// - Accesses the Tessera runtime to manage the component tree
 /// - Creates a new component node with the function name
 /// - Provides closures for `measure` and `state_handler` functionality
@@ -50,7 +51,7 @@ use syn::{ItemFn, parse_macro_input};
 ///
 /// ## Example
 ///
-/// ```rust
+/// ```
 /// use tessera_ui_macros::tessera;
 ///
 /// #[tessera]
@@ -67,6 +68,14 @@ use syn::{ItemFn, parse_macro_input};
 ///     
 ///     state_handler(Box::new(|_| {
 ///         // Event handling logic
+///     }));
+///
+///     on_minimize(Box::new(|minimized| {
+///         if minimized {
+///             println!("Window minimized!");
+///         } else {
+///             println!("Window restored!");
+///         }
 ///     }));
 /// }
 /// ```
@@ -132,14 +141,23 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             };
 
-            // Step 4: Execute the original function body within a closure
+            // Step 4: Inject the `on_minimize` function into the component scope
+            // This allows components to respond to window minimize events
+            let on_minimize = {
+                use tessera_ui::TesseraRuntime;
+                |fun: Box<dyn Fn(bool) + Send + Sync + 'static>| {
+                    TesseraRuntime::write().on_minimize(fun);
+                }
+            };
+
+            // Step 5: Execute the original function body within a closure
             // This prevents early returns from breaking the component tree structure
             let result = {
                 let closure = || #fn_block;
                 closure()
             };
 
-            // Step 5: Clean up the component tree by removing this node
+            // Step 6: Clean up the component tree by removing this node
             // This ensures proper tree management and prevents memory leaks
             {
                 use tessera_ui::TesseraRuntime;
