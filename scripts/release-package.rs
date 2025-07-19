@@ -1,6 +1,9 @@
 #!/usr/bin/env rust-script
 //!
 //! ```cargo
+//! [package]
+//! edition = "2024"
+//! 
 //! [dependencies]
 //! clap = { version = "4.0", features = ["derive"] }
 //! anyhow = "1.0"
