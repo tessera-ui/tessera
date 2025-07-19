@@ -120,7 +120,6 @@ fn main() -> Result<()> {
         &new_changelog,
         Some(&old_changelog),
     )?;
-    run_or_preview_cmd(dry_run, "git", &["add", changelog_path_str])?;
 
     // 1. bump version number, commit, tag
     doc["package"]["version"] = value(new_version.clone());
@@ -130,10 +129,16 @@ fn main() -> Result<()> {
         &doc.to_string(),
         Some(&fs::read_to_string(&cargo_toml_path)?),
     )?;
+    run_or_preview_cmd(dry_run, "cargo", &["check", "--workspace"])?;
     run_or_preview_cmd(
         dry_run,
         "git",
-        &["add", cargo_toml_path.to_str().unwrap()],
+        &[
+            "add",
+            changelog_path_str,
+            cargo_toml_path.to_str().unwrap(),
+            "Cargo.lock",
+        ],
     )?;
     let release_commit_msg = format!("release({}): v{}", cli.package, new_version);
     run_or_preview_cmd(dry_run, "git", &["commit", "-m", &release_commit_msg])?;
@@ -157,22 +162,6 @@ fn main() -> Result<()> {
     // 4. reset to tag
     run_or_preview_cmd(dry_run, "git", &["reset", "--hard", &tag])?;
 
-    if dry_run {
-        // File diff preview
-        for (file, old, new) in &modified_files {
-            write_or_preview_file(dry_run, file, new, Some(old))?;
-        }
-        // Remove ChangeLog Preview Start/End output
-    } else {
-        // Write back all modified Cargo.toml
-        for (file, _old, new) in &modified_files {
-            std::fs::write(file, new)?;
-        }
-        // Update main package's Cargo.toml (version number already written back)
-        doc["package"]["version"] = value(new_version.clone());
-        fs::write(&cargo_toml_path, doc.to_string())?;
-        println!("Updated version in {}", cargo_toml_path.display());
-    }
 
     Ok(())
 }
