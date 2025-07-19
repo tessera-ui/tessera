@@ -21,7 +21,7 @@ pub struct ButtonArgs {
     #[builder(default)]
     pub hover_color: Option<Color>,
     /// The shape of the button.
-    #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0 }")]
+    #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0, g2_k_value: 3.0 }")]
     pub shape: Shape,
     /// The padding of the button.
     #[builder(default = "Dp(12.0)")]

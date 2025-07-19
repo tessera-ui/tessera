@@ -37,6 +37,7 @@ pub fn content_section() {
         SurfaceArgsBuilder::default()
             .shape(Shape::RoundedRectangle {
                 corner_radius: 25.0,
+                g2_k_value: 3.0,
             })
             .padding(20.0.into())
             .color(Color::new(0.8, 0.8, 0.9, 1.0)) // Light purple fill, RGBA

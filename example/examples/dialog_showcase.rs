@@ -101,6 +101,7 @@ fn app(app_state: Arc<RwLock<AppState>>) {
                             .color(Color::new(0.2, 0.2, 0.2, 1.0))
                             .shape(Shape::RoundedRectangle {
                                 corner_radius: 10.0,
+                                g2_k_value: 3.0,
                             })
                             .padding(Dp(20.0))
                             .build()

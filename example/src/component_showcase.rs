@@ -32,6 +32,7 @@ fn surface_showcase(state: Arc<AppState>) {
                 .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
                 .shape(Shape::RoundedRectangle {
                     corner_radius: 25.0,
+                    g2_k_value: 3.0,
                 })
                 .padding(Dp(24.0))
                 .width(DimensionValue::Fill {
@@ -130,6 +131,7 @@ fn surface_showcase(state: Arc<AppState>) {
                                     })))
                                     .shape(Shape::RoundedRectangle {
                                         corner_radius: 25.0,
+                                        g2_k_value: 3.0,
                                     })
                                     .build()
                                     .unwrap(),
@@ -175,6 +177,7 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                 .color(md_colors::SURFACE_CONTAINER)
                 .shape(Shape::RoundedRectangle {
                     corner_radius: 25.0,
+                    g2_k_value: 3.0,
                 })
                 .padding(Dp(24.0))
                 .width(DimensionValue::Fill {
@@ -253,6 +256,7 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                     .height(DimensionValue::Fixed(Dp(100.0).into()))
                                     .shape(Shape::RoundedRectangle {
                                         corner_radius: 25.0,
+                                        g2_k_value: 3.0,
                                     })
                                     .on_click(Arc::new(|| {
                                         println!("Fluid glass with rounded corners clicked!");
@@ -304,6 +308,7 @@ fn text_editor_showcase(state: Arc<AppState>) {
             .color(md_colors::SURFACE_CONTAINER)
             .shape(Shape::RoundedRectangle {
                 corner_radius: 25.0,
+                g2_k_value: 3.0,
             })
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
@@ -354,6 +359,7 @@ fn animation_showcase(state: Arc<AppState>) {
             .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
             .shape(Shape::RoundedRectangle {
                 corner_radius: 25.0,
+                g2_k_value: 3.0,
             })
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
@@ -404,6 +410,7 @@ fn interactive_showcase(state: Arc<AppState>) {
             .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
             .shape(Shape::RoundedRectangle {
                 corner_radius: 25.0,
+                g2_k_value: 3.0,
             })
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
@@ -427,6 +434,7 @@ fn performance_showcase(state: Arc<AppState>) {
             .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
             .shape(Shape::RoundedRectangle {
                 corner_radius: 25.0,
+                g2_k_value: 3.0,
             })
             .padding(Dp(24.0))
             .width(DimensionValue::Fill {
@@ -482,6 +490,7 @@ pub fn component_showcase(state: Arc<AppState>) {
                     .color(md_colors::PRIMARY_CONTAINER)
                     .shape(Shape::RoundedRectangle {
                         corner_radius: 25.0,
+                        g2_k_value: 3.0,
                     })
                     .padding(Dp(24.0))
                     .width(DimensionValue::Fill {

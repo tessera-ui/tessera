@@ -20,6 +20,7 @@ fn small_box(text_content: &'static str, color: Color) {
             color,
             shape: Shape::RoundedRectangle {
                 corner_radius: 25.0,
+                g2_k_value: 3.0,
             },
             padding: Dp(8.0),
             width: Some(DimensionValue::Fixed(Px(40))),
@@ -69,6 +70,7 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
                         color: Color::new(0.9, 0.9, 0.9, 1.0), // Gray background to see borders clearly
                         shape: Shape::RoundedRectangle {
                             corner_radius: 25.0,
+                            g2_k_value: 3.0,
                         },
                         padding: Dp(10.0),
                         width: Some(DimensionValue::Fixed(Px(400))), // Sufficient Fixed Width

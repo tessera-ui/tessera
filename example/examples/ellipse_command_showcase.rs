@@ -82,6 +82,7 @@ fn app() {
                             SurfaceArgsBuilder::default()
                                 .shape(Shape::RoundedRectangle {
                                     corner_radius: 20.0,
+                                    g2_k_value: 3.0,
                                 })
                                 .color(blue)
                                 .width(DimensionValue::Fixed(Dp(80.0).into()))

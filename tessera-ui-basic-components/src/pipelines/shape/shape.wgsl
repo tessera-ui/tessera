@@ -6,6 +6,7 @@ struct ShapeUniforms {
     render_params: vec4f,      // shadow_offset.xy, shadow_smoothness, render_mode
     ripple_params: vec4f,      // ripple_center.xy, ripple_radius, ripple_alpha
     ripple_color: vec4f,       // ripple_color.rgb, unused
+    g2_k_value: f32, // G2 exponent for rounded corners
 };
 
 @group(0) @binding(0)
@@ -62,7 +63,7 @@ fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: f32, k: f32) -> f32 {
 // p: point to sample
 // r: radii of the ellipse
 fn sdf_ellipse(p: vec2f, r: vec2f) -> f32 {
-    if (r.x <= 0.0 || r.y <= 0.0) {
+    if r.x <= 0.0 || r.y <= 0.0 {
         // Return a large value to prevent rendering if radii are invalid
         return 1.0e6;
     }
@@ -111,7 +112,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     // G2 exponent for rounded corners.
     // k=2.0 results in standard G1 circular corners.
     // k > 2.0 (e.g., 2.5, 3.0, 4.0) gives G2-like superelliptical corners.
-    let G2_K_VALUE: f32 = 3.0;
+    let G2_K_VALUE: f32 = shape_params.g2_k_value;
 
     // in.local_pos_out is expected to be in normalized range, e.g., [-0.5, 0.5] for x and y
     let p_normalized = in.local_pos_out;
@@ -124,7 +125,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     if render_mode == 2.0 { // --- Draw Shadow ---
         let p_scaled_shadow_space = p_scaled_object_space - shadow_offset;
         var dist_shadow: f32;
-        if (corner_radius < 0.0) {
+        if corner_radius < 0.0 {
             dist_shadow = sdf_ellipse(p_scaled_shadow_space, rect_half_size);
         } else {
             dist_shadow = sdf_g2_rounded_box(p_scaled_shadow_space, rect_half_size, corner_radius, G2_K_VALUE);
@@ -146,7 +147,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     } else { // --- Draw Object (Fill or Outline) ---
         var dist_object: f32;
-        if (corner_radius < 0.0) {
+        if corner_radius < 0.0 {
             dist_object = sdf_ellipse(p_scaled_object_space, rect_half_size);
         } else {
             dist_object = sdf_g2_rounded_box(p_scaled_object_space, rect_half_size, corner_radius, G2_K_VALUE);

@@ -37,12 +37,10 @@ pub struct GlassButtonArgs {
     // Glass visual properties
     #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
     pub tint_color: Color,
-    #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0 }")]
+    #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0, g2_k_value: 3.0 }")]
     pub shape: Shape,
     #[builder(default = "0.0")]
     pub blur_radius: f32,
-    #[builder(default = "3.0")]
-    pub g2_k_value: f32,
     #[builder(default = "25.0")]
     pub dispersion_height: f32,
     #[builder(default = "1.2")]
@@ -142,7 +140,6 @@ pub fn glass_button(
         .tint_color(args.tint_color)
         .shape(args.shape)
         .blur_radius(args.blur_radius)
-        .g2_k_value(args.g2_k_value)
         .dispersion_height(args.dispersion_height)
         .chroma_multiplier(args.chroma_multiplier)
         .refraction_height(args.refraction_height)

@@ -22,6 +22,7 @@ fn small_box(color: Color) {
             color,
             shape: Shape::RoundedRectangle {
                 corner_radius: 25.0,
+                g2_k_value: 3.0,
             },
             padding: Dp(8.0),
             width: Some(DimensionValue::Fixed(Px(40))),
@@ -172,6 +173,7 @@ fn app() {
                                             .height(DimensionValue::Fixed(Px(250)))
                                             .shape(Shape::RoundedRectangle {
                                                 corner_radius: 20.0,
+                                                g2_k_value: 3.0,
                                             })
                                             .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
                                             .build()
@@ -189,6 +191,7 @@ fn app() {
                                             .height(DimensionValue::Fixed(Px(250)))
                                             .shape(Shape::RoundedRectangle {
                                                 corner_radius: 20.0,
+                                                g2_k_value: 3.0,
                                             })
                                             .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
                                             .border(GlassBorder::new(

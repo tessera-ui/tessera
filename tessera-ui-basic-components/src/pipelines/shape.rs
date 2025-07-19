@@ -1,6 +1,8 @@
 mod command;
 use bytemuck::{Pod, Zeroable};
 use earcutr::earcut;
+use encase::ShaderType;
+use glam::Vec4;
 use log::error;
 use tessera_ui::{
     PxPosition, PxSize,
@@ -14,22 +16,15 @@ use command::ShapeCommandComputed;
 
 pub use command::{RippleProps, ShadowProps, ShapeCommand};
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq)]
+#[derive(ShaderType, Clone, Copy, Debug, PartialEq)]
 pub struct ShapeUniforms {
-    // vec4f: size.x, size.y, corner_radius, border_width
-    pub size_cr_border_width: [f32; 4],
-    // vec4f: r, g, b, a (fill_color or border_color)
-    pub primary_color: [f32; 4],
-    // vec4f: r, g, b, a (shadow color)
-    pub shadow_color: [f32; 4],
-    // vec4f: shadow_offset.x, shadow_offset.y, shadow_smoothness, render_mode
-    // render_mode: 0.0 = fill, 1.0 = outline, 2.0 = shadow, 3.0 = ripple_fill, 4.0 = ripple_outline, 5.0 = ellipse_fill, 6.0 = ellipse_outline
-    pub render_params: [f32; 4],
-    // vec4f: ripple_center.x, ripple_center.y, ripple_radius, ripple_alpha
-    pub ripple_params: [f32; 4],
-    // vec4f: ripple_color.r, ripple_color.g, ripple_color.b, unused
-    pub ripple_color: [f32; 4],
+    pub size_cr_border_width: Vec4,
+    pub primary_color: Vec4,
+    pub shadow_color: Vec4,
+    pub render_params: Vec4,
+    pub ripple_params: Vec4,
+    pub ripple_color: Vec4,
+    pub g2_k_value: f32,
 }
 
 /// Vertex for any shapes
@@ -269,10 +264,13 @@ impl ShapePipeline {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        let mut buffer = encase::UniformBuffer::new(Vec::<u8>::new());
+        buffer.write(uniforms).unwrap();
+        let inner = buffer.into_inner();
         gpu_queue.write_buffer(
             &self.uniform_buffer,
             dynamic_offset as wgpu::BufferAddress,
-            bytemuck::bytes_of(uniforms),
+            &inner,
         );
 
         render_pass.set_pipeline(&self.pipeline);

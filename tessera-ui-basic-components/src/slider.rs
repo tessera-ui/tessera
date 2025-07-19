@@ -104,6 +104,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
             .color(args.active_track_color)
             .shape(Shape::RoundedRectangle {
                 corner_radius: args.track_height.0 as f32 / 2.0f32,
+                g2_k_value: 2.0, // Use G1 corners here specifically
             })
             .build()
             .unwrap(),
@@ -119,6 +120,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
             .color(args.thumb_color)
             .shape(Shape::RoundedRectangle {
                 corner_radius: args.thumb_size.0 as f32 / 2.0f32,
+                g2_k_value: 2.0, // Use G1 corners here specifically
             })
             .shadow(args.thumb_shadow)
             .build()
@@ -237,6 +239,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
             let inactive_track_command = ShapeCommand::Rect {
                 color: args.inactive_track_color,
                 corner_radius: track_height.0 as f32 / 2.0,
+                g2_k_value: 2.0, // Use G1 corners here specifically
                 shadow: None,
             };
             metadata.push_draw_command(inactive_track_command);

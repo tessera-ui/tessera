@@ -40,14 +40,11 @@ pub struct FluidGlassArgs {
     #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
     pub tint_color: Color,
     /// The shape of the component, an enum that can be `RoundedRectangle` or `Ellipse`.
-    #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0 }")]
+    #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0, g2_k_value: 3.0 }")]
     pub shape: Shape,
     /// The radius for the background blur effect. A value of `0.0` disables the blur.
     #[builder(default = "0.0")]
     pub blur_radius: f32,
-    /// The G2 K-value, influencing the dispersion effect's shape.
-    #[builder(default = "3.0")]
-    pub g2_k_value: f32,
     /// The height of the chromatic dispersion effect.
     #[builder(default = "25.0")]
     pub dispersion_height: f32,

@@ -3,7 +3,7 @@
 //! ```cargo
 //! [package]
 //! edition = "2024"
-//! 
+//!
 //! [dependencies]
 //! clap = { version = "4.0", features = ["derive"] }
 //! anyhow = "1.0"
@@ -144,11 +144,8 @@ fn main() -> Result<()> {
 
     // Replace all path dependencies of this package with version dependencies
     let package_versions = workspace.collect_versions()?;
-    let modified_files = replace_path_with_version_in_workspace(
-        &workspace,
-        &cli.package,
-        &package_versions,
-    )?;
+    let modified_files =
+        replace_path_with_version_in_workspace(&workspace, &cli.package, &package_versions)?;
 
     // 2. path->version dependency changes and temporary commit
     for (file, old, new) in &modified_files {
@@ -310,7 +307,9 @@ fn replace_path_with_version_in_workspace(
             if let Some(table) = doc.get_mut(section).and_then(|t| t.as_table_like_mut()) {
                 let keys: Vec<_> = table.iter().map(|(k, _)| k.to_string()).collect();
                 for dep in keys {
-                    if let Some(ver) = package_versions.get(&dep) && dep != target_package {
+                    if let Some(ver) = package_versions.get(&dep)
+                        && dep != target_package
+                    {
                         if let Some(item) = table.get_mut(&dep) {
                             if let Some(dep_table) = item.as_table_like_mut() {
                                 if dep_table.remove("path").is_some() {

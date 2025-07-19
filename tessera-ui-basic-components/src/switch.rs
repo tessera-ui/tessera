@@ -73,17 +73,6 @@ pub struct SwitchArgs {
     pub thumb_padding: Dp,
 }
 
-impl std::fmt::Debug for SwitchArgs {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SwitchArgs")
-            .field("state", &self.state.is_some())
-            .field("checked", &self.checked)
-            .field("on_toggle", &"<callback>")
-            // ... other fields
-            .finish()
-    }
-}
-
 #[tessera]
 pub fn switch(args: impl Into<SwitchArgs>) {
     let args: SwitchArgs = args.into();
@@ -94,9 +83,7 @@ pub fn switch(args: impl Into<SwitchArgs>) {
             .width(DimensionValue::Fixed(thumb_size.to_px()))
             .height(DimensionValue::Fixed(thumb_size.to_px()))
             .color(args.thumb_color)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: thumb_size.0 as f32 / 2.0,
-            })
+            .shape(Shape::Ellipse)
             .build()
             .unwrap(),
         None,
@@ -196,6 +183,7 @@ pub fn switch(args: impl Into<SwitchArgs>) {
         let track_command = ShapeCommand::Rect {
             color: track_color,
             corner_radius: (self_height_px.0 as f32) / 2.0,
+            g2_k_value: 2.0, // Use G1 corners here specifically
             shadow: None,
         };
         if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {

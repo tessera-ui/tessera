@@ -26,7 +26,7 @@ pub struct SurfaceArgs {
     #[builder(default)]
     pub hover_color: Option<Color>,
     /// The shape of the surface.
-    #[builder(default = "Shape::RoundedRectangle { corner_radius: 0.0 }")]
+    #[builder(default)]
     pub shape: Shape,
     /// The shadow properties of the surface.
     #[builder(default)]
@@ -52,31 +52,6 @@ pub struct SurfaceArgs {
     /// The ripple color (RGB) for interactive surfaces.
     #[builder(default = "Color::from_rgb(1.0, 1.0, 1.0)")]
     pub ripple_color: Color,
-}
-
-impl std::fmt::Debug for SurfaceArgs {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SurfaceArgs")
-            .field("color", &self.color)
-            .field("hover_color", &self.hover_color)
-            .field("shape", &self.shape)
-            .field("shadow", &self.shadow)
-            .field("padding", &self.padding)
-            .field("width", &self.width)
-            .field("height", &self.height)
-            .field("border_width", &self.border_width)
-            .field("border_color", &self.border_color)
-            .field(
-                "on_click",
-                &if self.on_click.is_some() {
-                    "<callback>"
-                } else {
-                    "None"
-                },
-            )
-            .field("ripple_color", &self.ripple_color)
-            .finish()
-    }
 }
 
 // Manual implementation of Default because derive_builder's default conflicts with our specific defaults
@@ -179,11 +154,15 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             };
 
             match args_measure_clone.shape {
-                Shape::RoundedRectangle { corner_radius } => {
+                Shape::RoundedRectangle {
+                    corner_radius,
+                    g2_k_value,
+                } => {
                     if args_measure_clone.border_width > 0.0 {
                         ShapeCommand::RippleOutlinedRect {
                             color: args_measure_clone.border_color.unwrap_or(effective_color),
                             corner_radius,
+                            g2_k_value,
                             shadow: args_measure_clone.shadow,
                             border_width: args_measure_clone.border_width,
                             ripple: ripple_props,
@@ -192,6 +171,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                         ShapeCommand::RippleRect {
                             color: effective_color,
                             corner_radius,
+                            g2_k_value,
                             shadow: args_measure_clone.shadow,
                             ripple: ripple_props,
                         }
@@ -202,6 +182,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                         ShapeCommand::RippleOutlinedRect {
                             color: args_measure_clone.border_color.unwrap_or(effective_color),
                             corner_radius: -1.0, // Use negative radius to signify ellipse
+                            g2_k_value: 0.0,     // Just for compatibility, not used in ellipse
                             shadow: args_measure_clone.shadow,
                             border_width: args_measure_clone.border_width,
                             ripple: ripple_props,
@@ -210,6 +191,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                         ShapeCommand::RippleRect {
                             color: effective_color,
                             corner_radius: -1.0, // Use negative radius to signify ellipse
+                            g2_k_value: 0.0,     // Just for compatibility, not used in ellipse
                             shadow: args_measure_clone.shadow,
                             ripple: ripple_props,
                         }
@@ -219,11 +201,15 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         } else {
             // Non-interactive surface
             match args_measure_clone.shape {
-                Shape::RoundedRectangle { corner_radius } => {
+                Shape::RoundedRectangle {
+                    corner_radius,
+                    g2_k_value,
+                } => {
                     if args_measure_clone.border_width > 0.0 {
                         ShapeCommand::OutlinedRect {
                             color: args_measure_clone.border_color.unwrap_or(effective_color),
                             corner_radius,
+                            g2_k_value,
                             shadow: args_measure_clone.shadow,
                             border_width: args_measure_clone.border_width,
                         }
@@ -231,6 +217,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                         ShapeCommand::Rect {
                             color: effective_color,
                             corner_radius,
+                            g2_k_value,
                             shadow: args_measure_clone.shadow,
                         }
                     }

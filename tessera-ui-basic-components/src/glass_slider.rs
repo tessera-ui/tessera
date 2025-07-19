@@ -88,9 +88,9 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
             .height(DimensionValue::Fixed(args.track_height.to_px()))
             .tint_color(args.tint_color)
             .blur_radius(args.blur_radius)
-            .g2_k_value(2.0)
             .shape(Shape::RoundedRectangle {
                 corner_radius: args.track_height.0 as f32 / 2.0,
+                g2_k_value: 2.0, // Use G1 corners here specifically
             })
             .build()
             .unwrap(),
@@ -107,6 +107,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
             .blur_radius(args.blur_radius)
             .shape(Shape::RoundedRectangle {
                 corner_radius: args.thumb_size.0 as f32 / 2.0,
+                g2_k_value: 2.0, // Use G1 corners here specifically
             })
             .build()
             .unwrap(),

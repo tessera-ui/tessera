@@ -74,7 +74,7 @@ pub struct TextEditorArgs {
     #[builder(default = "None")]
     pub border_color: Option<Color>,
     /// The shape of the text editor.
-    #[builder(default = "Shape::RoundedRectangle { corner_radius: 4.0 }")]
+    #[builder(default = "Shape::RoundedRectangle { corner_radius: 4.0, g2_k_value: 3.0 }")]
     pub shape: Shape,
     /// Padding inside the text editor. Defaults to 5.0.
     #[builder(default = "Dp(5.0)")]
@@ -465,7 +465,10 @@ impl TextEditorArgs {
             .background_color(Some(Color::WHITE))
             .border_width(1.0)
             .border_color(Some(Color::new(0.7, 0.7, 0.7, 1.0)))
-            .shape(Shape::RoundedRectangle { corner_radius: 4.0 })
+            .shape(Shape::RoundedRectangle {
+                corner_radius: 4.0,
+                g2_k_value: 3.0,
+            })
             .build()
             .unwrap()
     }
@@ -483,7 +486,10 @@ impl TextEditorArgs {
             .min_width(Some(Dp(120.0)))
             .background_color(Some(Color::WHITE))
             .border_width(0.0)
-            .shape(Shape::RoundedRectangle { corner_radius: 0.0 })
+            .shape(Shape::RoundedRectangle {
+                corner_radius: 0.0,
+                g2_k_value: 3.0,
+            })
             .build()
             .unwrap()
     }
