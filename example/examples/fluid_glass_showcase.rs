@@ -5,7 +5,7 @@ use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{AsBoxedItem, BoxedArgs, boxed},
     column::{AsColumnItem, ColumnArgsBuilder, column},
-    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
     row::{AsRowItem, RowArgsBuilder, row},
     shape_def::Shape,
     spacer::{SpacerArgs, spacer},
@@ -81,7 +81,7 @@ fn app() {
                                     row(
                                         RowArgsBuilder::default()
                                             .main_axis_alignment(MainAxisAlignment::SpaceAround)
-                                            .width(DimensionValue::Fixed(Px(400)))
+                                            .width(DimensionValue::Fixed(Px(800)))
                                             .build()
                                             .unwrap(),
                                         [
@@ -153,19 +153,56 @@ fn app() {
                     .into_boxed_item(),
                     // Fluid glass overlay
                     (move || {
-                        fluid_glass(
-                            FluidGlassArgsBuilder::default()
-                                .blur_radius(10.0)
-                                .width(DimensionValue::Fixed(Px(350)))
-                                .height(DimensionValue::Fixed(Px(250)))
-                                .shape(Shape::RoundedRectangle {
-                                    corner_radius: 20.0,
+                        row(
+                            RowArgsBuilder::default()
+                                .main_axis_alignment(MainAxisAlignment::SpaceAround)
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .width(DimensionValue::Fill {
+                                    min: None,
+                                    max: None,
                                 })
-                                .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
                                 .build()
                                 .unwrap(),
-                            None,
-                            || {},
+                            [
+                                (move || {
+                                    fluid_glass(
+                                        FluidGlassArgsBuilder::default()
+                                            .blur_radius(10.0)
+                                            .width(DimensionValue::Fixed(Px(350)))
+                                            .height(DimensionValue::Fixed(Px(250)))
+                                            .shape(Shape::RoundedRectangle {
+                                                corner_radius: 20.0,
+                                            })
+                                            .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
+                                            .build()
+                                            .unwrap(),
+                                        None,
+                                        || {},
+                                    )
+                                })
+                                .into_row_item(),
+                                (move || {
+                                    fluid_glass(
+                                        FluidGlassArgsBuilder::default()
+                                            .blur_radius(10.0)
+                                            .width(DimensionValue::Fixed(Px(350)))
+                                            .height(DimensionValue::Fixed(Px(250)))
+                                            .shape(Shape::RoundedRectangle {
+                                                corner_radius: 20.0,
+                                            })
+                                            .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
+                                            .border(GlassBorder::new(
+                                                Dp(2.0),
+                                                Color::BLUE.with_alpha(0.1),
+                                            ))
+                                            .build()
+                                            .unwrap(),
+                                        None,
+                                        || {},
+                                    )
+                                })
+                                .into_row_item(),
+                            ],
                         )
                     })
                     .into_boxed_item(),

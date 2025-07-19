@@ -23,6 +23,8 @@ struct GlassUniforms {
     ripple_radius: f32,
     ripple_alpha: f32,
     ripple_strength: f32,
+    border_color: vec4<f32>,
+    border_width: f32,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: GlassUniforms;
@@ -81,7 +83,7 @@ fn sdf_g2_rounded_box(p: vec2<f32>, b: vec2<f32>, r: f32, k: f32) -> f32 {
 }
 
 fn sdf_ellipse(p: vec2<f32>, r: vec2<f32>) -> f32 {
-    if (r.x <= 0.0 || r.y <= 0.0) {
+    if r.x <= 0.0 || r.y <= 0.0 {
         return 1.0e6;
     }
     return (length(p / r) - 1.0) * min(r.x, r.y);
@@ -143,7 +145,7 @@ fn refraction_color(local_coord: vec2<f32>, size: vec2<f32>, k: f32, rect_uv_sta
     let centered_coord = local_coord - half_size;
 
     var sd: f32;
-    if (uniforms.shape_type == 1.0) {
+    if uniforms.shape_type == 1.0 {
         sd = sdf_ellipse(centered_coord, half_size);
     } else {
         sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
@@ -152,7 +154,7 @@ fn refraction_color(local_coord: vec2<f32>, size: vec2<f32>, k: f32, rect_uv_sta
     var refracted_coord = local_coord;
     if sd < 0.0 && -sd < uniforms.refraction_height {
         var normal: vec2<f32>;
-        if (uniforms.shape_type == 1.0) {
+        if uniforms.shape_type == 1.0 {
             normal = grad_sd_ellipse(centered_coord, half_size);
         } else {
             let max_grad_radius = max(min(half_size.x, half_size.y), uniforms.corner_radius);
@@ -172,9 +174,9 @@ fn refraction_color(local_coord: vec2<f32>, size: vec2<f32>, k: f32, rect_uv_sta
 fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, k: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
-    
+
     var sd: f32;
-    if (uniforms.shape_type == 1.0) {
+    if uniforms.shape_type == 1.0 {
         sd = sdf_ellipse(centered_coord, half_size);
     } else {
         sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
@@ -184,7 +186,7 @@ fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, k: f32
 
     if sd < 0.0 && -sd < uniforms.dispersion_height && uniforms.dispersion_height > 0.0 {
         var normal: vec2<f32>;
-        if (uniforms.shape_type == 1.0) {
+        if uniforms.shape_type == 1.0 {
             normal = grad_sd_ellipse(centered_coord, half_size);
         } else {
             normal = grad_sd_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
@@ -255,9 +257,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let half_size = uniforms.rect_size_px * 0.5;
     let centered_coord = local_coord - half_size;
     let k = uniforms.g2_k_value;
-    
+
     var sd: f32;
-    if (uniforms.shape_type == 1.0) {
+    if uniforms.shape_type == 1.0 {
         sd = sdf_ellipse(centered_coord, half_size);
     } else {
         sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
@@ -281,7 +283,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let p_pixel = local_uv * uniforms.rect_size_px;
     let center_pixel = uniforms.ripple_center * uniforms.rect_size_px;
     let dist_pixels = distance(p_pixel, center_pixel);
-    
+
     let min_dimension = min(uniforms.rect_size_px.x, uniforms.rect_size_px.y);
     let radius_pixels = uniforms.ripple_radius * min_dimension;
 
@@ -296,17 +298,36 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     color = saturate_color(vec4(color, base_color.a), uniforms.chroma_multiplier).rgb;
-    
+
     if uniforms.noise_amount > 0.0 {
         let grain = (rand(local_coord * uniforms.noise_scale + uniforms.time) - 0.5) * uniforms.noise_amount;
         color += grain;
     }
 
     var final_color = vec4(color, base_color.a);
+    let shape_alpha = smoothstep(1.0, -1.0, sd);
+
+    if uniforms.border_width > 0.0 {
+        let border_alpha = smoothstep(-uniforms.border_width, -uniforms.border_width + 1.0, sd) - smoothstep(0.0, 1.0, sd);
+        if border_alpha > 0.0 {
+            // Simple highlight effect
+            let highlight_boost = 1.5;
+            let brightness_factor = max(1.0 - local_uv.x, 1.0 - local_uv.y); // light at (0,0) and dark at (1,1)
+            let highlight_amount = pow(brightness_factor, 2.0) * highlight_boost;
+            let highlighted_border_rgb = uniforms.border_color.rgb + highlight_amount;
+
+            let mixed_rgb = mix(final_color.rgb, highlighted_border_rgb, border_alpha * uniforms.border_color.a);
+            let final_alpha = max(shape_alpha, border_alpha * uniforms.border_color.a);
+            final_color = vec4(mixed_rgb, final_alpha);
+        } else {
+            final_color.a = shape_alpha;
+        }
+    } else {
+        final_color.a = shape_alpha;
+    }
+
     if sd > 0.0 {
         final_color.a = 0.0;
-    } else {
-        final_color.a *= smoothstep(1.0, -1.0, sd);
     }
 
     return final_color;

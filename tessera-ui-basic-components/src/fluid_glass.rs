@@ -15,6 +15,18 @@ use crate::{
     shape_def::Shape,
 };
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GlassBorder {
+    pub width: Dp,
+    pub color: Color,
+}
+
+impl GlassBorder {
+    pub fn new(width: Dp, color: Color) -> Self {
+        Self { width, color }
+    }
+}
+
 /// Arguments for the `fluid_glass` component, providing extensive control over its appearance.
 ///
 /// This struct uses the builder pattern for easy construction.
@@ -85,6 +97,9 @@ pub struct FluidGlassArgs {
 
     #[builder(default, setter(strip_option, into = false))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+
+    #[builder(default, setter(strip_option))]
+    pub border: Option<GlassBorder>,
 }
 
 impl FluidGlassArgsBuilder {

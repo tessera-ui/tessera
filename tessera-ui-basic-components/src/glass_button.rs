@@ -5,7 +5,7 @@ use tessera_ui::{Color, DimensionValue, Dp};
 use tessera_ui_macros::tessera;
 
 use crate::{
-    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
     ripple_state::RippleState,
     shape_def::Shape,
 };
@@ -59,6 +59,8 @@ pub struct GlassButtonArgs {
     pub time: f32,
     #[builder(default, setter(strip_option))]
     pub contrast: Option<f32>,
+    #[builder(default, setter(strip_option))]
+    pub border: Option<GlassBorder>,
 }
 
 /// Convenience constructors for common glass button styles
@@ -132,7 +134,7 @@ pub fn glass_button(
         glass_args_builder = glass_args_builder.contrast(contrast);
     }
 
-    let glass_args = glass_args_builder
+    let mut glass_args = glass_args_builder
         .tint_color(args.tint_color)
         .shape(args.shape)
         .blur_radius(args.blur_radius)
@@ -145,11 +147,16 @@ pub fn glass_button(
         .noise_scale(args.noise_scale)
         .time(args.time)
         .padding(args.padding);
-    let glass_args = if let Some(on_click) = args.on_click {
-        glass_args.on_click(on_click).build().unwrap()
-    } else {
-        glass_args.build().unwrap()
-    };
+
+    if let Some(on_click) = args.on_click {
+        glass_args = glass_args.on_click(on_click);
+    }
+
+    if let Some(border) = args.border {
+        glass_args = glass_args.border(border);
+    }
+
+    let glass_args = glass_args.build().unwrap();
 
     fluid_glass(glass_args, Some(ripple_state), child);
 }

@@ -5,6 +5,7 @@ use tessera_ui_basic_components::{
     alignment::Alignment,
     boxed::BoxedArgs,
     boxed_ui,
+    fluid_glass::GlassBorder,
     glass_button::{GlassButtonArgsBuilder, glass_button},
     image::{ImageArgsBuilder, ImageSource, image, load_image_from_source},
     pipelines::image::ImageData,
@@ -61,6 +62,7 @@ fn app(ripple_state: Arc<RippleState>, image_resource: &ImageData) {
                         .noise_amount(0.0)
                         .padding(Dp(15.0))
                         .shape(Shape::Ellipse)
+                        .border(GlassBorder::new(Dp(2.0), Color::GREEN.with_alpha(0.1)))
                         .contrast(0.6)
                         .build()
                         .unwrap();

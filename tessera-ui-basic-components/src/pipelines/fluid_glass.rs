@@ -1,4 +1,5 @@
-use bytemuck::{Pod, Zeroable};
+use encase::{ShaderType, UniformBuffer};
+use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxPosition, PxSize,
     renderer::DrawablePipeline,
@@ -9,19 +10,12 @@ use crate::fluid_glass::FluidGlassCommand;
 
 // --- Uniforms ---
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+#[derive(ShaderType, Clone, Copy, Debug)]
 struct GlassUniforms {
-    // Alignment and size follow WGSL std140 rules.
-    // vec4s (2 × 16 = 32 bytes, 16-byte aligned)
-    tint_color: [f32; 4],
-    rect_uv_bounds: [f32; 4],
-
-    // vec2s (2 × 8 = 16 bytes, 8-byte aligned)
-    rect_size_px: [f32; 2],
-    ripple_center: [f32; 2],
-
-    // f32s (14 × 4 = 56 bytes, 4-byte aligned)
+    tint_color: Vec4,
+    rect_uv_bounds: Vec4,
+    rect_size_px: Vec2,
+    ripple_center: Vec2,
     corner_radius: f32,
     shape_type: f32,
     g2_k_value: f32,
@@ -36,11 +30,8 @@ struct GlassUniforms {
     ripple_radius: f32,
     ripple_alpha: f32,
     ripple_strength: f32,
-
-    // Padding to ensure the struct is aligned to 16 bytes.
-    // Total size: 32 + 16 + 56 = 104 bytes.
-    // std140 requires struct size to be a multiple of 16 bytes. 104 % 16 = 8, so we add 8 bytes padding.
-    _padding: [f32; 2],
+    border_color: Vec4,
+    border_width: f32,
 }
 
 // --- Pipeline Definition ---
@@ -174,10 +165,10 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         ];
 
         let uniforms = GlassUniforms {
-            tint_color: args.tint_color.into(),
-            rect_uv_bounds,
-            rect_size_px: [size.width.0 as f32, size.height.0 as f32],
-            ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]),
+            tint_color: args.tint_color.to_array().into(),
+            rect_uv_bounds: rect_uv_bounds.into(),
+            rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
+            ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]).into(),
             corner_radius: match args.shape {
                 crate::shape_def::Shape::RoundedRectangle { corner_radius } => corner_radius,
                 crate::shape_def::Shape::Ellipse => 0.0,
@@ -198,15 +189,27 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             ripple_radius: args.ripple_radius.unwrap_or(0.0),
             ripple_alpha: args.ripple_alpha.unwrap_or(0.0),
             ripple_strength: args.ripple_strength.unwrap_or(0.0),
-            _padding: [0.0; 2],
+            border_color: if let Some(border) = args.border {
+                border.color.to_array()
+            } else {
+                [0.0; 4]
+            }
+            .into(),
+            border_width: if let Some(border) = args.border {
+                border.width.to_px().0 as f32
+            } else {
+                0.0
+            },
         };
 
+        let mut buffer = UniformBuffer::new(Vec::<u8>::new());
+        buffer.write(&uniforms).unwrap();
+        let inner = buffer.into_inner();
         let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Temporary Fluid Glass Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[uniforms]),
+            contents: &inner,
             usage: wgpu::BufferUsages::UNIFORM,
         });
-
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.bind_group_layout,
             entries: &[
