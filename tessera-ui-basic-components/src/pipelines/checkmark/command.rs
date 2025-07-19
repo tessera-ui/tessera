@@ -18,7 +18,7 @@ impl CheckmarkCommand {
     pub fn new() -> Self {
         Self {
             color: Color::new(0.0, 0.6, 0.0, 1.0), // Green checkmark
-            stroke_width: 10.0,
+            stroke_width: 5.0,
             progress: 1.0, // Fully drawn by default
             padding: [2.0, 2.0],
         }

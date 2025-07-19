@@ -13,7 +13,7 @@ pub struct CheckmarkArgs {
     pub color: Color,
 
     /// Width of the checkmark stroke in pixels
-    #[builder(default = "10.0")]
+    #[builder(default = "5.0")]
     pub stroke_width: f32,
 
     /// Animation progress from 0.0 (not drawn) to 1.0 (fully drawn)

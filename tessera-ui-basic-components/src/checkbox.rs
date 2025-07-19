@@ -53,7 +53,7 @@ pub struct CheckboxArgs {
     #[builder(default = "Color::from_rgb_u8(119, 72, 146)")]
     pub checkmark_color: Color,
 
-    #[builder(default = "20.0")]
+    #[builder(default = "5.0")]
     pub checkmark_stroke_width: f32,
 
     #[builder(default = "1.0")]

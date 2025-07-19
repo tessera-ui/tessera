@@ -45,11 +45,10 @@ impl CheckmarkVertex {
 pub struct CheckmarkPipeline {
     pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
-    #[allow(dead_code)]
-    bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    uniform_staging_buffer: Vec<u8>,
 }
 
 impl CheckmarkPipeline {
@@ -172,10 +171,10 @@ impl CheckmarkPipeline {
         Self {
             pipeline,
             uniform_buffer,
-            bind_group_layout,
             bind_group,
             vertex_buffer,
             index_buffer,
+            uniform_staging_buffer: vec![0; CheckmarkUniforms::min_size().get() as usize],
         }
     }
 }
@@ -208,10 +207,12 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
             padding: command.padding.into(),
         };
 
-        // Update uniform buffer
-        let mut buffer = UniformBuffer::new(Vec::new());
-        buffer.write(&uniforms).unwrap();
-        gpu_queue.write_buffer(&self.uniform_buffer, 0, &buffer.into_inner());
+        // Update uniform buffer using the staging buffer
+        {
+            let mut buffer = UniformBuffer::new(&mut self.uniform_staging_buffer);
+            buffer.write(&uniforms).unwrap();
+        }
+        gpu_queue.write_buffer(&self.uniform_buffer, 0, &self.uniform_staging_buffer);
 
         // Update vertex positions to match the actual position and size
         let vertices = [
