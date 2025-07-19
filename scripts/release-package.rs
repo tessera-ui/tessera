@@ -162,7 +162,6 @@ fn main() -> Result<()> {
     // 4. reset to tag
     run_or_preview_cmd(dry_run, "git", &["reset", "--hard", &tag])?;
 
-
     Ok(())
 }
 
