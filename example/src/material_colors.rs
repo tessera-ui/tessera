@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Material Design 3 color palette constants
 //!
 //! This module provides Material Design 3 color tokens for consistent theming
