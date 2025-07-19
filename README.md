@@ -216,12 +216,12 @@ cargo run
 
 ## Workspace Structure
 
-Tessera uses a multi-crate workspace structure with a clear separation of responsibilities:
+Tessera adopts a multi-crate workspace structure:
 
-- **`tessera`**: The core functionality of the framework, including the component tree, renderer, runtime, basic types (`Dp`, `Px`), and event handling.
-- **`tessera_basic_components`**: Provides a set of ready-to-use UI components (like `row`, `column`, `text`, `button`, `surface`) and their rendering pipelines.
-- **`tessera_macros`**: Contains the `#[tessera]` procedural macro, which greatly simplifies component definition. [Documentation](https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros/README.md)
-- **`example`**: An example project demonstrating how to build applications with the `Tessera` framework.
+- **`tessera-ui`**: Framework core, including the component tree, rendering system, runtime, basic types (`Dp`, `Px`), and event handling.
+- **`tessera-ui-basic-components`**: Provides a set of ready-to-use UI components (such as `row`, `column`, `text`, `button`, `surface`) and their rendering pipelines.
+- **`tessera-ui-macros`**: Contains the `#[tessera]` procedural macro for simplified component definition. [Documentation](tessera-ui-macros/README.md)
+- **`example`**: Example project demonstrating framework usage.
 
 ## Contributing
 

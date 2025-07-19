@@ -216,12 +216,12 @@ cargo run
 
 ## 工作区结构
 
-Tessera 使用多 crate 的工作区结构，职责分明：
+Tessera 采用多 crate 的工作区结构：
 
-- **`tessera`**：框架的核心功能，包括组件树、渲染器、运行时、基本类型（`Dp`、`Px`）和事件处理。
-- **`tessera_basic_components`**：提供一组即用型 UI 组件（如 `row`、`column`、`text`、`button`、`surface`）及其渲染管线。
-- **`tessera_macros`**：包含 `#[tessera]` 过程宏，极大地简化了组件的定义。[文档](https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros/docs/README_zh-CN.md)
-- **`example`**：一个示例项目，演示如何使用 `Tessera` 框架构建应用程序。
+- **`tessera-ui`**：框架核心，包括组件树、渲染系统、运行时、基本类型（`Dp`、`Px`）和事件处理。
+- **`tessera-ui-basic-components`**：提供一组即用型 UI 组件（如 `row`、`column`、`text`、`button`、`surface`）及其渲染管线。
+- **`tessera-ui-macros`**：包含 `#[tessera]` 过程宏，简化组件定义。[文档](tessera-ui-macros/docs/README_zh-CN.md)
+- **`example`**：示例项目，演示框架用法。
 
 ## 贡献
 
