@@ -1,3 +1,4 @@
+use encase::{ShaderType, UniformBuffer};
 use tessera_ui::{
     renderer::compute::ComputablePipeline,
     wgpu::{self, util::DeviceExt},
@@ -5,13 +6,11 @@ use tessera_ui::{
 
 use super::command::BlurCommand;
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(ShaderType)]
 struct BlurUniforms {
     radius: f32,
     direction_x: f32,
     direction_y: f32,
-    _padding: f32,
 }
 
 pub struct BlurPipeline {
@@ -106,11 +105,12 @@ impl ComputablePipeline<BlurCommand> for BlurPipeline {
             radius: command.radius,
             direction_x: command.direction.0,
             direction_y: command.direction.1,
-            _padding: 0.0,
         };
+        let mut buffer = UniformBuffer::new(Vec::new());
+        buffer.write(&uniforms).unwrap();
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Blur Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[uniforms]),
+            contents: &buffer.into_inner(),
             usage: wgpu::BufferUsages::UNIFORM,
         });
 

@@ -4,7 +4,8 @@ use std::{
     sync::Arc,
 };
 
-use bytemuck::{Pod, Zeroable};
+use encase::{ShaderType, UniformBuffer};
+use glam::Vec4;
 use tessera_ui::{DrawCommand, PxPosition, PxSize, renderer::drawer::DrawablePipeline, wgpu};
 
 #[derive(Debug, Clone)]
@@ -44,12 +45,10 @@ impl DrawCommand for ImageCommand {
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(ShaderType)]
 struct ImageUniforms {
-    rect: [f32; 4],
+    rect: Vec4,
     is_bgra: u32,
-    _padding: [u32; 3],
 }
 
 struct ImageResources {
@@ -208,7 +207,7 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
 
                 let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("Image Uniform Buffer"),
-                    size: std::mem::size_of::<ImageUniforms>() as u64,
+                    size: ImageUniforms::min_size().get(),
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
                 });
@@ -250,11 +249,13 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
                     - (size.height.0 as f32 / config.height as f32),
                 size.width.0 as f32 / config.width as f32,
                 size.height.0 as f32 / config.height as f32,
-            ],
+            ]
+            .into(),
             is_bgra: if is_bgra { 1 } else { 0 },
-            _padding: [0; 3],
         };
-        gpu_queue.write_buffer(&resources.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
+        let mut buffer = UniformBuffer::new(Vec::new());
+        buffer.write(&uniforms).unwrap();
+        gpu_queue.write_buffer(&resources.uniform_buffer, 0, &buffer.into_inner());
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &resources.bind_group, &[]);

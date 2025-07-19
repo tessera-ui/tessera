@@ -1,4 +1,6 @@
 use bytemuck::{Pod, Zeroable};
+use encase::{ShaderType, UniformBuffer};
+use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxPosition, PxSize,
     renderer::DrawablePipeline,
@@ -9,15 +11,13 @@ use crate::pipelines::pos_misc::pixel_to_ndc;
 
 use super::command::CheckmarkCommand;
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+#[derive(ShaderType)]
 pub struct CheckmarkUniforms {
-    pub size: [f32; 2],     // width, height
-    pub color: [f32; 4],    // r, g, b, a
-    pub stroke_width: f32,  // thickness
-    pub progress: f32,      // animation progress
-    pub padding: [f32; 2],  // horizontal, vertical
-    pub _padding: [f32; 2], // for alignment, ensure 48 bytes
+    pub size: Vec2,
+    pub color: Vec4,
+    pub stroke_width: f32,
+    pub progress: f32,
+    pub padding: Vec2,
 }
 
 #[repr(C)]
@@ -59,7 +59,7 @@ impl CheckmarkPipeline {
         // Create uniform buffer
         let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Checkmark Uniform Buffer"),
-            size: std::mem::size_of::<CheckmarkUniforms>() as u64,
+            size: CheckmarkUniforms::min_size().get(),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -201,21 +201,17 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
 
         // Create uniforms
         let uniforms = CheckmarkUniforms {
-            size: [size.width.to_f32(), size.height.to_f32()],
-            color: [
-                command.color.r,
-                command.color.g,
-                command.color.b,
-                command.color.a,
-            ],
+            size: [size.width.to_f32(), size.height.to_f32()].into(),
+            color: command.color.to_array().into(),
             stroke_width: command.stroke_width,
             progress: command.progress,
-            padding: command.padding,
-            _padding: [0.0, 0.0],
+            padding: command.padding.into(),
         };
 
         // Update uniform buffer
-        gpu_queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+        let mut buffer = UniformBuffer::new(Vec::new());
+        buffer.write(&uniforms).unwrap();
+        gpu_queue.write_buffer(&self.uniform_buffer, 0, &buffer.into_inner());
 
         // Update vertex positions to match the actual position and size
         let vertices = [
