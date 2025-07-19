@@ -4,7 +4,6 @@ mod app_state;
 mod component_showcase;
 mod content_section;
 mod interactive_demo;
-mod layout_examples;
 mod material_colors;
 mod misc;
 mod performance_display;
