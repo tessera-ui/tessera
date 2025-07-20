@@ -134,7 +134,8 @@ pub struct TesseraRuntime {
 
     /// Called when the window minimize state changes.
     on_minimize_callbacks: Vec<Box<dyn Fn(bool) + Send + Sync>>,
-
+    /// Called when the window close event is triggered.
+    on_close_callbacks: Vec<Box<dyn Fn() + Send + Sync>>,
     /// Whether the window is currently minimized.
     pub(crate) window_minimized: bool,
 }
@@ -241,10 +242,17 @@ impl TesseraRuntime {
         self.on_minimize_callbacks.push(Box::new(callback));
     }
 
+    /// Registers a per-frame callback for window close event.
+    /// Components should call this every frame they wish to be notified.
+    pub fn on_close(&mut self, callback: impl Fn() + Send + Sync + 'static) {
+        self.on_close_callbacks.push(Box::new(callback));
+    }
+
     /// Clears all per-frame registered callbacks.
     /// Must be called by the event loop at the beginning of each frame.
     pub fn clear_frame_callbacks(&mut self) {
         self.on_minimize_callbacks.clear();
+        self.on_close_callbacks.clear();
     }
 
     /// Triggers all registered callbacks (global and per-frame).
@@ -252,6 +260,14 @@ impl TesseraRuntime {
     pub fn trigger_minimize_callbacks(&self, minimized: bool) {
         for callback in &self.on_minimize_callbacks {
             callback(minimized);
+        }
+    }
+
+    /// Triggers all registered callbacks (global and per-frame) for window close event.
+    /// Called by the event loop when a close event is detected.
+    pub fn trigger_close_callbacks(&self) {
+        for callback in &self.on_close_callbacks {
+            callback();
         }
     }
 }

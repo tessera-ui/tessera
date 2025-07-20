@@ -150,6 +150,15 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             };
 
+            // Step 4b: Inject the `on_close` function into the component scope
+            // This allows components to respond to window close events
+            let on_close = {
+                use tessera_ui::TesseraRuntime;
+                |fun: Box<dyn Fn() + Send + Sync + 'static>| {
+                    TesseraRuntime::write().on_close(fun);
+                }
+            };
+
             // Step 5: Execute the original function body within a closure
             // This prevents early returns from breaking the component tree structure
             let result = {

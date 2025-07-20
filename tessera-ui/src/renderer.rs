@@ -837,6 +837,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         // Handle window events
         match event {
             WindowEvent::CloseRequested => {
+                TesseraRuntime::read().trigger_close_callbacks();
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
