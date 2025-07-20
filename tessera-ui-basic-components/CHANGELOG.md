@@ -1,3 +1,13 @@
+## [v0.3.0] - 2025-07-20 +08:00
+
+### Changes
+- feat(slider): change cursor to pointer on hover
+- feat(slider): redesign to be thumb-less and add disabled state
+- feat(glass_slider): redesign component for a modern, thumb-less look
+- feat(fluid_glass): implement world-coordinate lighting for borders
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v0.2.0...tessera-ui-basic-components-v0.3.0)
+
 ## [v0.2.0] - 2025-07-19 +08:00
 
 ### Changes
