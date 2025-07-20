@@ -56,7 +56,7 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
 - 输入法事件 (android)
 - 输入法事件 (ios)
 - ~~窗口最小化处理与回调 API~~
-- 窗口关闭回调 API
+- ~~窗口关闭回调 API~~
 
 ### tessera-ui-basic-components（v1.0.0 路线图）
 
