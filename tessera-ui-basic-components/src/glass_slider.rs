@@ -4,7 +4,7 @@ use derive_builder::Builder;
 use parking_lot::Mutex;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
-    focus_state::Focus,
+    focus_state::Focus, winit::window::CursorIcon,
 };
 use tessera_ui_macros::tessera;
 
@@ -147,6 +147,11 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
                 && cursor_pos.y.0 >= 0
                 && cursor_pos.y.0 < input.computed_data.height.0
         });
+
+        // Set cursor to pointer when hovering over the slider
+        if is_in_component {
+            input.requests.cursor_icon = CursorIcon::Pointer;
+        }
 
         if !is_in_component && !state.is_dragging {
             return;
