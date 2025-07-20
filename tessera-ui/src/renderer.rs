@@ -625,8 +625,31 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         TesseraRuntime::write().component_tree.clear();
         // Handle the window requests
         // After compute, check for cursor change requests
-        app.window
-            .set_cursor(winit::window::Cursor::Icon(window_requests.cursor_icon));
+        // Only set cursor when not at window edges to let window manager handle resize cursors
+        let cursor_position = cursor_state.position();
+        let window_size = app.size();
+        let edge_threshold = 8.0; // Slightly larger threshold for better UX
+
+        let should_set_cursor = if let Some(pos) = cursor_position {
+            let x = pos.x.0 as f64;
+            let y = pos.y.0 as f64;
+            let width = window_size.width as f64;
+            let height = window_size.height as f64;
+
+            // Check if cursor is within the safe area (not at edges)
+            x > edge_threshold
+                && x < width - edge_threshold
+                && y > edge_threshold
+                && y < height - edge_threshold
+        } else {
+            false // If no cursor position, disallow setting cursor
+        };
+
+        if should_set_cursor {
+            app.window
+                .set_cursor(winit::window::Cursor::Icon(window_requests.cursor_icon));
+        }
+        // When cursor is at edges, don't set cursor and let window manager handle it
         // Handle IME requests
         if let Some(ime_request) = window_requests.ime_request {
             app.window.set_ime_allowed(true);
