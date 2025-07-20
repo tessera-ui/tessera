@@ -146,6 +146,11 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
 
+            // Set text input cursor when hovering
+            if is_cursor_in_editor {
+                input.requests.cursor_icon = winit::window::CursorIcon::Text;
+            }
+
             // Handle click events - now we have a full clickable area from surface
             if is_cursor_in_editor {
                 // Handle mouse pressed events
