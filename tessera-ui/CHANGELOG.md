@@ -1,3 +1,10 @@
+## [v0.4.0] - 2025-07-20 +08:00
+
+### Changes
+- feat(tessera-ui): add on_close callback for window close events
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v0.3.0...tessera-ui-v0.4.0)
+
 ## [v0.3.0] - 2025-07-20 +08:00
 
 ### Changes
