@@ -10,10 +10,7 @@ use tessera_ui_macros::tessera;
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
-    row::RowArgsBuilder,
-    row_ui,
     shape_def::Shape,
-    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
 };
 
@@ -108,34 +105,28 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
             .build()
             .unwrap(),
         None,
-        || {
-            row_ui!(
-                RowArgsBuilder::default().build().unwrap(),
-                move || {
-                    // Internal progress fill - capsule shape using surface
-                    let progress_width = (args.width.to_px().to_f32() * args.value)
-                        - (args.track_border_width.to_px().to_f32() * 2.0);
-                    let effective_height = args.track_height.to_px().to_f32()
-                        - (args.track_border_width.to_px().to_f32() * 2.0);
-                    surface(
-                        SurfaceArgsBuilder::default()
-                            .width(DimensionValue::Fixed(Px(progress_width as i32)))
-                            .height(DimensionValue::Fill {
-                                min: None,
-                                max: None,
-                            })
-                            .color(args.progress_tint_color)
-                            .shape(Shape::RoundedRectangle {
-                                corner_radius: effective_height / 2.0,
-                                g2_k_value: 2.0, // Capsule shape
-                            })
-                            .build()
-                            .unwrap(),
-                        None,
-                        || {},
-                    );
-                },
-                move || spacer(Dp(10.0)),
+        move || {
+            // Internal progress fill - capsule shape using surface
+            let progress_width = (args.width.to_px().to_f32() * args.value)
+                - (args.track_border_width.to_px().to_f32() * 2.0);
+            let effective_height = args.track_height.to_px().to_f32()
+                - (args.track_border_width.to_px().to_f32() * 2.0);
+            surface(
+                SurfaceArgsBuilder::default()
+                    .width(DimensionValue::Fixed(Px(progress_width as i32)))
+                    .height(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .color(args.progress_tint_color)
+                    .shape(Shape::RoundedRectangle {
+                        corner_radius: effective_height / 2.0,
+                        g2_k_value: 2.0, // Capsule shape
+                    })
+                    .build()
+                    .unwrap(),
+                None,
+                || {},
             );
         },
     );

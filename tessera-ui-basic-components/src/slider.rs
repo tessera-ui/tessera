@@ -4,20 +4,18 @@ use derive_builder::Builder;
 use parking_lot::Mutex;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
-    focus_state::Focus, place_node,
+    focus_state::Focus,
 };
 use tessera_ui_macros::tessera;
 
 use crate::{
-    pipelines::{ShadowProps, ShapeCommand},
-    pos_misc::is_position_in_component,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
 
 /// State for the `slider` component.
 pub struct SliderState {
-    /// True if the user is currently dragging the thumb.
+    /// True if the user is currently dragging the slider.
     pub is_dragging: bool,
     /// The focus handler for the slider.
     pub focus: Focus,
@@ -55,88 +53,78 @@ pub struct SliderArgs {
     pub width: Dp,
 
     /// The height of the slider track.
-    #[builder(default = "Dp(4.0)")]
+    #[builder(default = "Dp(12.0)")]
     pub track_height: Dp,
 
-    /// The color of the active part of the track (from start to thumb).
+    /// The color of the active part of the track (progress fill).
     #[builder(default = "Color::new(0.2, 0.5, 0.8, 1.0)")]
     pub active_track_color: Color,
 
-    /// The color of the inactive part of the track (from thumb to end).
+    /// The color of the inactive part of the track (background).
     #[builder(default = "Color::new(0.8, 0.8, 0.8, 1.0)")]
     pub inactive_track_color: Color,
 
-    /// The color of the draggable thumb.
-    #[builder(default = "Color::WHITE")]
-    pub thumb_color: Color,
-
-    /// The diameter of the draggable thumb.
-    #[builder(default = "Dp(16.0)")]
-    pub thumb_size: Dp,
-
-    /// Shadow for the thumb.
-    #[builder(default)]
-    pub thumb_shadow: Option<ShadowProps>,
-}
-
-impl std::fmt::Debug for SliderArgs {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SliderArgs")
-            .field("value", &self.value)
-            .field("on_change", &"<callback>")
-            .field("width", &self.width)
-            .field("track_height", &self.track_height)
-            .field("active_track_color", &self.active_track_color)
-            .field("inactive_track_color", &self.inactive_track_color)
-            .field("thumb_color", &self.thumb_color)
-            .field("thumb_size", &self.thumb_size)
-            .finish()
-    }
+    /// Disable interaction.
+    #[builder(default = "false")]
+    pub disabled: bool,
 }
 
 #[tessera]
 pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
     let args: SliderArgs = args.into();
 
-    // Active track
+    // Background track (inactive part) - capsule shape
     surface(
         SurfaceArgsBuilder::default()
-            .color(args.active_track_color)
+            .width(DimensionValue::Fixed(args.width.to_px()))
+            .height(DimensionValue::Fixed(args.track_height.to_px()))
+            .color(args.inactive_track_color)
             .shape(Shape::RoundedRectangle {
-                corner_radius: args.track_height.0 as f32 / 2.0f32,
-                g2_k_value: 2.0, // Use G1 corners here specifically
+                corner_radius: args.track_height.to_px().to_f32() / 2.0,
+                g2_k_value: 2.0, // Capsule shape
             })
             .build()
             .unwrap(),
         None,
-        || {},
-    );
-
-    // The thumb component
-    surface(
-        SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(args.thumb_size.to_px()))
-            .height(DimensionValue::Fixed(args.thumb_size.to_px()))
-            .color(args.thumb_color)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: args.thumb_size.0 as f32 / 2.0f32,
-                g2_k_value: 2.0, // Use G1 corners here specifically
-            })
-            .shadow(args.thumb_shadow)
-            .build()
-            .unwrap(),
-        None,
-        || {},
+        move || {
+            // Progress fill (active part) - capsule shape
+            let progress_width = args.width.to_px().to_f32() * args.value;
+            surface(
+                SurfaceArgsBuilder::default()
+                    .width(DimensionValue::Fixed(Px(progress_width as i32)))
+                    .height(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .color(args.active_track_color)
+                    .shape(Shape::RoundedRectangle {
+                        corner_radius: args.track_height.to_px().to_f32() / 2.0,
+                        g2_k_value: 2.0, // Capsule shape
+                    })
+                    .build()
+                    .unwrap(),
+                None,
+                || {},
+            );
+        },
     );
 
     let on_change = args.on_change.clone();
     let state_handler_state = state.clone();
+    let disabled = args.disabled;
+
     state_handler(Box::new(move |input| {
+        if disabled {
+            return;
+        }
         let mut state = state_handler_state.lock();
 
-        let is_in_component = input
-            .cursor_position
-            .is_some_and(|cursor_pos| is_position_in_component(input.computed_data, cursor_pos));
+        let is_in_component = input.cursor_position.is_some_and(|cursor_pos| {
+            cursor_pos.x.0 >= 0
+                && cursor_pos.x.0 < input.computed_data.width.0
+                && cursor_pos.y.0 >= 0
+                && cursor_pos.y.0 < input.computed_data.height.0
+        });
 
         if !is_in_component && !state.is_dragging {
             return;
@@ -151,11 +139,8 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
                     state.is_dragging = true;
 
                     if let Some(pos) = input.cursor_position {
-                        let thumb_half_width = args.thumb_size.to_px().to_f32() / 2.0;
-                        let effective_width =
-                            input.computed_data.width.0 as f32 - thumb_half_width * 2.0;
                         let v =
-                            ((pos.x.0 as f32 - thumb_half_width) / effective_width).clamp(0.0, 1.0);
+                            (pos.x.0 as f32 / input.computed_data.width.0 as f32).clamp(0.0, 1.0);
                         new_value = Some(v);
                     }
                 }
@@ -168,9 +153,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
 
         if state.is_dragging {
             if let Some(pos) = input.cursor_position {
-                let thumb_half_width = args.thumb_size.to_px().to_f32() / 2.0;
-                let effective_width = input.computed_data.width.0 as f32 - thumb_half_width * 2.0;
-                let v = ((pos.x.0 as f32 - thumb_half_width) / effective_width).clamp(0.0, 1.0);
+                let v = (pos.x.0 as f32 / input.computed_data.width.0 as f32).clamp(0.0, 1.0);
                 new_value = Some(v);
             }
         }
@@ -184,66 +167,24 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
 
     measure(Box::new(move |input| {
         let self_width = args.width.to_px();
-        let self_height = args.thumb_size.to_px();
-        let track_height = args.track_height.to_px();
-        let track_y = (self_height - track_height) / 2;
+        let self_height = args.track_height.to_px();
 
-        let active_track_id = input.children_ids[0];
-        let thumb_id = input.children_ids[1];
+        let track_id = input.children_ids[0];
 
-        // Measure active track
-        let active_track_width = Px((self_width.to_f32() * args.value) as i32);
-        let active_track_constraint = Constraint::new(
-            DimensionValue::Fixed(active_track_width),
-            DimensionValue::Fixed(track_height),
+        // Measure track
+        let track_constraint = Constraint::new(
+            DimensionValue::Fixed(self_width),
+            DimensionValue::Fixed(self_height),
         );
         tessera_ui::measure_node(
-            active_track_id,
-            &active_track_constraint,
+            track_id,
+            &track_constraint,
             input.tree,
             input.metadatas,
             input.compute_resource_manager.clone(),
             input.gpu,
         )?;
-        place_node(
-            active_track_id,
-            PxPosition::new(Px(0), track_y),
-            input.metadatas,
-        );
-
-        // Measure thumb
-        let thumb_constraint = Constraint::new(
-            DimensionValue::Fixed(args.thumb_size.to_px()),
-            DimensionValue::Fixed(args.thumb_size.to_px()),
-        );
-        let thumb_size = tessera_ui::measure_node(
-            thumb_id,
-            &thumb_constraint,
-            input.tree,
-            input.metadatas,
-            input.compute_resource_manager.clone(),
-            input.gpu,
-        )?;
-
-        // Calculate thumb position
-        let thumb_x = (self_width - thumb_size.width).to_f32() * args.value;
-        let thumb_y = (self_height - thumb_size.height) / 2;
-        place_node(
-            thumb_id,
-            PxPosition::new(Px(thumb_x as i32), thumb_y),
-            input.metadatas,
-        );
-
-        // Draw inactive track
-        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            let inactive_track_command = ShapeCommand::Rect {
-                color: args.inactive_track_color,
-                corner_radius: track_height.0 as f32 / 2.0,
-                g2_k_value: 2.0, // Use G1 corners here specifically
-                shadow: None,
-            };
-            metadata.push_draw_command(inactive_track_command);
-        }
+        tessera_ui::place_node(track_id, PxPosition::new(Px(0), Px(0)), input.metadatas);
 
         Ok(ComputedData {
             width: self_width,
