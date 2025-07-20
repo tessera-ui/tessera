@@ -267,7 +267,7 @@ pub struct TesseraConfig {
 impl Default for TesseraConfig {
     /// Creates a default configuration with 4x MSAA enabled.
     fn default() -> Self {
-        Self { sample_count: 4 }
+        Self { sample_count: 1 }
     }
 }
 

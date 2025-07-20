@@ -152,7 +152,13 @@ impl ComponentTree {
         debug!("Start computing draw commands...");
         // compute_draw_commands_parallel expects &ComponentNodeTree and &ComponentNodeMetaDatas
         // It also uses get_mut on metadatas internally, which is fine for DashMap with &self.
-        let commands = compute_draw_commands_parallel(root_node, &self.tree, &self.metadatas);
+        let commands = compute_draw_commands_parallel(
+            root_node,
+            &self.tree,
+            &self.metadatas,
+            screen_size.width.0,
+            screen_size.height.0,
+        );
         debug!(
             "Draw commands computed in {:?}, total commands: {}",
             compute_draw_timer.elapsed(),
@@ -228,6 +234,24 @@ impl ComponentTree {
     }
 }
 
+// Helper struct for rectangle and intersection check
+#[derive(Debug, Clone, Copy)]
+struct Rect {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+}
+
+impl Rect {
+    fn intersects(&self, other: &Rect) -> bool {
+        self.x < other.x + other.width
+            && self.x + self.width > other.x
+            && self.y < other.y + other.height
+            && self.y + self.height > other.y
+    }
+}
+
 /// Parallel computation of draw commands from the component tree
 ///
 /// This function traverses the component tree and extracts rendering commands
@@ -240,8 +264,19 @@ fn compute_draw_commands_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
+    // New params: screen width and height
+    screen_width: i32,
+    screen_height: i32,
 ) -> Vec<(Command, PxSize, PxPosition)> {
-    compute_draw_commands_inner_parallel(PxPosition::ZERO, true, node_id, tree, metadatas)
+    compute_draw_commands_inner_parallel(
+        PxPosition::ZERO,
+        true,
+        node_id,
+        tree,
+        metadatas,
+        screen_width,
+        screen_height,
+    )
 }
 
 fn compute_draw_commands_inner_parallel(
@@ -250,6 +285,8 @@ fn compute_draw_commands_inner_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
+    screen_width: i32,
+    screen_height: i32,
 ) -> Vec<(Command, PxSize, PxPosition)> {
     let mut local_commands = Vec::new();
 
@@ -264,7 +301,6 @@ fn compute_draw_commands_inner_parallel(
         let self_pos = start_pos + rel_pos;
         entry.abs_position = Some(self_pos);
 
-        // Extract size from computed data, defaulting to zero if unavailable
         let size = entry
             .computed_data
             .map(|d| PxSize {
@@ -273,8 +309,25 @@ fn compute_draw_commands_inner_parallel(
             })
             .unwrap_or_default();
 
+        // Viewport culling: skip if the node is completely outside the screen
+        let screen_rect = Rect {
+            x: 0,
+            y: 0,
+            width: screen_width,
+            height: screen_height,
+        };
+        let node_rect = Rect {
+            x: self_pos.x.0,
+            y: self_pos.y.0,
+            width: size.width.0,
+            height: size.height.0,
+        };
+        // If the node is completely invisible, skip it
+        if size.width.0 > 0 && size.height.0 > 0 && !node_rect.intersects(&screen_rect) {
+            return local_commands;
+        }
+
         // Drain all commands from this node and add them to the output
-        // Note: Commands are now stored directly as Command enum instead of boxed trait objects
         for cmd in entry.commands.drain(..) {
             local_commands.push((cmd, size, self_pos));
         }
@@ -285,16 +338,22 @@ fn compute_draw_commands_inner_parallel(
     let child_results: Vec<Vec<_>> = children
         .into_par_iter()
         .map(|child| {
-            // Use current node's absolute position as starting point for children
             let self_pos = metadatas
                 .get(&node_id)
                 .and_then(|m| m.abs_position)
                 .unwrap_or(start_pos);
-            compute_draw_commands_inner_parallel(self_pos, false, child, tree, metadatas)
+            compute_draw_commands_inner_parallel(
+                self_pos,
+                false,
+                child,
+                tree,
+                metadatas,
+                screen_width,
+                screen_height,
+            )
         })
         .collect();
 
-    // Flatten all child commands into the local command list
     for child_cmds in child_results {
         local_commands.extend(child_cmds);
     }
