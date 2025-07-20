@@ -68,7 +68,8 @@ fn app(state: Arc<AppState>) {
                                 GlassSliderArgsBuilder::default()
                                     .value(value)
                                     .on_change(on_change_clone)
-                                    .tint_color(Color::new(0.2, 0.7, 1.0, 0.18))
+                                    .track_tint_color(Color::new(0.3, 0.3, 0.3, 0.15))
+                                    .progress_tint_color(Color::new(0.2, 0.7, 1.0, 0.25))
                                     .blur_radius(8.0)
                                     .build()
                                     .unwrap(),

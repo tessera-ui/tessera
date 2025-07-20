@@ -1,5 +1,5 @@
 use derive_builder::Builder;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Px};
+use tessera_ui::{ComputedData, Constraint, DimensionValue, Dp, Px};
 use tessera_ui_macros::tessera;
 
 /// Arguments for the Spacer component.
@@ -57,12 +57,34 @@ impl SpacerArgs {
     }
 }
 
+impl From<Dp> for SpacerArgs {
+    fn from(value: Dp) -> Self {
+        SpacerArgsBuilder::default()
+            .width(DimensionValue::Fixed(value.to_px()))
+            .height(DimensionValue::Fixed(value.to_px()))
+            .build()
+            .unwrap()
+    }
+}
+
+impl From<Px> for SpacerArgs {
+    fn from(value: Px) -> Self {
+        SpacerArgsBuilder::default()
+            .width(DimensionValue::Fixed(value))
+            .height(DimensionValue::Fixed(value))
+            .build()
+            .unwrap()
+    }
+}
+
 /// A component that creates an empty space in the layout.
 ///
 /// `Spacer` can be used to add gaps between other components or to fill available space.
 /// Its behavior is defined by the `width` and `height` `DimensionValue` parameters.
 #[tessera]
-pub fn spacer(args: SpacerArgs) {
+pub fn spacer(args: impl Into<SpacerArgs>) {
+    let args: SpacerArgs = args.into();
+
     measure(Box::new(move |input| {
         let spacer_intrinsic_constraint = Constraint::new(args.width, args.height);
         let effective_spacer_constraint =

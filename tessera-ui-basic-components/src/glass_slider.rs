@@ -9,13 +9,17 @@ use tessera_ui::{
 use tessera_ui_macros::tessera;
 
 use crate::{
-    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
+    row::RowArgsBuilder,
+    row_ui,
     shape_def::Shape,
+    spacer::spacer,
+    surface::{SurfaceArgsBuilder, surface},
 };
 
 /// State for the `glass_slider` component.
 pub struct GlassSliderState {
-    /// True if the user is currently dragging the thumb.
+    /// True if the user is currently dragging the slider.
     pub is_dragging: bool,
     /// The focus handler for the slider.
     pub focus: Focus,
@@ -53,24 +57,28 @@ pub struct GlassSliderArgs {
     pub width: Dp,
 
     /// The height of the slider track.
-    #[builder(default = "Dp(8.0)")]
+    #[builder(default = "Dp(12.0)")]
     pub track_height: Dp,
 
-    /// The diameter of the draggable thumb.
-    #[builder(default = "Dp(24.0)")]
-    pub thumb_size: Dp,
+    /// Glass tint color for the track background.
+    #[builder(default = "Color::new(0.3, 0.3, 0.3, 0.15)")]
+    pub track_tint_color: Color,
 
-    /// Glass tint color for the track.
-    #[builder(default = "Color::new(0.5, 0.7, 1.0, 0.18)")]
-    pub tint_color: Color,
+    /// Glass tint color for the progress fill.
+    #[builder(default = "Color::new(0.5, 0.7, 1.0, 0.25)")]
+    pub progress_tint_color: Color,
 
-    /// Glass blur radius for the track.
+    /// Glass blur radius for all components.
     #[builder(default = "8.0")]
     pub blur_radius: f32,
 
-    /// Enable ripple effect on thumb.
-    #[builder(default = "false")]
-    pub ripple: bool,
+    /// Border color for the track.
+    #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.3)")]
+    pub track_border_color: Color,
+
+    /// Border width for the track.
+    #[builder(default = "Dp(2.0)")]
+    pub track_border_width: Dp,
 
     /// Disable interaction.
     #[builder(default = "false")]
@@ -81,38 +89,55 @@ pub struct GlassSliderArgs {
 pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSliderState>>) {
     let args: GlassSliderArgs = args.into();
 
-    // Track (background) with fluid_glass
+    // External track (background) with border - capsule shape
     fluid_glass(
         FluidGlassArgsBuilder::default()
             .width(DimensionValue::Fixed(args.width.to_px()))
             .height(DimensionValue::Fixed(args.track_height.to_px()))
-            .tint_color(args.tint_color)
+            .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
             .shape(Shape::RoundedRectangle {
                 corner_radius: args.track_height.0 as f32 / 2.0,
-                g2_k_value: 2.0, // Use G1 corners here specifically
+                g2_k_value: 2.0, // Capsule shape
             })
+            .border(GlassBorder::new(
+                args.track_border_width,
+                args.track_border_color,
+            ))
+            .padding(args.track_border_width)
             .build()
             .unwrap(),
         None,
-        || {},
-    );
-
-    // Thumb (draggable) with fluid_glass
-    fluid_glass(
-        FluidGlassArgsBuilder::default()
-            .width(DimensionValue::Fixed(args.thumb_size.to_px()))
-            .height(DimensionValue::Fixed(args.thumb_size.to_px()))
-            .tint_color(Color::new(1.0, 1.0, 1.0, 0.7))
-            .blur_radius(args.blur_radius)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: args.thumb_size.0 as f32 / 2.0,
-                g2_k_value: 2.0, // Use G1 corners here specifically
-            })
-            .build()
-            .unwrap(),
-        None,
-        || {},
+        || {
+            row_ui!(
+                RowArgsBuilder::default().build().unwrap(),
+                move || {
+                    // Internal progress fill - capsule shape using surface
+                    let progress_width = (args.width.to_px().to_f32() * args.value)
+                        - (args.track_border_width.to_px().to_f32() * 2.0);
+                    let effective_height = args.track_height.to_px().to_f32()
+                        - (args.track_border_width.to_px().to_f32() * 2.0);
+                    surface(
+                        SurfaceArgsBuilder::default()
+                            .width(DimensionValue::Fixed(Px(progress_width as i32)))
+                            .height(DimensionValue::Fill {
+                                min: None,
+                                max: None,
+                            })
+                            .color(args.progress_tint_color)
+                            .shape(Shape::RoundedRectangle {
+                                corner_radius: effective_height / 2.0,
+                                g2_k_value: 2.0, // Capsule shape
+                            })
+                            .build()
+                            .unwrap(),
+                        None,
+                        || {},
+                    );
+                },
+                move || spacer(Dp(10.0)),
+            );
+        },
     );
 
     let on_change = args.on_change.clone();
@@ -145,11 +170,8 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
                     state.is_dragging = true;
 
                     if let Some(pos) = input.cursor_position {
-                        let thumb_half_width = args.thumb_size.to_px().to_f32() as f32 / 2.0;
-                        let effective_width =
-                            input.computed_data.width.0 as f32 - thumb_half_width * 2.0;
                         let v =
-                            ((pos.x.0 as f32 - thumb_half_width) / effective_width).clamp(0.0, 1.0);
+                            (pos.x.0 as f32 / input.computed_data.width.0 as f32).clamp(0.0, 1.0);
                         new_value = Some(v);
                     }
                 }
@@ -162,9 +184,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
 
         if state.is_dragging {
             if let Some(pos) = input.cursor_position {
-                let thumb_half_width = args.thumb_size.to_px().to_f32() as f32 / 2.0;
-                let effective_width = input.computed_data.width.0 as f32 - thumb_half_width * 2.0;
-                let v = ((pos.x.0 as f32 - thumb_half_width) / effective_width).clamp(0.0, 1.0);
+                let v = (pos.x.0 as f32 / input.computed_data.width.0 as f32).clamp(0.0, 1.0);
                 new_value = Some(v);
             }
         }
@@ -178,16 +198,14 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
 
     measure(Box::new(move |input| {
         let self_width = args.width.to_px();
-        let self_height = args.thumb_size.to_px();
-        let track_height = args.track_height.to_px();
+        let self_height = args.track_height.to_px();
 
         let track_id = input.children_ids[0];
-        let thumb_id = input.children_ids[1];
 
         // Measure track
         let track_constraint = Constraint::new(
             DimensionValue::Fixed(self_width),
-            DimensionValue::Fixed(track_height),
+            DimensionValue::Fixed(self_height),
         );
         tessera_ui::measure_node(
             track_id,
@@ -197,34 +215,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
             input.compute_resource_manager.clone(),
             input.gpu,
         )?;
-        tessera_ui::place_node(
-            track_id,
-            PxPosition::new(Px(0), (self_height - track_height) / 2),
-            input.metadatas,
-        );
-
-        // Measure thumb
-        let thumb_constraint = Constraint::new(
-            DimensionValue::Fixed(args.thumb_size.to_px()),
-            DimensionValue::Fixed(args.thumb_size.to_px()),
-        );
-        let thumb_size = tessera_ui::measure_node(
-            thumb_id,
-            &thumb_constraint,
-            input.tree,
-            input.metadatas,
-            input.compute_resource_manager.clone(),
-            input.gpu,
-        )?;
-
-        // Calculate thumb position
-        let thumb_x = (self_width - thumb_size.width).to_f32() * args.value;
-        let thumb_y = (self_height - thumb_size.height) / 2;
-        tessera_ui::place_node(
-            thumb_id,
-            PxPosition::new(Px(thumb_x as i32), thumb_y),
-            input.metadatas,
-        );
+        tessera_ui::place_node(track_id, PxPosition::new(Px(0), Px(0)), input.metadatas);
 
         Ok(ComputedData {
             width: self_width,

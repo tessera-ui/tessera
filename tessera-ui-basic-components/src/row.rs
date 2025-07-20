@@ -136,7 +136,9 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
 
             let mut total_width_of_unweighted_children = Px(0);
             for &child_idx in &unweighted_children_indices {
-                let child_id = input.children_ids[child_idx];
+                let Some(child_id) = input.children_ids.get(child_idx).copied() else {
+                    continue;
+                };
 
                 // Parent (row) offers Wrap for width and its own effective height constraint to unweighted children
                 let parent_offered_constraint_for_child = Constraint::new(
