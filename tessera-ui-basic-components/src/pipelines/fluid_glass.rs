@@ -32,6 +32,9 @@ struct GlassUniforms {
     ripple_strength: f32,
     border_color: Vec4,
     border_width: f32,
+    screen_size: Vec2,  // Screen dimensions
+    light_source: Vec2, // Light source position in world coordinates
+    light_scale: f32,   // Light intensity scale factor
 }
 
 // --- Pipeline Definition ---
@@ -203,6 +206,9 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             } else {
                 0.0
             },
+            screen_size: [screen_w, screen_h].into(), // Screen dimensions
+            light_source: [screen_w * 0.5, screen_h * 0.5].into(), // Default light source at screen center
+            light_scale: 1.0,                                      // Default light intensity scale
         };
 
         let mut buffer = UniformBuffer::new(Vec::<u8>::new());

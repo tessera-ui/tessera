@@ -25,6 +25,9 @@ struct GlassUniforms {
     ripple_strength: f32,
     border_color: vec4<f32>,
     border_width: f32,
+    screen_size: vec2<f32>, // Screen dimensions
+    light_source: vec2<f32>, // Light source position in world coordinates
+    light_scale: f32, // Light intensity scale factor
 };
 
 @group(0) @binding(0) var<uniform> uniforms: GlassUniforms;
@@ -310,12 +313,43 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if uniforms.border_width > 0.0 {
         let border_alpha = smoothstep(-uniforms.border_width, -uniforms.border_width + 1.0, sd) - smoothstep(0.0, 1.0, sd);
         if border_alpha > 0.0 {
-            // Simple highlight effect
+            // Fixed world coordinate lighting with component-relative intensity
             let highlight_boost = 1.5;
-            let brightness_factor = max(1.0 - local_uv.x, 1.0 - local_uv.y); // light at (0,0) and dark at (1,1)
-            let highlight_amount = pow(brightness_factor, 2.0) * highlight_boost;
-            let highlighted_border_rgb = uniforms.border_color.rgb + highlight_amount;
-
+            
+            // Calculate world coordinates from UV and screen size
+            let world_pos = vec2<f32>(
+                in.uv.x * uniforms.screen_size.x,
+                in.uv.y * uniforms.screen_size.y
+            );
+            
+            // Use configurable light source position
+            let light_source = uniforms.light_source;
+            
+            // Calculate direction from light source to current pixel (world space)
+            let light_direction = normalize(world_pos - light_source);
+            
+            // Project the light direction onto the component's local coordinate system
+            // This gives us the "local" lighting direction relative to the component
+            let component_center_world = vec2<f32>(
+                (rect_uv_min.x + rect_uv_max.x) * 0.5 * uniforms.screen_size.x,
+                (rect_uv_min.y + rect_uv_max.y) * 0.5 * uniforms.screen_size.y
+            );
+            
+            // Calculate local position relative to component center
+            let local_pos = world_pos - component_center_world;
+            
+            // Create lighting effect based on the dot product of light direction and local position
+            // This gives us the "side" of the component that should be lit
+            let lighting_dot = dot(light_direction, normalize(local_pos));
+            
+            // Convert to brightness factor (0 to 1)
+            let brightness_factor = (lighting_dot + 1.0) * 0.5;
+            
+            // Apply exponential falloff based on component size for consistent intensity
+            let component_scale = length(uniforms.rect_size_px) / 100.0; // Normalize to reasonable range
+            let adjusted_brightness = pow(brightness_factor, 1.5) * highlight_boost * uniforms.light_scale;
+            
+            let highlighted_border_rgb = uniforms.border_color.rgb + adjusted_brightness;
             let mixed_rgb = mix(final_color.rgb, highlighted_border_rgb, border_alpha * uniforms.border_color.a);
             let final_alpha = max(shape_alpha, border_alpha * uniforms.border_color.a);
             final_color = vec4(mixed_rgb, final_alpha);
