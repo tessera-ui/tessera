@@ -2,6 +2,7 @@ mod cursor;
 
 use std::{sync::Arc, time::Instant};
 
+use arboard::Clipboard;
 use glyphon::Edit;
 use parking_lot::RwLock;
 use tessera_ui::{
@@ -388,7 +389,11 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
 }
 
 /// Map keyboard events to text editing actions
-pub fn map_key_event_to_action(key_event: winit::event::KeyEvent) -> Option<Vec<glyphon::Action>> {
+pub fn map_key_event_to_action(
+    key_event: winit::event::KeyEvent,
+    key_modifiers: winit::keyboard::ModifiersState,
+    editor: &glyphon::Editor,
+) -> Option<Vec<glyphon::Action>> {
     match key_event.state {
         winit::event::ElementState::Pressed => {}
         winit::event::ElementState::Released => return None,
@@ -415,16 +420,47 @@ pub fn map_key_event_to_action(key_event: winit::event::KeyEvent) -> Option<Vec<
                 NamedKey::ArrowDown => {
                     Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Down)])
                 }
+                NamedKey::Home => Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Home)]),
+                NamedKey::End => Some(vec![glyphon::Action::Motion(cosmic_text::Motion::End)]),
                 NamedKey::Space => Some(vec![glyphon::Action::Insert(' ')]),
                 _ => None,
             }
         }
-        winit::keyboard::Key::Character(input) => Some(
-            input
-                .chars()
-                .map(glyphon::Action::Insert)
-                .collect::<Vec<_>>(),
-        ),
+        winit::keyboard::Key::Character(s) => {
+            let is_ctrl = key_modifiers.control_key() || key_modifiers.super_key();
+            if is_ctrl {
+                match s.to_lowercase().as_str() {
+                    "c" => {
+                        if let Some(text) = editor.copy_selection() {
+                            if let Ok(mut clipboard) = Clipboard::new() {
+                                let _ = clipboard.set_text(text);
+                            }
+                        }
+                        return None;
+                    }
+                    "v" => {
+                        if let Ok(mut clipboard) = Clipboard::new() {
+                            if let Ok(text) = clipboard.get_text() {
+                                return Some(text.chars().map(glyphon::Action::Insert).collect());
+                            }
+                        }
+                        return None;
+                    }
+                    "x" => {
+                        if let Some(text) = editor.copy_selection() {
+                            if let Ok(mut clipboard) = Clipboard::new() {
+                                let _ = clipboard.set_text(text);
+                            }
+                            // Use Backspace action to delete selection
+                            return Some(vec![glyphon::Action::Backspace]);
+                        }
+                        return None;
+                    }
+                    _ => {}
+                }
+            }
+            Some(s.chars().map(glyphon::Action::Insert).collect::<Vec<_>>())
+        }
         _ => None,
     }
 }

@@ -18,8 +18,6 @@ use crate::{
 
 pub use crate::text_edit_core::TextEditorState;
 
-// Re-export TextEditorState for convenience
-
 /// Arguments for the `text_editor` component.
 ///
 /// # Example
@@ -310,17 +308,57 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
             if state_for_handler.read().focus_handler().is_focused() {
                 // Handle keyboard events
                 {
-                    let actions = input
-                        .keyboard_events
-                        .iter()
-                        .cloned()
-                        .filter_map(map_key_event_to_action)
-                        .flatten();
-                    for action in actions {
-                        state_for_handler
-                            .write()
-                            .editor_mut()
-                            .action(&mut write_font_system(), action);
+                    let is_ctrl =
+                        input.key_modifiers.control_key() || input.key_modifiers.super_key();
+
+                    // Custom handling for Ctrl+A (Select All)
+                    let select_all_event_index =
+                        input.keyboard_events.iter().position(|key_event| {
+                            if let winit::keyboard::Key::Character(s) = &key_event.logical_key {
+                                is_ctrl
+                                    && s.to_lowercase() == "a"
+                                    && key_event.state == winit::event::ElementState::Pressed
+                            } else {
+                                false
+                            }
+                        });
+
+                    if let Some(_index) = select_all_event_index {
+                        let mut state = state_for_handler.write();
+                        let editor = state.editor_mut();
+                        // Set cursor to the beginning of the document
+                        editor.set_cursor(glyphon::Cursor::new(0, 0));
+                        // Set selection to start from the beginning
+                        editor.set_selection(glyphon::cosmic_text::Selection::Normal(
+                            glyphon::Cursor::new(0, 0),
+                        ));
+                        // Move cursor to the end, which extends the selection (use BufferEnd for full document)
+                        editor.action(
+                            &mut write_font_system(),
+                            glyphon::Action::Motion(glyphon::cosmic_text::Motion::BufferEnd),
+                        );
+                    } else {
+                        // Original logic for other keys
+                        let mut all_actions = Vec::new();
+                        {
+                            let state = state_for_handler.read();
+                            for key_event in input.keyboard_events.iter().cloned() {
+                                if let Some(actions) = map_key_event_to_action(
+                                    key_event,
+                                    input.key_modifiers,
+                                    state.editor(),
+                                ) {
+                                    all_actions.extend(actions);
+                                }
+                            }
+                        }
+
+                        if !all_actions.is_empty() {
+                            let mut state = state_for_handler.write();
+                            for action in all_actions {
+                                state.editor_mut().action(&mut write_font_system(), action);
+                            }
+                        }
                     }
                     // Block all keyboard events to prevent propagation
                     input.keyboard_events.clear();
