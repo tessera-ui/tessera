@@ -209,9 +209,7 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
 
             let mut total_width_of_unweighted_children = Px(0);
             for &child_idx in &unweighted_children_indices {
-                let Some(child_id) = input.children_ids.get(child_idx).copied() else {
-                    continue;
-                };
+                let child_id = input.children_ids[child_idx];
 
                 // Parent (row) offers Wrap for width and its own effective height constraint to unweighted children
                 let parent_offered_constraint_for_child = Constraint::new(
@@ -346,8 +344,13 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
             let final_row_width = match row_effective_constraint.width {
                 DimensionValue::Fixed(w) => w,
                 DimensionValue::Fill { min, .. } => {
-                    // Max is None if here
-                    let mut w = total_children_measured_width;
+                    // Max is None if here. In this case, Fill should take up all available space
+                    // from the parent, not wrap the content.
+                    let mut w = input
+                        .parent_constraint
+                        .width
+                        .get_max()
+                        .unwrap_or(total_children_measured_width);
                     if let Some(min_w) = min {
                         w = w.max(min_w);
                     }

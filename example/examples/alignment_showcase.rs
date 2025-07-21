@@ -114,6 +114,14 @@ fn app() {
         SurfaceArgs {
             color: Color::WHITE, // White Background
             padding: Dp(20.0),
+            width: Some(DimensionValue::Fill {
+                min: None,
+                max: None,
+            }), // Fill Width
+            height: Some(DimensionValue::Fill {
+                min: None,
+                max: None,
+            }), // Fill Height
             ..Default::default()
         },
         None,
@@ -121,7 +129,15 @@ fn app() {
             column(
                 ColumnArgsBuilder::default()
                     .main_axis_alignment(MainAxisAlignment::Start)
-                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    }) // Fill Width
+                    .height(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    }) // Fill Height
                     .build()
                     .unwrap(),
                 [

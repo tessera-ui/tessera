@@ -246,7 +246,27 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                 }
             }
 
-            let final_column_height = available_height_for_children;
+            let total_measured_children_height: Px = children_sizes
+                .iter()
+                .filter_map(|size_opt| size_opt.as_ref().map(|s| s.height))
+                .fold(Px(0), |acc, height| acc + height);
+
+            let final_column_height = match column_effective_constraint.height {
+                DimensionValue::Fixed(h) => h,
+                DimensionValue::Fill { max: Some(h), .. } => h,
+                DimensionValue::Wrap { min, max } => {
+                    let mut h = total_measured_children_height;
+                    if let Some(min_h) = min {
+                        h = h.max(min_h);
+                    }
+                    if let Some(max_h) = max {
+                        h = h.min(max_h);
+                    }
+                    h
+                }
+                _ => available_height_for_children,
+            };
+
             // column's width is determined by its own effective constraint, or by wrapping content if no explicit max.
             let final_column_width = match column_effective_constraint.width {
                 DimensionValue::Fixed(w) => w,
@@ -263,11 +283,6 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                 }
                 _ => max_child_width, // Fill { max: None } or Wrap { max: None } -> wraps content
             };
-
-            let total_measured_children_height: Px = children_sizes
-                .iter()
-                .filter_map(|size_opt| size_opt.as_ref().map(|s| s.height))
-                .fold(Px(0), |acc, height| acc + height);
 
             place_children_with_alignment(
                 &children_sizes,
@@ -320,8 +335,12 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
             let final_column_height = match column_effective_constraint.height {
                 DimensionValue::Fixed(h) => h,
                 DimensionValue::Fill { min, .. } => {
-                    // Max is None if here
-                    let mut h = total_children_measured_height;
+                    // Max is None if here. Fill should use parent's max height.
+                    let mut h = input
+                        .parent_constraint
+                        .height
+                        .get_max()
+                        .unwrap_or(total_children_measured_height);
                     if let Some(min_h) = min {
                         h = h.max(min_h);
                     }
