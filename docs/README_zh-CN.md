@@ -4,7 +4,7 @@
     <img src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
 <a/>
 
-# **Tessera (开发中)**
+# **Tessera**
 
 [![English][readme-en-badge]][readme-en-url]
 [![Stars][stars-badge]][stars-url]
