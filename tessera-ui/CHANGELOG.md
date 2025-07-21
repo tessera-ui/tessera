@@ -1,3 +1,9 @@
+## [v1.0.0] - 2025-07-21 +08:00
+
+### Changes
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v0.5.0...tessera-ui-v1.0.0)
+
 ## [v0.5.0] - 2025-07-21 +08:00
 
 ### Changes
