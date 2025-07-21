@@ -1,3 +1,11 @@
+## [v0.4.1] - 2025-07-21 +08:00
+
+### Changes
+- fix(layout): Correct `Fill` dimension behavior in Row and Column
+- docs(ui-basic-components): add comprehensive rustdoc and examples
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v0.4.0...tessera-ui-basic-components-v0.4.1)
+
 ## [v0.4.0] - 2025-07-21 +08:00
 
 ### Changes
