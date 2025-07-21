@@ -53,8 +53,6 @@ The roadmap is now organized by crate:
 ### tessera-ui (v1.0.0 roadmap)
 
 - IME event (windows, linux, macOS) (partially completed)
-- IME event (android)
-- IME event (ios)
 - ~~Window minimize handling & callback API~~
 - ~~Window close callback API~~
 
