@@ -52,7 +52,7 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
 
 ### tessera-ui（v1.0.0 路线图）
 
-- 输入法事件 (windows, linux, macOS)（部分完成）
+- ~~输入法事件 (windows, linux, macOS)（部分完成）~~
 - ~~窗口最小化处理与回调 API~~
 - ~~窗口关闭回调 API~~
 
@@ -63,14 +63,13 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
 - ~~boxed~~
 - ~~text~~
 - ~~spacer~~
-- text_editor（部分完成）
+- ~~/text_editor（部分完成）~~
 - ~~button~~
 - ~~surface~~
 - ~~fluid_glass~~
 - ~~scrollable~~
 - ~~image~~
 - ~~checkbox~~
-- radio
 - ~~switch~~
 - ~~slider~~
 - ~~progress~~

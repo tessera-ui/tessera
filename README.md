@@ -52,7 +52,7 @@ The roadmap is now organized by crate:
 
 ### tessera-ui (v1.0.0 roadmap)
 
-- IME event (windows, linux, macOS) (partially completed)
+- ~~IME event (windows, linux, macOS) (partially completed)~~
 - ~~Window minimize handling & callback API~~
 - ~~Window close callback API~~
 
@@ -63,14 +63,13 @@ The roadmap is now organized by crate:
 - ~~boxed~~
 - ~~text~~
 - ~~spacer~~
-- text_editor (partially completed)
+- ~~text_editor (partially completed)~~
 - ~~button~~
 - ~~surface~~
 - ~~fluid_glass~~
 - ~~scrollable~~
 - ~~image~~
 - ~~checkbox~~
-- radio
 - ~~switch~~
 - ~~slider~~
 - ~~progress~~
