@@ -1,3 +1,12 @@
+## [v0.4.0] - 2025-07-21 +08:00
+
+### Changes
+- feat(text-editor): clip selection highlight to visible area
+- feat(text-editor): implement clipboard and shortcut support
+- feat(text_editor): change cursor to text icon on hover
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v0.3.0...tessera-ui-basic-components-v0.4.0)
+
 ## [v0.3.0] - 2025-07-20 +08:00
 
 ### Changes
