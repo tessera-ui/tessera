@@ -93,9 +93,9 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
   - **GPU 计算**：WGPU 相对于其前辈的最大优势之一是计算着色器是一等公民。一个面向未来的框架应该充分利用这一点。通过使用自定义计算着色器，我们可以执行复杂的计算任务，例如图像处理和物理模拟，这些任务在 CPU 上执行通常效率低得令人无法接受。
 
 <p align="center">
-    <img alt="boxed component showcase with glass effect" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/boxed_showcase.png">
+    <img alt="boxed component showcase with glass effect" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/fluid_glass_showcase.png"/>
 </p>
-<p align="center" style="color: gray;"><em>使用自定义着色器代替内置画刷，可以轻松实现类似这样的高级玻璃效果。此示例可在 `example/boxed_showcase.rs` 中找到。</em></p>
+<p align="center" style="color: gray;"><em>使用自定义着色器代替内置画刷，可以轻松实现类似这样的高级玻璃效果。此示例可在 `example/fluid_glass_showcase.rs` 中找到。</em></p>
 
 - **去中心化的组件设计**：得益于可插拔的渲染管线，`tessera` 本身不包含任何内置组件。虽然 `tessera_basic_components` 提供了一组常用组件，但您可以自由地混合搭配或创建自己的组件库。
 - **显式的状态管理**：组件是无状态的。状态作为参数显式传入（由于高度并行的设计，通常以 `Arc<Lock<State>>` 的形式），交互逻辑在 `state_handler` 闭包中处理，使数据流清晰可控。

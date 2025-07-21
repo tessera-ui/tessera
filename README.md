@@ -93,9 +93,9 @@ The roadmap is now organized by crate:
   - **GPU Compute**: One of the biggest advantages of WGPU over its predecessors is that compute shaders are first-class citizens. A future-oriented framework should take full advantage of this. By using custom compute shaders, we can perform complex computational tasks such as image processing and physics simulations, which are often unacceptably inefficient to perform on the CPU.
 
 <p align="center">
-    <img alt="boxed component showcase with glass effect" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/boxed_showcase.png">
+    <img alt="boxed component showcase with glass effect" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/fluid_glass_showcase.png">
 </p>
-<p align="center" style="color: gray;"><em>Using custom shaders instead of a built-in brush allows us to easily achieve advanced glass effects like this. This example can be found in `example/boxed_showcase.rs`.</em></p>
+<p align="center" style="color: gray;"><em>Using custom shaders instead of a built-in brush allows us to easily achieve advanced glass effects like this. This example can be found in `example/fluid_glass_showcase.rs`.</em></p>
 
 - **Decentralized Component Design**: Thanks to the pluggable rendering pipeline, `tessera` itself does not include any built-in components. While `tessera_basic_components` provides a set of common components, you are free to mix and match or create your own component libraries.
 - **Explicit State Management**: Components are stateless. State is passed in explicitly as parameters (usually in the form of `Arc<Lock<State>>` due to the highly parallel design), and interaction logic is handled within the `state_handler` closure, making data flow clear and controllable.
