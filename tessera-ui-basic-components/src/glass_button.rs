@@ -1,3 +1,12 @@
+//! Provides an interactive button component with a glassmorphic (glass-like) background and ripple effect.
+//!
+//! This module defines `glass_button`, a highly customizable button for modern UI applications.
+//! It combines advanced glass visual effects with interactive feedback, supporting primary, secondary,
+//! success, and danger styles. Typical use cases include visually distinctive action buttons in
+//! glassmorphic or layered interfaces, where both aesthetics and user feedback are important.
+//!
+//! The component is suitable for dashboards, dialogs, toolbars, and any context requiring
+//! a visually appealing, interactive button with a translucent, layered look.
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -104,6 +113,43 @@ impl GlassButtonArgs {
     }
 }
 
+/// An interactive button with a fluid, glass-like background and a ripple effect on click.
+///
+/// This component combines a `fluid_glass` background for advanced visual effects with a
+/// ripple animation to provide clear user feedback. It is highly customizable, allowing
+/// control over the glass appearance, layout, and interaction behavior.
+///
+/// # Arguments
+///
+/// * `args` - A struct that provides detailed configuration for the button's appearance
+///   and behavior. See [`GlassButtonArgs`] for more details.
+/// * `ripple_state` - The state manager for the ripple animation. It should be created
+///   once and shared across recompositions.
+/// * `child` - A closure that defines the content displayed inside the button, such as text
+///   or an icon.
+///
+/// # Example
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui::Color;
+/// use tessera_ui_basic_components::{
+///     glass_button::{glass_button, GlassButtonArgs},
+///     ripple_state::RippleState,
+///     text::text,
+/// };
+///
+/// let ripple_state = Arc::new(RippleState::new());
+/// glass_button(
+///     GlassButtonArgs {
+///         on_click: Some(Arc::new(|| { /* Handle click */ })),
+///         tint_color: Color::new(0.3, 0.2, 0.5, 0.4),
+///         ..Default::default()
+///     },
+///     ripple_state,
+///     || text("Click Me".to_string()),
+/// );
+/// ```
 /// An interactive button with a fluid glass background and a ripple effect.
 ///
 /// This component is a composite of `fluid_glass` for the visuals and a transparent

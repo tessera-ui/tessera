@@ -1,3 +1,17 @@
+//! Provides a flexible vertical layout component for arranging child widgets in a single column.
+//!
+//! This module defines the `column` component, which stacks its children vertically and offers fine-grained control
+//! over alignment, sizing, and flexible space distribution via weights. It is suitable for building user interfaces
+//! where elements need to be organized from top to bottom, such as forms, lists, or grouped controls.
+//!
+//! Key features include:
+//! - Main/cross axis alignment options
+//! - Support for fixed, fill, or wrap sizing
+//! - Weighted children for proportional space allocation
+//! - Ergonomic macro for declarative usage
+//!
+//! Typical usage involves composing UI elements that should be laid out in a vertical sequence, with customizable
+//! alignment and spacing behaviors.
 use derive_builder::Builder;
 use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node};
 use tessera_ui_macros::tessera;
@@ -85,6 +99,42 @@ impl<F: FnOnce() + Send + Sync + 'static> AsColumnItem for (F, f32) {
 }
 
 /// A column component that arranges its children vertically.
+/// A layout component that arranges its children in a vertical sequence.
+///
+/// The `column` component stacks its children one after another in a single column.
+/// It provides extensive control over the alignment and sizing of its children through the `ColumnArgs` struct.
+///
+/// For a more convenient way to create a `column`, see the [`column_ui!`] macro.
+///
+/// # Parameters
+/// - `args`: A [`ColumnArgs`] struct that configures the column's behavior, including:
+///   - `width` and `height`: Define the size constraints of the column itself.
+///   - `main_axis_alignment`: Controls how children are distributed along the vertical axis (e.g., `Start`, `Center`, `End`, `SpaceBetween`).
+///   - `cross_axis_alignment`: Controls how children are aligned along the horizontal axis (e.g., `Start`, `Center`, `End`, `Stretch`).
+/// - `children_items_input`: An array of child components. Each child can be a simple closure, a `ColumnItem` for more complex configurations, or a tuple `(closure, weight)` to assign a flexible layout weight.
+///
+/// # Example
+///
+/// The following example demonstrates creating a column with three text labels, centered horizontally
+/// and spaced evenly vertically.
+///
+/// ```
+/// use tessera_ui_basic_components::column::{column_ui, ColumnArgsBuilder};
+/// use tessera_ui_basic_components::text::text;
+/// use tessera_ui_basic_components::alignment::{MainAxisAlignment, CrossAxisAlignment};
+///
+/// // It is recommended to use the `column_ui!` macro for better ergonomics.
+/// column_ui!(
+///     ColumnArgsBuilder::default()
+///         .main_axis_alignment(MainAxisAlignment::SpaceEvenly)
+///         .cross_axis_alignment(CrossAxisAlignment::Center)
+///         .build()
+///         .unwrap(),
+///     || text("First item".to_string()),
+///     || text("Second item".to_string()),
+///     || text("Third item".to_string()),
+/// );
+/// ```
 #[tessera]
 pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsColumnItem; N]) {
     let children_items: [ColumnItem; N] =

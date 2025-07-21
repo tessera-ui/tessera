@@ -1,3 +1,16 @@
+//! Provides a glassmorphism-style slider component for selecting a value in modern UI applications.
+//!
+//! The `glass_slider` module implements a customizable, frosted glass effect slider with support for
+//! blurred backgrounds, tint colors, borders, and interactive state management. It enables users to
+//! select a continuous value between 0.0 and 1.0 by dragging a thumb along a track, and is suitable
+//! for dashboards, settings panels, or any interface requiring visually appealing value selection.
+//!
+//! Typical usage involves integrating the slider into a component tree, passing state via `Arc<Mutex<GlassSliderState>>`,
+//! and customizing appearance through `GlassSliderArgs`. The component is designed to fit seamlessly into
+//! glassmorphism-themed user interfaces.
+//!
+//! See the module-level documentation and examples for details.
+
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -82,6 +95,50 @@ pub struct GlassSliderArgs {
     pub disabled: bool,
 }
 
+/// Creates a slider component with a frosted glass effect.
+///
+/// The `glass_slider` allows users to select a value from a continuous range (0.0 to 1.0)
+/// by dragging a handle along a track. It features a modern, semi-transparent
+/// "glassmorphism" aesthetic, with a blurred background and subtle highlights.
+///
+/// # Arguments
+///
+/// * `args` - An instance of `GlassSliderArgs` or `GlassSliderArgsBuilder` to configure the slider's appearance and behavior.
+///   - `value`: The current value of the slider, must be between 0.0 and 1.0.
+///   - `on_change`: A callback function that is triggered when the slider's value changes.
+///     It receives the new value as an `f32`.
+/// * `state` - An `Arc<Mutex<GlassSliderState>>` to manage the component's interactive state,
+///   such as dragging and focus.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use std::sync::Arc;
+/// use parking_lot::Mutex;
+/// use tessera_ui_basic_components::glass_slider::{glass_slider, GlassSliderArgsBuilder, GlassSliderState};
+///
+/// // In your application state
+/// let slider_value = Arc::new(Mutex::new(0.5));
+/// let slider_state = Arc::new(Mutex::new(GlassSliderState::new()));
+///
+/// // In your component function
+/// let value = *slider_value.lock();
+/// let on_change_callback = {
+///     let slider_value = slider_value.clone();
+///     Arc::new(move |new_value| {
+///         *slider_value.lock() = new_value;
+///     })
+/// };
+///
+/// glass_slider(
+///     GlassSliderArgsBuilder::default()
+///         .value(value)
+///         .on_change(on_change_callback)
+///         .build()
+///         .unwrap(),
+///     slider_state.clone(),
+/// );
+/// ```
 #[tessera]
 pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSliderState>>) {
     let args: GlassSliderArgs = args.into();

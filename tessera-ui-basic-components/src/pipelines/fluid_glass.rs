@@ -39,6 +39,17 @@ struct GlassUniforms {
 
 // --- Pipeline Definition ---
 
+/// Pipeline for rendering fluid glass effects in UI components.
+///
+/// This pipeline simulates glass-like refraction, dispersion, and ripple effects for UI backgrounds.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use tessera_ui_basic_components::pipelines::fluid_glass::FluidGlassPipeline;
+///
+/// let pipeline = FluidGlassPipeline::new(&device, &config, sample_count);
+/// ```
 pub(crate) struct FluidGlassPipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,

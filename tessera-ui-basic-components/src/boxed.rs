@@ -1,3 +1,14 @@
+//! Provides the `Boxed` component for overlaying multiple child components in a single container.
+//!
+//! The `Boxed` module enables stacking and aligning several UI elements on top of each other,
+//! making it ideal for building layered interfaces, overlays, decorations, or custom backgrounds.
+//! Children are positioned according to the specified [`Alignment`](crate::alignment::Alignment),
+//! and the container size adapts to the largest child or can be customized via [`DimensionValue`].
+//!
+//! Typical use cases include tooltips, badges, composite controls, or any scenario where
+//! multiple widgets need to share the same space with flexible alignment.
+//!
+//! This module also provides supporting types and a macro for ergonomic usage.
 use derive_builder::Builder;
 use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node};
 use tessera_ui_macros::tessera;
@@ -57,9 +68,37 @@ impl<F: FnOnce() + Send + Sync + 'static> AsBoxedItem for F {
     }
 }
 
-/// The `Boxed` component: stacks all its children, with the size being
-/// that of the largest child.
-#[tessera]
+/// A component that overlays its children on top of each other.
+///
+/// The `boxed` component acts as a container that stacks all its child components.
+/// The size of the container is determined by the dimensions of the largest child,
+/// and the alignment of the children within the container can be customized.
+///
+/// It's useful for creating layered UIs where components need to be placed
+/// relative to a common parent.
+///
+/// # Arguments
+///
+/// * `args`: A `BoxedArgs` struct that specifies the configuration for the container.
+///   - `alignment`: Controls how children are positioned within the box.
+///     See [`Alignment`](crate::alignment::Alignment) for available options.
+///   - `width`: The width of the container. Can be fixed, fill the parent, or wrap the content.
+///     See [`DimensionValue`](tessera_ui::DimensionValue) for details.
+///   - `height`: The height of the container. Can be fixed, fill the parent, or wrap the content.
+///     See [`DimensionValue`](tessera_ui::DimensionValue) for details.
+///
+/// * `children_items_input`: An array of child components to be rendered inside the box.
+///   Any component that implements the `AsBoxedItem` trait can be a child.
+///
+/// # Example
+///
+/// ```
+/// use tessera_ui_basic_components::boxed::{boxed, BoxedArgs};
+/// use tessera_ui_basic_components::text::text;
+///
+/// boxed(BoxedArgs::default(), [|| text("Hello".to_string())]);
+/// ```
+#[tessera(render_fn=boxed_ui)]
 pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxedItem; N]) {
     let children_items: [BoxedItem; N] =
         children_items_input.map(|item_input| item_input.into_boxed_item());

@@ -1,3 +1,14 @@
+//! Text Rendering Pipeline for UI Components
+//!
+//! This module implements the GPU pipeline and related utilities for efficient text rendering in Tessera UI components.
+//! It leverages the Glyphon engine for font management, shaping, and rasterization, providing high-quality and performant text output.
+//! Typical use cases include rendering static labels, paragraphs, and editable text fields within the UI.
+//!
+//! The pipeline is designed to be reusable and efficient, sharing a static font system across the application to minimize resource usage.
+//! It exposes APIs for preparing, measuring, and rendering text, supporting advanced features such as font fallback, shaping, and multi-line layout.
+//!
+//! This module is intended for integration into custom UI components and rendering flows that require flexible and robust text display.
+
 mod command;
 
 use std::sync::OnceLock;
@@ -46,6 +57,17 @@ pub fn write_font_system() -> RwLockWriteGuard<'static, glyphon::FontSystem> {
 }
 
 /// A text renderer
+/// Pipeline for rendering text using the Glyphon engine.
+///
+/// This struct manages font atlas, cache, viewport, and swash cache for efficient text rendering.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use tessera_ui_basic_components::pipelines::text::GlyphonTextRender;
+///
+/// let pipeline = GlyphonTextRender::new(&device, &queue, &config, sample_count);
+/// ```
 pub struct GlyphonTextRender {
     /// Glyphon font atlas, a heavy-weight, shared resource.
     atlas: glyphon::TextAtlas,
@@ -61,7 +83,13 @@ pub struct GlyphonTextRender {
 }
 
 impl GlyphonTextRender {
-    /// Create a new text renderer pipeline.
+    /// Creates a new text renderer pipeline.
+    ///
+    /// # Parameters
+    /// - `gpu`: The wgpu device.
+    /// - `queue`: The wgpu queue.
+    /// - `config`: Surface configuration.
+    /// - `sample_count`: Multisample count for anti-aliasing.
     pub fn new(
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -90,6 +118,17 @@ impl GlyphonTextRender {
 
 #[allow(unused_variables)]
 impl DrawablePipeline<TextCommand> for GlyphonTextRender {
+    /// Draws text in a UI component using the Glyphon engine.
+    ///
+    /// # Parameters
+    /// - `gpu`: The wgpu device.
+    /// - `gpu_queue`: The wgpu queue.
+    /// - `config`: Surface configuration.
+    /// - `render_pass`: The render pass to encode drawing commands.
+    /// - `command`: The text command with text data.
+    /// - `size`: The size of the component in pixels.
+    /// - `start_pos`: The top-left position of the component.
+    /// - `_scene_texture_view`: Not used for text rendering.
     fn draw(
         &mut self,
         gpu: &wgpu::Device,
@@ -135,6 +174,19 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
     }
 }
 
+/// Text data for rendering, including buffer and size.
+///
+/// # Fields
+/// - `text_buffer`: The glyphon text buffer.
+/// - `size`: The size of the text area [width, height].
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use tessera_ui_basic_components::pipelines::text::TextData;
+///
+/// let data = TextData::new("Hello".to_string(), color, 16.0, 1.2, constraint);
+/// ```
 #[derive(Debug, Clone)]
 pub struct TextData {
     /// glyphon text buffer
@@ -144,10 +196,14 @@ pub struct TextData {
 }
 
 impl TextData {
-    /// Prepare all text datas before rendering
-    /// returns the text data buffer
-    /// Notice that we must specify the text position
-    /// before rendering its return value
+    /// Prepares text data for rendering.
+    ///
+    /// # Parameters
+    /// - `text`: The text string.
+    /// - `color`: The text color.
+    /// - `size`: Font size.
+    /// - `line_height`: Line height.
+    /// - `constraint`: Text constraint for layout.
     pub fn new(
         text: String,
         color: Color,

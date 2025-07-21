@@ -1,3 +1,20 @@
+//! A customizable, animated checkbox UI component for Tessera UI.
+//!
+//! This module provides a standard checkbox widget with support for animated checkmark transitions,
+//! external or internal state management, and flexible styling options. The checkbox can be used
+//! wherever a boolean selection is required, such as forms, settings panels, or interactive lists.
+//!
+//! Features include:
+//! - Smooth checkmark animation on toggle
+//! - Optional external state for advanced control and animation
+//! - Customizable size, colors, shape, and hover effects
+//! - Callback for state changes to integrate with application logic
+//!
+//! Typical usage involves passing [`CheckboxArgs`] to the [`checkbox`] function, with optional
+//! state sharing for animation or controlled components.
+//!
+//! Suitable for both simple and complex UI scenarios requiring a responsive, visually appealing checkbox.
+
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -122,6 +139,45 @@ impl CheckmarkState {
     }
 }
 
+/// Renders a checkbox component.
+///
+/// The checkbox is a standard UI element that allows users to select or deselect an option.
+/// It visually represents its state, typically as a square box that is either empty or contains a checkmark.
+/// The component handles its own animation and state transitions when an optional `CheckboxState` is provided.
+///
+/// # Arguments
+///
+/// The component is configured by passing `CheckboxArgs`.
+///
+/// * `checked`: A `bool` indicating whether the checkbox is currently checked. This determines its
+///   visual appearance.
+/// * `on_toggle`: A callback function `Arc<dyn Fn(bool) + Send + Sync>` that is invoked when the user
+///   clicks the checkbox. It receives the new `checked` state as an argument, allowing the
+///   application state to be updated.
+///
+/// # Example
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui_basic_components::checkbox::{checkbox, CheckboxArgs};
+///
+/// // Create a checkbox that is initially unchecked.
+/// // The `on_toggle` callback is triggered when the user clicks it.
+/// checkbox(CheckboxArgs {
+///     checked: false,
+///     on_toggle: Arc::new(|new_state| {
+///         // In a real app, you would update your state here.
+///         println!("Checkbox toggled to: {}", new_state);
+///     }),
+///     ..Default::default()
+/// });
+///
+/// // Create a checkbox that is initially checked.
+/// checkbox(CheckboxArgs {
+///     checked: true,
+///     ..Default::default()
+/// });
+/// ```
 #[tessera]
 pub fn checkbox(args: impl Into<CheckboxArgs>) {
     let args: CheckboxArgs = args.into();

@@ -1,3 +1,14 @@
+//! Provides a modal dialog component for overlaying content and intercepting user input.
+//!
+//! This module defines a dialog provider for creating modal dialogs in UI applications.
+//! It allows rendering custom dialog content above the main application, blocking interaction
+//! with underlying elements and intercepting keyboard/mouse events (such as ESC or scrim click)
+//! to trigger close actions. Typical use cases include confirmation dialogs, alerts, and
+//! any scenario requiring user attention before proceeding.
+//!
+//! The dialog is managed via [`DialogProviderArgs`] and the [`dialog_provider`] function.
+//! See the example in [`dialog_provider`] for usage details.
+
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -6,12 +17,14 @@ use tessera_ui_macros::tessera;
 
 use crate::surface::{SurfaceArgsBuilder, surface};
 
-/// Arguments for the `dialog_provider` component.
+/// Arguments for the [`dialog_provider`] component.
 #[derive(Builder)]
+#[builder(pattern = "owned")]
 pub struct DialogProviderArgs {
     /// Determines whether the dialog is currently visible.
     pub is_open: bool,
-    /// Callback function triggered when a close request is made (e.g., by clicking the scrim or pressing ESC).
+    /// Callback function triggered when a close request is made, for example by
+    /// clicking the scrim or pressing the `ESC` key.
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
 }
 
@@ -19,7 +32,47 @@ pub struct DialogProviderArgs {
 ///
 /// This component should be used as one of the outermost layers of the application.
 /// It renders the main content, and when `is_open` is true, it overlays a modal
-/// dialog, intercepting all input.
+/// dialog, intercepting all input events to create a modal experience.
+///
+/// The dialog can be closed by calling the `on_close_request` callback, which can be
+/// triggered by clicking the background scrim or pressing the `ESC` key.
+///
+/// # Arguments
+///
+/// * `args` - The arguments for configuring the dialog provider. See [`DialogProviderArgs`].
+/// * `main_content` - A closure that renders the main content of the application,
+///   which is visible whether the dialog is open or closed.
+/// * `dialog_content` - A closure that renders the content of the dialog, which is
+///   only visible when `args.is_open` is `true`.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use std::sync::{Arc, RwLock};
+///
+/// use tessera_ui::use_state;
+/// use tessera_ui_basic_components::{
+///     button::button,
+///     dialog::{dialog_provider, Dialog, DialogArgs},
+///     text::text,
+/// };
+///
+/// let is_open = use_state(|| false);
+/// let dialog_state = use_state(Vec::new);
+///
+/// dialog_provider(dialog_state.clone());
+///
+/// button("Open Dialog", || {
+///     let mut dialogs = dialog_state.write();
+///     dialogs.push(Dialog {
+///         modal: true,
+///         ui: Arc::new(move || {
+///             text("This is a dialog".to_string());
+///             button("close", || {});
+///         }),
+///     });
+/// });
+/// ```
 #[tessera]
 pub fn dialog_provider(
     args: DialogProviderArgs,
@@ -38,7 +91,7 @@ pub fn dialog_provider(
         // and triggering the close request.
         surface(
             SurfaceArgsBuilder::default()
-                .color(Color::BLACK)
+                .color(Color::BLACK.with_alpha(0.5))
                 .on_click(Some(args.on_close_request))
                 .width(DimensionValue::Fill {
                     min: None,

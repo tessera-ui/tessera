@@ -1,3 +1,19 @@
+//! Core module for text editing logic and state management in Tessera UI.
+//!
+//! This module provides the foundational structures and functions for building text editing components,
+//! including text buffer management, selection and cursor handling, rendering logic, and keyboard event mapping.
+//! It is designed to be shared across UI components via `Arc<RwLock<TextEditorState>>`, enabling consistent
+//! and efficient text editing experiences.
+//!
+//! Typical use cases include single-line and multi-line text editors, input fields, and any UI element
+//! requiring advanced text manipulation, selection, and IME support.
+//!
+//! The module integrates with the Tessera component system and rendering pipelines, supporting selection
+//! highlighting, cursor blinking, clipboard operations, and extensible keyboard shortcuts.
+//!
+//! Most applications should interact with [`TextEditorState`] for state management and [`text_edit_core()`]
+//! for rendering and layout within a component tree.
+
 mod cursor;
 
 use std::{sync::Arc, time::Instant};
@@ -19,22 +35,50 @@ use crate::{
 
 /// Definition of a rectangular selection highlight
 #[derive(Clone, Debug)]
+/// Defines a rectangular region for text selection highlighting.
+///
+/// Used internally to represent the geometry of a selection highlight in pixel coordinates.
 pub struct RectDef {
+    /// The x-coordinate (in pixels) of the rectangle's top-left corner.
     pub x: Px,
+    /// The y-coordinate (in pixels) of the rectangle's top-left corner.
     pub y: Px,
+    /// The width (in pixels) of the rectangle.
     pub width: Px,
+    /// The height (in pixels) of the rectangle.
     pub height: Px,
 }
 
 /// Types of mouse clicks
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Represents the type of mouse click detected in the editor.
+///
+/// Used for distinguishing between single, double, and triple click actions.
 pub enum ClickType {
+    /// A single mouse click.
     Single,
+    /// A double mouse click.
     Double,
+    /// A triple mouse click.
     Triple,
 }
 
 /// Core text editing state, shared between components
+/// Core state for text editing, including content, selection, cursor, and interaction state.
+///
+/// This struct manages the text buffer, selection, cursor position, focus, and user interaction state.
+/// It is designed to be shared between UI components via an `Arc<RwLock<TextEditorState>>`.
+///
+/// # Example
+/// ```
+/// use std::sync::Arc;
+/// use parking_lot::RwLock;
+/// use tessera_ui::Dp;
+/// use tessera_ui_basic_components::text_edit_core::{TextEditorState, text_edit_core};
+///
+/// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(16.0), None)));
+/// // Use `text_edit_core(state.clone())` inside your component tree.
+/// ```
 pub struct TextEditorState {
     line_height: Px,
     pub(crate) editor: glyphon::Editor<'static>,
@@ -52,10 +96,30 @@ pub struct TextEditorState {
 }
 
 impl TextEditorState {
+    /// Creates a new `TextEditorState` with the given font size and optional line height.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` - Font size in Dp.
+    /// * `line_height` - Optional line height in Dp. If `None`, uses 1.2x the font size.
+    ///
+    /// # Example
+    /// ```
+    /// use tessera_ui::Dp;
+    /// use tessera_ui_basic_components::text_edit_core::TextEditorState;
+    /// let state = TextEditorState::new(Dp(16.0), None);
+    /// ```
     pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
         Self::with_selection_color(size, line_height, Color::new(0.5, 0.7, 1.0, 0.4))
     }
 
+    /// Creates a new `TextEditorState` with a custom selection highlight color.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` - Font size in Dp.
+    /// * `line_height` - Optional line height in Dp.
+    /// * `selection_color` - Color used for selection highlight.
     pub fn with_selection_color(size: Dp, line_height: Option<Dp>, selection_color: Color) -> Self {
         let final_line_height = line_height.unwrap_or(Dp(size.0 * 1.2));
         let line_height_px: Px = final_line_height.into();
@@ -80,10 +144,16 @@ impl TextEditorState {
         }
     }
 
+    /// Returns the line height in pixels.
     pub fn line_height(&self) -> Px {
         self.line_height
     }
 
+    /// Returns the current text buffer as `TextData`, applying the given layout constraints.
+    ///
+    /// # Arguments
+    ///
+    /// * `constraint` - Layout constraints for text rendering.
     pub fn text_data(&mut self, constraint: TextConstraint) -> TextData {
         self.editor.with_buffer_mut(|buffer| {
             buffer.set_size(
@@ -103,43 +173,67 @@ impl TextEditorState {
         TextData::from_buffer(text_buffer)
     }
 
+    /// Returns a reference to the internal focus handler.
     pub fn focus_handler(&self) -> &Focus {
         &self.focus_handler
     }
 
+    /// Returns a mutable reference to the internal focus handler.
     pub fn focus_handler_mut(&mut self) -> &mut Focus {
         &mut self.focus_handler
     }
 
+    /// Returns a reference to the underlying `glyphon::Editor`.
     pub fn editor(&self) -> &glyphon::Editor<'static> {
         &self.editor
     }
 
+    /// Returns a mutable reference to the underlying `glyphon::Editor`.
     pub fn editor_mut(&mut self) -> &mut glyphon::Editor<'static> {
         &mut self.editor
     }
 
+    /// Returns the current blink timer instant (for cursor blinking).
     pub fn bink_timer(&self) -> Instant {
         self.bink_timer
     }
 
+    /// Resets the blink timer to the current instant.
     pub fn update_bink_timer(&mut self) {
         self.bink_timer = Instant::now();
     }
 
+    /// Returns the current selection highlight color.
     pub fn selection_color(&self) -> Color {
         self.selection_color
     }
 
+    /// Returns a reference to the current selection rectangles.
     pub fn current_selection_rects(&self) -> &Vec<RectDef> {
         &self.current_selection_rects
     }
 
+    /// Sets the selection highlight color.
+    ///
+    /// # Arguments
+    ///
+    /// * `color` - The new selection color.
     pub fn set_selection_color(&mut self, color: Color) {
         self.selection_color = color;
     }
 
-    /// Handle a click event and determine the click type (single, double, triple)
+    /// Handles a mouse click event and determines the click type (single, double, triple).
+    ///
+    /// Used for text selection and word/line selection logic.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - The position of the click in pixels.
+    /// * `timestamp` - The time the click occurred.
+    ///
+    /// # Returns
+    ///
+    /// The detected [`ClickType`].
     pub fn handle_click(&mut self, position: PxPosition, timestamp: Instant) -> ClickType {
         const DOUBLE_CLICK_TIME_MS: u128 = 500; // 500ms for double click
         const CLICK_DISTANCE_THRESHOLD: Px = Px(5); // 5 pixels tolerance for position
@@ -176,37 +270,57 @@ impl TextEditorState {
         click_type
     }
 
-    /// Start drag operation
+    /// Starts a drag operation (for text selection).
     pub fn start_drag(&mut self) {
         self.is_dragging = true;
     }
 
-    /// Check if currently dragging
+    /// Returns `true` if a drag operation is in progress.
     pub fn is_dragging(&self) -> bool {
         self.is_dragging
     }
 
-    /// Stop drag operation
+    /// Stops the current drag operation.
     pub fn stop_drag(&mut self) {
         self.is_dragging = false;
     }
 
-    /// Get last click position
+    /// Returns the last click position, if any.
     pub fn last_click_position(&self) -> Option<PxPosition> {
         self.last_click_position
     }
 
-    /// Update last click position (for drag tracking)
+    /// Updates the last click position (used for drag tracking).
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - The new last click position.
     pub fn update_last_click_position(&mut self, position: PxPosition) {
         self.last_click_position = Some(position);
     }
 }
 
-/// Core text editing component - handles text rendering and cursor, no events
-///
-/// This component is designed to be used inside a container (like surface) that
-/// provides the proper size constraints and handles user interaction events.
 #[tessera]
+/// Core text editing component for rendering text, selection, and cursor.
+///
+/// This component is responsible for rendering the text buffer, selection highlights, and cursor.
+/// It does not handle user events directly; instead, it is intended to be used inside a container
+/// that manages user interaction and passes state updates via `TextEditorState`.
+///
+/// # Arguments
+///
+/// * `state` - Shared state for the text editor, typically wrapped in `Arc<RwLock<...>>`.
+///
+/// # Example
+/// ```
+/// use std::sync::Arc;
+/// use parking_lot::RwLock;
+/// use tessera_ui::Dp;
+/// use tessera_ui_basic_components::text_edit_core::{TextEditorState, text_edit_core};
+///
+/// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(16.0), None)));
+/// text_edit_core(state.clone());
+/// ```
 pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
     // text rendering with constraints from parent container
     {
@@ -421,6 +535,20 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
 }
 
 /// Map keyboard events to text editing actions
+/// Maps a keyboard event to a list of text editing actions for the editor.
+///
+/// This function translates keyboard input (including modifiers) into editing actions
+/// such as character insertion, deletion, navigation, and clipboard operations.
+///
+/// # Arguments
+///
+/// * `key_event` - The keyboard event to map.
+/// * `key_modifiers` - The current keyboard modifier state.
+/// * `editor` - Reference to the editor for clipboard operations.
+///
+/// # Returns
+///
+/// An optional vector of `glyphon::Action` to be applied to the editor.
 pub fn map_key_event_to_action(
     key_event: winit::event::KeyEvent,
     key_modifiers: winit::keyboard::ModifiersState,

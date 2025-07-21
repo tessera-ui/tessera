@@ -1,3 +1,20 @@
+//! Scrollable container component for Tessera UI.
+//!
+//! This module provides a scrollable container that enables vertical and/or horizontal scrolling
+//! for overflowing content within a UI layout. It is designed as a fundamental building block
+//! for creating areas where content may exceed the visible bounds, such as lists, panels, or
+//! custom scroll regions.
+//!
+//! Features include configurable scroll directions, smooth animated scrolling, and stateful
+//! management of scroll position and focus. The scrollable area is highly customizable via
+//! [`ScrollableArgs`], and integrates with the Tessera UI state management system.
+//!
+//! Typical use cases include scrollable lists, text areas, image galleries, or any UI region
+//! where content may not fit within the allocated space.
+//!
+//! # Example
+//! See [`scrollable()`] for usage details and code samples.
+
 use std::{sync::Arc, time::Instant};
 
 use derive_builder::Builder;
@@ -34,7 +51,19 @@ pub struct ScrollableArgs {
     pub scroll_smoothing: f32,
 }
 
-/// The state of Scrollable.
+impl Default for ScrollableArgs {
+    fn default() -> Self {
+        ScrollableArgsBuilder::default().build().unwrap()
+    }
+}
+
+/// Holds the state for a `scrollable` component, managing scroll position and interaction.
+///
+/// This state should be created and managed using `use_state` or a similar state management
+/// hook provided by the UI framework. It tracks the current and target scroll positions,
+/// the size of the scrollable content, and focus state.
+///
+/// The scroll position is smoothly interpolated over time to create a fluid scrolling effect.
 pub struct ScrollableState {
     /// The current position of the child component (for rendering)
     child_position: PxPosition,
@@ -132,6 +161,66 @@ impl ScrollableState {
     }
 }
 
+/// A container that makes its content scrollable when it exceeds the container's size.
+///
+/// The `scrollable` component is a fundamental building block for creating areas with
+/// content that may not fit within the allocated space. It supports vertical and/or
+/// horizontal scrolling, which can be configured via `ScrollableArgs`.
+///
+/// State management is handled by `ScrollableState`, which must be provided to persist
+/// the scroll position across recompositions. The scrolling behavior is animated with
+/// a configurable smoothing factor for a better user experience.
+///
+/// # Example
+///
+/// ```
+/// use std::sync::Arc;
+/// use parking_lot::RwLock;
+/// use tessera_ui::{DimensionValue, Dp};
+/// use tessera_ui_basic_components::{
+///     column::{column_ui, ColumnArgs},
+///     scrollable::{scrollable, ScrollableArgs, ScrollableState},
+///     text::text,
+/// };
+///
+/// // In a real app, you would manage the state.
+/// let scrollable_state = Arc::new(RwLock::new(ScrollableState::new()));
+///
+/// scrollable(
+///     ScrollableArgs {
+///         height: DimensionValue::Fixed(Dp(100.0).into()),
+///         ..Default::default()
+///     },
+///     scrollable_state,
+///     || {
+///         column_ui!(
+///             ColumnArgs::default(),
+///             || text("Item 1".to_string()),
+///             || text("Item 2".to_string()),
+///             || text("Item 3".to_string()),
+///             || text("Item 4".to_string()),
+///             || text("Item 5".to_string()),
+///             || text("Item 6".to_string()),
+///             || text("Item 7".to_string()),
+///             || text("Item 8".to_string()),
+///             || text("Item 9".to_string()),
+///             || text("Item 10".to_string()),
+///         );
+///     },
+/// );
+/// ```
+///
+/// # Panics
+///
+/// This component will panic if it does not have exactly one child.
+///
+/// # Arguments
+///
+/// * `args`: An instance of `ScrollableArgs` or `ScrollableArgsBuilder` to configure the
+///   scrollable area's behavior, such as dimensions and scroll directions.
+/// * `state`: An `Arc<RwLock<ScrollableState>>` to hold and manage the component's state.
+/// * `child`: A closure that defines the content to be placed inside the scrollable container.
+///   This closure is executed once to build the component tree.
 #[tessera]
 pub fn scrollable(
     args: impl Into<ScrollableArgs>,

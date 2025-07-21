@@ -1,3 +1,14 @@
+#![allow(clippy::needless_pass_by_value)]
+//! # Glass Switch Component Module
+//!
+//! This module provides a customizable, glassmorphic-style switch (toggle) UI component for the Tessera UI framework.
+//! The glass switch enables toggling a boolean state with smooth animated transitions and a frosted glass visual effect.
+//! It is suitable for modern user interfaces requiring visually appealing, interactive on/off controls, such as settings panels, forms, or dashboards.
+//! The component supports extensive customization, including size, color, border, and animation, and is designed for stateless usage with external state management.
+//! Typical usage involves integrating the switch into application UIs where a clear, elegant toggle is desired.
+//!
+//! See [`glass_switch()`](tessera-ui-basic-components/src/glass_switch.rs:142) for usage details and customization options.
+
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -91,7 +102,55 @@ pub struct GlassSwitchArgs {
     pub thumb_padding: Dp,
 }
 
+impl Default for GlassSwitchArgs {
+    fn default() -> Self {
+        GlassSwitchArgsBuilder::default().build().unwrap()
+    }
+}
+
 #[tessera]
+/// A glass-like switch component for toggling a boolean state.
+///
+/// The `glass_switch` provides a visually appealing switch with a frosted glass effect.
+/// It animates smoothly between its "on" and "off" states and is fully customizable
+/// in terms of size, color, and border.
+///
+/// # Example
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui_basic_components::glass_switch::{glass_switch, GlassSwitchArgs, GlassSwitchArgsBuilder};
+///
+/// // In a real app, you would manage the state.
+/// // This example shows how to create a switch that is initially off.
+/// glass_switch(
+///     GlassSwitchArgsBuilder::default()
+///         .checked(false)
+///         .on_toggle(Arc::new(|new_state| {
+///             // Update your application state here
+///             println!("Switch toggled to: {}", new_state);
+///         }))
+///         .build()
+///         .unwrap(),
+/// );
+///
+/// // An initially checked switch
+/// glass_switch(
+///     GlassSwitchArgsBuilder::default()
+///         .checked(true)
+///         .build()
+///         .unwrap(),
+/// );
+/// ```
+///
+/// # Arguments
+///
+/// * `args` - An instance of `GlassSwitchArgs` which can be built using `GlassSwitchArgsBuilder`.
+///   - `checked`: A `bool` indicating the current state of the switch (`true` for on, `false` for off).
+///   - `on_toggle`: A callback `Arc<dyn Fn(bool) + Send + Sync>` that is called when the switch is clicked.
+///     It receives the new boolean state.
+///   - Other arguments for customization like `width`, `height`, `track_on_color`, `track_off_color`, etc.
+///     are also available.
 pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
     let args: GlassSwitchArgs = args.into();
     let thumb_size = Dp(args.height.0 - (args.thumb_padding.0 * 2.0));

@@ -1,3 +1,17 @@
+//! Provides a flexible, customizable surface container component for UI elements.
+//!
+//! This module defines the [`surface`] component and its configuration via [`SurfaceArgs`].
+//! The surface acts as a visual and interactive container, supporting background color,
+//! shape, shadow, border, padding, and optional ripple effects for user interaction.
+//!
+//! Typical use cases include wrapping content to visually separate it from the background,
+//! providing elevation or emphasis, and enabling interactive feedback (e.g., ripple on click).
+//! It is commonly used as the foundational layer for buttons, dialogs, editors, and other
+//! interactive or visually distinct UI elements.
+//!
+//! The surface can be configured for both static and interactive scenarios, with support for
+//! hover and click callbacks, making it suitable for a wide range of UI composition needs.
+
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -15,7 +29,53 @@ use crate::{
     shape_def::Shape,
 };
 
-/// Arguments for the `surface` component.
+///
+/// Arguments for the [`surface`] component.
+///
+/// This struct defines the configurable properties for the [`surface`] container,
+/// which provides a background, optional shadow, border, shape, and interactive
+/// ripple effect. The surface is commonly used to wrap content and visually
+/// separate it from the background or other UI elements.
+///
+/// # Fields
+///
+/// - `color`: The fill color of the surface (RGBA). Defaults to a blue-gray.
+/// - `hover_color`: The color displayed when the surface is hovered. If `None`, no hover effect is applied.
+/// - `shape`: The geometric shape of the surface (e.g., rounded rectangle, ellipse).
+/// - `shadow`: Optional shadow properties for elevation effects.
+/// - `padding`: Padding inside the surface, applied to all sides.
+/// - `width`: Optional explicit width constraint. If `None`, wraps content.
+/// - `height`: Optional explicit height constraint. If `None`, wraps content.
+/// - `border_width`: Width of the border. If greater than 0, an outline is drawn.
+/// - `border_color`: Optional color for the border. If `None` and `border_width > 0`, uses `color`.
+/// - `on_click`: Optional callback for click events. If set, the surface becomes interactive and shows a ripple effect.
+/// - `ripple_color`: The color of the ripple effect for interactive surfaces.
+///
+/// # Example
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui::{Color, Dp};
+/// use tessera_ui_basic_components::{
+///     pipelines::ShadowProps,
+///     ripple_state::RippleState,
+///     surface::{surface, SurfaceArgs},
+/// };
+///
+/// let ripple_state = Arc::new(RippleState::new());
+/// surface(
+///     SurfaceArgs {
+///         color: Color::from_rgb(0.95, 0.95, 1.0),
+///         shadow: Some(ShadowProps::default()),
+///         padding: Dp(16.0),
+///         border_width: 1.0,
+///         border_color: Some(Color::from_rgb(0.7, 0.7, 0.9)),
+///         ..Default::default()
+///     },
+///     Some(ripple_state.clone()),
+///     || {},
+/// );
+/// ```
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SurfaceArgs {
@@ -25,13 +85,13 @@ pub struct SurfaceArgs {
     /// The hover color of the surface (RGBA). If None, no hover effect is applied.
     #[builder(default)]
     pub hover_color: Option<Color>,
-    /// The shape of the surface.
+    /// The shape of the surface (e.g., rounded rectangle, ellipse).
     #[builder(default)]
     pub shape: Shape,
     /// The shadow properties of the surface.
     #[builder(default)]
     pub shadow: Option<ShadowProps>,
-    /// The padding of the surface.
+    /// The padding inside the surface.
     #[builder(default = "Dp(0.0)")]
     pub padding: Dp,
     /// Optional explicit width behavior for the surface. Defaults to Wrap {min: None, max: None} if None.
@@ -61,8 +121,46 @@ impl Default for SurfaceArgs {
     }
 }
 
-/// surface component, a basic container that can have its own size constraints.
-/// If args contains an on_click callback, a ripple_state must be provided for interactive behavior.
+///
+/// A basic container component that provides a customizable background, optional shadow,
+/// border, shape, and interactive ripple effect. The surface is typically used to wrap
+/// content and visually separate it from the background or other UI elements.
+///
+/// If `args.on_click` is set, the surface becomes interactive and displays a ripple
+/// animation on click. In this case, a [`RippleState`] must be provided to manage
+/// the ripple effect and hover state.
+///
+/// # Parameters
+///
+/// - `args`: [`SurfaceArgs`] struct specifying appearance, layout, and interaction.
+/// - `ripple_state`: Optional [`RippleState`] for interactive surfaces. Required if `on_click` is set.
+/// - `child`: Closure that builds the child content inside the surface.
+///
+/// # Example
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui::{Color, Dp};
+/// use tessera_ui_basic_components::{
+///     pipelines::ShadowProps,
+///     surface::{surface, SurfaceArgs},
+///     text::text,
+/// };
+///
+/// surface(
+///     SurfaceArgs {
+///         color: Color::from_rgb(1.0, 1.0, 1.0),
+///         shadow: Some(ShadowProps::default()),
+///         padding: Dp(12.0),
+///         ..Default::default()
+///     },
+///     None,
+///     || {
+///         text("Content in a surface".to_string());
+///     },
+/// );
+/// ```
+///
 #[tessera]
 pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child: impl FnOnce()) {
     (child)();

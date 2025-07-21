@@ -1,3 +1,17 @@
+//! A reusable, interactive slider UI component for selecting a value within the range [0.0, 1.0].
+//!
+//! This module provides a customizable horizontal slider, suitable for use in forms, settings panels,
+//! media controls, or any scenario where users need to adjust a continuous value. The slider supports
+//! mouse and keyboard interaction, visual feedback for dragging and focus, and allows full control over
+//! appearance and behavior via configuration options and callbacks.
+//!
+//! Typical use cases include volume controls, progress bars, brightness adjustments, and other parameter selection tasks.
+//!
+//! The slider is fully controlled: you provide the current value and handle updates via a callback.
+//! State management (e.g., dragging, focus) is handled externally and passed in, enabling integration with various UI frameworks.
+//!
+//! See [`SliderArgs`] and [`SliderState`] for configuration and state management details.
+
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -13,7 +27,17 @@ use crate::{
     surface::{SurfaceArgsBuilder, surface},
 };
 
-/// State for the `slider` component.
+///
+/// Stores the interactive state for the [`slider`] component, such as whether the slider is currently being dragged by the user.
+/// This struct should be managed via [`Arc<Mutex<SliderState>>`] and passed to the [`slider`] function to enable correct interaction handling.
+///
+/// # Fields
+/// - `is_dragging`: Indicates whether the user is actively dragging the slider thumb.
+/// - `focus`: Manages keyboard focus for the slider component.
+///
+/// Typically, you create and manage this state using [`use_state`] or similar state management utilities.
+///
+/// [`slider`]: crate::slider
 pub struct SliderState {
     /// True if the user is currently dragging the slider.
     pub is_dragging: bool,
@@ -70,6 +94,52 @@ pub struct SliderArgs {
 }
 
 #[tessera]
+///
+/// Renders a slider UI component that allows users to select a value in the range `[0.0, 1.0]`.
+///
+/// The slider displays a horizontal track with a draggable thumb. The current value is visually represented by the filled portion of the track.
+/// The component is fully controlled: you must provide the current value and a callback to handle value changes.
+///
+/// # Parameters
+/// - `args`: Arguments for configuring the slider. See [`SliderArgs`] for all options. The most important are:
+///   - `value` (`f32`): The current value of the slider, in the range `[0.0, 1.0]`.
+///   - `on_change` (`Arc<dyn Fn(f32) + Send + Sync>`): Callback invoked when the user changes the slider's value.
+///   - `width`, `track_height`, `active_track_color`, `inactive_track_color`, `disabled`: Appearance and interaction options.
+/// - `state`: Shared state for the slider, used to track interaction (e.g., dragging, focus). Create and manage this using [`use_state`] or similar, and pass it to the slider for correct behavior.
+///
+/// # State Management
+/// The `state` parameter must be an [`Arc<Mutex<SliderState>>`]. You can create and manage it using the `use_state` hook or any other state management approach compatible with your application.
+///
+/// # Example
+/// ```
+/// use std::sync::Arc;
+/// use parking_lot::Mutex;
+/// use tessera_ui::Dp;
+/// use tessera_ui_basic_components::slider::{slider, SliderArgs, SliderState, SliderArgsBuilder};
+///
+/// // In a real application, you would manage the state.
+/// let slider_state = Arc::new(Mutex::new(SliderState::new()));
+///
+/// // Create a slider with a width of 200dp and an initial value of 0.5.
+/// slider(
+///     SliderArgsBuilder::default()
+///         .width(Dp(200.0))
+///         .value(0.5)
+///         .on_change(Arc::new(|new_value| {
+///             // Update your application state here.
+///             println!("Slider value: {}", new_value);
+///         }))
+///         .build()
+///         .unwrap(),
+///     slider_state,
+/// );
+/// ```
+///
+/// This example demonstrates how to create a stateful slider and respond to value changes by updating your own state.
+///
+/// # See Also
+/// - [`SliderArgs`]
+/// - [`SliderState`]
 pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
     let args: SliderArgs = args.into();
 

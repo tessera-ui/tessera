@@ -1,3 +1,21 @@
+//! # Mean Luminance Compute Pipeline
+//!
+//! This module implements a GPU-based compute pipeline for calculating the mean luminance of a texture.
+//! It provides both the pipeline and command abstractions for integrating mean luminance computation into Tessera UI rendering flows.
+//!
+//! ## Functionality
+//! - Calculates the average (mean) luminance of a given texture using a compute shader.
+//! - Exposes a [`MeanCommand`](MeanCommand) for issuing the operation and a [`MeanPipeline`](MeanPipeline) for dispatching the compute workload.
+//!
+//! ## Typical Use Cases
+//! - Image processing and analysis
+//! - Tone mapping and exposure adaptation in UI or graphics applications
+//! - Adaptive UI rendering based on scene brightness
+//!
+//! ## Integration
+//! Register and use this pipeline when average brightness information is required for further rendering or UI logic.
+//! See [`MeanCommand`] and [`MeanPipeline`] for usage examples.
+
 use tessera_ui::{
     compute::{ComputeResourceRef, resource::ComputeResourceManager},
     renderer::compute::{ComputablePipeline, command::ComputeCommand},
@@ -8,11 +26,23 @@ use tessera_ui::{
 
 /// A command to calculate the mean luminance of the input texture.
 #[derive(Debug, Clone, Copy)]
+/// Command to calculate the mean luminance of the input texture.
+///
+/// # Example
+/// ```rust,ignore
+/// use tessera_ui_basic_components::pipelines::mean::MeanCommand;
+/// let command = MeanCommand::new(&device, &mut resource_manager);
+/// ```
 pub struct MeanCommand {
     result_buffer_ref: ComputeResourceRef,
 }
 
 impl MeanCommand {
+    /// Creates a new `MeanCommand` and allocates a result buffer.
+    ///
+    /// # Parameters
+    /// - `gpu`: The wgpu device.
+    /// - `compute_resource_manager`: Resource manager for compute buffers.
     pub fn new(gpu: &wgpu::Device, compute_resource_manager: &mut ComputeResourceManager) -> Self {
         let result_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Mean Result Buffer"),
@@ -25,6 +55,7 @@ impl MeanCommand {
         MeanCommand { result_buffer_ref }
     }
 
+    /// Returns the reference to the result buffer.
     pub fn result_buffer_ref(&self) -> ComputeResourceRef {
         self.result_buffer_ref
     }
@@ -34,6 +65,13 @@ impl ComputeCommand for MeanCommand {}
 
 // --- Pipeline ---
 
+/// Pipeline for calculating mean luminance using a compute shader.
+///
+/// # Example
+/// ```rust,ignore
+/// use tessera_ui_basic_components::pipelines::mean::MeanPipeline;
+/// let pipeline = MeanPipeline::new(&device);
+/// ```
 pub struct MeanPipeline {
     pipeline: wgpu::ComputePipeline,
     bind_group_layout: wgpu::BindGroupLayout,
@@ -108,6 +146,16 @@ impl MeanPipeline {
 }
 
 impl ComputablePipeline<MeanCommand> for MeanPipeline {
+    /// Dispatches the compute shader to calculate mean luminance.
+    ///
+    /// # Parameters
+    /// - `device`: The wgpu device.
+    /// - `config`: Surface configuration.
+    /// - `compute_pass`: The compute pass to encode commands.
+    /// - `command`: The mean command with buffer reference.
+    /// - `resource_manager`: Resource manager for compute buffers.
+    /// - `input_view`: Source texture view.
+    /// - `output_view`: Destination texture view.
     fn dispatch(
         &mut self,
         device: &wgpu::Device,

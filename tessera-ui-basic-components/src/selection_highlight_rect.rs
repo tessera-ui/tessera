@@ -1,13 +1,41 @@
+//! Provides a rectangular highlight component for visually indicating selected regions,
+//! typically in text editors or similar UI elements. This module enables rendering of
+//! sharp-cornered, shadowless rectangles with configurable size and color, suitable for
+//! marking text selections or other highlighted areas. For multi-line or complex selections,
+//! multiple highlight rectangles can be composed to cover the desired region.
 use tessera_ui::{Color, ComputedData, Px};
 use tessera_ui_macros::tessera;
 
 use crate::pipelines::ShapeCommand;
 
-/// A single rectangular highlight for text selection
+/// Draws a rectangular highlight, typically used to indicate selected text regions in a text editor.
 ///
-/// This component represents one contiguous rectangular area that should be highlighted
-/// as part of a text selection. Multiple instances of this component may be used
-/// to represent a complete selection that spans multiple lines or has complex geometry.
+/// This component renders a single contiguous rectangle with sharp corners and no shadow,
+/// suitable for visually marking selected areas. To highlight selections spanning multiple lines
+/// or with complex shapes, use multiple `selection_highlight_rect` components, each representing
+/// a segment of the selection.
+///
+/// # Parameters
+///
+/// - `width`: The width of the highlight rectangle, in physical pixels (`Px`).
+/// - `height`: The height of the highlight rectangle, in physical pixels (`Px`).
+/// - `color`: The fill color of the rectangle, including alpha for transparency (`Color`).
+///
+/// # Example
+///
+/// ```
+/// use tessera_ui::{Color, Px};
+/// use tessera_ui_basic_components::selection_highlight_rect::selection_highlight_rect;
+///
+/// // Renders a selection highlight rectangle with a width of 100px, a height of 20px,
+/// // and a semi-transparent blue color.
+/// selection_highlight_rect(
+///     Px(100),
+///     Px(20),
+///     Color::new(0.2, 0.4, 1.0, 0.3),
+/// );
+/// ```
+///
 #[tessera]
 pub fn selection_highlight_rect(
     width: Px,

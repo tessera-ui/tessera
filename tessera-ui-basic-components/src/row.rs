@@ -1,3 +1,32 @@
+//! # Row Module
+//!
+//! Provides the [`row`] component and related utilities for horizontal layout in Tessera UI.
+//!
+//! This module defines a flexible and composable row layout component, allowing child components to be arranged horizontally with customizable alignment, sizing, and weighted space distribution. It is a fundamental building block for constructing responsive UI layouts, such as toolbars, navigation bars, forms, and any scenario requiring horizontal stacking of elements.
+//!
+//! ## Features
+//! - Horizontal arrangement of child components
+//! - Support for main/cross axis alignment and flexible sizing
+//! - Weighted children for proportional space allocation
+//! - Declarative macro [`row_ui!`] for ergonomic usage
+//!
+//! ## Typical Usage
+//! Use the [`row`] component to build horizontal layouts, optionally combining with [`column`](crate::column) for complex grid or responsive designs.
+//!
+//! See the documentation and examples for details on arguments and usage patterns.
+//!
+//! ---
+//!
+//! This module is part of the `tessera-ui-basic-components` crate.
+//!
+//! ## Example
+//! ```
+//! use tessera_ui_basic_components::{row::{row_ui, RowArgs}, text::text};
+//! row_ui!(RowArgs::default(),
+//!     || text("A".to_string()),
+//!     || text("B".to_string()),
+//! );
+//! ```
 use derive_builder::Builder;
 use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node};
 use tessera_ui_macros::tessera;
@@ -85,6 +114,50 @@ impl<F: FnOnce() + Send + Sync + 'static> AsRowItem for (F, f32) {
 }
 
 /// A row component that arranges its children horizontally.
+/// A layout component that arranges its children horizontally.
+///
+/// The `row` component is a fundamental building block for creating horizontal layouts.
+/// It takes a set of child components and arranges them one after another in a single
+/// row. The layout behavior can be extensively customized through the `RowArgs` struct.
+///
+/// # Arguments
+///
+/// * `args`: A `RowArgs` struct that configures the layout properties of the row.
+///   - `width` and `height`: Control the dimensions of the row container. They can be
+///     set to `DimensionValue::Wrap` to fit the content, `DimensionValue::Fixed` for a
+///     specific size, or `DimensionValue::Fill` to occupy available space.
+///   - `main_axis_alignment`: Determines how children are distributed along the horizontal
+///     axis (e.g., `Start`, `Center`, `End`, `SpaceBetween`).
+///   - `cross_axis_alignment`: Determines how children are aligned along the vertical
+///     axis (e.g., `Start`, `Center`, `End`, `Stretch`).
+///
+/// * `children_items_input`: An array of child components to be displayed in the row.
+///   Children can be simple closures, or they can be wrapped in `RowItem` to provide
+///   a `weight` for flexible space distribution. Weighted children will expand to fill
+///   any remaining space in the row according to their weight proportion.
+///
+/// # Example
+///
+/// A simple row with three text components, centered horizontally and vertically.
+///
+/// ```
+/// use tessera_ui_basic_components::{row::{row_ui, RowArgs}, text::text};
+/// use tessera_ui_basic_components::alignment::{MainAxisAlignment, CrossAxisAlignment};
+/// use tessera_ui::{DimensionValue, Dp};
+///
+/// let args = RowArgs {
+///     main_axis_alignment: MainAxisAlignment::Center,
+///     cross_axis_alignment: CrossAxisAlignment::Center,
+///     width: DimensionValue::Fill { min: None, max: None },
+///     height: DimensionValue::Fixed(Dp(50.0).into()),
+/// };
+///
+/// row_ui!(args,
+///     || text("First".to_string()),
+///     || text("Second".to_string()),
+///     || text("Third".to_string()),
+/// );
+/// ```
 #[tessera]
 pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem; N]) {
     let children_items: [RowItem; N] =

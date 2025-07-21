@@ -1,3 +1,21 @@
+//! Shape rendering pipeline for UI components.
+//!
+//! This module provides the GPU pipeline and associated data structures for rendering
+//! vector-based shapes in Tessera UI components. Supported shapes include rectangles,
+//! rounded rectangles (with G2 curve support), ellipses, and arbitrary polygons.
+//!
+//! The pipeline supports advanced visual effects such as drop shadows and interactive
+//! ripples, making it suitable for rendering button backgrounds, surfaces, and other
+//! interactive or decorative UI elements.
+//!
+//! Typical usage scenarios include:
+//! - Drawing backgrounds and outlines for buttons, surfaces, and containers
+//! - Rendering custom-shaped UI elements with smooth corners
+//! - Applying shadow and ripple effects for interactive feedback
+//!
+//! This module is intended to be used internally by basic UI components and registered
+//! as part of the rendering pipeline system.
+
 mod command;
 use bytemuck::{Pod, Zeroable};
 use earcutr::earcut;
@@ -16,6 +34,30 @@ use command::ShapeCommandComputed;
 
 pub use command::{RippleProps, ShadowProps, ShapeCommand};
 
+/// Uniforms for shape rendering pipeline.
+///
+/// # Fields
+/// - `size_cr_border_width`: Size, corner radius, border width.
+/// - `primary_color`: Main fill color.
+/// - `shadow_color`: Shadow color.
+/// - `render_params`: Additional rendering parameters.
+/// - `ripple_params`: Ripple effect parameters.
+/// - `ripple_color`: Ripple color.
+/// - `g2_k_value`: G2 curve parameter for rounded rectangles.
+///
+/// # Example
+/// ```
+/// use tessera_ui_basic_components::pipelines::shape::ShapeUniforms;
+/// let uniforms = ShapeUniforms {
+///     size_cr_border_width: glam::Vec4::ZERO,
+///     primary_color: glam::Vec4::ONE,
+///     shadow_color: glam::Vec4::ZERO,
+///     render_params: glam::Vec4::ZERO,
+///     ripple_params: glam::Vec4::ZERO,
+///     ripple_color: glam::Vec4::ZERO,
+///     g2_k_value: 0.0,
+/// };
+/// ```
 #[derive(ShaderType, Clone, Copy, Debug, PartialEq)]
 pub struct ShapeUniforms {
     pub size_cr_border_width: Vec4,
@@ -27,7 +69,18 @@ pub struct ShapeUniforms {
     pub g2_k_value: f32,
 }
 
-/// Vertex for any shapes
+/// Vertex for any shapes.
+///
+/// # Fields
+/// - `position`: Position of the vertex (x, y, z).
+/// - `color`: Color of the vertex (r, g, b).
+/// - `local_pos`: Normalized local position relative to rect center.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let v = ShapeVertex::new([0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0]);
+/// ```
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq)]
 pub struct ShapeVertex {
@@ -67,12 +120,27 @@ impl ShapeVertex {
     }
 }
 
+/// Vertex data for shape triangulation.
+///
+/// # Fields
+/// - `polygon_vertices`: Polygon vertices.
+/// - `vertex_colors`: Per-vertex colors.
+/// - `vertex_local_pos`: Per-vertex local positions.
 pub struct ShapeVertexData<'a> {
     pub polygon_vertices: &'a [[f32; 2]],
     pub vertex_colors: &'a [[f32; 3]],
     pub vertex_local_pos: &'a [[f32; 2]],
 }
 
+/// Pipeline for rendering vector shapes in UI components.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use tessera_ui_basic_components::pipelines::shape::ShapePipeline;
+///
+/// let pipeline = ShapePipeline::new(&device, &config, sample_count);
+/// ```
 pub struct ShapePipeline {
     pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,

@@ -1,3 +1,23 @@
+#![allow(clippy::needless_return)]
+//! # Switch Component Module
+//!
+//! This module provides a customizable toggle switch UI component for boolean state management in the Tessera UI framework.
+//! The `switch` component is commonly used for toggling settings or preferences in user interfaces, offering a modern,
+//! animated on/off control. It supports both controlled (external state via [`SwitchState`]) and uncontrolled usage
+//! (via `checked` and `on_toggle` parameters), and allows for appearance customization such as track and thumb colors, size, and padding.
+//!
+//! ## Typical Usage
+//! - Settings panels, feature toggles, or any scenario requiring a boolean on/off control.
+//! - Can be integrated into forms or interactive UIs where immediate feedback and smooth animation are desired.
+//!
+//! ## Key Features
+//! - Stateless component model: state is managed externally or via parameters, following Tessera's architecture.
+//! - Animation support for smooth transitions between checked and unchecked states.
+//! - Highly customizable appearance and behavior via [`SwitchArgs`].
+//! - Designed for ergonomic integration with the Tessera component tree and event system.
+//!
+//! See [`SwitchArgs`], [`SwitchState`], and [`switch()`] for details and usage examples.
+
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -19,7 +39,30 @@ use crate::{
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 
-/// State for the `switch` component, handling animation.
+///
+/// Represents the state for the `switch` component, including checked status and animation progress.
+///
+/// This struct can be shared between multiple switches or managed externally to control the checked state and animation.
+///
+/// # Fields
+/// - `checked`: Indicates whether the switch is currently on (`true`) or off (`false`).
+///
+/// # Example
+/// ```
+/// use tessera_ui_basic_components::switch::{SwitchState, SwitchArgs, switch};
+/// use std::sync::{Arc};
+/// use parking_lot::Mutex;
+///
+/// let state = Arc::new(Mutex::new(SwitchState::new(false)));
+///
+/// switch(SwitchArgs {
+///     state: Some(state.clone()),
+///     on_toggle: Arc::new(move |checked| {
+///         state.lock().checked = checked;
+///     }),
+///     ..Default::default()
+/// });
+/// ```
 pub struct SwitchState {
     pub checked: bool,
     progress: Mutex<f32>,
@@ -27,6 +70,10 @@ pub struct SwitchState {
 }
 
 impl SwitchState {
+    /// Creates a new `SwitchState` with the given initial checked state.
+    ///
+    /// # Arguments
+    /// * `initial_state` - Whether the switch should start as checked (`true`) or unchecked (`false`).
     pub fn new(initial_state: bool) -> Self {
         Self {
             checked: initial_state,
@@ -35,13 +82,42 @@ impl SwitchState {
         }
     }
 
+    /// Toggles the checked state and updates the animation timestamp.
     pub fn toggle(&mut self) {
         self.checked = !self.checked;
         *self.last_toggle_time.lock() = Some(Instant::now());
     }
 }
 
-/// Arguments for the `switch` component.
+///
+/// Arguments for configuring the `switch` component.
+///
+/// This struct allows customization of the switch's state, appearance, and behavior.
+///
+/// # Fields
+/// - `state`: Optional external state for the switch. If provided, the switch will use and update this state.
+/// - `checked`: Initial checked state if `state` is not provided.
+/// - `on_toggle`: Callback invoked when the switch is toggled, receiving the new checked state.
+/// - `width`: Width of the switch track.
+/// - `height`: Height of the switch track.
+/// - `track_color`: Color of the track when unchecked.
+/// - `track_checked_color`: Color of the track when checked.
+/// - `thumb_color`: Color of the thumb (handle).
+/// - `thumb_padding`: Padding between the thumb and the track edge.
+///
+/// # Example
+/// ```
+/// use tessera_ui_basic_components::switch::{SwitchArgs, switch};
+/// use std::sync::Arc;
+///
+/// switch(SwitchArgs {
+///     checked: true,
+///     on_toggle: Arc::new(|checked| {
+///         println!("Switch toggled: {}", checked);
+///     }),
+///     ..Default::default()
+/// });
+/// ```
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SwitchArgs {
@@ -73,6 +149,36 @@ pub struct SwitchArgs {
     pub thumb_padding: Dp,
 }
 
+impl Default for SwitchArgs {
+    fn default() -> Self {
+        SwitchArgsBuilder::default().build().unwrap()
+    }
+}
+
+///
+/// A UI component that displays a toggle switch for boolean state.
+///
+/// The `switch` component provides a customizable on/off control, commonly used for toggling settings.
+/// It can be controlled via external state (`SwitchState`) or by using the `checked` and `on_toggle` parameters.
+///
+/// # Arguments
+/// * `args` - Parameters for configuring the switch, see [`SwitchArgs`](crate::switch::SwitchArgs).
+///
+/// # Example
+/// ```
+/// use tessera_ui_basic_components::switch::{SwitchArgs, switch};
+/// use std::sync::Arc;
+///
+/// switch(SwitchArgs {
+///     checked: false,
+///     on_toggle: Arc::new(|checked| {
+///         println!("Switch toggled: {}", checked);
+///     }),
+///     width: tessera_ui::Dp(60.0),
+///     height: tessera_ui::Dp(36.0),
+///     ..Default::default()
+/// });
+/// ```
 #[tessera]
 pub fn switch(args: impl Into<SwitchArgs>) {
     let args: SwitchArgs = args.into();

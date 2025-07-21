@@ -9,6 +9,18 @@ use glam::Vec4;
 use tessera_ui::{DrawCommand, PxPosition, PxSize, renderer::drawer::DrawablePipeline, wgpu};
 
 #[derive(Debug, Clone)]
+/// Image pixel data for rendering.
+///
+/// # Fields
+/// - `data`: Raw pixel data (RGBA).
+/// - `width`: Image width in pixels.
+/// - `height`: Image height in pixels.
+///
+/// # Example
+/// ```rust,ignore
+/// use tessera_ui_basic_components::pipelines::image::ImageData;
+/// let img = ImageData { data: Arc::new(vec![255, 0, 0, 255]), width: 1, height: 1 };
+/// ```
 pub struct ImageData {
     pub data: Arc<Vec<u8>>,
     pub width: u32,
@@ -34,6 +46,13 @@ impl PartialEq for ImageData {
 impl Eq for ImageData {}
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+/// Command for rendering an image in a UI component.
+///
+/// # Example
+/// ```rust,ignore
+/// use tessera_ui_basic_components::pipelines::image::{ImageCommand, ImageData};
+/// let cmd = ImageCommand { data: img_data };
+/// ```
 pub struct ImageCommand {
     pub data: ImageData,
 }
@@ -56,6 +75,13 @@ struct ImageResources {
     uniform_buffer: wgpu::Buffer,
 }
 
+/// Pipeline for rendering images in UI components.
+///
+/// # Example
+/// ```rust,ignore
+/// use tessera_ui_basic_components::pipelines::image::ImagePipeline;
+/// let pipeline = ImagePipeline::new(&device, &config, sample_count);
+/// ```
 pub struct ImagePipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,

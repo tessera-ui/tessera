@@ -97,6 +97,16 @@ pub struct ShadowProps {
     pub smoothness: f32,
 }
 
+impl Default for ShadowProps {
+    fn default() -> Self {
+        Self {
+            color: Color::BLACK.with_alpha(0.25),
+            offset: [0.0, 2.0],
+            smoothness: 4.0,
+        }
+    }
+}
+
 /// Properties for ripple effect animation
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RippleProps {

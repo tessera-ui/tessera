@@ -1,3 +1,12 @@
+//! Fluid glass effect module for Tessera UI Basic Components.
+//!
+//! This module provides the core implementation for the "fluid glass" (frosted/distorted glass) visual effect,
+//! including parameter structures, builder patterns, and the main `fluid_glass` component.
+//! It enables highly customizable backgrounds with blur, tint, chromatic dispersion, noise, and ripple effects,
+//! suitable for creating modern, layered user interfaces with enhanced depth and focus.
+//! Typical use cases include backgrounds for buttons, sliders, switches, and other interactive UI elements
+//! where a dynamic, visually appealing glass-like surface is desired.
+
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -125,6 +134,37 @@ impl DrawCommand for FluidGlassCommand {
 }
 
 #[tessera]
+/// Creates a fluid glass effect component, which serves as a dynamic and visually appealing background.
+///
+/// The `fluid_glass` component simulates the look of frosted or distorted glass with a fluid,
+/// animated texture. It can be used to create modern, layered user interfaces where the background
+/// content is blurred and stylized, enhancing depth and focus. The effect is highly customizable
+/// through `FluidGlassArgs`.
+///
+/// # Example
+///
+/// ```
+/// use tessera_ui_basic_components::{
+///     fluid_glass::{fluid_glass, FluidGlassArgs},
+///     text::text,
+/// };
+///
+/// fluid_glass(FluidGlassArgs::default(), None, || {
+///     text("Content on glass".to_string());
+/// });
+/// ```
+///
+/// # Arguments
+///
+/// * `args` - A `FluidGlassArgs` struct that specifies the appearance and behavior of the glass
+///   effect. This includes properties like tint color, shape, blur radius, and noise level.
+///   The builder pattern is recommended for constructing the arguments.
+///
+/// * `ripple_state` - An optional `Arc<RippleState>` to enable and manage a ripple effect on user
+///   interaction, such as a click. When `None`, no ripple effect is applied.
+///
+/// * `child` - A closure that defines the child components to be rendered on top of the glass surface.
+///   These children will be contained within the bounds of the `fluid_glass` component.
 pub fn fluid_glass(
     args: FluidGlassArgs,
     ripple_state: Option<Arc<RippleState>>,

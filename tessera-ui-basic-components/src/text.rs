@@ -1,3 +1,34 @@
+//! Text component module for Tessera UI.
+//!
+//! This module provides the [`text`] component and its configuration types for rendering styled, single-style text within the Tessera UI framework.
+//! It is designed for displaying static or dynamic text content with customizable color, font size, and line height, supporting Unicode and DPI scaling.
+//!
+//! Typical use cases include labels, headings, captions, and any UI element requiring straightforward text rendering.
+//! The component is stateless and integrates with Tessera's layout and rendering systems, automatically adapting to parent constraints and device pixel density.
+//!
+//! The builder-pattern [`TextArgs`] struct allows ergonomic and flexible configuration, with sensible defaults for most properties.
+//! Conversions from `String` and `&str` are supported for convenience.
+//!
+//! # Examples
+//!
+//! Basic usage:
+//! ```
+//! use tessera_ui_basic_components::text::{text, TextArgs};
+//! text("Hello, Tessera!");
+//! ```
+//!
+//! Custom styling:
+//! ```
+//! use tessera_ui_basic_components::text::{text, TextArgsBuilder};
+//! use tessera_ui::{Color, Dp};
+//! let args = TextArgsBuilder::default()
+//!     .text("Styled".to_string())
+//!     .color(Color::from_rgb(0.2, 0.4, 0.8))
+//!     .size(Dp(32.0))
+//!     .build()
+//!     .unwrap();
+//! text(args);
+//! ```
 use derive_builder::Builder;
 use tessera_ui::{Color, ComputedData, DimensionValue, Dp, Px};
 use tessera_ui_macros::tessera;
@@ -127,12 +158,33 @@ pub struct TextArgs {
     pub line_height: Option<Dp>,
 }
 
+/// Converts a [`String`] into [`TextArgs`] using the builder pattern.
+///
+/// This allows convenient usage of string literals or owned strings as text arguments
+/// for the [`text`] component.
+///
+/// # Example
+/// ```
+/// use tessera_ui_basic_components::text::TextArgs;
+///
+/// let args: TextArgs = "Hello, Tessera!".to_string().into();
+/// ```
 impl From<String> for TextArgs {
     fn from(val: String) -> Self {
         TextArgsBuilder::default().text(val).build().unwrap()
     }
 }
 
+/// Converts a string slice (`&str`) into [`TextArgs`] using the builder pattern.
+///
+/// This enables ergonomic conversion from string literals for the [`text`] component.
+///
+/// # Example
+/// ```
+/// use tessera_ui_basic_components::text::TextArgs;
+///
+/// let args: TextArgs = "Quick text".into();
+/// ```
 impl From<&str> for TextArgs {
     fn from(val: &str) -> Self {
         TextArgsBuilder::default()
