@@ -53,6 +53,8 @@
 
 use std::collections::VecDeque;
 
+use winit::keyboard::ModifiersState;
+
 /// Maximum number of keyboard events to keep in the queue.
 ///
 /// This constant limits the size of the keyboard event queue to prevent unbounded
@@ -93,7 +95,7 @@ const KEEP_EVENTS_COUNT: usize = 10;
 /// let events = keyboard_state.take_events();
 /// assert_eq!(events.len(), 1);
 /// ```
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct KeyboardState {
     /// Internal queue storing keyboard events in chronological order.
     ///
@@ -101,6 +103,8 @@ pub struct KeyboardState {
     /// maintaining FIFO (First In, First Out) ordering. The queue is automatically
     /// bounded by [`KEEP_EVENTS_COUNT`] to prevent memory issues.
     events: VecDeque<winit::event::KeyEvent>,
+    /// Current state of the keyboard modifiers (e.g., Shift, Ctrl, Alt).
+    modifiers: ModifiersState,
 }
 
 impl KeyboardState {
@@ -182,5 +186,18 @@ impl KeyboardState {
     /// ```
     pub fn take_events(&mut self) -> Vec<winit::event::KeyEvent> {
         self.events.drain(..).collect()
+    }
+
+    /// Updates the current state of the keyboard modifiers.
+    ///
+    /// This should be called whenever a `ModifiersChanged` event is received
+    /// from the windowing system.
+    pub fn update_modifiers(&mut self, new_state: ModifiersState) {
+        self.modifiers = new_state;
+    }
+
+    /// Returns the current state of the keyboard modifiers.
+    pub fn modifiers(&self) -> ModifiersState {
+        self.modifiers
     }
 }

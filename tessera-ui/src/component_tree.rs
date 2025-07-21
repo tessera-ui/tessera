@@ -114,6 +114,7 @@ impl ComponentTree {
         mut cursor_events: Vec<CursorEvent>,
         mut keyboard_events: Vec<winit::event::KeyEvent>,
         mut ime_events: Vec<winit::event::Ime>,
+        modifiers: winit::keyboard::ModifiersState,
         compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
         gpu: &wgpu::Device,
     ) -> (Vec<(Command, PxSize, PxPosition)>, WindowRequests) {
@@ -205,8 +206,9 @@ impl ComponentTree {
                     cursor_position: current_cursor_position,
                     cursor_events: &mut cursor_events,
                     keyboard_events: &mut keyboard_events,
-                    requests: &mut window_requests,
                     ime_events: &mut ime_events,
+                    key_modifiers: modifiers,
+                    requests: &mut window_requests,
                 };
                 state_handler(input);
                 // if state_handler set ime request, it's position must be None, and we set it here

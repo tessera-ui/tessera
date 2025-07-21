@@ -183,6 +183,9 @@ pub struct StateHandlerInput<'a> {
     pub keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
     /// IME events from the event loop, if any.
     pub ime_events: &'a mut Vec<winit::event::Ime>,
+    /// The current state of the keyboard modifiers at the time of the event.
+    /// This allows for implementing keyboard shortcuts (e.g., Ctrl+C).
+    pub key_modifiers: winit::keyboard::ModifiersState,
     /// A context for making requests to the window for the current frame.
     pub requests: &'a mut WindowRequests,
 }

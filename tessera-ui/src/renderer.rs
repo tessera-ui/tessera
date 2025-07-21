@@ -617,6 +617,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             cursor_events,
             keyboard_events,
             ime_events,
+            keyboard_state.modifiers(),
             app.resource_manager.clone(),
             &app.gpu,
         );
@@ -933,6 +934,10 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
             WindowEvent::KeyboardInput { event, .. } => {
                 debug!("Keyboard input: {event:?}");
                 self.keyboard_state.push_event(event);
+            }
+            WindowEvent::ModifiersChanged(modifiers) => {
+                debug!("Modifiers changed: {modifiers:?}");
+                self.keyboard_state.update_modifiers(modifiers.state());
             }
             WindowEvent::Ime(ime_event) => {
                 debug!("IME event: {ime_event:?}");
