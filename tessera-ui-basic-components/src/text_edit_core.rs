@@ -329,7 +329,39 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                 }
             }
 
-            // Store calculated selection rectangles
+            // --- Filter and clip selection rects to visible area ---
+            // Only show highlight rects that are (partially) within the visible area
+            let visible_x0 = Px(0);
+            let visible_y0 = Px(0);
+            let visible_x1 = max_width_pixels.unwrap_or(Px(i32::MAX));
+            let visible_y1 = max_height_pixels.unwrap_or(Px(i32::MAX));
+            selection_rects = selection_rects
+                .into_iter()
+                .filter_map(|mut rect| {
+                    let rect_x1 = rect.x + rect.width;
+                    let rect_y1 = rect.y + rect.height;
+                    // If completely outside visible area, skip
+                    if rect_x1 <= visible_x0
+                        || rect.y >= visible_y1
+                        || rect.x >= visible_x1
+                        || rect_y1 <= visible_y0
+                    {
+                        None
+                    } else {
+                        // Clip to visible area
+                        let new_x = rect.x.max(visible_x0);
+                        let new_y = rect.y.max(visible_y0);
+                        let new_x1 = rect_x1.min(visible_x1);
+                        let new_y1 = rect_y1.min(visible_y1);
+                        rect.x = new_x;
+                        rect.y = new_y;
+                        rect.width = (new_x1 - new_x).max(Px(0));
+                        rect.height = (new_y1 - new_y).max(Px(0));
+                        Some(rect)
+                    }
+                })
+                .collect();
+            // Write filtered rects to state
             state_clone.write().current_selection_rects = selection_rects;
 
             // Handle cursor positioning (cursor comes after selection rects)
