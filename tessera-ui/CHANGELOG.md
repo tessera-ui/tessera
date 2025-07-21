@@ -1,3 +1,10 @@
+## [v0.5.0] - 2025-07-21 +08:00
+
+### Changes
+- feat(tessera-ui): expose keyboard modifier state for shortcuts
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v0.4.0...tessera-ui-v0.5.0)
+
 ## [v0.4.0] - 2025-07-20 +08:00
 
 ### Changes
