@@ -50,30 +50,31 @@ The project is currently in its early stages of development. Feel free to explor
 
 The roadmap is now organized by crate:
 
-### tessera-ui (v1.0.0 roadmap)
+### tessera-ui (v2.0.0 roadmap)
 
-- ~~IME event (windows, linux, macOS) (partially completed)~~
-- ~~Window minimize handling & callback API~~
-- ~~Window close callback API~~
+- IME support for Android
+- API optimization
+  - Pass metadata directly instead of `Option`
+  - and more...
+- Optimize rendering performance
+- Optimize rendering based on commands, goals:
+  - tier1: Analyze and update only necessary rendering areas
+  - tier2: Automatically analyze whether to actually update rendering based on final rendering commands
+- Design how to provide async API to components
+- Optimize touch screen adaptation
 
-### tessera-ui-basic-components (v1.0.0 roadmap)
+### tessera-ui-basic-components (v2.0.0 roadmap)
 
-- ~~row~~
-- ~~column~~
-- ~~boxed~~
-- ~~text~~
-- ~~spacer~~
-- ~~text_editor (partially completed)~~
-- ~~button~~
-- ~~surface~~
-- ~~fluid_glass~~
-- ~~scrollable~~
-- ~~image~~
-- ~~checkbox~~
-- ~~switch~~
-- ~~slider~~
-- ~~progress~~
-- ~~dialog~~
+- Beautify/optimize these components
+  - checkbox
+  - dialog
+  - slider
+  - text_editor
+  - progress
+- `image` component supports more formats
+- Add these components
+  - radio
+  - bottom sheet
 
 ## Core Features
 
