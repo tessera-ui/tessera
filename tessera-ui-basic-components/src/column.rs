@@ -200,14 +200,8 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                 );
 
                 // measure_node will fetch the child's intrinsic constraint and merge it with parent_offered_constraint_for_child
-                let child_result = tessera_ui::measure_node(
-                    child_id,
-                    &parent_offered_constraint_for_child,
-                    input.tree,
-                    input.metadatas,
-                    input.compute_resource_manager.clone(),
-                    input.gpu,
-                )?;
+                let child_result =
+                    input.measure_child(child_id, &parent_offered_constraint_for_child)?;
 
                 children_sizes[child_idx] = Some(child_result);
                 total_height_of_unweighted_children += child_result.height;
@@ -232,14 +226,8 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                     );
 
                     // measure_node will fetch the child's intrinsic constraint and merge it
-                    let child_result = tessera_ui::measure_node(
-                        child_id,
-                        &parent_offered_constraint_for_child,
-                        input.tree,
-                        input.metadatas,
-                        input.compute_resource_manager.clone(),
-                        input.gpu,
-                    )?;
+                    let child_result =
+                        input.measure_child(child_id, &parent_offered_constraint_for_child)?;
 
                     children_sizes[child_idx] = Some(child_result);
                     max_child_width = max_child_width.max(child_result.width);
@@ -317,14 +305,8 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
                 );
 
                 // measure_node will fetch the child's intrinsic constraint and merge it
-                let child_result = tessera_ui::measure_node(
-                    child_id,
-                    &parent_offered_constraint_for_child,
-                    input.tree,
-                    input.metadatas,
-                    input.compute_resource_manager.clone(),
-                    input.gpu,
-                )?;
+                let child_result =
+                    input.measure_child(child_id, &parent_offered_constraint_for_child)?;
 
                 children_sizes[i] = Some(child_result);
                 total_children_measured_height += child_result.height;

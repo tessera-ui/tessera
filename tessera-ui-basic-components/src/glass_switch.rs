@@ -260,21 +260,10 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
         );
         // Measure both children in parallel
         let nodes_constraints = vec![(track_id, track_constraint), (thumb_id, thumb_constraint)];
-        let sizes_map = tessera_ui::measure_nodes(
-            nodes_constraints,
-            input.tree,
-            input.metadatas,
-            input.compute_resource_manager.clone(),
-            input.gpu,
-        );
-        let _track_size = sizes_map
-            .get(&track_id)
-            .and_then(|r| r.as_ref().ok())
-            .expect("track measurement failed");
-        let thumb_size = sizes_map
-            .get(&thumb_id)
-            .and_then(|r| r.as_ref().ok())
-            .expect("thumb measurement failed");
+        let sizes_map = input.measure_children(nodes_constraints)?;
+
+        let _track_size = sizes_map.get(&track_id).unwrap();
+        let thumb_size = sizes_map.get(&thumb_id).unwrap();
         let self_width_px = args.width.to_px();
         let self_height_px = args.height.to_px();
         let thumb_padding_px = args.thumb_padding.to_px();
@@ -284,20 +273,18 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
             .map(|s| *s.lock().progress.lock())
             .unwrap_or(if args.checked { 1.0 } else { 0.0 });
         // Place track at origin
-        tessera_ui::place_node(
+        input.place_child(
             track_id,
             PxPosition::new(tessera_ui::Px(0), tessera_ui::Px(0)),
-            input.metadatas,
         );
         // Place thumb according to progress
         let start_x = thumb_padding_px;
         let end_x = self_width_px - thumb_size.width - thumb_padding_px;
         let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * progress;
         let thumb_y = (self_height_px - thumb_size.height) / 2;
-        tessera_ui::place_node(
+        input.place_child(
             thumb_id,
             PxPosition::new(tessera_ui::Px(thumb_x as i32), thumb_y),
-            input.metadatas,
         );
         Ok(ComputedData {
             width: self_width_px,

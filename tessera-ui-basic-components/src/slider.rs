@@ -251,15 +251,8 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
             DimensionValue::Fixed(self_width),
             DimensionValue::Fixed(self_height),
         );
-        tessera_ui::measure_node(
-            track_id,
-            &track_constraint,
-            input.tree,
-            input.metadatas,
-            input.compute_resource_manager.clone(),
-            input.gpu,
-        )?;
-        tessera_ui::place_node(track_id, PxPosition::new(Px(0), Px(0)), input.metadatas);
+        input.measure_child(track_id, &track_constraint)?;
+        input.place_child(track_id, PxPosition::new(Px(0), Px(0)));
 
         Ok(ComputedData {
             width: self_width,

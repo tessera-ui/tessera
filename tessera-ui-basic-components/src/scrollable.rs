@@ -21,7 +21,7 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     ComputedData, Constraint, CursorEventContent, DimensionValue, Px, PxPosition,
-    focus_state::Focus, measure_node, place_node,
+    focus_state::Focus,
 };
 use tessera_ui_macros::tessera;
 
@@ -255,14 +255,7 @@ pub fn scrollable(
             }
             // Measure the child with child constraint
             let child_node_id = input.children_ids[0]; // Scrollable should have exactly one child
-            let child_measurement = measure_node(
-                child_node_id,
-                &child_constraint,
-                input.tree,
-                input.metadatas,
-                input.compute_resource_manager.clone(),
-                input.gpu,
-            )?;
+            let child_measurement = input.measure_child(child_node_id, &child_constraint)?;
             // Update the child position and size in the state
             state.write().child_size = child_measurement;
 
@@ -274,7 +267,7 @@ pub fn scrollable(
             };
 
             // Place child at current interpolated position
-            place_node(child_node_id, current_child_position, input.metadatas);
+            input.place_child(child_node_id, current_child_position);
             // Calculate the size of the scrollable area
             let width = match merged_constraint.width {
                 DimensionValue::Fixed(w) => w,

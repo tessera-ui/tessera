@@ -17,7 +17,7 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
-    PxPosition, measure_node, place_node, winit::window::CursorIcon,
+    PxPosition, winit::window::CursorIcon,
 };
 use tessera_ui_macros::tessera;
 
@@ -195,22 +195,15 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         );
         // Measure the child with the computed constraint
         let child_measurement = if !input.children_ids.is_empty() {
-            let child_measurement = measure_node(
-                input.children_ids[0],
-                &child_constraint,
-                input.tree,
-                input.metadatas,
-                input.compute_resource_manager.clone(),
-                input.gpu,
-            )?;
+            let child_measurement =
+                input.measure_child(input.children_ids[0], &child_constraint)?;
             // place the child
-            place_node(
+            input.place_child(
                 input.children_ids[0],
                 PxPosition {
                     x: args.padding.into(),
                     y: args.padding.into(),
                 },
-                input.metadatas,
             );
             child_measurement
         } else {
@@ -337,9 +330,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             }
         };
 
-        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.push_draw_command(drawable);
-        }
+        input.metadata_mut().push_draw_command(drawable);
 
         // Calculate the final size of the surface
         let padding_px: Px = args_measure_clone.padding.into();

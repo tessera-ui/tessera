@@ -221,14 +221,8 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
                 );
 
                 // measure_node will fetch the child's intrinsic constraint and merge it
-                let child_result = tessera_ui::measure_node(
-                    child_id,
-                    &parent_offered_constraint_for_child,
-                    input.tree,
-                    input.metadatas,
-                    input.compute_resource_manager.clone(),
-                    input.gpu,
-                )?;
+                let child_result =
+                    input.measure_child(child_id, &parent_offered_constraint_for_child)?;
 
                 children_sizes[child_idx] = Some(child_result);
                 total_width_of_unweighted_children += child_result.width;
@@ -252,14 +246,8 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
                     );
 
                     // measure_node will fetch the child's intrinsic constraint and merge it
-                    let child_result = tessera_ui::measure_node(
-                        child_id,
-                        &parent_offered_constraint_for_child,
-                        input.tree,
-                        input.metadatas,
-                        input.compute_resource_manager.clone(),
-                        input.gpu,
-                    )?;
+                    let child_result =
+                        input.measure_child(child_id, &parent_offered_constraint_for_child)?;
 
                     children_sizes[child_idx] = Some(child_result);
                     max_child_height = max_child_height.max(child_result.height);
@@ -326,14 +314,8 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
                 );
 
                 // measure_node will fetch the child's intrinsic constraint and merge it
-                let child_result = tessera_ui::measure_node(
-                    child_id,
-                    &parent_offered_constraint_for_child,
-                    input.tree,
-                    input.metadatas,
-                    input.compute_resource_manager.clone(),
-                    input.gpu,
-                )?;
+                let child_result =
+                    input.measure_child(child_id, &parent_offered_constraint_for_child)?;
 
                 children_sizes[i] = Some(child_result);
                 total_children_measured_width += child_result.width;

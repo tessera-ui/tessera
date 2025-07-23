@@ -12,7 +12,7 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
-    PxPosition, measure_node, place_node, renderer::DrawCommand, winit::window::CursorIcon,
+    PxPosition, renderer::DrawCommand, winit::window::CursorIcon,
 };
 use tessera_ui_macros::tessera;
 
@@ -197,21 +197,14 @@ pub fn fluid_glass(
         );
 
         let child_measurement = if !input.children_ids.is_empty() {
-            let child_measurement = measure_node(
-                input.children_ids[0],
-                &child_constraint,
-                input.tree,
-                input.metadatas,
-                input.compute_resource_manager.clone(),
-                input.gpu,
-            )?;
-            place_node(
+            let child_measurement =
+                input.measure_child(input.children_ids[0], &child_constraint)?;
+            input.place_child(
                 input.children_ids[0],
                 PxPosition {
                     x: args.padding.into(),
                     y: args.padding.into(),
                 },
-                input.metadatas,
             );
             child_measurement
         } else {
@@ -230,10 +223,9 @@ pub fn fluid_glass(
                 radius: args.blur_radius,
                 direction: (0.0, 1.0), // Vertical
             };
-            if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-                metadata.push_compute_command(blur_command);
-                metadata.push_compute_command(blur_command2);
-            }
+            let mut metadata = input.metadata_mut();
+            metadata.push_compute_command(blur_command);
+            metadata.push_compute_command(blur_command2);
         }
 
         if let Some(contrast_value) = args.contrast {
@@ -241,19 +233,16 @@ pub fn fluid_glass(
                 MeanCommand::new(input.gpu, &mut input.compute_resource_manager.write());
             let contrast_command =
                 ContrastCommand::new(contrast_value, mean_command.result_buffer_ref());
-            if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-                metadata.push_compute_command(mean_command);
-                metadata.push_compute_command(contrast_command);
-            }
+            let mut metadata = input.metadata_mut();
+            metadata.push_compute_command(mean_command);
+            metadata.push_compute_command(contrast_command);
         }
 
         let drawable = FluidGlassCommand {
             args: args_measure_clone.clone(),
         };
 
-        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.push_draw_command(drawable);
-        }
+        input.metadata_mut().push_draw_command(drawable);
 
         let padding_px: Px = args_measure_clone.padding.into();
         let min_width = child_measurement.width + padding_px * 2;

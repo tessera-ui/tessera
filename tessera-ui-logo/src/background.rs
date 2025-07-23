@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use derive_builder::Builder;
 use tessera_ui::{
     ComputedData, Constraint, CursorEventContent, DimensionValue, DrawCommand, DrawablePipeline,
-    PressKeyEventType, Px, PxPosition, PxSize, StateHandlerInput, place_node,
+    PressKeyEventType, Px, PxPosition, PxSize, StateHandlerInput,
     wgpu::{self, util::DeviceExt},
     winit::window::CursorIcon,
 };
@@ -170,9 +170,9 @@ pub fn background<const N: usize>(args: BackgroundArgs, children: [BoxedItem; N]
             DimensionValue::Fill { max, .. } => max.unwrap_or(Px(0)),
         };
 
-        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.push_draw_command(BackgroundCommand { time: args.time });
-        }
+        input
+            .metadata_mut()
+            .push_draw_command(BackgroundCommand { time: args.time });
 
         let child_constraint =
             Constraint::new(DimensionValue::Fixed(width), DimensionValue::Fixed(height));
@@ -180,14 +180,7 @@ pub fn background<const N: usize>(args: BackgroundArgs, children: [BoxedItem; N]
         if N > 0 {
             for i in 0..input.children_ids.len() {
                 let child_id = input.children_ids[i];
-                let child_size = tessera_ui::measure_node(
-                    child_id,
-                    &child_constraint,
-                    input.tree,
-                    input.metadatas,
-                    input.compute_resource_manager.clone(),
-                    input.gpu,
-                )?;
+                let child_size = input.measure_child(child_id, &child_constraint)?;
 
                 let (x, y) = match args.alignment {
                     Alignment::TopStart => (Px(0), Px(0)),
@@ -208,7 +201,7 @@ pub fn background<const N: usize>(args: BackgroundArgs, children: [BoxedItem; N]
                     Alignment::BottomEnd => (width - child_size.width, height - child_size.height),
                 };
 
-                place_node(child_id, PxPosition::new(x, y), input.metadatas);
+                input.place_child(child_id, PxPosition::new(x, y));
             }
         }
 

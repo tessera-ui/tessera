@@ -10,7 +10,7 @@
 //!
 //! This module also provides supporting types and a macro for ergonomic usage.
 use derive_builder::Builder;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node};
+use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition};
 use tessera_ui_macros::tessera;
 
 use crate::alignment::Alignment;
@@ -119,14 +119,7 @@ pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxe
 
         for i in 0..N {
             let child_id = input.children_ids[i];
-            let child_result = tessera_ui::measure_node(
-                child_id,
-                &effective_constraint,
-                input.tree,
-                input.metadatas,
-                input.compute_resource_manager.clone(),
-                input.gpu,
-            )?;
+            let child_result = input.measure_child(child_id, &effective_constraint)?;
             max_child_width = max_child_width.max(child_result.width);
             max_child_height = max_child_height.max(child_result.height);
             children_sizes[i] = Some(child_result);
@@ -201,7 +194,7 @@ pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxe
                         final_height - child_size.height,
                     ),
                 };
-                place_node(child_id, PxPosition::new(x, y), input.metadatas);
+                input.place_child(child_id, PxPosition::new(x, y));
             }
         }
 

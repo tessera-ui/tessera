@@ -250,14 +250,7 @@ pub fn switch(args: impl Into<SwitchArgs>) {
                 max: None,
             },
         );
-        let thumb_size = tessera_ui::measure_node(
-            thumb_id,
-            &thumb_constraint,
-            input.tree,
-            input.metadatas,
-            input.compute_resource_manager.clone(),
-            input.gpu,
-        )?;
+        let thumb_size = input.measure_child(thumb_id, &thumb_constraint)?;
 
         let self_width_px = args.width.to_px();
         let self_height_px = args.height.to_px();
@@ -275,10 +268,9 @@ pub fn switch(args: impl Into<SwitchArgs>) {
 
         let thumb_y = (self_height_px - thumb_size.height) / 2;
 
-        tessera_ui::place_node(
+        input.place_child(
             thumb_id,
             PxPosition::new(tessera_ui::Px(thumb_x as i32), thumb_y),
-            input.metadatas,
         );
 
         let track_color = if args.checked {
@@ -292,9 +284,7 @@ pub fn switch(args: impl Into<SwitchArgs>) {
             g2_k_value: 2.0, // Use G1 corners here specifically
             shadow: None,
         };
-        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.push_draw_command(track_command);
-        }
+        input.metadata_mut().push_draw_command(track_command);
 
         Ok(ComputedData {
             width: self_width_px,

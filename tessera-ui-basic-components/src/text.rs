@@ -242,9 +242,7 @@ pub fn text(args: impl Into<TextArgs>) {
         let drawable = TextCommand { data: text_data };
 
         // Use the new unified command system to add the text rendering command
-        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.push_draw_command(drawable);
-        }
+        input.metadata_mut().push_draw_command(drawable);
 
         Ok(ComputedData {
             width: size[0].into(),

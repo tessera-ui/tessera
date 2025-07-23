@@ -22,8 +22,7 @@ use arboard::Clipboard;
 use glyphon::Edit;
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus, measure_node,
-    place_node, winit,
+    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus, winit,
 };
 use tessera_ui_macros::tessera;
 use unicode_segmentation::UnicodeSegmentation;
@@ -427,19 +426,8 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
             // Handle selection rectangle positioning
             for (i, rect_def) in selection_rects.iter().enumerate() {
                 if let Some(rect_node_id) = input.children_ids.get(i).copied() {
-                    let _ = measure_node(
-                        rect_node_id,
-                        input.parent_constraint,
-                        input.tree,
-                        input.metadatas,
-                        input.compute_resource_manager.clone(),
-                        input.gpu,
-                    );
-                    place_node(
-                        rect_node_id,
-                        PxPosition::new(rect_def.x, rect_def.y),
-                        input.metadatas,
-                    );
+                    let _ = input.measure_child(rect_node_id, input.parent_constraint);
+                    input.place_child(rect_node_id, PxPosition::new(rect_def.x, rect_def.y));
                 }
             }
 
@@ -483,24 +471,15 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                 let cursor_pos = PxPosition::new(Px(cursor_pos_raw.0), Px(cursor_pos_raw.1));
                 let cursor_node_index = selection_rects_len;
                 if let Some(cursor_node_id) = input.children_ids.get(cursor_node_index).copied() {
-                    let _ = measure_node(
-                        cursor_node_id,
-                        input.parent_constraint,
-                        input.tree,
-                        input.metadatas,
-                        input.compute_resource_manager.clone(),
-                        input.gpu,
-                    );
-                    place_node(cursor_node_id, cursor_pos, input.metadatas);
+                    let _ = input.measure_child(cursor_node_id, input.parent_constraint);
+                    input.place_child(cursor_node_id, cursor_pos);
                 }
             }
 
             let drawable = TextCommand {
                 data: text_data.clone(),
             };
-            if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-                metadata.push_draw_command(drawable);
-            }
+            input.metadata_mut().push_draw_command(drawable);
 
             // Return constrained size - respect maximum height to prevent overflow
             let constrained_height = if let Some(max_h) = max_height_pixels {

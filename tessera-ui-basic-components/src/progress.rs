@@ -8,7 +8,7 @@
 //! Typical usage involves specifying the progress value and optional appearance parameters.
 //! The component is designed for integration into Tessera UI applications.
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, place_node};
+use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition};
 use tessera_ui_macros::tessera;
 
 use crate::{
@@ -122,15 +122,8 @@ pub fn progress(args: impl Into<ProgressArgs>) {
             DimensionValue::Fixed(self_width),
             DimensionValue::Fixed(self_height),
         );
-        tessera_ui::measure_node(
-            track_id,
-            &track_constraint,
-            input.tree,
-            input.metadatas,
-            input.compute_resource_manager.clone(),
-            input.gpu,
-        )?;
-        place_node(track_id, PxPosition::new(Px(0), Px(0)), input.metadatas);
+        input.measure_child(track_id, &track_constraint)?;
+        input.place_child(track_id, PxPosition::new(Px(0), Px(0)));
 
         // Measure and place the progress fill based on the `value`.
         let progress_width = Px((self_width.to_f32() * args.value.clamp(0.0, 1.0)) as i32);
@@ -138,15 +131,8 @@ pub fn progress(args: impl Into<ProgressArgs>) {
             DimensionValue::Fixed(progress_width),
             DimensionValue::Fixed(self_height),
         );
-        tessera_ui::measure_node(
-            progress_id,
-            &progress_constraint,
-            input.tree,
-            input.metadatas,
-            input.compute_resource_manager.clone(),
-            input.gpu,
-        )?;
-        place_node(progress_id, PxPosition::new(Px(0), Px(0)), input.metadatas);
+        input.measure_child(progress_id, &progress_constraint)?;
+        input.place_child(progress_id, PxPosition::new(Px(0), Px(0)));
 
         // The progress component itself is a container, its size is defined by the args.
         Ok(ComputedData {

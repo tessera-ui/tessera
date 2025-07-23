@@ -153,6 +153,70 @@ pub struct MeasureInput<'a> {
     pub gpu: &'a wgpu::Device,
 }
 
+impl<'a> MeasureInput<'a> {
+    /// Returns a mutable reference to the metadata of the current node.
+    ///
+    /// This is a convenience method that simplifies accessing the current node's metadata
+    /// from within a `measure` function. It encapsulates the `DashMap::get_mut` call and panics
+    /// if the metadata is not found, as it's an invariant that it must exist.
+    pub fn metadata_mut(&self) -> dashmap::mapref::one::RefMut<'_, NodeId, ComponentNodeMetaData> {
+        self.metadatas
+            .get_mut(&self.current_node_id)
+            .expect("Metadata for current node must exist during measure")
+    }
+
+    /// Measures all specified child nodes under the given constraint.
+    ///
+    /// Returns a map of each child's computed layout data, or the first measurement error encountered.
+    pub fn measure_children(
+        &self,
+        nodes_to_measure: Vec<(NodeId, Constraint)>,
+    ) -> Result<HashMap<NodeId, ComputedData>, MeasurementError> {
+        let results = measure_nodes(
+            nodes_to_measure,
+            self.tree,
+            self.metadatas,
+            self.compute_resource_manager.clone(),
+            self.gpu,
+        );
+
+        let mut successful_results = HashMap::new();
+        for (child_id, result) in results {
+            match result {
+                Ok(size) => successful_results.insert(child_id, size),
+                Err(e) => {
+                    debug!("Measurement error for child {child_id:?}: {e:?}");
+                    return Err(e);
+                }
+            };
+        }
+        Ok(successful_results)
+    }
+
+    /// Measures a single child node under the given constraint.
+    ///
+    /// Returns the computed layout data or a measurement error.
+    pub fn measure_child(
+        &self,
+        child_id: NodeId,
+        constraint: &Constraint,
+    ) -> Result<ComputedData, MeasurementError> {
+        measure_node(
+            child_id,
+            constraint,
+            self.tree,
+            self.metadatas,
+            self.compute_resource_manager.clone(),
+            self.gpu,
+        )
+    }
+
+    /// Sets the relative position of a child node.
+    pub fn place_child(&self, child_id: NodeId, position: PxPosition) {
+        place_node(child_id, position, self.metadatas);
+    }
+}
+
 /// A `StateHandlerFn` is a function that handles state changes for a component.
 ///
 /// The rule of execution order is:

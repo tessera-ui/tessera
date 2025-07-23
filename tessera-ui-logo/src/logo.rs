@@ -272,9 +272,7 @@ pub fn crystal_shard(args: CrystalShardArgs) {
             seed: [center[0], center[1]],
         };
 
-        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.push_draw_command(command);
-        }
+        input.metadata_mut().push_draw_command(command);
 
         Ok(ComputedData {
             width: Px((RADIUS * 2.0) as i32),

@@ -67,9 +67,7 @@ pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
         };
 
         // Add the cursor drawable to the component's metadata for rendering
-        if let Some(mut metadata) = input.metadatas.get_mut(&input.current_node_id) {
-            metadata.push_draw_command(drawable);
-        }
+        input.metadata_mut().push_draw_command(drawable);
 
         // Return the computed dimensions for layout calculation
         Ok(ComputedData {
