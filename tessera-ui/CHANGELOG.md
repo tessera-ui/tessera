@@ -1,3 +1,11 @@
+## [v1.1.0] - 2025-07-23 +08:00
+
+### Changes
+- chore: transfer repo to https://github.com/tessera-ui/tessera
+- refactor(core): provide ergonomic helpers on `MeasureInput`
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.0.0...tessera-ui-v1.1.0)
+
 ## [v1.0.0] - 2025-07-21 +08:00
 
 ### Changes
