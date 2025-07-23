@@ -54,7 +54,8 @@ The roadmap is now organized by crate:
 
 - IME support for Android
 - API optimization
-  - Pass metadata directly instead of `Option`
+  - ~~Easier way for `measure_node(s)`~~
+  - ~~Easier way for `place_node`~~
   - and more...
 - Optimize rendering performance
 - Optimize rendering based on commands, goals:

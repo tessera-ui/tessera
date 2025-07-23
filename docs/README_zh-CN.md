@@ -54,7 +54,8 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
 
 - android平台ime支持
 - 优化api
-  - metadata改为直接传入而非Option
+  - ~~更简单的 `measure_node(s)` 用法~~
+  - ~~更简单的 `place_node` 用法~~
   - and more...
 - 优化渲染性能
 - 根据指令优化渲染，目标:
