@@ -29,11 +29,11 @@
 [logo-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-logo
 [tessera-ui-badge]: https://img.shields.io/badge/tessera%20ui-source-blue?style=for-the-badge&logo=rust
 [tessera-ui-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera%20ui-blue.svg?style=for-the-badge&logo=docsdotrs
-[tessera-ui-docs-url]: https://shadow3aaa.github.io/tessera/tessera_ui
+[tessera-ui-docs-url]: https://tessera-ui.github.io/tessera/tessera_ui
 [tessera-ui-macros-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera%20ui%20macros-blue.svg?style=for-the-badge&logo=docsdotrs
-[tessera-macros-docs-url]: https://shadow3aaa.github.io/tessera/tessera_ui_macros
+[tessera-macros-docs-url]: https://tessera-ui.github.io/tessera/tessera_ui_macros
 [tessera-ui-basic-components-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera%20ui%20basic%20components-blue.svg?style=for-the-badge&logo=docsdotrs
-[tessera-ui-basic-components-docs-url]: https://shadow3aaa.github.io/tessera/tessera_ui_basic_components
+[tessera-ui-basic-components-docs-url]: https://tessera-ui.github.io/tessera/tessera_ui_basic_components
 [tessera-ui-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui
 [tessera-ui-basic-components-badge]: https://img.shields.io/badge/tessera%20ui%20basic%20components-source-blue?style=for-the-badge&logo=rust
 [tessera-ui-basic-components-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-basic-components
