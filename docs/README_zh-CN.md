@@ -228,3 +228,5 @@ Tessera 采用多 crate 的工作区结构：
 ## 许可证
 
 Tessera 采用 [MIT 许可证](https://github.com/shadow3aaa/tessera/blob/main/LICENSE) 或 [Apache 2.0 许可证](https://github.com/shadow3aaa/tessera/blob/main/LICENSE)双重许可。
+
+[![Star History Chart](https://app.repohistory.com/api/svg?repo=shadow3aaa/tessera&type=Date&background=0D1117&color=62C3F8)](https://app.repohistory.com/star-history)

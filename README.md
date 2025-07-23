@@ -228,3 +228,5 @@ Read the [Contributing Guide](CONTRIBUTING.md) for details on how to contribute 
 ## License
 
 Tessera is licensed under either of the [MIT License](LICENSE) or the [Apache License 2.0](LICENSE).
+
+[![Star History Chart](https://app.repohistory.com/api/svg?repo=shadow3aaa/tessera&type=Date&background=0D1117&color=62C3F8)](https://app.repohistory.com/star-history)
