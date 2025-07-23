@@ -1,7 +1,7 @@
 <div align="center">
 
 <a href="tessera-ui-logo">
-    <img src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
+    <img src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
 <a/>
 
 # **Tessera**
@@ -20,13 +20,13 @@
 </div>
 
 [readme-cn-badge]: https://img.shields.io/badge/README-简体中文-blue.svg?style=for-the-badge&logo=readme
-[readme-cn-url]: https://github.com/shadow3aaa/tessera/blob/main/docs/README_zh-CN.md
-[stars-badge]: https://img.shields.io/github/stars/shadow3aaa/tessera?style=for-the-badge&logo=github
-[stars-url]: https://github.com/shadow3aaa/tessera
-[ci-badge]: https://img.shields.io/github/actions/workflow/status/shadow3aaa/tessera/ci.yml?style=for-the-badge&label=CI&logo=githubactions
-[ci-url]: https://github.com/shadow3aaa/tessera/actions/workflows/ci.yml
+[readme-cn-url]: https://github.com/tessera-ui/tessera/blob/main/docs/README_zh-CN.md
+[stars-badge]: https://img.shields.io/github/stars/tessera-ui/tessera?style=for-the-badge&logo=github
+[stars-url]: https://github.com/tessera-ui/tessera
+[ci-badge]: https://img.shields.io/github/actions/workflow/status/tessera-ui/tessera/ci.yml?style=for-the-badge&label=CI&logo=githubactions
+[ci-url]: https://github.com/tessera-ui/tessera/actions/workflows/ci.yml
 [logo-badge]: https://img.shields.io/badge/logo-source-blue?style=for-the-badge&logo=rust
-[logo-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-logo
+[logo-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-logo
 [tessera-ui-badge]: https://img.shields.io/badge/tessera%20ui-source-blue?style=for-the-badge&logo=rust
 [tessera-ui-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera%20ui-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-ui-docs-url]: https://shadow3aaa.github.io/tessera/tessera_ui
@@ -34,11 +34,11 @@
 [tessera-macros-docs-url]: https://shadow3aaa.github.io/tessera/tessera_ui_macros
 [tessera-ui-basic-components-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera%20ui%20basic%20components-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-ui-basic-components-docs-url]: https://shadow3aaa.github.io/tessera/tessera_ui_basic_components
-[tessera-ui-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui
+[tessera-ui-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui
 [tessera-ui-basic-components-badge]: https://img.shields.io/badge/tessera%20ui%20basic%20components-source-blue?style=for-the-badge&logo=rust
-[tessera-ui-basic-components-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-basic-components
+[tessera-ui-basic-components-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-basic-components
 [tessera-macros-badge]: https://img.shields.io/badge/tessera_macros-source-blue?style=for-the-badge&logo=rust
-[tessera-macros-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros
+[tessera-macros-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-macros
 
 ## Introduction
 
@@ -83,7 +83,7 @@ The roadmap is now organized by crate:
 - **Powerful and Flexible Layout System**: A constraint-based (`Fixed`, `Wrap`, `Fill`) layout engine, combined with components like `row` and `column` (inspired by Jetpack Compose), makes it easy to implement responsive layouts from simple to complex.
 
 <p align="center">
-    <img alt="row alignment showcase" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/alignment_showcase.png"/>
+    <img alt="row alignment showcase" src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/alignment_showcase.png"/>
 </p>
 <p align="center" style="color: gray;"><em>Example of `row`, viewable in `example/alignment_showcase.rs`</em></p>
 
@@ -95,7 +95,7 @@ The roadmap is now organized by crate:
   - **GPU Compute**: One of the biggest advantages of WGPU over its predecessors is that compute shaders are first-class citizens. A future-oriented framework should take full advantage of this. By using custom compute shaders, we can perform complex computational tasks such as image processing and physics simulations, which are often unacceptably inefficient to perform on the CPU.
 
 <p align="center">
-    <img alt="boxed component showcase with glass effect" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/fluid_glass_showcase.png">
+    <img alt="boxed component showcase with glass effect" src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/fluid_glass_showcase.png">
 </p>
 <p align="center" style="color: gray;"><em>Using custom shaders instead of a built-in brush allows us to easily achieve advanced glass effects like this. This example can be found in `example/fluid_glass_showcase.rs`.</em></p>
 
@@ -161,7 +161,7 @@ fn counter_app(app_state: Arc<AppState>) {
 ```
 
 <p align="center">
-    <img alt="counter component example" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/counter.png"/>
+    <img alt="counter component example" src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/counter.png"/>
 </p>
 <p align="center" style="color: gray;"><em>This example can be found in `example/counter.rs`</em></p>
 
@@ -230,4 +230,4 @@ Read the [Contributing Guide](CONTRIBUTING.md) for details on how to contribute 
 
 Tessera is licensed under either of the [MIT License](LICENSE) or the [Apache License 2.0](LICENSE).
 
-[![Star History Chart](https://app.repohistory.com/api/svg?repo=shadow3aaa/tessera&type=Date&background=0D1117&color=62C3F8)](https://app.repohistory.com/star-history)
+[![Star History Chart](https://app.repohistory.com/api/svg?repo=tessera-ui/tessera&type=Date&background=0D1117&color=62C3F8)](https://app.repohistory.com/star-history)

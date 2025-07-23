@@ -1,12 +1,12 @@
 # Tessera Logo
 
-This project is a standalone application that showcases a dynamic logo for the [tessera ui framework](https://github.com/shadow3aaa/tessera).
+This project is a standalone application that showcases a dynamic logo for the [tessera ui framework](https://github.com/tessera-ui/tessera).
 
 It utilizes Tessera's rendering capabilities and custom shaders (WGSL) to create a dynamic, crystal-like visual effect.
 
 ## Preview
 
-![Tessera Logo Preview](https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/logo.gif)
+![Tessera Logo Preview](https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/logo.gif)
 
 ## How to Run
 

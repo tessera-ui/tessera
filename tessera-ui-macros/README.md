@@ -3,9 +3,9 @@
 [![简体中文][readme-cn-badge]][readme-cn-url]
 
 [readme-cn-badge]: https://img.shields.io/badge/README-简体中文-blue.svg?style=for-the-badge&logo=readme
-[readme-cn-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros/docs/README_zh-CN.md
+[readme-cn-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-macros/docs/README_zh-CN.md
 
-The `tessera_macros` crate provides procedural macros for the [Tessera UI framework](https://github.com/shadow3aaa/tessera). Currently, it contains the `#[tessera]` attribute macro, which is essential for creating components in the Tessera framework.
+The `tessera_macros` crate provides procedural macros for the [Tessera UI framework](https://github.com/tessera-ui/tessera). Currently, it contains the `#[tessera]` attribute macro, which is essential for creating components in the Tessera framework.
 
 ## Overview
 
@@ -168,8 +168,8 @@ fn custom_layout() {
 
 ## Contributing
 
-This crate is part of the larger Tessera project. For contribution guidelines, please refer to the main [Tessera repository](https://github.com/shadow3aaa/tessera).
+This crate is part of the larger Tessera project. For contribution guidelines, please refer to the main [Tessera repository](https://github.com/tessera-ui/tessera).
 
 ## License
 
-This project is licensed under the same terms as the main Tessera framework. See the [LICENSE](https://github.com/shadow3aaa/tessera/blob/main/LICENSE) file for details.
+This project is licensed under the same terms as the main Tessera framework. See the [LICENSE](https://github.com/tessera-ui/tessera/blob/main/LICENSE) file for details.

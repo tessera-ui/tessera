@@ -1,7 +1,7 @@
 <div align="center">
 
-<a href="https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-logo">
-    <img src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
+<a href="https://github.com/tessera-ui/tessera/blob/main/tessera-ui-logo">
+    <img src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
 <a/>
 
 # **Tessera**
@@ -20,13 +20,13 @@
 </div>
 
 [readme-en-badge]: https://img.shields.io/badge/README-English-blue.svg?style=for-the-badge&logo=readme
-[readme-en-url]: https://github.com/shadow3aaa/tessera/blob/main/README.md
-[stars-badge]: https://img.shields.io/github/stars/shadow3aaa/tessera?style=for-the-badge&logo=github
-[stars-url]: https://github.com/shadow3aaa/tessera
-[ci-badge]: https://img.shields.io/github/actions/workflow/status/shadow3aaa/tessera/ci.yml?style=for-the-badge&label=CI&logo=githubactions
-[ci-url]: https://github.com/shadow3aaa/tessera/actions/workflows/ci.yml
+[readme-en-url]: https://github.com/tessera-ui/tessera/blob/main/README.md
+[stars-badge]: https://img.shields.io/github/stars/tessera-ui/tessera?style=for-the-badge&logo=github
+[stars-url]: https://github.com/tessera-ui/tessera
+[ci-badge]: https://img.shields.io/github/actions/workflow/status/tessera-ui/tessera/ci.yml?style=for-the-badge&label=CI&logo=githubactions
+[ci-url]: https://github.com/tessera-ui/tessera/actions/workflows/ci.yml
 [logo-badge]: https://img.shields.io/badge/logo-source-blue?style=for-the-badge&logo=rust
-[logo-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-logo
+[logo-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-logo
 [tessera-ui-badge]: https://img.shields.io/badge/tessera%20ui-source-blue?style=for-the-badge&logo=rust
 [tessera-ui-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera%20ui-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-ui-docs-url]: https://shadow3aaa.github.io/tessera/tessera_ui
@@ -34,17 +34,17 @@
 [tessera-macros-docs-url]: https://shadow3aaa.github.io/tessera/tessera_ui_macros
 [tessera-ui-basic-components-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera%20ui%20basic%20components-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-ui-basic-components-docs-url]: https://shadow3aaa.github.io/tessera/tessera_ui_basic_components
-[tessera-ui-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui
+[tessera-ui-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui
 [tessera-ui-basic-components-badge]: https://img.shields.io/badge/tessera%20ui%20basic%20components-source-blue?style=for-the-badge&logo=rust
-[tessera-ui-basic-components-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-basic-components
+[tessera-ui-basic-components-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-basic-components
 [tessera-macros-badge]: https://img.shields.io/badge/tessera_macros-source-blue?style=for-the-badge&logo=rust
-[tessera-macros-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros
+[tessera-macros-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-macros
 
 ## 简介
 
 Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其核心采用函数式设计，旨在提供极致的性能、灵活性和可扩展性。
 
-该项目目前处于早期开发阶段。欢迎通过[示例代码](https://github.com/shadow3aaa/tessera/blob/main/example)探索最新进展。
+该项目目前处于早期开发阶段。欢迎通过[示例代码](https://github.com/tessera-ui/tessera/blob/main/example)探索最新进展。
 
 ## 路线图
 
@@ -83,7 +83,7 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
 - **强大而灵活的布局系统**：基于约束（`Fixed`、`Wrap`、`Fill`）的布局引擎，结合 `row` 和 `column` 等组件（灵感来自 Jetpack Compose），可以轻松实现从简单到复杂的响应式布局。
 
 <p align="center">
-    <img alt="row alignment showcase" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/alignment_showcase.png"/>
+    <img alt="row alignment showcase" src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/alignment_showcase.png"/>
 </p>
 <p align="center" style="color: gray;"><em>`row` 的示例，可在 `example/alignment_showcase.rs` 中查看</em></p>
 
@@ -95,7 +95,7 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
   - **GPU 计算**：WGPU 相对于其前辈的最大优势之一是计算着色器是一等公民。一个面向未来的框架应该充分利用这一点。通过使用自定义计算着色器，我们可以执行复杂的计算任务，例如图像处理和物理模拟，这些任务在 CPU 上执行通常效率低得令人无法接受。
 
 <p align="center">
-    <img alt="boxed component showcase with glass effect" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/fluid_glass_showcase.png"/>
+    <img alt="boxed component showcase with glass effect" src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/fluid_glass_showcase.png"/>
 </p>
 <p align="center" style="color: gray;"><em>使用自定义着色器代替内置画刷，可以轻松实现类似这样的高级玻璃效果。此示例可在 `example/fluid_glass_showcase.rs` 中找到。</em></p>
 
@@ -161,7 +161,7 @@ fn counter_app(app_state: Arc<AppState>) {
 ```
 
 <p align="center">
-    <img alt="counter component example" src="https://raw.githubusercontent.com/shadow3aaa/tessera/refs/heads/main/assets/counter.png"/>
+    <img alt="counter component example" src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/counter.png"/>
 </p>
 <p align="center" style="color: gray;"><em>此示例可在 `example/counter.rs` 中找到</em></p>
 
@@ -228,6 +228,6 @@ Tessera 采用多 crate 的工作区结构：
 
 ## 许可证
 
-Tessera 采用 [MIT 许可证](https://github.com/shadow3aaa/tessera/blob/main/LICENSE) 或 [Apache 2.0 许可证](https://github.com/shadow3aaa/tessera/blob/main/LICENSE)双重许可。
+Tessera 采用 [MIT 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE) 或 [Apache 2.0 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE)双重许可。
 
-[![Star History Chart](https://app.repohistory.com/api/svg?repo=shadow3aaa/tessera&type=Date&background=0D1117&color=62C3F8)](https://app.repohistory.com/star-history)
+[![Star History Chart](https://app.repohistory.com/api/svg?repo=tessera-ui/tessera&type=Date&background=0D1117&color=62C3F8)](https://app.repohistory.com/star-history)

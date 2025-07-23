@@ -37,7 +37,7 @@
    │ +                                                                                                                     │
    │ +### Changes                                                                                                          │
    │ +                                                                                                                     │
-   │ +[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v0.2.0...tessera-ui-v0.2.1) │
+   │ +[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v0.2.0...tessera-ui-v0.2.1) │
    │ +                                                                                                                     │
    ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
    [dry-run] git add tessera-ui\CHANGELOG.md

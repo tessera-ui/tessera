@@ -3,9 +3,9 @@
 [![English][readme-en-badge]][readme-en-url]
 
 [readme-en-badge]: https://img.shields.io/badge/README-English-blue.svg?style=for-the-badge&logo=readme
-[readme-en-url]: https://github.com/shadow3aaa/tessera/blob/main/tessera-ui-macros/README.md
+[readme-en-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-macros/README.md
 
-`tessera_macros` crate 为 [Tessera UI 框架](https://github.com/shadow3aaa/tessera) 提供了过程宏。目前，它包含 `#[tessera]` 属性宏，这对于在 Tessera 框架中创建组件至关重要。
+`tessera_macros` crate 为 [Tessera UI 框架](https://github.com/tessera-ui/tessera) 提供了过程宏。目前，它包含 `#[tessera]` 属性宏，这对于在 Tessera 框架中创建组件至关重要。
 
 ## 概述
 
@@ -168,7 +168,7 @@ fn custom_layout() {
 
 ## 贡献
 
-该 crate 是更大的 Tessera 项目的一部分。有关贡献指南，请参阅主 [Tessera 存储库](https://github.com/shadow3aaa/tessera)。
+该 crate 是更大的 Tessera 项目的一部分。有关贡献指南，请参阅主 [Tessera 存储库](https://github.com/tessera-ui/tessera)。
 
 ## 许可证
 
