@@ -44,7 +44,6 @@ fn android_main(android_app: AndroidApp) {
 #[cfg(target_os = "android")]
 fn main() {}
 
-#[allow(dead_code)]
 #[cfg(not(target_os = "android"))]
 pub fn desktop_main() -> Result<(), Box<dyn std::error::Error>> {
     let _logger = flexi_logger::Logger::try_with_env()?
