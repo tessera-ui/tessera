@@ -134,6 +134,9 @@ fn set_thread_name_unix(name: &str) {
 
     unsafe {
         // Set the name for the current thread
+        #[cfg(target_vendor = "apple")]
+        libc::pthread_setname_np(cname.as_ptr());
+        #[cfg(not(target_vendor = "apple"))]
         libc::pthread_setname_np(libc::pthread_self(), cname.as_ptr());
     }
 }
