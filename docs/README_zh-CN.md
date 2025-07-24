@@ -230,4 +230,12 @@ Tessera 采用多 crate 的工作区结构：
 
 Tessera 采用 [MIT 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE) 或 [Apache 2.0 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE)双重许可。
 
-[![Star History Chart](https://app.repohistory.com/api/svg?repo=tessera-ui/tessera&type=Date&background=0D1117&color=62C3F8)](https://app.repohistory.com/star-history)
+## Star History
+
+<a href="https://www.star-history.com/#tessera-ui/tessera&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=tessera-ui/tessera&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=tessera-ui/tessera&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=tessera-ui/tessera&type=Date" />
+ </picture>
+</a>

@@ -230,4 +230,12 @@ Read the [Contributing Guide](CONTRIBUTING.md) for details on how to contribute 
 
 Tessera is licensed under either of the [MIT License](LICENSE) or the [Apache License 2.0](LICENSE).
 
-[![Star History Chart](https://app.repohistory.com/api/svg?repo=tessera-ui/tessera&type=Date&background=0D1117&color=62C3F8)](https://app.repohistory.com/star-history)
+## Star History
+
+<a href="https://www.star-history.com/#tessera-ui/tessera&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=tessera-ui/tessera&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=tessera-ui/tessera&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=tessera-ui/tessera&type=Date" />
+ </picture>
+</a>
