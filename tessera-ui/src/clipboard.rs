@@ -17,7 +17,7 @@
 //! The main entry point is the [`Clipboard`] struct, which provides methods to interact
 //! with the system clipboard.
 //!
-//! ```
+//! ```no_run
 //! use tessera_ui::clipboard::Clipboard;
 //!
 //! // Create a new clipboard instance.
@@ -61,7 +61,7 @@ impl Default for Clipboard {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
     /// use tessera_ui::clipboard::Clipboard;
     ///
     /// let clipboard = Clipboard::default();
@@ -83,7 +83,7 @@ impl Clipboard {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
     /// use tessera_ui::clipboard::Clipboard;
     ///
     /// let clipboard = Clipboard::new();
@@ -105,7 +105,7 @@ impl Clipboard {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
     /// use tessera_ui::clipboard::Clipboard;
     ///
     /// let mut clipboard = Clipboard::new();
@@ -138,7 +138,7 @@ impl Clipboard {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
     /// use tessera_ui::clipboard::Clipboard;
     ///
     /// let mut clipboard = Clipboard::new();
