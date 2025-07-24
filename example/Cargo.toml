@@ -6,7 +6,7 @@ license.workspace = true
 
 [lib]
 crate-type = ["rlib", "cdylib"]
-name = "example_lib"
+name = "example"
 path = "src/lib.rs"
 
 [[bin]]
