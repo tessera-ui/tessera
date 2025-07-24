@@ -1,3 +1,12 @@
+## [v1.2.0] - 2025-07-24 +08:00
+
+### Changes
+- docs(tessera-ui): add comprehensive documentation for clipboard module
+- feat(clipboard): introduce core clipboard abstraction
+- Fix non-posix pthread_setname_np call for apple platform
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.1.0...tessera-ui-v1.2.0)
+
 ## [v1.1.0] - 2025-07-23 +08:00
 
 ### Changes
