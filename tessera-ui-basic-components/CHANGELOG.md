@@ -1,3 +1,11 @@
+## [v1.0.2] - 2025-07-24 +08:00
+
+### Changes
+- style(docs): normalize doc comments to standard format
+- feat(clipboard): introduce core clipboard abstraction
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v1.0.1...tessera-ui-basic-components-v1.0.2)
+
 ## [v1.0.1] - 2025-07-24 +08:00
 
 ### Changes
