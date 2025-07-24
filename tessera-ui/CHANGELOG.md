@@ -1,3 +1,11 @@
+## [v1.4.0] - 2025-07-25 +08:00
+
+### Changes
+- feat(clipboard): add clear method to clipboard
+- feat(clipboard): add actual support of clipboard for android.
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.3.0...tessera-ui-v1.4.0)
+
 ## [v1.3.0] - 2025-07-24 +08:00
 
 ### Changes
