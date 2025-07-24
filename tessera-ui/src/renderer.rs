@@ -522,14 +522,14 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         config: TesseraConfig,
     ) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::builder()
-            .with_android_app(android_app)
+            .with_android_app(android_app.clone())
             .build()
             .unwrap();
         let app = None;
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
-        let clipboard = Clipboard::new();
+        let clipboard = Clipboard::new(android_app);
         let mut renderer = Self {
             app,
             entry_point,
