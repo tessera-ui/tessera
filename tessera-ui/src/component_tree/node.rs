@@ -303,7 +303,7 @@ pub fn measure_node(
     gpu: &wgpu::Device,
 ) -> Result<ComputedData, MeasurementError> {
     // Make sure metadata and default value exists for the node.
-    component_node_metadatas.entry(node_id).or_default(); // Ensure metadata exists, even if empty insert default one
+    component_node_metadatas.insert(node_id, Default::default());
 
     let node_data_ref = tree
         .get(node_id)
@@ -519,9 +519,9 @@ pub fn measure_nodes(
     if nodes_to_measure.is_empty() {
         return HashMap::new();
     }
-    // Make sure metadata and default value exists for the node.
+    // metadata must be reseted and initialized for each node to measure.
     for (node_id, _) in &nodes_to_measure {
-        component_node_metadatas.entry(*node_id).or_default();
+        component_node_metadatas.insert(*node_id, Default::default());
     }
     nodes_to_measure
         .into_par_iter()
