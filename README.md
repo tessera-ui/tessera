@@ -58,9 +58,7 @@ The roadmap is now organized by crate:
   - ~~Easier way for `place_node`~~
   - and more...
 - Optimize rendering performance
-- Optimize rendering based on commands, goals:
-  - tier1: Analyze and update only necessary rendering areas
-  - tier2: Automatically analyze whether to actually update rendering based on final rendering commands
+
 - Design how to provide async API to components
 - Optimize touch screen adaptation
 
