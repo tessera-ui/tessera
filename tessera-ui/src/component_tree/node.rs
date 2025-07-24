@@ -302,6 +302,9 @@ pub fn measure_node(
     compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
     gpu: &wgpu::Device,
 ) -> Result<ComputedData, MeasurementError> {
+    // Make sure metadata and default value exists for the node.
+    component_node_metadatas.entry(node_id).or_default(); // Ensure metadata exists, even if empty insert default one
+
     let node_data_ref = tree
         .get(node_id)
         .ok_or(MeasurementError::NodeNotFoundInTree)?;
@@ -515,6 +518,10 @@ pub fn measure_nodes(
 ) -> HashMap<NodeId, Result<ComputedData, MeasurementError>> {
     if nodes_to_measure.is_empty() {
         return HashMap::new();
+    }
+    // Make sure metadata and default value exists for the node.
+    for (node_id, _) in &nodes_to_measure {
+        component_node_metadatas.entry(*node_id).or_default();
     }
     nodes_to_measure
         .into_par_iter()
