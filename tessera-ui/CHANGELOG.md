@@ -1,3 +1,13 @@
+## [v1.3.0] - 2025-07-24 +08:00
+
+### Changes
+- fix(clipboard): Add no_run attribute to clipboard documentation code examples
+- fix(node): ensure metadata is reset and initialized for each node during measurement
+- fix(node): ensure metadata exists for nodes during measurement
+- feat(tessera-ui): add convenient constants to DimensionValue
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.2.0...tessera-ui-v1.3.0)
+
 ## [v1.2.0] - 2025-07-24 +08:00
 
 ### Changes
