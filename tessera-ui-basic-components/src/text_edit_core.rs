@@ -18,11 +18,10 @@ mod cursor;
 
 use std::{sync::Arc, time::Instant};
 
-use arboard::Clipboard;
 use glyphon::Edit;
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus, winit,
+    Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus, winit,
 };
 use tessera_ui_macros::tessera;
 use unicode_segmentation::UnicodeSegmentation;
@@ -532,6 +531,7 @@ pub fn map_key_event_to_action(
     key_event: winit::event::KeyEvent,
     key_modifiers: winit::keyboard::ModifiersState,
     editor: &glyphon::Editor,
+    clipboard: &mut Clipboard,
 ) -> Option<Vec<glyphon::Action>> {
     match key_event.state {
         winit::event::ElementState::Pressed => {}
@@ -571,25 +571,20 @@ pub fn map_key_event_to_action(
                 match s.to_lowercase().as_str() {
                     "c" => {
                         if let Some(text) = editor.copy_selection() {
-                            if let Ok(mut clipboard) = Clipboard::new() {
-                                let _ = clipboard.set_text(text);
-                            }
+                            clipboard.set_text(&text);
                         }
                         return None;
                     }
                     "v" => {
-                        if let Ok(mut clipboard) = Clipboard::new() {
-                            if let Ok(text) = clipboard.get_text() {
-                                return Some(text.chars().map(glyphon::Action::Insert).collect());
-                            }
+                        if let Some(text) = clipboard.get_text() {
+                            return Some(text.chars().map(glyphon::Action::Insert).collect());
                         }
+
                         return None;
                     }
                     "x" => {
                         if let Some(text) = editor.copy_selection() {
-                            if let Ok(mut clipboard) = Clipboard::new() {
-                                let _ = clipboard.set_text(text);
-                            }
+                            clipboard.set_text(&text);
                             // Use Backspace action to delete selection
                             return Some(vec![glyphon::Action::Backspace]);
                         }

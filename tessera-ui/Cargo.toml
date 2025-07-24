@@ -28,6 +28,7 @@ windows = { version = "0.61.1", features = ["Win32_System_Threading"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 winit = "0.30.11"
+arboard = "3.4.0"
 
 [target.'cfg(target_os = "android")'.dependencies]
 winit = { version = "0.30.11", features = ["android-native-activity"] }

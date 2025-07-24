@@ -160,6 +160,7 @@
 //! - Minimal allocations in hot paths
 //! - Optimized component tree traversal
 
+pub mod clipboard;
 pub mod color;
 mod component_tree;
 mod cursor;
@@ -178,6 +179,7 @@ pub use wgpu;
 pub use winit;
 
 pub use crate::{
+    clipboard::Clipboard,
     color::Color,
     component_tree::{
         ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,

@@ -439,6 +439,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                                     key_event,
                                     input.key_modifiers,
                                     state.editor(),
+                                    input.clipboard,
                                 ) {
                                     all_actions.extend(actions);
                                 }

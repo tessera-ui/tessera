@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use rayon::prelude::*;
 
 use crate::{
-    ComputeResourceManager,
+    Clipboard, ComputeResourceManager,
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
     renderer::Command,
@@ -117,6 +117,7 @@ impl ComponentTree {
         modifiers: winit::keyboard::ModifiersState,
         compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
         gpu: &wgpu::Device,
+        clipboard: &mut Clipboard,
     ) -> (Vec<(Command, PxSize, PxPosition)>, WindowRequests) {
         let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
             return (vec![], WindowRequests::default());
@@ -209,6 +210,7 @@ impl ComponentTree {
                     ime_events: &mut ime_events,
                     key_modifiers: modifiers,
                     requests: &mut window_requests,
+                    clipboard,
                 };
                 state_handler(input);
                 // if state_handler set ime request, it's position must be None, and we set it here

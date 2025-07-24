@@ -201,7 +201,7 @@ use winit::{
 };
 
 use crate::{
-    ImeState, PxPosition,
+    Clipboard, ImeState, PxPosition,
     cursor::{CursorEvent, CursorEventContent, CursorState},
     dp::SCALE_FACTOR,
     keyboard_state::KeyboardState,
@@ -317,6 +317,8 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     register_pipelines_fn: R,
     /// Configuration settings for the renderer
     config: TesseraConfig,
+    /// Clipboard manager
+    clipboard: Clipboard,
     #[cfg(target_os = "android")]
     /// Android-specific state tracking whether the soft keyboard is currently open
     android_ime_opened: bool,
@@ -410,6 +412,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
+        let clipboard = Clipboard::new();
         let mut renderer = Self {
             app,
             entry_point,
@@ -418,6 +421,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             register_pipelines_fn,
             ime_state,
             config,
+            clipboard,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -525,6 +529,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
+        let clipboard = Clipboard::new();
         let mut renderer = Self {
             app,
             entry_point,
@@ -534,6 +539,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             ime_state,
             android_ime_opened: false,
             config,
+            clipboard,
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -583,6 +589,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         #[cfg(target_os = "android")] android_ime_opened: &mut bool,
         app: &mut WgpuApp,
         #[cfg(target_os = "android")] event_loop: &ActiveEventLoop,
+        clipboard: &mut Clipboard,
     ) {
         // notify the windowing system before rendering
         // this will help winit to properly schedule and make assumptions about its internal state
@@ -620,6 +627,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             keyboard_state.modifiers(),
             app.resource_manager.clone(),
             &app.gpu,
+            clipboard,
         );
         let draw_cost = draw_timer.elapsed();
         debug!("Draw commands computed in {draw_cost:?}");
@@ -955,6 +963,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                     app,
                     #[cfg(target_os = "android")]
                     event_loop,
+                    &mut self.clipboard,
                 );
             }
             _ => (),

@@ -13,7 +13,7 @@ use rayon::prelude::*;
 use winit::window::CursorIcon;
 
 use crate::{
-    ComputeCommand, ComputeResourceManager, DrawCommand, Px,
+    Clipboard, ComputeCommand, ComputeResourceManager, DrawCommand, Px,
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
     renderer::Command,
@@ -252,6 +252,8 @@ pub struct StateHandlerInput<'a> {
     pub key_modifiers: winit::keyboard::ModifiersState,
     /// A context for making requests to the window for the current frame.
     pub requests: &'a mut WindowRequests,
+    /// Clipboard
+    pub clipboard: &'a mut Clipboard,
 }
 
 /// A collection of requests that components can make to the windowing system for the current frame.
