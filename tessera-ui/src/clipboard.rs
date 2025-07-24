@@ -113,8 +113,6 @@ impl Clipboard {
 
     /// Sets the clipboard text, overwriting any previous content.
     ///
-    /// On unsupported platforms like Android, this operation is a no-op and will log a warning.
-    ///
     /// # Arguments
     ///
     /// * `text` - The string slice to be copied to the clipboard.
@@ -143,8 +141,6 @@ impl Clipboard {
     /// This method retrieves text from the clipboard. If the clipboard is empty, contains
     /// non-text content, or an error occurs, it returns `None`.
     ///
-    /// On unsupported platforms like Android, this always returns `None` and logs a warning.
-    ///
     /// # Returns
     ///
     /// - `Some(String)` if text is successfully retrieved from the clipboard.
@@ -172,6 +168,28 @@ impl Clipboard {
         #[cfg(target_os = "android")]
         {
             get_clipboard_text(&self.android_app)
+        }
+    }
+
+    /// Clears the clipboard content.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use tessera_ui::clipboard::Clipboard;
+    ///
+    /// let mut clipboard = Clipboard::new();
+    /// clipboard.set_text("Temporary text"); // "Temporary text" is now in the clipboard
+    /// clipboard.clear(); // The clipboard is now cleared
+    /// ```
+    pub fn clear(&mut self) {
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = self.manager.clear();
+        }
+        #[cfg(target_os = "android")]
+        {
+            clear_clipboard(&self.android_app);
         }
     }
 }
