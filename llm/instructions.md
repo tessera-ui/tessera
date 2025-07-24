@@ -100,6 +100,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 - **example crate**: `example/Cargo.toml` is intentionally configured with both `[lib]` and `[[bin]]` pointing to `src/lib.rs` for compatibility with both testing and running. The resulting compiler warning is expected—do not remove the `[[bin]]` section.
 
+> Note: The output filename collision warning for the `example` crate (between the bin and lib targets) is expected and intentional. Do **not** attempt to resolve this warning by renaming the library or changing target names. This configuration is required for compatibility with both testing and running. See [Cargo issue #6313](https://github.com/rust-lang/cargo/issues/6313) for details.
 ---
 
 ## FAQ

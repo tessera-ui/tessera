@@ -1,3 +1,3 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    example::desktop_main()
+    example_lib::desktop_main()
 }
