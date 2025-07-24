@@ -13,8 +13,8 @@
 mod command;
 mod pipeline;
 
-#[doc = " Command for rendering a checkmark shape in UI components."]
+/// Command for rendering a checkmark shape in UI components.
 pub use command::CheckmarkCommand;
 
-#[doc = " Pipeline for rendering checkmark graphics."]
+/// Pipeline for rendering checkmark graphics.
 pub use pipeline::CheckmarkPipeline;

@@ -47,7 +47,7 @@ use itertools::Itertools;
 use proc_macro2::Span;
 use quote::quote;
 use rayon::prelude::*;
-use syn::{File, Item, UseTree, Visibility, spanned::Spanned};
+use syn::{Expr, File, Item, Lit, Meta, UseTree, Visibility, spanned::Spanned};
 
 /// Checks and fixes `use` statements in Rust files and directories, respecting .gitignore.
 #[derive(Parser, Debug)]
@@ -377,7 +377,23 @@ fn collect_imports(ast: &File, local_mods: &HashSet<String>) -> Result<Vec<Impor
             let attrs = use_item
                 .attrs
                 .iter()
-                .map(|attr| quote!(#attr).to_string())
+                .map(|attr| {
+                    if attr.path().is_ident("doc") {
+                        if let Meta::NameValue(nv) = &attr.meta {
+                            if let Expr::Lit(expr_lit) = &nv.value {
+                                if let Lit::Str(lit_str) = &expr_lit.lit {
+                                    let comment_content = lit_str.value();
+                                    return if matches!(attr.style, syn::AttrStyle::Inner(_)) {
+                                        format!("//! {}", comment_content.trim())
+                                    } else {
+                                        format!("/// {}", comment_content.trim())
+                                    };
+                                }
+                            }
+                        }
+                    }
+                    quote!(#attr).to_string()
+                })
                 .join("\n");
 
             if use_item.attrs.is_empty() {

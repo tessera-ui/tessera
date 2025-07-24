@@ -35,18 +35,18 @@ use crate::{
     text_edit_core::{ClickType, map_key_event_to_action, text_edit_core},
 };
 
-#[doc = " State structure for the text editor, managing text content, cursor, selection, and editing logic."]
-#[doc = ""]
-#[doc = " This is a re-export of [`TextEditorState`](crate::text_edit_core::TextEditorState) from the core text editing module."]
-#[doc = " It encapsulates all stateful aspects of the editor, including text buffer, cursor position, selection range,"]
-#[doc = " focus handling, and IME/preedit support. The state should be wrapped in `Arc<RwLock<...>>` for safe sharing between UI and event handlers."]
-#[doc = ""]
-#[doc = " # Example"]
-#[doc = " ```"]
-#[doc = " use tessera_ui_basic_components::text_editor::TextEditorState;"]
-#[doc = " use tessera_ui::Dp;"]
-#[doc = " let state = TextEditorState::new(Dp(14.0), None);"]
-#[doc = " ```"]
+/// State structure for the text editor, managing text content, cursor, selection, and editing logic.
+///
+/// This is a re-export of [`TextEditorState`](crate::text_edit_core::TextEditorState) from the core text editing module.
+/// It encapsulates all stateful aspects of the editor, including text buffer, cursor position, selection range,
+/// focus handling, and IME/preedit support. The state should be wrapped in `Arc<RwLock<...>>` for safe sharing between UI and event handlers.
+///
+/// # Example
+/// ```
+/// use tessera_ui_basic_components::text_editor::TextEditorState;
+/// use tessera_ui::Dp;
+/// let state = TextEditorState::new(Dp(14.0), None);
+/// ```
 pub use crate::text_edit_core::TextEditorState;
 
 /// Arguments for the `text_editor` component.
