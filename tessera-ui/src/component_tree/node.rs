@@ -233,9 +233,6 @@ pub type StateHandlerFn = dyn Fn(StateHandlerInput) + Send + Sync;
 /// for exmaple block some keyboard events or cursor events to prevent them from propagating
 /// to parent components and older brother components.
 pub struct StateHandlerInput<'a> {
-    /// The `NodeId` of the component node that this state handler is for.
-    /// Usually used to access the component's metadata.
-    pub node_id: indextree::NodeId,
     /// The size of the component node, computed during the measure stage.
     pub computed_data: ComputedData,
     /// The position of the cursor, if available.

@@ -202,7 +202,6 @@ impl ComponentTree {
             if let Some(node_computed_data) = computed_data_option {
                 // Check if computed_data exists
                 let input = StateHandlerInput {
-                    node_id,
                     computed_data: node_computed_data,
                     cursor_position: current_cursor_position,
                     cursor_events: &mut cursor_events,
