@@ -678,7 +678,7 @@ pub struct CursorEvent {
 /// println!("Horizontal scroll: {}", scroll.delta_x);
 /// println!("Vertical scroll: {}", scroll.delta_y);
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScrollEventConent {
     /// Horizontal scroll distance in pixels.
     ///
@@ -716,7 +716,7 @@ pub struct ScrollEventConent {
 ///     }
 /// }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CursorEventContent {
     /// A cursor button or touch point was pressed.
     Pressed(PressKeyEventType),
@@ -837,7 +837,7 @@ impl CursorEventContent {
 ///     PressKeyEventType::Middle => println!("Middle button (usually scroll wheel click)"),
 /// }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PressKeyEventType {
     /// The primary mouse button (typically left button) or primary touch.
     Left,
