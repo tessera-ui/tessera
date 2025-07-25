@@ -117,7 +117,7 @@
 //! }
 //! ```
 
-use crate::Px;
+use crate::{Dp, Px};
 
 /// Defines how a dimension (width or height) should be calculated.
 ///
@@ -315,6 +315,20 @@ impl DimensionValue {
             DimensionValue::Wrap { min, .. } => *min,
             DimensionValue::Fill { min, .. } => *min,
         }
+    }
+}
+
+impl From<Px> for DimensionValue {
+    /// Converts a `Px` value to a `DimensionValue::Fixed`.
+    fn from(value: Px) -> Self {
+        DimensionValue::Fixed(value)
+    }
+}
+
+impl From<Dp> for DimensionValue {
+    /// Converts a `Dp` value to a `DimensionValue::Fixed`.
+    fn from(value: Dp) -> Self {
+        DimensionValue::Fixed(value.into())
     }
 }
 
