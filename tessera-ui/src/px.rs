@@ -188,7 +188,7 @@ impl Px {
     /// assert_eq!(Px::new(0).abs(), 0);
     /// ```
     pub fn abs(self) -> u32 {
-        self.0.abs() as u32
+        self.0.unsigned_abs()
     }
 
     /// Returns only the positive value, or zero if negative.

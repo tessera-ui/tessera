@@ -260,6 +260,38 @@ impl Color {
             a: alpha,
         }
     }
+    /// Linearly interpolates between two colors.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The target color to interpolate towards.
+    /// * `t` - The interpolation factor, typically in the range `[0.0, 1.0]`.
+    ///
+    /// # Returns
+    ///
+    /// A new `Color` that is the result of the interpolation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera_ui::Color;
+    ///
+    /// let color1 = Color::new(1.0, 0.0, 0.0, 1.0); // Red
+    /// let color2 = Color::new(0.0, 0.0, 1.0, 1.0); // Blue
+    /// let interpolated = color1.lerp(&color2, 0.5);
+    ///
+    /// assert_eq!(interpolated, Color::new(0.5, 0.0, 0.5, 1.0)); // Purple
+    /// ```
+    #[inline]
+    pub fn lerp(&self, other: &Self, t: f32) -> Self {
+        let t = t.clamp(0.0, 1.0);
+        Self {
+            r: self.r + (other.r - self.r) * t,
+            g: self.g + (other.g - self.g) * t,
+            b: self.b + (other.b - self.b) * t,
+            a: self.a + (other.a - self.a) * t,
+        }
+    }
 }
 
 /// The default color is fully transparent.
