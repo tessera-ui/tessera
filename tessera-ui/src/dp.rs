@@ -112,6 +112,18 @@ pub static SCALE_FACTOR: OnceLock<RwLock<f64>> = OnceLock::new();
 pub struct Dp(pub f64);
 
 impl Dp {
+    /// A constant representing zero density-independent pixels.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera_ui::Dp;
+    ///
+    /// let zero_dp = Dp::ZERO;
+    /// assert_eq!(zero_dp, Dp(0.0));
+    /// ```
+    pub const ZERO: Dp = Dp(0.0);
+
     /// Creates a new `Dp` instance with the specified value.
     ///
     /// This is a const function, allowing `Dp` values to be created at compile time.
