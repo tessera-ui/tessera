@@ -1,3 +1,11 @@
+## [v1.1.0] - 2025-07-25 +08:00
+
+### Changes
+- docs(scrollable): correct state initialization in doc example
+- feat(scrollable): introduce reusable scrollbar and enhance scrollable component
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v1.0.2...tessera-ui-basic-components-v1.1.0)
+
 ## [v1.0.2] - 2025-07-24 +08:00
 
 ### Changes
