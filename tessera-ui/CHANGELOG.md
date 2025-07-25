@@ -1,3 +1,17 @@
+## [v1.5.0] - 2025-07-25 +08:00
+
+### Changes
+- feat(tessera-ui): add Color::lerp and refine Px methods
+- feat(px): correct Px::abs behavior and add positive()/negative()
+- feat(px): add mul_f32 and div_f32 methods
+- feat(cursor): impl PartialEq for cursor event types
+- refactor(component_tree): remove unused node_id from StateHandlerInput
+- feat(dp): add ZERO constant
+- feat(constraint): impl From<Px> and From<Dp> for DimensionValue
+- feat(px): add Mul and Div implementations
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.4.0...tessera-ui-v1.5.0)
+
 ## [v1.4.0] - 2025-07-25 +08:00
 
 ### Changes
