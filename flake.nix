@@ -25,10 +25,10 @@
 
   outputs =
     {
+      self,
       nixpkgs,
       flake-utils,
       rust-overlay,
-      ...
     }:
     (flake-utils.lib.eachDefaultSystem (
       system:
@@ -54,6 +54,8 @@
           vulkan-headers
         ];
 
+        sharedPkgs = with pkgs; [ rust-script ] ++ gfx;
+
         # Android payload (only for android shell)
         android = pkgs.androidenv.composeAndroidPackages {
           platformVersions = [ "34" ];
@@ -63,6 +65,23 @@
           includeEmulator = false;
         };
         sdkRoot = "${android.androidsdk}/libexec/android-sdk";
+
+        sharedShellHook = ''
+          # project root baked in at eval time
+          PRJ_ROOT="${toString self}"
+
+          fmt() {
+            local root
+            if root=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null); then
+              echo "Using git root"
+            else
+              root="$PRJ_ROOT"
+              echo "Not in git repo, using PRJ_ROOT"
+            fi
+            ( cd "$root" && rust-script scripts/check-imports.rs . --fix "$@" )
+          }
+          export -f fmt
+        '';
       in
       {
         devShells = {
@@ -72,7 +91,7 @@
               rust
               pkgs.pkg-config
             ]
-            ++ gfx;
+            ++ sharedPkgs;
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath gfx;
             shellHook = ''
               echo "Setting up fmt command..."
@@ -86,12 +105,10 @@
             buildInputs = [
               pkgs.rustup
               pkgs.pkg-config
-              pkgs.openssl.dev
-              pkgs.openssl
               android.androidsdk
               pkgs.cargo-ndk
             ]
-            ++ gfx;
+            ++ sharedPkgs;
 
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath gfx;
             PKG_CONFIG_PATH = pkgs.lib.makeSearchPath "lib/pkgconfig" [ pkgs.openssl.dev ];
