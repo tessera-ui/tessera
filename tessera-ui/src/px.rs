@@ -299,6 +299,56 @@ impl Px {
     pub fn saturating_sub(self, rhs: Self) -> Self {
         Px(self.0.saturating_sub(rhs.0))
     }
+
+    /// Multiplies the pixel value by a scalar f32.
+    ///
+    /// # Arguments
+    ///
+    /// * `rhs` - The scalar value to multiply by
+    ///
+    /// # Returns
+    ///
+    /// A new `Px` instance with the result of the multiplication.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera_ui::px::Px;
+    ///
+    /// let px = Px::new(10);
+    /// let result = px.mul_f32(2.0);
+    /// assert_eq!(result, Px::new(20));
+    /// ```
+    pub fn mul_f32(self, rhs: f32) -> Self {
+        Px((self.0 as f32 * rhs) as i32)
+    }
+
+    /// Divides the pixel value by a scalar f32.
+    ///
+    /// # Arguments
+    ///
+    /// * `rhs` - The scalar value to divide by
+    ///
+    /// # Returns
+    ///
+    /// A new `Px` instance with the result of the division.
+    ///
+    /// # Panics
+    ///
+    /// This function may panic if `rhs` is zero, as division by zero is undefined.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera_ui::px::Px;
+    ///
+    /// let px = Px::new(20);
+    /// let result = px.div_f32(2.0);
+    /// assert_eq!(result, Px::new(10));
+    /// ```
+    pub fn div_f32(self, rhs: f32) -> Self {
+        Px::from_f32(self.to_f32() / rhs)
+    }
 }
 
 /// A 2D position in physical pixel space.
