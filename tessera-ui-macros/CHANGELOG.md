@@ -1,3 +1,10 @@
+## [v0.1.2] - 2025-07-25 +08:00
+
+### Changes
+- chore: update Cargo.toml to include homepage.workspace for all packages
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-macros-v0.1.1...tessera-ui-macros-v0.1.2)
+
 ## [v0.1.1] - 2025-07-24 +08:00
 
 ### Changes
