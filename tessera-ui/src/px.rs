@@ -748,6 +748,22 @@ impl std::ops::Sub for Px {
     }
 }
 
+impl std::ops::Mul for Px {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Px(self.0 * rhs.0)
+    }
+}
+
+impl std::ops::Div for Px {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Px(self.0 / rhs.0)
+    }
+}
+
 impl std::ops::Mul<i32> for Px {
     type Output = Self;
 
@@ -894,6 +910,8 @@ mod tests {
         assert_eq!(a - b, Px(5));
         assert_eq!(a * 2, Px(20));
         assert_eq!(a / 2, Px(5));
+        assert_eq!(a * b, Px(50));
+        assert_eq!(a / b, Px(2));
     }
 
     #[test]
