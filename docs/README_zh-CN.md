@@ -52,13 +52,13 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
 
 ### tessera-ui（v2.0.0 路线图）
 
-- android平台ime支持
-- 优化api
+- android 平台 ime 支持
+- 优化 api
   - ~~更简单的 `measure_node(s)` 用法~~
   - ~~更简单的 `place_node` 用法~~
   - and more...
 - 优化渲染性能
-- 设计如何给出异步api到组件
+- 设计如何给出异步 api 到组件
 - 优化触屏适配
 
 ### tessera-ui-basic-components（v2.0.0 路线图）
@@ -68,8 +68,8 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
   - dialog
   - slider
   - text_editor
-  - progess
-- image组件支持更多格式
+  - progress
+- image 组件支持更多格式
 - 增加这些组件
   - radio
   - bottom sheet
@@ -210,6 +210,28 @@ cargo run
    x run -p example --arch arm64 --device adb:823c4f8b
    ```
 
+## 通过 Nix 开始
+
+### 使用 Nix 在桌面环境运行示例
+
+```bash
+nix develop           # 进入桌面环境 nix shell
+cargo run -p example  # 构建并运行示例
+```
+
+### 使用 Nix 在 Android 上运行示例
+
+```bash
+# 进入 Android shell（包括所有 android 工具和设置）
+nix develop
+
+# 查找您的设备 ID
+x devices
+
+# 假设设备 ID 为 adb:823c4f8b，架构为 arm64
+x run -p example --arch arm64 --device adb:823c4f8b
+```
+
 ## 工作区结构
 
 Tessera 采用多 crate 的工作区结构：
@@ -221,7 +243,7 @@ Tessera 采用多 crate 的工作区结构：
 
 ## 贡献
 
-请阅读 [贡献指南](CONTRIBUTING_zh-CN.md) 了解如何为项目做出贡献。
+请阅读 [贡献指南](docs/CONTRIBUTING_zh-CN.md) 了解如何为项目做出贡献。
 
 ## 许可证
 

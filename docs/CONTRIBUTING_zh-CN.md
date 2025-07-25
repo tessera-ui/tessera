@@ -12,11 +12,34 @@
 如果您需要为 `tessera` 做代码贡献，除最新 stable rust 以外，强烈建议安装以下工具:
 
 - [`xbuild`](https://github.com/rust-mobile/xbuild) 我们用它来构建和测试 Android 版本。未来也可能用它适配 iOS 版本。
-- [`rust-script`](https://rust-script.org/#installation) 我们用它来运行[一些 rust 脚本](../scripts)。对开发有帮助。
+- [`rust-script`](https://rust-script.org/#installation) 我们用它来运行[一些 rust 脚本](scripts)。对开发有帮助。
 
 ## 代码贡献规范
 
 为了确保代码质量和一致性，保证仓库整洁，请遵循以下规范：
+
+### 入门
+
+#### 选项 A - Nix 包管理器（单行命令）
+
+```bash
+nix develop            # 桌面开发 shell
+nix develop .#android  # 安卓开发 shell
+```
+
+#### 选项 B - 手动设置
+
+Rust >= 1.77 (rustup toolchain install stable)
+
+Vulkan SDK (包括加载器 + 头文件)
+从 <https://vulkan.lunarg.com> 下载，运行安装程序，并按照其安装后说明进行操作。
+
+```bash
+# X11
+sudo apt install libxi-dev libxrandr-dev libxcursor-dev
+# Wayland
+sudo apt install libwayland-dev libxkbcommon-dev
+```
 
 ### 代码使用的语言
 
@@ -39,6 +62,7 @@
     5. 同一根路径下的导入应合并为一个 `use` 语句。
 
 - 格式化工具
+
   - 您可以使用 `cargo fmt` 命令来格式化代码。这会自动应用上述的第一条格式化规范。
   - 但是，建议(于项目根目录下)始终使用
 
@@ -46,7 +70,9 @@
     rust-script scripts/check-imports.rs . --fix
     ```
 
-    来检查和修复导入规则，它还会顺便调用`rustfmt`进行格式化。因为这会直接应用上述的所有格式化规范，并且不会忽略脚本文件(`cargo fmt`只会格式化`Cargo.toml`管理的地方)。
+    来检查和修复导入规则，它还会顺便调用`rustfmt`进行格式化。因为它会直接应用上述的所有格式化规范，并且不会忽略脚本文件（而 `cargo fmt` 只会格式化 `Cargo.toml` 管理的内容）。
+
+  - Nix 用户：只需在 `nix develop` 环境中输入 `fmt` 即可——这是一个智能别名，可以从任何目录运行上述相同的命令。
 
 ### 提交规范
 
@@ -63,23 +89,23 @@
 
 ### 文档使用的语言
 
-任何文档内容，包括 README、Wiki 页面和其他文档，都必须至少有英语版本，且以英语版本为主。其他i18n版本可以在英语版本的基础上进行翻译，但必须确保英语版本始终存在，且其内容是最新的。
+任何文档内容，包括 README、Wiki 页面和其他文档，都必须至少有英语版本，且以英语版本为主。其他 i18n 版本可以在英语版本的基础上进行翻译，但必须确保英语版本始终存在，且其内容是最新的。
 
-注意，因为`cargo doc`生成的文档完全不支持i18n，我们也不可能把所有版本的文档都放在代码里，所以请不要在代码中添加任何非英语的文档内容。
+注意，因为`cargo doc`生成的文档完全不支持 i18n，我们也不可能把所有版本的文档都放在代码里，所以请不要在代码中添加任何非英语的文档内容。
 
 ### 文档翻译规范
 
 - 文档翻译必须基于英语版本进行，确保翻译内容与英语版本保持一致。
-- 英文版本的文档不需要加i18n后缀，其他语言版本的文档需要在文件名中添加对应的语言后缀，如 `README_zh-CN.md`。
+- 英文版本的文档不需要加 i18n 后缀，其他语言版本的文档需要在文件名中添加对应的语言后缀，如 `README_zh-CN.md`。
 - 建议翻译过的文档不是直接放在英语版本所在目录，而是其相对目录下的`docs`文件夹中，除非必须这样做。
 
 ### 文档格式
 
-最好能通过markdown lint，不过我们并不强制要求。请确保文档内容清晰、易读，并且格式一致。
+最好能通过 markdown lint，不过我们并不强制要求。请确保文档内容清晰、易读，并且格式一致。
 
 ### 文档提交
 
-- 对本仓库的直接提交/pr规范请查看[提交规范](#提交规范)
+- 对本仓库的直接提交/pr 规范请查看[提交规范](#提交规范)
 - 对相关仓库，如官网、Wiki 等的提交，请遵循各自仓库的贡献指南。
 
 ## 许可证
