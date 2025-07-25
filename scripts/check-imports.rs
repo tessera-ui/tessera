@@ -303,14 +303,13 @@ fn format_imports_from_collected(imports: Vec<Import>) -> String {
         .map(|(attrs, group)| {
             let imports: Vec<_> = group.collect();
             if !attrs.is_empty() {
-                let items = imports
+                return imports
                     .iter()
                     .map(|import| {
                         let keyword = if import.is_pub { "pub use" } else { "use" };
-                        format!("{} {};", keyword, import.path)
+                        format!("{}\n{} {};", attrs, keyword, import.path)
                     })
                     .join("\n");
-                return format!("{}\n{}", attrs, items);
             }
             imports
                 .into_iter()
