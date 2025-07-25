@@ -213,13 +213,15 @@ cargo run
 
 ## Getting started with Nix
 
-### Running the Example on Desktop
+### Running the Example on Desktop with Nix
+
 ```bash
 nix develop           # to enter the desktop shell
 cargo run -p example  # to build and run the example
 ```
 
-### Running the Example on Android
+### Running the Example on Android with Nix
+
 ```bash
 # Enter the Android shell (includes all android tools and setup)
 nix develop

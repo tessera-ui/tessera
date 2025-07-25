@@ -21,6 +21,7 @@ To ensure code quality and consistency, and to keep the repository clean, please
 ## Getting Started
 
 ### Option A - Nix package manager (one-liner)
+
 ```bash
 nix develop            # desktop dev shell
 nix develop .#android  # android dev shell
@@ -31,7 +32,7 @@ nix develop .#android  # android dev shell
 Rust >= 1.77 (rustup toolchain install stable)
 
 Vulkan SDK (includes loader + headers)
-Download from https://vulkan.lunarg.com, run the installer, and
+Download from <https://vulkan.lunarg.com>, run the installer, and
 follow its post‑install instructions.
 
 ```bash
@@ -52,10 +53,10 @@ All code, including documentation within the code (like `rustdoc` comments) and 
   - `rustfmt edition 2024` default rules.
   - `5 use import rules`:
     1. Imports are divided into four groups, arranged in the following strict order:
-        - Group 1: Standard library (`std`, `core`, `alloc`)
-        - Group 2: Third-party crates
-        - Group 3: Current crate root (`crate::`)
-        - Group 4: Submodules of the current crate (`super::`, `self::`)
+       - Group 1: Standard library (`std`, `core`, `alloc`)
+       - Group 2: Third-party crates
+       - Group 3: Current crate root (`crate::`)
+       - Group 4: Submodules of the current crate (`super::`, `self::`)
     2. There must be exactly one blank line between different groups.
     3. Imports within the same group must be arranged consecutively without any blank lines.
     4. Imports within each group must be sorted alphabetically.
@@ -69,6 +70,7 @@ All code, including documentation within the code (like `rustdoc` comments) and 
     ```bash
     rust-script scripts/check-imports.rs . --fix
     ```
+
   - Nix users: just type `fmt` inside `nix develop` - it's a smart alias that runs the same command above from any directory
 
     This command checks and fixes import rules, and also calls `rustfmt` for formatting. It directly applies all the formatting rules mentioned above and does not ignore script files (whereas `cargo fmt` only formats what is managed by `Cargo.toml`).
