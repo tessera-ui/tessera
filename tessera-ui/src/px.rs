@@ -173,7 +173,7 @@ impl Px {
         Dp((self.0 as f64) / scale_factor)
     }
 
-    /// Returns the absolute value as a u32, clamping negative values to 0.
+    /// Returns the absolute value as a u32
     ///
     /// This method is primarily used for coordinate conversion during rendering,
     /// where negative coordinates need to be handled appropriately.
@@ -184,11 +184,46 @@ impl Px {
     /// use tessera_ui::px::Px;
     ///
     /// assert_eq!(Px::new(10).abs(), 10);
-    /// assert_eq!(Px::new(-5).abs(), 0);
+    /// assert_eq!(Px::new(-5).abs(), 5);
     /// assert_eq!(Px::new(0).abs(), 0);
     /// ```
     pub fn abs(self) -> u32 {
-        self.0.max(0) as u32
+        self.0.abs() as u32
+    }
+
+    /// Returns only the positive value, or zero if negative.
+    ///
+    /// This is useful for ensuring that pixel values are always non-negative,
+    /// especially when dealing with rendering or layout calculations.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera_ui::px::Px;
+    ///
+    /// assert_eq!(Px::new(10).positive(), 10);
+    /// assert_eq!(Px::new(-5).positive(), 0);
+    /// assert_eq!(Px::new(0).positive(), 0);
+    /// ```
+    pub fn positive(self) -> u32 {
+        if self.0 < 0 { 0 } else { self.0 as u32 }
+    }
+
+    /// Returns the negative value, or zero if positive.
+    ///
+    /// This is useful for ensuring that pixel values are always non-positive,
+    /// especially when dealing with rendering or layout calculations.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera_ui::px::Px;
+    ///
+    /// assert_eq!(Px::new(10).negative(), 0);
+    /// assert_eq!(Px::new(-5).negative(), -5);
+    /// assert_eq!(Px::new(0).negative(), 0);
+    pub fn negative(self) -> i32 {
+        if self.0 > 0 { 0 } else { self.0 }
     }
 
     /// Converts the pixel value to f32.
@@ -919,7 +954,7 @@ impl From<[u32; 2]> for PxPosition {
 
 impl From<PxPosition> for [u32; 2] {
     fn from(pos: PxPosition) -> Self {
-        [pos.x.abs(), pos.y.abs()]
+        [pos.x.positive(), pos.y.positive()]
     }
 }
 
@@ -983,7 +1018,7 @@ mod tests {
     #[test]
     fn test_px_abs() {
         assert_eq!(Px(10).abs(), 10);
-        assert_eq!(Px(-5).abs(), 0);
+        assert_eq!(Px(-5).abs(), 5);
         assert_eq!(Px(0).abs(), 0);
     }
 
