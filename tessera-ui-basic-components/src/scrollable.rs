@@ -221,7 +221,7 @@ impl ScrollableStateInner {
 /// };
 ///
 /// // In a real app, you would manage the state.
-/// let scrollable_state = Arc::new(RwLock::new(ScrollableState::new()));
+/// let scrollable_state = Arc::new(ScrollableState::new());
 ///
 /// scrollable(
 ///     ScrollableArgs {
