@@ -211,6 +211,26 @@ cargo run
    x run -p example --arch arm64 --device adb:823c4f8b
    ```
 
+## Getting started with Nix
+
+### Running the Example on Desktop
+```bash
+nix develop           # to enter the desktop shell
+cargo run -p example  # to build and run the example
+```
+
+### Running the Example on Android
+```bash
+# Enter the Android shell (includes all android tools and setup)
+nix develop
+
+# Find your device ID
+x devices
+
+# Assuming device ID is adb:823c4f8b and architecture is arm64
+x run -p example --arch arm64 --device adb:823c4f8b
+```
+
 ## Workspace Structure
 
 Tessera adopts a multi-crate workspace structure:

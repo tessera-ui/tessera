@@ -18,6 +18,29 @@ If you need to contribute code to `tessera`, in addition to the latest stable Ru
 
 To ensure code quality and consistency, and to keep the repository clean, please follow these guidelines:
 
+## Getting Started
+
+### Option A - Nix package manager (one-liner)
+```bash
+nix develop            # desktop dev shell
+nix develop .#android  # android dev shell
+```
+
+### Option B - Manual setup
+
+Rust >= 1.77 (rustup toolchain install stable)
+
+Vulkan SDK (includes loader + headers)
+Download from https://vulkan.lunarg.com, run the installer, and
+follow its post‑install instructions.
+
+```bash
+# X11
+sudo apt install libxi-dev libxrandr-dev libxcursor-dev
+# Wayland
+sudo apt install libwayland-dev libxkbcommon-dev
+```
+
 ### Language for Code
 
 All code, including documentation within the code (like `rustdoc` comments) and comments, must be written in English, unless a feature specifically requires pointing out a word in another language.
@@ -46,6 +69,7 @@ All code, including documentation within the code (like `rustdoc` comments) and 
     ```bash
     rust-script scripts/check-imports.rs . --fix
     ```
+  - Nix users: just type `fmt` inside `nix develop` - it's a smart alias that runs the same command above from any directory
 
     This command checks and fixes import rules, and also calls `rustfmt` for formatting. It directly applies all the formatting rules mentioned above and does not ignore script files (whereas `cargo fmt` only formats what is managed by `Cargo.toml`).
 
