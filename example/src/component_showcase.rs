@@ -12,7 +12,6 @@ use tessera_ui_basic_components::{
 use tessera_ui_macros::tessera;
 
 use crate::{
-    animated_spacer::anim_spacer,
     app_state::AppState,
     interactive_demo::interactive_demo,
     material_colors::md_colors,
@@ -349,58 +348,6 @@ fn text_editor_showcase(state: Arc<AppState>) {
     )
 }
 
-/// Animation showcase
-#[tessera]
-fn animation_showcase(state: Arc<AppState>) {
-    let anim_state_clone = state.anim_spacer_state.clone();
-
-    surface(
-        SurfaceArgsBuilder::default()
-            .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
-            .shape(Shape::RoundedRectangle {
-                corner_radius: 25.0,
-                g2_k_value: 3.0,
-            })
-            .padding(Dp(24.0))
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .build()
-            .unwrap(),
-        None, // Non-interactive
-        move || {
-            column_ui!(
-                ColumnArgsBuilder::default()
-                    .width(DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
-                    .build()
-                    .unwrap(),
-                // Title inside the card
-                || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Animation Components".to_string())
-                            .size(tessera_ui::Dp(24.0))
-                            .color(md_colors::ON_SURFACE)
-                            .build()
-                            .unwrap(),
-                    )
-                },
-                || (create_spacer(12))(),
-                // Content
-                || text("Animated Spacer:"),
-                || (create_spacer(8))(),
-                move || anim_spacer(anim_state_clone.clone()),
-                || (create_spacer(8))(),
-                || text("↑ Height animation effect")
-            )
-        },
-    )
-}
-
 /// Interactive components showcase
 #[tessera]
 fn interactive_showcase(state: Arc<AppState>) {
@@ -548,12 +495,5 @@ pub fn component_showcase(state: Arc<AppState>) {
             let state_clone = state.clone();
             move || performance_showcase(state_clone.clone())
         },
-        || create_spacer(24)(),
-        // Animation components (Place at the bottom to avoid jumping)
-        {
-            let state_clone = state.clone();
-            move || animation_showcase(state_clone.clone())
-        },
-        || create_spacer(24)()
     )
 }

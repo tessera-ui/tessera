@@ -1,4 +1,3 @@
-mod animated_spacer;
 mod app;
 mod app_state;
 mod component_showcase;

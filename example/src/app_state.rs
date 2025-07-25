@@ -6,10 +6,7 @@ use tessera_ui_basic_components::{
     scrollable::ScrollableState, switch::SwitchState as BasicSwitchState,
 };
 
-use crate::{
-    animated_spacer::AnimSpacerState, performance_display::PerformanceMetrics,
-    text_editors::TextEditorsState,
-};
+use crate::{performance_display::PerformanceMetrics, text_editors::TextEditorsState};
 
 pub struct RippleDemoStates {
     pub primary: Arc<RippleState>,
@@ -59,9 +56,8 @@ impl SwitchState {
 
 pub struct AppState {
     pub metrics: Arc<PerformanceMetrics>,
-    pub anim_spacer_state: Arc<AnimSpacerState>,
     pub text_editors_state: TextEditorsState,
-    pub scrollable_state: Arc<RwLock<ScrollableState>>,
+    pub scrollable_state: Arc<ScrollableState>,
     pub ripple_states: RippleDemoStates,
     pub checkbox_state: CheckboxState,
     pub switch_state: SwitchState,
@@ -71,9 +67,8 @@ impl AppState {
     pub fn new() -> Self {
         Self {
             metrics: Arc::new(PerformanceMetrics::new()),
-            anim_spacer_state: Arc::new(AnimSpacerState::new()),
             text_editors_state: TextEditorsState::new(),
-            scrollable_state: Arc::new(RwLock::new(ScrollableState::new())),
+            scrollable_state: Arc::new(ScrollableState::new()),
             ripple_states: RippleDemoStates::new(),
             checkbox_state: CheckboxState::new(),
             switch_state: SwitchState::new(),

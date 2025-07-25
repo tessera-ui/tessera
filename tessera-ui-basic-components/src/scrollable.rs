@@ -14,20 +14,26 @@
 //!
 //! # Example
 //! See [`scrollable()`] for usage details and code samples.
+mod scrollbar;
 
 use std::{sync::Arc, time::Instant};
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
-    ComputedData, Constraint, CursorEventContent, DimensionValue, Px, PxPosition,
-    focus_state::Focus,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
 };
 use tessera_ui_macros::tessera;
 
-use crate::pos_misc::is_position_in_component;
+use crate::{
+    alignment::Alignment,
+    boxed::BoxedArgsBuilder,
+    boxed_ui,
+    pos_misc::is_position_in_component,
+    scrollable::scrollbar::{ScrollBarArgs, ScrollBarState, scrollbar_h, scrollbar_v},
+};
 
-#[derive(Debug, Builder)]
+#[derive(Debug, Builder, Clone)]
 pub struct ScrollableArgs {
     /// The desired width behavior of the scrollable area
     /// Defaults to Wrap { min: None, max: None }.
@@ -49,6 +55,29 @@ pub struct ScrollableArgs {
     /// Defaults to 0.05 for very responsive but still smooth scrolling.
     #[builder(default = "0.05")]
     pub scroll_smoothing: f32,
+    /// The behavior of the scrollbar visibility.
+    #[builder(default = "ScrollBarBehavior::AutoHide")]
+    pub scrollbar_behavior: ScrollBarBehavior,
+    /// The color of the scrollbar track.
+    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.1)")]
+    pub scrollbar_track_color: Color,
+    /// The color of the scrollbar thumb.
+    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.3)")]
+    pub scrollbar_thumb_color: Color,
+    /// The color of the scrollbar thumb when hovered.
+    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.5)")]
+    pub scrollbar_thumb_hover_color: Color,
+}
+
+/// Defines the behavior of the scrollbar visibility.
+#[derive(Debug, Clone)]
+pub enum ScrollBarBehavior {
+    /// The scrollbar is always visible.
+    AlwaysVisible,
+    /// The scrollbar is only visible when scrolling.
+    AutoHide,
+    /// No scrollbar at all.
+    Hidden,
 }
 
 impl Default for ScrollableArgs {
@@ -64,34 +93,52 @@ impl Default for ScrollableArgs {
 /// the size of the scrollable content, and focus state.
 ///
 /// The scroll position is smoothly interpolated over time to create a fluid scrolling effect.
+#[derive(Default)]
 pub struct ScrollableState {
+    /// The inner state containing scroll position, size
+    inner: Arc<RwLock<ScrollableStateInner>>,
+    /// The state for vertical scrollbar
+    scrollbar_state_v: Arc<RwLock<ScrollBarState>>,
+    /// The state for horizontal scrollbar
+    scrollbar_state_h: Arc<RwLock<ScrollBarState>>,
+}
+
+impl ScrollableState {
+    /// Creates a new `ScrollableState` with default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ScrollableStateInner {
     /// The current position of the child component (for rendering)
     child_position: PxPosition,
     /// The target position of the child component (scrolling destination)
     target_position: PxPosition,
     /// The child component size
     child_size: ComputedData,
+    /// The visible area size
+    visible_size: ComputedData,
     /// Last frame time for delta time calculation
     last_frame_time: Option<Instant>,
-    /// Focus handler for the scrollable component
-    focus_handler: Focus,
 }
 
-impl Default for ScrollableState {
+impl Default for ScrollableStateInner {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ScrollableState {
+impl ScrollableStateInner {
     /// Creates a new ScrollableState with default values.
     pub fn new() -> Self {
         Self {
             child_position: PxPosition::ZERO,
             target_position: PxPosition::ZERO,
             child_size: ComputedData::ZERO,
+            visible_size: ComputedData::ZERO,
             last_frame_time: None,
-            focus_handler: Focus::new(),
         }
     }
 
@@ -148,16 +195,6 @@ impl ScrollableState {
     /// Sets a new target position for scrolling
     fn set_target_position(&mut self, target: PxPosition) {
         self.target_position = target;
-    }
-
-    /// Gets a reference to the focus handler
-    pub fn focus_handler(&self) -> &Focus {
-        &self.focus_handler
-    }
-
-    /// Gets a mutable reference to the focus handler
-    pub fn focus_handler_mut(&mut self) -> &mut Focus {
-        &mut self.focus_handler
     }
 }
 
@@ -224,7 +261,61 @@ impl ScrollableState {
 #[tessera]
 pub fn scrollable(
     args: impl Into<ScrollableArgs>,
-    state: Arc<RwLock<ScrollableState>>,
+    state: Arc<ScrollableState>,
+    child: impl FnOnce() + Send + Sync + 'static,
+) {
+    let args: ScrollableArgs = args.into();
+    let scrollbar_args = ScrollBarArgs {
+        total: state.inner.read().child_size.height,
+        visible: state.inner.read().visible_size.height,
+        offset: state.inner.read().child_position.y,
+        thickness: Dp(8.0), // Default scrollbar thickness
+        state: state.inner.clone(),
+        track_color: args.scrollbar_track_color,
+        thumb_color: args.scrollbar_thumb_color,
+        thumb_hover_color: args.scrollbar_thumb_hover_color,
+    };
+    boxed_ui!(
+        BoxedArgsBuilder::default()
+            .width(DimensionValue::WRAP)
+            .height(DimensionValue::WRAP)
+            .alignment(Alignment::BottomEnd)
+            .build()
+            .unwrap(),
+        {
+            let state = state.clone();
+            let args = args.clone();
+            move || {
+                scrollable_inner(args, state.inner.clone(), child);
+            }
+        },
+        {
+            let scrollbar_args = scrollbar_args.clone();
+            let args = args.clone();
+            let state = state.clone();
+            move || {
+                if args.vertical {
+                    scrollbar_v(scrollbar_args, state.scrollbar_state_v.clone());
+                }
+            }
+        },
+        {
+            let scrollbar_args = scrollbar_args.clone();
+            let args = args.clone();
+            let state = state.clone();
+            move || {
+                if args.horizontal {
+                    scrollbar_h(scrollbar_args, state.scrollbar_state_h.clone());
+                }
+            }
+        },
+    );
+}
+
+#[tessera]
+fn scrollable_inner(
+    args: impl Into<ScrollableArgs>,
+    state: Arc<RwLock<ScrollableStateInner>>,
     child: impl FnOnce(),
 ) {
     let args: ScrollableArgs = args.into();
@@ -297,8 +388,12 @@ pub fn scrollable(
                 }
                 DimensionValue::Fill { min: _, max } => max.unwrap(),
             };
+            // Pack the size into ComputedData
+            let computed_data = ComputedData { width, height };
+            // Update the visible size in the state
+            state.write().visible_size = computed_data;
             // Return the size of the scrollable area
-            Ok(ComputedData { width, height })
+            Ok(computed_data)
         }));
     }
 
@@ -310,57 +405,41 @@ pub fn scrollable(
             .map(|pos| is_position_in_component(size, pos))
             .unwrap_or(false);
 
-        // Handle click events to request focus (only when cursor is in component)
         if is_cursor_in_component {
-            let click_events: Vec<_> = input
+            // Handle scroll events
+            for event in input
                 .cursor_events
                 .iter()
-                .filter(|event| matches!(event.content, CursorEventContent::Pressed(_)))
-                .collect();
+                .filter_map(|event| match &event.content {
+                    CursorEventContent::Scroll(event) => Some(event),
+                    _ => None,
+                })
+            {
+                let mut state_guard = state.write();
 
-            if !click_events.is_empty() {
-                // Request focus if not already focused
-                if !state.read().focus_handler().is_focused() {
-                    state.write().focus_handler_mut().request_focus();
-                }
-            }
+                // Use scroll delta directly (speed already handled in cursor.rs)
+                let scroll_delta_x = event.delta_x;
+                let scroll_delta_y = event.delta_y;
 
-            // Handle scroll events (only when focused)
-            if state.read().focus_handler().is_focused() {
-                for event in input
-                    .cursor_events
-                    .iter()
-                    .filter_map(|event| match &event.content {
-                        CursorEventContent::Scroll(event) => Some(event),
-                        _ => None,
-                    })
-                {
-                    let mut state_guard = state.write();
+                // Calculate new target position using saturating arithmetic
+                let current_target = state_guard.target_position;
+                let new_target = current_target.saturating_offset(
+                    Px::saturating_from_f32(scroll_delta_x),
+                    Px::saturating_from_f32(scroll_delta_y),
+                );
 
-                    // Use scroll delta directly (speed already handled in cursor.rs)
-                    let scroll_delta_x = event.delta_x;
-                    let scroll_delta_y = event.delta_y;
+                // Apply bounds constraints immediately before setting target
+                let child_size = state_guard.child_size;
+                let constrained_target = constrain_position(
+                    new_target,
+                    &child_size,
+                    &input.computed_data,
+                    args.vertical,
+                    args.horizontal,
+                );
 
-                    // Calculate new target position using saturating arithmetic
-                    let current_target = state_guard.target_position;
-                    let new_target = current_target.saturating_offset(
-                        Px::saturating_from_f32(scroll_delta_x),
-                        Px::saturating_from_f32(scroll_delta_y),
-                    );
-
-                    // Apply bounds constraints immediately before setting target
-                    let child_size = state_guard.child_size;
-                    let constrained_target = constrain_position(
-                        new_target,
-                        &child_size,
-                        &input.computed_data,
-                        args.vertical,
-                        args.horizontal,
-                    );
-
-                    // Set constrained target position
-                    state_guard.set_target_position(constrained_target);
-                }
+                // Set constrained target position
+                state_guard.set_target_position(constrained_target);
             }
 
             // Apply bound constraints to the child position
@@ -376,10 +455,8 @@ pub fn scrollable(
             );
             state.write().set_target_position(constrained_position);
 
-            // Only block cursor events when focused to prevent propagation
-            if state.read().focus_handler().is_focused() {
-                input.cursor_events.clear();
-            }
+            // Block cursor events to prevent propagation
+            input.cursor_events.clear();
         }
 
         // Update scroll position based on time (only once per frame, after handling events)
