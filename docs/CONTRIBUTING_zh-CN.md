@@ -1,4 +1,4 @@
-# Contributing to tessera
+# 为 tessera 做贡献
 
 [![English][contributing-en-badge]][contributing-en-url]
 
@@ -18,28 +18,85 @@
 
 为了确保代码质量和一致性，保证仓库整洁，请遵循以下规范：
 
-### 入门
+## 入门
 
-#### 选项 A - Nix 包管理器（单行命令）
+您可以通过以下三种方式之一来设置您的开发环境：
+
+1. **Nix (推荐)**: 在 Linux 和 macOS 上一键完成环境配置。
+2. **引导脚本**: 为 Windows、Linux 和 macOS 提供的自动化脚本。
+3. **手动设置**: 针对各个操作系统的分步说明。
+
+### 选项 A - Nix 包管理器 (推荐)
+
+如果您安装了 [Nix](https://nixos.org/download.html)，您可以通过运行以下命令来获取一个包含所有依赖的开发环境：
 
 ```bash
 nix develop            # 桌面开发 shell
 nix develop .#android  # 安卓开发 shell
 ```
 
-#### 选项 B - 手动设置
+### 选项 B - 引导脚本
 
-Rust >= 1.77 (rustup toolchain install stable)
+我们提供了脚本来自动化主流操作系统的设置过程。Linux 脚本会尝试检测您的显示服务器 (X11 或 Wayland) 并仅安装必要的依赖。
 
-Vulkan SDK (包括加载器 + 头文件)
-从 <https://vulkan.lunarg.com> 下载，运行安装程序，并按照其安装后说明进行操作。
+- **Windows**:
+  以管理员身份打开 PowerShell 终端并运行：
+
+  ```powershell
+  .\scripts\bootstrap.ps1
+  ```
+
+- **Linux / macOS**:
+  打开终端并运行：
+
+  ```bash
+  bash scripts/bootstrap.sh
+  ```
+
+这些脚本会尝试为您安装 Rust 和其他必要的依赖项。
+
+### 选项 C - 手动设置
+
+如果您倾向于手动设置环境，请按照下面对应您的操作系统的说明进行操作。
+
+#### 1. 安装 Rust
+
+首先，请访问 [rustup.rs](https://rustup.rs/) 按照官方指南安装 Rust 工具链。
 
 ```bash
-# X11
-sudo apt install libxi-dev libxrandr-dev libxcursor-dev
-# Wayland
-sudo apt install libwayland-dev libxkbcommon-dev
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
+
+#### 2. 安装系统依赖
+
+##### 针对 Linux
+
+在 Linux 上，您需要根据您正在使用的显示服务器安装 X11 或 Wayland 的开发包。通常您只需要安装其中一套。
+
+- **使用 X11**:
+
+  - _Debian/Ubuntu_: `sudo apt install libx11-dev libxrandr-dev libxcursor-dev`
+  - _Arch/Manjaro_: `sudo pacman -S libx11 libxrandr libxcursor`
+  - _Fedora_: `sudo dnf install libX11-devel libXrandr-devel libXcursor-devel`
+
+- **使用 Wayland**:
+  - _Debian/Ubuntu_: `sudo apt install libwayland-dev libxkbcommon-dev`
+  - _Arch/Manjaro_: `sudo pacman -S wayland libxkbcommon`
+  - _Fedora_: `sudo dnf install wayland-devel libxkbcommon-devel`
+
+##### 针对 macOS
+
+如果您已经安装了 Xcode 命令行工具，则无需额外的系统依赖。
+
+##### 针对 Windows
+
+安装 Rust 后无需额外的依赖。所需的工具已包含在 Windows 的标准 Rust 安装中。
+
+#### 3. 安装 Vulkan SDK (可选)
+
+Vulkan SDK 是**可选的**。仅当您需要进行着色器验证或调试时才需要它。对于常规的 UI 开发，您可以跳过此步骤。
+
+如果您需要，可以从 [vulkan.lunarg.com](https://vulkan.lunarg.com/) 下载，运行安装程序，并按照其安装后的说明进行操作。
 
 ### 代码使用的语言
 
@@ -82,6 +139,21 @@ sudo apt install libwayland-dev libxkbcommon-dev
   - 您的代码通过了所有测试(`cargo test`)。
   - 您已更新相关文档（如果适用）。
   - 您的代码符合[代码检查规范](#代码检查)。
+
+## 安卓构建特别说明
+
+由于 `NativeActivity` 的限制，为安卓构建需要一些特殊的考量。我们使用 [`xbuild`](https://github.com/rust-mobile/xbuild) 来处理交叉编译和打包的复杂性。
+
+- **先决条件**: 确保您已正确设置 Android NDK 和 SDK。
+- **问题排查**: 如果您在安卓构建过程中遇到问题，`xbuild` 提供了一个诊断工具。运行以下命令来检查您的环境并识别潜在问题：
+
+```bash
+x doctor
+```
+
+- **Nix 用户**: 安卓开发 shell (`nix develop .#android`) 中已预先配置好了 `xbuild`。
+
+请注意，安卓支持仍处于实验阶段，您可能会遇到一些问题。
 
 ## 文档贡献规范
 

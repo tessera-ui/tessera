@@ -20,27 +20,83 @@ To ensure code quality and consistency, and to keep the repository clean, please
 
 ## Getting Started
 
-### Option A - Nix package manager (one-liner)
+You can set up your development environment in one of three ways:
+
+1. **Nix (Recommended)**: For a one-liner setup on Linux and macOS.
+2. **Bootstrap Scripts**: Automated scripts for Windows, Linux, and macOS.
+3. **Manual Setup**: Step-by-step instructions for each OS.
+
+### Option A - Nix package manager (Recommended)
+
+If you have [Nix](https://nixos.org/download.html) installed, you can get a development shell with all dependencies ready by running:
 
 ```bash
-nix develop            # desktop dev shell
-nix develop .#android  # android dev shell
+nix develop            # Desktop dev shell
+nix develop .#android  # Android dev shell
 ```
 
-### Option B - Manual setup
+### Option B - Bootstrap Scripts
 
-Rust >= 1.77 (rustup toolchain install stable)
+We provide scripts to automate the setup process on major operating systems. The Linux script will attempt to detect your display server (X11 or Wayland) and install only the necessary dependencies.
 
-Vulkan SDK (includes loader + headers)
-Download from <https://vulkan.lunarg.com>, run the installer, and
-follow its post‑install instructions.
+- **Windows**:
+  Open a PowerShell terminal and run:
+
+  ```powershell
+  .\scripts\bootstrap.ps1
+  ```
+
+- **Linux / macOS**:
+  Open a terminal and run:
+
+  ```bash
+  bash scripts/bootstrap.sh
+  ```
+
+These scripts will attempt to install Rust and other required dependencies for you.
+
+### Option C - Manual Setup
+
+If you prefer to set up your environment manually, follow the instructions for your operating system below.
+
+#### 1. Install Rust
+
+First, install the Rust toolchain by following the official instructions at [rustup.rs](https://rustup.rs/).
 
 ```bash
-# X11
-sudo apt install libxi-dev libxrandr-dev libxcursor-dev
-# Wayland
-sudo apt install libwayland-dev libxkbcommon-dev
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
+
+#### 2. Install System Dependencies
+
+##### For Linux
+
+On Linux, you need to install development packages for either X11 or Wayland, depending on which display server you are using. You typically only need one set of packages.
+
+- **For X11**:
+
+  - _Debian/Ubuntu_: `sudo apt install libx11-dev libxrandr-dev libxcursor-dev`
+  - _Arch/Manjaro_: `sudo pacman -S libx11 libxrandr libxcursor`
+  - _Fedora_: `sudo dnf install libX11-devel libXrandr-devel libXcursor-devel`
+
+- **For Wayland**:
+  - _Debian/Ubuntu_: `sudo apt install libwayland-dev libxkbcommon-dev`
+  - _Arch/Manjaro_: `sudo pacman -S wayland libxkbcommon`
+  - _Fedora_: `sudo dnf install wayland-devel libxkbcommon-devel`
+
+##### For macOS
+
+No additional system dependencies are required if you have installed the Xcode Command Line Tools.
+
+##### For Windows
+
+No additional dependencies are required after installing Rust. The necessary tools are included with the standard Rust installation for Windows.
+
+#### 3. Install Vulkan SDK (Optional)
+
+The Vulkan SDK is **optional**. It is only required if you need to perform shader validation or debugging. For general UI development, you can skip this step.
+
+If you need it, you can download it from [vulkan.lunarg.com](https://vulkan.lunarg.com/), run the installer, and follow its post-install instructions.
 
 ### Language for Code
 
@@ -108,6 +164,21 @@ It is best to pass a markdown lint, but we do not strictly require it. Please en
 
 - For direct commits/PRs to this repository, please refer to the [Commit Guidelines](#commit-guidelines).
 - For commits to related repositories, such as the official website, Wiki, etc., please follow their respective contribution guidelines.
+
+## Special Note on Android Builds
+
+Building for Android requires some specific considerations due to the limitations of `NativeActivity`. We use [`xbuild`](https://github.com/rust-mobile/xbuild) to handle the complexity of cross-compilation and packaging.
+
+- **Prerequisites**: Ensure you have the Android NDK and SDK correctly set up.
+- **Troubleshooting**: If you encounter issues during an Android build, `xbuild` provides a diagnostic tool. Run the following command to check your environment and identify potential problems:
+
+  ```bash
+  x doctor
+  ```
+
+- **Nix Users**: The Android development shell (`nix develop .#android`) comes with `xbuild` pre-configured.
+
+Please note that Android support is still experimental and you might encounter issues.
 
 ## License
 
