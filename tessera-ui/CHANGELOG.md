@@ -1,3 +1,10 @@
+## [v1.5.2] - 2025-07-28 +08:00
+
+### Changes
+- fix(tessera-ui): ensure abs_position is calculated for all nodes
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.5.1...tessera-ui-v1.5.2)
+
 ## [v1.5.1] - 2025-07-25 +08:00
 
 ### Changes
