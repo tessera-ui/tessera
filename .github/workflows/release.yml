@@ -1,0 +1,48 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - '*-v*.*.*'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract package name and version from tag
+        id: extract_info
+        run: |
+          TAG=${{ github.ref_name }}
+          PACKAGE_NAME=$(echo $TAG | cut -d- -f1)
+          VERSION=$(echo $TAG | sed -n 's/.*-v\(.*\)/\1/p')
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get release notes from CHANGELOG.md
+        id: get_release_notes
+        run: |
+          PACKAGE_NAME=${{ steps.extract_info.outputs.package_name }}
+          VERSION=${{ steps.extract_info.outputs.version }}
+          CHANGELOG_PATH="$PACKAGE_NAME/CHANGELOG.md"
+
+          # Extract content between the new version's header and the next header.
+          # The sed command finds the line with the version, and prints everything until the next line that starts with '## '.
+          NOTES=$(sed -n "/^## \[v${VERSION}\]/,/^## / { /^## /d; p; }" "$CHANGELOG_PATH")
+
+          # Handle multiline output for GitHub Actions
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "notes<<$EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ steps.extract_info.outputs.package_name }} v${{ steps.extract_info.outputs.version }}
+          body: ${{ steps.get_release_notes.outputs.notes }}
+          draft: false
+          prerelease: false
