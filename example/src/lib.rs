@@ -45,7 +45,7 @@ fn main() {}
 
 #[cfg(not(target_os = "android"))]
 pub fn desktop_main() -> Result<(), Box<dyn std::error::Error>> {
-    let _logger = flexi_logger::Logger::try_with_env()?
+    let _logger = flexi_logger::Logger::try_with_env_or_str("info")?
         .write_mode(flexi_logger::WriteMode::Async)
         .start()?;
 
