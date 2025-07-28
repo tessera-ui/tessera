@@ -344,7 +344,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 .min(max.unwrap_or(Px::MAX)),
             DimensionValue::Fill { min, max } => max
                 .expect("Seems that you are trying to fill an infinite width, which is not allowed")
-                .max(min_height)
+                .max(min_width)
                 .max(min.unwrap_or(Px(0))),
         };
         let height = match effective_surface_constraint.height {

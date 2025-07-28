@@ -255,7 +255,7 @@ pub fn fluid_glass(
                 .min(max.unwrap_or(Px::MAX)),
             DimensionValue::Fill { min, max } => max
                 .expect("Seems that you are trying to fill an infinite width, which is not allowed")
-                .max(min_height)
+                .max(min_width)
                 .max(min.unwrap_or(Px(0))),
         };
         let height = match effective_glass_constraint.height {
