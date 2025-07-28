@@ -185,14 +185,14 @@ impl ComponentTree {
                 continue;
             };
 
-            // Compute the relative cursor position for the current node, if available
+            // Compute the relative cursor position for the current node
             let current_cursor_position = cursor_position.map(|pos| {
                 // Get the absolute position of the current node
                 let abs_pos = self
                     .metadatas
                     .get(&node_id)
                     .and_then(|m| m.abs_position)
-                    .unwrap_or(PxPosition::ZERO);
+                    .unwrap();
                 // Calculate the relative position
                 pos - abs_pos
             });
@@ -293,60 +293,56 @@ fn compute_draw_commands_inner_parallel(
 ) -> Vec<(Command, PxSize, PxPosition)> {
     let mut local_commands = Vec::new();
 
-    // Process current node's metadata and extract its rendering commands
-    if let Some(mut entry) = metadatas.get_mut(&node_id) {
-        // Calculate absolute position: root nodes start at origin, others use relative positioning
-        let rel_pos = match entry.rel_position {
-            Some(pos) => pos,
-            None if is_root => PxPosition::ZERO,
-            _ => return local_commands, // Skip nodes without position data
-        };
-        let self_pos = start_pos + rel_pos;
-        entry.abs_position = Some(self_pos);
+    // Get metadata and calculate absolute position. This MUST happen for all nodes.
+    let mut metadata = metadatas.get_mut(&node_id).unwrap();
+    let rel_pos = match metadata.rel_position {
+        Some(pos) => pos,
+        None if is_root => PxPosition::ZERO,
+        _ => return local_commands, // Skip nodes that were not placed at all.
+    };
+    let self_pos = start_pos + rel_pos;
+    metadata.abs_position = Some(self_pos);
 
-        let size = entry
-            .computed_data
-            .map(|d| PxSize {
-                width: d.width,
-                height: d.height,
-            })
-            .unwrap_or_default();
+    let size = metadata
+        .computed_data
+        .map(|d| PxSize {
+            width: d.width,
+            height: d.height,
+        })
+        .unwrap_or_default();
 
-        // Viewport culling: skip if the node is completely outside the screen
-        let screen_rect = Rect {
-            x: 0,
-            y: 0,
-            width: screen_width,
-            height: screen_height,
-        };
-        let node_rect = Rect {
-            x: self_pos.x.0,
-            y: self_pos.y.0,
-            width: size.width.0,
-            height: size.height.0,
-        };
-        // If the node is completely invisible, skip it
-        if size.width.0 > 0 && size.height.0 > 0 && !node_rect.intersects(&screen_rect) {
-            return local_commands;
-        }
+    // Viewport culling check
+    let screen_rect = Rect {
+        x: 0,
+        y: 0,
+        width: screen_width,
+        height: screen_height,
+    };
+    let node_rect = Rect {
+        x: self_pos.x.0,
+        y: self_pos.y.0,
+        width: size.width.0,
+        height: size.height.0,
+    };
 
-        // Drain all commands from this node and add them to the output
-        for cmd in entry.commands.drain(..) {
+    // Only drain commands if the node is visible.
+    if size.width.0 > 0 && size.height.0 > 0 && node_rect.intersects(&screen_rect) {
+        for cmd in metadata.commands.drain(..) {
             local_commands.push((cmd, size, self_pos));
         }
     }
 
-    // Process all child nodes in parallel for better performance
+    drop(metadata); // Release lock before recursing
+
+    // ALWAYS recurse to children to ensure their abs_position is calculated.
     let children: Vec<_> = node_id.children(tree).collect();
     let child_results: Vec<Vec<_>> = children
         .into_par_iter()
         .map(|child| {
-            let self_pos = metadatas
-                .get(&node_id)
-                .and_then(|m| m.abs_position)
-                .unwrap_or(start_pos);
+            // The unwrap is safe because we just set the parent's abs_position.
+            let parent_abs_pos = metadatas.get(&node_id).unwrap().abs_position.unwrap();
             compute_draw_commands_inner_parallel(
-                self_pos,
+                parent_abs_pos, // Pass the calculated absolute position
                 false,
                 child,
                 tree,
