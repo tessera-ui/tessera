@@ -1,3 +1,9 @@
+## [v0.1.3] - 2025-07-28 +08:00
+
+### Changes
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-macros-v0.1.2...tessera-ui-macros-v0.1.3)
+
 ## [v0.1.2] - 2025-07-25 +08:00
 
 ### Changes
