@@ -1,3 +1,10 @@
+## [v1.1.3] - 2025-07-28 +08:00
+
+### Changes
+- fix(tessera-ui-basic-components): correct layout calculation for fill dimension
+
+[Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-basic-components-v1.1.2...tessera-ui-basic-components-v1.1.3)
+
 ## [v1.1.2] - 2025-07-28 +08:00
 
 ### Changes
