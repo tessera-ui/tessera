@@ -65,7 +65,7 @@ The roadmap is now organized by crate:
 ### tessera-ui-basic-components (v2.0.0 roadmap)
 
 - Beautify/optimize these components
-  - checkbox
+  - ~~checkbox~~
   - dialog
   - slider
   - text_editor
