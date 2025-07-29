@@ -1,3 +1,10 @@
+## [v1.2.1] - 2025-07-29 +08:00
+
+### Changes
+- style(checkbox): adjust checkmark size and padding for better visual centering
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.2.0...tessera-ui-basic-components-v1.2.1)
+
 ## [v1.2.0] - 2025-07-29 +08:00
 
 ### Changes
