@@ -70,6 +70,7 @@ The roadmap is now organized by crate:
   - slider
   - text_editor
   - progress
+  - ~~scrollable~~
 - `image` component supports more formats
 - Add these components
   - radio
