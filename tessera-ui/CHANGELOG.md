@@ -1,3 +1,15 @@
+## [v1.6.0] - 2025-07-29 +08:00
+
+### Changes
+- docs(renderer): correct comment for TesseraConfig's default
+- feat(scrollable): support Overlay/Alongside scrollbar layouts, always-visible by default, improve API
+- build(deps): remove unused dependencies
+- Merge pull request #20 from tessera-ui/dependabot/cargo/tokio-1.47.0
+- chore(deps): bump tokio from 1.46.1 to 1.47.0
+- chore(deps): bump winit from 0.30.11 to 0.30.12
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.5.2...tessera-ui-v1.6.0)
+
 ## [v1.5.2] - 2025-07-28 +08:00
 
 ### Changes

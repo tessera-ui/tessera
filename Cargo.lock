@@ -3031,7 +3031,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-ui"
-version = "1.5.2"
+version = "1.6.0"
 dependencies = [
  "arboard",
  "bytemuck",
