@@ -16,7 +16,7 @@ jobs:
         id: extract_info
         run: |
           TAG=${{ github.ref_name }}
-          PACKAGE_NAME=$(echo $TAG | cut -d- -f1)
+          PACKAGE_NAME=${TAG%-*}
           VERSION=$(echo $TAG | sed -n 's/.*-v\(.*\)/\1/p')
           echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
