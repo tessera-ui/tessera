@@ -253,7 +253,7 @@ pub struct TesseraConfig {
     /// ## Supported Values
     /// - `1`: Disables MSAA (best performance, lower quality)
     /// - `2`: 2x MSAA (moderate performance impact)
-    /// - `4`: 4x MSAA (balanced quality/performance - default)
+    /// - `4`: 4x MSAA (balanced quality/performance)
     /// - `8`: 8x MSAA (high quality, higher performance cost)
     ///
     /// ## Notes
@@ -265,7 +265,7 @@ pub struct TesseraConfig {
 }
 
 impl Default for TesseraConfig {
-    /// Creates a default configuration with 4x MSAA enabled.
+    /// Creates a default configuration with no MSAA enabled.
     fn default() -> Self {
         Self { sample_count: 1 }
     }
