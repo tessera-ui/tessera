@@ -71,7 +71,6 @@ The roadmap is now organized by crate:
   - text_editor
   - progress
   - ~~scrollable~~
-- `image` component supports more formats
 - Add these components
   - radio
   - bottom sheet
