@@ -271,6 +271,7 @@ pub fn scrollable(
         offset: state.inner.read().child_position.y,
         thickness: Dp(8.0), // Default scrollbar thickness
         state: state.inner.clone(),
+        scrollbar_behavior: args.scrollbar_behavior.clone(),
         track_color: args.scrollbar_track_color,
         thumb_color: args.scrollbar_thumb_color,
         thumb_hover_color: args.scrollbar_thumb_hover_color,
@@ -286,7 +287,13 @@ pub fn scrollable(
             let state = state.clone();
             let args = args.clone();
             move || {
-                scrollable_inner(args, state.inner.clone(), child);
+                scrollable_inner(
+                    args,
+                    state.inner.clone(),
+                    state.scrollbar_state_v.clone(),
+                    state.scrollbar_state_h.clone(),
+                    child,
+                );
             }
         },
         {
@@ -316,6 +323,8 @@ pub fn scrollable(
 fn scrollable_inner(
     args: impl Into<ScrollableArgs>,
     state: Arc<RwLock<ScrollableStateInner>>,
+    scrollbar_state_v: Arc<RwLock<ScrollBarState>>,
+    scrollbar_state_h: Arc<RwLock<ScrollBarState>>,
     child: impl FnOnce(),
 ) {
     let args: ScrollableArgs = args.into();
@@ -440,6 +449,22 @@ fn scrollable_inner(
 
                 // Set constrained target position
                 state_guard.set_target_position(constrained_target);
+
+                // Update scroll activity for AutoHide behavior
+                if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
+                    // Update vertical scrollbar state if vertical scrolling is enabled
+                    if args.vertical {
+                        let mut scrollbar_state = scrollbar_state_v.write();
+                        scrollbar_state.last_scroll_activity = Some(std::time::Instant::now());
+                        scrollbar_state.should_be_visible = true;
+                    }
+                    // Update horizontal scrollbar state if horizontal scrolling is enabled
+                    if args.horizontal {
+                        let mut scrollbar_state = scrollbar_state_h.write();
+                        scrollbar_state.last_scroll_activity = Some(std::time::Instant::now());
+                        scrollbar_state.should_be_visible = true;
+                    }
+                }
             }
 
             // Apply bound constraints to the child position

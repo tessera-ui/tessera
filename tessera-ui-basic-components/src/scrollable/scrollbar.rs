@@ -5,7 +5,7 @@ use tessera_ui::{Color, Constraint, CursorEventContent, Dp, PressKeyEventType, P
 use tessera_ui_macros::tessera;
 
 use crate::{
-    scrollable::ScrollableStateInner,
+    scrollable::{ScrollBarBehavior, ScrollableStateInner},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
@@ -22,6 +22,8 @@ pub struct ScrollBarArgs {
     pub thickness: Dp,
     /// The scrollable's state, used for interaction.
     pub state: Arc<RwLock<ScrollableStateInner>>,
+    /// The behavior of the scrollbar visibility.
+    pub scrollbar_behavior: ScrollBarBehavior,
     /// The color of the scrollbar track.
     pub track_color: Color,
     /// The color of the scrollbar thumb.
@@ -38,11 +40,30 @@ pub struct ScrollBarState {
     pub is_hovered: bool,
     /// The instant when the hover state last changed.
     pub hover_instant: Option<std::time::Instant>,
+    /// The instant when the last scroll activity occurred (for AutoHide behavior).
+    pub last_scroll_activity: Option<std::time::Instant>,
+    /// Whether the scrollbar should be visible (for AutoHide behavior).
+    pub should_be_visible: bool,
 }
 
 #[tessera]
 pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarState>>) {
     let args: ScrollBarArgs = args.into();
+
+    // Check if scrollbar should be visible based on behavior
+    let should_show = match args.scrollbar_behavior {
+        ScrollBarBehavior::AlwaysVisible => true,
+        ScrollBarBehavior::Hidden => false,
+        ScrollBarBehavior::AutoHide => {
+            let state_guard = state.read();
+            state_guard.should_be_visible || state_guard.is_dragging || state_guard.is_hovered
+        }
+    };
+
+    // If scrollbar should be hidden, don't render anything
+    if !should_show {
+        return;
+    }
 
     // Ensure the scrollbar is visible
     if args.visible <= Px::ZERO || args.total <= Px::ZERO || args.thickness <= Dp::ZERO {
@@ -120,6 +141,17 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
     }));
 
     state_handler(Box::new(move |input| {
+        // Handle AutoHide behavior - hide scrollbar after inactivity
+        if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
+            let mut state_guard = state.write();
+            if let Some(last_activity) = state_guard.last_scroll_activity {
+                // Hide scrollbar after 2 seconds of inactivity
+                if last_activity.elapsed().as_secs_f32() > 2.0 {
+                    state_guard.should_be_visible = false;
+                }
+            }
+        }
+
         // A helper function to calculate the target position based on cursor's y
         let calculate_target_pos = |cursor_y: Px| -> PxPosition {
             // The scrollable range of the thumb within the track
@@ -166,6 +198,13 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
             if let Some(cursor_pos) = input.cursor_position {
                 let new_target_pos = calculate_target_pos(cursor_pos.y);
                 args.state.write().set_target_position(new_target_pos);
+
+                // Update scroll activity for AutoHide behavior
+                if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
+                    let mut state_guard = state.write();
+                    state_guard.last_scroll_activity = Some(std::time::Instant::now());
+                    state_guard.should_be_visible = true;
+                }
             } else {
                 // Cursor is outside the window, stop dragging
                 state.write().is_dragging = false;
@@ -227,6 +266,21 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
 #[tessera]
 pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarState>>) {
     let args: ScrollBarArgs = args.into();
+
+    // Check if scrollbar should be visible based on behavior
+    let should_show = match args.scrollbar_behavior {
+        ScrollBarBehavior::AlwaysVisible => true,
+        ScrollBarBehavior::Hidden => false,
+        ScrollBarBehavior::AutoHide => {
+            let state_guard = state.read();
+            state_guard.should_be_visible || state_guard.is_dragging || state_guard.is_hovered
+        }
+    };
+
+    // If scrollbar should be hidden, don't render anything
+    if !should_show {
+        return;
+    }
 
     // Ensure the scrollbar is visible
     if args.visible <= Px::ZERO || args.total <= Px::ZERO || args.thickness <= Dp::ZERO {
@@ -304,6 +358,17 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
     }));
 
     state_handler(Box::new(move |input| {
+        // Handle AutoHide behavior - hide scrollbar after inactivity
+        if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
+            let mut state_guard = state.write();
+            if let Some(last_activity) = state_guard.last_scroll_activity {
+                // Hide scrollbar after 2 seconds of inactivity
+                if last_activity.elapsed().as_secs_f32() > 2.0 {
+                    state_guard.should_be_visible = false;
+                }
+            }
+        }
+
         // A helper function to calculate the target position based on cursor's x
         let calculate_target_pos = |cursor_x: Px| -> PxPosition {
             // The scrollable range of the thumb within the track
@@ -350,6 +415,13 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
             if let Some(cursor_pos) = input.cursor_position {
                 let new_target_pos = calculate_target_pos(cursor_pos.x);
                 args.state.write().set_target_position(new_target_pos);
+
+                // Update scroll activity for AutoHide behavior
+                if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
+                    let mut state_guard = state.write();
+                    state_guard.last_scroll_activity = Some(std::time::Instant::now());
+                    state_guard.should_be_visible = true;
+                }
             } else {
                 // Cursor is outside the window, stop dragging
                 state.write().is_dragging = false;
