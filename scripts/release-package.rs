@@ -54,7 +54,7 @@ enum BumpType {
     Patch,
 }
 
-const GITHUB_OWNER: &str = "shadow3aaa";
+const GITHUB_OWNER: &str = "tessera-ui";
 const GITHUB_REPO: &str = "tessera";
 const PUBLISHABLE_PACKAGES: &[&str] = &[
     "tessera-ui",
