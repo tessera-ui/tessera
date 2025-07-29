@@ -117,6 +117,8 @@
 //! }
 //! ```
 
+use std::ops::Sub;
+
 use crate::{Dp, Px};
 
 /// Defines how a dimension (width or height) should be calculated.
@@ -329,6 +331,78 @@ impl From<Dp> for DimensionValue {
     /// Converts a `Dp` value to a `DimensionValue::Fixed`.
     fn from(value: Dp) -> Self {
         DimensionValue::Fixed(value.into())
+    }
+}
+
+impl Sub<Px> for DimensionValue {
+    type Output = DimensionValue;
+
+    fn sub(self, rhs: Px) -> Self::Output {
+        match self {
+            DimensionValue::Fixed(px) => DimensionValue::Fixed(px - rhs),
+            DimensionValue::Wrap { min, max } => DimensionValue::Wrap {
+                min,
+                max: max.map(|m| m - rhs),
+            },
+            DimensionValue::Fill { min, max } => DimensionValue::Fill {
+                min,
+                max: max.map(|m| m - rhs),
+            },
+        }
+    }
+}
+
+impl std::ops::Add<Px> for DimensionValue {
+    type Output = DimensionValue;
+
+    fn add(self, rhs: Px) -> Self::Output {
+        match self {
+            DimensionValue::Fixed(px) => DimensionValue::Fixed(px + rhs),
+            DimensionValue::Wrap { min, max } => DimensionValue::Wrap {
+                min,
+                max: max.map(|m| m + rhs),
+            },
+            DimensionValue::Fill { min, max } => DimensionValue::Fill {
+                min,
+                max: max.map(|m| m + rhs),
+            },
+        }
+    }
+}
+
+impl std::ops::AddAssign<Px> for DimensionValue {
+    fn add_assign(&mut self, rhs: Px) {
+        match self {
+            DimensionValue::Fixed(px) => *px = *px + rhs,
+            DimensionValue::Wrap { max, .. } => {
+                if let Some(m) = max {
+                    *m = *m + rhs;
+                }
+            }
+            DimensionValue::Fill { max, .. } => {
+                if let Some(m) = max {
+                    *m = *m + rhs;
+                }
+            }
+        }
+    }
+}
+
+impl std::ops::SubAssign<Px> for DimensionValue {
+    fn sub_assign(&mut self, rhs: Px) {
+        match self {
+            DimensionValue::Fixed(px) => *px = *px - rhs,
+            DimensionValue::Wrap { max, .. } => {
+                if let Some(m) = max {
+                    *m = *m - rhs;
+                }
+            }
+            DimensionValue::Fill { max, .. } => {
+                if let Some(m) = max {
+                    *m = *m - rhs;
+                }
+            }
+        }
     }
 }
 

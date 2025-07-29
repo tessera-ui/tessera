@@ -56,7 +56,7 @@ pub struct ScrollableArgs {
     #[builder(default = "0.05")]
     pub scroll_smoothing: f32,
     /// The behavior of the scrollbar visibility.
-    #[builder(default = "ScrollBarBehavior::AutoHide")]
+    #[builder(default = "ScrollBarBehavior::AlwaysVisible")]
     pub scrollbar_behavior: ScrollBarBehavior,
     /// The color of the scrollbar track.
     #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.1)")]
@@ -67,6 +67,9 @@ pub struct ScrollableArgs {
     /// The color of the scrollbar thumb when hovered.
     #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.5)")]
     pub scrollbar_thumb_hover_color: Color,
+    /// The layout of the scrollbar relative to the content.
+    #[builder(default = "ScrollBarLayout::Alongside")]
+    pub scrollbar_layout: ScrollBarLayout,
 }
 
 /// Defines the behavior of the scrollbar visibility.
@@ -78,6 +81,15 @@ pub enum ScrollBarBehavior {
     AutoHide,
     /// No scrollbar at all.
     Hidden,
+}
+
+/// Defines the layout of the scrollbar relative to the scrollable content.
+#[derive(Debug, Clone)]
+pub enum ScrollBarLayout {
+    /// The scrollbar is placed alongside the content (takes up space in the layout).
+    Alongside,
+    /// The scrollbar is overlaid on top of the content (doesn't take up space).
+    Overlay,
 }
 
 impl Default for ScrollableArgs {
@@ -204,6 +216,10 @@ impl ScrollableStateInner {
 /// content that may not fit within the allocated space. It supports vertical and/or
 /// horizontal scrolling, which can be configured via `ScrollableArgs`.
 ///
+/// The component offers two scrollbar layout options:
+/// - `Alongside`: Scrollbars take up space in the layout alongside the content
+/// - `Overlay`: Scrollbars are overlaid on top of the content without taking up space
+///
 /// State management is handled by `ScrollableState`, which must be provided to persist
 /// the scroll position across recompositions. The scrolling behavior is animated with
 /// a configurable smoothing factor for a better user experience.
@@ -216,16 +232,43 @@ impl ScrollableStateInner {
 /// use tessera_ui::{DimensionValue, Dp};
 /// use tessera_ui_basic_components::{
 ///     column::{column_ui, ColumnArgs},
-///     scrollable::{scrollable, ScrollableArgs, ScrollableState},
+///     scrollable::{scrollable, ScrollableArgs, ScrollableState, ScrollBarLayout},
 ///     text::text,
 /// };
 ///
 /// // In a real app, you would manage the state.
 /// let scrollable_state = Arc::new(ScrollableState::new());
 ///
+/// // Example with alongside scrollbars (default)
 /// scrollable(
 ///     ScrollableArgs {
 ///         height: DimensionValue::Fixed(Dp(100.0).into()),
+///         scrollbar_layout: ScrollBarLayout::Alongside,
+///         ..Default::default()
+///     },
+///     scrollable_state.clone(),
+///     || {
+///         column_ui!(
+///             ColumnArgs::default(),
+///             || text("Item 1".to_string()),
+///             || text("Item 2".to_string()),
+///             || text("Item 3".to_string()),
+///             || text("Item 4".to_string()),
+///             || text("Item 5".to_string()),
+///             || text("Item 6".to_string()),
+///             || text("Item 7".to_string()),
+///             || text("Item 8".to_string()),
+///             || text("Item 9".to_string()),
+///             || text("Item 10".to_string()),
+///         );
+///     },
+/// );
+///
+/// // Example with overlay scrollbars
+/// scrollable(
+///     ScrollableArgs {
+///         height: DimensionValue::Fixed(Dp(100.0).into()),
+///         scrollbar_layout: ScrollBarLayout::Overlay,
 ///         ..Default::default()
 ///     },
 ///     scrollable_state,
@@ -265,7 +308,9 @@ pub fn scrollable(
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
     let args: ScrollableArgs = args.into();
-    let scrollbar_args = ScrollBarArgs {
+
+    // Create separate ScrollBarArgs for vertical and horizontal scrollbars
+    let scrollbar_args_v = ScrollBarArgs {
         total: state.inner.read().child_size.height,
         visible: state.inner.read().visible_size.height,
         offset: state.inner.read().child_position.y,
@@ -276,10 +321,134 @@ pub fn scrollable(
         thumb_color: args.scrollbar_thumb_color,
         thumb_hover_color: args.scrollbar_thumb_hover_color,
     };
+
+    let scrollbar_args_h = ScrollBarArgs {
+        total: state.inner.read().child_size.width,
+        visible: state.inner.read().visible_size.width,
+        offset: state.inner.read().child_position.x,
+        thickness: Dp(8.0), // Default scrollbar thickness
+        state: state.inner.clone(),
+        scrollbar_behavior: args.scrollbar_behavior.clone(),
+        track_color: args.scrollbar_track_color,
+        thumb_color: args.scrollbar_thumb_color,
+        thumb_hover_color: args.scrollbar_thumb_hover_color,
+    };
+
+    match args.scrollbar_layout {
+        ScrollBarLayout::Alongside => {
+            scrollable_with_alongside_scrollbar(
+                state,
+                args,
+                scrollbar_args_v,
+                scrollbar_args_h,
+                child,
+            );
+        }
+        ScrollBarLayout::Overlay => {
+            scrollable_with_overlay_scrollbar(
+                state,
+                args,
+                scrollbar_args_v,
+                scrollbar_args_h,
+                child,
+            );
+        }
+    }
+}
+
+#[tessera]
+fn scrollable_with_alongside_scrollbar(
+    state: Arc<ScrollableState>,
+    args: ScrollableArgs,
+    scrollbar_args_v: ScrollBarArgs,
+    scrollbar_args_h: ScrollBarArgs,
+    child: impl FnOnce() + Send + Sync + 'static,
+) {
+    scrollable_inner(
+        args.clone(),
+        state.inner.clone(),
+        state.scrollbar_state_v.clone(),
+        state.scrollbar_state_h.clone(),
+        child,
+    );
+
+    if args.vertical {
+        scrollbar_v(scrollbar_args_v, state.scrollbar_state_v.clone());
+    }
+
+    if args.horizontal {
+        scrollbar_h(scrollbar_args_h, state.scrollbar_state_h.clone());
+    }
+
+    measure(Box::new(move |input| {
+        // Record the final size
+        let mut final_size = ComputedData::ZERO;
+        // Get parent constraint as content constraint
+        let mut content_contraint = input.parent_constraint.to_owned();
+        // measure the scrollbar
+        if args.vertical {
+            let scrollbar_node_id = input.children_ids[1];
+            let size = input.measure_child(scrollbar_node_id, input.parent_constraint)?;
+            // substract the scrollbar size from the content constraint
+            content_contraint.width -= size.width;
+            // update the size
+            final_size.width += size.width;
+        }
+        if args.horizontal {
+            let scrollbar_node_id = if args.vertical {
+                input.children_ids[2]
+            } else {
+                input.children_ids[1]
+            };
+            let size = input.measure_child(scrollbar_node_id, input.parent_constraint)?;
+            content_contraint.height -= size.height;
+            // update the size
+            final_size.height += size.height;
+        }
+        // Measure the content
+        let content_node_id = input.children_ids[0];
+        let content_measurement = input.measure_child(content_node_id, &content_contraint)?;
+        // update the size
+        final_size.width += content_measurement.width;
+        final_size.height += content_measurement.height;
+        // Place childrens
+        // place the content at [0, 0]
+        input.place_child(content_node_id, PxPosition::ZERO);
+        // place the scrollbar at the end
+        if args.vertical {
+            input.place_child(
+                input.children_ids[1],
+                PxPosition::new(content_measurement.width, Px::ZERO),
+            );
+        }
+        if args.horizontal {
+            let scrollbar_node_id = if args.vertical {
+                input.children_ids[2]
+            } else {
+                input.children_ids[1]
+            };
+            input.place_child(
+                scrollbar_node_id,
+                PxPosition::new(Px::ZERO, content_measurement.height),
+            );
+        }
+        // Return the computed data
+        Ok(final_size)
+    }));
+}
+
+#[tessera]
+fn scrollable_with_overlay_scrollbar(
+    state: Arc<ScrollableState>,
+    args: ScrollableArgs,
+    scrollbar_args_v: ScrollBarArgs,
+    scrollbar_args_h: ScrollBarArgs,
+    child: impl FnOnce() + Send + Sync + 'static,
+) {
     boxed_ui!(
         BoxedArgsBuilder::default()
-            .width(DimensionValue::WRAP)
-            .height(DimensionValue::WRAP)
+            .width(args.width)
+            .height(args.height)
             .alignment(Alignment::BottomEnd)
             .build()
             .unwrap(),
@@ -297,22 +466,22 @@ pub fn scrollable(
             }
         },
         {
-            let scrollbar_args = scrollbar_args.clone();
+            let scrollbar_args_v = scrollbar_args_v.clone();
             let args = args.clone();
             let state = state.clone();
             move || {
                 if args.vertical {
-                    scrollbar_v(scrollbar_args, state.scrollbar_state_v.clone());
+                    scrollbar_v(scrollbar_args_v, state.scrollbar_state_v.clone());
                 }
             }
         },
         {
-            let scrollbar_args = scrollbar_args.clone();
+            let scrollbar_args_h = scrollbar_args_h.clone();
             let args = args.clone();
             let state = state.clone();
             move || {
                 if args.horizontal {
-                    scrollbar_h(scrollbar_args, state.scrollbar_state_h.clone());
+                    scrollbar_h(scrollbar_args_h, state.scrollbar_state_h.clone());
                 }
             }
         },

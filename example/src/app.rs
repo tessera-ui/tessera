@@ -15,22 +15,16 @@ use crate::{
 #[tessera]
 fn main_content(state: Arc<AppState>) {
     surface(
-        // Main background surface
         SurfaceArgsBuilder::default()
-            .color(md_colors::SURFACE) // Material Design surface color
-            .padding(Dp(16.0)) // Add consistent padding around main content
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
+            .color(md_colors::SURFACE)
+            .padding(Dp(16.0))
             .build()
             .unwrap(),
-        None, // Non-interactive background
+        None,
         move || {
-            // Use the new organized component showcase
             component_showcase(state.clone());
         },
-    )
+    );
 }
 
 /// Main application component
@@ -39,12 +33,26 @@ pub fn app(state: Arc<AppState>) {
     let scroller_state_clone = state.scrollable_state.clone();
     let state_clone = state.clone();
 
-    // Main scrollable container
-    scrollable(
-        ScrollableArgsBuilder::default().build().unwrap(),
-        scroller_state_clone,
+    surface(
+        // Main background surface
+        SurfaceArgsBuilder::default()
+            .color(md_colors::SURFACE)
+            .width(DimensionValue::Fill {
+                min: None,
+                max: None,
+            })
+            .build()
+            .unwrap(),
+        None, // Non-interactive background
         move || {
-            main_content(state_clone.clone());
+            // Main scrollable container
+            scrollable(
+                ScrollableArgsBuilder::default().build().unwrap(),
+                scroller_state_clone,
+                move || {
+                    main_content(state_clone.clone());
+                },
+            );
         },
     );
 }

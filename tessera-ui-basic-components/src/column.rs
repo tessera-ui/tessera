@@ -187,7 +187,9 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
 
             let mut total_height_of_unweighted_children = Px(0);
             for &child_idx in &unweighted_children_indices {
-                let child_id = input.children_ids[child_idx];
+                let Some(child_id) = input.children_ids.get(child_idx).copied() else {
+                    continue;
+                };
 
                 // Parent (column) offers its own effective width constraint.
                 // Height is Wrap for unweighted children in this path.
