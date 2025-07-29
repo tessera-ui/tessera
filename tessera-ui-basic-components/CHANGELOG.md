@@ -1,3 +1,12 @@
+## [v1.2.0] - 2025-07-29 +08:00
+
+### Changes
+- feat(scrollable): support Overlay/Alongside scrollbar layouts, always-visible by default, improve API
+- feat(scrollable): add ScrollBarBehavior with AlwaysVisible, AutoHide, and Hidden modes
+- chore(deps): bump glam from 0.30.4 to 0.30.5
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.1.3...tessera-ui-basic-components-v1.2.0)
+
 ## [v1.1.3] - 2025-07-28 +08:00
 
 ### Changes
