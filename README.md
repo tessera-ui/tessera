@@ -61,6 +61,7 @@ The roadmap is now organized by crate:
 
 - Design how to provide async API to components
 - Optimize touch screen adaptation
+- router
 
 ### tessera-ui-basic-components (v2.0.0 roadmap)
 
@@ -74,6 +75,9 @@ The roadmap is now organized by crate:
 - Add these components
   - radio
   - bottom sheet
+  - tab
+  - bottom nav bar
+  - side bar
 
 ## Comparison with `egui`
 
