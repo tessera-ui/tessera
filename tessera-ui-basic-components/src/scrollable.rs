@@ -578,7 +578,7 @@ fn scrollable_inner(
     // Handle scroll input and position updates
     state_handler(Box::new(move |input| {
         let size = input.computed_data;
-        let cursor_pos_option = input.cursor_position;
+        let cursor_pos_option = input.cursor_position_rel;
         let is_cursor_in_component = cursor_pos_option
             .map(|pos| is_position_in_component(size, pos))
             .unwrap_or(false);

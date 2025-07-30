@@ -220,7 +220,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
         }
 
         let size = input.computed_data;
-        let is_cursor_in = if let Some(pos) = input.cursor_position {
+        let is_cursor_in = if let Some(pos) = input.cursor_position_rel {
             pos.x.0 >= 0 && pos.x.0 < size.width.0 && pos.y.0 >= 0 && pos.y.0 < size.height.0
         } else {
             false

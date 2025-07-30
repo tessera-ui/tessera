@@ -237,7 +237,11 @@ pub struct StateHandlerInput<'a> {
     pub computed_data: ComputedData,
     /// The position of the cursor, if available.
     /// Relative to the root position of the component.
-    pub cursor_position: Option<PxPosition>,
+    pub cursor_position_rel: Option<PxPosition>,
+    /// The mut ref of absolute position of the cursor in the window.
+    /// Used to block cursor fully if needed, since cursor_position_rel use this.
+    /// Not a public field for now.
+    pub(crate) cursor_position_abs: &'a mut Option<PxPosition>,
     /// Cursor events from the event loop, if any.
     pub cursor_events: &'a mut Vec<CursorEvent>,
     /// Keyboard events from the event loop, if any.
@@ -251,6 +255,35 @@ pub struct StateHandlerInput<'a> {
     pub requests: &'a mut WindowRequests,
     /// Clipboard
     pub clipboard: &'a mut Clipboard,
+}
+
+impl StateHandlerInput<'_> {
+    /// Blocks the cursor to other components.
+    pub fn block_cursor(&mut self) {
+        // Block the cursor by setting its position to None.
+        self.cursor_position_abs.take();
+        // Clear all cursor events to prevent them from propagating.
+        self.cursor_events.clear();
+    }
+
+    /// Blocks the keyboard events to other components.
+    pub fn block_keyboard(&mut self) {
+        // Clear all keyboard events to prevent them from propagating.
+        self.keyboard_events.clear();
+    }
+
+    /// Blocks the IME events to other components.
+    pub fn block_ime(&mut self) {
+        // Clear all IME events to prevent them from propagating.
+        self.ime_events.clear();
+    }
+
+    /// Block all events (cursor, keyboard, IME) to other components.
+    pub fn block_all(&mut self) {
+        self.block_cursor();
+        self.block_keyboard();
+        self.block_ime();
+    }
 }
 
 /// A collection of requests that components can make to the windowing system for the current frame.

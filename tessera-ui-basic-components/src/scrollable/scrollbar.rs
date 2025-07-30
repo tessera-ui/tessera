@@ -195,7 +195,7 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
             }
 
             // If dragging, update target position based on cursor
-            if let Some(cursor_pos) = input.cursor_position {
+            if let Some(cursor_pos) = input.cursor_position_rel {
                 let new_target_pos = calculate_target_pos(cursor_pos.y);
                 args.state.write().set_target_position(new_target_pos);
 
@@ -211,7 +211,7 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
             }
         } else {
             // Not dragging, check for interactions to start dragging or jump
-            let Some(cursor_pos) = input.cursor_position else {
+            let Some(cursor_pos) = input.cursor_position_rel else {
                 state.write().is_hovered = false; // Reset hover state if no cursor
                 return; // No cursor, do nothing
             };
@@ -412,7 +412,7 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
             }
 
             // If dragging, update target position based on cursor
-            if let Some(cursor_pos) = input.cursor_position {
+            if let Some(cursor_pos) = input.cursor_position_rel {
                 let new_target_pos = calculate_target_pos(cursor_pos.x);
                 args.state.write().set_target_position(new_target_pos);
 
@@ -428,7 +428,7 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
             }
         } else {
             // Not dragging, check for interactions to start dragging or jump
-            let Some(cursor_pos) = input.cursor_position else {
+            let Some(cursor_pos) = input.cursor_position_rel else {
                 state.write().is_hovered = false; // Reset hover state if no cursor
                 return; // No cursor, do nothing
             };

@@ -367,9 +367,9 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
     if args.on_click.is_some() {
         let args_for_handler = args.clone();
         let state_for_handler = ripple_state;
-        state_handler(Box::new(move |input| {
+        state_handler(Box::new(move |mut input| {
             let size = input.computed_data;
-            let cursor_pos_option = input.cursor_position;
+            let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
@@ -429,10 +429,20 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     }
                 }
 
-                // Consume cursor events if we're handling relevant mouse events
-                if !press_events.is_empty() || !release_events.is_empty() {
-                    input.cursor_events.clear();
-                }
+                // Block all events to prevent propagation
+                input.block_all();
+            }
+        }));
+    } else {
+        // Non-interactive surface, still block all cursor events inside the surface
+        state_handler(Box::new(|mut input| {
+            let size = input.computed_data;
+            let cursor_pos_option = input.cursor_position_rel;
+            let is_cursor_in_surface = cursor_pos_option
+                .map(|pos| is_position_in_component(size, pos))
+                .unwrap_or(false);
+            if is_cursor_in_surface {
+                input.block_all();
             }
         }));
     }

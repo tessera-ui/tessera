@@ -231,7 +231,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
         let state_for_handler = state.clone();
         state_handler(Box::new(move |input| {
             let size = input.computed_data; // This is the full surface size
-            let cursor_pos_option = input.cursor_position;
+            let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_editor = cursor_pos_option
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);

@@ -213,7 +213,7 @@ pub fn background<const N: usize>(args: BackgroundArgs, children: [BoxedItem; N]
         if let Some(on_click) = &args.on_click {
             let size = input.computed_data;
             let is_cursor_in = input
-                .cursor_position
+                .cursor_position_rel
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
 

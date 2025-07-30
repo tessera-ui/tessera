@@ -278,7 +278,7 @@ pub fn fluid_glass(
         let ripple_state = ripple_state.clone();
         state_handler(Box::new(move |input| {
             let size = input.computed_data;
-            let cursor_pos_option = input.cursor_position;
+            let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in = cursor_pos_option
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
@@ -295,7 +295,7 @@ pub fn fluid_glass(
                     )
                 }) {
                     if let Some(ripple_state) = &ripple_state {
-                        if let Some(pos) = input.cursor_position {
+                        if let Some(pos) = input.cursor_position_rel {
                             let size = input.computed_data;
                             let normalized_pos = [
                                 pos.x.to_f32() / size.width.to_f32(),

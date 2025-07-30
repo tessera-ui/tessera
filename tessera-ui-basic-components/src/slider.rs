@@ -189,7 +189,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
         }
         let mut state = state_handler_state.lock();
 
-        let is_in_component = input.cursor_position.is_some_and(|cursor_pos| {
+        let is_in_component = input.cursor_position_rel.is_some_and(|cursor_pos| {
             cursor_pos.x.0 >= 0
                 && cursor_pos.x.0 < input.computed_data.width.0
                 && cursor_pos.y.0 >= 0
@@ -213,7 +213,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
                     state.focus.request_focus();
                     state.is_dragging = true;
 
-                    if let Some(pos) = input.cursor_position {
+                    if let Some(pos) = input.cursor_position_rel {
                         let v =
                             (pos.x.0 as f32 / input.computed_data.width.0 as f32).clamp(0.0, 1.0);
                         new_value = Some(v);
@@ -227,7 +227,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
         }
 
         if state.is_dragging {
-            if let Some(pos) = input.cursor_position {
+            if let Some(pos) = input.cursor_position_rel {
                 let v = (pos.x.0 as f32 / input.computed_data.width.0 as f32).clamp(0.0, 1.0);
                 new_value = Some(v);
             }

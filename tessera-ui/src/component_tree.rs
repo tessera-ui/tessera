@@ -110,7 +110,7 @@ impl ComponentTree {
     pub fn compute(
         &mut self,
         screen_size: PxSize,
-        cursor_position: Option<PxPosition>,
+        mut cursor_position: Option<PxPosition>,
         mut cursor_events: Vec<CursorEvent>,
         mut keyboard_events: Vec<winit::event::KeyEvent>,
         mut ime_events: Vec<winit::event::Ime>,
@@ -203,7 +203,8 @@ impl ComponentTree {
                 // Check if computed_data exists
                 let input = StateHandlerInput {
                     computed_data: node_computed_data,
-                    cursor_position: current_cursor_position,
+                    cursor_position_rel: current_cursor_position,
+                    cursor_position_abs: &mut cursor_position,
                     cursor_events: &mut cursor_events,
                     keyboard_events: &mut keyboard_events,
                     ime_events: &mut ime_events,
