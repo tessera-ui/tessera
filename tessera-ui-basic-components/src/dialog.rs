@@ -47,31 +47,82 @@ pub struct DialogProviderArgs {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```
 /// use std::sync::{Arc, RwLock};
-///
-/// use tessera_ui::use_state;
 /// use tessera_ui_basic_components::{
-///     button::button,
-///     dialog::{dialog_provider, Dialog, DialogArgs},
-///     text::text,
+///     dialog::{DialogProviderArgsBuilder, dialog_provider},
+///     button::{ButtonArgsBuilder, button},
+///     text::{TextArgsBuilder, text},
+///     ripple_state::RippleState,
 /// };
 ///
-/// let is_open = use_state(|| false);
-/// let dialog_state = use_state(Vec::new);
+/// #[derive(Default)]
+/// struct State {
+///     show_dialog: bool,
+/// }
 ///
-/// dialog_provider(dialog_state.clone());
+/// # let state = Arc::new(RwLock::new(State::default()));
+/// # let ripple_state = Arc::new(RippleState::default());
+/// // ...
 ///
-/// button("Open Dialog", || {
-///     let mut dialogs = dialog_state.write();
-///     dialogs.push(Dialog {
-///         modal: true,
-///         ui: Arc::new(move || {
-///             text("This is a dialog".to_string());
-///             button("close", || {});
-///         }),
-///     });
-/// });
+/// dialog_provider(
+///     DialogProviderArgsBuilder::default()
+///         .is_open(state.read().unwrap().show_dialog)
+///         .on_close_request(Arc::new({
+///             let state = state.clone();
+///             move || state.write().unwrap().show_dialog = false
+///         }))
+///         .build()
+///         .unwrap(),
+///     // Main content
+///     {
+///         let state = state.clone();
+///         let ripple = ripple_state.clone();
+///         move || {
+///             button(
+///                 ButtonArgsBuilder::default()
+///                     .on_click(Arc::new(move || {
+///                         state.write().unwrap().show_dialog = true;
+///                     }))
+///                     .build()
+///                     .unwrap(),
+///                 ripple, // ripple state
+///                 || {
+///                     text(
+///                         TextArgsBuilder::default()
+///                             .text("Show Dialog".to_string())
+///                             .build()
+///                             .unwrap(),
+///                     );
+///                 },
+///             );
+///         }
+///     },
+///     // Dialog content
+///     {
+///         let state = state.clone();
+///         let ripple = ripple_state.clone();
+///         move || {
+///             button(
+///                 ButtonArgsBuilder::default()
+///                     .on_click(Arc::new(move || {
+///                         state.write().unwrap().show_dialog = false;
+///                     }))
+///                     .build()
+///                     .unwrap(),
+///                 ripple,
+///                 || {
+///                     text(
+///                         TextArgsBuilder::default()
+///                             .text("Dialog Content".to_string())
+///                             .build()
+///                             .unwrap(),
+///                     );
+///                 },
+///             );
+///         }
+///     },
+/// );
 /// ```
 #[tessera]
 pub fn dialog_provider(
