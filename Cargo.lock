@@ -1122,9 +1122,9 @@ dependencies = [
 
 [[package]]
 name = "glyphon-tessera-fork"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4677237de0c921ca09ed77ea268fd2dcfed8f19964e91657acf979933739c4f1"
+checksum = "f477e8bdee15f64a2786352f2c6fbe9e351fb334c6f1b820054cd2ecbeb57452"
 dependencies = [
  "cosmic-text",
  "etagere",
