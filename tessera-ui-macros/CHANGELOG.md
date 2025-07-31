@@ -1,3 +1,9 @@
+## [v0.1.5] - 2025-07-31 +08:00
+
+### Changes
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.1.4...tessera-ui-macros-v0.1.5)
+
 ## [v0.1.4] - 2025-07-29 +08:00
 
 ### Changes
