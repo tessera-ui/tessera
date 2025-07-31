@@ -49,7 +49,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         {
             let app_state = app_state.clone();
             move || {
-                let state = app_state.ripple_states.primary.clone();
+                let state = app_state.primary_button_ripple.clone();
                 button(
                     ButtonArgsBuilder::default()
                         .color(md_colors::PRIMARY) // Material Design primary color
@@ -80,7 +80,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         {
             let app_state = app_state.clone();
             move || {
-                let state = app_state.ripple_states.success.clone();
+                let state = app_state.success_button_ripple.clone();
                 button(
                     ButtonArgsBuilder::default()
                         .color(md_colors::TERTIARY) // Material Design tertiary color
@@ -111,7 +111,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         {
             let app_state = app_state.clone();
             move || {
-                let state = app_state.ripple_states.danger.clone();
+                let state = app_state.danger_button_ripple.clone();
                 button(
                     ButtonArgsBuilder::default()
                         .color(md_colors::ERROR) // Material Design error color
@@ -198,7 +198,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         {
             let app_state = app_state.clone();
             move || {
-                let state = app_state.ripple_states.primary.clone();
+                let state = app_state.primary_glass_button_ripple.clone();
                 glass_button(
                     GlassButtonArgs::primary(Arc::new(|| {
                         println!("Primary Glass button clicked!");
@@ -221,7 +221,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         {
             let app_state = app_state.clone();
             move || {
-                let state = app_state.ripple_states.primary.clone(); // secondary 没有单独 ripple_state，复用 primary
+                let state = app_state.secondary_glass_button_ripple.clone();
                 glass_button(
                     GlassButtonArgs::secondary(Arc::new(|| {
                         println!("Secondary Glass button clicked!");
@@ -244,7 +244,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         {
             let app_state = app_state.clone();
             move || {
-                let state = app_state.ripple_states.success.clone();
+                let state = app_state.success_glass_button_ripple.clone();
                 glass_button(
                     GlassButtonArgs::success(Arc::new(|| {
                         println!("Success Glass button clicked!");
@@ -267,7 +267,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         {
             let app_state = app_state.clone();
             move || {
-                let state = app_state.ripple_states.danger.clone();
+                let state = app_state.danger_glass_button_ripple.clone();
                 glass_button(
                     GlassButtonArgs::danger(Arc::new(|| {
                         println!("Danger Glass button clicked!");
@@ -302,7 +302,7 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
         {
             let app_state = app_state.clone();
             move || {
-                let state = app_state.ripple_states.custom.clone();
+                let state = app_state.custom_surface_ripple.clone();
                 surface(
                     SurfaceArgsBuilder::default()
                         .color(md_colors::SECONDARY) // Material Design secondary color

@@ -110,7 +110,7 @@ fn surface_showcase(state: Arc<AppState>) {
                                     })))
                                     .build()
                                     .unwrap(),
-                                Some(state.ripple_states.primary.clone()),
+                                Some(state.surface_ripple_1.clone()),
                                 || {},
                             );
                         }
@@ -134,7 +134,7 @@ fn surface_showcase(state: Arc<AppState>) {
                                     })
                                     .build()
                                     .unwrap(),
-                                Some(state.ripple_states.primary.clone()),
+                                Some(state.surface_ripple_2.clone()),
                                 || {},
                             );
                         }
@@ -155,7 +155,7 @@ fn surface_showcase(state: Arc<AppState>) {
                                     .shape(Shape::Ellipse)
                                     .build()
                                     .unwrap(),
-                                Some(state.ripple_states.primary.clone()),
+                                Some(state.surface_ripple_3.clone()),
                                 || {},
                             );
                         }
@@ -239,7 +239,7 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                     }))
                                     .build()
                                     .unwrap(),
-                                Some(state.ripple_states.primary.clone()),
+                                Some(state.fluid_glass_ripple_1.clone()),
                                 || {},
                             );
                         }
@@ -263,7 +263,7 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                     .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
                                     .build()
                                     .unwrap(),
-                                Some(state.ripple_states.primary.clone()),
+                                Some(state.fluid_glass_ripple_2.clone()),
                                 || {},
                             );
                         }
@@ -285,7 +285,7 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                     .border(GlassBorder::new(Dp(2.0), Color::BLUE.with_alpha(0.3)))
                                     .build()
                                     .unwrap(),
-                                Some(state.ripple_states.primary.clone()),
+                                Some(state.fluid_glass_ripple_3.clone()),
                                 || {},
                             );
                         }
