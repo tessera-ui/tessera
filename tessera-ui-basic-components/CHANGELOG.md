@@ -1,3 +1,14 @@
+## [v1.4.0] - 2025-07-31 +08:00
+
+### Changes
+- style: make scripts\check-imports.rs happy
+- chore(example): remove unused glass_dialog_showcase example entry from Cargo.toml
+- feat(glass-dialog): add modal glass dialog component and showcase example
+- feat(animation): add cubic ease-in-out animation module and unify easing logic in dialog, glass_switch, and switch components
+- build(deps): bump glyphon-tessera-fork from 0.9.0 to 0.9.1
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.3.1...tessera-ui-basic-components-v1.4.0)
+
 ## [v1.3.1] - 2025-07-31 +08:00
 
 ### Changes
