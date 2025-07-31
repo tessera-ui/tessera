@@ -98,6 +98,7 @@ impl DialogProviderState {
 /// use std::sync::Arc;
 ///
 /// use parking_lot::RwLock;
+/// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
 ///     dialog::{DialogProviderArgsBuilder, DialogProviderState, dialog_provider},
 ///     button::{ButtonArgsBuilder, button},
@@ -155,9 +156,10 @@ impl DialogProviderState {
 ///         let state = state.clone();
 ///         let ripple = ripple_state.clone();
 ///         let dialog_state = dialog_state.clone();
-///         move || {
+///         move |content_alpha| {
 ///             button(
 ///                 ButtonArgsBuilder::default()
+///                     .color(Color::GREEN.with_alpha(content_alpha))
 ///                     .on_click(Arc::new(move || {
 ///                         state.write().show_dialog = false;
 ///                         dialog_state.write().close();
@@ -168,6 +170,7 @@ impl DialogProviderState {
 ///                 || {
 ///                     text(
 ///                         TextArgsBuilder::default()
+///                             .color(Color::BLACK.with_alpha(content_alpha))
 ///                             .text("Dialog Content".to_string())
 ///                             .build()
 ///                             .unwrap(),
