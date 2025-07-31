@@ -1,3 +1,12 @@
+## [v1.3.1] - 2025-07-31 +08:00
+
+### Changes
+- fix(fluid_glass): align ripple default behavior with glass_button
+- refactor(example): remove custom Surface interactive demo and related state
+- fix(dialog): improve doc example to demonstrate usage of color with alpha in button and text
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.3.0...tessera-ui-basic-components-v1.3.1)
+
 ## [v1.3.0] - 2025-07-31 +08:00
 
 ### Changes
