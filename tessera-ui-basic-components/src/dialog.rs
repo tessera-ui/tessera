@@ -95,9 +95,11 @@ impl DialogProviderState {
 /// # Example
 ///
 /// ```
-/// use std::sync::{Arc, RwLock};
+/// use std::sync::Arc;
+///
+/// use parking_lot::RwLock;
 /// use tessera_ui_basic_components::{
-///     dialog::{DialogProviderArgsBuilder, dialog_provider},
+///     dialog::{DialogProviderArgsBuilder, DialogProviderState, dialog_provider},
 ///     button::{ButtonArgsBuilder, button},
 ///     text::{TextArgsBuilder, text},
 ///     ripple_state::RippleState,
@@ -110,26 +112,29 @@ impl DialogProviderState {
 ///
 /// # let state = Arc::new(RwLock::new(State::default()));
 /// # let ripple_state = Arc::new(RippleState::default());
+/// # let dialog_state = Arc::new(RwLock::new(DialogProviderState::default()));
 /// // ...
 ///
 /// dialog_provider(
 ///     DialogProviderArgsBuilder::default()
-///         .is_open(state.read().unwrap().show_dialog)
 ///         .on_close_request(Arc::new({
 ///             let state = state.clone();
-///             move || state.write().unwrap().show_dialog = false
+///             move || state.write().show_dialog = false
 ///         }))
 ///         .build()
 ///         .unwrap(),
+///     dialog_state.clone(),
 ///     // Main content
 ///     {
 ///         let state = state.clone();
 ///         let ripple = ripple_state.clone();
+///         let dialog_state = dialog_state.clone();
 ///         move || {
 ///             button(
 ///                 ButtonArgsBuilder::default()
 ///                     .on_click(Arc::new(move || {
-///                         state.write().unwrap().show_dialog = true;
+///                         state.write().show_dialog = true;
+///                         dialog_state.write().open();
 ///                     }))
 ///                     .build()
 ///                     .unwrap(),
@@ -149,11 +154,13 @@ impl DialogProviderState {
 ///     {
 ///         let state = state.clone();
 ///         let ripple = ripple_state.clone();
+///         let dialog_state = dialog_state.clone();
 ///         move || {
 ///             button(
 ///                 ButtonArgsBuilder::default()
 ///                     .on_click(Arc::new(move || {
-///                         state.write().unwrap().show_dialog = false;
+///                         state.write().show_dialog = false;
+///                         dialog_state.write().close();
 ///                     }))
 ///                     .build()
 ///                     .unwrap(),
