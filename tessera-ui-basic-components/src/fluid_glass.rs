@@ -58,7 +58,7 @@ pub struct FluidGlassArgs {
     #[builder(default = "25.0")]
     pub dispersion_height: f32,
     /// Multiplier for the chromatic aberration, enhancing the color separation effect.
-    #[builder(default = "1.2")]
+    #[builder(default = "1.0")]
     pub chroma_multiplier: f32,
     /// The height of the refraction effect, simulating light bending through the glass.
     #[builder(default = "24.0")]
@@ -106,6 +106,11 @@ pub struct FluidGlassArgs {
 
     #[builder(default, setter(strip_option))]
     pub border: Option<GlassBorder>,
+
+    /// Whether to block input events on the glass surface.
+    /// When `true`, the surface will consume all input events, preventing interaction with underlying components.
+    #[builder(default = "false")]
+    pub block_input: bool,
 }
 
 impl FluidGlassArgsBuilder {
@@ -170,7 +175,6 @@ pub fn fluid_glass(
     ripple_state: Option<Arc<RippleState>>,
     child: impl FnOnce(),
 ) {
-    // 使 ripple 默认行为与 glass_button 一致
     if let Some(ripple_state) = &ripple_state {
         if let Some((progress, center)) = ripple_state.get_animation_progress() {
             args.ripple_center = Some(center);
@@ -285,7 +289,7 @@ pub fn fluid_glass(
 
     if let Some(on_click) = args.on_click {
         let ripple_state = ripple_state.clone();
-        state_handler(Box::new(move |input| {
+        state_handler(Box::new(move |mut input| {
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in = cursor_pos_option
@@ -315,6 +319,24 @@ pub fn fluid_glass(
                     }
                     on_click();
                 }
+
+                if args.block_input {
+                    // Consume all input events to prevent interaction with underlying components
+                    input.block_all();
+                }
+            }
+        }));
+    } else if args.block_input {
+        state_handler(Box::new(move |mut input| {
+            let size = input.computed_data;
+            let cursor_pos_option = input.cursor_position_rel;
+            let is_cursor_in = cursor_pos_option
+                .map(|pos| is_position_in_component(size, pos))
+                .unwrap_or(false);
+
+            if is_cursor_in {
+                // Consume all input events to prevent interaction with underlying components
+                input.block_all();
             }
         }));
     }

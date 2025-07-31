@@ -30,3 +30,8 @@ flexi_logger = { version = "0.31.2", features = ["async", "trc"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15.1"
+
+
+[[example]]
+name = "glass_dialog_showcase"
+path = "examples/glass_dialog_showcase.rs"

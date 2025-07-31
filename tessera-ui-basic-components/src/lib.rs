@@ -79,3 +79,5 @@ pub mod switch;
 pub mod text;
 pub mod text_edit_core;
 pub mod text_editor;
+
+pub mod glass_dialog;
