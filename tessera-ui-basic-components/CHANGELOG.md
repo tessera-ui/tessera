@@ -1,3 +1,15 @@
+## [v1.3.0] - 2025-07-31 +08:00
+
+### Changes
+- feat(dialog): add content_alpha parameter to dialog_content for animated opacity
+- fix(surface, dialog): add block_input to surface and dialog to block all input events
+- docs(dialog): improve doc example for dialog_provider
+- feat(dialog): refactor DialogProvider state management and API, add animation support
+- feat(basic-components,component_tree): unify cursor position API and add event blocking methods
+- docs(dialog): rewrite doc example for dialog_provider with updated usage and API
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.2.1...tessera-ui-basic-components-v1.3.0)
+
 ## [v1.2.1] - 2025-07-29 +08:00
 
 ### Changes
