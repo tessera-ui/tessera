@@ -1,12 +1,13 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
+use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
     column::ColumnArgsBuilder,
     column_ui,
-    dialog::{DialogProviderArgsBuilder, dialog_provider},
+    dialog::{DialogProviderArgsBuilder, DialogProviderState, dialog_provider},
     ripple_state::RippleState,
     row::RowArgsBuilder,
     row_ui,
@@ -19,7 +20,7 @@ use tessera_ui_macros::tessera;
 
 #[derive(Default)]
 struct AppState {
-    show_dialog: bool,
+    dialog_state: Arc<RwLock<DialogProviderState>>,
     button_ripple: Arc<RippleState>,
     close_button_ripple: Arc<RippleState>,
 }
@@ -27,7 +28,7 @@ struct AppState {
 #[tessera]
 fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
     let state = app_state.clone();
-    let button_ripple = state.read().unwrap().button_ripple.clone();
+    let button_ripple = state.read().button_ripple.clone();
     row_ui!(
         RowArgsBuilder::default()
             .main_axis_alignment(MainAxisAlignment::Center)
@@ -46,7 +47,7 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
             button(
                 ButtonArgsBuilder::default()
                     .on_click(Arc::new(move || {
-                        state.write().unwrap().show_dialog = true;
+                        state.write().dialog_state.write().open();
                     }))
                     .build()
                     .unwrap(),
@@ -67,7 +68,7 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
 #[tessera]
 fn dialog_content(app_state: Arc<RwLock<AppState>>) {
     let state = app_state.clone();
-    let close_button_ripple = state.read().unwrap().close_button_ripple.clone();
+    let close_button_ripple = state.read().close_button_ripple.clone();
     row_ui!(
         RowArgsBuilder::default()
             .main_axis_alignment(MainAxisAlignment::Center)
@@ -117,7 +118,7 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>) {
                             button(
                                 ButtonArgsBuilder::default()
                                     .on_click(Arc::new(move || {
-                                        state.write().unwrap().show_dialog = false;
+                                        state.write().dialog_state.write().close();
                                     }))
                                     .build()
                                     .unwrap(),
@@ -151,12 +152,12 @@ fn dialog_provider_wrapper(app_state: Arc<RwLock<AppState>>) {
         move || {
             dialog_provider(
                 DialogProviderArgsBuilder::default()
-                    .is_open(app_state.read().unwrap().show_dialog)
                     .on_close_request(Arc::new(move || {
-                        state_for_provider.write().unwrap().show_dialog = false;
+                        state_for_provider.write().dialog_state.write().close();
                     }))
                     .build()
                     .unwrap(),
+                app_state.read().dialog_state.clone(),
                 {
                     let state = app_state.clone();
                     move || dialog_main_content(state.clone())

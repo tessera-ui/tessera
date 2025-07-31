@@ -9,23 +9,70 @@
 //! The dialog is managed via [`DialogProviderArgs`] and the [`dialog_provider`] function.
 //! See the example in [`dialog_provider`] for usage details.
 
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use derive_builder::Builder;
+use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, winit};
 use tessera_ui_macros::tessera;
 
 use crate::surface::{SurfaceArgsBuilder, surface};
 
+/// The duration of the full dialog animation.
+const ANIM_TIME: Duration = Duration::from_millis(300);
+
 /// Arguments for the [`dialog_provider`] component.
 #[derive(Builder)]
 #[builder(pattern = "owned")]
 pub struct DialogProviderArgs {
-    /// Determines whether the dialog is currently visible.
-    pub is_open: bool,
     /// Callback function triggered when a close request is made, for example by
     /// clicking the scrim or pressing the `ESC` key.
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
+}
+
+#[derive(Default)]
+pub struct DialogProviderState {
+    is_open: bool,
+    timer: Option<Instant>,
+}
+
+impl DialogProviderState {
+    /// Open the dialog
+    pub fn open(&mut self) {
+        if self.is_open { // Already opened, no action needed
+        } else {
+            self.is_open = true; // Mark as open
+            let mut timer = Instant::now();
+            if let Some(old_timer) = self.timer {
+                let elapsed = old_timer.elapsed();
+                if elapsed < ANIM_TIME {
+                    // If we are still in the middle of an animation
+                    timer += ANIM_TIME - elapsed; // We need to 'catch up' the timer
+                }
+            }
+            self.timer = Some(timer);
+        }
+    }
+
+    /// Close the dialog
+    pub fn close(&mut self) {
+        if !self.is_open { // Already closed, no action needed
+        } else {
+            self.is_open = false; // Mark as closed
+            let mut timer = Instant::now();
+            if let Some(old_timer) = self.timer {
+                let elapsed = old_timer.elapsed();
+                if elapsed < ANIM_TIME {
+                    // If we are still in the middle of an animation
+                    timer += ANIM_TIME - elapsed; // We need to 'catch up' the timer
+                }
+            }
+            self.timer = Some(timer);
+        }
+    }
 }
 
 /// A provider component that manages the rendering and event flow for a modal dialog.
@@ -127,6 +174,7 @@ pub struct DialogProviderArgs {
 #[tessera]
 pub fn dialog_provider(
     args: DialogProviderArgs,
+    state: Arc<RwLock<DialogProviderState>>,
     main_content: impl FnOnce(),
     dialog_content: impl FnOnce(),
 ) {
@@ -134,15 +182,34 @@ pub fn dialog_provider(
     main_content();
 
     // 2. If the dialog is open, render the modal overlay.
-    if args.is_open {
+    if state.read().is_open
+        || state
+            .read()
+            .timer
+            .is_some_and(|timer| timer.elapsed() < ANIM_TIME)
+    {
         let on_close_for_keyboard = args.on_close_request.clone();
+
+        let progress = state.read().timer.as_ref().map_or(1.0, |timer| {
+            let elapsed = timer.elapsed();
+            if elapsed >= ANIM_TIME {
+                1.0 // Animation is complete
+            } else {
+                elapsed.as_secs_f32() / ANIM_TIME.as_secs_f32()
+            }
+        });
+        let alpha = if state.read().is_open {
+            progress * 0.5 // Transition from 0 to 0.5 alpha
+        } else {
+            0.5 * (1.0 - progress) // Transition from 0.5 to 0 alpha
+        };
 
         // 2a. Scrim
         // This Surface covers the entire screen, consuming all mouse clicks
         // and triggering the close request.
         surface(
             SurfaceArgsBuilder::default()
-                .color(Color::BLACK.with_alpha(0.5))
+                .color(Color::BLACK.with_alpha(alpha))
                 .on_click(Some(args.on_close_request))
                 .width(DimensionValue::Fill {
                     min: None,
