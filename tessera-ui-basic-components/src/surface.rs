@@ -112,6 +112,9 @@ pub struct SurfaceArgs {
     /// The ripple color (RGB) for interactive surfaces.
     #[builder(default = "Color::from_rgb(1.0, 1.0, 1.0)")]
     pub ripple_color: Color,
+    /// Whether the surface should block all input events.
+    #[builder(default = "false")]
+    pub block_input: bool,
 }
 
 // Manual implementation of Default because derive_builder's default conflicts with our specific defaults
@@ -166,6 +169,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
     (child)();
     let ripple_state_for_measure = ripple_state.clone();
     let args_measure_clone = args.clone();
+    let args_for_handler = args.clone();
 
     measure(Box::new(move |input| {
         // Determine surface's intrinsic constraint based on args
@@ -430,18 +434,20 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 }
 
                 // Block all events to prevent propagation
-                input.block_all();
+                if args_for_handler.block_input {
+                    input.block_all();
+                }
             }
         }));
     } else {
         // Non-interactive surface, still block all cursor events inside the surface
-        state_handler(Box::new(|mut input| {
+        state_handler(Box::new(move |mut input| {
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
-            if is_cursor_in_surface {
+            if args_for_handler.block_input && is_cursor_in_surface {
                 input.block_all();
             }
         }));

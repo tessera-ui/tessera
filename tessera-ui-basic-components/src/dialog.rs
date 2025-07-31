@@ -226,6 +226,7 @@ pub fn dialog_provider(
                     min: None,
                     max: None,
                 })
+                .block_input(true)
                 .build()
                 .unwrap(),
             None,

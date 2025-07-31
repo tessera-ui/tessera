@@ -92,6 +92,7 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>) {
                         g2_k_value: 3.0,
                     })
                     .padding(Dp(20.0))
+                    .block_input(true)
                     .build()
                     .unwrap(),
                 None,
