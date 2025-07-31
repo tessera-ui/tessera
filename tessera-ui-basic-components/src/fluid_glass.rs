@@ -166,10 +166,19 @@ impl DrawCommand for FluidGlassCommand {
 /// * `child` - A closure that defines the child components to be rendered on top of the glass surface.
 ///   These children will be contained within the bounds of the `fluid_glass` component.
 pub fn fluid_glass(
-    args: FluidGlassArgs,
+    mut args: FluidGlassArgs,
     ripple_state: Option<Arc<RippleState>>,
     child: impl FnOnce(),
 ) {
+    // 使 ripple 默认行为与 glass_button 一致
+    if let Some(ripple_state) = &ripple_state {
+        if let Some((progress, center)) = ripple_state.get_animation_progress() {
+            args.ripple_center = Some(center);
+            args.ripple_radius = Some(progress);
+            args.ripple_alpha = Some((1.0 - progress) * 0.3);
+            args.ripple_strength = Some(progress);
+        }
+    }
     (child)();
     let args_measure_clone = args.clone();
     measure(Box::new(move |input| {
