@@ -23,6 +23,7 @@ use tessera_ui::{
 use tessera_ui_macros::tessera;
 
 use crate::{
+    animation,
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
     shape_def::Shape,
 };
@@ -267,11 +268,13 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
         let self_width_px = args.width.to_px();
         let self_height_px = args.height.to_px();
         let thumb_padding_px = args.thumb_padding.to_px();
-        let progress = args
-            .state
-            .as_ref()
-            .map(|s| *s.lock().progress.lock())
-            .unwrap_or(if args.checked { 1.0 } else { 0.0 });
+
+        let progress = animation::easing(
+            args.state
+                .as_ref()
+                .map(|s| *s.lock().progress.lock())
+                .unwrap_or(if args.checked { 1.0 } else { 0.0 }),
+        );
         // Place track at origin
         input.place_child(
             track_id,

@@ -32,6 +32,7 @@ use tessera_ui::{
 use tessera_ui_macros::tessera;
 
 use crate::{
+    animation,
     pipelines::ShapeCommand,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -264,7 +265,8 @@ pub fn switch(args: impl Into<SwitchArgs>) {
 
         let start_x = thumb_padding_px;
         let end_x = self_width_px - thumb_size.width - thumb_padding_px;
-        let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * progress;
+        let eased = animation::easing(progress);
+        let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * eased;
 
         let thumb_y = (self_height_px - thumb_size.height) / 2;
 

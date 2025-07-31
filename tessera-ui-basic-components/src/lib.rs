@@ -1,3 +1,6 @@
+//! Basic UI components library for Tessera.
+//! Internal animation utilities are available via the private `animation` module.
+
 //! Basic components for the Tessera UI framework.
 //!
 //! # Usage
@@ -44,6 +47,8 @@
 //! let editor_state = Arc::new(RwLock::new(TextEditorState::new(Dp(16.0), None)));
 //! text_editor(TextEditorArgs::default(), editor_state.clone());
 //! ```
+
+mod animation;
 
 pub mod alignment;
 pub mod boxed;

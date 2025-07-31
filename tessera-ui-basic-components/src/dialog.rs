@@ -19,7 +19,10 @@ use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, winit};
 use tessera_ui_macros::tessera;
 
-use crate::surface::{SurfaceArgsBuilder, surface};
+use crate::{
+    animation,
+    surface::{SurfaceArgsBuilder, surface},
+};
 
 /// The duration of the full dialog animation.
 const ANIM_TIME: Duration = Duration::from_millis(300);
@@ -200,14 +203,14 @@ pub fn dialog_provider(
     {
         let on_close_for_keyboard = args.on_close_request.clone();
 
-        let progress = state.read().timer.as_ref().map_or(1.0, |timer| {
+        let progress = animation::easing(state.read().timer.as_ref().map_or(1.0, |timer| {
             let elapsed = timer.elapsed();
             if elapsed >= ANIM_TIME {
                 1.0 // Animation is complete
             } else {
                 elapsed.as_secs_f32() / ANIM_TIME.as_secs_f32()
             }
-        });
+        }));
         let alpha = if state.read().is_open {
             progress * 0.5 // Transition from 0 to 0.5 alpha
         } else {
