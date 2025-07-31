@@ -208,6 +208,8 @@ fn counter_app(app_state: Arc<AppState>) {
 
 ### 在 Windows / Linux 上运行示例
 
+请确保已安装 Rust：https://rustup.rs/
+
 ```bash
 # 进入 example 目录
 cd example

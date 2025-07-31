@@ -20,11 +20,10 @@ To ensure code quality and consistency, and to keep the repository clean, please
 
 ## Getting Started
 
-You can set up your development environment in one of three ways:
+You can set up your development environment in one of two ways:
 
 1. **Nix (Recommended)**: For a one-liner setup on Linux and macOS.
-2. **Bootstrap Scripts**: Automated scripts for Windows, Linux, and macOS.
-3. **Manual Setup**: Step-by-step instructions for each OS.
+2. **Manual Setup**: Manually install Rust and other dependencies.
 
 ### Option A - Nix package manager (Recommended)
 
@@ -35,27 +34,7 @@ nix develop            # Desktop dev shell
 nix develop .#android  # Android dev shell
 ```
 
-### Option B - Bootstrap Scripts
-
-We provide scripts to automate the setup process on major operating systems. The Linux script will attempt to detect your display server (X11 or Wayland) and install only the necessary dependencies.
-
-- **Windows**:
-  Open a PowerShell terminal and run:
-
-  ```powershell
-  .\scripts\bootstrap.ps1
-  ```
-
-- **Linux / macOS**:
-  Open a terminal and run:
-
-  ```bash
-  bash scripts/bootstrap.sh
-  ```
-
-These scripts will attempt to install Rust and other required dependencies for you.
-
-### Option C - Manual Setup
+### Option B - Manual Setup
 
 If you prefer to set up your environment manually, follow the instructions for your operating system below.
 
@@ -71,7 +50,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 ##### For Linux
 
-On Linux, you need to install development packages for either X11 or Wayland, depending on which display server you are using. You typically only need one set of packages.
+For Linux users who already have a desktop environment, you most likely do not need this step. The following is for users without a desktop environment.
+
+If you do not currently have a desktop environment, you need to choose and install development packages for either X11 or Wayland. You typically only need one set of packages.
 
 - **For X11**:
 
