@@ -55,7 +55,6 @@ pub struct AppState {
     pub secondary_glass_button_ripple: Arc<RippleState>,
     pub success_glass_button_ripple: Arc<RippleState>,
     pub danger_glass_button_ripple: Arc<RippleState>,
-    pub custom_surface_ripple: Arc<RippleState>,
 
     // States for `component_showcase.rs`
     pub surface_ripple_1: Arc<RippleState>,
@@ -83,7 +82,6 @@ impl AppState {
             secondary_glass_button_ripple: Arc::new(RippleState::new()),
             success_glass_button_ripple: Arc::new(RippleState::new()),
             danger_glass_button_ripple: Arc::new(RippleState::new()),
-            custom_surface_ripple: Arc::new(RippleState::new()),
 
             // Ripple states for component_showcase
             surface_ripple_1: Arc::new(RippleState::new()),

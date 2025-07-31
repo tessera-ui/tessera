@@ -93,6 +93,7 @@ impl RippleState {
     /// Returns `Some((progress, [x, y]))` if the animation is active, where:
     /// - `progress` is a value in `[0.0, 1.0)` representing the animation progress.
     /// - `[x, y]` is the normalized origin of the ripple.
+    ///
     /// Returns `None` if the animation is not active or has completed.
     ///
     /// # Example

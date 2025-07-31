@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{Color, DimensionValue, Dp, Px};
+use tessera_ui::{Color, Dp};
 use tessera_ui_basic_components::{
     button::{ButtonArgsBuilder, button},
     checkbox::{CheckboxArgsBuilder, checkbox},
@@ -9,7 +9,6 @@ use tessera_ui_basic_components::{
     glass_button::{GlassButtonArgs, glass_button},
     row::RowArgsBuilder,
     row_ui,
-    surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 use tessera_ui_macros::tessera;
@@ -286,76 +285,5 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                 )
             }
         },
-        || (create_spacer(16))(),
-        // Interactive surfaces section
-        || {
-            text(
-                TextArgsBuilder::default()
-                    .text("Interactive Surfaces with Hover Effects:".to_string())
-                    .size(tessera_ui::Dp(18.0))
-                    .color(md_colors::ON_SURFACE_VARIANT)
-                    .build()
-                    .unwrap(),
-            )
-        },
-        // Custom interactive surface with hover effect
-        {
-            let app_state = app_state.clone();
-            move || {
-                let state = app_state.custom_surface_ripple.clone();
-                surface(
-                    SurfaceArgsBuilder::default()
-                        .color(md_colors::SECONDARY) // Material Design secondary color
-                        .hover_color(Some(Color::new(0.6, 0.7, 0.9, 1.0))) // Lighter color on hover
-                        .ripple_color(md_colors::RIPPLE) // Material Design ripple
-                        .padding(Dp(16.0))
-                        .width(DimensionValue::Fixed(Px(250)))
-                        .height(DimensionValue::Fixed(Px(80)))
-                        .border_width(2.0)
-                        .border_color(Some(Color::new(1.0, 1.0, 1.0, 0.8))) // White border
-                        .on_click(Some(Arc::new(|| {
-                            println!("Custom interactive surface clicked!");
-                        })))
-                        .build()
-                        .unwrap(),
-                    Some(state),
-                    || {
-                        text(
-                            TextArgsBuilder::default()
-                                .text("Interactive Surface\nwith Hover Effect".to_string())
-                                .color(md_colors::ON_SURFACE)
-                                .size(Dp(14.0))
-                                .build()
-                                .unwrap(),
-                        )
-                    },
-                )
-            }
-        },
-        // Small spacer between surfaces
-        || (create_spacer(12))(),
-        // Non-interactive surface for comparison
-        || {
-            surface(
-                SurfaceArgsBuilder::default()
-                    .color(md_colors::SURFACE_VARIANT) // Material Design surface-variant
-                    .padding(Dp(12.0))
-                    .width(DimensionValue::Fixed(Px(200)))
-                    .height(DimensionValue::Fixed(Px(60)))
-                    .build()
-                    .unwrap(),
-                None, // No ripple state - non-interactive
-                || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Non-interactive Surface\n(No Hover Effect)".to_string())
-                            .color(md_colors::ON_SURFACE_VARIANT)
-                            .size(Dp(14.0))
-                            .build()
-                            .unwrap(),
-                    )
-                },
-            )
-        }
     )
 }
