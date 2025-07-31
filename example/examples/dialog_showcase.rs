@@ -66,7 +66,7 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
 }
 
 #[tessera]
-fn dialog_content(app_state: Arc<RwLock<AppState>>) {
+fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
     let state = app_state.clone();
     let close_button_ripple = state.read().close_button_ripple.clone();
     row_ui!(
@@ -83,10 +83,10 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>) {
             })
             .build()
             .unwrap(),
-        || {
+        move || {
             surface(
                 SurfaceArgsBuilder::default()
-                    .color(Color::new(0.2, 0.2, 0.2, 1.0))
+                    .color(Color::new(0.2, 0.2, 0.2, 1.0).with_alpha(content_alpha))
                     .shape(Shape::RoundedRectangle {
                         corner_radius: 10.0,
                         g2_k_value: 3.0,
@@ -96,12 +96,13 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>) {
                     .build()
                     .unwrap(),
                 None,
-                || {
+                move || {
                     column_ui!(
                         ColumnArgsBuilder::default().build().unwrap(),
-                        || {
+                        move || {
                             text(
                                 TextArgsBuilder::default()
+                                    .color(Color::BLACK.with_alpha(content_alpha))
                                     .text("This is a Dialog".to_string())
                                     .build()
                                     .unwrap(),
@@ -115,9 +116,10 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>) {
                                     .unwrap(),
                             );
                         },
-                        || {
+                        move || {
                             button(
                                 ButtonArgsBuilder::default()
+                                    .color(Color::new(0.2, 0.5, 0.8, content_alpha))
                                     .on_click(Arc::new(move || {
                                         state.write().dialog_state.write().close();
                                     }))
@@ -127,6 +129,7 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>) {
                                 || {
                                     text(
                                         TextArgsBuilder::default()
+                                            .color(Color::BLACK.with_alpha(content_alpha))
                                             .text("Close".to_string())
                                             .build()
                                             .unwrap(),
@@ -165,7 +168,7 @@ fn dialog_provider_wrapper(app_state: Arc<RwLock<AppState>>) {
                 },
                 {
                     let state = app_state.clone();
-                    move || dialog_content(state.clone())
+                    move |progress| dialog_content(state.clone(), progress)
                 },
             );
         },

@@ -183,7 +183,7 @@ pub fn dialog_provider(
     args: DialogProviderArgs,
     state: Arc<RwLock<DialogProviderState>>,
     main_content: impl FnOnce(),
-    dialog_content: impl FnOnce(),
+    dialog_content: impl FnOnce(f32),
 ) {
     // 1. Render the main application content unconditionally.
     main_content();
@@ -209,6 +209,11 @@ pub fn dialog_provider(
             progress * 0.5 // Transition from 0 to 0.5 alpha
         } else {
             0.5 * (1.0 - progress) // Transition from 0.5 to 0 alpha
+        };
+        let content_alpha = if state.read().is_open {
+            progress * 1.0 // Transition from 0 to 1 alpha
+        } else {
+            1.0 * (1.0 - progress) // Transition from 1 to 0 alpha
         };
 
         // 2a. Scrim
@@ -253,6 +258,6 @@ pub fn dialog_provider(
 
         // 2c. Dialog Content
         // The user-defined dialog content is rendered on top of everything.
-        dialog_content();
+        dialog_content(content_alpha);
     }
 }
