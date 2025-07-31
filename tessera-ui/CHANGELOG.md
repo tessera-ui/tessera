@@ -1,3 +1,10 @@
+## [v1.7.0] - 2025-07-31 +08:00
+
+### Changes
+- feat(basic-components,component_tree): unify cursor position API and add event blocking methods
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.6.0...tessera-ui-v1.7.0)
+
 ## [v1.6.0] - 2025-07-29 +08:00
 
 ### Changes
