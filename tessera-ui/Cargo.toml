@@ -13,7 +13,7 @@ readme = "../README.md"
 bytemuck = { version = "1.15.0", features = ["derive"] }
 log = "0.4.27"
 parking_lot = "0.12.3"
-tokio = { version = "1.47.0", features = ["full"] }
+tokio = { version = "1.47.1", features = ["full"] }
 wgpu = "26.0.1"
 indextree = "4.7.4"
 rayon = "1.10.0"

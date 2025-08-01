@@ -17,7 +17,7 @@ path = "src/main.rs"
 tessera-ui = { path = "../tessera-ui" }
 tessera-ui-macros = { path = "../tessera-ui-macros" }
 tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
-tokio = { version = "1.47.0", features = ["full"] }
+tokio = { version = "1.47.1", features = ["full"] }
 log = "0.4.27"
 parking_lot = "0.12.4"
 winit = "0.30.12"
