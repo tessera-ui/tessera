@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tessera_ui::{Color, Dp, Renderer};
+use tessera_ui::{Color, DimensionValue, Dp, Renderer};
 use tessera_ui_basic_components::{
     alignment::MainAxisAlignment,
     column::ColumnArgsBuilder,
@@ -32,7 +32,9 @@ impl AppState {
 fn app(state: Arc<AppState>) {
     surface(
         SurfaceArgsBuilder::default()
-            .color(Color::new(0.1, 0.1, 0.1, 1.0))
+            .color(Color::WHITE)
+            .width(DimensionValue::FILLED)
+            .height(DimensionValue::FILLED)
             .padding(Dp(20.0))
             .build()
             .unwrap(),
