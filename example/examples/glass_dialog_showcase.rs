@@ -4,10 +4,10 @@ use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    button::{ButtonArgsBuilder, button},
     column::ColumnArgsBuilder,
     column_ui,
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    glass_button::{GlassButtonArgsBuilder, glass_button},
     glass_dialog::{
         GlassDialogProviderArgsBuilder, GlassDialogProviderState, glass_dialog_provider,
     },
@@ -46,11 +46,12 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
             .build()
             .unwrap(),
         || {
-            button(
-                ButtonArgsBuilder::default()
+            glass_button(
+                GlassButtonArgsBuilder::default()
                     .on_click(Arc::new(move || {
                         state.write().dialog_state.write().open();
                     }))
+                    .tint_color(Color::new(0.2, 0.5, 0.8, 0.5))
                     .build()
                     .unwrap(),
                 button_ripple,
@@ -88,17 +89,13 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
         move || {
             fluid_glass(
                 FluidGlassArgsBuilder::default()
-                    .tint_color(Color::TRANSPARENT)
+                    .tint_color(Color::WHITE.with_alpha(content_alpha / 2.0))
                     .blur_radius(10.0 * content_alpha)
-                    .shape(Shape::RoundedRectangle {
-                        corner_radius: 10.0,
-                        g2_k_value: 3.0,
-                    })
                     .shape(Shape::RoundedRectangle {
                         corner_radius: 25.0,
                         g2_k_value: 3.0,
                     })
-                    .refraction_height(24.0 * content_alpha)
+                    .refraction_height(50.0 * content_alpha)
                     .block_input(true)
                     .padding(Dp(20.0))
                     .build()
@@ -125,16 +122,17 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
                             );
                         },
                         move || {
-                            button(
-                                ButtonArgsBuilder::default()
-                                    .color(Color::new(0.2, 0.5, 0.8, content_alpha))
+                            glass_button(
+                                GlassButtonArgsBuilder::default()
+                                    .tint_color(Color::new(0.2, 0.5, 0.8, content_alpha / 2.0))
                                     .on_click(Arc::new(move || {
                                         state.write().dialog_state.write().close();
                                     }))
+                                    .refraction_height(24.0 * content_alpha)
                                     .build()
                                     .unwrap(),
                                 close_button_ripple,
-                                || {
+                                move || {
                                     text(
                                         TextArgsBuilder::default()
                                             .color(Color::BLACK.with_alpha(content_alpha))
