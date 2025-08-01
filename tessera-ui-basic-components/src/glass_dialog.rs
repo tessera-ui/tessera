@@ -35,9 +35,6 @@ pub struct GlassDialogProviderArgs {
     /// Callback function triggered when a close request is made, for example by
     /// clicking the scrim or pressing the `ESC` key.
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
-
-    #[builder(default = "20.0")]
-    pub blur_radius: f32,
 }
 
 #[derive(Default)]

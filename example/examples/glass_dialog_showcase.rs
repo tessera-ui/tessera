@@ -89,13 +89,13 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
         move || {
             fluid_glass(
                 FluidGlassArgsBuilder::default()
-                    .tint_color(Color::WHITE.with_alpha(content_alpha / 2.0))
+                    .tint_color(Color::WHITE.with_alpha(content_alpha / 2.5))
                     .blur_radius(10.0 * content_alpha)
                     .shape(Shape::RoundedRectangle {
                         corner_radius: 25.0,
                         g2_k_value: 3.0,
                     })
-                    .refraction_height(50.0 * content_alpha)
+                    .refraction_amount(32.0 * content_alpha)
                     .block_input(true)
                     .padding(Dp(20.0))
                     .build()
@@ -124,11 +124,11 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
                         move || {
                             glass_button(
                                 GlassButtonArgsBuilder::default()
-                                    .tint_color(Color::new(0.2, 0.5, 0.8, content_alpha / 2.0))
+                                    .tint_color(Color::new(0.2, 0.5, 0.8, content_alpha / 2.5))
                                     .on_click(Arc::new(move || {
                                         state.write().dialog_state.write().close();
                                     }))
-                                    .refraction_height(24.0 * content_alpha)
+                                    .refraction_amount(32.0 * content_alpha)
                                     .build()
                                     .unwrap(),
                                 close_button_ripple,
@@ -183,7 +183,6 @@ fn dialog_provider_wrapper(
                     .on_close_request(Arc::new(move || {
                         state_for_provider.write().dialog_state.write().close();
                     }))
-                    .blur_radius(20.0)
                     .build()
                     .unwrap(),
                 app_state.read().dialog_state.clone(),
@@ -214,8 +213,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .start()?;
 
     let app_state = Arc::new(RwLock::new(AppState::default()));
-
-    // 加载图片资源
     let image_path = format!(
         "{}/examples/assets/scarlet_ut.jpg",
         env!("CARGO_MANIFEST_DIR")
