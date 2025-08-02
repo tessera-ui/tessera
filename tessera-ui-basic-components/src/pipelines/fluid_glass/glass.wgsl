@@ -307,7 +307,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     var final_color = vec4(color, base_color.a);
-    let shape_alpha = smoothstep(1.0, -1.0, sd);
+    let width = fwidth(sd);
+    let shape_alpha = smoothstep(width, -width, sd);
 
     if uniforms.border_width > 0.0 {
         let bevel_width = uniforms.border_width;
@@ -334,7 +335,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             // Slightly increased ambient light to maintain border definition
             let ambient_color = vec3<f32>(0.15, 0.15, 0.15);
 
-            let highlight_color = specular_color + ambient_color;
+            let highlight_falloff = smoothstep(-bevel_width, -bevel_width + 1.5, sd);
+            let highlight_color = (specular_color + ambient_color) * highlight_falloff;
 
             let new_rgb = final_color.rgb + highlight_color;
             final_color.r = new_rgb.r;
