@@ -45,7 +45,7 @@ pub struct FluidGlassArgs {
     /// The alpha channel uniquely and directly controls the tint strength.
     /// `A=0.0` means no tint (100% background visibility).
     /// `A=1.0` means full tint (100% color visibility).
-    #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
+    #[builder(default = "Color::TRANSPARENT")]
     pub tint_color: Color,
     /// The shape of the component, an enum that can be `RoundedRectangle` or `Ellipse`.
     #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0, g2_k_value: 3.0 }")]

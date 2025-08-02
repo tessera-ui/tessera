@@ -65,6 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .blur_radius(5.0)
                         .width(DimensionValue::Fixed(Dp(500.0).into()))
                         .height(DimensionValue::Fixed(Dp(500.0).into()))
+                        .contrast(1.5)
                         .build()
                         .unwrap(),
                     None,
