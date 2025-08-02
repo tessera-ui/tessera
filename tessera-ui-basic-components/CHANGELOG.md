@@ -1,3 +1,14 @@
+## [v1.5.0] - 2025-08-02 +08:00
+
+### Changes
+- refactor(progress): optimize progress bar visual design by removing shape parameter and implementing height-based auto rounded corners
+- feat(fluid_glass): add contrast property and set default tint to transparent
+- refactor(glass_slider): use fluid_glass for progress indicator
+- feat(glass-components): enhance border rendering with 3D bevel highlight
+- refactor(glass_dialog_showcase,glass_dialog): optimize glass dialog and button visual parameters, remove blur_radius field for simpler configuration
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.4.0...tessera-ui-basic-components-v1.5.0)
+
 ## [v1.4.0] - 2025-07-31 +08:00
 
 ### Changes
