@@ -10,7 +10,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera_ui::{Color, DimensionValue, Dp};
+use tessera_ui::{Color, DimensionValue, Dp, Px};
 use tessera_ui_macros::tessera;
 
 use crate::{
@@ -77,7 +77,7 @@ impl GlassButtonArgs {
         GlassButtonArgsBuilder::default()
             .on_click(on_click)
             .tint_color(Color::new(0.2, 0.5, 0.8, 0.2)) // Blue tint
-            .border(GlassBorder::new(Dp(2.0), Color::new(0.2, 0.5, 0.8, 0.5)))
+            .border(GlassBorder::new(Px(1)))
             .build()
             .unwrap()
     }
@@ -87,7 +87,7 @@ impl GlassButtonArgs {
         GlassButtonArgsBuilder::default()
             .on_click(on_click)
             .tint_color(Color::new(0.6, 0.6, 0.6, 0.2)) // Gray tint
-            .border(GlassBorder::new(Dp(2.0), Color::new(0.6, 0.6, 0.6, 0.5)))
+            .border(GlassBorder::new(Px(1)))
             .build()
             .unwrap()
     }
@@ -97,7 +97,7 @@ impl GlassButtonArgs {
         GlassButtonArgsBuilder::default()
             .on_click(on_click)
             .tint_color(Color::new(0.1, 0.7, 0.3, 0.2)) // Green tint
-            .border(GlassBorder::new(Dp(2.0), Color::new(0.1, 0.7, 0.3, 0.5)))
+            .border(GlassBorder::new(Px(1)))
             .build()
             .unwrap()
     }
@@ -107,7 +107,7 @@ impl GlassButtonArgs {
         GlassButtonArgsBuilder::default()
             .on_click(on_click)
             .tint_color(Color::new(0.8, 0.2, 0.2, 0.2)) // Red tint
-            .border(GlassBorder::new(Dp(2.0), Color::new(0.8, 0.2, 0.2, 0.5)))
+            .border(GlassBorder::new(Px(1)))
             .build()
             .unwrap()
     }

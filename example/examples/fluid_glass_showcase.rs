@@ -5,7 +5,7 @@ use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{AsBoxedItem, BoxedArgs, boxed},
     column::{AsColumnItem, ColumnArgsBuilder, column},
-    fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
+    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     row::{AsRowItem, RowArgsBuilder, row},
     shape_def::Shape,
     spacer::{SpacerArgs, spacer},
@@ -194,10 +194,6 @@ fn app() {
                                                 g2_k_value: 3.0,
                                             })
                                             .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
-                                            .border(GlassBorder::new(
-                                                Dp(2.0),
-                                                Color::BLUE.with_alpha(0.1),
-                                            ))
                                             .build()
                                             .unwrap(),
                                         None,

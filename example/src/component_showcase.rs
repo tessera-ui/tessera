@@ -4,7 +4,7 @@ use tessera_ui::{Color, DimensionValue, Dp};
 use tessera_ui_basic_components::{
     column::ColumnArgsBuilder,
     column_ui,
-    fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
+    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -215,6 +215,7 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                 FluidGlassArgsBuilder::default()
                                     .width(DimensionValue::Fixed(Dp(100.0).into()))
                                     .height(DimensionValue::Fixed(Dp(100.0).into()))
+                                    .border(None)
                                     .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
                                     .build()
                                     .unwrap(),
@@ -233,7 +234,6 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                     .width(DimensionValue::Fixed(Dp(100.0).into()))
                                     .height(DimensionValue::Fixed(Dp(100.0).into()))
                                     .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
-                                    .border(GlassBorder::new(Dp(2.0), Color::BLUE.with_alpha(0.3)))
                                     .on_click(Arc::new(|| {
                                         println!("Fluid glass with border clicked!");
                                     }))
@@ -282,7 +282,6 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                     .on_click(Arc::new(|| {
                                         println!("Fluid glass ellipse clicked!");
                                     }))
-                                    .border(GlassBorder::new(Dp(2.0), Color::BLUE.with_alpha(0.3)))
                                     .build()
                                     .unwrap(),
                                 Some(state.fluid_glass_ripple_3.clone()),

@@ -26,13 +26,12 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GlassBorder {
-    pub width: Dp,
-    pub color: Color,
+    pub width: Px,
 }
 
 impl GlassBorder {
-    pub fn new(width: Dp, color: Color) -> Self {
-        Self { width, color }
+    pub fn new(width: Px) -> Self {
+        Self { width }
     }
 }
 
@@ -104,7 +103,7 @@ pub struct FluidGlassArgs {
     #[builder(default, setter(strip_option, into = false))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
 
-    #[builder(default, setter(strip_option))]
+    #[builder(default = "Some(GlassBorder { width: Px(1) })")]
     pub border: Option<GlassBorder>,
 
     /// Whether to block input events on the glass surface.

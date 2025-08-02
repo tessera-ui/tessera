@@ -85,17 +85,11 @@ pub struct GlassSwitchArgs {
     pub thumb_off_alpha: f32,
 
     /// Border for the thumb
-    #[builder(
-        default = "Some(GlassBorder::new(Dp(2.0), Color::BLUE.with_alpha(0.5)))",
-        setter(strip_option)
-    )]
+    #[builder(default, setter(strip_option))]
     pub thumb_border: Option<GlassBorder>,
 
     /// Border for the track
-    #[builder(
-        default = "Some(GlassBorder::new(Dp(2.0), Color::WHITE.with_alpha(0.5)))",
-        setter(strip_option)
-    )]
+    #[builder(default, setter(strip_option))]
     pub track_border: Option<GlassBorder>,
 
     /// Padding around the thumb

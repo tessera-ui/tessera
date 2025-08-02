@@ -82,12 +82,8 @@ pub struct GlassSliderArgs {
     #[builder(default = "8.0")]
     pub blur_radius: f32,
 
-    /// Border color for the track.
-    #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.3)")]
-    pub track_border_color: Color,
-
     /// Border width for the track.
-    #[builder(default = "Dp(2.0)")]
+    #[builder(default = "Px(1).into()")]
     pub track_border_width: Dp,
 
     /// Disable interaction.
@@ -154,10 +150,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
                 corner_radius: args.track_height.0 as f32 / 2.0,
                 g2_k_value: 2.0, // Capsule shape
             })
-            .border(GlassBorder::new(
-                args.track_border_width,
-                args.track_border_color,
-            ))
+            .border(GlassBorder::new(args.track_border_width.into()))
             .padding(args.track_border_width)
             .build()
             .unwrap(),
