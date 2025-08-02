@@ -39,10 +39,6 @@ pub struct ProgressArgs {
     /// The color of the inactive part of the track.
     #[builder(default = "Color::new(0.8, 0.8, 0.8, 1.0)")]
     pub track_color: Color,
-
-    /// The shape of the progress bar.
-    #[builder(default = "Shape::RoundedRectangle{ corner_radius: 4.0, g2_k_value: 3.0 }")]
-    pub shape: Shape,
 }
 
 #[tessera]
@@ -76,7 +72,10 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(args.track_color)
-            .shape(args.shape)
+            .shape(Shape::RoundedRectangle {
+                corner_radius: args.height.to_px().to_f32() / 2.0,
+                g2_k_value: 2.0,
+            })
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -95,7 +94,10 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(args.progress_color)
-            .shape(args.shape)
+            .shape(Shape::RoundedRectangle {
+                corner_radius: args.height.to_px().to_f32() / 2.0,
+                g2_k_value: 2.0,
+            })
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,

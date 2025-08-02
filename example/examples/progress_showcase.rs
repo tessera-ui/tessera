@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tessera_ui::{Color, Dp, renderer::Renderer};
+use tessera_ui::{Color, DimensionValue, Dp, renderer::Renderer};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{ColumnArgsBuilder, column_ui},
@@ -31,7 +31,10 @@ impl AppState {
 fn app(state: Arc<AppState>) {
     surface(
         SurfaceArgsBuilder::default()
-            .color(Color::new(0.1, 0.1, 0.1, 1.0))
+            .color(Color::WHITE)
+            .padding(Dp(20.0))
+            .width(DimensionValue::FILLED)
+            .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
         None,
@@ -68,6 +71,13 @@ fn app(state: Arc<AppState>) {
                             .build()
                             .unwrap()
                     ),
+                    || text("progress ↑"),
+                    || spacer(
+                        SpacerArgsBuilder::default()
+                            .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
+                            .build()
+                            .unwrap()
+                    ),
                     {
                         let state = state_for_column.clone();
                         move || {
@@ -84,6 +94,13 @@ fn app(state: Arc<AppState>) {
                     || spacer(
                         SpacerArgsBuilder::default()
                             .height(tessera_ui::DimensionValue::Fixed(Dp(10.0).to_px()))
+                            .build()
+                            .unwrap()
+                    ),
+                    || text("slider ↑"),
+                    || spacer(
+                        SpacerArgsBuilder::default()
+                            .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
                             .build()
                             .unwrap()
                     ),
