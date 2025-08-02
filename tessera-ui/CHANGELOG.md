@@ -1,3 +1,11 @@
+## [v1.8.0] - 2025-08-02 +08:00
+
+### Changes
+- feat(glass-components): enhance border rendering with 3D bevel highlight
+- chore(deps): bump tokio from 1.47.0 to 1.47.1
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.7.0...tessera-ui-v1.8.0)
+
 ## [v1.7.0] - 2025-07-31 +08:00
 
 ### Changes
