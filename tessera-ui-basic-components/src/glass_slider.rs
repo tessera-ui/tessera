@@ -24,7 +24,6 @@ use tessera_ui_macros::tessera;
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
     shape_def::Shape,
-    surface::{SurfaceArgsBuilder, surface},
 };
 
 /// State for the `glass_slider` component.
@@ -161,18 +160,19 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
                 - (args.track_border_width.to_px().to_f32() * 2.0);
             let effective_height = args.track_height.to_px().to_f32()
                 - (args.track_border_width.to_px().to_f32() * 2.0);
-            surface(
-                SurfaceArgsBuilder::default()
+            fluid_glass(
+                FluidGlassArgsBuilder::default()
                     .width(DimensionValue::Fixed(Px(progress_width as i32)))
                     .height(DimensionValue::Fill {
                         min: None,
                         max: None,
                     })
-                    .color(args.progress_tint_color)
+                    .tint_color(args.progress_tint_color)
                     .shape(Shape::RoundedRectangle {
                         corner_radius: effective_height / 2.0,
                         g2_k_value: 2.0, // Capsule shape
                     })
+                    .refraction_amount(0.0)
                     .build()
                     .unwrap(),
                 None,
