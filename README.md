@@ -70,7 +70,7 @@ The roadmap is now organized by crate:
   - ~~dialog~~
   - ~~slider~~
   - text_editor
-  - progress
+  - ~~progress~~
   - ~~scrollable~~
 - Add these components
   - radio
