@@ -8,17 +8,13 @@ use tessera_ui_basic_components::{
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
+    text_editor::{TextEditorArgsBuilder, text_editor},
 };
 use tessera_ui_macros::tessera;
 
 use crate::{
-    app_state::AppState,
-    interactive_demo::interactive_demo,
-    material_colors::md_colors,
-    misc::create_spacer,
-    performance_display::perf_display,
-    switch_showcase::switch_showcase,
-    text_editors::{text_editor_1, text_editor_2},
+    app_state::AppState, interactive_demo::interactive_demo, material_colors::md_colors,
+    misc::create_spacer, performance_display::perf_display, switch_showcase::switch_showcase,
 };
 
 /// surface examples showcase
@@ -299,7 +295,6 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
 #[tessera]
 fn text_editor_showcase(state: Arc<AppState>) {
     let editor_state_clone = state.text_editors_state.editor_state.clone();
-    let editor_state_2_clone = state.text_editors_state.editor_state_2.clone();
 
     surface(
         SurfaceArgsBuilder::default()
@@ -339,9 +334,23 @@ fn text_editor_showcase(state: Arc<AppState>) {
                 // Spacer
                 || (create_spacer(12))(),
                 // Content
-                move || text_editor_1(editor_state_clone.clone()),
-                || (create_spacer(16))(),
-                move || text_editor_2(editor_state_2_clone.clone())
+                move || text_editor(
+                    TextEditorArgsBuilder::default()
+                        .height(Some(DimensionValue::Fixed(Dp(250.0).into())))
+                        .width(Some(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        }))
+                        .selection_color(Some(Color::new(
+                            md_colors::PRIMARY.r,
+                            md_colors::PRIMARY.g,
+                            md_colors::PRIMARY.b,
+                            0.4,
+                        ))) // Material Design primary color with transparency
+                        .build()
+                        .unwrap(),
+                    editor_state_clone.clone()
+                ),
             )
         },
     )
