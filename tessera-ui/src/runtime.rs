@@ -29,14 +29,13 @@
 //! // Read-only access (multiple threads can read simultaneously)
 //! {
 //!     let runtime = TesseraRuntime::read();
-//!     let window_size = runtime.window_size;
+//!     let window_size = runtime.window_size();
 //!     println!("Window size: {}x{}", window_size[0], window_size[1]);
 //! } // Lock is automatically released
 //!
 //! // Write access (exclusive access required)
 //! {
 //!     let mut runtime = TesseraRuntime::write();
-//!     runtime.window_size = [1920, 1080];
 //!     runtime.cursor_icon_request = Some(winit::window::CursorIcon::Pointer);
 //! } // Lock is automatically released
 //! ```
@@ -110,7 +109,7 @@ pub struct TesseraRuntime {
     /// - Values are in physical pixels (not density-independent pixels)
     /// - Origin is at the top-left corner of the window
     /// - Both dimensions are guaranteed to be non-negative
-    pub window_size: [u32; 2],
+    pub(crate) window_size: [u32; 2],
 
     /// Cursor icon change request from UI components.
     ///
@@ -160,7 +159,7 @@ impl TesseraRuntime {
     ///
     /// // Access runtime data for reading
     /// let runtime = TesseraRuntime::read();
-    /// let [width, height] = runtime.window_size;
+    /// let [width, height] = runtime.window_size();
     /// println!("Window size: {}x{}", width, height);
     /// // Lock is automatically released when `runtime` goes out of scope
     /// ```
@@ -207,7 +206,6 @@ impl TesseraRuntime {
     /// // Modify runtime state
     /// {
     ///     let mut runtime = TesseraRuntime::write();
-    ///     runtime.window_size = [1920, 1080];
     ///     runtime.cursor_icon_request = Some(winit::window::CursorIcon::Pointer);
     /// } // Lock is automatically released
     /// ```
@@ -234,6 +232,11 @@ impl TesseraRuntime {
         TESSERA_RUNTIME
             .get_or_init(|| RwLock::new(Self::default()))
             .write()
+    }
+
+    /// Get the current window size in physical pixels.
+    pub fn window_size(&self) -> [u32; 2] {
+        self.window_size
     }
 
     /// Registers a per-frame callback for minimize state changes.
