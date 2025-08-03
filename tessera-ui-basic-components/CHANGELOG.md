@@ -1,3 +1,13 @@
+## [v1.6.0] - 2025-08-03 +08:00
+
+### Changes
+- fix(tessera-ui-basic-components): include descender in text layout height calculation
+- feat(tessera-ui-basic-components): use Dp for borders, add max_blur_radius & overlay blend highlight, update examples
+- feat(glass_progress): add glassmorphism-style progress bar component and showcase example
+- refactor(fluid_glass): enhance shape rendering and border highlight effects
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.5.0...tessera-ui-basic-components-v1.6.0)
+
 ## [v1.5.0] - 2025-08-02 +08:00
 
 ### Changes
