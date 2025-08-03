@@ -55,7 +55,6 @@ fn app(ripple_state: Arc<RippleState>, image_resource: &ImageData) {
                 move || {
                     let button_args = GlassButtonArgsBuilder::default()
                         .on_click(Arc::new(|| println!("Glass Button 1 clicked!")))
-                        .tint_color(Color::GREEN.with_alpha(0.2))
                         .width(DimensionValue::Fixed(Dp(50.0).into()))
                         .height(DimensionValue::Fixed(Dp(50.0).into()))
                         .noise_amount(0.0)

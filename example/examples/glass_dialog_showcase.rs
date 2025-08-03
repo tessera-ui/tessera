@@ -51,7 +51,7 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
                     .on_click(Arc::new(move || {
                         state.write().dialog_state.write().open();
                     }))
-                    .tint_color(Color::new(0.2, 0.5, 0.8, 0.5))
+                    .tint_color(Color::WHITE.with_alpha(0.3))
                     .build()
                     .unwrap(),
                 button_ripple,
@@ -124,7 +124,7 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
                         move || {
                             glass_button(
                                 GlassButtonArgsBuilder::default()
-                                    .tint_color(Color::new(0.2, 0.5, 0.8, content_alpha / 2.5))
+                                    .tint_color(Color::RED.with_alpha(content_alpha / 2.5))
                                     .on_click(Arc::new(move || {
                                         state.write().dialog_state.write().close();
                                     }))
@@ -135,7 +135,7 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
                                 move || {
                                     text(
                                         TextArgsBuilder::default()
-                                            .color(Color::BLACK.with_alpha(content_alpha))
+                                            .color(Color::RED.with_alpha(content_alpha))
                                             .text("Close".to_string())
                                             .build()
                                             .unwrap(),

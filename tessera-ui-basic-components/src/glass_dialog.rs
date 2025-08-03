@@ -214,10 +214,11 @@ pub fn glass_dialog_provider(
                 elapsed.as_secs_f32() / ANIM_TIME.as_secs_f32()
             }
         }));
+        let max_blur_radius = 50.0; // Maximum blur radius for the dialog
         let blur_radius = if state.read().is_open {
-            progress * 10.0 // Transition from 0 to 10.0 radius
+            progress * max_blur_radius // Transition from 0 to max_blur_radius
         } else {
-            10.0 * (1.0 - progress) // Transition from 10.0 to 0 alpha
+            max_blur_radius * (1.0 - progress) // Transition from 10.0 to max_blur_radius
         };
 
         let content_alpha = if state.read().is_open {
@@ -245,6 +246,7 @@ pub fn glass_dialog_provider(
                 .refraction_height(0.0)
                 .block_input(true)
                 .blur_radius(blur_radius)
+                .border(None)
                 .shape(Shape::RoundedRectangle {
                     corner_radius: 0.0,
                     g2_k_value: 3.0,

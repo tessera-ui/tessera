@@ -239,6 +239,12 @@ fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, k: f32
     }
 }
 
+fn blend_overlay(base: vec3<f32>, blend: vec3<f32>) -> vec3<f32> {
+    let a = base * 2.0;
+    let b = (vec3<f32>(1.0) - (vec3<f32>(1.0) - base) * 2.0) * (blend - 0.5) + base;
+    return select(b, a, blend < vec3<f32>(0.5));
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let rect_uv_min = uniforms.rect_uv_bounds.xy;
@@ -311,8 +317,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let shape_alpha = smoothstep(width, -width, sd);
 
     if uniforms.border_width > 0.0 {
-        let bevel_width = uniforms.border_width;
-        if (sd < 0.0 && sd > -bevel_width) {
+        // 1. Define the border region.
+        // sd is the distance to the shape edge, negative inside, positive outside.
+        // This expression creates a "band" region where sd is between 0 and -border_width.
+        let border_mask = smoothstep(0.0, -1.0, sd) - smoothstep(-uniforms.border_width, -uniforms.border_width - 1.0, sd);
+
+        // Only compute highlight within the border region.
+        if border_mask > 0.0 {
+            // 2. Compute highlight normal (same logic as AGSL, using new function).
             var normal: vec2<f32>;
             if uniforms.shape_type == 1.0 {
                 normal = grad_sd_ellipse(centered_coord, half_size);
@@ -320,36 +332,36 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 normal = grad_sd_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
             }
 
-            // Blinn-Phong Specular Highlight
-            let world_pos = in.uv * uniforms.screen_size;
-            let lightDir = normalize(uniforms.light_source - world_pos);
+            // 3. Compute highlight distribution.
+            let highlight_dir = normalize(vec2<f32>(-0.5, -0.866)); // Light direction at 120 degrees.
+            let top_light_fraction = dot(highlight_dir, normal);
+            let bottom_light_fraction = -top_light_fraction;
+            let highlight_decay = 1.5;
+            let highlight_fraction = pow(max(top_light_fraction, bottom_light_fraction), highlight_decay);
+        
+            // 4. Blend highlight color with border mask and add to final color.
+            let border_color = vec3<f32>(1.0); // Base border color (white).
+            let highlight_intensity = highlight_fraction * border_mask;
 
-            // Simplified Blinn-Phong: Assume view direction is same as light direction (H = L)
-            // This creates a highlight on surfaces directly facing the light source.
-            // Further reduced shininess for an even softer highlight
-            let shininess: f32 = 6.0;
-            let specular_intensity = pow(max(dot(normal, lightDir), 0.0), shininess);
-            // Reduced intensity for a less harsh highlight
-            let specular_color = vec3<f32>(1.0) * specular_intensity * 1.5;
+            // Create highlight layer color (white highlight times its intensity).
+            let highlight_layer_color = border_color * highlight_intensity;
 
-            // Slightly increased ambient light to maintain border definition
-            let ambient_color = vec3<f32>(0.15, 0.15, 0.15);
+            // Use overlay blend mode to mix highlight layer into final color.
+            let final_rgb_with_highlight = blend_overlay(final_color.rgb, highlight_layer_color);
 
-            let highlight_falloff = smoothstep(-bevel_width, -bevel_width + 1.5, sd);
-            let highlight_color = (specular_color + ambient_color) * highlight_falloff;
+            // Only apply blended result in border region.
+            let highlight_rgb = mix(final_color.rgb, final_rgb_with_highlight, border_mask);
 
-            let new_rgb = final_color.rgb + highlight_color;
-            final_color.r = new_rgb.r;
-            final_color.g = new_rgb.g;
-            final_color.b = new_rgb.b;
+            final_color.r = highlight_rgb.r;
+            final_color.g = highlight_rgb.g;
+            final_color.b = highlight_rgb.b;
         }
-        final_color.a = shape_alpha;
-    } else {
-        final_color.a = shape_alpha;
     }
 
+    final_color.a = shape_alpha;
+
     if sd > 0.0 {
-        final_color.a = 0.0;
+        discard; // Discard fragment if outside the shape.
     }
 
     return final_color;

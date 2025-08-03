@@ -82,7 +82,7 @@ pub struct GlassSliderArgs {
     pub blur_radius: f32,
 
     /// Border width for the track.
-    #[builder(default = "Px(1).into()")]
+    #[builder(default = "Dp(1.0)")]
     pub track_border_width: Dp,
 
     /// Disable interaction.
