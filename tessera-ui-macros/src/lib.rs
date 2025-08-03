@@ -104,15 +104,15 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
             {
                 use tessera_ui::{TesseraRuntime, ComponentNode};
 
-                TesseraRuntime::write()
-                    .component_tree
-                    .add_node(
+                TesseraRuntime::with_mut(|runtime| {
+                    runtime.component_tree.add_node(
                         ComponentNode {
                             fn_name: stringify!(#fn_name).to_string(),
                             measure_fn: None,
                             state_handler_fn: None,
                         }
-                    );
+                    )
+                });
             }
 
             // Step 2: Inject the `measure` function into the component scope
@@ -120,11 +120,13 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let measure = {
                 use tessera_ui::{MeasureFn, TesseraRuntime};
                 |fun: Box<MeasureFn>| {
-                    TesseraRuntime::write()
-                        .component_tree
-                        .current_node_mut()
-                        .unwrap()
-                        .measure_fn = Some(fun);
+                    TesseraRuntime::with_mut(|runtime| {
+                        runtime
+                            .component_tree
+                            .current_node_mut()
+                            .unwrap()
+                            .measure_fn = Some(fun)
+                    });
                 }
             };
 
@@ -133,11 +135,13 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let state_handler = {
                 use tessera_ui::{StateHandlerFn, TesseraRuntime};
                 |fun: Box<StateHandlerFn>| {
-                    TesseraRuntime::write()
-                        .component_tree
-                        .current_node_mut()
-                        .unwrap()
-                        .state_handler_fn = Some(fun);
+                    TesseraRuntime::with_mut(|runtime| {
+                        runtime
+                            .component_tree
+                            .current_node_mut()
+                            .unwrap()
+                            .state_handler_fn = Some(fun)
+                    });
                 }
             };
 
@@ -146,7 +150,7 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let on_minimize = {
                 use tessera_ui::TesseraRuntime;
                 |fun: Box<dyn Fn(bool) + Send + Sync + 'static>| {
-                    TesseraRuntime::write().on_minimize(fun);
+                    TesseraRuntime::with_mut(|runtime| runtime.on_minimize(fun));
                 }
             };
 
@@ -155,7 +159,7 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let on_close = {
                 use tessera_ui::TesseraRuntime;
                 |fun: Box<dyn Fn() + Send + Sync + 'static>| {
-                    TesseraRuntime::write().on_close(fun);
+                    TesseraRuntime::with_mut(|runtime| runtime.on_close(fun));
                 }
             };
 
@@ -171,9 +175,7 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
             {
                 use tessera_ui::TesseraRuntime;
 
-                TesseraRuntime::write()
-                    .component_tree
-                    .pop_node();
+                TesseraRuntime::with_mut(|runtime| runtime.component_tree.pop_node());
             }
 
             result

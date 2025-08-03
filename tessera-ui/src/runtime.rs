@@ -28,16 +28,13 @@
 //!
 //! // Read-only access (multiple threads can read simultaneously)
 //! {
-//!     let runtime = TesseraRuntime::read();
-//!     let window_size = runtime.window_size();
+//!     let window_size = TesseraRuntime::with(|rt| rt.window_size());
 //!     println!("Window size: {}x{}", window_size[0], window_size[1]);
-//! } // Lock is automatically released
 //!
 //! // Write access (exclusive access required)
-//! {
-//!     let mut runtime = TesseraRuntime::write();
-//!     runtime.cursor_icon_request = Some(winit::window::CursorIcon::Pointer);
-//! } // Lock is automatically released
+//!     TesseraRuntime::with_mut(|rt| {
+//!         rt.cursor_icon_request = Some(winit::window::CursorIcon::Pointer);
+//!     });
 //! ```
 //!
 //! ## Performance Considerations
@@ -140,6 +137,50 @@ pub struct TesseraRuntime {
 }
 
 impl TesseraRuntime {
+    /// Executes a closure with a shared, read-only reference to the runtime.
+    ///
+    /// This is the recommended way to access runtime state, as it ensures the lock is
+    /// released immediately after the closure finishes, preventing deadlocks caused by
+    /// extended lock lifetimes.
+    ///
+    /// # Example
+    /// ```
+    /// use tessera_ui::TesseraRuntime;
+    ///
+    /// let size = TesseraRuntime::with(|runtime| runtime.window_size());
+    /// println!("Window size: {}x{}", size[0], size[1]);
+    /// ```
+    pub fn with<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Self) -> R,
+    {
+        f(&TESSERA_RUNTIME
+            .get_or_init(|| RwLock::new(Self::default()))
+            .read())
+    }
+
+    /// Executes a closure with an exclusive, mutable reference to the runtime.
+    ///
+    /// This is the recommended way to modify runtime state. The lock is guaranteed
+    /// to be released after the closure completes.
+    ///
+    /// # Example
+    /// ```
+    /// use tessera_ui::{TesseraRuntime, winit};
+    ///
+    /// TesseraRuntime::with_mut(|runtime| {
+    ///     runtime.cursor_icon_request = Some(winit::window::CursorIcon::Pointer);
+    /// });
+    /// ```
+    pub fn with_mut<F, R>(f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        f(&mut TESSERA_RUNTIME
+            .get_or_init(|| RwLock::new(Self::default()))
+            .write())
+    }
+
     /// Acquires shared read access to the runtime state.
     ///
     /// This method returns a read guard that allows concurrent access to the runtime
@@ -181,6 +222,10 @@ impl TesseraRuntime {
     ///
     /// A [`RwLockReadGuard`] that provides read-only access to the runtime state.
     /// The guard automatically releases the lock when dropped.
+    #[deprecated(
+        since = "1.8.1",
+        note = "May cause deadlocks due to temporary lifetime extension. Use `TesseraRuntime::with()` instead."
+    )]
     pub fn read() -> RwLockReadGuard<'static, Self> {
         TESSERA_RUNTIME
             .get_or_init(|| RwLock::new(Self::default()))
@@ -228,6 +273,10 @@ impl TesseraRuntime {
     ///
     /// A [`RwLockWriteGuard`] that provides exclusive read-write access to the
     /// runtime state. The guard automatically releases the lock when dropped.
+    #[deprecated(
+        since = "1.8.1",
+        note = "May cause deadlocks due to temporary lifetime extension. Use `TesseraRuntime::with_mut()` instead."
+    )]
     pub fn write() -> RwLockWriteGuard<'static, Self> {
         TESSERA_RUNTIME
             .get_or_init(|| RwLock::new(Self::default()))

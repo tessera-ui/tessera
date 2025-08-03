@@ -595,10 +595,10 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         // this will help winit to properly schedule and make assumptions about its internal state
         app.window.pre_present_notify();
         // and tell runtime the new size
-        TesseraRuntime::write().window_size = app.size().into();
+        TesseraRuntime::with_mut(|rt| rt.window_size = app.size().into());
         // render the surface
         // Clear any registered callbacks
-        TesseraRuntime::write().clear_frame_callbacks();
+        TesseraRuntime::with_mut(|rt| rt.clear_frame_callbacks());
         // timer for performance measurement
         let tree_timer = Instant::now();
         // build the component tree
@@ -618,20 +618,22 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         // Clear any existing compute resources
         app.resource_manager.write().clear();
         // Compute the draw commands
-        let (commands, window_requests) = TesseraRuntime::write().component_tree.compute(
-            screen_size,
-            cursor_position,
-            cursor_events,
-            keyboard_events,
-            ime_events,
-            keyboard_state.modifiers(),
-            app.resource_manager.clone(),
-            &app.gpu,
-            clipboard,
-        );
+        let (commands, window_requests) = TesseraRuntime::with_mut(|rt| {
+            rt.component_tree.compute(
+                screen_size,
+                cursor_position,
+                cursor_events,
+                keyboard_events,
+                ime_events,
+                keyboard_state.modifiers(),
+                app.resource_manager.clone(),
+                &app.gpu,
+                clipboard,
+            )
+        });
         let draw_cost = draw_timer.elapsed();
         debug!("Draw commands computed in {draw_cost:?}");
-        TesseraRuntime::write().component_tree.clear();
+        TesseraRuntime::with_mut(|rt| rt.component_tree.clear());
         // Handle the window requests
         // After compute, check for cursor change requests
         // Only set cursor when not at window edges to let window manager handle resize cursors
@@ -686,7 +688,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         // timer for performance measurement
         let render_timer = Instant::now();
         // skip actual rendering if window is minimized
-        if TesseraRuntime::read().window_minimized {
+        if TesseraRuntime::with(|rt| rt.window_minimized) {
             app.window.request_redraw();
             return;
         }
@@ -846,22 +848,26 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         // Handle window events
         match event {
             WindowEvent::CloseRequested => {
-                TesseraRuntime::read().trigger_close_callbacks();
+                TesseraRuntime::with(|rt| rt.trigger_close_callbacks());
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
                 if size.width == 0 || size.height == 0 {
                     // Window minimize handling & callback API
-                    if !TesseraRuntime::write().window_minimized {
-                        TesseraRuntime::write().window_minimized = true;
-                        TesseraRuntime::read().trigger_minimize_callbacks(true);
-                    }
+                    TesseraRuntime::with_mut(|rt| {
+                        if !rt.window_minimized {
+                            rt.window_minimized = true;
+                            rt.trigger_minimize_callbacks(true);
+                        }
+                    });
                 } else {
                     // Window (un)minimize handling & callback API
-                    if TesseraRuntime::write().window_minimized {
-                        TesseraRuntime::write().window_minimized = false;
-                        TesseraRuntime::read().trigger_minimize_callbacks(false);
-                    }
+                    TesseraRuntime::with_mut(|rt| {
+                        if rt.window_minimized {
+                            rt.window_minimized = false;
+                            rt.trigger_minimize_callbacks(false);
+                        }
+                    });
                     app.resize(size);
                 }
             }
