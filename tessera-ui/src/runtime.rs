@@ -24,17 +24,18 @@
 //! Access the runtime through the static methods:
 //!
 //! ```
-//! use tessera_ui::TesseraRuntime;
+//! use tessera_ui::{TesseraRuntime, winit};
 //!
 //! // Read-only access (multiple threads can read simultaneously)
 //! {
 //!     let window_size = TesseraRuntime::with(|rt| rt.window_size());
 //!     println!("Window size: {}x{}", window_size[0], window_size[1]);
+//! }
 //!
 //! // Write access (exclusive access required)
-//!     TesseraRuntime::with_mut(|rt| {
-//!         rt.cursor_icon_request = Some(winit::window::CursorIcon::Pointer);
-//!     });
+//! TesseraRuntime::with_mut(|rt| {
+//!     rt.cursor_icon_request = Some(winit::window::CursorIcon::Pointer);
+//! });
 //! ```
 //!
 //! ## Performance Considerations
