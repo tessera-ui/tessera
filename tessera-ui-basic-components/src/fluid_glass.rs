@@ -69,7 +69,7 @@ pub struct FluidGlassArgs {
     #[builder(default = "0.2")]
     pub eccentric_factor: f32,
     /// The amount of noise to apply over the surface, adding texture.
-    #[builder(default = "0.02")]
+    #[builder(default = "0.0")]
     pub noise_amount: f32,
     /// The scale of the noise pattern.
     #[builder(default = "1.0")]

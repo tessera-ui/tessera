@@ -4,13 +4,11 @@ use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{AsBoxedItem, BoxedArgs, boxed},
-    column::{AsColumnItem, ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
     row::{AsRowItem, RowArgsBuilder, row},
     shape_def::Shape,
-    spacer::{SpacerArgs, spacer},
-    surface::{SurfaceArgs, surface},
-    text::{TextArgsBuilder, text},
+    surface::{SurfaceArgsBuilder, surface},
 };
 use tessera_ui_macros::tessera;
 
@@ -18,17 +16,17 @@ use tessera_ui_macros::tessera;
 #[tessera]
 fn small_box(color: Color) {
     surface(
-        SurfaceArgs {
-            color,
-            shape: Shape::RoundedRectangle {
+        SurfaceArgsBuilder::default()
+            .color(color)
+            .shape(Shape::RoundedRectangle {
                 corner_radius: 25.0,
                 g2_k_value: 3.0,
-            },
-            padding: Dp(8.0),
-            width: Some(DimensionValue::Fixed(Px(40))),
-            height: Some(DimensionValue::Fixed(Px(40))),
-            ..Default::default()
-        },
+            })
+            .padding(Dp(8.0))
+            .width(DimensionValue::Fixed(Px(40)))
+            .height(DimensionValue::Fixed(Px(40)))
+            .build()
+            .unwrap(),
         None,
         move || {},
     );
@@ -36,21 +34,21 @@ fn small_box(color: Color) {
 
 /// Main App
 #[tessera]
-fn app() {
+fn app(image_resource: &ImageData) {
+    let image_resource = image_resource.clone();
     // A surface to hold everything
     surface(
-        SurfaceArgs {
-            color: Color::new(0.1, 0.1, 0.2, 1.0), // Dark background to make the effect more visible
-            width: Some(DimensionValue::Fill {
+        SurfaceArgsBuilder::default()
+            .width(DimensionValue::Fill {
                 min: None,
                 max: None,
-            }),
-            height: Some(DimensionValue::Fill {
+            })
+            .height(DimensionValue::Fill {
                 min: None,
                 max: None,
-            }),
-            ..Default::default()
-        },
+            })
+            .build()
+            .unwrap(),
         None,
         || {
             // Use boxed to stack background content and fluid glass
@@ -62,94 +60,12 @@ fn app() {
                 [
                     // Background content layer
                     (move || {
-                        column(
-                            ColumnArgsBuilder::default()
-                                .main_axis_alignment(MainAxisAlignment::Center)
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .width(DimensionValue::Fill {
-                                    min: None,
-                                    max: None,
-                                })
-                                .height(DimensionValue::Fill {
-                                    min: None,
-                                    max: None,
-                                })
+                        image(
+                            ImageArgsBuilder::default()
+                                .data(image_resource)
                                 .build()
                                 .unwrap(),
-                            [
-                                // Colorful boxes row
-                                (move || {
-                                    row(
-                                        RowArgsBuilder::default()
-                                            .main_axis_alignment(MainAxisAlignment::SpaceAround)
-                                            .width(DimensionValue::Fixed(Px(800)))
-                                            .build()
-                                            .unwrap(),
-                                        [
-                                            (|| small_box(Color::new(0.2, 0.6, 0.9, 1.0)))
-                                                .into_row_item(),
-                                            (|| small_box(Color::new(0.9, 0.2, 0.2, 1.0)))
-                                                .into_row_item(),
-                                            (|| small_box(Color::new(0.2, 0.8, 0.3, 1.0)))
-                                                .into_row_item(),
-                                            (|| small_box(Color::new(0.9, 0.8, 0.2, 1.0)))
-                                                .into_row_item(),
-                                            (|| small_box(Color::new(0.8, 0.2, 0.8, 1.0)))
-                                                .into_row_item(),
-                                        ],
-                                    )
-                                })
-                                .into_column_item(),
-                                // Spacer
-                                (|| {
-                                    spacer(SpacerArgs {
-                                        width: DimensionValue::Fixed(Px(0)),
-                                        height: DimensionValue::Fixed(Px(30)),
-                                    })
-                                })
-                                .into_column_item(),
-                                // Text content
-                                (move || {
-                                    text(
-                                        TextArgsBuilder::default()
-                                            .text(
-                                                "This text should appear blurred through the glass"
-                                                    .to_string(),
-                                            )
-                                            .size(Dp(18.0))
-                                            .color(Color::WHITE)
-                                            .build()
-                                            .unwrap(),
-                                    )
-                                })
-                                .into_column_item(),
-                                // More colorful elements
-                                (|| {
-                                    spacer(SpacerArgs {
-                                        width: DimensionValue::Fixed(Px(0)),
-                                        height: DimensionValue::Fixed(Px(20)),
-                                    })
-                                })
-                                .into_column_item(),
-                                (move || {
-                                    row(
-                                        RowArgsBuilder::default()
-                                            .main_axis_alignment(MainAxisAlignment::Center)
-                                            .build()
-                                            .unwrap(),
-                                        [
-                                            (|| small_box(Color::new(0.3, 0.5, 1.0, 1.0)))
-                                                .into_row_item(),
-                                            (|| small_box(Color::new(1.0, 0.3, 0.3, 1.0)))
-                                                .into_row_item(),
-                                            (|| small_box(Color::new(0.3, 1.0, 0.3, 1.0)))
-                                                .into_row_item(),
-                                        ],
-                                    )
-                                })
-                                .into_column_item(),
-                            ],
-                        )
+                        );
                     })
                     .into_boxed_item(),
                     // Fluid glass overlay
@@ -168,14 +84,14 @@ fn app() {
                                 (move || {
                                     fluid_glass(
                                         FluidGlassArgsBuilder::default()
-                                            .blur_radius(10.0)
                                             .width(DimensionValue::Fixed(Px(350)))
                                             .height(DimensionValue::Fixed(Px(250)))
                                             .shape(Shape::RoundedRectangle {
                                                 corner_radius: 20.0,
                                                 g2_k_value: 3.0,
                                             })
-                                            .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
+                                            .refraction_amount(50.0)
+                                            .tint_color(Color::TRANSPARENT)
                                             .build()
                                             .unwrap(),
                                         None,
@@ -193,7 +109,7 @@ fn app() {
                                                 corner_radius: 20.0,
                                                 g2_k_value: 3.0,
                                             })
-                                            .tint_color(Color::new(0.8, 0.9, 1.0, 0.2))
+                                            .tint_color(Color::TRANSPARENT)
                                             .build()
                                             .unwrap(),
                                         None,
@@ -212,8 +128,20 @@ fn app() {
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    Renderer::run(app, |app| {
-        tessera_ui_basic_components::pipelines::register_pipelines(app);
-    })?;
+    let image_path = format!(
+        "{}/examples/assets/scarlet_ut.jpg",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let image_data = load_image_from_source(&ImageSource::Path(image_path))?;
+    Renderer::run(
+        {
+            move || {
+                app(&image_data);
+            }
+        },
+        |app| {
+            tessera_ui_basic_components::pipelines::register_pipelines(app);
+        },
+    )?;
     Ok(())
 }
