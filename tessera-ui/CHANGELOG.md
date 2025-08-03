@@ -1,3 +1,10 @@
+## [v1.8.1] - 2025-08-03 +08:00
+
+### Changes
+- refactor(runtime)!: privatize window_size and add window_size() method
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.8.0...tessera-ui-v1.8.1)
+
 ## [v1.8.0] - 2025-08-02 +08:00
 
 ### Changes
