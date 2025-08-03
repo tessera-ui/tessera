@@ -240,9 +240,11 @@ impl TextData {
         // Calculate text bounds
         // Get the layout runs
         let mut run_width: f32 = 0.0;
-        // Calculate the line height based on the number of lines
-        let line_height =
-            text_buffer.layout_runs().count() as f32 * text_buffer.metrics().line_height;
+        // Calculate total height including descender for the last line
+        let metrics = text_buffer.metrics();
+        let num_lines = text_buffer.layout_runs().count() as f32;
+        let descent_amount = (metrics.line_height - metrics.font_size).max(0.0);
+        let total_height = num_lines * metrics.line_height + descent_amount;
         for run in text_buffer.layout_runs() {
             // Take the max. width of all lines.
             run_width = run_width.max(run.line_w);
@@ -250,17 +252,18 @@ impl TextData {
         // build text data
         Self {
             text_buffer,
-            size: [run_width as u32, line_height as u32],
+            size: [run_width as u32, total_height.ceil() as u32],
         }
     }
 
     pub fn from_buffer(text_buffer: glyphon::Buffer) -> Self {
+        // Calculate total height including descender for the last line
+        let metrics = text_buffer.metrics();
+        let num_lines = text_buffer.layout_runs().count() as f32;
+        let descent_amount = (metrics.line_height - metrics.font_size).max(0.0);
+        let total_height = num_lines * metrics.line_height + descent_amount;
         // Calculate text bounds
-        // Get the layout runs
         let mut run_width: f32 = 0.0;
-        // Calculate the line height based on the number of lines
-        let line_height =
-            text_buffer.layout_runs().count() as f32 * text_buffer.metrics().line_height;
         for run in text_buffer.layout_runs() {
             // Take the max. width of all lines.
             run_width = run_width.max(run.line_w);
@@ -268,7 +271,7 @@ impl TextData {
         // build text data
         Self {
             text_buffer,
-            size: [run_width as u32, line_height as u32],
+            size: [run_width as u32, total_height.ceil() as u32],
         }
     }
 
