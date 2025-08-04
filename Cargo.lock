@@ -3101,6 +3101,9 @@ dependencies = [
 [[package]]
 name = "tessera-ui-shard"
 version = "0.1.0"
+dependencies = [
+ "dashmap",
+]
 
 [[package]]
 name = "thiserror"

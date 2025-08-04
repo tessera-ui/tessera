@@ -8,3 +8,4 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+dashmap = "6.1.0"
