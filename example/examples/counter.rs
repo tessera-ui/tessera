@@ -10,7 +10,7 @@ use std::sync::{
     atomic::{self, AtomicU32},
 };
 
-use tessera_ui::{Color, Dp, Renderer};
+use tessera_ui::{Color, Dp, Renderer, renderer::TesseraConfig};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
@@ -102,7 +102,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Click the blue button to increment the counter!");
 
     // Run the application
-    Renderer::run(
+    let config = TesseraConfig {
+        window_title: "Tessera Counter Example".to_string(),
+        ..Default::default()
+    };
+    Renderer::run_with_config(
         {
             let app_state_main = app_state.clone(); // Clone for the main app loop
             move || {
@@ -112,6 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         |app| {
             tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
+        config,
     )?;
 
     Ok(())

@@ -54,6 +54,7 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = TesseraConfig {
 //!     sample_count: 8,  // 8x MSAA
+//!     ..Default::default()
 //! };
 //!
 //! Renderer::run_with_config(
@@ -236,11 +237,13 @@ use winit::platform::android::{
 /// // Custom configuration with 8x MSAA
 /// let config = TesseraConfig {
 ///     sample_count: 8,
+///     ..Default::default()
 /// };
 ///
 /// // Disable MSAA for better performance
 /// let config = TesseraConfig {
 ///     sample_count: 1,
+///     ..Default::default()
 /// };
 /// ```
 #[derive(Clone)]
@@ -262,12 +265,18 @@ pub struct TesseraConfig {
     /// - Mobile devices may have limited support for higher sample counts
     /// - Consider using lower values on resource-constrained devices
     pub sample_count: u32,
+    /// The title of the application window.
+    /// Defaults to "Tessera" if not specified.
+    pub window_title: String,
 }
 
 impl Default for TesseraConfig {
-    /// Creates a default configuration with 4x MSAA enabled.
+    /// Creates a default configuration with 4x MSAA and "Tessera" as the window title.
     fn default() -> Self {
-        Self { sample_count: 4 }
+        Self {
+            sample_count: 4,
+            window_title: "Tessera".to_string(),
+        }
     }
 }
 
@@ -392,6 +401,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let config = TesseraConfig {
     ///     sample_count: 8,  // 8x MSAA for higher quality
+    ///     ..Default::default()
     /// };
     ///
     /// Renderer::run_with_config(
@@ -761,7 +771,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
 
         // Create a new window
         let window_attributes = Window::default_attributes()
-            .with_title("Tessera")
+            .with_title(&self.config.window_title)
             .with_transparent(true);
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         let register_pipelines_fn = self.register_pipelines_fn.clone();
