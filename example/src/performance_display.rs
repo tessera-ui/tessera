@@ -4,8 +4,8 @@ use std::{
 };
 
 use parking_lot::RwLock;
+use tessera_ui::tessera;
 use tessera_ui_basic_components::text::text;
-use tessera_ui_macros::tessera;
 
 pub struct PerformanceMetrics {
     pub fps: atomic::AtomicU64,

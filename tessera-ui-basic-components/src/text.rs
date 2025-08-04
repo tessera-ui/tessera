@@ -30,8 +30,7 @@
 //! text(args);
 //! ```
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, DimensionValue, Dp, Px};
-use tessera_ui_macros::tessera;
+use tessera_ui::{Color, ComputedData, DimensionValue, Dp, Px, tessera};
 
 use crate::pipelines::{TextCommand, TextConstraint, TextData};
 

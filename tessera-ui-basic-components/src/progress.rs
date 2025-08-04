@@ -8,8 +8,7 @@
 //! Typical usage involves specifying the progress value and optional appearance parameters.
 //! The component is designed for integration into Tessera UI applications.
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition};
-use tessera_ui_macros::tessera;
+use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, tessera};
 
 use crate::{
     shape_def::Shape,

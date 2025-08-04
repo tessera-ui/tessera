@@ -10,8 +10,7 @@
 //!
 //! This module also provides supporting types and a macro for ergonomic usage.
 use derive_builder::Builder;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition};
-use tessera_ui_macros::tessera;
+use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, tessera};
 
 use crate::alignment::Alignment;
 

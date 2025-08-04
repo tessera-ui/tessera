@@ -886,7 +886,6 @@ dependencies = [
  "parking_lot",
  "tessera-ui",
  "tessera-ui-basic-components",
- "tessera-ui-macros",
  "tokio",
  "wgpu",
  "winit",
@@ -3044,6 +3043,8 @@ dependencies = [
  "ndk-sys",
  "parking_lot",
  "rayon",
+ "tessera-ui-macros",
+ "tessera-ui-shard",
  "tokio",
  "uuid",
  "wgpu",
@@ -3065,7 +3066,6 @@ dependencies = [
  "log",
  "parking_lot",
  "tessera-ui",
- "tessera-ui-macros",
  "unicode-segmentation",
 ]
 
@@ -3095,7 +3095,6 @@ version = "0.1.7"
 dependencies = [
  "quote",
  "syn",
- "tessera-ui",
 ]
 
 [[package]]

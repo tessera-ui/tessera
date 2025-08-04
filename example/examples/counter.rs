@@ -10,7 +10,7 @@ use std::sync::{
     atomic::{self, AtomicU32},
 };
 
-use tessera_ui::{Color, Dp, Renderer, renderer::TesseraConfig};
+use tessera_ui::{Color, Dp, Renderer, renderer::TesseraConfig, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
@@ -20,7 +20,6 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgsBuilder, text},
 };
-use tessera_ui_macros::tessera;
 
 /// Shared application state
 struct AppState {
@@ -30,8 +29,8 @@ struct AppState {
     button_state: Arc<RippleState>,
 }
 
-impl AppState {
-    fn new() -> Self {
+impl Default for AppState {
+    fn default() -> Self {
         Self {
             click_count: AtomicU32::new(0),
             button_state: Arc::new(RippleState::new()),
@@ -41,7 +40,8 @@ impl AppState {
 
 /// Main counter application component
 #[tessera]
-fn counter_app(app_state: Arc<AppState>) {
+#[shard]
+fn counter_app(app_state: AppState) {
     {
         let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
         let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
@@ -95,9 +95,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .write_mode(flexi_logger::WriteMode::Async)
         .start()?;
 
-    // Create application state
-    let app_state = Arc::new(AppState::new());
-
     println!("Starting Counter Example");
     println!("Click the blue button to increment the counter!");
 
@@ -108,9 +105,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     Renderer::run_with_config(
         {
-            let app_state_main = app_state.clone(); // Clone for the main app loop
             move || {
-                counter_app(app_state_main.clone());
+                counter_app();
             }
         },
         |app| {

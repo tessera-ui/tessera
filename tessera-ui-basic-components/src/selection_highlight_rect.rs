@@ -3,8 +3,7 @@
 //! sharp-cornered, shadowless rectangles with configurable size and color, suitable for
 //! marking text selections or other highlighted areas. For multi-line or complex selections,
 //! multiple highlight rectangles can be composed to cover the desired region.
-use tessera_ui::{Color, ComputedData, Px};
-use tessera_ui_macros::tessera;
+use tessera_ui::{Color, ComputedData, Px, tessera};
 
 use crate::pipelines::ShapeCommand;
 

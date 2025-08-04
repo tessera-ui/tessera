@@ -17,7 +17,6 @@
 //! - Designed for ergonomic integration with the Tessera component tree and event system.
 //!
 //! See [`SwitchArgs`], [`SwitchState`], and [`switch()`] for details and usage examples.
-
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -27,9 +26,8 @@ use derive_builder::Builder;
 use parking_lot::Mutex;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
-    PxPosition, winit::window::CursorIcon,
+    PxPosition, tessera, winit::window::CursorIcon,
 };
-use tessera_ui_macros::tessera;
 
 use crate::{
     animation,

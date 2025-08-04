@@ -1,6 +1,6 @@
 //! Fluid Glass Showcase
 
-use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer};
+use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{AsBoxedItem, BoxedArgs, boxed},
@@ -10,7 +10,6 @@ use tessera_ui_basic_components::{
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
-use tessera_ui_macros::tessera;
 
 /// Create a small colored box
 #[tessera]

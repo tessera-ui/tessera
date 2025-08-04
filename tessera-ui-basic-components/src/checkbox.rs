@@ -22,8 +22,7 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp};
-use tessera_ui_macros::tessera;
+use tessera_ui::{Color, DimensionValue, Dp, tessera};
 
 use crate::{
     alignment::Alignment,

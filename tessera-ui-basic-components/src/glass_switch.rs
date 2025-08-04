@@ -18,9 +18,8 @@ use derive_builder::Builder;
 use parking_lot::Mutex;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
-    PxPosition, winit::window::CursorIcon,
+    PxPosition, tessera, winit::window::CursorIcon,
 };
-use tessera_ui_macros::tessera;
 
 use crate::{
     animation,

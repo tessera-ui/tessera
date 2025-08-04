@@ -51,7 +51,7 @@ use syn::{ItemFn, parse_macro_input};
 ///
 /// ## Example
 ///
-/// ```
+/// ```rust,ignore
 /// use tessera_ui_macros::tessera;
 ///
 /// #[tessera]
@@ -182,5 +182,65 @@ pub fn tessera(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    TokenStream::from(expanded)
+}
+
+#[cfg(feature = "shard")]
+#[proc_macro_attribute]
+pub fn shard(_args: TokenStream, input: TokenStream) -> TokenStream {
+    use syn::Pat;
+
+    // 1. Parse the function marked by the macro
+    let mut func = parse_macro_input!(input as ItemFn);
+
+    // 2. Find and remove the state parameter from the function signature (assumed to be the first parameter)
+    let state_param = match func.sig.inputs.iter().next() {
+        Some(syn::FnArg::Typed(pat_type)) => pat_type.clone(),
+        _ => panic!("#[shard] function must have at least one typed parameter for the state."),
+    };
+    // Remove the first parameter
+    func.sig.inputs = func.sig.inputs.iter().skip(1).cloned().collect();
+
+    // 3. Extract the name and type of the state parameter
+    let state_name = match *state_param.pat {
+        Pat::Ident(pat_ident) => pat_ident.ident,
+        _ => panic!(
+            "Unsupported parameter pattern in #[shard] function. Please use a simple identifier like `state`."
+        ),
+    };
+    let state_type = state_param.ty;
+
+    // 4. Save the original function body and function name
+    let func_body = func.block;
+    let func_name_str = func.sig.ident.to_string();
+
+    // 5. Get the remaining function attributes and the modified signature
+    let func_attrs = &func.attrs;
+    let func_vis = &func.vis;
+    let func_sig_modified = &func.sig;
+
+    // 6. Use quote! to generate the new TokenStream code
+    let expanded = quote! {
+        // Rebuild the function, keeping its attributes and visibility, but using the modified signature
+        #(#func_attrs)*
+        #func_vis #func_sig_modified {
+            // Generate a stable unique ID at the call site
+            const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
+
+            // Call the global registry and pass the original function body as a closure
+            // The state parameter is reintroduced here as the closure's parameter
+            // The use of unsafe here is because its implementation is very evil 😈, do not attempt to call it manually elsewhere
+            unsafe {
+                ::tessera_ui::tessera_ui_shard::ShardRegistry::get().init_or_get::<#state_type, _, _>(
+                    SHARD_ID,
+                    |#state_name| {
+                        #func_body
+                    },
+                )
+            }
+        }
+    };
+
+    // 7. Return the generated code as a TokenStream
     TokenStream::from(expanded)
 }

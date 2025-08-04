@@ -16,9 +16,7 @@
 //! See [`SpacerArgs`] and [`spacer`] for usage details.
 
 use derive_builder::Builder;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Dp, Px};
-use tessera_ui_macros::tessera;
-
+use tessera_ui::{ComputedData, Constraint, DimensionValue, Dp, Px, tessera};
 ///
 /// Arguments for configuring the [`spacer`] component.
 ///

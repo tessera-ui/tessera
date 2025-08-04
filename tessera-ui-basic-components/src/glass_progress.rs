@@ -6,8 +6,7 @@
 //! any interface requiring a modern and visually appealing progress indicator.
 
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition};
-use tessera_ui_macros::tessera;
+use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, tessera};
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},

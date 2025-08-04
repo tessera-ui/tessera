@@ -9,6 +9,10 @@ homepage.workspace = true
 description = "Gui Rust In Rust."
 readme = "../README.md"
 
+[features]
+default = ["shard"]
+shard = ["tessera-ui-shard"]
+
 [dependencies]
 bytemuck = { version = "1.15.0", features = ["derive"] }
 log = "0.4.27"
@@ -19,6 +23,8 @@ indextree = "4.7.4"
 rayon = "1.10.0"
 dashmap = "6.1.0"
 uuid = { version = "1.17.0", features = ["v4"] }
+tessera-ui-macros = { path = "../tessera-ui-macros" }
+tessera-ui-shard = { path = "../tessera-ui-shard", optional = true }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = "0.2.172"

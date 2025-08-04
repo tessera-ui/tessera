@@ -12,9 +12,8 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
-    PxPosition, renderer::DrawCommand, winit::window::CursorIcon,
+    PxPosition, renderer::DrawCommand, tessera, winit::window::CursorIcon,
 };
-use tessera_ui_macros::tessera;
 
 use crate::{
     padding_utils::remove_padding_from_dimension,

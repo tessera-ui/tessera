@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use tessera_ui::{Color, Constraint, CursorEventContent, Dp, PressKeyEventType, Px, PxPosition};
-use tessera_ui_macros::tessera;
+use tessera_ui::{
+    Color, Constraint, CursorEventContent, Dp, PressKeyEventType, Px, PxPosition, tessera,
+};
 
 use crate::{
     scrollable::{ScrollBarBehavior, ScrollableStateInner},

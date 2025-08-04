@@ -6,8 +6,7 @@
 
 use std::time::Instant;
 
-use tessera_ui::{Color, ComputedData, Dp, Px};
-use tessera_ui_macros::tessera;
+use tessera_ui::{Color, ComputedData, Dp, Px, tessera};
 
 use crate::pipelines::ShapeCommand;
 

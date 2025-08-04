@@ -21,9 +21,9 @@ use std::{sync::Arc, time::Instant};
 use glyphon::Edit;
 use parking_lot::RwLock;
 use tessera_ui::{
-    Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus, winit,
+    Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus,
+    tessera, winit,
 };
-use tessera_ui_macros::tessera;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
@@ -298,7 +298,6 @@ impl TextEditorState {
     }
 }
 
-#[tessera]
 /// Core text editing component for rendering text, selection, and cursor.
 ///
 /// This component is responsible for rendering the text buffer, selection highlights, and cursor.
@@ -319,6 +318,7 @@ impl TextEditorState {
 /// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(16.0), None)));
 /// text_edit_core(state.clone());
 /// ```
+#[tessera]
 pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
     // text rendering with constraints from parent container
     {
