@@ -42,52 +42,50 @@ impl Default for AppState {
 #[tessera]
 #[shard]
 fn counter_app(app_state: AppState) {
-    {
-        let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
-        let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
-        let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
+    let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
+    let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
+    let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
 
-        surface(
-            SurfaceArgs {
-                color: Color::WHITE, // White background
-                padding: Dp(25.0),
-                ..Default::default()
-            },
-            None,
-            move || {
-                row_ui![
-                    RowArgsBuilder::default()
-                        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .build()
-                        .unwrap(),
-                    move || {
-                        button(
-                            ButtonArgsBuilder::default()
-                                .on_click(Arc::new(move || {
-                                    // Increment the click count
-                                    app_state_clone // Use the cloned app_state
-                                        .click_count
-                                        .fetch_add(1, atomic::Ordering::Relaxed);
-                                }))
-                                .build()
-                                .unwrap(),
-                            button_state_clone, // Use the cloned button_state
-                            move || text("click me!"),
-                        )
-                    },
-                    move || {
-                        text(
-                            TextArgsBuilder::default()
-                                .text(format!("Count: {click_count}"))
-                                .build()
-                                .unwrap(),
-                        )
-                    }
-                ];
-            },
-        );
-    }
+    surface(
+        SurfaceArgs {
+            color: Color::WHITE, // White background
+            padding: Dp(25.0),
+            ..Default::default()
+        },
+        None,
+        move || {
+            row_ui![
+                RowArgsBuilder::default()
+                    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .build()
+                    .unwrap(),
+                move || {
+                    button(
+                        ButtonArgsBuilder::default()
+                            .on_click(Arc::new(move || {
+                                // Increment the click count
+                                app_state_clone // Use the cloned app_state
+                                    .click_count
+                                    .fetch_add(1, atomic::Ordering::Relaxed);
+                            }))
+                            .build()
+                            .unwrap(),
+                        button_state_clone, // Use the cloned button_state
+                        move || text("click me!"),
+                    )
+                },
+                move || {
+                    text(
+                        TextArgsBuilder::default()
+                            .text(format!("Count: {click_count}"))
+                            .build()
+                            .unwrap(),
+                    )
+                }
+            ];
+        },
+    );
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
