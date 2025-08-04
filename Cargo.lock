@@ -3085,7 +3085,6 @@ dependencies = [
  "rand_pcg",
  "tessera-ui",
  "tessera-ui-basic-components",
- "tessera-ui-macros",
  "tokio",
 ]
 
