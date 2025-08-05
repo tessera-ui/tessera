@@ -6,7 +6,7 @@
 //!
 //! ## Usage
 //!
-//! ```
+//! ```rust,ignore
 //! use tessera_ui_macros::tessera;
 //!
 //! #[tessera]
