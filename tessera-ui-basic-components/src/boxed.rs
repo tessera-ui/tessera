@@ -97,7 +97,7 @@ impl<F: FnOnce() + Send + Sync + 'static> AsBoxedItem for F {
 ///
 /// boxed(BoxedArgs::default(), [|| text("Hello".to_string())]);
 /// ```
-#[tessera(render_fn=boxed_ui)]
+#[tessera]
 pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxedItem; N]) {
     let children_items: [BoxedItem; N] =
         children_items_input.map(|item_input| item_input.into_boxed_item());

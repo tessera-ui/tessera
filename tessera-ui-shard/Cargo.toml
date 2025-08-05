@@ -9,3 +9,4 @@ homepage.workspace = true
 
 [dependencies]
 dashmap = "6.1.0"
+parking_lot = "0.12.4"

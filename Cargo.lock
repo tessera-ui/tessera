@@ -3092,6 +3092,7 @@ dependencies = [
 name = "tessera-ui-macros"
 version = "0.1.7"
 dependencies = [
+ "heck",
  "quote",
  "syn",
 ]
@@ -3101,6 +3102,7 @@ name = "tessera-ui-shard"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "parking_lot",
 ]
 
 [[package]]

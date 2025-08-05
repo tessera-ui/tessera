@@ -10,7 +10,9 @@ use std::sync::{
     atomic::{self, AtomicU32},
 };
 
-use tessera_ui::{Color, Dp, Renderer, renderer::TesseraConfig, shard, tessera};
+use tessera_ui::{
+    Color, Dp, Renderer, renderer::TesseraConfig, router::router_root, shard, tessera,
+};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
@@ -41,7 +43,7 @@ impl Default for AppState {
 /// Main counter application component
 #[tessera]
 #[shard]
-fn counter_app(app_state: AppState) {
+fn counter_app(#[state] app_state: AppState) {
     let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
     let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
     let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
@@ -95,7 +97,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Starting Counter Example");
     println!("Click the blue button to increment the counter!");
-
     // Run the application
     let config = TesseraConfig {
         window_title: "Tessera Counter Example".to_string(),
@@ -104,7 +105,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Renderer::run_with_config(
         {
             move || {
-                counter_app();
+                router_root(CounterAppDestination {});
             }
         },
         |app| {

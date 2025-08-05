@@ -1,3 +1,5 @@
+pub mod router;
+
 use std::{
     any::Any,
     sync::{Arc, OnceLock},

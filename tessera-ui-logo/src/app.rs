@@ -27,7 +27,7 @@ impl Default for AppState {
 
 #[tessera]
 #[shard]
-pub fn app(state: AppState) {
+pub fn app(#[state] state: AppState) {
     let time = state.start_time.elapsed().as_secs_f32();
 
     let shard = (move || crystal_shard(CrystalShardArgsBuilder::default().build().unwrap()))
