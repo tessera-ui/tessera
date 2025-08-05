@@ -11,7 +11,8 @@ use std::sync::{
 };
 
 use tessera_ui::{
-    Color, Dp, Renderer, renderer::TesseraConfig, router::router_root, shard, tessera,
+    Color, Dp, Renderer, RouteController, renderer::TesseraConfig, router::router_root, shard,
+    tessera,
 };
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
@@ -43,7 +44,7 @@ impl Default for AppState {
 /// Main counter application component
 #[tessera]
 #[shard]
-fn counter_app(#[state] app_state: AppState) {
+fn counter_app(#[state] app_state: AppState, #[route_controller] controller: RouteController) {
     let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
     let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
     let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
@@ -70,6 +71,71 @@ fn counter_app(#[state] app_state: AppState) {
                                 app_state_clone // Use the cloned app_state
                                     .click_count
                                     .fetch_add(1, atomic::Ordering::Relaxed);
+                                // Navigate to the counter_app2 route if click_count > 5
+                                if app_state_clone.click_count.load(atomic::Ordering::Relaxed) > 5 {
+                                    app_state_clone
+                                        .click_count
+                                        .store(0, atomic::Ordering::Relaxed); // Reset count
+                                    controller.push(CounterApp2Destination {});
+                                }
+                            }))
+                            .build()
+                            .unwrap(),
+                        button_state_clone, // Use the cloned button_state
+                        move || text("click me!"),
+                    )
+                },
+                move || {
+                    text(
+                        TextArgsBuilder::default()
+                            .text(format!("Count: {click_count}"))
+                            .build()
+                            .unwrap(),
+                    )
+                }
+            ];
+        },
+    );
+}
+
+/// Main counter application component, but this one's button is red :)
+#[tessera]
+#[shard]
+fn counter_app2(#[state] app_state: AppState, #[route_controller] controller: RouteController) {
+    let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
+    let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
+    let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
+
+    surface(
+        SurfaceArgs {
+            color: Color::WHITE, // White background
+            padding: Dp(25.0),
+            ..Default::default()
+        },
+        None,
+        move || {
+            row_ui![
+                RowArgsBuilder::default()
+                    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .build()
+                    .unwrap(),
+                move || {
+                    button(
+                        ButtonArgsBuilder::default()
+                            .color(Color::RED) // Set button color to red
+                            .on_click(Arc::new(move || {
+                                // Increment the click count
+                                app_state_clone // Use the cloned app_state
+                                    .click_count
+                                    .fetch_add(1, atomic::Ordering::Relaxed);
+                                // Navigate back to the counter_app route if click_count > 5
+                                if app_state_clone.click_count.load(atomic::Ordering::Relaxed) > 5 {
+                                    app_state_clone
+                                        .click_count
+                                        .store(0, atomic::Ordering::Relaxed); // Reset count
+                                    controller.pop();
+                                }
                             }))
                             .build()
                             .unwrap(),
