@@ -10,7 +10,25 @@ use dashmap::DashMap;
 static REGISTRY: OnceLock<ShardRegistry> = OnceLock::new();
 
 /// Trait for shard state that can be auto-injected into `shard component`.
-pub trait ShardState: Any + Send + Sync {}
+pub trait ShardState: Any + Send + Sync {
+    fn life_cycle(&self) -> ShardStateLifeCycle {
+        ShardStateLifeCycle::Shard
+    }
+}
+
+/// Describes the lifecycle of this ShardState.
+///
+/// The lifecycle of ShardState can be divided into two types:
+///
+/// 1. Application: ShardState exists for the lifetime of the application and will not be destroyed.
+/// 2. Shard: ShardState's lifecycle matches the navigation target, meaning it will be destroyed when the page is popped.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ShardStateLifeCycle {
+    /// ShardState exists for the lifetime of the application and will not be destroyed.
+    Application,
+    /// ShardState's lifecycle matches the navigation target, meaning it will be destroyed when the page is popped.
+    Shard,
+}
 
 impl<T> ShardState for T where T: 'static + Send + Sync + Default {}
 
@@ -62,5 +80,13 @@ impl ShardRegistry {
         std::mem::forget(arc_t);
 
         f(ret)
+    }
+
+    pub(crate) fn with_mut_dyn<F, R>(&self, id: &str, f: F) -> R
+    where
+        F: FnOnce(Arc<dyn ShardState>) -> R,
+    {
+        let shard_ref = self.shards.get(id).expect("Shard not found");
+        f(shard_ref.value().clone())
     }
 }

@@ -358,6 +358,10 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                             ),*
                         );
                     }
+
+                    fn shard_id(&self) -> &'static str {
+                        concat!(module_path!(), "::", #func_name_str)
+                    }
                 }
 
                 // Rebuild the function, keeping its attributes and visibility, but using the modified signature
@@ -404,6 +408,10 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                                 #exec_args
                             ),*
                         );
+                    }
+
+                    fn shard_id(&self) -> &'static str {
+                        concat!(module_path!(), "::", #func_name_str)
                     }
                 }
 

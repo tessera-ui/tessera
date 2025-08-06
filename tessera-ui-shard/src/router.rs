@@ -2,6 +2,8 @@ use std::sync::OnceLock;
 
 use parking_lot::RwLock;
 
+use crate::{ShardRegistry, ShardStateLifeCycle};
+
 static ROUTER: OnceLock<RwLock<Router>> = OnceLock::new();
 
 pub struct Router {
@@ -70,7 +72,14 @@ impl RouteController {
 
     /// Pop the top destination from the current router
     pub fn pop(&self) -> Option<Box<dyn RouterDestination>> {
-        Router::with_mut(|router| router.pop())
+        let dest = Router::with_mut(|router| router.pop())?;
+        let life_cycle =
+            ShardRegistry::get().with_mut_dyn(dest.shard_id(), |state| state.life_cycle());
+        if life_cycle == ShardStateLifeCycle::Shard {
+            // If the shard state' lifetime bound is Shard, we remove it from the registry
+            ShardRegistry::get().shards.remove(dest.shard_id());
+        }
+        Some(dest)
     }
 }
 
@@ -79,4 +88,6 @@ impl RouteController {
 pub trait RouterDestination: Send + Sync {
     /// Executes the component associated with this route destination
     fn exec_component(&self);
+    /// The id of the ShardState, used for cleanup
+    fn shard_id(&self) -> &'static str;
 }
