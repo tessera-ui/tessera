@@ -4,7 +4,60 @@
 //! into a single type, enabling seamless integration of graphics and compute pipelines
 //! in the rendering workflow.
 
-use crate::{BarrierRequirement, ComputeCommand, DrawCommand};
+use std::any::Any;
+
+use crate::{
+    ComputeCommand, DrawCommand,
+    px::{Px, PxRect},
+};
+
+/// Defines the sampling requirements for a rendering command that needs a barrier.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BarrierRequirement {
+    /// The command needs to sample from the entire previously rendered scene.
+    /// This will cause a full-screen texture copy.
+    Global,
+
+    /// The command needs to sample from a region relative to its own bounding box.
+    /// The `padding` value extends the sampling area beyond the component's own size.
+    /// For example, a `padding` of `10.0` on all sides means the component can
+    /// access pixels up to 10px outside its own boundaries.
+    PaddedLocal {
+        top: Px,
+        right: Px,
+        bottom: Px,
+        left: Px,
+    },
+
+    /// The command needs to sample from a specific, absolute region of the screen.
+    Absolute(PxRect),
+}
+
+impl BarrierRequirement {
+    pub const ZERO_PADDING_LOCAL: Self = Self::PaddedLocal {
+        top: Px::ZERO,
+        right: Px::ZERO,
+        bottom: Px::ZERO,
+        left: Px::ZERO,
+    };
+}
+
+/// Trait providing type erasure capabilities for command objects.
+///
+/// This trait allows commands to be stored and passed around as trait objects
+/// while still providing access to their concrete types when needed for
+/// pipeline dispatch.
+pub trait AsAny {
+    /// Returns a reference to the concrete type as `&dyn Any`.
+    fn as_any(&self) -> &dyn Any;
+}
+
+/// Blanket implementation of `AsAny` for all types that implement `Any`.
+impl<T: Any> AsAny for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
 
 /// Unified command enum that can represent either a draw or compute operation.
 ///
@@ -37,8 +90,7 @@ impl Command {
         match self {
             Command::Draw(command) => command.barrier(),
             // Currently, compute can only be used for after effects,
-            // so we assume it must require a barrier to sample background.
-            Command::Compute(_) => Some(BarrierRequirement::SampleBackground),
+            Command::Compute(command) => Some(command.barrier()),
         }
     }
 }

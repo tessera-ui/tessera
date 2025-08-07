@@ -190,16 +190,14 @@ pub use crate::{
     cursor::{CursorEvent, CursorEventContent, PressKeyEventType, ScrollEventConent},
     dp::Dp,
     focus_state::Focus,
-    px::{Px, PxPosition, PxSize},
+    px::{Px, PxPosition, PxRect, PxSize},
     renderer::{
-        Command, Renderer,
+        BarrierRequirement, Command, Renderer,
         compute::{
             self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry, ComputeResource,
             ComputeResourceManager, ComputeResourceRef,
         },
-        drawer::{
-            self, BarrierRequirement, DrawCommand, DrawablePipeline, PipelineRegistry, command,
-        },
+        drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
     },
     runtime::TesseraRuntime,
 };

@@ -11,8 +11,8 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
-    PxPosition, renderer::DrawCommand, winit::window::CursorIcon,
+    BarrierRequirement, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
+    PressKeyEventType, Px, PxPosition, renderer::DrawCommand, winit::window::CursorIcon,
 };
 use tessera_ui_macros::tessera;
 
@@ -131,9 +131,14 @@ pub struct FluidGlassCommand {
 }
 
 impl DrawCommand for FluidGlassCommand {
-    fn barrier(&self) -> Option<tessera_ui::BarrierRequirement> {
-        // Fluid glass aquires the scene texture, so it needs to sample the background
-        Some(tessera_ui::BarrierRequirement::SampleBackground)
+    fn barrier(&self) -> Option<BarrierRequirement> {
+        const PADDING: Px = Px(5);
+        Some(BarrierRequirement::PaddedLocal {
+            top: PADDING,
+            right: PADDING,
+            bottom: PADDING,
+            left: PADDING,
+        })
     }
 }
 

@@ -3,36 +3,7 @@
 //! This module defines the core traits and types for graphics rendering commands
 //! in the unified command system.
 
-use std::any::Any;
-
-/// Specifies synchronization requirements for rendering operations.
-///
-/// Barrier requirements ensure proper ordering of rendering operations when
-/// commands need to sample from previously rendered content.
-pub enum BarrierRequirement {
-    /// Command needs to sample from the background (previously rendered content).
-    ///
-    /// This triggers a texture copy operation before the command is executed,
-    /// making the previous frame's content available for sampling in shaders.
-    SampleBackground,
-}
-
-/// Trait providing type erasure capabilities for command objects.
-///
-/// This trait allows commands to be stored and passed around as trait objects
-/// while still providing access to their concrete types when needed for
-/// pipeline dispatch.
-pub trait AsAny {
-    /// Returns a reference to the concrete type as `&dyn Any`.
-    fn as_any(&self) -> &dyn Any;
-}
-
-/// Blanket implementation of `AsAny` for all types that implement `Any`.
-impl<T: Any> AsAny for T {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+use crate::renderer::command::{AsAny, BarrierRequirement};
 
 /// Trait for graphics rendering commands that can be processed by draw pipelines.
 ///

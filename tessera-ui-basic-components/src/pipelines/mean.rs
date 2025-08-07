@@ -17,6 +17,7 @@
 //! See [`MeanCommand`] and [`MeanPipeline`] for usage examples.
 
 use tessera_ui::{
+    BarrierRequirement,
     compute::{ComputeResourceRef, resource::ComputeResourceManager},
     renderer::compute::{ComputablePipeline, command::ComputeCommand},
     wgpu,
@@ -61,7 +62,11 @@ impl MeanCommand {
     }
 }
 
-impl ComputeCommand for MeanCommand {}
+impl ComputeCommand for MeanCommand {
+    fn barrier(&self) -> BarrierRequirement {
+        BarrierRequirement::ZERO_PADDING_LOCAL
+    }
+}
 
 // --- Pipeline ---
 

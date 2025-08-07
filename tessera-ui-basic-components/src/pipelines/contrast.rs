@@ -1,4 +1,5 @@
 use tessera_ui::{
+    BarrierRequirement,
     compute::{ComputeResourceRef, resource::ComputeResourceManager},
     renderer::compute::{ComputablePipeline, command::ComputeCommand},
     wgpu::{self, util::DeviceExt},
@@ -39,7 +40,11 @@ impl ContrastCommand {
     }
 }
 
-impl ComputeCommand for ContrastCommand {}
+impl ComputeCommand for ContrastCommand {
+    fn barrier(&self) -> tessera_ui::BarrierRequirement {
+        BarrierRequirement::ZERO_PADDING_LOCAL
+    }
+}
 
 // --- Pipeline ---
 
