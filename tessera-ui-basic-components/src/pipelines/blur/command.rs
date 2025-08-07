@@ -1,4 +1,4 @@
-use tessera_ui::ComputeCommand;
+use tessera_ui::{ComputeCommand, renderer::command::BarrierRequirement};
 
 /// A synchronous command to execute a gaussian blur.
 /// BlurCommand only describes blur parameters
@@ -9,4 +9,8 @@ pub struct BlurCommand {
     pub direction: (f32, f32),
 }
 
-impl ComputeCommand for BlurCommand {}
+impl ComputeCommand for BlurCommand {
+    fn barrier(&self) -> BarrierRequirement {
+        BarrierRequirement::ZERO_PADDING_LOCAL
+    }
+}

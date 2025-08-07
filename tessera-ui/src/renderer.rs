@@ -212,9 +212,9 @@ use crate::{
 };
 
 pub use app::WgpuApp;
-pub use command::Command;
+pub use command::{BarrierRequirement, Command};
 pub use compute::{ComputablePipeline, ComputePipelineRegistry};
-pub use drawer::{BarrierRequirement, DrawCommand, DrawablePipeline, PipelineRegistry};
+pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
 
 #[cfg(target_os = "android")]
 use winit::platform::android::{

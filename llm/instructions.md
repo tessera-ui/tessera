@@ -60,6 +60,14 @@ This document defines how You should assist in the Tessera project to ensure cod
 - Components set draw/compute commands via `ComponentNodeMetaData`
 - The basic components crate provides common pipelines, which must be registered at entry (e.g., `register_pipelines`)
 
+### Barrier System & Performance Optimization
+
+- **BarrierRequirement**: An enum used by both `DrawCommand` and `ComputeCommand` to declare if it needs to sample from the previously rendered scene. This is crucial for effects like blur or glass morphism.
+- `Global`: Samples the entire screen. This is expensive as it requires a full-screen texture copy.
+- `PaddedLocal { top: Px, right: Px, bottom: Px, left: Px }`: Defines a region relative to the component's bounding box plus specified padding on each side. This is used to determine the **scissor rectangle** for the draw pass, limiting GPU work to the relevant area.
+- `Absolute(PxRect)`: Samples a specific, absolute region of the screen.
+- **Performance Optimization**: When a command requires a barrier, the renderer performs a **full-screen texture copy** to make the background available for sampling. The key optimization is **batching**: subsequent commands that also require a barrier and have non-overlapping draw regions are processed in the same render pass, avoiding additional expensive texture copies. A scissor rectangle is applied to limit the actual drawing area for each command.
+
 ---
 
 ## 🎯 Event & State Management

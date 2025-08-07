@@ -8,7 +8,7 @@ mod pipeline;
 
 use crate::{PxPosition, px::PxSize};
 
-pub use command::{BarrierRequirement, DrawCommand};
+pub use command::DrawCommand;
 pub use pipeline::{DrawablePipeline, PipelineRegistry};
 
 /// Drawer manages graphics pipelines and processes draw commands.

@@ -202,7 +202,7 @@ fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, k: f32
             return base_refracted;
         }
 
-        let sample_count = 30;
+        let sample_count = 12;
         var red_color = 0.0;
         var green_color = 0.0;
         var blue_color = 0.0;

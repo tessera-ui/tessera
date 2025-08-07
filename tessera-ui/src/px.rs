@@ -767,6 +767,117 @@ impl PxSize {
     }
 }
 
+/// A 2D rectangle in physical pixel space.
+///
+/// This type represents a rectangle with a position (top-left corner) and dimensions
+/// in physical pixel space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct PxRect {
+    /// The x-coordinate of the top-left corner
+    pub x: Px,
+    /// The y-coordinate of the top-left corner
+    pub y: Px,
+    /// The width of the rectangle
+    pub width: Px,
+    /// The height of the rectangle
+    pub height: Px,
+}
+
+impl PxRect {
+    /// Creates a new rectangle from position and size.
+    pub const fn new(x: Px, y: Px, width: Px, height: Px) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    /// Checks if this rectangle is orthogonal (non-overlapping) with another rectangle.
+    ///
+    /// Two rectangles are orthogonal if they do not overlap in either the x or y axis.
+    /// This is useful for barrier batching optimization where non-overlapping rectangles
+    /// can be processed together without requiring barriers.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The other rectangle to check orthogonality against
+    ///
+    /// # Returns
+    ///
+    /// `true` if the rectangles are orthogonal (non-overlapping), `false` otherwise
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera_ui::px::{Px, PxRect};
+    ///
+    /// let rect1 = PxRect::new(Px::new(0), Px::new(0), Px::new(100), Px::new(100));
+    /// let rect2 = PxRect::new(Px::new(150), Px::new(0), Px::new(100), Px::new(100));
+    /// assert!(rect1.is_orthogonal(&rect2));
+    ///
+    /// let rect3 = PxRect::new(Px::new(50), Px::new(50), Px::new(100), Px::new(100));
+    /// assert!(!rect1.is_orthogonal(&rect3));
+    /// ```
+    pub fn is_orthogonal(&self, other: &Self) -> bool {
+        // Check if rectangles overlap on x-axis
+        let x_overlap = self.x.0 < other.x.0 + other.width.0 && other.x.0 < self.x.0 + self.width.0;
+
+        // Check if rectangles overlap on y-axis
+        let y_overlap =
+            self.y.0 < other.y.0 + other.height.0 && other.y.0 < self.y.0 + self.height.0;
+
+        // Rectangles are orthogonal if they don't overlap on either axis
+        !x_overlap || !y_overlap
+    }
+
+    /// Creates a new rectangle that is the union of this rectangle and another rectangle.
+    /// Which is the smallest rectangle that contains both rectangles.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The other rectangle to union with
+    ///
+    /// # Returns
+    ///
+    /// A new `PxRect` that is the union of this rectangle and the other rectangle
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera_ui::px::{Px, PxRect};
+    ///
+    /// let rect1 = PxRect::new(Px::new(0), Px::new(0), Px::new(100), Px::new(100));
+    /// let rect2 = PxRect::new(Px::new(50), Px::new(50), Px::new(100), Px::new(100));
+    /// let union_rect = rect1.union(&rect2);
+    /// assert_eq!(union_rect, PxRect::new(Px::new(0), Px::new(0), Px::new(150), Px::new(150)));
+    /// ```
+    pub fn union(&self, other: &Self) -> Self {
+        let x = self.x.0.min(other.x.0);
+        let y = self.y.0.min(other.y.0);
+        let width = (self.x.0 + self.width.0).max(other.x.0 + other.width.0) - x;
+        let height = (self.y.0 + self.height.0).max(other.y.0 + other.height.0) - y;
+
+        Self {
+            x: Px(x),
+            y: Px(y),
+            width: Px(width),
+            height: Px(height),
+        }
+    }
+
+    /// Returns the area of this rectangle.
+    ///
+    /// # Returns
+    ///
+    /// The area as a positive integer, or 0 if width or height is negative
+    pub fn area(&self) -> u32 {
+        let width = self.width.0.max(0) as u32;
+        let height = self.height.0.max(0) as u32;
+        width * height
+    }
+}
 impl From<[Px; 2]> for PxSize {
     fn from(size: [Px; 2]) -> Self {
         Self {
