@@ -1,3 +1,16 @@
+## [v1.7.0] - 2025-08-08 +08:00
+
+### Changes
+- perf(renderer): replace manual padding with zero padding for FluidGlassCommand barrier
+- fix(checkbox): correct typo in documentation comment for CheckmarkState
+- perf(renderer): implement instruction reordering and scoped compute
+- perf(renderer): implement scissor and batching for barrier commands
+- feat(macros, shard): introduce declarative client-side routing
+- feat(shard, macros): introduce shard state management and re-export macros
+- feat(fluid_glass): update example to use image background with Builder API, set default noise_amount to 0.0
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.6.1...tessera-ui-basic-components-v1.7.0)
+
 ## [v1.6.1] - 2025-08-03 +08:00
 
 ### Changes
