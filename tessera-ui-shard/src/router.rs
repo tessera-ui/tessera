@@ -46,8 +46,8 @@ impl Router {
     }
 
     /// Get the current top route destination, used for route component display
-    pub fn last(&self) -> Option<&Box<dyn RouterDestination>> {
-        self.route_stack.last()
+    pub fn last(&self) -> Option<&dyn RouterDestination> {
+        self.route_stack.last().map(|v| &**v)
     }
 }
 
