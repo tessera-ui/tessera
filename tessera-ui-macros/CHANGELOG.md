@@ -1,3 +1,14 @@
+## [v0.2.0] - 2025-08-08 +08:00
+
+### Changes
+- feat(shard): implement automatic memory management for ShardState
+- fix(test): specify language for usage code block in documentation
+- feat(macros, shard): introduce declarative client-side routing
+- feat(shard, macros): introduce shard state management and re-export macros
+- refactor(runtime): replace TesseraRuntime::read()/write() calls with with()/with_mut() closures and deprecate old methods
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.1.7...tessera-ui-macros-v0.2.0)
+
 ## [v0.1.7] - 2025-08-03 +08:00
 
 ### Changes
