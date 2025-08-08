@@ -1,3 +1,17 @@
+## [v1.9.0] - 2025-08-08 +08:00
+
+### Changes
+- refactor(renderer, deps): replace tokio with pollster and remove custom runtime
+- perf(renderer): implement instruction reordering and scoped compute
+- perf(renderer): implement scissor and batching for barrier commands
+- feat(macros, shard): introduce declarative client-side routing
+- feat(shard, macros): introduce shard state management and re-export macros
+- feat(renderer): add window_title to TesseraConfig and support custom window title
+- docs(runtime): include winit import in example and adjust formatting
+- refactor(runtime): replace TesseraRuntime::read()/write() calls with with()/with_mut() closures and deprecate old methods
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.8.1...tessera-ui-v1.9.0)
+
 ## [v1.8.1] - 2025-08-03 +08:00
 
 ### Changes
