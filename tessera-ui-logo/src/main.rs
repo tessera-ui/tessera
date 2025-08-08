@@ -2,8 +2,6 @@ mod app;
 mod background;
 mod logo;
 
-use std::sync::Arc;
-
 use log::error;
 use tessera_ui::Renderer;
 
@@ -13,12 +11,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .write_mode(flexi_logger::WriteMode::Async)
         .start()?;
 
-    let app_state = Arc::new(app::AppState::new());
-
     // 2. Run the Tessera application using the standard helper
     Renderer::run(
         // The root component of our application
-        move || app::app(app_state.clone()),
+        app::app,
         // A closure to register all necessary rendering pipelines
         |renderer| {
             // Register pipelines from the basic components crate

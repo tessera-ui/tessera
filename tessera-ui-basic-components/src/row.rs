@@ -28,8 +28,7 @@
 //! );
 //! ```
 use derive_builder::Builder;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node};
-use tessera_ui_macros::tessera;
+use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node, tessera};
 
 use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 

@@ -1,12 +1,11 @@
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
-use tessera_ui::Px;
+use tessera_ui::{Px, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::Alignment,
     boxed::{AsBoxedItem, BoxedArgsBuilder, boxed},
     spacer::{SpacerArgsBuilder, spacer},
 };
-use tessera_ui_macros::tessera;
 
 use crate::{
     background::{BackgroundArgsBuilder, background},
@@ -18,8 +17,8 @@ pub struct AppState {
     pub start_time: Instant,
 }
 
-impl AppState {
-    pub fn new() -> Self {
+impl Default for AppState {
+    fn default() -> Self {
         Self {
             start_time: Instant::now(),
         }
@@ -27,7 +26,8 @@ impl AppState {
 }
 
 #[tessera]
-pub fn app(state: Arc<AppState>) {
+#[shard]
+pub fn app(#[state] state: AppState) {
     let time = state.start_time.elapsed().as_secs_f32();
 
     let shard = (move || crystal_shard(CrystalShardArgsBuilder::default().build().unwrap()))

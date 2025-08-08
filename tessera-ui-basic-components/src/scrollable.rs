@@ -15,15 +15,14 @@
 //! # Example
 //! See [`scrollable()`] for usage details and code samples.
 mod scrollbar;
-
 use std::{sync::Arc, time::Instant};
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
+    tessera,
 };
-use tessera_ui_macros::tessera;
 
 use crate::{
     alignment::Alignment,

@@ -3,10 +3,9 @@ use delaunator::{Point, triangulate};
 use derive_builder::Builder;
 use rand::{Rng, SeedableRng};
 use tessera_ui::{
-    ComputedData, DrawCommand, DrawablePipeline, Px, PxPosition, PxSize,
+    ComputedData, DrawCommand, DrawablePipeline, Px, PxPosition, PxSize, tessera,
     wgpu::{self, util::DeviceExt},
 };
-use tessera_ui_macros::tessera;
 
 #[derive(Clone, Debug)]
 pub struct CrystalCommand {

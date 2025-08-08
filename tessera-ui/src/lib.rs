@@ -172,9 +172,12 @@ pub mod px;
 pub mod renderer;
 pub mod runtime;
 mod thread_utils;
-pub mod tokio_runtime;
+
+#[cfg(feature = "shard")]
+pub mod router;
 
 pub use indextree::{Arena, NodeId};
+pub use tessera_ui_macros::tessera;
 pub use wgpu;
 pub use winit;
 
@@ -203,3 +206,8 @@ pub use crate::{
 };
 
 use ime_state::ImeState;
+
+#[cfg(feature = "shard")]
+pub use tessera_ui_macros::shard;
+#[cfg(feature = "shard")]
+pub use tessera_ui_shard::{self, router::RouteController};

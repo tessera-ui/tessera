@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{Color, DimensionValue, Dp};
+use tessera_ui::{Color, DimensionValue, Dp, tessera};
 use tessera_ui_basic_components::{
     column::ColumnArgsBuilder,
     column_ui,
@@ -10,7 +10,6 @@ use tessera_ui_basic_components::{
     text::{TextArgsBuilder, text},
     text_editor::{TextEditorArgsBuilder, text_editor},
 };
-use tessera_ui_macros::tessera;
 
 use crate::{
     app_state::AppState, interactive_demo::interactive_demo, material_colors::md_colors,

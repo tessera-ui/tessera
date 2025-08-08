@@ -1,6 +1,6 @@
 //! Layout Alignment Showcase
 
-use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer};
+use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{AsColumnItem, ColumnArgsBuilder, column},
@@ -10,7 +10,6 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgsBuilder, text},
 };
-use tessera_ui_macros::tessera;
 
 /// Create a small colored box
 #[tessera]

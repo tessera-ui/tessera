@@ -1,6 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["example", "tessera-ui", "tessera-ui-logo", "tessera-ui-basic-components", "tessera-ui-macros"]
+members = [
+    "example",
+    "tessera-ui",
+    "tessera-ui-logo",
+    "tessera-ui-basic-components",
+    "tessera-ui-macros",
+    "tessera-ui-shard",
+]
 
 [workspace.package]
 license = "MIT OR Apache-2.0"

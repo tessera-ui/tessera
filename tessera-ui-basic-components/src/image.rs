@@ -12,8 +12,7 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use image::GenericImageView;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Px};
-use tessera_ui_macros::tessera;
+use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, tessera};
 
 use crate::pipelines::image::ImageCommand;
 

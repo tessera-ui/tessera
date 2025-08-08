@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tessera_ui::{Color, DimensionValue, Dp, Renderer};
+use tessera_ui::{Color, DimensionValue, Dp, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::Alignment,
     boxed::BoxedArgs,
@@ -9,7 +9,6 @@ use tessera_ui_basic_components::{
     glass_switch::{GlassSwitchArgsBuilder, GlassSwitchState, glass_switch},
     surface::{SurfaceArgsBuilder, surface},
 };
-use tessera_ui_macros::tessera;
 
 #[tessera]
 fn app(switch_state: Arc<Mutex<GlassSwitchState>>) {

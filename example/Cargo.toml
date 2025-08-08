@@ -15,7 +15,6 @@ path = "src/main.rs"
 
 [dependencies]
 tessera-ui = { path = "../tessera-ui" }
-tessera-ui-macros = { path = "../tessera-ui-macros" }
 tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
 tokio = { version = "1.47.1", features = ["full"] }
 log = "0.4.27"

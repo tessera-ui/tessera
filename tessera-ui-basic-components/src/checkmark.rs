@@ -17,10 +17,8 @@
 //! - High-performance GPU rendering
 //!
 //! See [`CheckmarkArgs`] for configuration options and usage examples in the [`checkmark`] function documentation.
-
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, Dp, Px};
-use tessera_ui_macros::tessera;
+use tessera_ui::{Color, ComputedData, Dp, Px, tessera};
 
 use crate::pipelines::CheckmarkCommand;
 

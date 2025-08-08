@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tessera_ui::{DimensionValue, Dp};
+use tessera_ui::{DimensionValue, Dp, tessera};
 use tessera_ui_basic_components::{
     column::ColumnArgsBuilder,
     column_ui,
@@ -11,7 +11,6 @@ use tessera_ui_basic_components::{
     switch::{SwitchArgsBuilder, SwitchState, switch},
     text::{TextArgsBuilder, text},
 };
-use tessera_ui_macros::tessera;
 
 use crate::{material_colors::md_colors, misc::create_spacer};
 

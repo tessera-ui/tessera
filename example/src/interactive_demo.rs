@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{Color, Dp};
+use tessera_ui::{Color, Dp, tessera};
 use tessera_ui_basic_components::{
     button::{ButtonArgsBuilder, button},
     checkbox::{CheckboxArgsBuilder, checkbox},
@@ -11,7 +11,6 @@ use tessera_ui_basic_components::{
     row_ui,
     text::{TextArgsBuilder, text},
 };
-use tessera_ui_macros::tessera;
 
 use crate::{app_state::AppState, material_colors::md_colors, misc::create_spacer};
 

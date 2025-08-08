@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tessera_ui::{Color, DimensionValue, Dp, renderer::Renderer};
+use tessera_ui::{Color, DimensionValue, Dp, renderer::Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{ColumnArgsBuilder, column_ui},
@@ -11,7 +11,6 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
-use tessera_ui_macros::tessera;
 
 struct AppState {
     value: Arc<Mutex<f32>>,

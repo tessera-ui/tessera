@@ -10,8 +10,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera_ui::{Color, DimensionValue, Dp};
-use tessera_ui_macros::tessera;
+use tessera_ui::{Color, DimensionValue, Dp, tessera};
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},

@@ -17,9 +17,8 @@ use derive_builder::Builder;
 use parking_lot::Mutex;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
-    focus_state::Focus, winit::window::CursorIcon,
+    focus_state::Focus, tessera, winit::window::CursorIcon,
 };
-use tessera_ui_macros::tessera;
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
