@@ -1,3 +1,10 @@
+## [v1.9.1] - 2025-08-08 +08:00
+
+### Changes
+- fix(tessera-ui): use positive() instead of abs() for rect clamping
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.9.0...tessera-ui-v1.9.1)
+
 ## [v1.9.0] - 2025-08-08 +08:00
 
 ### Changes
