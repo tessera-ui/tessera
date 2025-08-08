@@ -54,7 +54,7 @@ pub struct WgpuApp {
     // --- Compute resources ---
     compute_target_a: PassTarget,
     compute_target_b: PassTarget,
-    compute_commands: Vec<Box<dyn ComputeCommand>>,
+    compute_commands: Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
     pub resource_manager: Arc<RwLock<ComputeResourceManager>>,
 }
 
@@ -351,6 +351,11 @@ impl WgpuApp {
         &mut self,
         commands: impl IntoIterator<Item = (Command, PxSize, PxPosition)>,
     ) -> Result<(), wgpu::SurfaceError> {
+        // Collect commands into a Vec to allow reordering
+        let commands: Vec<_> = commands.into_iter().collect();
+        // Reorder instructions based on dependencies for better batching optimization
+        let commands = super::reorder::reorder_instructions(commands);
+
         let output_frame = self.surface.get_current_texture()?;
         let mut encoder = self
             .gpu
@@ -637,11 +642,11 @@ impl WgpuApp {
                 }
                 // Process compute commands using the compute pipeline
                 Command::Compute(command) => {
-                    self.compute_commands.push(command);
+                    self.compute_commands.push((command, size, start_pos));
                     // batch subsequent compute commands
                     while let Some((Command::Compute(_), _, _)) = commands_iter.peek() {
                         if let Some((Command::Compute(command), _, _)) = commands_iter.next() {
-                            self.compute_commands.push(command);
+                            self.compute_commands.push((command, size, start_pos));
                         }
                     }
                 }
@@ -668,7 +673,7 @@ impl WgpuApp {
 
     fn do_compute<'a>(
         encoder: &mut wgpu::CommandEncoder,
-        commands: Vec<Box<dyn ComputeCommand>>,
+        commands: Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
         compute_pipeline_registry: &mut ComputePipelineRegistry,
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -687,7 +692,7 @@ impl WgpuApp {
         let mut read_view = scene_view;
         let (mut write_target, mut read_target) = (target_a, target_b);
 
-        for command in commands {
+        for (command, size, start_pos) in commands {
             // Ensure the write target is cleared before use
             encoder.clear_texture(
                 &write_target.texture,
@@ -707,6 +712,36 @@ impl WgpuApp {
                     timestamp_writes: None,
                 });
 
+                // Get the area of the compute command
+                let area = match command.barrier() {
+                    BarrierRequirement::Global => PxRect {
+                        x: Px(0),
+                        y: Px(0),
+                        width: Px(config.width as i32),
+                        height: Px(config.height as i32),
+                    },
+                    BarrierRequirement::PaddedLocal {
+                        top,
+                        right,
+                        bottom,
+                        left,
+                    } => {
+                        let padded_x = (start_pos.x - left).max(Px(0));
+                        let padded_y = (start_pos.y - top).max(Px(0));
+                        let padded_width =
+                            (size.width + left + right).min(Px(config.width as i32 - padded_x.0));
+                        let padded_height =
+                            (size.height + top + bottom).min(Px(config.height as i32 - padded_y.0));
+                        PxRect {
+                            x: padded_x,
+                            y: padded_y,
+                            width: padded_width,
+                            height: padded_height,
+                        }
+                    }
+                    BarrierRequirement::Absolute(rect) => rect,
+                };
+
                 compute_pipeline_registry.dispatch_erased(
                     gpu,
                     queue,
@@ -714,6 +749,7 @@ impl WgpuApp {
                     &mut cpass,
                     &*command,
                     resource_manager,
+                    area,
                     read_view,
                     &write_target.view,
                 );

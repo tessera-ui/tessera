@@ -1,5 +1,5 @@
 use tessera_ui::{
-    BarrierRequirement,
+    BarrierRequirement, PxRect,
     compute::{ComputeResourceRef, resource::ComputeResourceManager},
     renderer::compute::{ComputablePipeline, command::ComputeCommand},
     wgpu::{self, util::DeviceExt},
@@ -52,6 +52,10 @@ impl ComputeCommand for ContrastCommand {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
     contrast: f32,
+    area_x: u32,
+    area_y: u32,
+    area_width: u32,
+    area_height: u32,
 }
 
 /// Pipeline for applying contrast adjustment to an image using a compute shader.
@@ -82,7 +86,7 @@ impl ContrastPipeline {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: Some(std::num::NonZeroU64::new(4).unwrap()),
+                        min_binding_size: Some(std::num::NonZeroU64::new(20).unwrap()),
                     },
                     count: None,
                 },
@@ -146,6 +150,8 @@ impl ContrastPipeline {
 }
 
 impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
+    /// Dispatches the contrast adjustment compute shader.
+    /// - `target_area`: The area of the output texture to be affected (PxRect).
     fn dispatch(
         &mut self,
         device: &wgpu::Device,
@@ -154,12 +160,17 @@ impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &ContrastCommand,
         resource_manager: &mut ComputeResourceManager,
+        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
         if let Some(mean_buffer) = resource_manager.get(&command.mean_result_handle) {
             let uniforms = Uniforms {
                 contrast: command.contrast,
+                area_x: target_area.x.0 as u32,
+                area_y: target_area.y.0 as u32,
+                area_width: target_area.width.0 as u32,
+                area_height: target_area.height.0 as u32,
             };
 
             let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

@@ -173,7 +173,7 @@
 //!
 //! The framework automatically handles format conversions when necessary.
 
-use crate::compute::resource::ComputeResourceManager;
+use crate::{PxRect, compute::resource::ComputeResourceManager};
 
 use super::command::ComputeCommand;
 
@@ -288,6 +288,7 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &C,
         resource_manager: &mut ComputeResourceManager,
+        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     );
@@ -316,6 +317,7 @@ pub(crate) trait ErasedComputablePipeline: Send + Sync {
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &dyn ComputeCommand,
         resource_manager: &mut ComputeResourceManager,
+        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     );
@@ -338,6 +340,7 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &dyn ComputeCommand,
         resource_manager: &mut ComputeResourceManager,
+        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
@@ -349,6 +352,7 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
                 compute_pass,
                 command,
                 resource_manager,
+                target_area,
                 input_view,
                 output_view,
             );
@@ -479,6 +483,7 @@ impl ComputePipelineRegistry {
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &dyn ComputeCommand,
         resource_manager: &mut ComputeResourceManager,
+        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
@@ -490,6 +495,7 @@ impl ComputePipelineRegistry {
                 compute_pass,
                 command,
                 resource_manager,
+                target_area,
                 input_view,
                 output_view,
             );

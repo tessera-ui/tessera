@@ -2,6 +2,10 @@ struct Uniforms {
     radius: f32,
     direction_x: f32, // 1.0 for horizontal, 0.0 for vertical
     direction_y: f32, // 0.0 for horizontal, 1.0 for vertical
+    area_x: u32,
+    area_y: u32,
+    area_width: u32,
+    area_height: u32,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -43,16 +47,16 @@ fn gaussian_blur(coord: vec2<u32>, direction: vec2<f32>, texture_size: vec2<u32>
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let output_size = textureDimensions(dest_texture);
-    if global_id.x >= output_size.x || global_id.y >= output_size.y {
-        return;
-    }
-
     let coord = global_id.xy;
-    let texture_size = vec2<u32>(textureDimensions(source_texture));
-    
-    // Use direction from uniforms
-    let direction = vec2<f32>(uniforms.direction_x, uniforms.direction_y);
-    let blurred_color = gaussian_blur(coord, direction, texture_size);
 
-    textureStore(dest_texture, coord, blurred_color);
+    if global_id.x >= uniforms.area_x && global_id.x < uniforms.area_x + uniforms.area_width && global_id.y >= uniforms.area_y && global_id.y < uniforms.area_y + uniforms.area_height && global_id.x < output_size.x && global_id.y < output_size.y {
+
+        let texture_size = vec2<u32>(textureDimensions(source_texture));
+        let direction = vec2<f32>(uniforms.direction_x, uniforms.direction_y);
+        let blurred_color = gaussian_blur(coord, direction, texture_size);
+        textureStore(dest_texture, coord, blurred_color);
+    } else if global_id.x < output_size.x && global_id.y < output_size.y {
+        let color = textureLoad(source_texture, coord, 0);
+        textureStore(dest_texture, coord, color);
+    }
 }
