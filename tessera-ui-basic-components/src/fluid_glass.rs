@@ -132,13 +132,7 @@ pub struct FluidGlassCommand {
 
 impl DrawCommand for FluidGlassCommand {
     fn barrier(&self) -> Option<BarrierRequirement> {
-        const PADDING: Px = Px(5);
-        Some(BarrierRequirement::PaddedLocal {
-            top: PADDING,
-            right: PADDING,
-            bottom: PADDING,
-            left: PADDING,
-        })
+        Some(BarrierRequirement::ZERO_PADDING_LOCAL)
     }
 }
 
