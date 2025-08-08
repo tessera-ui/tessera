@@ -18,6 +18,12 @@ impl Default for TaskHandles {
     }
 }
 
+impl Drop for TaskHandles {
+    fn drop(&mut self) {
+        self.cancel_all();
+    }
+}
+
 impl TaskHandles {
     pub fn new() -> Self {
         Self {
