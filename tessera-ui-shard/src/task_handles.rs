@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use tokio::{sync::oneshot, task::JoinHandle};
 
 pub struct TaskHandle {
-    handle: JoinHandle<()>,
+    pub handle: JoinHandle<()>,
     cancel: oneshot::Sender<()>,
 }
 
