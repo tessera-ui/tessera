@@ -209,7 +209,7 @@ use crate::{
     keyboard_state::KeyboardState,
     px::PxSize,
     runtime::TesseraRuntime,
-    thread_utils, tokio_runtime,
+    thread_utils,
 };
 
 pub use app::WgpuApp;
@@ -777,8 +777,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         let register_pipelines_fn = self.register_pipelines_fn.clone();
 
-        let mut wgpu_app =
-            tokio_runtime::get().block_on(WgpuApp::new(window, self.config.sample_count));
+        let mut wgpu_app = pollster::block_on(WgpuApp::new(window, self.config.sample_count));
 
         // Register pipelines
         wgpu_app.register_pipelines(register_pipelines_fn);

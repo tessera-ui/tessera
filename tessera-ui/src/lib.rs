@@ -172,7 +172,6 @@ pub mod px;
 pub mod renderer;
 pub mod runtime;
 mod thread_utils;
-pub mod tokio_runtime;
 
 #[cfg(feature = "shard")]
 pub mod router;
