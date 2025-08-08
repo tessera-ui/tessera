@@ -57,11 +57,11 @@ The roadmap is now organized by crate:
   - ~~Easier way for `measure_node(s)`~~
   - ~~Easier way for `place_node`~~
   - and more...
-- Optimize rendering performance
+- ~~Optimize rendering performance~~
 
-- Design how to provide async API to components
+- ~~Design how to provide async API to components~~
 - Optimize touch screen adaptation
-- router
+- ~~router~~
 
 ### tessera-ui-basic-components (v2.0.0 roadmap)
 
