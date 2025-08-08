@@ -94,7 +94,7 @@ impl Default for CheckboxArgs {
 // Animation duration for the checkmark stroke (milliseconds)
 const CHECKMARK_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 
-/// State for checkmark animation (similar风格 to `SwitchState`)
+/// State for checkmark animation (similar to `SwitchState`)
 pub struct CheckmarkState {
     pub checked: bool,
     progress: f32,
