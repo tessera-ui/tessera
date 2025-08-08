@@ -503,20 +503,26 @@ impl WgpuApp {
                     };
                     // Also we need to clamp the draw rectangle to the texture size
                     if let Some(rect) = &mut draw_rect {
-                        rect.x = Px(rect.x.abs().min(texture_size.width) as i32);
-                        rect.y = Px(rect.y.abs().min(texture_size.height) as i32);
-                        rect.width =
-                            Px(rect.width.abs().min(texture_size.width - rect.x.abs()) as i32);
-                        rect.height =
-                            Px(rect.height.abs().min(texture_size.height - rect.y.abs()) as i32);
+                        rect.x = Px(rect.x.positive().min(texture_size.width) as i32);
+                        rect.y = Px(rect.y.positive().min(texture_size.height) as i32);
+                        rect.width = Px(rect
+                            .width
+                            .positive()
+                            .min(texture_size.width - rect.x.positive())
+                            as i32);
+                        rect.height = Px(rect
+                            .height
+                            .positive()
+                            .min(texture_size.height - rect.y.positive())
+                            as i32);
                     }
                     // If a draw rectangle is specified, set the scissor rect
                     if let Some(rect) = draw_rect {
                         rpass.set_scissor_rect(
-                            rect.x.abs(),
-                            rect.y.abs(),
-                            rect.width.abs(),
-                            rect.height.abs(),
+                            rect.x.positive(),
+                            rect.y.positive(),
+                            rect.width.positive(),
+                            rect.height.positive(),
                         );
                     }
 
@@ -588,10 +594,10 @@ impl WgpuApp {
                                 // If the new draw rectangle is not orthogonal, continue batching
                                 // Set scissor rect to the new draw rectangle
                                 rpass.set_scissor_rect(
-                                    new_draw_rect.x.abs(),
-                                    new_draw_rect.y.abs(),
-                                    new_draw_rect.width.abs(),
-                                    new_draw_rect.height.abs(),
+                                    new_draw_rect.x.positive(),
+                                    new_draw_rect.y.positive(),
+                                    new_draw_rect.width.positive(),
+                                    new_draw_rect.height.positive(),
                                 );
                                 // Submit the command
                                 self.drawer.submit(
@@ -619,10 +625,10 @@ impl WgpuApp {
                             commands_iter.next()
                         {
                             // Clamp rect to the texture size
-                            let x = start_pos.x.abs().min(texture_size.width);
-                            let y = start_pos.y.abs().min(texture_size.height);
-                            let width = size.width.abs().min(texture_size.width - x);
-                            let height = size.height.abs().min(texture_size.height - y);
+                            let x = start_pos.x.positive().min(texture_size.width);
+                            let y = start_pos.y.positive().min(texture_size.height);
+                            let width = size.width.positive().min(texture_size.width - x);
+                            let height = size.height.positive().min(texture_size.height - y);
                             // Set the scissor rect to the new draw rectangle
                             rpass.set_scissor_rect(x, y, width, height);
                             self.drawer.submit(
