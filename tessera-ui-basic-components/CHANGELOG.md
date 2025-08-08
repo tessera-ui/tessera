@@ -1,3 +1,9 @@
+## [v1.7.1] - 2025-08-08 +08:00
+
+### Changes
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.7.0...tessera-ui-basic-components-v1.7.1)
+
 ## [v1.7.0] - 2025-08-08 +08:00
 
 ### Changes
