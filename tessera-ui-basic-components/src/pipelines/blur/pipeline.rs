@@ -1,5 +1,6 @@
 use encase::{ShaderType, UniformBuffer};
 use tessera_ui::{
+    PxRect,
     renderer::compute::ComputablePipeline,
     wgpu::{self, util::DeviceExt},
 };
@@ -11,6 +12,10 @@ struct BlurUniforms {
     radius: f32,
     direction_x: f32,
     direction_y: f32,
+    area_x: u32,
+    area_y: u32,
+    area_width: u32,
+    area_height: u32,
 }
 
 pub struct BlurPipeline {
@@ -90,6 +95,8 @@ impl BlurPipeline {
 }
 
 impl ComputablePipeline<BlurCommand> for BlurPipeline {
+    /// Dispatches the blur compute shader.
+    /// - `target_area`: The area of the output texture to be affected (PxRect).
     fn dispatch(
         &mut self,
         device: &wgpu::Device,
@@ -98,6 +105,7 @@ impl ComputablePipeline<BlurCommand> for BlurPipeline {
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &BlurCommand,
         _resource_manager: &mut tessera_ui::ComputeResourceManager,
+        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
@@ -105,6 +113,10 @@ impl ComputablePipeline<BlurCommand> for BlurPipeline {
             radius: command.radius,
             direction_x: command.direction.0,
             direction_y: command.direction.1,
+            area_x: target_area.x.0 as u32,
+            area_y: target_area.y.0 as u32,
+            area_width: target_area.width.0 as u32,
+            area_height: target_area.height.0 as u32,
         };
         let mut buffer = UniformBuffer::new(Vec::new());
         buffer.write(&uniforms).unwrap();

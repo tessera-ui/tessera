@@ -189,6 +189,7 @@ pub mod app;
 pub mod command;
 pub mod compute;
 pub mod drawer;
+pub mod reorder;
 
 use std::{sync::Arc, time::Instant};
 

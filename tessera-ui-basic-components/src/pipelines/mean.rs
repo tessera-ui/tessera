@@ -17,10 +17,10 @@
 //! See [`MeanCommand`] and [`MeanPipeline`] for usage examples.
 
 use tessera_ui::{
-    BarrierRequirement,
+    BarrierRequirement, PxRect,
     compute::{ComputeResourceRef, resource::ComputeResourceManager},
     renderer::compute::{ComputablePipeline, command::ComputeCommand},
-    wgpu,
+    wgpu::{self, util::DeviceExt},
 };
 
 // --- Command ---
@@ -48,7 +48,9 @@ impl MeanCommand {
         let result_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Mean Result Buffer"),
             size: 8, // two u32s: total_luminance, total_pixels
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -66,6 +68,15 @@ impl ComputeCommand for MeanCommand {
     fn barrier(&self) -> BarrierRequirement {
         BarrierRequirement::ZERO_PADDING_LOCAL
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct AreaUniform {
+    area_x: u32,
+    area_y: u32,
+    area_width: u32,
+    area_height: u32,
 }
 
 // --- Pipeline ---
@@ -91,9 +102,20 @@ impl MeanPipeline {
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
-                // 0: Source Texture
+                // 0: Area Uniform
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(std::num::NonZeroU64::new(16).unwrap()),
+                    },
+                    count: None,
+                },
+                // 1: Source Texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Float { filterable: false },
@@ -102,9 +124,9 @@ impl MeanPipeline {
                     },
                     count: None,
                 },
-                // 1: Result Buffer (Storage)
+                // 2: Result Buffer (Storage)
                 wgpu::BindGroupLayoutEntry {
-                    binding: 1,
+                    binding: 2,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: false },
@@ -113,9 +135,9 @@ impl MeanPipeline {
                     },
                     count: None,
                 },
-                // 2: Destination Texture (Storage)
+                // 3: Destination Texture (Storage)
                 wgpu::BindGroupLayoutEntry {
-                    binding: 2,
+                    binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
                         access: wgpu::StorageTextureAccess::WriteOnly,
@@ -161,31 +183,50 @@ impl ComputablePipeline<MeanCommand> for MeanPipeline {
     /// - `resource_manager`: Resource manager for compute buffers.
     /// - `input_view`: Source texture view.
     /// - `output_view`: Destination texture view.
+    /// Dispatches the mean luminance compute shader.
+    /// - `target_area`: The area of the output texture to be affected (PxRect).
     fn dispatch(
         &mut self,
         device: &wgpu::Device,
-        _queue: &wgpu::Queue,
+        queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &MeanCommand,
         resource_manager: &mut ComputeResourceManager,
+        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
         let result_buffer = resource_manager.get(&command.result_buffer_ref).unwrap();
+        queue.write_buffer(result_buffer, 0, bytemuck::cast_slice(&[0u32, 0u32]));
+        let area_uniform = AreaUniform {
+            area_x: target_area.x.0 as u32,
+            area_y: target_area.y.0 as u32,
+            area_width: target_area.width.0 as u32,
+            area_height: target_area.height.0 as u32,
+        };
+        let area_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Mean Area Uniform Buffer"),
+            contents: bytemuck::bytes_of(&area_uniform),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(input_view),
+                    resource: area_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: result_buffer.as_entire_binding(),
+                    resource: wgpu::BindingResource::TextureView(input_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
+                    resource: result_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
                     resource: wgpu::BindingResource::TextureView(output_view),
                 },
             ],
