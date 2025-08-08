@@ -16,7 +16,7 @@ log = "0.4"
 derive_builder = "0.20"
 glam = "0.30.5"
 parking_lot = "0.12"
-bytemuck = { version = "1.23.1", features = ["derive"] }
+bytemuck = { version = "1.23.2", features = ["derive"] }
 image = "0.25"
 delaunator = "1.0.2"
 flexi_logger = { version = "0.31.2", features = ["async", "trc"] }
