@@ -1,12 +1,11 @@
-use encase::{ShaderType, UniformBuffer};
+use encase::{ShaderSize, ShaderType, UniformBuffer};
 use glam::{Vec2, Vec4};
-use tessera_ui::{
-    PxPosition, PxSize,
-    renderer::DrawablePipeline,
-    wgpu::{self, util::DeviceExt},
-};
+use tessera_ui::{PxPosition, PxSize, renderer::DrawablePipeline, wgpu};
 
 use crate::fluid_glass::FluidGlassCommand;
+
+// Define MAX_CONCURRENT_SHAPES, can be adjusted later
+pub const MAX_CONCURRENT_GLASSES: wgpu::BufferAddress = 256;
 
 // --- Uniforms ---
 
@@ -53,10 +52,26 @@ pub(crate) struct FluidGlassPipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
+    uniform_buffer: wgpu::Buffer,
+    uniform_alignment: u32,
+    current_uniform_offset: u32,
+    max_uniform_buffer_offset: u32,
 }
 
 impl FluidGlassPipeline {
     pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
+        let uniform_alignment =
+            gpu.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
+        let size_of_uniforms = GlassUniforms::SHADER_SIZE.get();
+        let aligned_size_of_uniforms = wgpu::util::align_to(size_of_uniforms, uniform_alignment);
+
+        let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Fluid Glass Uniform Buffer"),
+            size: MAX_CONCURRENT_GLASSES * aligned_size_of_uniforms,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         let shader = gpu.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Fluid Glass Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("fluid_glass/glass.wgsl").into()),
@@ -79,8 +94,8 @@ impl FluidGlassPipeline {
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                        has_dynamic_offset: true,
+                        min_binding_size: Some(GlassUniforms::SHADER_SIZE),
                     },
                     count: None,
                 },
@@ -146,19 +161,33 @@ impl FluidGlassPipeline {
             cache: None,
         });
 
+        let size_of_uniforms = GlassUniforms::SHADER_SIZE.get() as u32;
+        let alignment = gpu.limits().min_uniform_buffer_offset_alignment;
+        let uniform_alignment = wgpu::util::align_to(size_of_uniforms, alignment) as u32;
+
+        let max_uniform_buffer_offset = (MAX_CONCURRENT_GLASSES as u32 - 1) * uniform_alignment;
+
         Self {
             pipeline,
             bind_group_layout,
             sampler,
+            uniform_buffer,
+            uniform_alignment,
+            current_uniform_offset: 0,
+            max_uniform_buffer_offset,
         }
     }
 }
 
 impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
+    fn begin_frame(&mut self, _: &wgpu::Device, _: &wgpu::Queue, _: &wgpu::SurfaceConfiguration) {
+        self.current_uniform_offset = 0;
+    }
+
     fn draw(
         &mut self,
         gpu: &wgpu::Device,
-        _queue: &wgpu::Queue,
+        queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         command: &FluidGlassCommand,
@@ -166,6 +195,14 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         start_pos: PxPosition,
         scene_texture_view: &wgpu::TextureView,
     ) {
+        let dynamic_offset = self.current_uniform_offset;
+        if dynamic_offset > self.max_uniform_buffer_offset {
+            panic!(
+                "Shape uniform buffer overflow for object: offset {} > max {}",
+                dynamic_offset, self.max_uniform_buffer_offset
+            );
+        }
+
         let args = &command.args;
         let screen_w = config.width as f32;
         let screen_h = config.height as f32;
@@ -217,18 +254,18 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
 
         let mut buffer = UniformBuffer::new(Vec::<u8>::new());
         buffer.write(&uniforms).unwrap();
-        let inner = buffer.into_inner();
-        let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Temporary Fluid Glass Uniform Buffer"),
-            contents: &inner,
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        queue.write_buffer(&self.uniform_buffer, dynamic_offset as _, buffer.as_ref());
+
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &self.uniform_buffer,
+                        offset: 0,
+                        size: Some(GlassUniforms::SHADER_SIZE),
+                    }),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -243,7 +280,9 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         });
 
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &bind_group, &[]);
+        render_pass.set_bind_group(0, &bind_group, &[dynamic_offset]);
         render_pass.draw(0..6, 0..1);
+
+        self.current_uniform_offset += self.uniform_alignment;
     }
 }
