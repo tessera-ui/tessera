@@ -29,39 +29,59 @@ struct GlassUniforms {
     light_scale: f32, // Light intensity scale factor
 };
 
-@group(0) @binding(0) var<uniform> uniforms: GlassUniforms;
+struct GlassInstances {
+    length: u32,
+    instances: array<GlassUniforms>,
+};
+
+
+@group(0) @binding(0) var<storage, read> uniforms: GlassInstances;
 @group(0) @binding(1) var t_diffuse: texture_2d<f32>;
 @group(0) @binding(2) var s_diffuse: sampler;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
+    @location(0) uv: vec2<f32>, // Local UV [0, 1]
+    @location(1) @interpolate(flat) instance_index: u32,
 };
 
 @vertex
-fn vs_main(@builtin(vertex_index) idx: u32) -> VertexOutput {
-    let pos = array<vec2<f32>, 6>(
-        vec2<f32>(-1.0, 1.0),
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>(1.0, -1.0),
-        vec2<f32>(-1.0, 1.0),
-        vec2<f32>(1.0, -1.0),
-        vec2<f32>(1.0, 1.0)
+fn vs_main(
+    @builtin(vertex_index) vertex_index: u32,
+    @builtin(instance_index) instance_index: u32
+) -> VertexOutput {
+    let instance = uniforms.instances[instance_index];
+    let rect_uv_min = instance.rect_uv_bounds.xy;
+    let rect_uv_max = instance.rect_uv_bounds.zw;
+
+    // Define a unit quad (from 0,0 to 1,1). These are the local UVs.
+    let local_uvs = array<vec2<f32>, 4>(
+        vec2(0.0, 0.0), // Top-left
+        vec2(0.0, 1.0), // Bottom-left
+        vec2(1.0, 1.0), // Bottom-right
+        vec2(1.0, 0.0)  // Top-right
     );
-    let uvs = array<vec2<f32>, 6>(
-        vec2<f32>(0.0, 0.0),
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(1.0, 1.0),
-        vec2<f32>(0.0, 0.0),
-        vec2<f32>(1.0, 1.0),
-        vec2<f32>(1.0, 0.0)
+
+    let indices = array<u32, 6>(0, 1, 2, 0, 2, 3);
+    let local_uv = local_uvs[indices[vertex_index]];
+
+    // Map local UV to the instance's global UV space
+    let global_uv = rect_uv_min + local_uv * (rect_uv_max - rect_uv_min);
+
+    // Convert global UV coordinates [0, 1] to clip space coordinates [-1, 1].
+    // Y is flipped in clip space (positive is up).
+    let clip_pos = vec2<f32>(
+        global_uv.x * 2.0 - 1.0,
+        -(global_uv.y * 2.0 - 1.0)
     );
 
     var out: VertexOutput;
-    out.clip_position = vec4<f32>(pos[idx], 0.0, 1.0);
-    out.uv = uvs[idx];
+    out.clip_position = vec4<f32>(clip_pos, 0.0, 1.0);
+    out.uv = local_uv; // Pass the LOCAL UV to the fragment shader
+    out.instance_index = instance_index;
     return out;
 }
+
 
 fn circle_map(x: f32) -> f32 {
     return 1.0 - sqrt(1.0 - x * x);
@@ -142,61 +162,63 @@ fn rand(co: vec2<f32>) -> f32 {
     return fract(sin(dot(co.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }
 
-fn refraction_color(local_coord: vec2<f32>, size: vec2<f32>, k: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
+fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<f32>, k: f32) -> vec4<f32> {
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
 
     var sd: f32;
-    if uniforms.shape_type == 1.0 {
+    if instance.shape_type == 1.0 {
         sd = sdf_ellipse(centered_coord, half_size);
     } else {
-        sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
+        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
     }
 
     var refracted_coord = local_coord;
-    if sd < 0.0 && -sd < uniforms.refraction_height {
+    if sd < 0.0 && -sd < instance.refraction_height {
         var normal: vec2<f32>;
-        if uniforms.shape_type == 1.0 {
+        if instance.shape_type == 1.0 {
             normal = grad_sd_ellipse(centered_coord, half_size);
         } else {
-            let max_grad_radius = max(min(half_size.x, half_size.y), uniforms.corner_radius);
-            let grad_radius = min(uniforms.corner_radius * 1.5, max_grad_radius);
+            let max_grad_radius = max(min(half_size.x, half_size.y), instance.corner_radius);
+            let grad_radius = min(instance.corner_radius * 1.5, max_grad_radius);
             normal = grad_sd_g2_rounded_box(centered_coord, half_size, grad_radius, k);
         }
 
-        let refracted_distance = circle_map(1.0 - (-sd / uniforms.refraction_height)) * uniforms.refraction_amount;
-        let refracted_direction = normalize(normal + uniforms.eccentric_factor * normalize(centered_coord));
+        let refracted_distance = circle_map(1.0 - (-sd / instance.refraction_height)) * instance.refraction_amount;
+        let refracted_direction = normalize(normal + instance.eccentric_factor * normalize(centered_coord));
         refracted_coord = local_coord + refracted_distance * refracted_direction;
     }
 
+    let rect_uv_start = instance.rect_uv_bounds.xy;
+    let px_to_uv_ratio = (instance.rect_uv_bounds.zw - rect_uv_start) / instance.rect_size_px;
     let sample_uv = rect_uv_start + refracted_coord * px_to_uv_ratio;
     return textureSample(t_diffuse, s_diffuse, sample_uv);
 }
 
-fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, k: f32, rect_uv_start: vec2<f32>, px_to_uv_ratio: vec2<f32>) -> vec4<f32> {
+fn dispersion_color_on_refracted(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<f32>, k: f32) -> vec4<f32> {
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
 
     var sd: f32;
-    if uniforms.shape_type == 1.0 {
+    if instance.shape_type == 1.0 {
         sd = sdf_ellipse(centered_coord, half_size);
     } else {
-        sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
+        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
     }
 
-    let base_refracted = refraction_color(local_coord, size, k, rect_uv_start, px_to_uv_ratio);
+    let base_refracted = refraction_color(instance, local_coord, size, k);
 
-    if sd < 0.0 && -sd < uniforms.dispersion_height && uniforms.dispersion_height > 0.0 {
+    if sd < 0.0 && -sd < instance.dispersion_height && instance.dispersion_height > 0.0 {
         var normal: vec2<f32>;
-        if uniforms.shape_type == 1.0 {
+        if instance.shape_type == 1.0 {
             normal = grad_sd_ellipse(centered_coord, half_size);
         } else {
-            normal = grad_sd_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
+            normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
         }
         let tangent = normal_to_tangent(normal);
 
-        let dispersion_fraction = 1.0 - (-sd / uniforms.dispersion_height);
-        let dispersion_width = uniforms.dispersion_height * 2.0 * pow(circle_map(dispersion_fraction), 2.0);
+        let dispersion_fraction = 1.0 - (-sd / instance.dispersion_height);
+        let dispersion_width = instance.dispersion_height * 2.0 * pow(circle_map(dispersion_fraction), 2.0);
 
         if dispersion_width < 2.0 {
             return base_refracted;
@@ -213,7 +235,7 @@ fn dispersion_color_on_refracted(local_coord: vec2<f32>, size: vec2<f32>, k: f32
         for (var i = 0; i < sample_count; i = i + 1) {
             let t = f32(i) / f32(sample_count - 1);
             let sample_coord = local_coord + tangent * (t - 0.5) * dispersion_width;
-            let refracted_c = refraction_color(sample_coord, size, k, rect_uv_start, px_to_uv_ratio);
+            let refracted_c = refraction_color(instance, sample_coord, size, k);
 
             if t >= 0.0 && t <= 0.5 {
                 blue_color += refracted_c.b;
@@ -247,68 +269,60 @@ fn blend_overlay(base: vec3<f32>, blend: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let rect_uv_min = uniforms.rect_uv_bounds.xy;
-    let rect_uv_max = uniforms.rect_uv_bounds.zw;
+    let instance = uniforms.instances[in.instance_index];
 
-    if in.uv.x < rect_uv_min.x || in.uv.x > rect_uv_max.x || in.uv.y < rect_uv_min.y || in.uv.y > rect_uv_max.y {
-        discard;
-    }
-
-    let rect_uv_size = rect_uv_max - rect_uv_min;
-    if rect_uv_size.x <= 0.0 || rect_uv_size.y <= 0.0 {
-        discard;
-    }
-    let px_to_uv_ratio = rect_uv_size / uniforms.rect_size_px;
-
-    let local_uv = (in.uv - rect_uv_min) / rect_uv_size;
-    let local_coord = local_uv * uniforms.rect_size_px;
-    let half_size = uniforms.rect_size_px * 0.5;
+    let local_coord = in.uv * instance.rect_size_px;
+    let half_size = instance.rect_size_px * 0.5;
     let centered_coord = local_coord - half_size;
-    let k = uniforms.g2_k_value;
+    let k = instance.g2_k_value;
 
     var sd: f32;
-    if uniforms.shape_type == 1.0 {
+    if instance.shape_type == 1.0 {
         sd = sdf_ellipse(centered_coord, half_size);
     } else {
-        sd = sdf_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
+        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
+    }
+
+    // Discard pixels outside the shape's boundary.
+    if sd > 0.0 {
+        discard;
     }
 
     var base_color: vec4<f32>;
-    if uniforms.dispersion_height > 0.0 {
-        base_color = dispersion_color_on_refracted(local_coord, uniforms.rect_size_px, k, rect_uv_min, px_to_uv_ratio);
+    if instance.dispersion_height > 0.0 {
+        base_color = dispersion_color_on_refracted(instance, local_coord, instance.rect_size_px, k);
     } else {
         base_color = refraction_color(
+            instance,
             local_coord,
-            uniforms.rect_size_px,
-            k,
-            rect_uv_min,
-            px_to_uv_ratio
+            instance.rect_size_px,
+            k
         );
     }
 
     var color = base_color.rgb;
 
-    let p_pixel = local_uv * uniforms.rect_size_px;
-    let center_pixel = uniforms.ripple_center * uniforms.rect_size_px;
+    let p_pixel = in.uv * instance.rect_size_px;
+    let center_pixel = instance.ripple_center * instance.rect_size_px;
     let dist_pixels = distance(p_pixel, center_pixel);
 
-    let min_dimension = min(uniforms.rect_size_px.x, uniforms.rect_size_px.y);
-    let radius_pixels = uniforms.ripple_radius * min_dimension;
+    let min_dimension = min(instance.rect_size_px.x, instance.rect_size_px.y);
+    let radius_pixels = instance.ripple_radius * min_dimension;
 
     if dist_pixels < radius_pixels {
         let ripple_factor = 1.0 - dist_pixels / radius_pixels;
-        color += vec3<f32>(1.0, 1.0, 1.0) * ripple_factor * uniforms.ripple_alpha;
+        color += vec3<f32>(1.0, 1.0, 1.0) * ripple_factor * instance.ripple_alpha;
     }
 
-    let tint_weight = uniforms.tint_color.a;
+    let tint_weight = instance.tint_color.a;
     if tint_weight > 0.0 {
-        color = mix(color, uniforms.tint_color.rgb, tint_weight);
+        color = mix(color, instance.tint_color.rgb, tint_weight);
     }
 
-    color = saturate_color(vec4(color, base_color.a), uniforms.chroma_multiplier).rgb;
+    color = saturate_color(vec4(color, base_color.a), instance.chroma_multiplier).rgb;
 
-    if uniforms.noise_amount > 0.0 {
-        let grain = (rand(local_coord * uniforms.noise_scale + uniforms.time) - 0.5) * uniforms.noise_amount;
+    if instance.noise_amount > 0.0 {
+        let grain = (rand(local_coord * instance.noise_scale + instance.time) - 0.5) * instance.noise_amount;
         color += grain;
     }
 
@@ -316,20 +330,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let width = fwidth(sd);
     let shape_alpha = smoothstep(width, -width, sd);
 
-    if uniforms.border_width > 0.0 {
+    if instance.border_width > 0.0 {
         // 1. Define the border region.
         // sd is the distance to the shape edge, negative inside, positive outside.
         // This expression creates a "band" region where sd is between 0 and -border_width.
-        let border_mask = smoothstep(0.0, -1.0, sd) - smoothstep(-uniforms.border_width, -uniforms.border_width - 1.0, sd);
+        let border_mask = smoothstep(0.0, -1.0, sd) - smoothstep(-instance.border_width, -instance.border_width - 1.0, sd);
 
         // Only compute highlight within the border region.
         if border_mask > 0.0 {
             // 2. Compute highlight normal (same logic as AGSL, using new function).
             var normal: vec2<f32>;
-            if uniforms.shape_type == 1.0 {
+            if instance.shape_type == 1.0 {
                 normal = grad_sd_ellipse(centered_coord, half_size);
             } else {
-                normal = grad_sd_g2_rounded_box(centered_coord, half_size, uniforms.corner_radius, k);
+                normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
             }
 
             // 3. Compute highlight distribution.
@@ -359,10 +373,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     final_color.a = shape_alpha;
-
-    if sd > 0.0 {
-        discard; // Discard fragment if outside the shape.
-    }
 
     return final_color;
 }

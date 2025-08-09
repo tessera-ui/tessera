@@ -1,4 +1,5 @@
 use std::{
+    any::TypeId,
     collections::HashMap,
     ops::{Add, AddAssign},
     sync::Arc,
@@ -54,7 +55,7 @@ pub struct ComponentNodeMetaData {
     /// new `Command` enum. Commands are collected during the measure phase and
     /// executed during rendering. The order of commands in this vector determines
     /// their execution order.
-    pub(crate) commands: Vec<Command>,
+    pub(crate) commands: Vec<(Command, TypeId)>,
 }
 
 impl ComponentNodeMetaData {
@@ -82,11 +83,11 @@ impl ComponentNodeMetaData {
     ///     shadow: None,
     /// });
     /// ```
-    pub fn push_draw_command(&mut self, command: impl DrawCommand + 'static) {
+    pub fn push_draw_command<C: DrawCommand + 'static>(&mut self, command: C) {
         let command = Box::new(command);
         let command = command as Box<dyn DrawCommand>;
         let command = Command::Draw(command);
-        self.commands.push(command);
+        self.commands.push((command, TypeId::of::<C>()));
     }
 
     /// Pushes a compute command to the node's metadata.
@@ -102,11 +103,11 @@ impl ComponentNodeMetaData {
     ///     sigma: 2.0,
     /// });
     /// ```
-    pub fn push_compute_command(&mut self, command: impl ComputeCommand + 'static) {
+    pub fn push_compute_command<C: ComputeCommand + 'static>(&mut self, command: C) {
         let command = Box::new(command);
         let command = command as Box<dyn ComputeCommand>;
         let command = Command::Compute(command);
-        self.commands.push(command);
+        self.commands.push((command, TypeId::of::<C>()));
     }
 }
 

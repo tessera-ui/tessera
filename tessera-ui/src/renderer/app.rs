@@ -1,4 +1,4 @@
-use std::{mem, sync::Arc};
+use std::{any::TypeId, mem, sync::Arc};
 
 use log::{error, info, warn};
 use parking_lot::RwLock;
@@ -349,7 +349,7 @@ impl WgpuApp {
     /// * `Err(wgpu::SurfaceError)` if there are issues with the surface
     pub(crate) fn render(
         &mut self,
-        commands: impl IntoIterator<Item = (Command, PxSize, PxPosition)>,
+        commands: impl IntoIterator<Item = (Command, TypeId, PxSize, PxPosition)>,
     ) -> Result<(), wgpu::SurfaceError> {
         // Collect commands into a Vec to allow reordering
         let commands: Vec<_> = commands.into_iter().collect();
@@ -409,7 +409,7 @@ impl WgpuApp {
         // Main command processing loop with barrier handling
         let mut commands_iter = commands.into_iter().peekable();
         let mut scene_texture_view = &read_target.view;
-        while let Some((command, size, start_pos)) = commands_iter.next() {
+        while let Some((command, command_type_id, size, start_pos)) = commands_iter.next() {
             // Handle barrier requirements by swapping buffers and copying content
             if command.barrier().is_some() {
                 // Perform a ping-pong operation
@@ -465,11 +465,12 @@ impl WgpuApp {
 
                     // Set the scissor rectangle only to needed area
                     let mut draw_rect = match command.barrier() {
-                        Some(BarrierRequirement::Global) => {
-                            // Global barrier, no scissor rect
-                            rpass.set_scissor_rect(0, 0, texture_size.width, texture_size.height);
-                            None
-                        }
+                        Some(BarrierRequirement::Global) => PxRect {
+                            x: Px(0),
+                            y: Px(0),
+                            width: Px(texture_size.width as i32),
+                            height: Px(texture_size.height as i32),
+                        },
                         Some(BarrierRequirement::PaddedLocal {
                             top,
                             right,
@@ -482,45 +483,49 @@ impl WgpuApp {
                                 .min(Px(texture_size.width as i32 - padded_x.0));
                             let padded_height = (size.height + top + bottom)
                                 .min(Px(texture_size.height as i32 - padded_y.0));
-                            Some(PxRect {
+                            PxRect {
                                 x: padded_x,
                                 y: padded_y,
                                 width: padded_width,
                                 height: padded_height,
-                            })
+                            }
                         }
-                        Some(BarrierRequirement::Absolute(rect)) => Some(rect),
-                        None => Some(PxRect {
-                            x: start_pos.x,
-                            y: start_pos.y,
-                            width: size.width,
-                            height: size.height,
-                        }),
+                        Some(BarrierRequirement::Absolute(mut rect)) => {
+                            rect.x = rect.x.positive().min(texture_size.width).into();
+                            rect.y = rect.y.positive().min(texture_size.height).into();
+                            rect.width = rect
+                                .width
+                                .positive()
+                                .min(texture_size.width - rect.x.positive())
+                                .into();
+                            rect.height = rect
+                                .height
+                                .positive()
+                                .min(texture_size.height - rect.y.positive())
+                                .into();
+                            rect
+                        }
+                        None => {
+                            let x = start_pos.x.positive().min(texture_size.width);
+                            let y = start_pos.y.positive().min(texture_size.height);
+                            let width = size.width.positive().min(texture_size.width - x);
+                            let height = size.height.positive().min(texture_size.height - y);
+                            PxRect {
+                                x: Px::from(x),
+                                y: Px::from(y),
+                                width: Px::from(width),
+                                height: Px::from(height),
+                            }
+                        }
                     };
-                    // Also we need to clamp the draw rectangle to the texture size
-                    if let Some(rect) = &mut draw_rect {
-                        rect.x = Px(rect.x.positive().min(texture_size.width) as i32);
-                        rect.y = Px(rect.y.positive().min(texture_size.height) as i32);
-                        rect.width = Px(rect
-                            .width
-                            .positive()
-                            .min(texture_size.width - rect.x.positive())
-                            as i32);
-                        rect.height = Px(rect
-                            .height
-                            .positive()
-                            .min(texture_size.height - rect.y.positive())
-                            as i32);
-                    }
-                    // If a draw rectangle is specified, set the scissor rect
-                    if let Some(rect) = draw_rect {
-                        rpass.set_scissor_rect(
-                            rect.x.positive(),
-                            rect.y.positive(),
-                            rect.width.positive(),
-                            rect.height.positive(),
-                        );
-                    }
+
+                    // Set the scissor rect
+                    rpass.set_scissor_rect(
+                        draw_rect.x.positive(),
+                        draw_rect.y.positive(),
+                        draw_rect.width.positive(),
+                        draw_rect.height.positive(),
+                    );
 
                     self.drawer.begin_pass(
                         &self.gpu,
@@ -543,12 +548,10 @@ impl WgpuApp {
                     );
 
                     // Batch subsequent draw commands that require barriers but not orthogonal to draw rect
-                    if command.barrier().is_some()
-                        && let Some(draw_rect) = draw_rect
-                    {
+                    if command.barrier().is_some() {
                         // Used to record all draw commands that are drawn in this pass
                         let mut draw_rects = vec![draw_rect.to_owned()]; // Here we assume using the CPU to check orthogonality one by one is worth avoiding an extra texture copy
-                        while let Some((Command::Draw(command), size, start_pos)) =
+                        while let Some((Command::Draw(command), _, size, start_pos)) =
                             commands_iter.peek()
                         {
                             if let Some(barrirer) = command.barrier() {
@@ -587,18 +590,19 @@ impl WgpuApp {
                                 // Record the new draw rectangle
                                 draw_rects.push(new_draw_rect.to_owned());
                                 // Acutally custom iter since we determine the next command can be batched
-                                let (Command::Draw(command), size, start_pos) =
+                                let (Command::Draw(command), _, size, start_pos) =
                                     commands_iter.next().unwrap()
                                 else {
                                     break; // Unreachable, but just in case
                                 };
                                 // If the new draw rectangle is not orthogonal, continue batching
-                                // Set scissor rect to the new draw rectangle
+                                // Set scissor rect to cover the new draw rectangle
+                                draw_rect = draw_rect.union(&new_draw_rect);
                                 rpass.set_scissor_rect(
-                                    new_draw_rect.x.positive(),
-                                    new_draw_rect.y.positive(),
-                                    new_draw_rect.width.positive(),
-                                    new_draw_rect.height.positive(),
+                                    draw_rect.x.positive(),
+                                    draw_rect.y.positive(),
+                                    draw_rect.width.positive(),
+                                    draw_rect.height.positive(),
                                 );
                                 // Submit the command
                                 self.drawer.submit(
@@ -618,11 +622,13 @@ impl WgpuApp {
                     }
 
                     // Batch subsequent draw commands that don't require barriers
-                    while let Some((Command::Draw(command), _, _)) = commands_iter.peek() {
-                        if command.barrier().is_some() {
-                            break; // Break if a barrier is required
+                    while let Some((Command::Draw(command), next_command_type_id, _, _)) =
+                        commands_iter.peek()
+                    {
+                        if command.barrier().is_some() || next_command_type_id != &command_type_id {
+                            break; // Break if a barrier is required or the type ID changes
                         }
-                        if let Some((Command::Draw(command), size, start_pos)) =
+                        if let Some((Command::Draw(command), _, size, start_pos)) =
                             commands_iter.next()
                         {
                             // Clamp rect to the texture size
@@ -630,8 +636,19 @@ impl WgpuApp {
                             let y = start_pos.y.positive().min(texture_size.height);
                             let width = size.width.positive().min(texture_size.width - x);
                             let height = size.height.positive().min(texture_size.height - y);
-                            // Set the scissor rect to the new draw rectangle
-                            rpass.set_scissor_rect(x, y, width, height);
+                            // Set the scissor rect to cover the new draw rectangle
+                            draw_rect = draw_rect.union(&PxRect {
+                                x: Px::from(x),
+                                y: Px::from(y),
+                                width: Px::from(width),
+                                height: Px::from(height),
+                            });
+                            rpass.set_scissor_rect(
+                                draw_rect.x.positive(),
+                                draw_rect.y.positive(),
+                                draw_rect.width.positive(),
+                                draw_rect.height.positive(),
+                            );
                             self.drawer.submit(
                                 &self.gpu,
                                 &self.queue,
@@ -656,8 +673,8 @@ impl WgpuApp {
                 Command::Compute(command) => {
                     self.compute_commands.push((command, size, start_pos));
                     // batch subsequent compute commands
-                    while let Some((Command::Compute(_), _, _)) = commands_iter.peek() {
-                        if let Some((Command::Compute(command), _, _)) = commands_iter.next() {
+                    while let Some((Command::Compute(_), _, _, _)) = commands_iter.peek() {
+                        if let Some((Command::Compute(command), _, _, _)) = commands_iter.next() {
                             self.compute_commands.push((command, size, start_pos));
                         }
                     }

@@ -1,7 +1,7 @@
 mod constraint;
 mod node;
 
-use std::{num::NonZero, sync::Arc, time::Instant};
+use std::{any::TypeId, num::NonZero, sync::Arc, time::Instant};
 
 use log::debug;
 use parking_lot::RwLock;
@@ -118,7 +118,7 @@ impl ComponentTree {
         compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
         gpu: &wgpu::Device,
         clipboard: &mut Clipboard,
-    ) -> (Vec<(Command, PxSize, PxPosition)>, WindowRequests) {
+    ) -> (Vec<(Command, TypeId, PxSize, PxPosition)>, WindowRequests) {
         let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
             return (vec![], WindowRequests::default());
         };
@@ -271,7 +271,7 @@ fn compute_draw_commands_parallel(
     // New params: screen width and height
     screen_width: i32,
     screen_height: i32,
-) -> Vec<(Command, PxSize, PxPosition)> {
+) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
     compute_draw_commands_inner_parallel(
         PxPosition::ZERO,
         true,
@@ -291,7 +291,7 @@ fn compute_draw_commands_inner_parallel(
     metadatas: &ComponentNodeMetaDatas,
     screen_width: i32,
     screen_height: i32,
-) -> Vec<(Command, PxSize, PxPosition)> {
+) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
     let mut local_commands = Vec::new();
 
     // Get metadata and calculate absolute position. This MUST happen for all nodes.
@@ -328,8 +328,8 @@ fn compute_draw_commands_inner_parallel(
 
     // Only drain commands if the node is visible.
     if size.width.0 > 0 && size.height.0 > 0 && node_rect.intersects(&screen_rect) {
-        for cmd in metadata.commands.drain(..) {
-            local_commands.push((cmd, size, self_pos));
+        for (cmd, type_id) in metadata.commands.drain(..) {
+            local_commands.push((cmd, type_id, size, self_pos));
         }
     }
 

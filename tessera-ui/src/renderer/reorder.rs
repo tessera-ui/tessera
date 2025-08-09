@@ -1,4 +1,4 @@
-use std::collections::BinaryHeap;
+use std::{any::TypeId, collections::BinaryHeap};
 
 use petgraph::{
     graph::{DiGraph, NodeIndex},
@@ -25,7 +25,8 @@ pub(crate) enum InstructionCategory {
 /// A wrapper for a command with additional information for sorting.
 pub(crate) struct InstructionInfo {
     pub(crate) original_index: usize,
-    pub(crate) command: Option<Command>,
+    pub(crate) command: Command,
+    pub(crate) type_id: TypeId,
     pub(crate) size: PxSize,
     pub(crate) position: PxPosition,
     pub(crate) category: InstructionCategory,
@@ -37,7 +38,7 @@ impl InstructionInfo {
     ///
     /// It calculates the instruction category and the bounding rectangle.
     pub(crate) fn new(
-        (command, size, position): (Command, PxSize, PxPosition),
+        (command, type_id, size, position): (Command, TypeId, PxSize, PxPosition),
         original_index: usize,
     ) -> Self {
         let (category, rect) = match &command {
@@ -119,7 +120,8 @@ impl InstructionInfo {
 
         Self {
             original_index,
-            command: Some(command),
+            command,
+            type_id,
             size,
             position,
             category,
@@ -153,8 +155,8 @@ impl PartialOrd for PriorityNode {
 }
 
 pub(crate) fn reorder_instructions(
-    commands: impl IntoIterator<Item = (Command, PxSize, PxPosition)>,
-) -> Vec<(Command, PxSize, PxPosition)> {
+    commands: impl IntoIterator<Item = (Command, TypeId, PxSize, PxPosition)>,
+) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
     let instructions: Vec<InstructionInfo> = commands
         .into_iter()
         .enumerate()
@@ -175,7 +177,7 @@ pub(crate) fn reorder_instructions(
     for node_index in sorted_node_indices {
         let original_index = node_index.index();
         if let Some(info) = original_infos[original_index].take() {
-            sorted_instructions.push((info.command.unwrap(), info.size, info.position));
+            sorted_instructions.push((info.command, info.type_id, info.size, info.position));
         }
     }
 
