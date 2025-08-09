@@ -236,6 +236,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        scene_texture_view: &wgpu::TextureView,
     ) {
     }
 
@@ -332,6 +333,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        scene_texture_view: &wgpu::TextureView,
     ) {
     }
 
@@ -397,6 +399,7 @@ pub trait ErasedDrawablePipeline {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        scene_texture_view: &wgpu::TextureView,
     );
 
     fn end_pass(
@@ -405,6 +408,7 @@ pub trait ErasedDrawablePipeline {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        scene_texture_view: &wgpu::TextureView,
     );
 
     fn draw_erased(
@@ -452,9 +456,10 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        scene_texture_view: &wgpu::TextureView,
     ) {
         self.pipeline
-            .begin_pass(gpu, gpu_queue, config, render_pass);
+            .begin_pass(gpu, gpu_queue, config, render_pass, scene_texture_view);
     }
 
     fn end_pass(
@@ -463,8 +468,10 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        scene_texture_view: &wgpu::TextureView,
     ) {
-        self.pipeline.end_pass(gpu, gpu_queue, config, render_pass);
+        self.pipeline
+            .end_pass(gpu, gpu_queue, config, render_pass, scene_texture_view);
     }
 
     fn draw_erased(
@@ -615,9 +622,10 @@ impl PipelineRegistry {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        scene_texture_view: &wgpu::TextureView,
     ) {
         for pipeline in self.pipelines.iter_mut() {
-            pipeline.begin_pass(gpu, gpu_queue, config, render_pass);
+            pipeline.begin_pass(gpu, gpu_queue, config, render_pass, scene_texture_view);
         }
     }
 
@@ -627,9 +635,10 @@ impl PipelineRegistry {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        scene_texture_view: &wgpu::TextureView,
     ) {
         for pipeline in self.pipelines.iter_mut() {
-            pipeline.end_pass(gpu, gpu_queue, config, render_pass);
+            pipeline.end_pass(gpu, gpu_queue, config, render_pass, scene_texture_view);
         }
     }
 

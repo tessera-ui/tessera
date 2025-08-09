@@ -386,7 +386,7 @@ impl WgpuApp {
             } else {
                 (&write_target.view, None)
             };
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Initial Clear Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
@@ -399,10 +399,6 @@ impl WgpuApp {
                 })],
                 ..Default::default()
             });
-            self.drawer
-                .begin_pass(&self.gpu, &self.queue, &self.config, &mut rpass);
-            self.drawer
-                .end_pass(&self.gpu, &self.queue, &self.config, &mut rpass);
         }
 
         // Frame-level begin for all pipelines
@@ -526,8 +522,13 @@ impl WgpuApp {
                         );
                     }
 
-                    self.drawer
-                        .begin_pass(&self.gpu, &self.queue, &self.config, &mut rpass);
+                    self.drawer.begin_pass(
+                        &self.gpu,
+                        &self.queue,
+                        &self.config,
+                        &mut rpass,
+                        scene_texture_view,
+                    );
 
                     // Submit the first command
                     self.drawer.submit(
@@ -643,8 +644,13 @@ impl WgpuApp {
                             );
                         }
                     }
-                    self.drawer
-                        .end_pass(&self.gpu, &self.queue, &self.config, &mut rpass);
+                    self.drawer.end_pass(
+                        &self.gpu,
+                        &self.queue,
+                        &self.config,
+                        &mut rpass,
+                        scene_texture_view,
+                    );
                 }
                 // Process compute commands using the compute pipeline
                 Command::Compute(command) => {

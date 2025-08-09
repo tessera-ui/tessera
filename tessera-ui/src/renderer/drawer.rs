@@ -45,9 +45,15 @@ impl Drawer {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        scene_texture_view: &wgpu::TextureView,
     ) {
-        self.pipeline_registry
-            .begin_all_passes(gpu, queue, config, render_pass);
+        self.pipeline_registry.begin_all_passes(
+            gpu,
+            queue,
+            config,
+            render_pass,
+            scene_texture_view,
+        );
     }
 
     /// Finalize all pipelines at the end of each render pass.
@@ -60,9 +66,10 @@ impl Drawer {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        scene_texture_view: &wgpu::TextureView,
     ) {
         self.pipeline_registry
-            .end_all_passes(gpu, queue, config, render_pass);
+            .end_all_passes(gpu, queue, config, render_pass, scene_texture_view);
     }
 
     /// Submit a draw command to the appropriate pipeline for rendering.
