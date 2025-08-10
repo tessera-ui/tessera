@@ -1,6 +1,7 @@
+use glam::{Vec2, Vec4};
 use tessera_ui::{Color, DrawCommand, PxPosition, PxSize};
 
-use super::{ShapeUniforms, ShapeVertex};
+use super::ShapeUniforms;
 
 /// Represents a shape drawable
 #[derive(Debug, Clone)]
@@ -131,44 +132,33 @@ impl Default for RippleProps {
     }
 }
 
-pub struct ShapeCommandComputed {
-    pub(crate) vertices: Vec<ShapeVertex>,
-    pub(crate) uniforms: ShapeUniforms,
-}
-
-impl ShapeCommandComputed {
-    pub fn from_command(command: ShapeCommand, size: PxSize, position: PxPosition) -> Self {
+pub(crate) fn rect_to_uniforms(
+    command: &ShapeCommand,
+    size: PxSize,
+    position: PxPosition,
+) -> ShapeUniforms {
+    let (primary_color_rgba, corner_radius, g2_k_value, shadow, border_width, render_mode, ripple) =
         match command {
             ShapeCommand::Rect {
                 color,
                 corner_radius,
                 g2_k_value,
                 shadow,
-            } => rect_to_computed_draw_command(
-                size,
-                position,
-                color, // RGBA
-                corner_radius,
-                g2_k_value,
-                shadow,
-                0.0, // border_width for fill is 0
-                0.0, // render_mode for fill is 0.0
-            ),
+            } => (*color, *corner_radius, *g2_k_value, *shadow, 0.0, 0.0, None),
             ShapeCommand::OutlinedRect {
                 color,
                 corner_radius,
                 g2_k_value,
                 shadow,
                 border_width,
-            } => rect_to_computed_draw_command(
-                size,
-                position,
-                color, // RGBA, This color is for the border
-                corner_radius,
-                g2_k_value,
-                shadow,
-                border_width,
-                1.0, // render_mode for outline is 1.0
+            } => (
+                *color,
+                *corner_radius,
+                *g2_k_value,
+                *shadow,
+                *border_width,
+                1.0,
+                None,
             ),
             ShapeCommand::RippleRect {
                 color,
@@ -176,16 +166,14 @@ impl ShapeCommandComputed {
                 g2_k_value,
                 shadow,
                 ripple,
-            } => ripple_rect_to_computed_draw_command(
-                size,
-                position,
-                color,
-                corner_radius,
-                g2_k_value,
-                shadow,
-                0.0, // border_width for fill is 0
-                0.0, // render_mode for fill is 0.0
-                ripple,
+            } => (
+                *color,
+                *corner_radius,
+                *g2_k_value,
+                *shadow,
+                0.0,
+                3.0,
+                Some(*ripple),
             ),
             ShapeCommand::RippleOutlinedRect {
                 color,
@@ -194,94 +182,28 @@ impl ShapeCommandComputed {
                 shadow,
                 border_width,
                 ripple,
-            } => ripple_rect_to_computed_draw_command(
-                size,
-                position,
-                color,
-                corner_radius,
-                g2_k_value,
-                shadow,
-                border_width,
-                1.0, // render_mode for outline is 1.0
-                ripple,
+            } => (
+                *color,
+                *corner_radius,
+                *g2_k_value,
+                *shadow,
+                *border_width,
+                4.0,
+                Some(*ripple),
             ),
-            ShapeCommand::Ellipse { color, shadow } => rect_to_computed_draw_command(
-                size, position, color,
-                -1.0, // Use negative corner_radius to signify an ellipse to the shader
-                0.0, shadow, 0.0, // border_width for fill is 0
-                0.0, // render_mode for fill
+            ShapeCommand::Ellipse { color, shadow } => (
+                *color, -1.0, // Use negative corner_radius to signify an ellipse
+                0.0, *shadow, 0.0, 0.0, None,
             ),
             ShapeCommand::OutlinedEllipse {
                 color,
                 shadow,
                 border_width,
-            } => rect_to_computed_draw_command(
-                size,
-                position,
-                color,
-                -1.0, // Use negative corner_radius to signify an ellipse to the shader
-                0.0,
-                shadow,
-                border_width,
-                1.0, // render_mode for outline
-            ),
-        }
-    }
-}
+            } => (*color, -1.0, 0.0, *shadow, *border_width, 1.0, None),
+        };
 
-/// Helper function to create Shape DrawCommand for both Rect and OutlinedRect
-fn rect_to_computed_draw_command(
-    size: PxSize,
-    position: PxPosition,
-    primary_color_rgba: Color,
-    corner_radius: f32,
-    g2_k_value: f32,
-    shadow: Option<ShadowProps>,
-    border_width: f32,
-    render_mode: f32,
-) -> ShapeCommandComputed {
     let width = size.width;
     let height = size.height;
-
-    let rect_local_pos = [
-        [-0.5, -0.5], // Top-Left
-        [0.5, -0.5],  // Top-Right
-        [0.5, 0.5],   // Bottom-Right
-        [-0.5, 0.5],  // Bottom-Left
-    ];
-
-    let vertex_color_placeholder_rgb = [0.0, 0.0, 0.0];
-    let top_left = position.to_f32_arr3();
-    let top_right = [top_left[0] + width.to_f32(), top_left[1], top_left[2]];
-    let bottom_right = [
-        top_left[0] + width.to_f32(),
-        top_left[1] + height.to_f32(),
-        top_left[2],
-    ];
-    let bottom_left = [top_left[0], top_left[1] + height.to_f32(), top_left[2]];
-
-    let vertices = vec![
-        ShapeVertex {
-            position: top_left,
-            color: vertex_color_placeholder_rgb,
-            local_pos: rect_local_pos[0],
-        },
-        ShapeVertex {
-            position: top_right,
-            color: vertex_color_placeholder_rgb,
-            local_pos: rect_local_pos[1],
-        },
-        ShapeVertex {
-            position: bottom_right,
-            color: vertex_color_placeholder_rgb,
-            local_pos: rect_local_pos[2],
-        },
-        ShapeVertex {
-            position: bottom_left,
-            color: vertex_color_placeholder_rgb,
-            local_pos: rect_local_pos[3],
-        },
-    ];
 
     let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) = if let Some(s_props) = shadow {
         (s_props.color, s_props.offset, s_props.smoothness)
@@ -289,7 +211,21 @@ fn rect_to_computed_draw_command(
         (Color::TRANSPARENT, [0.0, 0.0], 0.0)
     };
 
-    let uniforms = ShapeUniforms {
+    let (ripple_params, ripple_color) = if let Some(r_props) = ripple {
+        (
+            Vec4::new(
+                r_props.center[0],
+                r_props.center[1],
+                r_props.radius,
+                r_props.alpha,
+            ),
+            Vec4::new(r_props.color.r, r_props.color.g, r_props.color.b, 0.0),
+        )
+    } else {
+        (Vec4::ZERO, Vec4::ZERO)
+    };
+
+    ShapeUniforms {
         size_cr_border_width: [width.to_f32(), height.to_f32(), corner_radius, border_width].into(),
         primary_color: primary_color_rgba.to_array().into(),
         shadow_color: shadow_rgba_color.to_array().into(),
@@ -300,98 +236,16 @@ fn rect_to_computed_draw_command(
             render_mode,
         ]
         .into(),
-        ripple_params: [0.0, 0.0, 0.0, 0.0].into(),
-        ripple_color: [0.0, 0.0, 0.0, 0.0].into(),
+        ripple_params,
+        ripple_color,
         g2_k_value,
-    };
-
-    ShapeCommandComputed { vertices, uniforms }
-}
-
-/// Helper function to create Shape DrawCommand for ripple effects
-fn ripple_rect_to_computed_draw_command(
-    size: PxSize,
-    position: PxPosition,
-    primary_color_rgba: Color,
-    corner_radius: f32,
-    g2_k_value: f32,
-    shadow: Option<ShadowProps>,
-    border_width: f32,
-    render_mode: f32,
-    ripple: RippleProps,
-) -> ShapeCommandComputed {
-    let width = size.width;
-    let height = size.height;
-
-    let rect_local_pos = [
-        [-0.5, -0.5], // Top-Left
-        [0.5, -0.5],  // Top-Right
-        [0.5, 0.5],   // Bottom-Right
-        [-0.5, 0.5],  // Bottom-Left
-    ];
-
-    let vertex_color_placeholder_rgb = [0.0, 0.0, 0.0];
-    let top_left = position.to_f32_arr3();
-    let top_right = [top_left[0] + width.to_f32(), top_left[1], top_left[2]];
-    let bottom_right = [
-        top_left[0] + width.to_f32(),
-        top_left[1] + height.to_f32(),
-        top_left[2],
-    ];
-    let bottom_left = [top_left[0], top_left[1] + height.to_f32(), top_left[2]];
-
-    let vertices = vec![
-        ShapeVertex {
-            position: top_left,
-            color: vertex_color_placeholder_rgb,
-            local_pos: rect_local_pos[0],
-        },
-        ShapeVertex {
-            position: top_right,
-            color: vertex_color_placeholder_rgb,
-            local_pos: rect_local_pos[1],
-        },
-        ShapeVertex {
-            position: bottom_right,
-            color: vertex_color_placeholder_rgb,
-            local_pos: rect_local_pos[2],
-        },
-        ShapeVertex {
-            position: bottom_left,
-            color: vertex_color_placeholder_rgb,
-            local_pos: rect_local_pos[3],
-        },
-    ];
-
-    let (shadow_rgba_color, shadow_offset_vec, shadow_smooth_val) = if let Some(s_props) = shadow {
-        (s_props.color.into(), s_props.offset, s_props.smoothness)
-    } else {
-        ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
-    };
-
-    let ripple_render_mode = if render_mode == 0.0 { 3.0 } else { 4.0 };
-
-    let uniforms = ShapeUniforms {
-        size_cr_border_width: [width.to_f32(), height.to_f32(), corner_radius, border_width].into(),
-        primary_color: primary_color_rgba.to_array().into(),
-        shadow_color: shadow_rgba_color.into(),
-        render_params: [
-            shadow_offset_vec[0],
-            shadow_offset_vec[1],
-            shadow_smooth_val,
-            ripple_render_mode,
+        position: [
+            position.x.to_f32(),
+            position.y.to_f32(),
+            width.to_f32(),
+            height.to_f32(),
         ]
         .into(),
-        ripple_params: [
-            ripple.center[0],
-            ripple.center[1],
-            ripple.radius,
-            ripple.alpha,
-        ]
-        .into(),
-        ripple_color: [ripple.color.r, ripple.color.g, ripple.color.b, 0.0].into(),
-        g2_k_value,
-    };
-
-    ShapeCommandComputed { vertices, uniforms }
+        screen_size: Vec2::ZERO, // Will be populated in the pipeline
+    }
 }

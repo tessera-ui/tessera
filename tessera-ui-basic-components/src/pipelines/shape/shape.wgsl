@@ -2,34 +2,64 @@ struct ShapeUniforms {
     size_cr_border_width: vec4f, // size.xy, corner_radius, border_width
     primary_color: vec4f,      // fill_color or border_color
     shadow_color: vec4f,       // shadow_color
-    // render_mode: 0.0: fill, 1.0: outline, 2.0: shadow, 3.0: ripple_fill, 4.0: ripple_outline, 5.0: ellipse_fill, 6.0: ellipse_outline
+    // render_mode: 0.0: fill, 1.0: outline, 2.0: shadow, 3.0: ripple_fill, 4.0: ripple_outline
     render_params: vec4f,      // shadow_offset.xy, shadow_smoothness, render_mode
     ripple_params: vec4f,      // ripple_center.xy, ripple_radius, ripple_alpha
     ripple_color: vec4f,       // ripple_color.rgb, unused
     g2_k_value: f32, // G2 exponent for rounded corners
+    position: vec4f, // x, y, width, height in pixels
+    screen_size: vec2f,
+};
+
+struct ShapeInstances {
+    length: u32,
+    instances: array<ShapeUniforms>,
 };
 
 @group(0) @binding(0)
-var<uniform> shape_params: ShapeUniforms;
-
-struct VertexInput {
-    @location(0) position: vec3f,
-    @location(1) color: vec3f,
-    @location(2) local_pos_in: vec2f,
-};
+var<storage, read> uniforms: ShapeInstances;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4f,
-    @location(0) color: vec3f,
-    @location(1) local_pos_out: vec2f,
+    @location(0) local_pos: vec2f, // Local UV [0, 1]
+    @location(1) @interpolate(flat) instance_index: u32,
 };
 
 @vertex
-fn vs_main(model: VertexInput) -> VertexOutput {
+fn vs_main(
+    @builtin(vertex_index) vertex_index: u32,
+    @builtin(instance_index) instance_index: u32
+) -> VertexOutput {
+    let instance = uniforms.instances[instance_index];
+    
+    let global_pos_pixels = instance.position.xy;
+    let size_pixels = instance.position.zw;
+    let screen_dimensions = instance.screen_size;
+
+    let rect_uv_min = global_pos_pixels / screen_dimensions;
+    let rect_uv_max = (global_pos_pixels + size_pixels) / screen_dimensions;
+
+    let local_uvs = array<vec2<f32>, 4>(
+        vec2(0.0, 0.0), // Top-left
+        vec2(0.0, 1.0), // Bottom-left
+        vec2(1.0, 1.0), // Bottom-right
+        vec2(1.0, 0.0)  // Top-right
+    );
+
+    let indices = array<u32, 6>(0, 1, 2, 0, 2, 3);
+    let local_uv = local_uvs[indices[vertex_index]];
+
+    let global_uv = rect_uv_min + local_uv * (rect_uv_max - rect_uv_min);
+
+    let clip_pos = vec2<f32>(
+        global_uv.x * 2.0 - 1.0,
+        -(global_uv.y * 2.0 - 1.0)
+    );
+
     var out: VertexOutput;
-    out.color = model.color;
-    out.clip_position = vec4f(model.position.xy, 0.0, 1.0);
-    out.local_pos_out = model.local_pos_in;
+    out.clip_position = vec4<f32>(clip_pos, 0.0, 1.0);
+    out.local_pos = local_uv - 0.5; // Center the local coordinates around 0
+    out.instance_index = instance_index;
     return out;
 }
 
@@ -92,30 +122,29 @@ fn calculate_ripple_effect(dist_to_center: f32, ripple_radius: f32) -> f32 {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    let size = shape_params.size_cr_border_width.xy;
-    let corner_radius = shape_params.size_cr_border_width.z;
-    let border_width = shape_params.size_cr_border_width.w;
+    let instance = uniforms.instances[in.instance_index];
+    let size = instance.size_cr_border_width.xy;
+    let corner_radius = instance.size_cr_border_width.z;
+    let border_width = instance.size_cr_border_width.w;
 
-    let primary_color_uniform = shape_params.primary_color;
-    let shadow_color_uniform = shape_params.shadow_color;
+    let primary_color_uniform = instance.primary_color;
+    let shadow_color_uniform = instance.shadow_color;
 
-    let shadow_offset = shape_params.render_params.xy;
-    let shadow_smoothness = shape_params.render_params.z;
-    let render_mode = shape_params.render_params.w; // 0.0: fill, 1.0: outline, 2.0: shadow, 3.0: ripple_fill, 4.0: ripple_outline
+    let shadow_offset = instance.render_params.xy;
+    let shadow_smoothness = instance.render_params.z;
+    let render_mode = instance.render_params.w; // 0.0: fill, 1.0: outline, 2.0: shadow, 3.0: ripple_fill, 4.0: ripple_outline
     
     // Ripple parameters
-    let ripple_center = shape_params.ripple_params.xy;
-    let ripple_radius = shape_params.ripple_params.z;
-    let ripple_alpha = shape_params.ripple_params.w;
-    let ripple_color_rgb = shape_params.ripple_color.rgb;
+    let ripple_center = instance.ripple_params.xy;
+    let ripple_radius = instance.ripple_params.z;
+    let ripple_alpha = instance.ripple_params.w;
+    let ripple_color_rgb = instance.ripple_color.rgb;
 
     // G2 exponent for rounded corners.
-    // k=2.0 results in standard G1 circular corners.
-    // k > 2.0 (e.g., 2.5, 3.0, 4.0) gives G2-like superelliptical corners.
-    let G2_K_VALUE: f32 = shape_params.g2_k_value;
+    let G2_K_VALUE: f32 = instance.g2_k_value;
 
-    // in.local_pos_out is expected to be in normalized range, e.g., [-0.5, 0.5] for x and y
-    let p_normalized = in.local_pos_out;
+    // in.local_pos is expected to be in normalized range, e.g., [-0.5, 0.5] for x and y
+    let p_normalized = in.local_pos;
     // Scale to actual rectangle dimensions, centered at (0,0) for SDF calculation
     let p_scaled_object_space = p_normalized * size;
     let rect_half_size = size * 0.5;
@@ -187,13 +216,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             }
 
             // Calculate ripple effect
-            // To maintain circular ripple, we need to convert normalized coordinates to pixel space
-            // and then calculate distance in pixel space to ensure true circular ripple
             let p_pixel = p_normalized * size;
             let center_pixel = ripple_center * size;
             let dist_to_ripple_center_pixel = distance(p_pixel, center_pixel);
             
-            // Normalize the pixel distance based on the smaller dimension for consistent ripple size
             let min_dimension = min(size.x, size.y);
             let normalized_dist = dist_to_ripple_center_pixel / min_dimension;
             let ripple_effect = calculate_ripple_effect(normalized_dist, ripple_radius);
@@ -209,12 +235,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             if border_width <= 0.0 {
                 discard;
             }
-            // Alpha for the outer edge of the border
             let alpha_outer_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
-            // Alpha for the inner edge of the border (shape shrunk by border_width)
             let alpha_inner_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object + border_width);
             
-            // The outline alpha is the difference
             let outline_alpha = alpha_outer_edge - alpha_inner_edge;
 
             if outline_alpha <= 0.001 {
@@ -222,13 +245,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             }
 
             // Calculate ripple effect
-            // To maintain circular ripple, we need to convert normalized coordinates to pixel space
-            // and then calculate distance in pixel space to ensure true circular ripple
             let p_pixel = p_normalized * size;
             let center_pixel = ripple_center * size;
             let dist_to_ripple_center_pixel = distance(p_pixel, center_pixel);
             
-            // Normalize the pixel distance based on the smaller dimension for consistent ripple size
             let min_dimension = min(size.x, size.y);
             let normalized_dist = dist_to_ripple_center_pixel / min_dimension;
             let ripple_effect = calculate_ripple_effect(normalized_dist, ripple_radius);
