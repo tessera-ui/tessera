@@ -78,8 +78,12 @@ pub struct GlyphonTextRender {
     viewport: glyphon::Viewport,
     /// Glyphon swash cache, a CPU-side cache for glyph rasterization.
     swash_cache: glyphon::SwashCache,
-    /// The multisample state, needed for creating temporary renderers.
+    /// Multisample state for anti-aliasing.
     msaa: wgpu::MultisampleState,
+    /// Glyphon text renderer, responsible for rendering text.
+    renderer: glyphon::TextRenderer,
+    /// Commands to be executed in the render pass.
+    commands: Vec<(TextCommand, PxPosition)>,
 }
 
 impl GlyphonTextRender {
@@ -97,7 +101,7 @@ impl GlyphonTextRender {
         sample_count: u32,
     ) -> Self {
         let cache = glyphon::Cache::new(gpu);
-        let atlas = glyphon::TextAtlas::new(gpu, queue, &cache, config.format);
+        let mut atlas = glyphon::TextAtlas::new(gpu, queue, &cache, config.format);
         let viewport = glyphon::Viewport::new(gpu, &cache);
         let swash_cache = glyphon::SwashCache::new();
         let msaa = wgpu::MultisampleState {
@@ -105,6 +109,7 @@ impl GlyphonTextRender {
             mask: !0,
             alpha_to_coverage_enabled: false,
         };
+        let renderer = glyphon::TextRenderer::new(&mut atlas, gpu, msaa, None);
 
         Self {
             atlas,
@@ -112,11 +117,12 @@ impl GlyphonTextRender {
             viewport,
             swash_cache,
             msaa,
+            renderer,
+            commands: Vec::new(),
         }
     }
 }
 
-#[allow(unused_variables)]
 impl DrawablePipeline<TextCommand> for GlyphonTextRender {
     /// Draws text in a UI component using the Glyphon engine.
     ///
@@ -131,21 +137,37 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
     /// - `_scene_texture_view`: Not used for text rendering.
     fn draw(
         &mut self,
+        _gpu: &wgpu::Device,
+        _gpu_queue: &wgpu::Queue,
+        _config: &wgpu::SurfaceConfiguration,
+        _render_pass: &mut wgpu::RenderPass<'_>,
+        command: &TextCommand,
+        _size: PxSize,
+        start_pos: PxPosition,
+        _scene_texture_view: &wgpu::TextureView,
+    ) {
+        self.commands.push((command.to_owned(), start_pos));
+    }
+
+    fn begin_pass(
+        &mut self,
+        _gpu: &wgpu::Device,
+        _gpu_queue: &wgpu::Queue,
+        _config: &wgpu::SurfaceConfiguration,
+        _render_pass: &mut wgpu::RenderPass<'_>,
+        _scene_texture_view: &wgpu::TextureView,
+    ) {
+        self.commands.clear();
+    }
+
+    fn end_pass(
+        &mut self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
-        command: &TextCommand,
-        size: PxSize,
-        start_pos: PxPosition,
         _scene_texture_view: &wgpu::TextureView,
     ) {
-        // Create a new, temporary TextRenderer for each draw call.
-        // This is necessary to avoid state conflicts when rendering multiple
-        // text elements interleaved with other components. It correctly
-        // isolates the `prepare` call for each text block.
-        let mut text_renderer = glyphon::TextRenderer::new(&mut self.atlas, gpu, self.msaa, None);
-
         self.viewport.update(
             gpu_queue,
             glyphon::Resolution {
@@ -154,9 +176,11 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
             },
         );
 
-        let text_areas = std::iter::once(command.data.text_area(start_pos));
-
-        text_renderer
+        let text_areas = self.commands.iter().map(|(command, start_pos)| {
+            // Get the text area from the text data
+            command.data.text_area(*start_pos)
+        });
+        self.renderer
             .prepare(
                 gpu,
                 gpu_queue,
@@ -168,9 +192,12 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
             )
             .unwrap();
 
-        text_renderer
+        self.renderer
             .render(&self.atlas, &self.viewport, render_pass)
             .unwrap();
+
+        let new_renderer = glyphon::TextRenderer::new(&mut self.atlas, gpu, self.msaa, None);
+        let _ = std::mem::replace(&mut self.renderer, new_renderer);
     }
 }
 
@@ -182,7 +209,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```
 /// use tessera_ui_basic_components::pipelines::text::TextData;
 ///
 /// let data = TextData::new("Hello".to_string(), color, 16.0, 1.2, constraint);

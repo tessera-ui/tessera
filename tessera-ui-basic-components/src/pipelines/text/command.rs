@@ -2,6 +2,7 @@ use tessera_ui::DrawCommand;
 
 use super::TextData;
 
+#[derive(Debug, Clone)]
 pub struct TextCommand {
     pub data: TextData,
 }
