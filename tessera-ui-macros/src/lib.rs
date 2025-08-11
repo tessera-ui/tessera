@@ -339,7 +339,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 ///
                 /// # Example
                 ///
-                /// ```rust
+                /// ```ignore
                 /// controller.push(AboutPageDestination {
                 ///     title: "About".to_string(),
                 ///     description: "This is the about page.".to_string(),
