@@ -1,15 +1,10 @@
 <div align="center">
 
-<a href="tessera-ui-logo">
-    <img src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/logo.gif" alt="Tessera Logo" width="128" style="display: block; margin: 0 auto"/>
-<a/>
-
 # **Tessera**
 
 [![简体中文][readme-cn-badge]][readme-cn-url]
 [![Stars][stars-badge]][stars-url]
 [![CI][ci-badge]][ci-url]
-[![Logo][logo-badge]][logo-url]
 [![tessera ui][tessera-ui-badge]][tessera-ui-url]
 [![tessera ui macros][tessera-macros-badge]][tessera-macros-url]
 [![tessera ui basic components][tessera-ui-basic-components-badge]][tessera-ui-basic-components-url]
@@ -25,8 +20,6 @@
 [stars-url]: https://github.com/tessera-ui/tessera
 [ci-badge]: https://img.shields.io/github/actions/workflow/status/tessera-ui/tessera/ci.yml?style=for-the-badge&label=CI&logo=githubactions
 [ci-url]: https://github.com/tessera-ui/tessera/actions/workflows/ci.yml
-[logo-badge]: https://img.shields.io/badge/logo-source-blue?style=for-the-badge&logo=rust
-[logo-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-ui-logo
 [tessera-ui-badge]: https://img.shields.io/badge/tessera%20ui-source-blue?style=for-the-badge&logo=rust
 [tessera-ui-docs-badge]: https://img.shields.io/badge/docs%20(ci)-tessera%20ui-blue.svg?style=for-the-badge&logo=docsdotrs
 [tessera-ui-docs-url]: https://tessera-ui.github.io/tessera/tessera_ui
