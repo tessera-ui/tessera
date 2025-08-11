@@ -134,6 +134,7 @@ impl InstructionInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PriorityNode {
     category: InstructionCategory,
+    type_id: TypeId,
     original_index: usize, // Use negative index for max-heap behavior
     node_index: NodeIndex,
 }
@@ -141,9 +142,11 @@ struct PriorityNode {
 impl Ord for PriorityNode {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // Higher category -> higher priority
+        // Same type_id -> higher priority
         // Lower original_index -> higher priority (tie-breaker)
         self.category
             .cmp(&other.category)
+            .then_with(|| self.type_id.cmp(&other.type_id))
             .then_with(|| other.original_index.cmp(&self.original_index))
     }
 }
@@ -199,6 +202,7 @@ fn priority_topological_sort(
             let info = &instructions[node_index.index()];
             ready_queue.push(PriorityNode {
                 category: info.category,
+                type_id: info.type_id,
                 original_index: info.original_index,
                 node_index,
             });
@@ -216,6 +220,7 @@ fn priority_topological_sort(
                 let info = &instructions[v.index()];
                 ready_queue.push(PriorityNode {
                     category: info.category,
+                    type_id: info.type_id,
                     original_index: info.original_index,
                     node_index: v,
                 });
