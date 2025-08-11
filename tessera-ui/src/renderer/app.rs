@@ -356,19 +356,6 @@ impl WgpuApp {
         // Reorder instructions based on dependencies for better batching optimization
         let commands = super::reorder::reorder_instructions(commands);
 
-        println!("Rendering {} commands", commands.len());
-        for (command, _, _, _) in &commands {
-            match command {
-                Command::Draw(_) => {
-                    println!("Processing draw command");
-                }
-                Command::Compute(_) => {
-                    println!("Processing compute command");
-                }
-            }
-        }
-        println!("Finished processing commands");
-
         let output_frame = self.surface.get_current_texture()?;
         let mut encoder = self
             .gpu
