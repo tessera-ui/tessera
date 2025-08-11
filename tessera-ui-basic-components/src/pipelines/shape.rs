@@ -21,9 +21,9 @@ mod command;
 use encase::{ArrayLength, ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    PxPosition, PxSize,
     renderer::DrawablePipeline,
     wgpu::{self, include_wgsl},
+    PxPosition, PxSize,
 };
 
 use self::command::rect_to_uniforms;
@@ -92,7 +92,6 @@ pub const MAX_CONCURRENT_SHAPES: wgpu::BufferAddress = 1024;
 pub struct ShapePipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
-    instances: Vec<ShapeUniforms>,
 }
 
 impl ShapePipeline {
@@ -160,81 +159,68 @@ impl ShapePipeline {
         Self {
             pipeline,
             bind_group_layout,
-            instances: Vec::with_capacity(MAX_CONCURRENT_SHAPES as usize),
         }
     }
 }
 
-#[allow(unused_variables)]
 impl DrawablePipeline<ShapeCommand> for ShapePipeline {
-    fn begin_pass(
-        &mut self,
-        _gpu: &wgpu::Device,
-        _gpu_queue: &wgpu::Queue,
-        _config: &wgpu::SurfaceConfiguration,
-        _render_pass: &mut wgpu::RenderPass<'_>,
-        _scene_texture_view: &wgpu::TextureView,
-    ) {
-        self.instances.clear();
-    }
-
     fn draw(
         &mut self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
-        command: &ShapeCommand,
-        size: PxSize,
-        start_pos: PxPosition,
+        commands: &[(&ShapeCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
     ) {
-        if self.instances.len() >= MAX_CONCURRENT_SHAPES as usize {
-            return; // Avoid buffer overflow
+        if commands.is_empty() {
+            return;
         }
 
-        let mut uniforms = rect_to_uniforms(command, size, start_pos);
-        uniforms.screen_size = [config.width as f32, config.height as f32].into();
+        let mut instances: Vec<ShapeUniforms> = commands
+            .iter()
+            .flat_map(|(command, size, start_pos)| {
+                let mut uniforms = rect_to_uniforms(command, *size, *start_pos);
+                uniforms.screen_size = [config.width as f32, config.height as f32].into();
 
-        // Check if shadow needs to be drawn
-        let has_shadow = uniforms.shadow_color[3] > 0.0 && uniforms.render_params[2] > 0.0;
+                let has_shadow = uniforms.shadow_color[3] > 0.0 && uniforms.render_params[2] > 0.0;
 
-        if has_shadow {
-            let mut uniforms_for_shadow = uniforms;
-            uniforms_for_shadow.render_params[3] = 2.0;
-            self.instances.push(uniforms_for_shadow);
+                if has_shadow {
+                    let mut uniforms_for_shadow = uniforms;
+                    uniforms_for_shadow.render_params[3] = 2.0;
+                    vec![uniforms_for_shadow, uniforms]
+                } else {
+                    vec![uniforms]
+                }
+            })
+            .collect();
+
+        if instances.len() > MAX_CONCURRENT_SHAPES as usize {
+            // In a real application, you might want to handle this more gracefully,
+            // perhaps by splitting the draw call. For now, we'll just truncate.
+            instances.truncate(MAX_CONCURRENT_SHAPES as usize);
         }
 
-        self.instances.push(uniforms);
-    }
-
-    fn end_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        _scene_texture_view: &wgpu::TextureView,
-    ) {
-        if self.instances.is_empty() {
+        if instances.is_empty() {
             return;
         }
 
         let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Shape Storage Buffer"),
-            size: 16 + ShapeUniforms::SHADER_SIZE.get() * MAX_CONCURRENT_SHAPES,
+            size: 16 + ShapeUniforms::SHADER_SIZE.get() * instances.len() as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let uniforms = ShapeInstances {
             length: Default::default(),
-            instances: self.instances.clone(),
+            instances,
         };
+        let instance_count = uniforms.instances.len();
 
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
         buffer_content.write(&uniforms).unwrap();
-        queue.write_buffer(&uniform_buffer, 0, buffer_content.as_ref());
+        gpu_queue.write_buffer(&uniform_buffer, 0, buffer_content.as_ref());
 
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.bind_group_layout,
@@ -247,6 +233,6 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &bind_group, &[]);
-        render_pass.draw(0..6, 0..self.instances.len() as u32);
+        render_pass.draw(0..6, 0..instance_count as u32);
     }
 }

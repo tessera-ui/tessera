@@ -1,6 +1,6 @@
 use encase::{ArrayLength, ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
-use tessera_ui::{PxPosition, PxSize, renderer::DrawablePipeline, wgpu};
+use tessera_ui::{renderer::DrawablePipeline, wgpu, PxPosition, PxSize};
 
 use crate::fluid_glass::FluidGlassCommand;
 
@@ -48,7 +48,6 @@ pub(crate) struct FluidGlassPipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
-    instances: Vec<GlassUniforms>,
 }
 
 impl FluidGlassPipeline {
@@ -146,114 +145,100 @@ impl FluidGlassPipeline {
             pipeline,
             bind_group_layout,
             sampler,
-            instances: Vec::with_capacity(MAX_CONCURRENT_GLASSES as usize),
         }
     }
 }
 
 impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
-    fn begin_pass(
-        &mut self,
-        _gpu: &wgpu::Device,
-        _gpu_queue: &wgpu::Queue,
-        _config: &wgpu::SurfaceConfiguration,
-        _render_pass: &mut wgpu::RenderPass<'_>,
-        _scene_texture_view: &wgpu::TextureView,
-    ) {
-        self.instances.clear();
-    }
-
     fn draw(
-        &mut self,
-        _gpu: &wgpu::Device,
-        _queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        _render_pass: &mut wgpu::RenderPass<'_>,
-        command: &FluidGlassCommand,
-        size: PxSize,
-        start_pos: PxPosition,
-        _scene_texture_view: &wgpu::TextureView,
-    ) {
-        if self.instances.len() >= MAX_CONCURRENT_GLASSES as usize {
-            return; // Avoid buffer overflow
-        }
-
-        let args = &command.args;
-        let screen_w = config.width as f32;
-        let screen_h = config.height as f32;
-
-        let rect_uv_bounds = [
-            start_pos.x.0 as f32 / screen_w,
-            start_pos.y.0 as f32 / screen_h,
-            (start_pos.x.0 + size.width.0) as f32 / screen_w,
-            (start_pos.y.0 + size.height.0) as f32 / screen_h,
-        ];
-
-        let uniforms = GlassUniforms {
-            tint_color: args.tint_color.to_array().into(),
-            rect_uv_bounds: rect_uv_bounds.into(),
-            rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
-            ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]).into(),
-            corner_radius: match args.shape {
-                crate::shape_def::Shape::RoundedRectangle { corner_radius, .. } => corner_radius,
-                crate::shape_def::Shape::Ellipse => 0.0,
-            },
-            shape_type: match args.shape {
-                crate::shape_def::Shape::RoundedRectangle { .. } => 0.0,
-                crate::shape_def::Shape::Ellipse => 1.0,
-            },
-            g2_k_value: match args.shape {
-                crate::shape_def::Shape::RoundedRectangle { g2_k_value, .. } => g2_k_value,
-                crate::shape_def::Shape::Ellipse => 0.0,
-            },
-            dispersion_height: args.dispersion_height,
-            chroma_multiplier: args.chroma_multiplier,
-            refraction_height: args.refraction_height,
-            refraction_amount: args.refraction_amount,
-            eccentric_factor: args.eccentric_factor,
-            noise_amount: args.noise_amount,
-            noise_scale: args.noise_scale,
-            time: args.time,
-            ripple_radius: args.ripple_radius.unwrap_or(0.0),
-            ripple_alpha: args.ripple_alpha.unwrap_or(0.0),
-            ripple_strength: args.ripple_strength.unwrap_or(0.0),
-            border_width: if let Some(border) = args.border {
-                border.width.0 as f32
-            } else {
-                0.0
-            },
-            screen_size: [screen_w, screen_h].into(),
-            light_source: [screen_w * 0.1, screen_h * 0.1].into(),
-            light_scale: 1.0,
-        };
-
-        self.instances.push(uniforms);
-    }
-
-    fn end_pass(
         &mut self,
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
-        _config: &wgpu::SurfaceConfiguration,
+        config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        commands: &[(&FluidGlassCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
     ) {
-        if self.instances.is_empty() {
+        if commands.is_empty() {
             return;
         }
 
+        let mut instances: Vec<GlassUniforms> = commands
+            .iter()
+            .map(|(command, size, start_pos)| {
+                let args = &command.args;
+                let screen_w = config.width as f32;
+                let screen_h = config.height as f32;
+
+                let rect_uv_bounds = [
+                    start_pos.x.0 as f32 / screen_w,
+                    start_pos.y.0 as f32 / screen_h,
+                    (start_pos.x.0 + size.width.0) as f32 / screen_w,
+                    (start_pos.y.0 + size.height.0) as f32 / screen_h,
+                ];
+
+                GlassUniforms {
+                    tint_color: args.tint_color.to_array().into(),
+                    rect_uv_bounds: rect_uv_bounds.into(),
+                    rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
+                    ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]).into(),
+                    corner_radius: match args.shape {
+                        crate::shape_def::Shape::RoundedRectangle { corner_radius, .. } => {
+                            corner_radius
+                        }
+                        crate::shape_def::Shape::Ellipse => 0.0,
+                    },
+                    shape_type: match args.shape {
+                        crate::shape_def::Shape::RoundedRectangle { .. } => 0.0,
+                        crate::shape_def::Shape::Ellipse => 1.0,
+                    },
+                    g2_k_value: match args.shape {
+                        crate::shape_def::Shape::RoundedRectangle { g2_k_value, .. } => g2_k_value,
+                        crate::shape_def::Shape::Ellipse => 0.0,
+                    },
+                    dispersion_height: args.dispersion_height,
+                    chroma_multiplier: args.chroma_multiplier,
+                    refraction_height: args.refraction_height,
+                    refraction_amount: args.refraction_amount,
+                    eccentric_factor: args.eccentric_factor,
+                    noise_amount: args.noise_amount,
+                    noise_scale: args.noise_scale,
+                    time: args.time,
+                    ripple_radius: args.ripple_radius.unwrap_or(0.0),
+                    ripple_alpha: args.ripple_alpha.unwrap_or(0.0),
+                    ripple_strength: args.ripple_strength.unwrap_or(0.0),
+                    border_width: if let Some(border) = args.border {
+                        border.width.0 as f32
+                    } else {
+                        0.0
+                    },
+                    screen_size: [screen_w, screen_h].into(),
+                    light_source: [screen_w * 0.1, screen_h * 0.1].into(),
+                    light_scale: 1.0,
+                }
+            })
+            .collect();
+
+        if instances.len() > MAX_CONCURRENT_GLASSES as usize {
+            instances.truncate(MAX_CONCURRENT_GLASSES as usize);
+        }
+
+        if instances.is_empty() {
+            return;
+        }
+
+        let instance_count = instances.len();
+
         let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Fluid Glass Storage Buffer"),
-            // The size of the buffer is the size of the header (ArrayLength, a u32, padded to 16 bytes for vec4 alignment)
-            // plus the size of the maximum number of instances.
-            size: 16 + GlassUniforms::SHADER_SIZE.get() * MAX_CONCURRENT_GLASSES,
+            size: 16 + GlassUniforms::SHADER_SIZE.get() * instances.len() as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let uniforms = GlassInstances {
             length: Default::default(),
-            instances: self.instances.clone(),
+            instances,
         };
 
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
@@ -281,6 +266,6 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &bind_group, &[]);
-        render_pass.draw(0..6, 0..self.instances.len() as u32);
+        render_pass.draw(0..6, 0..instance_count as u32);
     }
 }

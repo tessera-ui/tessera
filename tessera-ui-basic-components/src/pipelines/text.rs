@@ -15,7 +15,7 @@ use std::sync::OnceLock;
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tessera_ui::{Color, DrawablePipeline, PxPosition, PxSize, wgpu};
+use tessera_ui::{wgpu, Color, DrawablePipeline, PxPosition, PxSize};
 
 pub use command::{TextCommand, TextConstraint};
 
@@ -82,8 +82,6 @@ pub struct GlyphonTextRender {
     msaa: wgpu::MultisampleState,
     /// Glyphon text renderer, responsible for rendering text.
     renderer: glyphon::TextRenderer,
-    /// Commands to be executed in the render pass.
-    commands: Vec<(TextCommand, PxPosition)>,
 }
 
 impl GlyphonTextRender {
@@ -118,56 +116,24 @@ impl GlyphonTextRender {
             swash_cache,
             msaa,
             renderer,
-            commands: Vec::new(),
         }
     }
 }
 
 impl DrawablePipeline<TextCommand> for GlyphonTextRender {
-    /// Draws text in a UI component using the Glyphon engine.
-    ///
-    /// # Parameters
-    /// - `gpu`: The wgpu device.
-    /// - `gpu_queue`: The wgpu queue.
-    /// - `config`: Surface configuration.
-    /// - `render_pass`: The render pass to encode drawing commands.
-    /// - `command`: The text command with text data.
-    /// - `size`: The size of the component in pixels.
-    /// - `start_pos`: The top-left position of the component.
-    /// - `_scene_texture_view`: Not used for text rendering.
     fn draw(
-        &mut self,
-        _gpu: &wgpu::Device,
-        _gpu_queue: &wgpu::Queue,
-        _config: &wgpu::SurfaceConfiguration,
-        _render_pass: &mut wgpu::RenderPass<'_>,
-        command: &TextCommand,
-        _size: PxSize,
-        start_pos: PxPosition,
-        _scene_texture_view: &wgpu::TextureView,
-    ) {
-        self.commands.push((command.to_owned(), start_pos));
-    }
-
-    fn begin_pass(
-        &mut self,
-        _gpu: &wgpu::Device,
-        _gpu_queue: &wgpu::Queue,
-        _config: &wgpu::SurfaceConfiguration,
-        _render_pass: &mut wgpu::RenderPass<'_>,
-        _scene_texture_view: &wgpu::TextureView,
-    ) {
-        self.commands.clear();
-    }
-
-    fn end_pass(
         &mut self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
+        commands: &[(&TextCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
     ) {
+        if commands.is_empty() {
+            return;
+        }
+
         self.viewport.update(
             gpu_queue,
             glyphon::Resolution {
@@ -176,10 +142,10 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
             },
         );
 
-        let text_areas = self.commands.iter().map(|(command, start_pos)| {
-            // Get the text area from the text data
+        let text_areas = commands.iter().map(|(command, _size, start_pos)| {
             command.data.text_area(*start_pos)
         });
+
         self.renderer
             .prepare(
                 gpu,
@@ -196,6 +162,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
             .render(&self.atlas, &self.viewport, render_pass)
             .unwrap();
 
+        // Re-create the renderer to release borrow on atlas
         let new_renderer = glyphon::TextRenderer::new(&mut self.atlas, gpu, self.msaa, None);
         let _ = std::mem::replace(&mut self.renderer, new_renderer);
     }

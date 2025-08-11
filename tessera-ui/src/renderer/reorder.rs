@@ -269,6 +269,18 @@ fn build_dependency_graph(instructions: &[InstructionInfo]) -> DiGraph<(), ()> {
             {
                 graph.add_edge(node_indices[i], node_indices[j], ());
             }
+
+            // Rule 3: Implicit dependency (Draw -> Compute)
+            // If inst_j is a Compute command and inst_i is a Draw command that
+            // appeared earlier, and their areas are not orthogonal, then j depends on i.
+            if (inst_i.category == InstructionCategory::BarrierDraw
+                || inst_i.category == InstructionCategory::ContinuationDraw)
+                && inst_j.category == InstructionCategory::Compute
+                && inst_i.original_index < inst_j.original_index
+                && !inst_i.rect.is_orthogonal(&inst_j.rect)
+            {
+                graph.add_edge(node_indices[i], node_indices[j], ());
+            }
         }
     }
 

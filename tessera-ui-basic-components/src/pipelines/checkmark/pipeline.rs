@@ -2,9 +2,9 @@ use bytemuck::{Pod, Zeroable};
 use encase::{ShaderType, UniformBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    PxPosition, PxSize,
     renderer::DrawablePipeline,
     wgpu::{self, include_wgsl, util::DeviceExt},
+    PxPosition, PxSize,
 };
 
 use crate::pipelines::pos_misc::pixel_to_ndc;
@@ -186,62 +186,63 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
-        command: &CheckmarkCommand,
-        size: PxSize,
-        start_pos: PxPosition,
+        commands: &[(&CheckmarkCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
     ) {
-        // Convert position and size to NDC coordinates
-        let ndc_pos = pixel_to_ndc(start_pos, [config.width, config.height]);
-        let ndc_size = [
-            size.width.to_f32() / config.width as f32 * 2.0,
-            size.height.to_f32() / config.height as f32 * 2.0,
-        ];
-
-        // Create uniforms
-        let uniforms = CheckmarkUniforms {
-            size: [size.width.to_f32(), size.height.to_f32()].into(),
-            color: command.color.to_array().into(),
-            stroke_width: command.stroke_width,
-            progress: command.progress,
-            padding: command.padding.into(),
-        };
-
-        // Update uniform buffer using the staging buffer
-        {
-            let mut buffer = UniformBuffer::new(&mut self.uniform_staging_buffer);
-            buffer.write(&uniforms).unwrap();
-        }
-        gpu_queue.write_buffer(&self.uniform_buffer, 0, &self.uniform_staging_buffer);
-
-        // Update vertex positions to match the actual position and size
-        let vertices = [
-            CheckmarkVertex {
-                position: [ndc_pos[0], ndc_pos[1] - ndc_size[1], 0.0],
-                uv: [0.0, 1.0],
-            },
-            CheckmarkVertex {
-                position: [ndc_pos[0] + ndc_size[0], ndc_pos[1] - ndc_size[1], 0.0],
-                uv: [1.0, 1.0],
-            },
-            CheckmarkVertex {
-                position: [ndc_pos[0] + ndc_size[0], ndc_pos[1], 0.0],
-                uv: [1.0, 0.0],
-            },
-            CheckmarkVertex {
-                position: [ndc_pos[0], ndc_pos[1], 0.0],
-                uv: [0.0, 0.0],
-            },
-        ];
-
-        // Update vertex buffer
-        gpu_queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
-
-        // Set pipeline and draw
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..6, 0, 0..1);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+        for (command, size, start_pos) in commands {
+            // Convert position and size to NDC coordinates
+            let ndc_pos = pixel_to_ndc(*start_pos, [config.width, config.height]);
+            let ndc_size = [
+                size.width.to_f32() / config.width as f32 * 2.0,
+                size.height.to_f32() / config.height as f32 * 2.0,
+            ];
+
+            // Create uniforms
+            let uniforms = CheckmarkUniforms {
+                size: [size.width.to_f32(), size.height.to_f32()].into(),
+                color: command.color.to_array().into(),
+                stroke_width: command.stroke_width,
+                progress: command.progress,
+                padding: command.padding.into(),
+            };
+
+            // Update uniform buffer using the staging buffer
+            {
+                let mut buffer = UniformBuffer::new(&mut self.uniform_staging_buffer);
+                buffer.write(&uniforms).unwrap();
+            }
+            gpu_queue.write_buffer(&self.uniform_buffer, 0, &self.uniform_staging_buffer);
+
+            // Update vertex positions to match the actual position and size
+            let vertices = [
+                CheckmarkVertex {
+                    position: [ndc_pos[0], ndc_pos[1] - ndc_size[1], 0.0],
+                    uv: [0.0, 1.0],
+                },
+                CheckmarkVertex {
+                    position: [ndc_pos[0] + ndc_size[0], ndc_pos[1] - ndc_size[1], 0.0],
+                    uv: [1.0, 1.0],
+                },
+                CheckmarkVertex {
+                    position: [ndc_pos[0] + ndc_size[0], ndc_pos[1], 0.0],
+                    uv: [1.0, 0.0],
+                },
+                CheckmarkVertex {
+                    position: [ndc_pos[0], ndc_pos[1], 0.0],
+                    uv: [0.0, 0.0],
+                },
+            ];
+
+            // Update vertex buffer
+            gpu_queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+
+            // Set pipeline and draw
+            render_pass.draw_indexed(0..6, 0, 0..1);
+        }
     }
 }

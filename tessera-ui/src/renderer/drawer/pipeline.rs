@@ -143,7 +143,7 @@
 //! The `scene_texture_view` parameter provides access to the current scene texture,
 //! enabling effects that sample from the background or perform post-processing.
 
-use crate::{PxPosition, px::PxSize, renderer::DrawCommand};
+use crate::{px::PxSize, renderer::DrawCommand, PxPosition};
 
 /// Core trait for implementing custom graphics rendering pipelines.
 ///
@@ -302,9 +302,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
-        command: &T,
-        size: PxSize,
-        start_pos: PxPosition,
+        commands: &[(&T, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
     );
 
@@ -417,9 +415,7 @@ pub trait ErasedDrawablePipeline {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
-        command: &dyn DrawCommand,
-        size: PxSize,
-        start_pos: PxPosition,
+        commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
     ) -> bool;
 }
@@ -480,20 +476,33 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
-        command: &dyn DrawCommand,
-        size: PxSize,
-        start_pos: PxPosition,
+        commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
     ) -> bool {
-        if let Some(cmd) = command.as_any().downcast_ref::<T>() {
+        if commands.is_empty() {
+            return true;
+        }
+
+        if commands[0].0.as_any().is::<T>() {
+            let typed_commands: Vec<(&T, PxSize, PxPosition)> = commands
+                .iter()
+                .map(|(cmd, size, pos)| {
+                    (
+                        cmd.as_any().downcast_ref::<T>().expect(
+                            "FATAL: A command in a batch has a different type than the first one.",
+                        ),
+                        *size,
+                        *pos,
+                    )
+                })
+                .collect();
+
             self.pipeline.draw(
                 gpu,
                 gpu_queue,
                 config,
                 render_pass,
-                cmd,
-                size,
-                start_pos,
+                &typed_commands,
                 scene_texture_view,
             );
             true
@@ -670,20 +679,20 @@ impl PipelineRegistry {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
-        cmd: &dyn DrawCommand,
-        size: PxSize,
-        start_pos: PxPosition,
+        commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
     ) {
+        if commands.is_empty() {
+            return;
+        }
+
         for pipeline in self.pipelines.iter_mut() {
             if pipeline.draw_erased(
                 gpu,
                 gpu_queue,
                 config,
                 render_pass,
-                cmd,
-                size,
-                start_pos,
+                commands,
                 scene_texture_view,
             ) {
                 return;
@@ -692,7 +701,7 @@ impl PipelineRegistry {
 
         panic!(
             "No pipeline found for command {:?}",
-            std::any::type_name_of_val(cmd)
+            std::any::type_name_of_val(commands[0].0)
         );
     }
 }

@@ -90,9 +90,7 @@ impl Drawer {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
-        cmd: &dyn DrawCommand,
-        size: PxSize,
-        start_pos: PxPosition,
+        commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
     ) {
         self.pipeline_registry.dispatch(
@@ -100,9 +98,7 @@ impl Drawer {
             queue,
             config,
             render_pass,
-            cmd,
-            size,
-            start_pos,
+            commands,
             scene_texture_view,
         );
     }

@@ -1,4 +1,4 @@
-use std::{any::TypeId, mem, sync::Arc};
+use std::{any::TypeId, collections::VecDeque, mem, sync::Arc};
 
 use log::{error, info, warn};
 use parking_lot::RwLock;
@@ -6,7 +6,7 @@ use wgpu::{ImageSubresourceRange, TextureFormat};
 use winit::window::Window;
 
 use crate::{
-    ComputeCommand, Px, PxPosition,
+    ComputeCommand, DrawCommand, Px, PxPosition,
     compute::resource::ComputeResourceManager,
     dp::SCALE_FACTOR,
     px::{PxRect, PxSize},
@@ -356,6 +356,19 @@ impl WgpuApp {
         // Reorder instructions based on dependencies for better batching optimization
         let commands = super::reorder::reorder_instructions(commands);
 
+        println!("Rendering {} commands", commands.len());
+        for (command, _, _, _) in &commands {
+            match command {
+                Command::Draw(_) => {
+                    println!("Processing draw command");
+                }
+                Command::Compute(_) => {
+                    println!("Processing compute command");
+                }
+            }
+        }
+        println!("Finished processing commands");
+
         let output_frame = self.surface.get_current_texture()?;
         let mut encoder = self
             .gpu
@@ -519,14 +532,6 @@ impl WgpuApp {
                         }
                     };
 
-                    // Set the scissor rect
-                    rpass.set_scissor_rect(
-                        draw_rect.x.positive(),
-                        draw_rect.y.positive(),
-                        draw_rect.width.positive(),
-                        draw_rect.height.positive(),
-                    );
-
                     self.drawer.begin_pass(
                         &self.gpu,
                         &self.queue,
@@ -535,17 +540,8 @@ impl WgpuApp {
                         scene_texture_view,
                     );
 
-                    // Submit the first command
-                    self.drawer.submit(
-                        &self.gpu,
-                        &self.queue,
-                        &self.config,
-                        &mut rpass,
-                        &*command,
-                        size,
-                        start_pos,
-                        scene_texture_view,
-                    );
+                    // Record commands to submit to the drawer
+                    let mut commands = VecDeque::new();
 
                     // Batch subsequent draw commands that require barriers but not orthogonal to draw rect
                     if command.barrier().is_some() {
@@ -598,37 +594,23 @@ impl WgpuApp {
                                 // If the new draw rectangle is not orthogonal, continue batching
                                 // Set scissor rect to cover the new draw rectangle
                                 draw_rect = draw_rect.union(&new_draw_rect);
-                                rpass.set_scissor_rect(
-                                    draw_rect.x.positive(),
-                                    draw_rect.y.positive(),
-                                    draw_rect.width.positive(),
-                                    draw_rect.height.positive(),
-                                );
                                 // Submit the command
-                                self.drawer.submit(
-                                    &self.gpu,
-                                    &self.queue,
-                                    &self.config,
-                                    &mut rpass,
-                                    &*command,
-                                    size,
-                                    start_pos,
-                                    scene_texture_view,
-                                );
+                                commands.push_back((command, command_type_id, size, start_pos));
                             } else {
                                 break; // Break if no barrier is required
                             }
                         }
                     }
 
+                    // Push the initial command to the front of the queue
+                    commands.push_front((command, command_type_id, size, start_pos));
+
                     // Batch subsequent draw commands that don't require barriers
-                    while let Some((Command::Draw(command), next_command_type_id, _, _)) =
-                        commands_iter.peek()
-                    {
-                        if command.barrier().is_some() || next_command_type_id != &command_type_id {
-                            break; // Break if a barrier is required or the type ID changes
+                    while let Some((Command::Draw(command), _, _, _)) = commands_iter.peek() {
+                        if command.barrier().is_some() {
+                            break; // Break if a barrier is required
                         }
-                        if let Some((Command::Draw(command), _, size, start_pos)) =
+                        if let Some((Command::Draw(command), command_type_id, size, start_pos)) =
                             commands_iter.next()
                         {
                             // Clamp rect to the texture size
@@ -643,24 +625,59 @@ impl WgpuApp {
                                 width: Px::from(width),
                                 height: Px::from(height),
                             });
-                            rpass.set_scissor_rect(
-                                draw_rect.x.positive(),
-                                draw_rect.y.positive(),
-                                draw_rect.width.positive(),
-                                draw_rect.height.positive(),
-                            );
-                            self.drawer.submit(
-                                &self.gpu,
-                                &self.queue,
-                                &self.config,
-                                &mut rpass,
-                                &*command,
-                                size,
-                                start_pos,
-                                scene_texture_view,
-                            );
+                            commands.push_back((command, command_type_id, size, start_pos));
                         }
                     }
+
+                    rpass.set_scissor_rect(
+                        draw_rect.x.positive(),
+                        draw_rect.y.positive(),
+                        draw_rect.width.positive(),
+                        draw_rect.height.positive(),
+                    );
+
+                    // Submit all batched draw commands to the drawer
+                    let mut buffer: Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)> =
+                        Vec::with_capacity(commands.len());
+                    let mut last_command_type_id = None;
+                    for (command, command_type_id, size, start_pos) in commands {
+                        if last_command_type_id != Some(command_type_id) {
+                            if !buffer.is_empty() {
+                                let commands = mem::take(&mut buffer); // Clear and take the buffer
+                                let commands = commands
+                                    .iter()
+                                    .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
+                                    .collect::<Vec<_>>();
+                                self.drawer.submit(
+                                    &self.gpu,
+                                    &self.queue,
+                                    &self.config,
+                                    &mut rpass,
+                                    &commands,
+                                    scene_texture_view,
+                                );
+                            }
+
+                            last_command_type_id = Some(command_type_id);
+                        }
+                        buffer.push((command, size, start_pos));
+                    }
+                    if !buffer.is_empty() {
+                        let commands = mem::take(&mut buffer); // Clear and take the buffer
+                        let commands = commands
+                            .iter()
+                            .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
+                            .collect::<Vec<_>>();
+                        self.drawer.submit(
+                            &self.gpu,
+                            &self.queue,
+                            &self.config,
+                            &mut rpass,
+                            &commands,
+                            scene_texture_view,
+                        );
+                    }
+
                     self.drawer.end_pass(
                         &self.gpu,
                         &self.queue,
