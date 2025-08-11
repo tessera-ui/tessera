@@ -130,7 +130,7 @@ impl DrawablePipeline<CrystalCommand> for CrystalPipeline {
         &mut self,
         gpu: &wgpu::Device,
         _queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
+        _config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass,
         commands: &[(&CrystalCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
