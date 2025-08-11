@@ -21,9 +21,9 @@ mod command;
 use encase::{ArrayLength, ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
+    PxPosition, PxSize,
     renderer::DrawablePipeline,
     wgpu::{self, include_wgsl},
-    PxPosition, PxSize,
 };
 
 use self::command::rect_to_uniforms;

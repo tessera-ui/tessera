@@ -15,7 +15,7 @@ use std::sync::OnceLock;
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tessera_ui::{wgpu, Color, DrawablePipeline, PxPosition, PxSize};
+use tessera_ui::{Color, DrawablePipeline, PxPosition, PxSize, wgpu};
 
 pub use command::{TextCommand, TextConstraint};
 
@@ -142,9 +142,9 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
             },
         );
 
-        let text_areas = commands.iter().map(|(command, _size, start_pos)| {
-            command.data.text_area(*start_pos)
-        });
+        let text_areas = commands
+            .iter()
+            .map(|(command, _size, start_pos)| command.data.text_area(*start_pos));
 
         self.renderer
             .prepare(
@@ -176,11 +176,17 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
 ///
 /// # Example
 ///
-/// ```
-/// use tessera_ui_basic_components::pipelines::text::TextData;
-///
-/// let data = TextData::new("Hello".to_string(), color, 16.0, 1.2, constraint);
-/// ```
+/**
+```rust
+use tessera_ui_basic_components::pipelines::text::TextData;
+use tessera_ui::Color;
+use tessera_ui_basic_components::pipelines::text::TextConstraint;
+
+let color = Color::from_rgb(255, 255, 255);
+let constraint = TextConstraint { max_width: 200.0, max_height: 50.0 };
+let data = TextData::new("Hello".to_string(), color, 16.0, 1.2, constraint);
+```
+*/
 #[derive(Debug, Clone)]
 pub struct TextData {
     /// glyphon text buffer

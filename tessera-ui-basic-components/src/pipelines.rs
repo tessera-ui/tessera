@@ -5,7 +5,7 @@ pub(crate) mod fluid_glass;
 pub mod mean;
 mod pos_misc;
 pub mod shape;
-mod text;
+pub mod text;
 
 pub mod image;
 

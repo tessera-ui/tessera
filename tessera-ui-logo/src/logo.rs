@@ -132,66 +132,59 @@ impl DrawablePipeline<CrystalCommand> for CrystalPipeline {
         _queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass,
-        command: &CrystalCommand,
-        size: PxSize,
-        start_pos: PxPosition,
+        commands: &[(&CrystalCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
     ) {
-        if command.vertices.is_empty() {
-            return;
+        for (command, size, _pos) in commands {
+            if command.vertices.is_empty() {
+                continue;
+            }
+
+            let component_size = [size.width.to_f32(), size.height.to_f32()];
+
+            let gpu_vertices: Vec<GpuVertex> = command
+                .vertices
+                .iter()
+                .map(|v| GpuVertex {
+                    position: v.position,
+                    normal: v.normal,
+                })
+                .collect();
+
+            let vertex_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Crystal Vertex Buffer"),
+                contents: bytemuck::cast_slice(&gpu_vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+            let uniforms = Uniforms {
+                color: command.base_color,
+                time: 0.0, // Time is no longer used for the logo animation
+                size: component_size,
+                seed: command.seed,
+                _padding1: [0],
+                _padding2: [0, 0],
+            };
+            let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Crystal Uniform Buffer"),
+                contents: bytemuck::bytes_of(&uniforms),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
+            let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &self.bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                }],
+                label: Some("crystal_bind_group"),
+            });
+
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(0, &bind_group, &[]);
+            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            render_pass.draw(0..command.vertices.len() as u32, 0..1);
         }
-
-        let screen_size = [config.width as f32, config.height as f32];
-        let component_size = [size.width.to_f32(), size.height.to_f32()];
-
-        let to_ndc = |pos: [f32; 2]| {
-            let ndc_x = (start_pos.x.to_f32() + pos[0]) / screen_size[0] * 2.0 - 1.0;
-            let ndc_y = -((start_pos.y.to_f32() + pos[1]) / screen_size[1] * 2.0 - 1.0);
-            [ndc_x, ndc_y]
-        };
-
-        let gpu_vertices: Vec<GpuVertex> = command
-            .vertices
-            .iter()
-            .map(|v| GpuVertex {
-                position: to_ndc(v.position),
-                normal: v.normal,
-            })
-            .collect();
-
-        let vertex_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Crystal Vertex Buffer"),
-            contents: bytemuck::cast_slice(&gpu_vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let uniforms = Uniforms {
-            color: command.base_color,
-            time: 0.0, // Time is no longer used for the logo animation
-            size: component_size,
-            seed: command.seed,
-            _padding1: [0],
-            _padding2: [0, 0],
-        };
-        let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Crystal Uniform Buffer"),
-            contents: bytemuck::bytes_of(&uniforms),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-
-        let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-            label: Some("crystal_bind_group"),
-        });
-
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &bind_group, &[]);
-        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        render_pass.draw(0..command.vertices.len() as u32, 0..1);
     }
 }
 

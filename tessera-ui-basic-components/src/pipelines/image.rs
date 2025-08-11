@@ -6,7 +6,7 @@ use std::{
 
 use encase::{ShaderType, UniformBuffer};
 use glam::Vec4;
-use tessera_ui::{renderer::drawer::DrawablePipeline, wgpu, DrawCommand, PxPosition, PxSize};
+use tessera_ui::{DrawCommand, PxPosition, PxSize, renderer::drawer::DrawablePipeline, wgpu};
 
 #[derive(Debug, Clone)]
 /// Image pixel data for rendering.
@@ -203,8 +203,7 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
                         sample_count: 1,
                         dimension: wgpu::TextureDimension::D2,
                         format: config.format,
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING
-                            | wgpu::TextureUsages::COPY_DST,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                         label: Some("diffuse_texture"),
                         view_formats: &[],
                     });

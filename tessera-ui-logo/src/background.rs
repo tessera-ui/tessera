@@ -108,35 +108,35 @@ impl DrawablePipeline<BackgroundCommand> for BackgroundPipeline {
         _queue: &wgpu::Queue,
         _config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass,
-        command: &BackgroundCommand,
-        size: PxSize,
-        _start_pos: PxPosition,
+        commands: &[(&BackgroundCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
     ) {
-        let uniforms = Uniforms {
-            time: command.time,
-            width: size.width.to_f32(),
-            height: size.height.to_f32(),
-            _padding: 0,
-        };
-        let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Background Uniform Buffer"),
-            contents: bytemuck::bytes_of(&uniforms),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        for (command, size, _pos) in commands {
+            let uniforms = Uniforms {
+                time: command.time,
+                width: size.width.to_f32(),
+                height: size.height.to_f32(),
+                _padding: 0,
+            };
+            let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Background Uniform Buffer"),
+                contents: bytemuck::bytes_of(&uniforms),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
 
-        let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-            label: Some("background_bind_group"),
-        });
+            let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &self.bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                }],
+                label: Some("background_bind_group"),
+            });
 
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &bind_group, &[]);
-        render_pass.draw(0..4, 0..1);
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(0, &bind_group, &[]);
+            render_pass.draw(0..4, 0..1);
+        }
     }
 }
 

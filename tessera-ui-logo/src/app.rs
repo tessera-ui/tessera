@@ -1,11 +1,7 @@
 use std::time::Instant;
 
-use tessera_ui::{Px, shard, tessera};
-use tessera_ui_basic_components::{
-    alignment::Alignment,
-    boxed::{AsBoxedItem, BoxedArgsBuilder, boxed},
-    spacer::{SpacerArgsBuilder, spacer},
-};
+use tessera_ui::{shard, tessera};
+use tessera_ui_basic_components::{alignment::Alignment, boxed::AsBoxedItem};
 
 use crate::{
     background::{BackgroundArgsBuilder, background},
@@ -30,46 +26,8 @@ impl Default for AppState {
 pub fn app(#[state] state: AppState) {
     let time = state.start_time.elapsed().as_secs_f32();
 
-    let shard = (move || crystal_shard(CrystalShardArgsBuilder::default().build().unwrap()))
+    let logo = (move || crystal_shard(CrystalShardArgsBuilder::default().build().unwrap()))
         .into_boxed_item();
-
-    // The existing logo component, which centers the shard
-    let inner_logo = (move || {
-        boxed(
-            BoxedArgsBuilder::default()
-                .alignment(Alignment::Center)
-                .build()
-                .unwrap(),
-            [shard],
-        );
-    })
-    .into_boxed_item();
-
-    // A spacer that is larger than the logo, creating a padding effect.
-    // The logo is ~400px, so we add 100px padding on all sides.
-    let padding_spacer = (move || {
-        spacer(
-            SpacerArgsBuilder::default()
-                .width(tessera_ui::DimensionValue::Fixed(Px(500)))
-                .height(tessera_ui::DimensionValue::Fixed(Px(500)))
-                .build()
-                .unwrap(),
-        )
-    })
-    .into_boxed_item();
-
-    // The outer container that holds both the logo and the spacer.
-    // The spacer forces the size, and the logo is centered within it.
-    let padded_logo = (move || {
-        boxed(
-            BoxedArgsBuilder::default()
-                .alignment(Alignment::Center)
-                .build()
-                .unwrap(),
-            [padding_spacer, inner_logo],
-        );
-    })
-    .into_boxed_item();
 
     let background_args = BackgroundArgsBuilder::default()
         .time(time)
@@ -77,5 +35,5 @@ pub fn app(#[state] state: AppState) {
         .build()
         .unwrap();
 
-    background(background_args, [padded_logo]);
+    background(background_args, [logo]);
 }

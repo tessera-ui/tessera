@@ -143,7 +143,7 @@
 //! The `scene_texture_view` parameter provides access to the current scene texture,
 //! enabling effects that sample from the background or perform post-processing.
 
-use crate::{px::PxSize, renderer::DrawCommand, PxPosition};
+use crate::{PxPosition, px::PxSize, renderer::DrawCommand};
 
 /// Core trait for implementing custom graphics rendering pipelines.
 ///
