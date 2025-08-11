@@ -1,0 +1,30 @@
+[package]
+name = "tessera-example-calculator"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+name = "tessera_example_calculator"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tessera_example_calculator"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.98"
+bytemuck = "1.23.1"
+dashmap = "6.1.0"
+derive_builder = "0.20.2"
+log = "0.4.27"
+parking_lot = "0.12.4"
+rsc = "3.0.0"
+tessera-ui = { path = "../tessera-ui" }
+tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+flexi_logger = { version = "0.31.2", features = ["async", "trc"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.15.1"

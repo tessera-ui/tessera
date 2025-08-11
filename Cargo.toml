@@ -6,6 +6,7 @@ members = [
     "tessera-ui-basic-components",
     "tessera-ui-macros",
     "tessera-ui-shard",
+    "tessera-example-calculator"
 ]
 
 [workspace.package]
