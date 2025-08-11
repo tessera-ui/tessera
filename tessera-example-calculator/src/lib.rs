@@ -6,8 +6,33 @@ use tessera_ui::{Renderer, router::router_root};
 
 use crate::app::AppDestination;
 
+#[cfg(not(target_os = "android"))]
+use clap::Parser;
+
 #[cfg(target_os = "android")]
 use tessera_ui::winit::platform::android::activity::AndroidApp;
+
+#[cfg(not(target_os = "android"))]
+#[derive(Parser, Debug, Clone, Copy, clap::ValueEnum)]
+enum CalStyle {
+    Glass,
+    Material,
+}
+
+#[cfg(target_os = "android")]
+#[derive(Clone, Copy, Debug)]
+enum CalStyle {
+    Glass,
+    Material,
+}
+
+#[cfg(not(target_os = "android"))]
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    #[arg(short, long, value_enum, default_value_t = CalStyle::Glass)]
+    style: CalStyle,
+}
 
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
@@ -18,7 +43,11 @@ fn android_main(android_app: AndroidApp) {
     android_logger::init_once(Config::default().with_max_level(LevelFilter::Info));
 
     Renderer::run(
-        || router_root(AppDestination {}),
+        || {
+            router_root(AppDestination {
+                style: CalStyle::Glass,
+            })
+        },
         |app| {
             tessera_ui_basic_components::pipelines::register_pipelines(app);
             let background_pipeline = app::pipelines::background::BackgroundPipeline::new(
@@ -40,13 +69,14 @@ fn main() {}
 #[cfg(not(target_os = "android"))]
 pub fn desktop_main() -> anyhow::Result<()> {
     use tessera_ui::renderer::TesseraConfig;
+    let cli = Cli::parse();
 
     let _logger = flexi_logger::Logger::try_with_env_or_str("info")?
         .write_mode(flexi_logger::WriteMode::Async)
         .start()?;
 
     Renderer::run_with_config(
-        || router_root(AppDestination {}),
+        move || router_root(AppDestination { style: cli.style }),
         |app| {
             tessera_ui_basic_components::pipelines::register_pipelines(app);
             let background_pipeline = app::pipelines::background::BackgroundPipeline::new(

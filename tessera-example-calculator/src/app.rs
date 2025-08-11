@@ -9,6 +9,8 @@ use parking_lot::RwLock;
 use tessera_ui::{shard, tessera};
 use tessera_ui_basic_components::{RippleState, column::ColumnArgsBuilder, column_ui};
 
+use crate::CalStyle;
+
 use display_screen::display_screen;
 use keyboard::keyboard;
 use pipelines::background::background;
@@ -33,29 +35,32 @@ impl Default for AppState {
 
 #[tessera]
 #[shard]
-pub fn app(#[state] state: AppState) {
-    background(|| {
-        column_ui!(
-            ColumnArgsBuilder::default()
-                .width(tessera_ui::DimensionValue::FILLED)
-                .height(tessera_ui::DimensionValue::FILLED)
-                .build()
-                .unwrap(),
-            {
-                let state = state.clone();
-                move || {
-                    display_screen(state);
-                }
-            },
-            (
+pub fn app(#[state] state: AppState, style: CalStyle) {
+    background(
+        || {
+            column_ui!(
+                ColumnArgsBuilder::default()
+                    .width(tessera_ui::DimensionValue::FILLED)
+                    .height(tessera_ui::DimensionValue::FILLED)
+                    .build()
+                    .unwrap(),
                 {
                     let state = state.clone();
                     move || {
-                        keyboard(state);
+                        display_screen(state, style);
                     }
                 },
-                1.0
-            )
-        );
-    });
+                (
+                    {
+                        let state = state.clone();
+                        move || {
+                            keyboard(state, style);
+                        }
+                    },
+                    1.0
+                )
+            );
+        },
+        style,
+    );
 }

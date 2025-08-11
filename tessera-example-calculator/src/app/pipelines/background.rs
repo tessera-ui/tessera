@@ -2,10 +2,13 @@ use std::{sync::OnceLock, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, DrawCommand, DrawablePipeline, Px, PxPosition,
+    Color, ComputedData, Constraint, DimensionValue, DrawCommand, DrawablePipeline, Px, PxPosition,
     PxSize, tessera,
     wgpu::{self, util::DeviceExt},
 };
+use tessera_ui_basic_components::surface::{SurfaceArgsBuilder, surface};
+
+use crate::CalStyle;
 
 #[derive(Clone, Debug)]
 pub struct BackgroundCommand {
@@ -138,35 +141,53 @@ impl DrawablePipeline<BackgroundCommand> for BackgroundPipeline {
 static START_AT: OnceLock<Instant> = OnceLock::new();
 
 #[tessera]
-pub fn background(child: impl FnOnce()) {
-    child();
+pub fn background(child: impl FnOnce(), style: CalStyle) {
+    match style {
+        CalStyle::Glass => {
+            child();
 
-    measure(Box::new(move |input| {
-        let width = match input.parent_constraint.width {
-            DimensionValue::Fixed(v) => v,
-            DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
-            DimensionValue::Fill { max, .. } => max.unwrap_or(Px(0)),
-        };
-        let height = match input.parent_constraint.height {
-            DimensionValue::Fixed(v) => v,
-            DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
-            DimensionValue::Fill { max, .. } => max.unwrap_or(Px(0)),
-        };
+            measure(Box::new(move |input| {
+                let width = match input.parent_constraint.width {
+                    DimensionValue::Fixed(v) => v,
+                    DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
+                    DimensionValue::Fill { max, .. } => max.unwrap_or(Px(0)),
+                };
+                let height = match input.parent_constraint.height {
+                    DimensionValue::Fixed(v) => v,
+                    DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
+                    DimensionValue::Fill { max, .. } => max.unwrap_or(Px(0)),
+                };
 
-        let time = START_AT.get_or_init(Instant::now).elapsed().as_secs_f32();
+                let time = START_AT.get_or_init(Instant::now).elapsed().as_secs_f32();
 
-        input
-            .metadata_mut()
-            .push_draw_command(BackgroundCommand { time });
+                input
+                    .metadata_mut()
+                    .push_draw_command(BackgroundCommand { time });
 
-        let child_constraint =
-            Constraint::new(DimensionValue::Fixed(width), DimensionValue::Fixed(height));
+                let child_constraint =
+                    Constraint::new(DimensionValue::Fixed(width), DimensionValue::Fixed(height));
 
-        if let Some(child_id) = input.children_ids.first() {
-            input.measure_child(*child_id, &child_constraint)?;
-            input.place_child(*child_id, [0, 0].into());
+                if let Some(child_id) = input.children_ids.first() {
+                    input.measure_child(*child_id, &child_constraint)?;
+                    input.place_child(*child_id, [0, 0].into());
+                }
+
+                Ok(ComputedData { width, height })
+            }));
         }
-
-        Ok(ComputedData { width, height })
-    }));
+        CalStyle::Material => {
+            surface(
+                SurfaceArgsBuilder::default()
+                    .color(Color::WHITE)
+                    .width(DimensionValue::FILLED)
+                    .height(DimensionValue::FILLED)
+                    .build()
+                    .unwrap(),
+                None,
+                || {
+                    child();
+                },
+            );
+        }
+    }
 }

@@ -110,6 +110,12 @@ impl Color {
     /// Full intensity blue with no red or green components, fully opaque.
     pub const BLUE: Color = Color::new(0.0, 0.0, 1.0, 1.0);
 
+    /// Gray color
+    pub const GRAY: Color = Color::new(0.12, 0.12, 0.12, 1.0);
+
+    /// Alias for [Color::GRAY].
+    pub const GREY: Color = Color::GRAY;
+
     /// Creates a new `Color` from four `f32` values (red, green, blue, alpha).
     ///
     /// # Parameters
