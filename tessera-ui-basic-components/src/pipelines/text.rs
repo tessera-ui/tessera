@@ -182,8 +182,8 @@ use tessera_ui_basic_components::pipelines::text::TextData;
 use tessera_ui::Color;
 use tessera_ui_basic_components::pipelines::text::TextConstraint;
 
-let color = Color::from_rgb(255, 255, 255);
-let constraint = TextConstraint { max_width: 200.0, max_height: 50.0 };
+let color = Color::from_rgb(1.0, 1.0, 1.0);
+let constraint = TextConstraint { max_width: Some(200.0), max_height: Some(50.0) };
 let data = TextData::new("Hello".to_string(), color, 16.0, 1.2, constraint);
 ```
 */
