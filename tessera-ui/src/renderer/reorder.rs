@@ -147,7 +147,8 @@ impl Ord for PriorityNode {
         self.category
             .cmp(&other.category)
             .then_with(|| self.type_id.cmp(&other.type_id))
-            .then_with(|| other.original_index.cmp(&self.original_index))
+            // To make the sort stable, we prefer the one that appeared first.
+            .then_with(|| self.original_index.cmp(&other.original_index).reverse())
     }
 }
 
@@ -210,20 +211,38 @@ fn priority_topological_sort(
     }
 
     let mut sorted_list = Vec::with_capacity(instructions.len());
-    while let Some(priority_node) = ready_queue.pop() {
-        let u = priority_node.node_index;
-        sorted_list.push(u);
+    while let Some(batch_prototype) = ready_queue.pop() {
+        let batch_category = batch_prototype.category;
+        let batch_type_id = batch_prototype.type_id;
 
-        for v in graph.neighbors(u) {
-            in_degree[v.index()] -= 1;
-            if in_degree[v.index()] == 0 {
-                let info = &instructions[v.index()];
-                ready_queue.push(PriorityNode {
-                    category: info.category,
-                    type_id: info.type_id,
-                    original_index: info.original_index,
-                    node_index: v,
-                });
+        let mut batch = vec![batch_prototype];
+        let mut temp_heap = BinaryHeap::new();
+
+        while let Some(next_node) = ready_queue.pop() {
+            if next_node.category == batch_category && next_node.type_id == batch_type_id {
+                batch.push(next_node);
+            } else {
+                temp_heap.push(next_node);
+            }
+        }
+        ready_queue = temp_heap;
+        batch.sort_by_key(|n| n.original_index);
+
+        for priority_node in batch {
+            let u = priority_node.node_index;
+            sorted_list.push(u);
+
+            for v in graph.neighbors(u) {
+                in_degree[v.index()] -= 1;
+                if in_degree[v.index()] == 0 {
+                    let info = &instructions[v.index()];
+                    ready_queue.push(PriorityNode {
+                        category: info.category,
+                        type_id: info.type_id,
+                        original_index: info.original_index,
+                        node_index: v,
+                    });
+                }
             }
         }
     }
@@ -298,7 +317,7 @@ mod tests {
     use crate::{
         px::{Px, PxPosition, PxRect, PxSize},
         renderer::{
-            command::Command, compute::ComputeCommand, drawer::DrawCommand, BarrierRequirement,
+            BarrierRequirement, command::Command, compute::ComputeCommand, drawer::DrawCommand,
         },
     };
     use std::any::TypeId;
@@ -319,11 +338,33 @@ mod tests {
     }
 
     #[derive(Debug)]
+    struct MockDrawCommand2 {
+        barrier_req: Option<BarrierRequirement>,
+    }
+
+    impl DrawCommand for MockDrawCommand2 {
+        fn barrier(&self) -> Option<BarrierRequirement> {
+            self.barrier_req.clone()
+        }
+    }
+
+    #[derive(Debug)]
     struct MockComputeCommand {
         barrier_req: BarrierRequirement,
     }
 
     impl ComputeCommand for MockComputeCommand {
+        fn barrier(&self) -> BarrierRequirement {
+            self.barrier_req.clone()
+        }
+    }
+
+    #[derive(Debug)]
+    struct MockComputeCommand2 {
+        barrier_req: BarrierRequirement,
+    }
+
+    impl ComputeCommand for MockComputeCommand2 {
         fn barrier(&self) -> BarrierRequirement {
             self.barrier_req.clone()
         }
@@ -352,6 +393,33 @@ mod tests {
             (
                 Command::Draw(Box::new(cmd)),
                 TypeId::of::<MockDrawCommand>(),
+                size,
+                pos,
+            )
+        }
+    }
+
+    fn create_cmd2(
+        pos: PxPosition,
+        barrier_req: Option<BarrierRequirement>,
+        is_compute: bool,
+    ) -> (Command, TypeId, PxSize, PxPosition) {
+        let size = PxSize::new(Px(10), Px(10));
+        if is_compute {
+            let cmd = MockComputeCommand2 {
+                barrier_req: barrier_req.unwrap_or(BarrierRequirement::Global),
+            };
+            (
+                Command::Compute(Box::new(cmd)),
+                TypeId::of::<MockComputeCommand2>(),
+                size,
+                pos,
+            )
+        } else {
+            let cmd = MockDrawCommand2 { barrier_req };
+            (
+                Command::Draw(Box::new(cmd)),
+                TypeId::of::<MockDrawCommand2>(),
                 size,
                 pos,
             )
@@ -401,6 +469,40 @@ mod tests {
         let reordered = reorder_instructions(commands);
         let reordered_positions = get_positions(&reordered);
         assert_eq!(reordered_positions, original_positions);
+    }
+
+    #[test]
+    fn test_opt() {
+        let commands = vec![
+            create_cmd(PxPosition::new(Px(0), Px(0)), None, false), // 0
+            create_cmd2(PxPosition::new(Px(10), Px(10)), None, false), // 1
+            create_cmd(PxPosition::new(Px(20), Px(20)), None, false), // 2
+        ];
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+        assert_eq!(
+            vec![
+                PxPosition::new(Px(0), Px(0)),
+                PxPosition::new(Px(20), Px(20)),
+                PxPosition::new(Px(10), Px(10)),
+            ],
+            reordered_positions
+        ); // Instructions with the same type and orthogonal should be grouped together
+        let commands = vec![
+            create_cmd(PxPosition::new(Px(0), Px(0)), None, false), // 0
+            create_cmd2(PxPosition::new(Px(10), Px(10)), None, false), // 1
+            create_cmd(PxPosition::new(Px(5), Px(5)), None, false), // 2
+        ];
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+        assert_eq!(
+            vec![
+                PxPosition::new(Px(0), Px(0)),
+                PxPosition::new(Px(10), Px(10)),
+                PxPosition::new(Px(5), Px(5)),
+            ],
+            reordered_positions
+        ); // Instructions with the same type but not orthogonal should not grouped together
     }
 
     #[test]
@@ -456,7 +558,7 @@ mod tests {
                     Px(10),
                     Px(10),
                 ))), // rect B
-                true,  // Compute
+                true, // Compute
             ), // 1
             create_cmd(PxPosition::new(Px(200), Px(200)), None, false), // 2: ContinuationDraw
         ];
