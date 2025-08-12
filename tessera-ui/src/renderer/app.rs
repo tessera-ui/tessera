@@ -379,27 +379,8 @@ impl WgpuApp {
             self.compute_commands.clear();
         }
 
-        // Initial clear pass
-        {
-            let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
-                (msaa_view, Some(&write_target.view))
-            } else {
-                (&write_target.view, None)
-            };
-            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Initial Clear Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    depth_slice: None,
-                    resolve_target,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                ..Default::default()
-            });
-        }
+        // Flag for first pass
+        let mut is_first_pass = true;
 
         // Frame-level begin for all pipelines
         self.drawer
@@ -449,6 +430,16 @@ impl WgpuApp {
                     } else {
                         (&write_target.view, None)
                     };
+
+                    let load_ops = if is_first_pass {
+                        is_first_pass = false;
+                        // If this is the first pass, we load the texture
+                        wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                    } else {
+                        // Otherwise, we load the existing content
+                        wgpu::LoadOp::Load
+                    };
+
                     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("Render Pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -456,7 +447,7 @@ impl WgpuApp {
                             depth_slice: None,
                             resolve_target,
                             ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
+                                load: load_ops,
                                 store: wgpu::StoreOp::Store,
                             },
                         })],
