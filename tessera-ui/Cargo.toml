@@ -22,7 +22,7 @@ wgpu = "26.0.1"
 indextree = "4.7.4"
 rayon = "1.10.0"
 dashmap = "6.1.0"
-uuid = { version = "1.17.0", features = ["v4"] }
+uuid = { version = "1.18.0", features = ["v4"] }
 tessera-ui-macros = { path = "../tessera-ui-macros" }
 tessera-ui-shard = { path = "../tessera-ui-shard", optional = true }
 petgraph = "0.8.2"
