@@ -291,3 +291,248 @@ fn build_dependency_graph(instructions: &[InstructionInfo]) -> DiGraph<(), ()> {
 
     graph
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        px::{Px, PxPosition, PxRect, PxSize},
+        renderer::{
+            command::Command, compute::ComputeCommand, drawer::DrawCommand, BarrierRequirement,
+        },
+    };
+    use std::any::TypeId;
+    use std::fmt::Debug;
+
+    // --- Mock Commands ---
+    // Mocks to simulate different command types for testing reordering logic.
+
+    #[derive(Debug)]
+    struct MockDrawCommand {
+        barrier_req: Option<BarrierRequirement>,
+    }
+
+    impl DrawCommand for MockDrawCommand {
+        fn barrier(&self) -> Option<BarrierRequirement> {
+            self.barrier_req.clone()
+        }
+    }
+
+    #[derive(Debug)]
+    struct MockComputeCommand {
+        barrier_req: BarrierRequirement,
+    }
+
+    impl ComputeCommand for MockComputeCommand {
+        fn barrier(&self) -> BarrierRequirement {
+            self.barrier_req.clone()
+        }
+    }
+
+    // --- Helper Functions ---
+
+    fn create_cmd(
+        pos: PxPosition,
+        barrier_req: Option<BarrierRequirement>,
+        is_compute: bool,
+    ) -> (Command, TypeId, PxSize, PxPosition) {
+        let size = PxSize::new(Px(10), Px(10));
+        if is_compute {
+            let cmd = MockComputeCommand {
+                barrier_req: barrier_req.unwrap_or(BarrierRequirement::Global),
+            };
+            (
+                Command::Compute(Box::new(cmd)),
+                TypeId::of::<MockComputeCommand>(),
+                size,
+                pos,
+            )
+        } else {
+            let cmd = MockDrawCommand { barrier_req };
+            (
+                Command::Draw(Box::new(cmd)),
+                TypeId::of::<MockDrawCommand>(),
+                size,
+                pos,
+            )
+        }
+    }
+
+    fn get_positions(commands: &[(Command, TypeId, PxSize, PxPosition)]) -> Vec<PxPosition> {
+        commands.iter().map(|(_, _, _, pos)| *pos).collect()
+    }
+
+    // --- Test Cases ---
+
+    #[test]
+    fn test_empty_instructions() {
+        let commands = vec![];
+        let reordered = reorder_instructions(commands);
+        assert!(reordered.is_empty());
+    }
+
+    #[test]
+    fn test_no_dependencies_preserves_order() {
+        let commands = vec![
+            create_cmd(PxPosition::new(Px(0), Px(0)), None, false), // 0
+            create_cmd(PxPosition::new(Px(20), Px(0)), None, false), // 1
+        ];
+        let original_positions = get_positions(&commands);
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+        assert_eq!(reordered_positions, original_positions);
+    }
+
+    #[test]
+    fn test_compute_before_barrier_preserves_order() {
+        let commands = vec![
+            create_cmd(
+                PxPosition::new(Px(0), Px(0)),
+                Some(BarrierRequirement::Global),
+                true,
+            ), // 0: Compute
+            create_cmd(
+                PxPosition::new(Px(20), Px(20)),
+                Some(BarrierRequirement::Global),
+                false,
+            ), // 1: BarrierDraw
+        ];
+        let original_positions = get_positions(&commands);
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+        assert_eq!(reordered_positions, original_positions);
+    }
+
+    #[test]
+    fn test_overlapping_draw_preserves_order() {
+        let commands = vec![
+            create_cmd(PxPosition::new(Px(0), Px(0)), None, false), // 0
+            create_cmd(PxPosition::new(Px(5), Px(5)), None, false), // 1 (overlaps with 0)
+        ];
+        let original_positions = get_positions(&commands);
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+        assert_eq!(reordered_positions, original_positions);
+    }
+
+    #[test]
+    fn test_draw_before_overlapping_compute_preserves_order() {
+        let commands = vec![
+            create_cmd(
+                PxPosition::new(Px(0), Px(0)),
+                Some(BarrierRequirement::Global),
+                false,
+            ), // 0: BarrierDraw
+            create_cmd(
+                PxPosition::new(Px(20), Px(20)),
+                Some(BarrierRequirement::Global),
+                true,
+            ), // 1: Compute
+        ];
+        let original_positions = get_positions(&commands);
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+        assert_eq!(reordered_positions, original_positions);
+    }
+
+    #[test]
+    fn test_reorder_based_on_priority_with_no_overlap() {
+        let commands = vec![
+            create_cmd(
+                PxPosition::new(Px(0), Px(0)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(0),
+                    Px(0),
+                    Px(10),
+                    Px(10),
+                ))), // rect A
+                false, // BarrierDraw
+            ), // 0
+            create_cmd(
+                PxPosition::new(Px(100), Px(100)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(100),
+                    Px(100),
+                    Px(10),
+                    Px(10),
+                ))), // rect B
+                true,  // Compute
+            ), // 1
+            create_cmd(PxPosition::new(Px(200), Px(200)), None, false), // 2: ContinuationDraw
+        ];
+        let original_positions = get_positions(&commands);
+        // No dependencies as all rects are orthogonal.
+        // Priority: Compute (1) > BarrierDraw (0) > ContinuationDraw (2)
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+
+        let expected_positions = vec![
+            original_positions[1], // Compute
+            original_positions[0], // BarrierDraw
+            original_positions[2], // ContinuationDraw
+        ];
+        assert_eq!(reordered_positions, expected_positions);
+    }
+
+    #[test]
+    fn test_complex_reordering_with_dependencies() {
+        let commands = vec![
+            // 0: Compute. Must run first.
+            create_cmd(
+                PxPosition::new(Px(0), Px(0)),
+                Some(BarrierRequirement::Global),
+                true,
+            ),
+            // 1: BarrierDraw. Depends on 0. Orthogonal to 4.
+            create_cmd(
+                PxPosition::new(Px(50), Px(50)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(50),
+                    Px(50),
+                    Px(10),
+                    Px(10),
+                ))),
+                false,
+            ),
+            // 2: ContinuationDraw. Overlaps with 3.
+            create_cmd(PxPosition::new(Px(200), Px(200)), None, false),
+            // 3: ContinuationDraw.
+            create_cmd(PxPosition::new(Px(205), Px(205)), None, false),
+            // 4: BarrierDraw. Depends on 0. Orthogonal to 1.
+            create_cmd(
+                PxPosition::new(Px(80), Px(80)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(80),
+                    Px(80),
+                    Px(10),
+                    Px(10),
+                ))),
+                false,
+            ),
+        ];
+        let original_positions = get_positions(&commands);
+
+        // Dependencies:
+        // 0 -> 1 (Compute -> Barrier)
+        // 0 -> 4 (Compute -> Barrier)
+        // 2 -> 3 (Overlapping Draw)
+
+        // Expected order:
+        // Ready queue starts with [0, 2] -> prio sort -> [0, 2]
+        // 1. Pop 0. Result: [0]. Add 1, 4 to queue. Queue: [1, 4, 2]. Prio sort: [1, 4, 2] (Barrier > Contin)
+        // 2. Pop 1. Result: [0, 1].
+        // 3. Pop 4. Result: [0, 1, 4].
+        // 4. Pop 2. Result: [0, 1, 4, 2]. Add 3 to queue. Queue: [3]
+        // 5. Pop 3. Result: [0, 1, 4, 2, 3].
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+        let expected_positions = vec![
+            original_positions[0],
+            original_positions[1],
+            original_positions[4],
+            original_positions[2],
+            original_positions[3],
+        ];
+        assert_eq!(reordered_positions, expected_positions);
+    }
+}
