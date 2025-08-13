@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::VecDeque, mem, sync::Arc};
+use std::{any::TypeId, mem, sync::Arc};
 
 use log::{error, info, warn};
 use parking_lot::RwLock;
@@ -388,13 +388,114 @@ impl WgpuApp {
             .begin_all_frames(&self.gpu, &self.queue, &self.config);
 
         // Main command processing loop with barrier handling
-        let mut commands_iter = commands.into_iter().peekable();
         let mut scene_texture_view = &read_target.view;
-        while let Some((command, command_type_id, size, start_pos)) = commands_iter.next() {
-            // Handle barrier requirements by swapping buffers and copying content
-            if command.barrier().is_some() {
+        let mut commands_in_pass: Vec<(Box<dyn DrawCommand>, TypeId, PxSize, PxPosition, PxRect)> =
+            Vec::new();
+        let mut barrier_draw_rects_in_pass: Vec<PxRect> = Vec::new();
+
+        for (command, command_type_id, size, start_pos) in commands {
+            let need_new_pass = commands_in_pass
+                .last()
+                .map(|(cmd, _, _, _, _)| {
+                    match (cmd.barrier(), command.barrier()) {
+                        (None, Some(_)) => true, // If the last command has no barrier but the next one does, we need a new pass
+                        (Some(_), Some(barrier)) => {
+                            // If both have barriers, we need to check if they are orthogonal
+                            // First extract the last barrier's draw rect
+                            let last_draw_rect =
+                                extract_draw_rect(Some(barrier), size, start_pos, texture_size);
+                            // Then check if the last draw rect is orthogonal to all existing draw rects in this pass
+                            !barrier_draw_rects_in_pass
+                                .iter()
+                                .all(|dr| dr.is_orthogonal(&last_draw_rect)) // We don't need a new pass if the last command's barrier is orthogonal to all existing draw rects
+                        }
+                        (Some(_), None) => false, // If the last command has a barrier but the next one does not, we can continue in the same pass
+                        (None, None) => false, // If both have no barriers, we can continue in the same pass
+                    }
+                })
+                .unwrap_or(false);
+
+            if need_new_pass {
+                // A ping-pong operation is needed if the first command in the pass has a barrier
+                if commands_in_pass
+                    .first()
+                    .map(|(cmd, _, _, _, _)| cmd.barrier().is_some())
+                    .unwrap_or(false)
+                {
+                    // Perform a ping-pong operation
+                    mem::swap(&mut read_target, &mut write_target);
+
+                    encoder.copy_texture_to_texture(
+                        read_target.texture.as_image_copy(),
+                        write_target.texture.as_image_copy(),
+                        texture_size,
+                    );
+                    // --- Apply compute effect ---
+                    let final_view_after_compute = if !self.compute_commands.is_empty() {
+                        let compute_commands = mem::take(&mut self.compute_commands);
+                        Self::do_compute(
+                            &mut encoder,
+                            compute_commands,
+                            &mut self.compute_pipeline_registry,
+                            &self.gpu,
+                            &self.queue,
+                            &self.config,
+                            &mut self.resource_manager.write(),
+                            &read_target.view,
+                            &self.compute_target_a,
+                            &self.compute_target_b,
+                        )
+                    } else {
+                        &read_target.view
+                    };
+                    scene_texture_view = final_view_after_compute;
+                }
+
+                // Render the current pass before starting a new one
+                render_current_pass(
+                    &self.msaa_view,
+                    &mut is_first_pass,
+                    &mut encoder,
+                    write_target,
+                    &mut commands_in_pass,
+                    scene_texture_view,
+                    &mut self.drawer,
+                    &self.gpu,
+                    &self.queue,
+                    &self.config,
+                );
+                commands_in_pass.clear();
+                barrier_draw_rects_in_pass.clear();
+            }
+
+            match command {
+                Command::Draw(cmd) => {
+                    // Extract the draw rectangle based on the command's barrier, size and position
+                    let draw_rect = extract_draw_rect(cmd.barrier(), size, start_pos, texture_size);
+                    // If the command has a barrier, we need to track the draw rect for orthogonality checks
+                    if cmd.barrier().is_some() {
+                        barrier_draw_rects_in_pass.push(draw_rect);
+                    }
+                    // Add the command to the current pass
+                    commands_in_pass.push((cmd, command_type_id, size, start_pos, draw_rect));
+                }
+                Command::Compute(cmd) => {
+                    // Add the compute command to the current pass
+                    self.compute_commands.push((cmd, size, start_pos));
+                }
+            }
+        }
+
+        // After processing all commands, we need to render the last pass if there are any commands left
+        if !commands_in_pass.is_empty() {
+            // A ping-pong operation is needed if the first command in the pass has a barrier
+            if commands_in_pass
+                .first()
+                .map(|(cmd, _, _, _, _)| cmd.barrier().is_some())
+                .unwrap_or(false)
+            {
                 // Perform a ping-pong operation
-                std::mem::swap(&mut read_target, &mut write_target);
+                mem::swap(&mut read_target, &mut write_target);
 
                 encoder.copy_texture_to_texture(
                     read_target.texture.as_image_copy(),
@@ -422,280 +523,21 @@ impl WgpuApp {
                 scene_texture_view = final_view_after_compute;
             }
 
-            match command {
-                // Process draw commands using the graphics pipeline
-                Command::Draw(command) => {
-                    let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_view {
-                        (msaa_view, Some(&write_target.view))
-                    } else {
-                        (&write_target.view, None)
-                    };
-
-                    let load_ops = if is_first_pass {
-                        is_first_pass = false;
-                        // If this is the first pass, we load the texture
-                        wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
-                    } else {
-                        // Otherwise, we load the existing content
-                        wgpu::LoadOp::Load
-                    };
-
-                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("Render Pass"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view,
-                            depth_slice: None,
-                            resolve_target,
-                            ops: wgpu::Operations {
-                                load: load_ops,
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        ..Default::default()
-                    });
-
-                    // Set the scissor rectangle only to needed area
-                    let first_draw_rect = match command.barrier() {
-                        Some(BarrierRequirement::Global) => PxRect {
-                            x: Px(0),
-                            y: Px(0),
-                            width: Px(texture_size.width as i32),
-                            height: Px(texture_size.height as i32),
-                        },
-                        Some(BarrierRequirement::PaddedLocal {
-                            top,
-                            right,
-                            bottom,
-                            left,
-                        }) => {
-                            let padded_x = (start_pos.x - left).max(Px(0));
-                            let padded_y = (start_pos.y - top).max(Px(0));
-                            let padded_width = (size.width + left + right)
-                                .min(Px(texture_size.width as i32 - padded_x.0));
-                            let padded_height = (size.height + top + bottom)
-                                .min(Px(texture_size.height as i32 - padded_y.0));
-                            PxRect {
-                                x: padded_x,
-                                y: padded_y,
-                                width: padded_width,
-                                height: padded_height,
-                            }
-                        }
-                        Some(BarrierRequirement::Absolute(mut rect)) => {
-                            rect.x = rect.x.positive().min(texture_size.width).into();
-                            rect.y = rect.y.positive().min(texture_size.height).into();
-                            rect.width = rect
-                                .width
-                                .positive()
-                                .min(texture_size.width - rect.x.positive())
-                                .into();
-                            rect.height = rect
-                                .height
-                                .positive()
-                                .min(texture_size.height - rect.y.positive())
-                                .into();
-                            rect
-                        }
-                        None => {
-                            let x = start_pos.x.positive().min(texture_size.width);
-                            let y = start_pos.y.positive().min(texture_size.height);
-                            let width = size.width.positive().min(texture_size.width - x);
-                            let height = size.height.positive().min(texture_size.height - y);
-                            PxRect {
-                                x: Px::from(x),
-                                y: Px::from(y),
-                                width: Px::from(width),
-                                height: Px::from(height),
-                            }
-                        }
-                    };
-                    let mut all_draw_rects = vec![first_draw_rect.to_owned()];
-
-                    self.drawer.begin_pass(
-                        &self.gpu,
-                        &self.queue,
-                        &self.config,
-                        &mut rpass,
-                        scene_texture_view,
-                    );
-
-                    // Record commands to submit to the drawer
-                    let mut commands = VecDeque::new();
-
-                    // Batch subsequent draw commands that require barriers but not orthogonal to draw rect
-                    if command.barrier().is_some() {
-                        // Used to record all draw commands that are drawn in this pass
-                        let mut draw_rects_for_check = vec![first_draw_rect.to_owned()]; // Here we assume using the CPU to check orthogonality one by one is worth avoiding an extra texture copy
-                        while let Some((Command::Draw(command), _, size, start_pos)) =
-                            commands_iter.peek()
-                        {
-                            if let Some(barrirer) = command.barrier() {
-                                let new_draw_rect = match barrirer {
-                                    BarrierRequirement::Global => PxRect {
-                                        x: Px(0),
-                                        y: Px(0),
-                                        width: Px(texture_size.width as i32),
-                                        height: Px(texture_size.height as i32),
-                                    },
-                                    BarrierRequirement::PaddedLocal {
-                                        top,
-                                        right,
-                                        bottom,
-                                        left,
-                                    } => {
-                                        let padded_x = (start_pos.x - left).max(Px(0));
-                                        let padded_y = (start_pos.y - top).max(Px(0));
-                                        let padded_width = (size.width + left + right)
-                                            .min(Px(texture_size.width as i32 - padded_x.0));
-                                        let padded_height = (size.height + top + bottom)
-                                            .min(Px(texture_size.height as i32 - padded_y.0));
-                                        PxRect {
-                                            x: padded_x,
-                                            y: padded_y,
-                                            width: padded_width,
-                                            height: padded_height,
-                                        }
-                                    }
-                                    BarrierRequirement::Absolute(rect) => rect,
-                                };
-                                // Check if the new draw rectangle is orthogonal to every existing draw rectangle
-                                if !draw_rects_for_check
-                                    .iter()
-                                    .all(|dr| dr.is_orthogonal(&new_draw_rect))
-                                {
-                                    break; // Break if the next command requires a barrier that is not orthogonal to any existing draw rectangle in this pass
-                                }
-                                // Record the new draw rectangle
-                                draw_rects_for_check.push(new_draw_rect.to_owned());
-                                // Acutally custom iter since we determine the next command can be batched
-                                let (Command::Draw(command), _, size, start_pos) =
-                                    commands_iter.next().unwrap()
-                                else {
-                                    break; // Unreachable, but just in case
-                                };
-                                // Record the draw rectangle so we can set the scissor rect later
-                                all_draw_rects.push(new_draw_rect);
-                                // Submit the command
-                                commands.push_back((command, command_type_id, size, start_pos));
-                            } else {
-                                break; // Break if no barrier is required
-                            }
-                        }
-                    }
-
-                    // Push the initial command to the front of the queue
-                    commands.push_front((command, command_type_id, size, start_pos));
-
-                    // Batch subsequent draw commands that don't require barriers
-                    while let Some((Command::Draw(command), _, _, _)) = commands_iter.peek() {
-                        if command.barrier().is_some() {
-                            break; // Break if a barrier is required
-                        }
-                        if let Some((Command::Draw(command), command_type_id, size, start_pos)) =
-                            commands_iter.next()
-                        {
-                            // Clamp rect to the texture size
-                            let x = start_pos.x.positive().min(texture_size.width);
-                            let y = start_pos.y.positive().min(texture_size.height);
-                            let width = size.width.positive().min(texture_size.width - x);
-                            let height = size.height.positive().min(texture_size.height - y);
-                            // Record the draw rectangle so we can set the scissor rect later
-                            all_draw_rects.push(PxRect {
-                                x: Px::from(x),
-                                y: Px::from(y),
-                                width: Px::from(width),
-                                height: Px::from(height),
-                            });
-                            commands.push_back((command, command_type_id, size, start_pos));
-                        }
-                    }
-
-                    rpass.set_scissor_rect(
-                        first_draw_rect.x.positive(),
-                        first_draw_rect.y.positive(),
-                        first_draw_rect.width.positive(),
-                        first_draw_rect.height.positive(),
-                    );
-
-                    // Submit all batched draw commands to the drawer
-                    let mut buffer: Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)> =
-                        Vec::with_capacity(commands.len());
-                    let mut last_command_type_id = None;
-                    // Use a separate variable to track the current batch draw rectangle
-                    let mut current_batch_draw_rect = PxRect::ZERO;
-                    for ((command, command_type_id, size, start_pos), draw_rect) in
-                        commands.into_iter().zip(all_draw_rects.into_iter())
-                    {
-                        if last_command_type_id != Some(command_type_id) {
-                            if !buffer.is_empty() {
-                                let commands = mem::take(&mut buffer); // Clear and take the buffer
-                                let commands = commands
-                                    .iter()
-                                    .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
-                                    .collect::<Vec<_>>();
-                                rpass.set_scissor_rect(
-                                    current_batch_draw_rect.x.positive(),
-                                    current_batch_draw_rect.y.positive(),
-                                    current_batch_draw_rect.width.positive(),
-                                    current_batch_draw_rect.height.positive(),
-                                );
-                                self.drawer.submit(
-                                    &self.gpu,
-                                    &self.queue,
-                                    &self.config,
-                                    &mut rpass,
-                                    &commands,
-                                    scene_texture_view,
-                                );
-                                current_batch_draw_rect = PxRect::ZERO; // Reset the current batch draw rectangle
-                            }
-
-                            last_command_type_id = Some(command_type_id);
-                        }
-                        buffer.push((command, size, start_pos));
-                        current_batch_draw_rect = current_batch_draw_rect.union(&draw_rect);
-                    }
-                    if !buffer.is_empty() {
-                        let commands = mem::take(&mut buffer); // Clear and take the buffer
-                        let commands = commands
-                            .iter()
-                            .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
-                            .collect::<Vec<_>>();
-                        rpass.set_scissor_rect(
-                            current_batch_draw_rect.x.positive(),
-                            current_batch_draw_rect.y.positive(),
-                            current_batch_draw_rect.width.positive(),
-                            current_batch_draw_rect.height.positive(),
-                        );
-                        self.drawer.submit(
-                            &self.gpu,
-                            &self.queue,
-                            &self.config,
-                            &mut rpass,
-                            &commands,
-                            scene_texture_view,
-                        );
-                    }
-
-                    self.drawer.end_pass(
-                        &self.gpu,
-                        &self.queue,
-                        &self.config,
-                        &mut rpass,
-                        scene_texture_view,
-                    );
-                }
-                // Process compute commands using the compute pipeline
-                Command::Compute(command) => {
-                    self.compute_commands.push((command, size, start_pos));
-                    // batch subsequent compute commands
-                    while let Some((Command::Compute(_), _, _, _)) = commands_iter.peek() {
-                        if let Some((Command::Compute(command), _, _, _)) = commands_iter.next() {
-                            self.compute_commands.push((command, size, start_pos));
-                        }
-                    }
-                }
-            }
+            // Render the current pass before starting a new one
+            render_current_pass(
+                &self.msaa_view,
+                &mut is_first_pass,
+                &mut encoder,
+                write_target,
+                &mut commands_in_pass,
+                scene_texture_view,
+                &mut self.drawer,
+                &self.gpu,
+                &self.queue,
+                &self.config,
+            );
+            commands_in_pass.clear();
+            barrier_draw_rects_in_pass.clear();
         }
 
         // Frame-level end for all pipelines
@@ -811,4 +653,171 @@ impl WgpuApp {
         // because we swapped one last time at the end of the loop.
         read_view
     }
+}
+
+fn extract_draw_rect(
+    barrier: Option<BarrierRequirement>,
+    size: PxSize,
+    start_pos: PxPosition,
+    texture_size: wgpu::Extent3d,
+) -> PxRect {
+    match barrier {
+        Some(BarrierRequirement::Global) => PxRect {
+            x: Px(0),
+            y: Px(0),
+            width: Px(texture_size.width as i32),
+            height: Px(texture_size.height as i32),
+        },
+        Some(BarrierRequirement::PaddedLocal {
+            top,
+            right,
+            bottom,
+            left,
+        }) => {
+            let padded_x = (start_pos.x - left).max(Px(0));
+            let padded_y = (start_pos.y - top).max(Px(0));
+            let padded_width =
+                (size.width + left + right).min(Px(texture_size.width as i32 - padded_x.0));
+            let padded_height =
+                (size.height + top + bottom).min(Px(texture_size.height as i32 - padded_y.0));
+            PxRect {
+                x: padded_x,
+                y: padded_y,
+                width: padded_width,
+                height: padded_height,
+            }
+        }
+        Some(BarrierRequirement::Absolute(mut rect)) => {
+            rect.x = rect.x.positive().min(texture_size.width).into();
+            rect.y = rect.y.positive().min(texture_size.height).into();
+            rect.width = rect
+                .width
+                .positive()
+                .min(texture_size.width - rect.x.positive())
+                .into();
+            rect.height = rect
+                .height
+                .positive()
+                .min(texture_size.height - rect.y.positive())
+                .into();
+            rect
+        }
+        None => {
+            let x = start_pos.x.positive().min(texture_size.width);
+            let y = start_pos.y.positive().min(texture_size.height);
+            let width = size.width.positive().min(texture_size.width - x);
+            let height = size.height.positive().min(texture_size.height - y);
+            PxRect {
+                x: Px::from(x),
+                y: Px::from(y),
+                width: Px::from(width),
+                height: Px::from(height),
+            }
+        }
+    }
+}
+
+fn render_current_pass(
+    msaa_view: &Option<wgpu::TextureView>,
+    is_first_pass: &mut bool,
+    encoder: &mut wgpu::CommandEncoder,
+    write_target: &PassTarget,
+    commands_in_pass: &mut Vec<(Box<dyn DrawCommand>, TypeId, PxSize, PxPosition, PxRect)>,
+    scene_texture_view: &wgpu::TextureView,
+    drawer: &mut Drawer,
+    gpu: &wgpu::Device,
+    queue: &wgpu::Queue,
+    config: &wgpu::SurfaceConfiguration,
+) {
+    let (view, resolve_target) = if let Some(msaa_view) = msaa_view {
+        (msaa_view, Some(&write_target.view))
+    } else {
+        (&write_target.view, None)
+    };
+
+    let load_ops = if *is_first_pass {
+        *is_first_pass = false;
+        // If this is the first pass, we load the texture
+        wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+    } else {
+        // Otherwise, we load the existing content
+        wgpu::LoadOp::Load
+    };
+
+    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("Render Pass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target,
+            ops: wgpu::Operations {
+                load: load_ops,
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        ..Default::default()
+    });
+
+    drawer.begin_pass(gpu, queue, config, &mut rpass, scene_texture_view);
+
+    // Submit all batched draw commands to the drawer
+    let mut buffer: Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)> = Vec::new();
+    let mut last_command_type_id = None;
+    // Use a separate variable to track the current batch draw rectangle
+    let mut current_batch_draw_rect = PxRect::ZERO;
+    for (command, command_type_id, size, start_pos, draw_rect) in
+        mem::take(commands_in_pass).into_iter()
+    {
+        if last_command_type_id != Some(command_type_id) {
+            if !buffer.is_empty() {
+                let commands = mem::take(&mut buffer); // Clear and take the buffer
+                let commands = commands
+                    .iter()
+                    .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
+                    .collect::<Vec<_>>();
+                rpass.set_scissor_rect(
+                    current_batch_draw_rect.x.positive(),
+                    current_batch_draw_rect.y.positive(),
+                    current_batch_draw_rect.width.positive(),
+                    current_batch_draw_rect.height.positive(),
+                );
+                drawer.submit(
+                    gpu,
+                    queue,
+                    config,
+                    &mut rpass,
+                    &commands,
+                    scene_texture_view,
+                );
+                current_batch_draw_rect = PxRect::ZERO; // Reset the current batch draw rectangle
+            }
+
+            last_command_type_id = Some(command_type_id);
+        }
+        buffer.push((command, size, start_pos));
+        current_batch_draw_rect = current_batch_draw_rect.union(&draw_rect);
+    }
+    if !buffer.is_empty() {
+        let commands = mem::take(&mut buffer); // Clear and take the buffer
+        let commands = commands
+            .iter()
+            .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
+            .collect::<Vec<_>>();
+        rpass.set_scissor_rect(
+            current_batch_draw_rect.x.positive(),
+            current_batch_draw_rect.y.positive(),
+            current_batch_draw_rect.width.positive(),
+            current_batch_draw_rect.height.positive(),
+        );
+        drawer.submit(
+            gpu,
+            queue,
+            config,
+            &mut rpass,
+            &commands,
+            scene_texture_view,
+        );
+    }
+
+    drawer.end_pass(gpu, queue, config, &mut rpass, scene_texture_view);
 }
