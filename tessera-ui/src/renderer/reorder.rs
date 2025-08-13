@@ -1,4 +1,7 @@
-use std::{any::TypeId, collections::BinaryHeap};
+use std::{
+    any::TypeId,
+    collections::{BinaryHeap, HashMap},
+};
 
 use petgraph::{
     graph::{DiGraph, NodeIndex},
@@ -12,7 +15,7 @@ use crate::{
 
 /// Instruction category for sorting.
 /// The order of the variants is important as it defines the priority.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum InstructionCategory {
     /// Low priority, can be batched together.
     ContinuationDraw,
@@ -135,19 +138,22 @@ impl InstructionInfo {
 struct PriorityNode {
     category: InstructionCategory,
     type_id: TypeId,
-    original_index: usize, // Use negative index for max-heap behavior
+    original_index: usize,
     node_index: NodeIndex,
+    batch_potential: usize,
 }
 
 impl Ord for PriorityNode {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Higher category -> higher priority
-        // Same type_id -> higher priority
-        // Lower original_index -> higher priority (tie-breaker)
+        // This is the core heuristic for optimal batching:
+        // 1. Higher category is always higher priority.
+        // 2. For the same category, nodes with smaller batch potential are prioritized.
+        //    This helps to get "lonely" nodes out of the way, clearing the path for
+        //    larger batches to be processed contiguously.
+        // 3. The original index is used as a final tie-breaker for stability.
         self.category
             .cmp(&other.category)
-            .then_with(|| self.type_id.cmp(&other.type_id))
-            // To make the sort stable, we prefer the one that appeared first.
+            .then_with(|| self.batch_potential.cmp(&other.batch_potential).reverse())
             .then_with(|| self.original_index.cmp(&other.original_index).reverse())
     }
 }
@@ -171,9 +177,14 @@ pub(crate) fn reorder_instructions(
         return vec![];
     }
 
+    let mut potentials = HashMap::new();
+    for info in &instructions {
+        *potentials.entry((info.category, info.type_id)).or_insert(0) += 1;
+    }
+
     let graph = build_dependency_graph(&instructions);
 
-    let sorted_node_indices = priority_topological_sort(&graph, &instructions);
+    let sorted_node_indices = priority_topological_sort(&graph, &instructions, &potentials);
 
     let mut sorted_instructions = Vec::with_capacity(instructions.len());
     let mut original_infos: Vec<_> = instructions.into_iter().map(Some).collect();
@@ -191,6 +202,7 @@ pub(crate) fn reorder_instructions(
 fn priority_topological_sort(
     graph: &DiGraph<(), ()>,
     instructions: &[InstructionInfo],
+    potentials: &HashMap<(InstructionCategory, TypeId), usize>,
 ) -> Vec<NodeIndex> {
     let mut in_degree = vec![0; graph.node_count()];
     for edge in graph.raw_edges() {
@@ -206,43 +218,27 @@ fn priority_topological_sort(
                 type_id: info.type_id,
                 original_index: info.original_index,
                 node_index,
+                batch_potential: potentials[&(info.category, info.type_id)],
             });
         }
     }
 
     let mut sorted_list = Vec::with_capacity(instructions.len());
-    while let Some(batch_prototype) = ready_queue.pop() {
-        let batch_category = batch_prototype.category;
-        let batch_type_id = batch_prototype.type_id;
+    while let Some(priority_node) = ready_queue.pop() {
+        let u = priority_node.node_index;
+        sorted_list.push(u);
 
-        let mut batch = vec![batch_prototype];
-        let mut temp_heap = BinaryHeap::new();
-
-        while let Some(next_node) = ready_queue.pop() {
-            if next_node.category == batch_category && next_node.type_id == batch_type_id {
-                batch.push(next_node);
-            } else {
-                temp_heap.push(next_node);
-            }
-        }
-        ready_queue = temp_heap;
-        batch.sort_by_key(|n| n.original_index);
-
-        for priority_node in batch {
-            let u = priority_node.node_index;
-            sorted_list.push(u);
-
-            for v in graph.neighbors(u) {
-                in_degree[v.index()] -= 1;
-                if in_degree[v.index()] == 0 {
-                    let info = &instructions[v.index()];
-                    ready_queue.push(PriorityNode {
-                        category: info.category,
-                        type_id: info.type_id,
-                        original_index: info.original_index,
-                        node_index: v,
-                    });
-                }
+        for v in graph.neighbors(u) {
+            in_degree[v.index()] -= 1;
+            if in_degree[v.index()] == 0 {
+                let info = &instructions[v.index()];
+                ready_queue.push(PriorityNode {
+                    category: info.category,
+                    type_id: info.type_id,
+                    original_index: info.original_index,
+                    node_index: v,
+                    batch_potential: potentials[&(info.category, info.type_id)],
+                });
             }
         }
     }
@@ -473,51 +469,45 @@ mod tests {
 
     #[test]
     fn test_opt() {
+        // Test case 1: No dependencies, test batching
         let commands = vec![
-            create_cmd(PxPosition::new(Px(0), Px(0)), None, false), // 0
-            create_cmd2(PxPosition::new(Px(10), Px(10)), None, false), // 1
-            create_cmd(PxPosition::new(Px(20), Px(20)), None, false), // 2
+            create_cmd(PxPosition::new(Px(0), Px(0)), None, false), // 0 (T1)
+            create_cmd2(PxPosition::new(Px(10), Px(10)), None, false), // 1 (T2)
+            create_cmd(PxPosition::new(Px(20), Px(20)), None, false), // 2 (T1)
         ];
         let reordered = reorder_instructions(commands);
         let reordered_positions = get_positions(&reordered);
 
-        // There are two different possible orders:
-        // 1. Optimized order1: [0, 2, 1]
-        // 2. Optimized order2: [1, 0, 2]
-        // Both orders are valid but different machine could produce different orders,
-        // since TypeId's order is not guaranteed to be stable across runs on different machines.
-        // So we check them both.
-        let expected_positions1 = vec![
-            PxPosition::new(Px(0), Px(0)),
-            PxPosition::new(Px(20), Px(20)),
-            PxPosition::new(Px(10), Px(10)),
+        // Potentials: T1 -> 2, T2 -> 1.
+        // T2 has lower potential, so it's prioritized.
+        // Expected order: [1, 0, 2]
+        let expected_positions = vec![
+            PxPosition::new(Px(10), Px(10)), // 1
+            PxPosition::new(Px(0), Px(0)),   // 0
+            PxPosition::new(Px(20), Px(20)), // 2
         ];
-        let expected_positions2 = vec![
-            PxPosition::new(Px(10), Px(10)),
-            PxPosition::new(Px(0), Px(0)),
-            PxPosition::new(Px(20), Px(20)),
-        ];
-        assert!(
-            reordered_positions == expected_positions1
-                || reordered_positions == expected_positions2,
-            "Reordered positions did not match expected orders"
-        );
+        assert_eq!(reordered_positions, expected_positions);
 
+        // Test case 2: With dependencies, test batching
         let commands = vec![
-            create_cmd(PxPosition::new(Px(0), Px(0)), None, false), // 0
-            create_cmd2(PxPosition::new(Px(10), Px(10)), None, false), // 1
-            create_cmd(PxPosition::new(Px(5), Px(5)), None, false), // 2
+            create_cmd(PxPosition::new(Px(0), Px(0)), None, false), // 0 (T1)
+            create_cmd2(PxPosition::new(Px(10), Px(10)), None, false), // 1 (T2)
+            create_cmd(PxPosition::new(Px(5), Px(5)), None, false), // 2 (T1)
         ];
         let reordered = reorder_instructions(commands);
         let reordered_positions = get_positions(&reordered);
-        assert_eq!(
-            vec![
-                PxPosition::new(Px(0), Px(0)),
-                PxPosition::new(Px(10), Px(10)),
-                PxPosition::new(Px(5), Px(5)),
-            ],
-            reordered_positions
-        ); // Instructions with the same type but not orthogonal should not grouped together
+
+        // Potentials: T1 -> 2, T2 -> 1.
+        // Dependencies: 2 > 0, 2 > 1.
+        // Initial ready queue: [0, 1].
+        // Node 1 has lower potential (1 vs 2), so it's prioritized.
+        // Expected order: [1, 0, 2]
+        let expected_positions = vec![
+            PxPosition::new(Px(10), Px(10)), // Cmd 1
+            PxPosition::new(Px(0), Px(0)),   // Cmd 0
+            PxPosition::new(Px(5), Px(5)),   // Cmd 2
+        ];
+        assert_eq!(expected_positions, reordered_positions);
     }
 
     #[test]
@@ -633,10 +623,10 @@ mod tests {
         // 0 -> 1 (Compute -> Barrier)
         // 0 -> 4 (Compute -> Barrier)
         // 2 -> 3 (Overlapping Draw)
-
-        // Expected order:
-        // Ready queue starts with [0, 2] -> prio sort -> [0, 2]
-        // 1. Pop 0. Result: [0]. Add 1, 4 to queue. Queue: [1, 4, 2]. Prio sort: [1, 4, 2] (Barrier > Contin)
+        // Potentials: Compute:1, BarrierDraw:2, ContinuationDraw:2
+        // All categories have different potentials, so batching heuristic won't apply across categories.
+        // Ready queue starts with [0(C), 2(CD)] -> Prio sort -> [0, 2]
+        // 1. Pop 0. Result: [0]. Add 1, 4 to queue. Queue: [1(BD), 4(BD), 2(CD)]. Prio sort: [1,4,2]
         // 2. Pop 1. Result: [0, 1].
         // 3. Pop 4. Result: [0, 1, 4].
         // 4. Pop 2. Result: [0, 1, 4, 2]. Add 3 to queue. Queue: [3]
