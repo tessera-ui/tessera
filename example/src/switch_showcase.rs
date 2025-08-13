@@ -7,6 +7,7 @@ use tessera_ui_basic_components::{
     column_ui,
     row::RowArgsBuilder,
     row_ui,
+    shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     switch::{SwitchArgsBuilder, SwitchState, switch},
     text::{TextArgsBuilder, text},
@@ -27,6 +28,10 @@ pub fn switch_showcase(state: Arc<Mutex<SwitchState>>) {
         SurfaceArgsBuilder::default()
             .color(md_colors::SURFACE_CONTAINER)
             .padding(Dp(24.0))
+            .shape(Shape::RoundedRectangle {
+                corner_radius: 25.0,
+                g2_k_value: 3.0,
+            })
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
