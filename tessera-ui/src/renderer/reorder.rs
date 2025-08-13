@@ -480,14 +480,29 @@ mod tests {
         ];
         let reordered = reorder_instructions(commands);
         let reordered_positions = get_positions(&reordered);
-        assert_eq!(
-            vec![
-                PxPosition::new(Px(0), Px(0)),
-                PxPosition::new(Px(20), Px(20)),
-                PxPosition::new(Px(10), Px(10)),
-            ],
-            reordered_positions
-        ); // Instructions with the same type and orthogonal should be grouped together
+
+        // There are two different possible orders:
+        // 1. Optimized order1: [0, 2, 1]
+        // 2. Optimized order2: [1, 0, 2]
+        // Both orders are valid but different machine could produce different orders,
+        // since TypeId's order is not guaranteed to be stable across runs on different machines.
+        // So we check them both.
+        let expected_positions1 = vec![
+            PxPosition::new(Px(0), Px(0)),
+            PxPosition::new(Px(20), Px(20)),
+            PxPosition::new(Px(10), Px(10)),
+        ];
+        let expected_positions2 = vec![
+            PxPosition::new(Px(10), Px(10)),
+            PxPosition::new(Px(0), Px(0)),
+            PxPosition::new(Px(20), Px(20)),
+        ];
+        assert!(
+            reordered_positions == expected_positions1
+                || reordered_positions == expected_positions2,
+            "Reordered positions did not match expected orders"
+        );
+
         let commands = vec![
             create_cmd(PxPosition::new(Px(0), Px(0)), None, false), // 0
             create_cmd2(PxPosition::new(Px(10), Px(10)), None, false), // 1
