@@ -885,7 +885,49 @@ impl PxRect {
         let height = self.height.0.max(0) as u32;
         width * height
     }
+
+    /// Gets the intersection of this rectangle with another rectangle.
+    ///
+    /// If the rectangles do not intersect, returns `None`.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The other rectangle to intersect with
+    ///
+    /// # Returns
+    ///
+    /// An `Option<PxRect>` that is `Some` if the rectangles intersect,
+    /// or `None` if they do not.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera_ui::px::{Px, PxRect};
+    ///
+    /// let rect1 = PxRect::new(Px::new(0), Px::new(0), Px::new(100), Px::new(100));
+    /// let rect2 = PxRect::new(Px::new(50), Px::new(50), Px::new(100), Px::new(100));
+    /// let intersection = rect1.intersection(&rect2);
+    /// assert_eq!(intersection, Some(PxRect::new(Px::new(50), Px::new(50), Px::new(50), Px::new(50))));
+    /// ```
+    pub fn intersection(&self, other: &Self) -> Option<Self> {
+        let x1 = self.x.0.max(other.x.0);
+        let y1 = self.y.0.max(other.y.0);
+        let x2 = (self.x.0 + self.width.0).min(other.x.0 + other.width.0);
+        let y2 = (self.y.0 + self.height.0).min(other.y.0 + other.height.0);
+
+        if x1 < x2 && y1 < y2 {
+            Some(Self {
+                x: Px(x1),
+                y: Px(y1),
+                width: Px(x2 - x1),
+                height: Px(y2 - y1),
+            })
+        } else {
+            None
+        }
+    }
 }
+
 impl From<[Px; 2]> for PxSize {
     fn from(size: [Px; 2]) -> Self {
         Self {

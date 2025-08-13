@@ -389,15 +389,16 @@ impl WgpuApp {
 
         // Main command processing loop with barrier handling
         let mut scene_texture_view = &read_target.view;
-        let mut commands_in_pass: Vec<(Box<dyn DrawCommand>, TypeId, PxSize, PxPosition, PxRect)> =
-            Vec::new();
+        let mut commands_in_pass: Vec<DrawCommandWithMetadata> = Vec::new();
         let mut barrier_draw_rects_in_pass: Vec<PxRect> = Vec::new();
+        let mut clip_temp_stack = Vec::new();
+        let mut clip_stack = Vec::new();
 
         for (command, command_type_id, size, start_pos) in commands {
             let need_new_pass = commands_in_pass
                 .last()
-                .map(|(cmd, _, _, _, _)| {
-                    match (cmd.barrier(), command.barrier()) {
+                .map(|cmd| {
+                    match (cmd.command.barrier(), command.barrier()) {
                         (None, Some(_)) => true, // If the last command has no barrier but the next one does, we need a new pass
                         (Some(_), Some(barrier)) => {
                             // If both have barriers, we need to check if they are orthogonal
@@ -419,7 +420,7 @@ impl WgpuApp {
                 // A ping-pong operation is needed if the first command in the pass has a barrier
                 if commands_in_pass
                     .first()
-                    .map(|(cmd, _, _, _, _)| cmd.barrier().is_some())
+                    .map(|cmd| cmd.command.barrier().is_some())
                     .unwrap_or(false)
                 {
                     // Perform a ping-pong operation
@@ -463,6 +464,7 @@ impl WgpuApp {
                     &self.gpu,
                     &self.queue,
                     &self.config,
+                    &mut clip_stack,
                 );
                 commands_in_pass.clear();
                 barrier_draw_rects_in_pass.clear();
@@ -477,11 +479,31 @@ impl WgpuApp {
                         barrier_draw_rects_in_pass.push(draw_rect);
                     }
                     // Add the command to the current pass
-                    commands_in_pass.push((cmd, command_type_id, size, start_pos, draw_rect));
+                    commands_in_pass.push(DrawCommandWithMetadata {
+                        command: cmd,
+                        type_id: command_type_id,
+                        size,
+                        start_pos,
+                        draw_rect,
+                        clip_ops: clip_temp_stack.pop(), // If there is a clipping operation, we take it from the temp stack
+                    });
                 }
                 Command::Compute(cmd) => {
                     // Add the compute command to the current pass
                     self.compute_commands.push((cmd, size, start_pos));
+                }
+                Command::ClipPush(rect) => {
+                    // Mark last command as having clipping operations
+                    if let Some(last_cmd) = commands_in_pass.last_mut() {
+                        last_cmd.clip_ops = Some(ClipOps::Push(rect));
+                    } else {
+                        // If there is no last command, we need to push it into temp stack
+                        clip_temp_stack.push(ClipOps::Push(rect)); // we'll use this for next command
+                    }
+                }
+                Command::ClipPop => {
+                    // Push it into temp stack
+                    clip_temp_stack.push(ClipOps::Pop); // we'll use this for next command
                 }
             }
         }
@@ -491,7 +513,7 @@ impl WgpuApp {
             // A ping-pong operation is needed if the first command in the pass has a barrier
             if commands_in_pass
                 .first()
-                .map(|(cmd, _, _, _, _)| cmd.barrier().is_some())
+                .map(|cmd| cmd.command.barrier().is_some())
                 .unwrap_or(false)
             {
                 // Perform a ping-pong operation
@@ -535,6 +557,7 @@ impl WgpuApp {
                 &self.gpu,
                 &self.queue,
                 &self.config,
+                &mut clip_stack,
             );
             commands_in_pass.clear();
             barrier_draw_rects_in_pass.clear();
@@ -722,12 +745,13 @@ fn render_current_pass(
     is_first_pass: &mut bool,
     encoder: &mut wgpu::CommandEncoder,
     write_target: &PassTarget,
-    commands_in_pass: &mut Vec<(Box<dyn DrawCommand>, TypeId, PxSize, PxPosition, PxRect)>,
+    commands_in_pass: &mut Vec<DrawCommandWithMetadata>,
     scene_texture_view: &wgpu::TextureView,
     drawer: &mut Drawer,
     gpu: &wgpu::Device,
     queue: &wgpu::Queue,
     config: &wgpu::SurfaceConfiguration,
+    clip_stack: &mut Vec<PxRect>,
 ) {
     let (view, resolve_target) = if let Some(msaa_view) = msaa_view {
         (msaa_view, Some(&write_target.view))
@@ -765,16 +789,21 @@ fn render_current_pass(
     let mut last_command_type_id = None;
     // Use a separate variable to track the current batch draw rectangle
     let mut current_batch_draw_rect = PxRect::ZERO;
-    for (command, command_type_id, size, start_pos, draw_rect) in
-        mem::take(commands_in_pass).into_iter()
-    {
-        if last_command_type_id != Some(command_type_id) {
+    for cmd in mem::take(commands_in_pass).into_iter() {
+        if last_command_type_id != Some(cmd.type_id) || cmd.clip_ops.is_some() {
             if !buffer.is_empty() {
                 let commands = mem::take(&mut buffer); // Clear and take the buffer
                 let commands = commands
                     .iter()
                     .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
                     .collect::<Vec<_>>();
+                if let Some(clipped_rect) = clip_stack.last() {
+                    let Some(final_rect) = current_batch_draw_rect.intersection(clipped_rect)
+                    else {
+                        continue;
+                    };
+                    current_batch_draw_rect = final_rect;
+                }
                 rpass.set_scissor_rect(
                     current_batch_draw_rect.x.positive(),
                     current_batch_draw_rect.y.positive(),
@@ -792,32 +821,82 @@ fn render_current_pass(
                 current_batch_draw_rect = PxRect::ZERO; // Reset the current batch draw rectangle
             }
 
-            last_command_type_id = Some(command_type_id);
+            last_command_type_id = Some(cmd.type_id);
         }
-        buffer.push((command, size, start_pos));
-        current_batch_draw_rect = current_batch_draw_rect.union(&draw_rect);
+
+        // Handle clipping operations
+        if let Some(clip_ops) = cmd.clip_ops {
+            match clip_ops {
+                ClipOps::Push(rect) => {
+                    clip_stack.push(rect);
+                }
+                ClipOps::Pop => {
+                    clip_stack.pop();
+                }
+            }
+        }
+
+        // Add the command to the buffer
+        buffer.push((cmd.command, cmd.size, cmd.start_pos));
+        current_batch_draw_rect = current_batch_draw_rect.union(&cmd.draw_rect);
     }
+    // If there are any remaining commands in the buffer, submit them
     if !buffer.is_empty() {
         let commands = mem::take(&mut buffer); // Clear and take the buffer
         let commands = commands
             .iter()
             .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
             .collect::<Vec<_>>();
-        rpass.set_scissor_rect(
-            current_batch_draw_rect.x.positive(),
-            current_batch_draw_rect.y.positive(),
-            current_batch_draw_rect.width.positive(),
-            current_batch_draw_rect.height.positive(),
-        );
-        drawer.submit(
-            gpu,
-            queue,
-            config,
-            &mut rpass,
-            &commands,
-            scene_texture_view,
-        );
+        if let Some(clipped_rect) = clip_stack.last() {
+            if let Some(current_batch_draw_rect) =
+                current_batch_draw_rect.intersection(clipped_rect)
+            {
+                rpass.set_scissor_rect(
+                    current_batch_draw_rect.x.positive(),
+                    current_batch_draw_rect.y.positive(),
+                    current_batch_draw_rect.width.positive(),
+                    current_batch_draw_rect.height.positive(),
+                );
+                drawer.submit(
+                    gpu,
+                    queue,
+                    config,
+                    &mut rpass,
+                    &commands,
+                    scene_texture_view,
+                );
+            };
+        } else {
+            rpass.set_scissor_rect(
+                current_batch_draw_rect.x.positive(),
+                current_batch_draw_rect.y.positive(),
+                current_batch_draw_rect.width.positive(),
+                current_batch_draw_rect.height.positive(),
+            );
+            drawer.submit(
+                gpu,
+                queue,
+                config,
+                &mut rpass,
+                &commands,
+                scene_texture_view,
+            );
+        }
     }
 
     drawer.end_pass(gpu, queue, config, &mut rpass, scene_texture_view);
+}
+
+struct DrawCommandWithMetadata {
+    command: Box<dyn DrawCommand>,
+    type_id: TypeId,
+    size: PxSize,
+    start_pos: PxPosition,
+    draw_rect: PxRect,
+    clip_ops: Option<ClipOps>,
+}
+
+enum ClipOps {
+    Push(PxRect),
+    Pop,
 }

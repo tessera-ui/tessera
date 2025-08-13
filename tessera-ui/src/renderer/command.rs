@@ -79,6 +79,10 @@ pub enum Command {
     Draw(Box<dyn DrawCommand>),
     /// A GPU computation command processed by compute pipelines
     Compute(Box<dyn ComputeCommand>),
+    /// A command to push a clipping rectangle onto the stack
+    ClipPush(PxRect),
+    /// A command to pop the most recent clipping rectangle from the stack
+    ClipPop,
 }
 
 impl Command {
@@ -91,6 +95,8 @@ impl Command {
             Command::Draw(command) => command.barrier(),
             // Currently, compute can only be used for after effects,
             Command::Compute(command) => Some(command.barrier()),
+            Command::ClipPush(_) => None, // Clipping commands do not require barriers
+            Command::ClipPop => None,     // Clipping commands do not require barriers
         }
     }
 }

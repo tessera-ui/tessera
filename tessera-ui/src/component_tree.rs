@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use rayon::prelude::*;
 
 use crate::{
-    Clipboard, ComputeResourceManager,
+    Clipboard, ComputeResourceManager, Px, PxRect,
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
     renderer::Command,
@@ -238,24 +238,6 @@ impl ComponentTree {
     }
 }
 
-// Helper struct for rectangle and intersection check
-#[derive(Debug, Clone, Copy)]
-struct Rect {
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-}
-
-impl Rect {
-    fn intersects(&self, other: &Rect) -> bool {
-        self.x < other.x + other.width
-            && self.x + self.width > other.x
-            && self.y < other.y + other.height
-            && self.y + self.height > other.y
-    }
-}
-
 /// Parallel computation of draw commands from the component tree
 ///
 /// This function traverses the component tree and extracts rendering commands
@@ -312,22 +294,38 @@ fn compute_draw_commands_inner_parallel(
         })
         .unwrap_or_default();
 
+    let clips_children = metadata.clips_children;
+    // Add Clip command if the node clips its children
+    if clips_children {
+        local_commands.push((
+            Command::ClipPush(PxRect {
+                x: self_pos.x,
+                y: self_pos.y,
+                width: size.width,
+                height: size.height,
+            }),
+            TypeId::of::<Command>(),
+            size,
+            self_pos,
+        ));
+    }
+
     // Viewport culling check
-    let screen_rect = Rect {
-        x: 0,
-        y: 0,
-        width: screen_width,
-        height: screen_height,
+    let screen_rect = PxRect {
+        x: Px(0),
+        y: Px(0),
+        width: Px(screen_width),
+        height: Px(screen_height),
     };
-    let node_rect = Rect {
-        x: self_pos.x.0,
-        y: self_pos.y.0,
-        width: size.width.0,
-        height: size.height.0,
+    let node_rect = PxRect {
+        x: Px(self_pos.x.0),
+        y: Px(self_pos.y.0),
+        width: Px(size.width.0),
+        height: Px(size.height.0),
     };
 
     // Only drain commands if the node is visible.
-    if size.width.0 > 0 && size.height.0 > 0 && node_rect.intersects(&screen_rect) {
+    if size.width.0 > 0 && size.height.0 > 0 && !node_rect.is_orthogonal(&screen_rect) {
         for (cmd, type_id) in metadata.commands.drain(..) {
             local_commands.push((cmd, type_id, size, self_pos));
         }
@@ -356,6 +354,11 @@ fn compute_draw_commands_inner_parallel(
 
     for child_cmds in child_results {
         local_commands.extend(child_cmds);
+    }
+
+    // If the node clips its children, we need to pop the clip command
+    if clips_children {
+        local_commands.push((Command::ClipPop, TypeId::of::<Command>(), size, self_pos));
     }
 
     local_commands

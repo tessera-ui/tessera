@@ -23,6 +23,8 @@ pub(crate) enum InstructionCategory {
     BarrierDraw,
     /// High priority, must be executed before barrier draws that depend on it.
     Compute,
+    /// A state-changing command that acts as a reordering fence.
+    StateChange,
 }
 
 /// A wrapper for a command with additional information for sorting.
@@ -119,6 +121,16 @@ impl InstructionInfo {
                 };
                 (category, rect)
             }
+            Command::ClipPush(rect) => (InstructionCategory::StateChange, *rect),
+            Command::ClipPop => (
+                InstructionCategory::StateChange,
+                PxRect {
+                    x: position.x,
+                    y: position.y,
+                    width: Px::ZERO,
+                    height: Px::ZERO,
+                },
+            ),
         };
 
         Self {
@@ -265,6 +277,15 @@ fn build_dependency_graph(instructions: &[InstructionInfo]) -> DiGraph<(), ()> {
 
             let inst_i = &instructions[i];
             let inst_j = &instructions[j];
+
+            // Rule 0: State changes act as fences.
+            // If one of two commands is a state change, their relative order must be preserved.
+            if inst_i.original_index < inst_j.original_index
+                && (inst_i.category == InstructionCategory::StateChange
+                    || inst_j.category == InstructionCategory::StateChange)
+            {
+                graph.add_edge(node_indices[i], node_indices[j], ());
+            }
 
             // Rule 1: Explicit dependency (Compute -> BarrierDraw)
             // If inst_j is a BarrierDraw and inst_i is a Compute that appeared

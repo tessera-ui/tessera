@@ -56,6 +56,8 @@ pub struct ComponentNodeMetaData {
     /// executed during rendering. The order of commands in this vector determines
     /// their execution order.
     pub(crate) commands: Vec<(Command, TypeId)>,
+    /// Whether this node clips its children.
+    pub clips_children: bool,
 }
 
 impl ComponentNodeMetaData {
@@ -66,6 +68,7 @@ impl ComponentNodeMetaData {
             rel_position: None,
             abs_position: None,
             commands: Vec::new(),
+            clips_children: false,
         }
     }
 
@@ -215,6 +218,18 @@ impl<'a> MeasureInput<'a> {
     /// Sets the relative position of a child node.
     pub fn place_child(&self, child_id: NodeId, position: PxPosition) {
         place_node(child_id, position, self.metadatas);
+    }
+
+    /// Enables clipping for the current node.
+    pub fn enable_clipping(&self) {
+        // Set the clipping flag to true for this node.
+        self.metadata_mut().clips_children = true;
+    }
+
+    /// Disables clipping for the current node.
+    pub fn disable_clipping(&self) {
+        // Set the clipping flag to false for this node.
+        self.metadata_mut().clips_children = false;
     }
 }
 
