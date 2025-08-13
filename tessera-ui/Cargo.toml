@@ -20,7 +20,7 @@ parking_lot = "0.12.3"
 pollster = "0.4.0"
 wgpu = "26.0.1"
 indextree = "4.7.4"
-rayon = "1.10.0"
+rayon = "1.11.0"
 dashmap = "6.1.0"
 uuid = { version = "1.18.0", features = ["v4"] }
 tessera-ui-macros = { path = "../tessera-ui-macros" }
