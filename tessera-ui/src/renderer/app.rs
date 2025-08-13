@@ -455,7 +455,7 @@ impl WgpuApp {
                     });
 
                     // Set the scissor rectangle only to needed area
-                    let mut draw_rect = match command.barrier() {
+                    let first_draw_rect = match command.barrier() {
                         Some(BarrierRequirement::Global) => PxRect {
                             x: Px(0),
                             y: Px(0),
@@ -509,6 +509,7 @@ impl WgpuApp {
                             }
                         }
                     };
+                    let mut all_draw_rects = vec![first_draw_rect.to_owned()];
 
                     self.drawer.begin_pass(
                         &self.gpu,
@@ -524,7 +525,7 @@ impl WgpuApp {
                     // Batch subsequent draw commands that require barriers but not orthogonal to draw rect
                     if command.barrier().is_some() {
                         // Used to record all draw commands that are drawn in this pass
-                        let mut draw_rects = vec![draw_rect.to_owned()]; // Here we assume using the CPU to check orthogonality one by one is worth avoiding an extra texture copy
+                        let mut draw_rects_for_check = vec![first_draw_rect.to_owned()]; // Here we assume using the CPU to check orthogonality one by one is worth avoiding an extra texture copy
                         while let Some((Command::Draw(command), _, size, start_pos)) =
                             commands_iter.peek()
                         {
@@ -558,20 +559,22 @@ impl WgpuApp {
                                     BarrierRequirement::Absolute(rect) => rect,
                                 };
                                 // Check if the new draw rectangle is orthogonal to every existing draw rectangle
-                                if !draw_rects.iter().all(|dr| dr.is_orthogonal(&new_draw_rect)) {
+                                if !draw_rects_for_check
+                                    .iter()
+                                    .all(|dr| dr.is_orthogonal(&new_draw_rect))
+                                {
                                     break; // Break if the next command requires a barrier that is not orthogonal to any existing draw rectangle in this pass
                                 }
                                 // Record the new draw rectangle
-                                draw_rects.push(new_draw_rect.to_owned());
+                                draw_rects_for_check.push(new_draw_rect.to_owned());
                                 // Acutally custom iter since we determine the next command can be batched
                                 let (Command::Draw(command), _, size, start_pos) =
                                     commands_iter.next().unwrap()
                                 else {
                                     break; // Unreachable, but just in case
                                 };
-                                // If the new draw rectangle is not orthogonal, continue batching
-                                // Set scissor rect to cover the new draw rectangle
-                                draw_rect = draw_rect.union(&new_draw_rect);
+                                // Record the draw rectangle so we can set the scissor rect later
+                                all_draw_rects.push(new_draw_rect);
                                 // Submit the command
                                 commands.push_back((command, command_type_id, size, start_pos));
                             } else {
@@ -596,8 +599,8 @@ impl WgpuApp {
                             let y = start_pos.y.positive().min(texture_size.height);
                             let width = size.width.positive().min(texture_size.width - x);
                             let height = size.height.positive().min(texture_size.height - y);
-                            // Set the scissor rect to cover the new draw rectangle
-                            draw_rect = draw_rect.union(&PxRect {
+                            // Record the draw rectangle so we can set the scissor rect later
+                            all_draw_rects.push(PxRect {
                                 x: Px::from(x),
                                 y: Px::from(y),
                                 width: Px::from(width),
@@ -608,17 +611,21 @@ impl WgpuApp {
                     }
 
                     rpass.set_scissor_rect(
-                        draw_rect.x.positive(),
-                        draw_rect.y.positive(),
-                        draw_rect.width.positive(),
-                        draw_rect.height.positive(),
+                        first_draw_rect.x.positive(),
+                        first_draw_rect.y.positive(),
+                        first_draw_rect.width.positive(),
+                        first_draw_rect.height.positive(),
                     );
 
                     // Submit all batched draw commands to the drawer
                     let mut buffer: Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)> =
                         Vec::with_capacity(commands.len());
                     let mut last_command_type_id = None;
-                    for (command, command_type_id, size, start_pos) in commands {
+                    // Use a separate variable to track the current batch draw rectangle
+                    let mut current_batch_draw_rect = PxRect::ZERO;
+                    for ((command, command_type_id, size, start_pos), draw_rect) in
+                        commands.into_iter().zip(all_draw_rects.into_iter())
+                    {
                         if last_command_type_id != Some(command_type_id) {
                             if !buffer.is_empty() {
                                 let commands = mem::take(&mut buffer); // Clear and take the buffer
@@ -626,6 +633,12 @@ impl WgpuApp {
                                     .iter()
                                     .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
                                     .collect::<Vec<_>>();
+                                rpass.set_scissor_rect(
+                                    current_batch_draw_rect.x.positive(),
+                                    current_batch_draw_rect.y.positive(),
+                                    current_batch_draw_rect.width.positive(),
+                                    current_batch_draw_rect.height.positive(),
+                                );
                                 self.drawer.submit(
                                     &self.gpu,
                                     &self.queue,
@@ -634,11 +647,13 @@ impl WgpuApp {
                                     &commands,
                                     scene_texture_view,
                                 );
+                                current_batch_draw_rect = PxRect::ZERO; // Reset the current batch draw rectangle
                             }
 
                             last_command_type_id = Some(command_type_id);
                         }
                         buffer.push((command, size, start_pos));
+                        current_batch_draw_rect = current_batch_draw_rect.union(&draw_rect);
                     }
                     if !buffer.is_empty() {
                         let commands = mem::take(&mut buffer); // Clear and take the buffer
@@ -646,6 +661,12 @@ impl WgpuApp {
                             .iter()
                             .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
                             .collect::<Vec<_>>();
+                        rpass.set_scissor_rect(
+                            current_batch_draw_rect.x.positive(),
+                            current_batch_draw_rect.y.positive(),
+                            current_batch_draw_rect.width.positive(),
+                            current_batch_draw_rect.height.positive(),
+                        );
                         self.drawer.submit(
                             &self.gpu,
                             &self.queue,

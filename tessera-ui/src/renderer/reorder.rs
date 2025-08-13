@@ -333,7 +333,7 @@ mod tests {
 
     impl DrawCommand for MockDrawCommand {
         fn barrier(&self) -> Option<BarrierRequirement> {
-            self.barrier_req.clone()
+            self.barrier_req
         }
     }
 
@@ -344,7 +344,7 @@ mod tests {
 
     impl DrawCommand for MockDrawCommand2 {
         fn barrier(&self) -> Option<BarrierRequirement> {
-            self.barrier_req.clone()
+            self.barrier_req
         }
     }
 
@@ -355,7 +355,7 @@ mod tests {
 
     impl ComputeCommand for MockComputeCommand {
         fn barrier(&self) -> BarrierRequirement {
-            self.barrier_req.clone()
+            self.barrier_req
         }
     }
 
@@ -366,7 +366,7 @@ mod tests {
 
     impl ComputeCommand for MockComputeCommand2 {
         fn barrier(&self) -> BarrierRequirement {
-            self.barrier_req.clone()
+            self.barrier_req
         }
     }
 

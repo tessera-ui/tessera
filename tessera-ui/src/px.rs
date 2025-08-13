@@ -784,6 +784,14 @@ pub struct PxRect {
 }
 
 impl PxRect {
+    /// A constant representing a zero rectangle (0×0 at position (0, 0)).
+    pub const ZERO: Self = Self {
+        x: Px::ZERO,
+        y: Px::ZERO,
+        width: Px::ZERO,
+        height: Px::ZERO,
+    };
+
     /// Creates a new rectangle from position and size.
     pub const fn new(x: Px, y: Px, width: Px, height: Px) -> Self {
         Self {
