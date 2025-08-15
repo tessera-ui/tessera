@@ -1,3 +1,31 @@
+## [v1.10.0] - 2025-08-15 +08:00
+
+### Changes
+- fix(renderer): correct clip command handling logic
+- Merge pull request #33 from tessera-ui/dependabot/cargo/rayon-1.11.0
+- feat(clip): implement component clipping to prevent content overflow
+- chore(deps): bump rayon from 1.10.0 to 1.11.0
+- refactor(renderer/app): streamline main render loop with pass-based architecture
+- feat(renderer/reorder): optimize instruction batching with batch_potential heuristic and improve stable sorting
+- test(tests): update instruction reordering tests to account for non-deterministic order
+- feat(renderer): optimize barrier batch draw logic and add PxRect::ZERO constant
+- feat(renderer/app): implement conditional clear pass for initial rendering
+- feat(renderer/reorder): optimize PriorityNode stable sorting and batch grouping, extend tests for instruction reordering
+- feat(tests): add unit tests for instruction reordering logic
+- Merge pull request #30 from tessera-ui/dependabot/cargo/uuid-1.18.0
+- chore(deps): bump uuid from 1.17.0 to 1.18.0
+- chore(deps): bump libc from 0.2.174 to 0.2.175
+- feat(example-calculator): add CalStyle enum and CLI option for style switching, refactor keyboard and background to support glass and material styles, introduce Color::GRAY constant, update dependencies for clap support
+- perf(renderer/reorder): improve PriorityNode sorting by adding type_id for finer-grained priority control
+- refactor(renderer,pipelines,logo): unify import order, optimize pipeline interfaces for batched command processing, simplify logo component structure
+- refactor(renderer): remove debug print statements from command processing for cleaner output
+- perf(renderer): refactor rendering pipeline interfaces for batched command processing and optimize dependency graph rules
+- perf(renderer): batch draw commands and optimize fluid_glass pipeline
+- feat(renderer): add scene_texture_view parameter to render pass methods for improved pipeline flexibility and future glass morphism support
+- chore(deps): bump bytemuck from 1.23.1 to 1.23.2
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.9.1...tessera-ui-v1.10.0)
+
 ## [v1.9.1] - 2025-08-08 +08:00
 
 ### Changes
