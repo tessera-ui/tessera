@@ -1,3 +1,22 @@
+## [v1.8.0] - 2025-08-15 +08:00
+
+### Changes
+- refactor(fluid_glass): optimize border anti-aliasing and highlight logic
+- docs(shape): update examples to reflect independent corner radii API
+- fix(renderer): correct clip command handling logic
+- feat(components): introduce BottomSheet and independent corner radii
+- feat(clip): implement component clipping to prevent content overflow
+- fix(pipelines/text): fix doctest type errors in TextData example for Color and TextConstraint
+- refactor(renderer,pipelines,logo): unify import order, optimize pipeline interfaces for batched command processing, simplify logo component structure
+- perf(renderer): refactor rendering pipeline interfaces for batched command processing and optimize dependency graph rules
+- perf(pipelines/shape): optimize shape rendering pipeline with instance-based uniforms and batched draw, update WGSL for multi-instance support
+- perf(text-pipeline): optimize GlyphonTextRender with batched command collection and improved renderer reuse
+- perf(renderer): batch draw commands and optimize fluid_glass pipeline
+- perf(pipelines/fluid_glass): optimize FluidGlassPipeline with dynamic uniform buffer offset, improve multi-component rendering performance.
+- chore(deps): bump bytemuck from 1.23.1 to 1.23.2
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.7.1...tessera-ui-basic-components-v1.8.0)
+
 ## [v1.7.1] - 2025-08-08 +08:00
 
 ### Changes
