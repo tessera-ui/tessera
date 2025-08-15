@@ -1,3 +1,11 @@
+## [v0.2.2] - 2025-08-15 +08:00
+
+### Changes
+- chore(deps): bump syn from 2.0.104 to 2.0.105
+- fix(docs): update code block in shard function example to ignore syntax highlighting
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.2.1...tessera-ui-macros-v0.2.2)
+
 ## [v0.2.1] - 2025-08-08 +08:00
 
 ### Changes
