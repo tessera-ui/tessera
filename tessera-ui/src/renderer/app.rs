@@ -493,13 +493,8 @@ impl WgpuApp {
                     self.compute_commands.push((cmd, size, start_pos));
                 }
                 Command::ClipPush(rect) => {
-                    // Mark last command as having clipping operations
-                    if let Some(last_cmd) = commands_in_pass.last_mut() {
-                        last_cmd.clip_ops = Some(ClipOps::Push(rect));
-                    } else {
-                        // If there is no last command, we need to push it into temp stack
-                        clip_temp_stack.push(ClipOps::Push(rect)); // we'll use this for next command
-                    }
+                    // Push it into temp stack
+                    clip_temp_stack.push(ClipOps::Push(rect)); // we'll use this for next command
                 }
                 Command::ClipPop => {
                     // Push it into temp stack

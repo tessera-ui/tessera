@@ -380,8 +380,6 @@ fn scrollable_with_alongside_scrollbar(
     }
 
     measure(Box::new(move |input| {
-        // Enable clip
-        input.enable_clipping();
         // Record the final size
         let mut final_size = ComputedData::ZERO;
         // Get parent constraint as content constraint
