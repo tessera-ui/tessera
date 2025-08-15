@@ -297,13 +297,11 @@ pub fn fluid_glass(
 
             if is_cursor_in {
                 input.requests.cursor_icon = CursorIcon::Pointer;
-            }
 
-            if is_cursor_in {
                 if let Some(_event) = input.cursor_events.iter().find(|e| {
                     matches!(
                         e.content,
-                        CursorEventContent::Pressed(PressKeyEventType::Left)
+                        CursorEventContent::Released(PressKeyEventType::Left)
                     )
                 }) {
                     if let Some(ripple_state) = &ripple_state {
