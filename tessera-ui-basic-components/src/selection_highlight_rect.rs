@@ -44,9 +44,9 @@ pub fn selection_highlight_rect(
     measure(Box::new(move |input| {
         let drawable = ShapeCommand::Rect {
             color,
-            corner_radius: 0.0, // Sharp corners for text selection
-            g2_k_value: 3.0,    // g2-like corners
-            shadow: None,       // No shadow for selection highlight
+            corner_radii: glam::Vec4::ZERO.into(), // Sharp corners for text selection
+            g2_k_value: 3.0,                       // g2-like corners
+            shadow: None,                          // No shadow for selection highlight
         };
 
         input.metadata_mut().push_draw_command(drawable);

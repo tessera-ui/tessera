@@ -75,7 +75,9 @@ pub struct CheckboxArgs {
     #[builder(default = "1.0")]
     pub checkmark_animation_progress: f32,
 
-    #[builder(default = "Shape::RoundedRectangle{ corner_radius: 4.0, g2_k_value: 3.0 }")]
+    #[builder(
+        default = "Shape::RoundedRectangle{ top_left: 4.0, top_right: 4.0, bottom_right: 4.0, bottom_left: 4.0, g2_k_value: 3.0 }"
+    )]
     pub shape: Shape,
 
     #[builder(default)]

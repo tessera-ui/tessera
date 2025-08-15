@@ -59,14 +59,15 @@ pub use command::{RippleProps, ShadowProps, ShapeCommand};
 /// ```
 #[derive(ShaderType, Clone, Copy, Debug, PartialEq)]
 pub struct ShapeUniforms {
-    pub size_cr_border_width: Vec4,
+    pub corner_radii: Vec4, // x:tl, y:tr, z:br, w:bl
     pub primary_color: Vec4,
     pub shadow_color: Vec4,
     pub render_params: Vec4,
     pub ripple_params: Vec4,
     pub ripple_color: Vec4,
     pub g2_k_value: f32,
-    pub position: Vec4,
+    pub border_width: f32, // separate border_width field
+    pub position: Vec4,    // x, y, width, height
     pub screen_size: Vec2,
 }
 

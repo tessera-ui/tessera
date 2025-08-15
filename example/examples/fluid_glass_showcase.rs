@@ -18,7 +18,10 @@ fn small_box(color: Color) {
         SurfaceArgsBuilder::default()
             .color(color)
             .shape(Shape::RoundedRectangle {
-                corner_radius: 25.0,
+                top_left: 25.0,
+                top_right: 25.0,
+                bottom_right: 25.0,
+                bottom_left: 25.0,
                 g2_k_value: 3.0,
             })
             .padding(Dp(8.0))
@@ -86,7 +89,10 @@ fn app(image_resource: &ImageData) {
                                             .width(DimensionValue::Fixed(Px(350)))
                                             .height(DimensionValue::Fixed(Px(250)))
                                             .shape(Shape::RoundedRectangle {
-                                                corner_radius: 20.0,
+                                                top_left: 20.0,
+                                                top_right: 20.0,
+                                                bottom_right: 20.0,
+                                                bottom_left: 20.0,
                                                 g2_k_value: 3.0,
                                             })
                                             .refraction_amount(50.0)
@@ -105,7 +111,10 @@ fn app(image_resource: &ImageData) {
                                             .width(DimensionValue::Fixed(Px(350)))
                                             .height(DimensionValue::Fixed(Px(250)))
                                             .shape(Shape::RoundedRectangle {
-                                                corner_radius: 20.0,
+                                                top_left: 20.0,
+                                                top_right: 20.0,
+                                                bottom_right: 20.0,
+                                                bottom_left: 20.0,
                                                 g2_k_value: 3.0,
                                             })
                                             .tint_color(Color::TRANSPARENT)

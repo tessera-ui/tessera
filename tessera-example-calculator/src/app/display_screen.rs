@@ -42,7 +42,10 @@ pub fn display_screen(app_state: Arc<AppState>, style: CalStyle) {
                     SurfaceArgsBuilder::default()
                         .padding(Dp(10.0))
                         .shape(Shape::RoundedRectangle {
-                            corner_radius: 25.0,
+                            top_left: 25.0,
+                            top_right: 25.0,
+                            bottom_right: 25.0,
+                            bottom_left: 25.0,
                             g2_k_value: 3.0,
                         })
                         .color(Color::GREY)

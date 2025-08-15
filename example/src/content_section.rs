@@ -35,7 +35,10 @@ pub fn content_section() {
     surface(
         SurfaceArgsBuilder::default()
             .shape(Shape::RoundedRectangle {
-                corner_radius: 25.0,
+                top_left: 25.0,
+                top_right: 25.0,
+                bottom_right: 25.0,
+                bottom_left: 25.0,
                 g2_k_value: 3.0,
             })
             .padding(20.0.into())

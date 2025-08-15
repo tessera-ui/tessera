@@ -280,7 +280,7 @@ pub fn switch(args: impl Into<SwitchArgs>) {
         };
         let track_command = ShapeCommand::Rect {
             color: track_color,
-            corner_radius: (self_height_px.0 as f32) / 2.0,
+            corner_radii: glam::Vec4::splat((self_height_px.0 as f32) / 2.0).into(),
             g2_k_value: 2.0, // Use G1 corners here specifically
             shadow: None,
         };

@@ -82,9 +82,15 @@ pub fn glass_progress(args: impl Into<GlassProgressArgs>) {
             .height(DimensionValue::Fixed(args.height.to_px()))
             .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: args.height.to_px().to_f32() / 2.0,
-                g2_k_value: 2.0, // Capsule shape
+            .shape({
+                let radius = args.height.to_px().to_f32() / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0,
+                }
             })
             .border(GlassBorder::new(args.track_border_width.into()))
             .padding(args.track_border_width)
@@ -107,9 +113,15 @@ pub fn glass_progress(args: impl Into<GlassProgressArgs>) {
                             max: None,
                         })
                         .tint_color(args.progress_tint_color)
-                        .shape(Shape::RoundedRectangle {
-                            corner_radius: effective_height / 2.0,
-                            g2_k_value: 2.0, // Capsule shape
+                        .shape({
+                            let radius = effective_height / 2.0;
+                            Shape::RoundedRectangle {
+                                top_left: radius,
+                                top_right: radius,
+                                bottom_right: radius,
+                                bottom_left: radius,
+                                g2_k_value: 2.0, // Capsule shape
+                            }
                         })
                         .refraction_amount(0.0)
                         .build()

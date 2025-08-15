@@ -71,9 +71,15 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(args.track_color)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: args.height.to_px().to_f32() / 2.0,
-                g2_k_value: 2.0,
+            .shape({
+                let radius = args.height.to_px().to_f32() / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0,
+                }
             })
             .width(DimensionValue::Fill {
                 min: None,
@@ -93,9 +99,15 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     surface(
         SurfaceArgsBuilder::default()
             .color(args.progress_color)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: args.height.to_px().to_f32() / 2.0,
-                g2_k_value: 2.0,
+            .shape({
+                let radius = args.height.to_px().to_f32() / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0,
+                }
             })
             .width(DimensionValue::Fill {
                 min: None,

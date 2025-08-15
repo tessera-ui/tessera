@@ -10,8 +10,8 @@ pub enum ShapeCommand {
     Rect {
         /// Color of the rectangle (RGBA)
         color: Color,
-        /// Corner radius of the rectangle
-        corner_radius: f32,
+        /// Corner radii of the rectangle (tl, tr, br, bl)
+        corner_radii: [f32; 4],
         /// G2 exponent for rounded corners.
         /// k=2.0 results in standard G1 circular corners.
         g2_k_value: f32,
@@ -22,8 +22,8 @@ pub enum ShapeCommand {
     OutlinedRect {
         /// Color of the border (RGBA)
         color: Color,
-        /// Corner radius of the rectangle
-        corner_radius: f32,
+        /// Corner radii of the rectangle (tl, tr, br, bl)
+        corner_radii: [f32; 4],
         /// G2 exponent for rounded corners.
         /// k=2.0 results in standard G1 circular corners.
         g2_k_value: f32,
@@ -36,8 +36,8 @@ pub enum ShapeCommand {
     RippleRect {
         /// Color of the rectangle (RGBA)
         color: Color,
-        /// Corner radius of the rectangle
-        corner_radius: f32,
+        /// Corner radii of therectangle (tl, tr, br, bl)
+        corner_radii: [f32; 4],
         /// G2 exponent for rounded corners.
         /// k=2.0 results in standard G1 circular corners.
         g2_k_value: f32,
@@ -50,8 +50,8 @@ pub enum ShapeCommand {
     RippleOutlinedRect {
         /// Color of the border (RGBA)
         color: Color,
-        /// Corner radius of the rectangle
-        corner_radius: f32,
+        /// Corner radii of the rectangle (tl, tr, br, bl)
+        corner_radii: [f32; 4],
         /// G2 exponent for rounded corners.
         /// k=2.0 results in standard G1 circular corners.
         g2_k_value: f32,
@@ -137,23 +137,23 @@ pub(crate) fn rect_to_uniforms(
     size: PxSize,
     position: PxPosition,
 ) -> ShapeUniforms {
-    let (primary_color_rgba, corner_radius, g2_k_value, shadow, border_width, render_mode, ripple) =
+    let (primary_color_rgba, corner_radii, g2_k_value, shadow, border_width, render_mode, ripple) =
         match command {
             ShapeCommand::Rect {
                 color,
-                corner_radius,
+                corner_radii,
                 g2_k_value,
                 shadow,
-            } => (*color, *corner_radius, *g2_k_value, *shadow, 0.0, 0.0, None),
+            } => (*color, *corner_radii, *g2_k_value, *shadow, 0.0, 0.0, None),
             ShapeCommand::OutlinedRect {
                 color,
-                corner_radius,
+                corner_radii,
                 g2_k_value,
                 shadow,
                 border_width,
             } => (
                 *color,
-                *corner_radius,
+                *corner_radii,
                 *g2_k_value,
                 *shadow,
                 *border_width,
@@ -162,13 +162,13 @@ pub(crate) fn rect_to_uniforms(
             ),
             ShapeCommand::RippleRect {
                 color,
-                corner_radius,
+                corner_radii,
                 g2_k_value,
                 shadow,
                 ripple,
             } => (
                 *color,
-                *corner_radius,
+                *corner_radii,
                 *g2_k_value,
                 *shadow,
                 0.0,
@@ -177,14 +177,14 @@ pub(crate) fn rect_to_uniforms(
             ),
             ShapeCommand::RippleOutlinedRect {
                 color,
-                corner_radius,
+                corner_radii,
                 g2_k_value,
                 shadow,
                 border_width,
                 ripple,
             } => (
                 *color,
-                *corner_radius,
+                *corner_radii,
                 *g2_k_value,
                 *shadow,
                 *border_width,
@@ -192,14 +192,27 @@ pub(crate) fn rect_to_uniforms(
                 Some(*ripple),
             ),
             ShapeCommand::Ellipse { color, shadow } => (
-                *color, -1.0, // Use negative corner_radius to signify an ellipse
-                0.0, *shadow, 0.0, 0.0, None,
+                *color,
+                [-1.0, -1.0, -1.0, -1.0],
+                0.0,
+                *shadow,
+                0.0,
+                0.0,
+                None,
             ),
             ShapeCommand::OutlinedEllipse {
                 color,
                 shadow,
                 border_width,
-            } => (*color, -1.0, 0.0, *shadow, *border_width, 1.0, None),
+            } => (
+                *color,
+                [-1.0, -1.0, -1.0, -1.0],
+                0.0,
+                *shadow,
+                *border_width,
+                1.0,
+                None,
+            ),
         };
 
     let width = size.width;
@@ -226,7 +239,7 @@ pub(crate) fn rect_to_uniforms(
     };
 
     ShapeUniforms {
-        size_cr_border_width: [width.to_f32(), height.to_f32(), corner_radius, border_width].into(),
+        corner_radii: corner_radii.into(),
         primary_color: primary_color_rgba.to_array().into(),
         shadow_color: shadow_rgba_color.to_array().into(),
         render_params: [
@@ -239,6 +252,7 @@ pub(crate) fn rect_to_uniforms(
         ripple_params,
         ripple_color,
         g2_k_value,
+        border_width,
         position: [
             position.x.to_f32(),
             position.y.to_f32(),

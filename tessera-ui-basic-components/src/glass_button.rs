@@ -45,7 +45,9 @@ pub struct GlassButtonArgs {
     // Glass visual properties
     #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
     pub tint_color: Color,
-    #[builder(default = "Shape::RoundedRectangle { corner_radius: 25.0, g2_k_value: 3.0 }")]
+    #[builder(
+        default = "Shape::RoundedRectangle { top_left: 25.0, top_right: 25.0, bottom_right: 25.0, bottom_left: 25.0, g2_k_value: 3.0 }"
+    )]
     pub shape: Shape,
     #[builder(default = "0.0")]
     pub blur_radius: f32,

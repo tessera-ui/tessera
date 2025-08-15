@@ -81,9 +81,15 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
             .width(width.into())
             .height(track_height.into())
             .color(args.track_color)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: width.to_f32() / 2.0,
-                g2_k_value: 2.0,
+            .shape({
+                let radius = width.to_f32() / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0,
+                }
             })
             .build()
             .unwrap(),
@@ -111,9 +117,15 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
         SurfaceArgsBuilder::default()
             .width(width.into())
             .height(thumb_height.into())
-            .shape(Shape::RoundedRectangle {
-                corner_radius: width.to_f32() / 2.0,
-                g2_k_value: 2.0,
+            .shape({
+                let radius = width.to_f32() / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0,
+                }
             })
             .color(thumb_color)
             .build()
@@ -298,9 +310,15 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
             .width(track_width.into())
             .height(height.into())
             .color(args.track_color)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: height.to_f32() / 2.0,
-                g2_k_value: 2.0,
+            .shape({
+                let radius = height.to_f32() / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0,
+                }
             })
             .build()
             .unwrap(),
@@ -328,9 +346,15 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
         SurfaceArgsBuilder::default()
             .width(thumb_width.into())
             .height(height.into())
-            .shape(Shape::RoundedRectangle {
-                corner_radius: height.to_f32() / 2.0,
-                g2_k_value: 2.0,
+            .shape({
+                let radius = height.to_f32() / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0,
+                }
             })
             .color(thumb_color)
             .build()

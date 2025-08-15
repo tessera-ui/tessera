@@ -148,9 +148,15 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
             .width(DimensionValue::Fixed(args.width.to_px()))
             .height(DimensionValue::Fixed(args.track_height.to_px()))
             .color(args.inactive_track_color)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: args.track_height.to_px().to_f32() / 2.0,
-                g2_k_value: 2.0, // Capsule shape
+            .shape({
+                let radius = args.track_height.to_px().to_f32() / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0, // Capsule shape
+                }
             })
             .build()
             .unwrap(),
@@ -166,9 +172,15 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
                         max: None,
                     })
                     .color(args.active_track_color)
-                    .shape(Shape::RoundedRectangle {
-                        corner_radius: args.track_height.to_px().to_f32() / 2.0,
-                        g2_k_value: 2.0, // Capsule shape
+                    .shape({
+                        let radius = args.track_height.to_px().to_f32() / 2.0;
+                        Shape::RoundedRectangle {
+                            top_left: radius,
+                            top_right: radius,
+                            bottom_right: radius,
+                            bottom_left: radius,
+                            g2_k_value: 2.0, // Capsule shape
+                        }
                     })
                     .build()
                     .unwrap(),

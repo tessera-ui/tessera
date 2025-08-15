@@ -166,9 +166,15 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
         .height(DimensionValue::Fixed(args.height.to_px()))
         .tint_color(track_color)
         .blur_radius(10.0)
-        .shape(Shape::RoundedRectangle {
-            corner_radius: args.height.to_px().to_f32() / 2.0,
-            g2_k_value: 2.0,
+        .shape({
+            let radius = args.height.to_px().to_f32() / 2.0;
+            Shape::RoundedRectangle {
+                top_left: radius,
+                top_right: radius,
+                bottom_right: radius,
+                bottom_left: radius,
+                g2_k_value: 2.0, // Capsule shape
+            }
         })
         .blur_radius(8.0);
     if let Some(border) = args.track_border {

@@ -60,7 +60,7 @@ pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
         // Create a rectangular cursor shape with fixed width and variable height
         let drawable = ShapeCommand::Rect {
             color: Color::BLACK,
-            corner_radius: 0.0,
+            corner_radii: glam::Vec4::ZERO.into(),
             g2_k_value: 3.0, // Use G2-like corners
             shadow: None,
         };

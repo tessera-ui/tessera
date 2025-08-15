@@ -4,30 +4,30 @@ use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
+    bottom_sheet::{
+        BottomSheetProviderArgsBuilder, BottomSheetProviderState, bottom_sheet_provider,
+    },
+    button::{ButtonArgsBuilder, button},
     column::ColumnArgsBuilder,
     column_ui,
-    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
-    glass_button::{GlassButtonArgsBuilder, glass_button},
-    glass_dialog::{
-        GlassDialogProviderArgsBuilder, GlassDialogProviderState, glass_dialog_provider,
-    },
     ripple_state::RippleState,
     row::RowArgsBuilder,
     row_ui,
     shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},
+    surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
 #[derive(Default)]
 struct AppState {
-    dialog_state: Arc<RwLock<GlassDialogProviderState>>,
+    bottom_sheet_state: Arc<RwLock<BottomSheetProviderState>>,
     button_ripple: Arc<RippleState>,
     close_button_ripple: Arc<RippleState>,
 }
 
 #[tessera]
-fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
+fn bottom_sheet_main_content(app_state: Arc<RwLock<AppState>>) {
     let state = app_state.clone();
     let button_ripple = state.read().button_ripple.clone();
     row_ui!(
@@ -45,19 +45,18 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
             .build()
             .unwrap(),
         || {
-            glass_button(
-                GlassButtonArgsBuilder::default()
+            button(
+                ButtonArgsBuilder::default()
                     .on_click(Arc::new(move || {
-                        state.write().dialog_state.write().open();
+                        state.write().bottom_sheet_state.write().open();
                     }))
-                    .tint_color(Color::WHITE.with_alpha(0.3))
                     .build()
                     .unwrap(),
                 button_ripple,
                 || {
                     text(
                         TextArgsBuilder::default()
-                            .text("Show Glass Dialog".to_string())
+                            .text("Show Bottom Sheet".to_string())
                             .build()
                             .unwrap(),
                     )
@@ -68,13 +67,13 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
 }
 
 #[tessera]
-fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
+fn bottom_sheet_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
     let state = app_state.clone();
     let close_button_ripple = state.read().close_button_ripple.clone();
     row_ui!(
         RowArgsBuilder::default()
             .main_axis_alignment(MainAxisAlignment::Center)
-            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .cross_axis_alignment(CrossAxisAlignment::End)
             .width(DimensionValue::Fill {
                 min: None,
                 max: None
@@ -86,20 +85,22 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
             .build()
             .unwrap(),
         move || {
-            fluid_glass(
-                FluidGlassArgsBuilder::default()
-                    .tint_color(Color::WHITE.with_alpha(content_alpha / 2.5))
-                    .blur_radius(10.0 * content_alpha)
+            surface(
+                SurfaceArgsBuilder::default()
+                    .color(Color::new(0.2, 0.2, 0.2, 1.0).with_alpha(content_alpha))
                     .shape(Shape::RoundedRectangle {
                         top_left: 25.0,
                         top_right: 25.0,
-                        bottom_right: 25.0,
-                        bottom_left: 25.0,
+                        bottom_right: 0.0,
+                        bottom_left: 0.0,
                         g2_k_value: 3.0,
                     })
-                    .refraction_amount(32.0 * content_alpha)
-                    .block_input(true)
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
                     .padding(Dp(20.0))
+                    .block_input(true)
                     .build()
                     .unwrap(),
                 None,
@@ -110,7 +111,7 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
                             text(
                                 TextArgsBuilder::default()
                                     .color(Color::BLACK.with_alpha(content_alpha))
-                                    .text("This is a Glass Dialog".to_string())
+                                    .text("This is a Bottom Sheet".to_string())
                                     .build()
                                     .unwrap(),
                             );
@@ -124,20 +125,19 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
                             );
                         },
                         move || {
-                            glass_button(
-                                GlassButtonArgsBuilder::default()
-                                    .tint_color(Color::RED.with_alpha(content_alpha / 2.5))
+                            button(
+                                ButtonArgsBuilder::default()
+                                    .color(Color::new(0.2, 0.5, 0.8, content_alpha))
                                     .on_click(Arc::new(move || {
-                                        state.write().dialog_state.write().close();
+                                        state.write().bottom_sheet_state.write().close();
                                     }))
-                                    .refraction_amount(32.0 * content_alpha)
                                     .build()
                                     .unwrap(),
                                 close_button_ripple,
-                                move || {
+                                || {
                                     text(
                                         TextArgsBuilder::default()
-                                            .color(Color::RED.with_alpha(content_alpha))
+                                            .color(Color::BLACK.with_alpha(content_alpha))
                                             .text("Close".to_string())
                                             .build()
                                             .unwrap(),
@@ -153,48 +153,42 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
 }
 
 #[tessera]
-fn dialog_provider_wrapper(
-    app_state: Arc<RwLock<AppState>>,
-    image_resource: &tessera_ui_basic_components::pipelines::image::ImageData,
-) {
+fn bottom_sheet_provider_wrapper(app_state: Arc<RwLock<AppState>>) {
     let state_for_provider = app_state.clone();
-    let image_resource = image_resource.clone();
-    tessera_ui_basic_components::boxed_ui!(
-        tessera_ui_basic_components::boxed::BoxedArgs {
-            alignment: tessera_ui_basic_components::alignment::Alignment::Center,
-            width: DimensionValue::Fill {
+    surface(
+        SurfaceArgsBuilder::default()
+            .color(Color::WHITE)
+            .width(DimensionValue::Fill {
                 min: None,
-                max: None
-            },
-            height: DimensionValue::Fill {
+                max: None,
+            })
+            .height(DimensionValue::Fill {
                 min: None,
-                max: None
-            },
-        },
+                max: None,
+            })
+            .build()
+            .unwrap(),
+        None,
         move || {
-            tessera_ui_basic_components::image::image(
-                tessera_ui_basic_components::image::ImageArgsBuilder::default()
-                    .data(image_resource.clone())
-                    .build()
-                    .unwrap(),
-            );
-        },
-        move || {
-            glass_dialog_provider(
-                GlassDialogProviderArgsBuilder::default()
+            bottom_sheet_provider(
+                BottomSheetProviderArgsBuilder::default()
                     .on_close_request(Arc::new(move || {
-                        state_for_provider.write().dialog_state.write().close();
+                        state_for_provider
+                            .write()
+                            .bottom_sheet_state
+                            .write()
+                            .close();
                     }))
                     .build()
                     .unwrap(),
-                app_state.read().dialog_state.clone(),
+                app_state.read().bottom_sheet_state.clone(),
                 {
                     let state = app_state.clone();
-                    move || dialog_main_content(state.clone())
+                    move || bottom_sheet_main_content(state.clone())
                 },
                 {
                     let state = app_state.clone();
-                    move |progress| dialog_content(state.clone(), progress)
+                    move |progress| bottom_sheet_content(state.clone(), progress)
                 },
             );
         },
@@ -202,11 +196,8 @@ fn dialog_provider_wrapper(
 }
 
 #[tessera]
-fn app(
-    app_state: Arc<RwLock<AppState>>,
-    image_resource: &tessera_ui_basic_components::pipelines::image::ImageData,
-) {
-    dialog_provider_wrapper(app_state, image_resource);
+fn app(app_state: Arc<RwLock<AppState>>) {
+    bottom_sheet_provider_wrapper(app_state);
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -215,19 +206,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .start()?;
 
     let app_state = Arc::new(RwLock::new(AppState::default()));
-    let image_path = format!(
-        "{}/examples/assets/scarlet_ut.jpg",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let image_data = tessera_ui_basic_components::image::load_image_from_source(
-        &tessera_ui_basic_components::image::ImageSource::Path(image_path),
-    )?;
 
     Renderer::run(
         {
             let app_state = app_state.clone();
-            let image_data = image_data.clone();
-            move || app(app_state.clone(), &image_data)
+            move || app(app_state.clone())
         },
         |renderer| {
             tessera_ui_basic_components::pipelines::register_pipelines(renderer);

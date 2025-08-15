@@ -247,7 +247,10 @@ pub fn glass_dialog_provider(
                 .blur_radius(blur_radius)
                 .border(None)
                 .shape(Shape::RoundedRectangle {
-                    corner_radius: 0.0,
+                    top_left: 0.0,
+                    top_right: 0.0,
+                    bottom_right: 0.0,
+                    bottom_left: 0.0,
                     g2_k_value: 3.0,
                 })
                 .noise_amount(0.0)

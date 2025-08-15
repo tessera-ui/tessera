@@ -18,7 +18,10 @@ fn small_box(text_content: &'static str, color: Color) {
         SurfaceArgs {
             color,
             shape: Shape::RoundedRectangle {
-                corner_radius: 25.0,
+                top_left: 25.0,
+                top_right: 25.0,
+                bottom_right: 25.0,
+                bottom_left: 25.0,
                 g2_k_value: 3.0,
             },
             padding: Dp(8.0),
@@ -68,7 +71,10 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
                     SurfaceArgs {
                         color: Color::new(0.9, 0.9, 0.9, 1.0), // Gray background to see borders clearly
                         shape: Shape::RoundedRectangle {
-                            corner_radius: 25.0,
+                            top_left: 25.0,
+                            top_right: 25.0,
+                            bottom_right: 25.0,
+                            bottom_left: 25.0,
                             g2_k_value: 3.0,
                         },
                         padding: Dp(10.0),

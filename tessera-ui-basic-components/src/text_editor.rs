@@ -128,7 +128,13 @@ pub struct TextEditorArgs {
     #[builder(default = "None")]
     pub border_color: Option<Color>,
     /// The shape of the text editor container.
-    #[builder(default = "Shape::RoundedRectangle { corner_radius: 4.0, g2_k_value: 3.0 }")]
+    #[builder(default = "                Shape::RoundedRectangle {
+                    top_left: 4.0,
+                    top_right: 4.0,
+                    bottom_right: 4.0,
+                    bottom_left: 4.0,
+                    g2_k_value: 3.0,
+                }")]
     pub shape: Shape,
     /// Padding inside the text editor. Defaults to 5.0 Dp.
     #[builder(default = "Dp(5.0)")]
@@ -610,7 +616,10 @@ impl TextEditorArgs {
             .border_width(1.0)
             .border_color(Some(Color::new(0.7, 0.7, 0.7, 1.0)))
             .shape(Shape::RoundedRectangle {
-                corner_radius: 4.0,
+                top_left: 4.0,
+                top_right: 4.0,
+                bottom_right: 4.0,
+                bottom_left: 4.0,
                 g2_k_value: 3.0,
             })
             .build()
@@ -647,7 +656,10 @@ impl TextEditorArgs {
             .background_color(Some(Color::WHITE))
             .border_width(0.0)
             .shape(Shape::RoundedRectangle {
-                corner_radius: 0.0,
+                top_left: 0.0,
+                top_right: 0.0,
+                bottom_right: 0.0,
+                bottom_left: 0.0,
                 g2_k_value: 3.0,
             })
             .build()
@@ -753,7 +765,7 @@ impl TextEditorArgs {
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui_basic_components::shape_def::Shape;
-    /// let args = TextEditorArgs::simple().with_shape(Shape::RoundedRectangle { corner_radius: 8.0, g2_k_value: 3.0 });
+    /// let args = TextEditorArgs::simple().with_shape(Shape::RoundedRectangle { top_left: 8.0, top_right: 8.0, bottom_right: 8.0, bottom_left: 8.0, g2_k_value: 3.0 });
     /// ```
     pub fn with_shape(mut self, shape: Shape) -> Self {
         self.shape = shape;

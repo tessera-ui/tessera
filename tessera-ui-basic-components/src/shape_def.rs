@@ -32,7 +32,13 @@ pub enum Shape {
     /// use tessera_ui_basic_components::shape_def::Shape;
     /// let shape = Shape::RoundedRectangle { corner_radius: 8.0, g2_k_value: 3.0 };
     /// ```
-    RoundedRectangle { corner_radius: f32, g2_k_value: f32 },
+    RoundedRectangle {
+        top_left: f32,
+        top_right: f32,
+        bottom_right: f32,
+        bottom_left: f32,
+        g2_k_value: f32,
+    },
 
     /// An ellipse that fills the component's bounding rectangle.
     ///
@@ -55,7 +61,10 @@ impl Default for Shape {
     /// ```
     fn default() -> Self {
         Shape::RoundedRectangle {
-            corner_radius: 0.0,
+            top_left: 0.0,
+            top_right: 0.0,
+            bottom_right: 0.0,
+            bottom_left: 0.0,
             g2_k_value: 3.0,
         }
     }

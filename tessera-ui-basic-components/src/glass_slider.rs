@@ -144,9 +144,15 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
             .height(DimensionValue::Fixed(args.track_height.to_px()))
             .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
-            .shape(Shape::RoundedRectangle {
-                corner_radius: args.track_height.0 as f32 / 2.0,
-                g2_k_value: 2.0, // Capsule shape
+            .shape({
+                let radius = args.track_height.0 as f32 / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0, // Capsule shape
+                }
             })
             .border(GlassBorder::new(args.track_border_width.into()))
             .padding(args.track_border_width)
@@ -167,9 +173,15 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
                         max: None,
                     })
                     .tint_color(args.progress_tint_color)
-                    .shape(Shape::RoundedRectangle {
-                        corner_radius: effective_height / 2.0,
-                        g2_k_value: 2.0, // Capsule shape
+                    .shape({
+                        let radius = effective_height / 2.0;
+                        Shape::RoundedRectangle {
+                            top_left: radius,
+                            top_right: radius,
+                            bottom_right: radius,
+                            bottom_left: radius,
+                            g2_k_value: 2.0, // Capsule shape
+                        }
                     })
                     .refraction_amount(0.0)
                     .build()

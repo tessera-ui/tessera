@@ -183,9 +183,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
                     rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
                     ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]).into(),
                     corner_radius: match args.shape {
-                        crate::shape_def::Shape::RoundedRectangle { corner_radius, .. } => {
-                            corner_radius
-                        }
+                        crate::shape_def::Shape::RoundedRectangle { top_left, .. } => top_left,
                         crate::shape_def::Shape::Ellipse => 0.0,
                     },
                     shape_type: match args.shape {

@@ -25,7 +25,10 @@ fn surface_showcase(state: Arc<AppState>) {
             SurfaceArgsBuilder::default()
                 .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
                 .shape(Shape::RoundedRectangle {
-                    corner_radius: 25.0,
+                    top_left: 25.0,
+                    top_right: 25.0,
+                    bottom_right: 25.0,
+                    bottom_left: 25.0,
                     g2_k_value: 3.0,
                 })
                 .padding(Dp(24.0))
@@ -124,7 +127,10 @@ fn surface_showcase(state: Arc<AppState>) {
                                         println!("Surface with ripple clicked!")
                                     })))
                                     .shape(Shape::RoundedRectangle {
-                                        corner_radius: 25.0,
+                                        top_left: 25.0,
+                                        top_right: 25.0,
+                                        bottom_right: 25.0,
+                                        bottom_left: 25.0,
                                         g2_k_value: 3.0,
                                     })
                                     .build()
@@ -170,7 +176,10 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
             SurfaceArgsBuilder::default()
                 .color(md_colors::SURFACE_CONTAINER)
                 .shape(Shape::RoundedRectangle {
-                    corner_radius: 25.0,
+                    top_left: 25.0,
+                    top_right: 25.0,
+                    bottom_right: 25.0,
+                    bottom_left: 25.0,
                     g2_k_value: 3.0,
                 })
                 .padding(Dp(24.0))
@@ -249,7 +258,10 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                     .width(DimensionValue::Fixed(Dp(100.0).into()))
                                     .height(DimensionValue::Fixed(Dp(100.0).into()))
                                     .shape(Shape::RoundedRectangle {
-                                        corner_radius: 25.0,
+                                        top_left: 25.0,
+                                        top_right: 25.0,
+                                        bottom_right: 25.0,
+                                        bottom_left: 25.0,
                                         g2_k_value: 3.0,
                                     })
                                     .on_click(Arc::new(|| {
@@ -299,7 +311,10 @@ fn text_editor_showcase(state: Arc<AppState>) {
         SurfaceArgsBuilder::default()
             .color(md_colors::SURFACE_CONTAINER)
             .shape(Shape::RoundedRectangle {
-                corner_radius: 25.0,
+                top_left: 25.0,
+                top_right: 25.0,
+                bottom_right: 25.0,
+                bottom_left: 25.0,
                 g2_k_value: 3.0,
             })
             .padding(Dp(24.0))
@@ -363,7 +378,10 @@ fn interactive_showcase(state: Arc<AppState>) {
         SurfaceArgsBuilder::default()
             .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
             .shape(Shape::RoundedRectangle {
-                corner_radius: 25.0,
+                top_left: 25.0,
+                top_right: 25.0,
+                bottom_right: 25.0,
+                bottom_left: 25.0,
                 g2_k_value: 3.0,
             })
             .padding(Dp(24.0))
@@ -387,7 +405,10 @@ fn performance_showcase(state: Arc<AppState>) {
         SurfaceArgsBuilder::default()
             .color(md_colors::SURFACE_CONTAINER) // Material Design surface-container color
             .shape(Shape::RoundedRectangle {
-                corner_radius: 25.0,
+                top_left: 25.0,
+                top_right: 25.0,
+                bottom_right: 25.0,
+                bottom_left: 25.0,
                 g2_k_value: 3.0,
             })
             .padding(Dp(24.0))
@@ -443,7 +464,10 @@ pub fn component_showcase(state: Arc<AppState>) {
                 SurfaceArgsBuilder::default()
                     .color(md_colors::PRIMARY_CONTAINER)
                     .shape(Shape::RoundedRectangle {
-                        corner_radius: 25.0,
+                        top_left: 25.0,
+                        top_right: 25.0,
+                        bottom_right: 25.0,
+                        bottom_left: 25.0,
                         g2_k_value: 3.0,
                     })
                     .padding(Dp(24.0))

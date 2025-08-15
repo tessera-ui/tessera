@@ -249,13 +249,17 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
 
             match args_measure_clone.shape {
                 Shape::RoundedRectangle {
-                    corner_radius,
+                    top_left,
+                    top_right,
+                    bottom_right,
+                    bottom_left,
                     g2_k_value,
                 } => {
+                    let corner_radii = [top_left, top_right, bottom_right, bottom_left];
                     if args_measure_clone.border_width > 0.0 {
                         ShapeCommand::RippleOutlinedRect {
                             color: args_measure_clone.border_color.unwrap_or(effective_color),
-                            corner_radius,
+                            corner_radii,
                             g2_k_value,
                             shadow: args_measure_clone.shadow,
                             border_width: args_measure_clone.border_width,
@@ -264,7 +268,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     } else {
                         ShapeCommand::RippleRect {
                             color: effective_color,
-                            corner_radius,
+                            corner_radii,
                             g2_k_value,
                             shadow: args_measure_clone.shadow,
                             ripple: ripple_props,
@@ -275,8 +279,8 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     if args_measure_clone.border_width > 0.0 {
                         ShapeCommand::RippleOutlinedRect {
                             color: args_measure_clone.border_color.unwrap_or(effective_color),
-                            corner_radius: -1.0, // Use negative radius to signify ellipse
-                            g2_k_value: 0.0,     // Just for compatibility, not used in ellipse
+                            corner_radii: [-1.0, -1.0, -1.0, -1.0], // Use negative radius to signify ellipse
+                            g2_k_value: 0.0, // Just for compatibility, not used in ellipse
                             shadow: args_measure_clone.shadow,
                             border_width: args_measure_clone.border_width,
                             ripple: ripple_props,
@@ -284,8 +288,8 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     } else {
                         ShapeCommand::RippleRect {
                             color: effective_color,
-                            corner_radius: -1.0, // Use negative radius to signify ellipse
-                            g2_k_value: 0.0,     // Just for compatibility, not used in ellipse
+                            corner_radii: [-1.0, -1.0, -1.0, -1.0], // Use negative radius to signify ellipse
+                            g2_k_value: 0.0, // Just for compatibility, not used in ellipse
                             shadow: args_measure_clone.shadow,
                             ripple: ripple_props,
                         }
@@ -296,13 +300,17 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             // Non-interactive surface
             match args_measure_clone.shape {
                 Shape::RoundedRectangle {
-                    corner_radius,
+                    top_left,
+                    top_right,
+                    bottom_right,
+                    bottom_left,
                     g2_k_value,
                 } => {
+                    let corner_radii = [top_left, top_right, bottom_right, bottom_left];
                     if args_measure_clone.border_width > 0.0 {
                         ShapeCommand::OutlinedRect {
                             color: args_measure_clone.border_color.unwrap_or(effective_color),
-                            corner_radius,
+                            corner_radii,
                             g2_k_value,
                             shadow: args_measure_clone.shadow,
                             border_width: args_measure_clone.border_width,
@@ -310,7 +318,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     } else {
                         ShapeCommand::Rect {
                             color: effective_color,
-                            corner_radius,
+                            corner_radii,
                             g2_k_value,
                             shadow: args_measure_clone.shadow,
                         }
