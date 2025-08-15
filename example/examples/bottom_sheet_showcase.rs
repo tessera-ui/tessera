@@ -3,9 +3,21 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer, tessera};
 use tessera_ui_basic_components::{
-    alignment::{CrossAxisAlignment, MainAxisAlignment}, bottom_sheet::{
-        bottom_sheet_provider, BottomSheetProviderArgsBuilder, BottomSheetProviderState, BottomSheetStyle
-    }, button::{button, ButtonArgsBuilder}, column::{column_ui, ColumnArgsBuilder}, fluid_glass::{fluid_glass, FluidGlassArgsBuilder}, glass_button::{glass_button, GlassButtonArgsBuilder}, ripple_state::RippleState, row::{row_ui, RowArgsBuilder}, shape_def::Shape, spacer::{spacer, SpacerArgsBuilder}, surface::{surface, SurfaceArgsBuilder}, text::{text, TextArgsBuilder}
+    alignment::{CrossAxisAlignment, MainAxisAlignment},
+    bottom_sheet::{
+        BottomSheetProviderArgsBuilder, BottomSheetProviderState, BottomSheetStyle,
+        bottom_sheet_provider,
+    },
+    button::{ButtonArgsBuilder, button},
+    column::{ColumnArgsBuilder, column_ui},
+    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    glass_button::{GlassButtonArgsBuilder, glass_button},
+    ripple_state::RippleState,
+    row::{RowArgsBuilder, row_ui},
+    shape_def::Shape,
+    spacer::{SpacerArgsBuilder, spacer},
+    surface::{SurfaceArgsBuilder, surface},
+    text::{TextArgsBuilder, text},
 };
 
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -264,8 +276,8 @@ fn main_content_glass(
     fluid_glass(
         FluidGlassArgsBuilder::default()
             .shape(Shape::RoundedRectangle {
-                top_left: 25.0,
-                top_right: 25.0,
+                top_left: 50.0,
+                top_right: 50.0,
                 bottom_right: 0.0,
                 bottom_left: 0.0,
                 g2_k_value: 3.0,
