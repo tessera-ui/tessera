@@ -9,14 +9,28 @@ use tessera_ui::{Color, Constraint, DimensionValue, Px, PxPosition, tessera, win
 
 use crate::{
     animation,
-    surface::{SurfaceArgsBuilder, surface},
+    fluid_glass::{fluid_glass, FluidGlassArgsBuilder},
+    shape_def::Shape,
+    surface::{surface, SurfaceArgsBuilder},
 };
 
 const ANIM_TIME: Duration = Duration::from_millis(300);
 
+/// Defines the visual style of the bottom sheet's scrim.
+#[derive(Default, Clone, Copy)]
+pub enum BottomSheetStyle {
+    /// A translucent glass effect that blurs the content behind it.
+    Glass,
+    /// A simple, semi-transparent dark overlay.
+    #[default]
+    Material,
+}
+
 #[derive(Builder)]
 pub struct BottomSheetProviderArgs {
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
+    #[builder(default)]
+    pub style: BottomSheetStyle,
 }
 
 #[derive(Default)]
@@ -81,30 +95,71 @@ pub fn bottom_sheet_provider(
             }
         }));
 
-        let scrim_alpha = if state.read().is_open {
-            progress * 0.5
-        } else {
-            0.5 * (1.0 - progress)
-        };
-
-        surface(
-            SurfaceArgsBuilder::default()
-                .color(Color::BLACK.with_alpha(scrim_alpha))
-                .on_click(Some(args.on_close_request))
-                .width(DimensionValue::Fill {
-                    min: None,
-                    max: None,
-                })
-                .height(DimensionValue::Fill {
-                    min: None,
-                    max: None,
-                })
-                .block_input(true)
-                .build()
-                .unwrap(),
-            None,
-            || {},
-        );
+        match args.style {
+            BottomSheetStyle::Glass => {
+                let max_blur_radius = 50.0;
+                let blur_radius = if state.read().is_open {
+                    progress * max_blur_radius
+                } else {
+                    max_blur_radius * (1.0 - progress)
+                };
+                fluid_glass(
+                    FluidGlassArgsBuilder::default()
+                        .on_click(args.on_close_request)
+                        .tint_color(Color::TRANSPARENT)
+                        .width(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .height(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .dispersion_height(0.0)
+                        .refraction_height(0.0)
+                        .block_input(true)
+                        .blur_radius(blur_radius)
+                        .border(None)
+                        .shape(Shape::RoundedRectangle {
+                            top_left: 0.0,
+                            top_right: 0.0,
+                            bottom_right: 0.0,
+                            bottom_left: 0.0,
+                            g2_k_value: 3.0,
+                        })
+                        .noise_amount(0.0)
+                        .build()
+                        .unwrap(),
+                    None,
+                    || {},
+                );
+            }
+            BottomSheetStyle::Material => {
+                let scrim_alpha = if state.read().is_open {
+                    progress * 0.5
+                } else {
+                    0.5 * (1.0 - progress)
+                };
+                surface(
+                    SurfaceArgsBuilder::default()
+                        .color(Color::BLACK.with_alpha(scrim_alpha))
+                        .on_click(Some(args.on_close_request))
+                        .width(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .height(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .block_input(true)
+                        .build()
+                        .unwrap(),
+                    None,
+                    || {},
+                );
+            }
+        }
 
         state_handler(Box::new(move |input| {
             let events = input.keyboard_events.drain(..).collect::<Vec<_>>();
