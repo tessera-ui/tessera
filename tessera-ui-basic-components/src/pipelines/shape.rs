@@ -46,13 +46,14 @@ pub use command::{RippleProps, ShadowProps, ShapeCommand};
 /// ```
 /// use tessera_ui_basic_components::pipelines::shape::ShapeUniforms;
 /// let uniforms = ShapeUniforms {
-///     size_cr_border_width: glam::Vec4::ZERO,
+///     corner_radii: glam::Vec4::ZERO,
 ///     primary_color: glam::Vec4::ZERO,
 ///     shadow_color: glam::Vec4::ZERO,
 ///     render_params: glam::Vec4::ZERO,
 ///     ripple_params: glam::Vec4::ZERO,
 ///     ripple_color: glam::Vec4::ZERO,
 ///     g2_k_value: 0.0,
+///     border_width: 0.0,
 ///     position: glam::Vec4::ZERO,
 ///     screen_size: glam::Vec2::ZERO,
 /// };

@@ -15,7 +15,7 @@
 /// use tessera_ui_basic_components::shape_def::Shape;
 ///
 /// // Create a rounded rectangle shape with a 6.0 radius
-/// let shape = Shape::RoundedRectangle { corner_radius: 6.0, g2_k_value: 3.0 };
+/// let shape = Shape::RoundedRectangle { top_left: 6.0, top_right: 6.0, bottom_right: 6.0, bottom_left: 6.0, g2_k_value: 3.0 };
 ///
 /// // Use an ellipse shape
 /// let ellipse = Shape::Ellipse;
@@ -30,7 +30,7 @@ pub enum Shape {
     /// # Example
     /// ```
     /// use tessera_ui_basic_components::shape_def::Shape;
-    /// let shape = Shape::RoundedRectangle { corner_radius: 8.0, g2_k_value: 3.0 };
+    /// let shape = Shape::RoundedRectangle { top_left: 8.0, top_right: 8.0, bottom_right: 8.0, bottom_left: 8.0, g2_k_value: 3.0 };
     /// ```
     RoundedRectangle {
         top_left: f32,
@@ -57,7 +57,7 @@ impl Default for Shape {
     /// ```
     /// use tessera_ui_basic_components::shape_def::Shape;
     /// let default_shape = Shape::default();
-    /// assert_eq!(default_shape, Shape::RoundedRectangle { corner_radius: 0.0, g2_k_value: 3.0 });
+    /// assert_eq!(default_shape, Shape::RoundedRectangle { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0, g2_k_value: 3.0 });
     /// ```
     fn default() -> Self {
         Shape::RoundedRectangle {
