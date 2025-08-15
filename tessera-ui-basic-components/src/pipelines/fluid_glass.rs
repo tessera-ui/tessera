@@ -13,9 +13,9 @@ pub const MAX_CONCURRENT_GLASSES: wgpu::BufferAddress = 256;
 struct GlassUniforms {
     tint_color: Vec4,
     rect_uv_bounds: Vec4,
+    corner_radii: Vec4,
     rect_size_px: Vec2,
     ripple_center: Vec2,
-    corner_radius: f32,
     shape_type: f32,
     g2_k_value: f32,
     dispersion_height: f32,
@@ -182,9 +182,15 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
                     rect_uv_bounds: rect_uv_bounds.into(),
                     rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
                     ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]).into(),
-                    corner_radius: match args.shape {
-                        crate::shape_def::Shape::RoundedRectangle { top_left, .. } => top_left,
-                        crate::shape_def::Shape::Ellipse => 0.0,
+                    corner_radii: match args.shape {
+                        crate::shape_def::Shape::RoundedRectangle {
+                            top_left,
+                            top_right,
+                            bottom_right,
+                            bottom_left,
+                            ..
+                        } => [top_left, top_right, bottom_right, bottom_left].into(),
+                        crate::shape_def::Shape::Ellipse => Vec4::ZERO,
                     },
                     shape_type: match args.shape {
                         crate::shape_def::Shape::RoundedRectangle { .. } => 0.0,

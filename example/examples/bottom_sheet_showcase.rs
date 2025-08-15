@@ -3,19 +3,9 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer, tessera};
 use tessera_ui_basic_components::{
-    alignment::{CrossAxisAlignment, MainAxisAlignment},
-    bottom_sheet::{
-        bottom_sheet_provider, BottomSheetProviderArgsBuilder, BottomSheetProviderState,
-        BottomSheetStyle,
-    },
-    button::{button, ButtonArgsBuilder},
-    column::{ColumnArgsBuilder, column_ui},
-    ripple_state::RippleState,
-    row::{RowArgsBuilder, row_ui},
-    shape_def::Shape,
-    spacer::{spacer, SpacerArgsBuilder},
-    surface::{surface, SurfaceArgsBuilder},
-    text::{text, TextArgsBuilder},
+    alignment::{CrossAxisAlignment, MainAxisAlignment}, bottom_sheet::{
+        bottom_sheet_provider, BottomSheetProviderArgsBuilder, BottomSheetProviderState, BottomSheetStyle
+    }, button::{button, ButtonArgsBuilder}, column::{column_ui, ColumnArgsBuilder}, fluid_glass::{fluid_glass, FluidGlassArgsBuilder}, glass_button::{glass_button, GlassButtonArgsBuilder}, ripple_state::RippleState, row::{row_ui, RowArgsBuilder}, shape_def::Shape, spacer::{spacer, SpacerArgsBuilder}, surface::{surface, SurfaceArgsBuilder}, text::{text, TextArgsBuilder}
 };
 
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -131,70 +121,17 @@ fn bottom_sheet_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
             })
             .build()
             .unwrap(),
-        move || {
-            surface(
-                SurfaceArgsBuilder::default()
-                    .color(Color::new(0.2, 0.2, 0.2, 1.0).with_alpha(content_alpha))
-                    .shape(Shape::RoundedRectangle {
-                        top_left: 25.0,
-                        top_right: 25.0,
-                        bottom_right: 0.0,
-                        bottom_left: 0.0,
-                        g2_k_value: 3.0,
-                    })
-                    .width(DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
-                    .padding(Dp(20.0))
-                    .block_input(true)
-                    .build()
-                    .unwrap(),
-                None,
-                move || {
-                    column_ui!(
-                        ColumnArgsBuilder::default().build().unwrap(),
-                        move || {
-                            text(
-                                TextArgsBuilder::default()
-                                    .color(Color::BLACK.with_alpha(content_alpha))
-                                    .text("This is a Bottom Sheet".to_string())
-                                    .build()
-                                    .unwrap(),
-                            );
-                        },
-                        || {
-                            spacer(
-                                SpacerArgsBuilder::default()
-                                    .height(DimensionValue::Fixed(Px(10)))
-                                    .build()
-                                    .unwrap(),
-                            );
-                        },
-                        move || {
-                            button(
-                                ButtonArgsBuilder::default()
-                                    .color(Color::new(0.2, 0.5, 0.8, content_alpha))
-                                    .on_click(Arc::new(move || {
-                                        state.write().bottom_sheet_state.write().close();
-                                    }))
-                                    .build()
-                                    .unwrap(),
-                                close_button_ripple,
-                                || {
-                                    text(
-                                        TextArgsBuilder::default()
-                                            .color(Color::BLACK.with_alpha(content_alpha))
-                                            .text("Close".to_string())
-                                            .build()
-                                            .unwrap(),
-                                    )
-                                },
-                            );
-                        }
-                    );
-                },
-            );
+        {
+            let state = app_state.clone();
+            let style = state.read().style;
+            move || match style {
+                ShowcaseStyle::Material => {
+                    main_content_material(state, content_alpha, close_button_ripple.clone());
+                }
+                ShowcaseStyle::Glass => {
+                    main_content_glass(state, content_alpha, close_button_ripple.clone());
+                }
+            }
         }
     );
 }
@@ -242,6 +179,148 @@ fn bottom_sheet_provider_wrapper(app_state: Arc<RwLock<AppState>>) {
                     let state = app_state.clone();
                     move |progress| bottom_sheet_content(state.clone(), progress)
                 },
+            );
+        },
+    );
+}
+
+#[tessera]
+fn main_content_material(
+    state: Arc<RwLock<AppState>>,
+    content_alpha: f32,
+    close_button_ripple: Arc<RippleState>,
+) {
+    surface(
+        SurfaceArgsBuilder::default()
+            .color(Color::new(0.2, 0.2, 0.2, 1.0).with_alpha(content_alpha))
+            .shape(Shape::RoundedRectangle {
+                top_left: 25.0,
+                top_right: 25.0,
+                bottom_right: 0.0,
+                bottom_left: 0.0,
+                g2_k_value: 3.0,
+            })
+            .width(DimensionValue::Fill {
+                min: None,
+                max: None,
+            })
+            .padding(Dp(20.0))
+            .block_input(true)
+            .build()
+            .unwrap(),
+        None,
+        move || {
+            column_ui!(
+                ColumnArgsBuilder::default().build().unwrap(),
+                move || {
+                    text(
+                        TextArgsBuilder::default()
+                            .color(Color::BLACK.with_alpha(content_alpha))
+                            .text("This is a Bottom Sheet".to_string())
+                            .build()
+                            .unwrap(),
+                    );
+                },
+                || {
+                    spacer(
+                        SpacerArgsBuilder::default()
+                            .height(DimensionValue::Fixed(Px(10)))
+                            .build()
+                            .unwrap(),
+                    );
+                },
+                move || {
+                    button(
+                        ButtonArgsBuilder::default()
+                            .color(Color::new(0.2, 0.5, 0.8, content_alpha))
+                            .on_click(Arc::new(move || {
+                                state.write().bottom_sheet_state.write().close();
+                            }))
+                            .build()
+                            .unwrap(),
+                        close_button_ripple,
+                        || {
+                            text(
+                                TextArgsBuilder::default()
+                                    .color(Color::BLACK.with_alpha(content_alpha))
+                                    .text("Close".to_string())
+                                    .build()
+                                    .unwrap(),
+                            )
+                        },
+                    );
+                }
+            );
+        },
+    );
+}
+
+#[tessera]
+fn main_content_glass(
+    state: Arc<RwLock<AppState>>,
+    content_alpha: f32,
+    close_button_ripple: Arc<RippleState>,
+) {
+    fluid_glass(
+        FluidGlassArgsBuilder::default()
+            .shape(Shape::RoundedRectangle {
+                top_left: 25.0,
+                top_right: 25.0,
+                bottom_right: 0.0,
+                bottom_left: 0.0,
+                g2_k_value: 3.0,
+            })
+            .tint_color(Color::new(0.6, 0.8, 1.0, content_alpha / 3.0)) // Give it a slight blue tint
+            .width(DimensionValue::Fill {
+                min: None,
+                max: None,
+            })
+            .padding(Dp(20.0))
+            .block_input(true)
+            .build()
+            .unwrap(),
+        None,
+        move || {
+            column_ui!(
+                ColumnArgsBuilder::default().build().unwrap(),
+                move || {
+                    text(
+                        TextArgsBuilder::default()
+                            .color(Color::BLACK.with_alpha(content_alpha))
+                            .text("This is a Bottom Sheet".to_string())
+                            .build()
+                            .unwrap(),
+                    );
+                },
+                || {
+                    spacer(
+                        SpacerArgsBuilder::default()
+                            .height(DimensionValue::Fixed(Px(10)))
+                            .build()
+                            .unwrap(),
+                    );
+                },
+                move || {
+                    glass_button(
+                        GlassButtonArgsBuilder::default()
+                            .tint_color(Color::new(0.2, 0.5, 0.8, content_alpha / 3.0))
+                            .on_click(Arc::new(move || {
+                                state.write().bottom_sheet_state.write().close();
+                            }))
+                            .build()
+                            .unwrap(),
+                        close_button_ripple,
+                        move || {
+                            text(
+                                TextArgsBuilder::default()
+                                    .color(Color::BLACK.with_alpha(content_alpha))
+                                    .text("Close".to_string())
+                                    .build()
+                                    .unwrap(),
+                            )
+                        },
+                    );
+                }
             );
         },
     );

@@ -3,13 +3,13 @@ struct GlassUniforms {
     // vec4s
     tint_color: vec4<f32>,
     rect_uv_bounds: vec4<f32>,
+    corner_radii: vec4<f32>, // top-left, top-right, bottom-right, bottom-left
 
     // vec2s
     rect_size_px: vec2<f32>,
     ripple_center: vec2<f32>,
 
     // f32s
-    corner_radius: f32,
     shape_type: f32,
     g2_k_value: f32,
     dispersion_height: f32,
@@ -89,17 +89,21 @@ fn normal_to_tangent(normal: vec2<f32>) -> vec2<f32> {
     return vec2<f32>(normal.y, -normal.x);
 }
 
-fn sdf_g2_rounded_box(p: vec2<f32>, b: vec2<f32>, r: f32, k: f32) -> f32 {
-    let q = abs(p) - b + r;
+fn sdf_g2_rounded_box(p: vec2<f32>, b: vec2<f32>, r: vec4<f32>, k: f32) -> f32 {
+    let top_radii = select(r.x, r.y, p.x > 0.0);
+    let bottom_radii = select(r.w, r.z, p.x > 0.0);
+    let r_for_quadrant = select(top_radii, bottom_radii, p.y > 0.0);
+
+    let q = abs(p) - b + r_for_quadrant;
     let v = max(q, vec2<f32>(0.0));
 
     if abs(k - 2.0) < 0.001 {
-        return length(v) + min(max(q.x, q.y), 0.0) - r;
+        return length(v) + min(max(q.x, q.y), 0.0) - r_for_quadrant;
     }
 
     let dist_corner_shape = pow(pow(v.x, k) + pow(v.y, k), 1.0 / k);
 
-    return dist_corner_shape + min(max(q.x, q.y), 0.0) - r;
+    return dist_corner_shape + min(max(q.x, q.y), 0.0) - r_for_quadrant;
 }
 
 fn sdf_ellipse(p: vec2<f32>, r: vec2<f32>) -> f32 {
@@ -109,8 +113,11 @@ fn sdf_ellipse(p: vec2<f32>, r: vec2<f32>) -> f32 {
     return (length(p / r) - 1.0) * min(r.x, r.y);
 }
 
-fn grad_sd_g2_rounded_box(coord: vec2<f32>, half_size: vec2<f32>, r: f32, k: f32) -> vec2<f32> {
-    let inner_half_size = half_size - r;
+fn grad_sd_g2_rounded_box(coord: vec2<f32>, half_size: vec2<f32>, r: vec4<f32>, k: f32) -> vec2<f32> {
+    let top_radii = select(r.x, r.y, coord.x > 0.0);
+    let bottom_radii = select(r.w, r.z, coord.x > 0.0);
+    let r_for_quadrant = select(top_radii, bottom_radii, coord.y > 0.0);
+    let inner_half_size = half_size - r_for_quadrant;
     let corner_coord = abs(coord) - inner_half_size;
 
     if corner_coord.x >= 0.0 && corner_coord.y >= 0.0 {
@@ -168,7 +175,7 @@ fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<
     if instance.shape_type == 1.0 {
         sd = sdf_ellipse(centered_coord, half_size);
     } else {
-        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
+        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
     }
 
     var refracted_coord = local_coord;
@@ -177,9 +184,7 @@ fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<
         if instance.shape_type == 1.0 {
             normal = grad_sd_ellipse(centered_coord, half_size);
         } else {
-            let max_grad_radius = max(min(half_size.x, half_size.y), instance.corner_radius);
-            let grad_radius = min(instance.corner_radius * 1.5, max_grad_radius);
-            normal = grad_sd_g2_rounded_box(centered_coord, half_size, grad_radius, k);
+            normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
         }
 
         let refracted_distance = circle_map(1.0 - (-sd / instance.refraction_height)) * instance.refraction_amount;
@@ -201,7 +206,7 @@ fn dispersion_color_on_refracted(instance: GlassUniforms, local_coord: vec2<f32>
     if instance.shape_type == 1.0 {
         sd = sdf_ellipse(centered_coord, half_size);
     } else {
-        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
+        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
     }
 
     let base_refracted = refraction_color(instance, local_coord, size, k);
@@ -211,7 +216,7 @@ fn dispersion_color_on_refracted(instance: GlassUniforms, local_coord: vec2<f32>
         if instance.shape_type == 1.0 {
             normal = grad_sd_ellipse(centered_coord, half_size);
         } else {
-            normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
+            normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
         }
         let tangent = normal_to_tangent(normal);
 
@@ -278,7 +283,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if instance.shape_type == 1.0 {
         sd = sdf_ellipse(centered_coord, half_size);
     } else {
-        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
+        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
     }
 
     var base_color: vec4<f32>;
@@ -338,7 +343,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             if instance.shape_type == 1.0 {
                 normal = grad_sd_ellipse(centered_coord, half_size);
             } else {
-                normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
+                normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
             }
 
             // 3. Compute highlight distribution.
@@ -347,7 +352,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             let bottom_light_fraction = -top_light_fraction;
             let highlight_decay = 1.5;
             let highlight_fraction = pow(max(top_light_fraction, bottom_light_fraction), highlight_decay);
-        
+
             // 4. Blend highlight color with border mask and add to final color.
             let border_color = vec3<f32>(1.0); // Base border color (white).
             let highlight_intensity = highlight_fraction * border_mask;

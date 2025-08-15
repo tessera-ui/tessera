@@ -9,9 +9,9 @@ use tessera_ui::{Color, Constraint, DimensionValue, Px, PxPosition, tessera, win
 
 use crate::{
     animation,
-    fluid_glass::{fluid_glass, FluidGlassArgsBuilder},
+    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     shape_def::Shape,
-    surface::{surface, SurfaceArgsBuilder},
+    surface::{SurfaceArgsBuilder, surface},
 };
 
 const ANIM_TIME: Duration = Duration::from_millis(300);
