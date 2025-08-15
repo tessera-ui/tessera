@@ -20,11 +20,23 @@ use tessera_ui::{Color, DimensionValue, tessera, winit};
 
 use crate::{
     animation,
+    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
 
 /// The duration of the full dialog animation.
 const ANIM_TIME: Duration = Duration::from_millis(300);
+
+/// Defines the visual style of the dialog's scrim.
+#[derive(Default, Clone, Copy)]
+pub enum DialogStyle {
+    /// A translucent glass effect that blurs the content behind it.
+    Glass,
+    /// A simple, semi-transparent dark overlay.
+    #[default]
+    Material,
+}
 
 /// Arguments for the [`dialog_provider`] component.
 #[derive(Builder)]
@@ -33,6 +45,9 @@ pub struct DialogProviderArgs {
     /// Callback function triggered when a close request is made, for example by
     /// clicking the scrim or pressing the `ESC` key.
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
+    /// The visual style of the dialog's scrim.
+    #[builder(default)]
+    pub style: DialogStyle,
 }
 
 #[derive(Default)]
@@ -44,7 +59,8 @@ pub struct DialogProviderState {
 impl DialogProviderState {
     /// Open the dialog
     pub fn open(&mut self) {
-        if self.is_open { // Already opened, no action needed
+        if self.is_open {
+            // Already opened, no action needed
         } else {
             self.is_open = true; // Mark as open
             let mut timer = Instant::now();
@@ -61,7 +77,8 @@ impl DialogProviderState {
 
     /// Close the dialog
     pub fn close(&mut self) {
-        if !self.is_open { // Already closed, no action needed
+        if !self.is_open {
+            // Already closed, no action needed
         } else {
             self.is_open = false; // Mark as closed
             let mut timer = Instant::now();
@@ -102,7 +119,7 @@ impl DialogProviderState {
 /// use parking_lot::RwLock;
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
-///     dialog::{DialogProviderArgsBuilder, DialogProviderState, dialog_provider},
+///     dialog::{DialogProviderArgsBuilder, DialogProviderState, dialog_provider, DialogStyle},
 ///     button::{ButtonArgsBuilder, button},
 ///     text::{TextArgsBuilder, text},
 ///     ripple_state::RippleState,
@@ -124,6 +141,7 @@ impl DialogProviderState {
 ///             let state = state.clone();
 ///             move || state.write().show_dialog = false
 ///         }))
+///         .style(DialogStyle::Glass) // Or DialogStyle::Material
 ///         .build()
 ///         .unwrap(),
 ///     dialog_state.clone(),
@@ -210,11 +228,7 @@ pub fn dialog_provider(
                 elapsed.as_secs_f32() / ANIM_TIME.as_secs_f32()
             }
         }));
-        let alpha = if state.read().is_open {
-            progress * 0.5 // Transition from 0 to 0.5 alpha
-        } else {
-            0.5 * (1.0 - progress) // Transition from 0.5 to 0 alpha
-        };
+
         let content_alpha = if state.read().is_open {
             progress * 1.0 // Transition from 0 to 1 alpha
         } else {
@@ -224,24 +238,71 @@ pub fn dialog_provider(
         // 2a. Scrim
         // This Surface covers the entire screen, consuming all mouse clicks
         // and triggering the close request.
-        surface(
-            SurfaceArgsBuilder::default()
-                .color(Color::BLACK.with_alpha(alpha))
-                .on_click(Some(args.on_close_request))
-                .width(DimensionValue::Fill {
-                    min: None,
-                    max: None,
-                })
-                .height(DimensionValue::Fill {
-                    min: None,
-                    max: None,
-                })
-                .block_input(true)
-                .build()
-                .unwrap(),
-            None,
-            || {},
-        );
+        match args.style {
+            DialogStyle::Glass => {
+                let max_blur_radius = 50.0; // Maximum blur radius for the dialog
+                let blur_radius = if state.read().is_open {
+                    progress * max_blur_radius // Transition from 0 to max_blur_radius
+                } else {
+                    max_blur_radius * (1.0 - progress) // Transition from 10.0 to max_blur_radius
+                };
+                fluid_glass(
+                    FluidGlassArgsBuilder::default()
+                        .on_click(args.on_close_request)
+                        .tint_color(Color::TRANSPARENT)
+                        .width(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .height(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .dispersion_height(0.0)
+                        .refraction_height(0.0)
+                        .block_input(true)
+                        .blur_radius(blur_radius)
+                        .border(None)
+                        .shape(Shape::RoundedRectangle {
+                            top_left: 0.0,
+                            top_right: 0.0,
+                            bottom_right: 0.0,
+                            bottom_left: 0.0,
+                            g2_k_value: 3.0,
+                        })
+                        .noise_amount(0.0)
+                        .build()
+                        .unwrap(),
+                    None,
+                    || {},
+                );
+            }
+            DialogStyle::Material => {
+                let alpha = if state.read().is_open {
+                    progress * 0.5 // Transition from 0 to 0.5 alpha
+                } else {
+                    0.5 * (1.0 - progress) // Transition from 0.5 to 0 alpha
+                };
+                surface(
+                    SurfaceArgsBuilder::default()
+                        .color(Color::BLACK.with_alpha(alpha))
+                        .on_click(Some(args.on_close_request))
+                        .width(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .height(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .block_input(true)
+                        .build()
+                        .unwrap(),
+                    None,
+                    || {},
+                );
+            }
+        }
 
         // 2b. State Handler for intercepting keyboard events.
         state_handler(Box::new(move |input| {

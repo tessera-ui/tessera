@@ -60,7 +60,6 @@ pub mod column;
 pub mod dialog;
 pub mod fluid_glass;
 pub mod glass_button;
-pub mod glass_dialog;
 pub mod glass_progress;
 pub mod glass_slider;
 pub mod glass_switch;

@@ -6,11 +6,9 @@ use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::ColumnArgsBuilder,
     column_ui,
+    dialog::{DialogProviderArgsBuilder, DialogProviderState, DialogStyle, dialog_provider},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     glass_button::{GlassButtonArgsBuilder, glass_button},
-    glass_dialog::{
-        GlassDialogProviderArgsBuilder, GlassDialogProviderState, glass_dialog_provider,
-    },
     ripple_state::RippleState,
     row::RowArgsBuilder,
     row_ui,
@@ -21,7 +19,7 @@ use tessera_ui_basic_components::{
 
 #[derive(Default)]
 struct AppState {
-    dialog_state: Arc<RwLock<GlassDialogProviderState>>,
+    dialog_state: Arc<RwLock<DialogProviderState>>,
     button_ripple: Arc<RippleState>,
     close_button_ripple: Arc<RippleState>,
 }
@@ -180,11 +178,12 @@ fn dialog_provider_wrapper(
             );
         },
         move || {
-            glass_dialog_provider(
-                GlassDialogProviderArgsBuilder::default()
+            dialog_provider(
+                DialogProviderArgsBuilder::default()
                     .on_close_request(Arc::new(move || {
                         state_for_provider.write().dialog_state.write().close();
                     }))
+                    .style(DialogStyle::Glass)
                     .build()
                     .unwrap(),
                 app_state.read().dialog_state.clone(),
