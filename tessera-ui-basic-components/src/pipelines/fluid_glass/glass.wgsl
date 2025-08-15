@@ -34,7 +34,6 @@ struct GlassInstances {
     instances: array<GlassUniforms>,
 };
 
-
 @group(0) @binding(0) var<storage, read> uniforms: GlassInstances;
 @group(0) @binding(1) var t_diffuse: texture_2d<f32>;
 @group(0) @binding(2) var s_diffuse: sampler;
@@ -81,7 +80,6 @@ fn vs_main(
     out.instance_index = instance_index;
     return out;
 }
-
 
 fn circle_map(x: f32) -> f32 {
     return 1.0 - sqrt(1.0 - x * x);
@@ -283,11 +281,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radius, k);
     }
 
-    // Discard pixels outside the shape's boundary.
-    if sd > 0.0 {
-        discard;
-    }
-
     var base_color: vec4<f32>;
     if instance.dispersion_height > 0.0 {
         base_color = dispersion_color_on_refracted(instance, local_coord, instance.rect_size_px, k);
@@ -334,8 +327,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // 1. Define the border region.
         // sd is the distance to the shape edge, negative inside, positive outside.
         // This expression creates a "band" region where sd is between 0 and -border_width.
-        let border_mask = smoothstep(0.0, -1.0, sd) - smoothstep(-instance.border_width, -instance.border_width - 1.0, sd);
-
+        let border_width_aa = fwidth(sd); // Add anti-aliasing for the border
+        let outer = smoothstep(0.0 + border_width_aa, -border_width_aa, sd);
+        let inner = smoothstep(-instance.border_width + border_width_aa, -instance.border_width - border_width_aa, sd);
+        let border_mask = outer - inner;
         // Only compute highlight within the border region.
         if border_mask > 0.0 {
             // 2. Compute highlight normal (same logic as AGSL, using new function).
@@ -347,7 +342,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             }
 
             // 3. Compute highlight distribution.
-            let highlight_dir = normalize(vec2<f32>(-0.5, -0.866)); // Light direction at 120 degrees.
+            let highlight_dir = normalize(vec2<f32>(cos(radians(136.0)), sin(radians(136.0)))); // Light direction at 136 degrees.
             let top_light_fraction = dot(highlight_dir, normal);
             let bottom_light_fraction = -top_light_fraction;
             let highlight_decay = 1.5;
