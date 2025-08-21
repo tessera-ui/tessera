@@ -783,7 +783,7 @@ fn render_current_pass(
     let mut buffer: Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)> = Vec::new();
     let mut last_command_type_id = None;
     // Use a separate variable to track the current batch draw rectangle
-    let mut current_batch_draw_rect = PxRect::ZERO;
+    let mut current_batch_draw_rect: Option<PxRect> = None;
     for cmd in mem::take(commands_in_pass).into_iter() {
         if last_command_type_id != Some(cmd.type_id) || cmd.clip_ops.is_some() {
             if !buffer.is_empty() {
@@ -793,17 +793,18 @@ fn render_current_pass(
                     .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
                     .collect::<Vec<_>>();
                 if let Some(clipped_rect) = clip_stack.last() {
-                    let Some(final_rect) = current_batch_draw_rect.intersection(clipped_rect)
+                    let Some(final_rect) =
+                        current_batch_draw_rect.unwrap().intersection(clipped_rect)
                     else {
                         continue;
                     };
-                    current_batch_draw_rect = final_rect;
+                    current_batch_draw_rect = Some(final_rect);
                 }
                 rpass.set_scissor_rect(
-                    current_batch_draw_rect.x.positive(),
-                    current_batch_draw_rect.y.positive(),
-                    current_batch_draw_rect.width.positive(),
-                    current_batch_draw_rect.height.positive(),
+                    current_batch_draw_rect.unwrap().x.positive(),
+                    current_batch_draw_rect.unwrap().y.positive(),
+                    current_batch_draw_rect.unwrap().width.positive(),
+                    current_batch_draw_rect.unwrap().height.positive(),
                 );
                 drawer.submit(
                     gpu,
@@ -813,7 +814,7 @@ fn render_current_pass(
                     &commands,
                     scene_texture_view,
                 );
-                current_batch_draw_rect = PxRect::ZERO; // Reset the current batch draw rectangle
+                current_batch_draw_rect = None; // Reset the current batch draw rectangle
             }
 
             last_command_type_id = Some(cmd.type_id);
@@ -833,7 +834,13 @@ fn render_current_pass(
 
         // Add the command to the buffer
         buffer.push((cmd.command, cmd.size, cmd.start_pos));
-        current_batch_draw_rect = current_batch_draw_rect.union(&cmd.draw_rect);
+        if let Some(draw_rect) = current_batch_draw_rect {
+            // If we already have a draw rectangle, we need to update it
+            current_batch_draw_rect = Some(draw_rect.union(&cmd.draw_rect));
+        } else {
+            // Otherwise, we set the current batch draw rectangle to the command's draw rectangle
+            current_batch_draw_rect = Some(cmd.draw_rect);
+        }
     }
     // If there are any remaining commands in the buffer, submit them
     if !buffer.is_empty() {
@@ -844,7 +851,7 @@ fn render_current_pass(
             .collect::<Vec<_>>();
         if let Some(clipped_rect) = clip_stack.last() {
             if let Some(current_batch_draw_rect) =
-                current_batch_draw_rect.intersection(clipped_rect)
+                current_batch_draw_rect.unwrap().intersection(clipped_rect)
             {
                 rpass.set_scissor_rect(
                     current_batch_draw_rect.x.positive(),
@@ -863,10 +870,10 @@ fn render_current_pass(
             };
         } else {
             rpass.set_scissor_rect(
-                current_batch_draw_rect.x.positive(),
-                current_batch_draw_rect.y.positive(),
-                current_batch_draw_rect.width.positive(),
-                current_batch_draw_rect.height.positive(),
+                current_batch_draw_rect.unwrap().x.positive(),
+                current_batch_draw_rect.unwrap().y.positive(),
+                current_batch_draw_rect.unwrap().width.positive(),
+                current_batch_draw_rect.unwrap().height.positive(),
             );
             drawer.submit(
                 gpu,
