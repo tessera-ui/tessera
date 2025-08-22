@@ -30,7 +30,6 @@ struct GlassUniforms {
 };
 
 struct GlassInstances {
-    length: u32,
     instances: array<GlassUniforms>,
 };
 

@@ -187,8 +187,8 @@ pub use crate::{
     component_tree::{
         ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
         ComponentTree, ComputedData, Constraint, DimensionValue, ImeRequest, MeasureFn,
-        MeasurementError, StateHandlerFn, StateHandlerInput, measure_node, measure_nodes,
-        place_node,
+        MeasureInput, MeasurementError, StateHandlerFn, StateHandlerInput, measure_node,
+        measure_nodes, place_node,
     },
     cursor::{CursorEvent, CursorEventContent, PressKeyEventType, ScrollEventConent},
     dp::Dp,

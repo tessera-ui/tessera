@@ -17,8 +17,9 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use parking_lot::Mutex;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
-    focus_state::Focus, tessera, winit::window::CursorIcon,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasureInput,
+    MeasurementError, Px, PxPosition, StateHandlerInput, focus_state::Focus, tessera,
+    winit::window::CursorIcon,
 };
 
 use crate::{
@@ -92,8 +93,170 @@ pub struct SliderArgs {
     pub disabled: bool,
 }
 
-#[tessera]
-///
+/// Helper: check if a cursor position is within the bounds of a component.
+fn cursor_within_component(cursor_pos: Option<PxPosition>, computed: &ComputedData) -> bool {
+    if let Some(pos) = cursor_pos {
+        let within_x = pos.x.0 >= 0 && pos.x.0 < computed.width.0;
+        let within_y = pos.y.0 >= 0 && pos.y.0 < computed.height.0;
+        within_x && within_y
+    } else {
+        false
+    }
+}
+
+/// Helper: compute normalized progress (0.0..1.0) from cursor X and width.
+/// Returns None when cursor is not available.
+fn cursor_progress(cursor_pos: Option<PxPosition>, width_f: f32) -> Option<f32> {
+    cursor_pos.map(|pos| (pos.x.0 as f32 / width_f).clamp(0.0, 1.0))
+}
+
+fn handle_slider_state(
+    input: &mut StateHandlerInput,
+    state: &Arc<Mutex<SliderState>>,
+    args: &SliderArgs,
+) {
+    if args.disabled {
+        return;
+    }
+
+    let mut state = state.lock();
+    let is_in_component = cursor_within_component(input.cursor_position_rel, &input.computed_data);
+
+    if is_in_component {
+        input.requests.cursor_icon = CursorIcon::Pointer;
+    }
+
+    if !is_in_component && !state.is_dragging {
+        return;
+    }
+
+    let width_f = input.computed_data.width.0 as f32;
+    let mut new_value: Option<f32> = None;
+
+    handle_cursor_events(input, &mut state, &mut new_value, width_f);
+    update_value_on_drag(input, &state, &mut new_value, width_f);
+    notify_on_change(new_value, args);
+}
+
+fn handle_cursor_events(
+    input: &mut StateHandlerInput,
+    state: &mut SliderState,
+    new_value: &mut Option<f32>,
+    width_f: f32,
+) {
+    for event in input.cursor_events.iter() {
+        match &event.content {
+            CursorEventContent::Pressed(_) => {
+                state.focus.request_focus();
+                state.is_dragging = true;
+                if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
+                    *new_value = Some(v);
+                }
+            }
+            CursorEventContent::Released(_) => {
+                state.is_dragging = false;
+            }
+            _ => {}
+        }
+    }
+}
+
+fn update_value_on_drag(
+    input: &StateHandlerInput,
+    state: &SliderState,
+    new_value: &mut Option<f32>,
+    width_f: f32,
+) {
+    if state.is_dragging {
+        if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
+            *new_value = Some(v);
+        }
+    }
+}
+
+fn notify_on_change(new_value: Option<f32>, args: &SliderArgs) {
+    if let Some(v) = new_value {
+        if (v - args.value).abs() > f32::EPSILON {
+            (args.on_change)(v);
+        }
+    }
+}
+
+fn render_track(args: &SliderArgs) {
+    surface(
+        SurfaceArgsBuilder::default()
+            .width(DimensionValue::Fixed(args.width.to_px()))
+            .height(DimensionValue::Fixed(args.track_height.to_px()))
+            .color(args.inactive_track_color)
+            .shape({
+                let radius = args.track_height.to_px().to_f32() / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0, // Capsule shape
+                }
+            })
+            .build()
+            .unwrap(),
+        None,
+        move || {
+            render_progress_fill(args);
+        },
+    );
+}
+
+fn render_progress_fill(args: &SliderArgs) {
+    let progress_width = args.width.to_px().to_f32() * args.value;
+    surface(
+        SurfaceArgsBuilder::default()
+            .width(DimensionValue::Fixed(Px(progress_width as i32)))
+            .height(DimensionValue::Fill {
+                min: None,
+                max: None,
+            })
+            .color(args.active_track_color)
+            .shape({
+                let radius = args.track_height.to_px().to_f32() / 2.0;
+                Shape::RoundedRectangle {
+                    top_left: radius,
+                    top_right: radius,
+                    bottom_right: radius,
+                    bottom_left: radius,
+                    g2_k_value: 2.0, // Capsule shape
+                }
+            })
+            .build()
+            .unwrap(),
+        None,
+        || {},
+    );
+}
+
+fn measure_slider(
+    input: &MeasureInput,
+    args: &SliderArgs,
+) -> Result<ComputedData, MeasurementError> {
+    let self_width = args.width.to_px();
+    let self_height = args.track_height.to_px();
+
+    let track_id = input.children_ids[0];
+
+    // Measure track
+    let track_constraint = Constraint::new(
+        DimensionValue::Fixed(self_width),
+        DimensionValue::Fixed(self_height),
+    );
+    input.measure_child(track_id, &track_constraint)?;
+    input.place_child(track_id, PxPosition::new(Px(0), Px(0)));
+
+    Ok(ComputedData {
+        width: self_width,
+        height: self_height,
+    })
+}
+
 /// Renders a slider UI component that allows users to select a value in the range `[0.0, 1.0]`.
 ///
 /// The slider displays a horizontal track with a draggable thumb. The current value is visually represented by the filled portion of the track.
@@ -139,135 +302,19 @@ pub struct SliderArgs {
 /// # See Also
 /// - [`SliderArgs`]
 /// - [`SliderState`]
+/// Helper: check if a cursor position is inside a measured component area.
+#[tessera]
 pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
     let args: SliderArgs = args.into();
 
-    // Background track (inactive part) - capsule shape
-    surface(
-        SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(args.width.to_px()))
-            .height(DimensionValue::Fixed(args.track_height.to_px()))
-            .color(args.inactive_track_color)
-            .shape({
-                let radius = args.track_height.to_px().to_f32() / 2.0;
-                Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
-                    g2_k_value: 2.0, // Capsule shape
-                }
-            })
-            .build()
-            .unwrap(),
-        None,
-        move || {
-            // Progress fill (active part) - capsule shape
-            let progress_width = args.width.to_px().to_f32() * args.value;
-            surface(
-                SurfaceArgsBuilder::default()
-                    .width(DimensionValue::Fixed(Px(progress_width as i32)))
-                    .height(DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
-                    .color(args.active_track_color)
-                    .shape({
-                        let radius = args.track_height.to_px().to_f32() / 2.0;
-                        Shape::RoundedRectangle {
-                            top_left: radius,
-                            top_right: radius,
-                            bottom_right: radius,
-                            bottom_left: radius,
-                            g2_k_value: 2.0, // Capsule shape
-                        }
-                    })
-                    .build()
-                    .unwrap(),
-                None,
-                || {},
-            );
-        },
-    );
+    render_track(&args);
 
-    let on_change = args.on_change.clone();
-    let state_handler_state = state.clone();
-    let disabled = args.disabled;
-
-    state_handler(Box::new(move |input| {
-        if disabled {
-            return;
-        }
-        let mut state = state_handler_state.lock();
-
-        let is_in_component = input.cursor_position_rel.is_some_and(|cursor_pos| {
-            cursor_pos.x.0 >= 0
-                && cursor_pos.x.0 < input.computed_data.width.0
-                && cursor_pos.y.0 >= 0
-                && cursor_pos.y.0 < input.computed_data.height.0
-        });
-
-        // Set cursor to pointer when hovering over the slider
-        if is_in_component {
-            input.requests.cursor_icon = CursorIcon::Pointer;
-        }
-
-        if !is_in_component && !state.is_dragging {
-            return;
-        }
-
-        let mut new_value = None;
-
-        for event in input.cursor_events.iter() {
-            match &event.content {
-                CursorEventContent::Pressed(_) => {
-                    state.focus.request_focus();
-                    state.is_dragging = true;
-
-                    if let Some(pos) = input.cursor_position_rel {
-                        let v =
-                            (pos.x.0 as f32 / input.computed_data.width.0 as f32).clamp(0.0, 1.0);
-                        new_value = Some(v);
-                    }
-                }
-                CursorEventContent::Released(_) => {
-                    state.is_dragging = false;
-                }
-                _ => {}
-            }
-        }
-
-        if state.is_dragging {
-            if let Some(pos) = input.cursor_position_rel {
-                let v = (pos.x.0 as f32 / input.computed_data.width.0 as f32).clamp(0.0, 1.0);
-                new_value = Some(v);
-            }
-        }
-
-        if let Some(v) = new_value {
-            if (v - args.value).abs() > f32::EPSILON {
-                on_change(v);
-            }
-        }
+    let cloned_args = args.clone();
+    let state_clone = state.clone();
+    state_handler(Box::new(move |mut input| {
+        handle_slider_state(&mut input, &state_clone, &cloned_args);
     }));
 
-    measure(Box::new(move |input| {
-        let self_width = args.width.to_px();
-        let self_height = args.track_height.to_px();
-
-        let track_id = input.children_ids[0];
-
-        // Measure track
-        let track_constraint = Constraint::new(
-            DimensionValue::Fixed(self_width),
-            DimensionValue::Fixed(self_height),
-        );
-        input.measure_child(track_id, &track_constraint)?;
-        input.place_child(track_id, PxPosition::new(Px(0), Px(0)));
-
-        Ok(ComputedData {
-            width: self_width,
-            height: self_height,
-        })
-    }));
+    let cloned_args = args.clone();
+    measure(Box::new(move |input| measure_slider(input, &cloned_args)));
 }

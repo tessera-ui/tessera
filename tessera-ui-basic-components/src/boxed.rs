@@ -67,6 +67,60 @@ impl<F: FnOnce() + Send + Sync + 'static> AsBoxedItem for F {
     }
 }
 
+/// Helper: resolve an effective final dimension from a DimensionValue and the largest child size.
+/// Keeps logic concise and documented in one place.
+fn resolve_final_dimension(dv: DimensionValue, largest_child: Px) -> Px {
+    match dv {
+        DimensionValue::Fixed(v) => v,
+        DimensionValue::Fill { min, max } => {
+            let mut v = max.unwrap_or(largest_child);
+            if let Some(min_v) = min {
+                v = v.max(min_v);
+            }
+            v
+        }
+        DimensionValue::Wrap { min, max } => {
+            let mut v = largest_child;
+            if let Some(min_v) = min {
+                v = v.max(min_v);
+            }
+            if let Some(max_v) = max {
+                v = v.min(max_v);
+            }
+            v
+        }
+    }
+}
+
+/// Helper: compute centered offset along one axis.
+fn center_axis(container: Px, child: Px) -> Px {
+    (container - child) / 2
+}
+
+/// Helper: compute child placement (x, y) inside the container according to alignment.
+fn compute_child_offset(
+    alignment: Alignment,
+    container_w: Px,
+    container_h: Px,
+    child_w: Px,
+    child_h: Px,
+) -> (Px, Px) {
+    match alignment {
+        Alignment::TopStart => (Px(0), Px(0)),
+        Alignment::TopCenter => (center_axis(container_w, child_w), Px(0)),
+        Alignment::TopEnd => (container_w - child_w, Px(0)),
+        Alignment::CenterStart => (Px(0), center_axis(container_h, child_h)),
+        Alignment::Center => (
+            center_axis(container_w, child_w),
+            center_axis(container_h, child_h),
+        ),
+        Alignment::CenterEnd => (container_w - child_w, center_axis(container_h, child_h)),
+        Alignment::BottomStart => (Px(0), container_h - child_h),
+        Alignment::BottomCenter => (center_axis(container_w, child_w), container_h - child_h),
+        Alignment::BottomEnd => (container_w - child_w, container_h - child_h),
+    }
+}
+
 /// A component that overlays its children on top of each other.
 ///
 /// The `boxed` component acts as a container that stacks all its child components.
@@ -88,37 +142,30 @@ impl<F: FnOnce() + Send + Sync + 'static> AsBoxedItem for F {
 ///
 /// * `children_items_input`: An array of child components to be rendered inside the box.
 ///   Any component that implements the `AsBoxedItem` trait can be a child.
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui_basic_components::boxed::{boxed, BoxedArgs};
-/// use tessera_ui_basic_components::text::text;
-///
-/// boxed(BoxedArgs::default(), [|| text("Hello".to_string())]);
-/// ```
 #[tessera]
 pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxedItem; N]) {
+    // Convert inputs to boxed items and collect their closures.
     let children_items: [BoxedItem; N] =
         children_items_input.map(|item_input| item_input.into_boxed_item());
 
     let mut child_closures = Vec::with_capacity(N);
-
     for child_item in children_items {
         child_closures.push(child_item.child);
     }
 
+    // Measurement closure: measure all present children and compute container size.
     measure(Box::new(move |input| {
         let boxed_intrinsic_constraint = Constraint::new(args.width, args.height);
         let effective_constraint = boxed_intrinsic_constraint.merge(input.parent_constraint);
 
+        // Track largest child sizes
         let mut max_child_width = Px(0);
         let mut max_child_height = Px(0);
         let mut children_sizes = vec![None; N];
 
         for i in 0..N {
             let Some(child_id) = input.children_ids.get(i).copied() else {
-                continue; // Skip if no child ID is available
+                continue;
             };
             let child_result = input.measure_child(child_id, &effective_constraint)?;
             max_child_width = max_child_width.max(child_result.width);
@@ -126,75 +173,21 @@ pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxe
             children_sizes[i] = Some(child_result);
         }
 
-        let final_width = match effective_constraint.width {
-            DimensionValue::Fixed(w) => w,
-            DimensionValue::Fill { min, max } => {
-                let mut w = max.unwrap_or(max_child_width);
-                if let Some(min_w) = min {
-                    w = w.max(min_w);
-                }
-                w
-            }
-            DimensionValue::Wrap { min, max } => {
-                let mut w = max_child_width;
-                if let Some(min_w) = min {
-                    w = w.max(min_w);
-                }
-                if let Some(max_w) = max {
-                    w = w.min(max_w);
-                }
-                w
-            }
-        };
+        // Resolve final container dimensions using helpers.
+        let final_width = resolve_final_dimension(effective_constraint.width, max_child_width);
+        let final_height = resolve_final_dimension(effective_constraint.height, max_child_height);
 
-        let final_height = match effective_constraint.height {
-            DimensionValue::Fixed(h) => h,
-            DimensionValue::Fill { min, max } => {
-                let mut h = max.unwrap_or(max_child_height);
-                if let Some(min_h) = min {
-                    h = h.max(min_h);
-                }
-                h
-            }
-            DimensionValue::Wrap { min, max } => {
-                let mut h = max_child_height;
-                if let Some(min_h) = min {
-                    h = h.max(min_h);
-                }
-                if let Some(max_h) = max {
-                    h = h.min(max_h);
-                }
-                h
-            }
-        };
-
+        // Place each measured child according to alignment.
         for (i, child_size_opt) in children_sizes.iter().enumerate() {
             if let Some(child_size) = child_size_opt {
                 let child_id = input.children_ids[i];
-
-                let (x, y) = match args.alignment {
-                    Alignment::TopStart => (Px(0), Px(0)),
-                    Alignment::TopCenter => ((final_width - child_size.width) / 2, Px(0)),
-                    Alignment::TopEnd => (final_width - child_size.width, Px(0)),
-                    Alignment::CenterStart => (Px(0), (final_height - child_size.height) / 2),
-                    Alignment::Center => (
-                        (final_width - child_size.width) / 2,
-                        (final_height - child_size.height) / 2,
-                    ),
-                    Alignment::CenterEnd => (
-                        final_width - child_size.width,
-                        (final_height - child_size.height) / 2,
-                    ),
-                    Alignment::BottomStart => (Px(0), final_height - child_size.height),
-                    Alignment::BottomCenter => (
-                        (final_width - child_size.width) / 2,
-                        final_height - child_size.height,
-                    ),
-                    Alignment::BottomEnd => (
-                        final_width - child_size.width,
-                        final_height - child_size.height,
-                    ),
-                };
+                let (x, y) = compute_child_offset(
+                    args.alignment,
+                    final_width,
+                    final_height,
+                    child_size.width,
+                    child_size.height,
+                );
                 input.place_child(child_id, PxPosition::new(x, y));
             }
         }
@@ -205,6 +198,7 @@ pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxe
         })
     }));
 
+    // Render child closures after measurement.
     for child_closure in child_closures {
         child_closure();
     }

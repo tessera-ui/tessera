@@ -66,13 +66,13 @@ pub struct ProgressArgs {
 /// ```
 pub fn progress(args: impl Into<ProgressArgs>) {
     let args: ProgressArgs = args.into();
+    let radius = args.height.to_px().to_f32() / 2.0;
 
     // Child 1: The background track. It's drawn first.
     surface(
         SurfaceArgsBuilder::default()
             .color(args.track_color)
             .shape({
-                let radius = args.height.to_px().to_f32() / 2.0;
                 Shape::RoundedRectangle {
                     top_left: radius,
                     top_right: radius,
@@ -100,7 +100,6 @@ pub fn progress(args: impl Into<ProgressArgs>) {
         SurfaceArgsBuilder::default()
             .color(args.progress_color)
             .shape({
-                let radius = args.height.to_px().to_f32() / 2.0;
                 Shape::RoundedRectangle {
                     top_left: radius,
                     top_right: radius,
@@ -139,7 +138,8 @@ pub fn progress(args: impl Into<ProgressArgs>) {
         input.place_child(track_id, PxPosition::new(Px(0), Px(0)));
 
         // Measure and place the progress fill based on the `value`.
-        let progress_width = Px((self_width.to_f32() * args.value.clamp(0.0, 1.0)) as i32);
+        let clamped_value = args.value.clamp(0.0, 1.0);
+        let progress_width = Px::saturating_from_f32(self_width.to_f32() * clamped_value);
         let progress_constraint = Constraint::new(
             DimensionValue::Fixed(progress_width),
             DimensionValue::Fixed(self_height),

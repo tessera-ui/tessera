@@ -60,25 +60,17 @@ pub struct WgpuApp {
 
 impl WgpuApp {
     /// Create a new WGPU app, as the root of Tessera
-    pub(crate) async fn new(window: Arc<Window>, sample_count: u32) -> Self {
-        // Looking for gpus
-        let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-        // Create a surface
-        let surface = match instance.create_surface(window.clone()) {
-            Ok(surface) => surface,
-            Err(e) => {
-                error!("Failed to create surface: {e:?}");
-                panic!("Failed to create surface: {e:?}");
-            }
-        };
-        // Looking for adapter gpu
-        let adapter = match instance
+    // Small helper functions extracted from `new` to reduce its complexity.
+    //
+    // These helpers keep behavior unchanged but make `new` shorter and easier to analyze.
+    async fn request_adapter_for_surface(
+        instance: &wgpu::Instance,
+        surface: &wgpu::Surface<'_>,
+    ) -> wgpu::Adapter {
+        match instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
+                compatible_surface: Some(surface),
                 force_fallback_adapter: false,
             })
             .await
@@ -88,12 +80,15 @@ impl WgpuApp {
                 error!("Failed to find an appropriate adapter: {e:?}");
                 panic!("Failed to find an appropriate adapter: {e:?}");
             }
-        };
-        // Create a device and queue
-        let (gpu, queue) = match adapter
+        }
+    }
+
+    async fn request_device_and_queue_for_adapter(
+        adapter: &wgpu::Adapter,
+    ) -> (wgpu::Device, wgpu::Queue) {
+        match adapter
             .request_device(&wgpu::DeviceDescriptor {
                 required_features: wgpu::Features::empty() | wgpu::Features::CLEAR_TEXTURE,
-                // WebGL backend does not support all features
                 required_limits: if cfg!(target_arch = "wasm32") {
                     wgpu::Limits::downlevel_webgl2_defaults()
                 } else {
@@ -110,7 +105,53 @@ impl WgpuApp {
                 error!("Failed to create device: {e:?}");
                 panic!("Failed to create device: {e:?}");
             }
+        }
+    }
+
+    fn make_msaa_resources(
+        gpu: &wgpu::Device,
+        sample_count: u32,
+        config: &wgpu::SurfaceConfiguration,
+    ) -> (Option<wgpu::Texture>, Option<wgpu::TextureView>) {
+        if sample_count > 1 {
+            let texture = gpu.create_texture(&wgpu::TextureDescriptor {
+                label: Some("MSAA Framebuffer"),
+                size: wgpu::Extent3d {
+                    width: config.width,
+                    height: config.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count,
+                dimension: wgpu::TextureDimension::D2,
+                format: config.format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            (Some(texture), Some(view))
+        } else {
+            (None, None)
+        }
+    }
+    pub(crate) async fn new(window: Arc<Window>, sample_count: u32) -> Self {
+        // Looking for gpus
+        let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
+        // Create a surface
+        let surface = match instance.create_surface(window.clone()) {
+            Ok(surface) => surface,
+            Err(e) => {
+                error!("Failed to create surface: {e:?}");
+                panic!("Failed to create surface: {e:?}");
+            }
         };
+        // Looking for adapter gpu
+        let adapter = Self::request_adapter_for_surface(&instance, &surface).await;
+        // Create a device and queue
+        let (gpu, queue) = Self::request_device_and_queue_for_adapter(&adapter).await;
         // Create surface configuration
         let size = window.inner_size();
         let caps = surface.get_capabilities(&adapter);
@@ -136,27 +177,7 @@ impl WgpuApp {
         surface.configure(&gpu, &config);
 
         // --- Create MSAA Target ---
-        let (msaa_texture, msaa_view) = if sample_count > 1 {
-            let texture = gpu.create_texture(&wgpu::TextureDescriptor {
-                label: Some("MSAA Framebuffer"),
-                size: wgpu::Extent3d {
-                    width: config.width,
-                    height: config.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count,
-                dimension: wgpu::TextureDimension::D2,
-                // Use surface format to match pass targets
-                format: config.format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            });
-            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-            (Some(texture), Some(view))
-        } else {
-            (None, None)
-        };
+        let (msaa_texture, msaa_view) = Self::make_msaa_resources(&gpu, sample_count, &config);
 
         // --- Create Pass Targets (A and B and Compute) ---
         let pass_a = Self::create_pass_target(&gpu, &config, "A");
@@ -299,26 +320,12 @@ impl WgpuApp {
 
             if self.sample_count > 1 {
                 if let Some(t) = self.msaa_texture.take() {
-                    t.destroy()
+                    t.destroy();
                 }
-                let texture = self.gpu.create_texture(&wgpu::TextureDescriptor {
-                    label: Some("MSAA Framebuffer"),
-                    size: wgpu::Extent3d {
-                        width: self.config.width,
-                        height: self.config.height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: self.sample_count,
-                    dimension: wgpu::TextureDimension::D2,
-                    // Use surface format to match pass targets
-                    format: self.config.format,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                    view_formats: &[],
-                });
-                let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-                self.msaa_texture = Some(texture);
-                self.msaa_view = Some(view);
+                let (msaa_texture, msaa_view) =
+                    Self::make_msaa_resources(&self.gpu, self.sample_count, &self.config);
+                self.msaa_texture = msaa_texture;
+                self.msaa_view = msaa_view;
             }
         }
     }
@@ -331,6 +338,54 @@ impl WgpuApp {
             self.resize_pass_targets_if_needed();
             self.surface.configure(&self.gpu, &self.config);
             self.size_changed = false;
+        }
+    }
+
+    // Helper does ping-pong copy and optional compute; returns an owned TextureView to avoid
+    // holding mutable borrows on pass targets across the caller scope.
+    fn handle_ping_pong_and_compute(
+        encoder: &mut wgpu::CommandEncoder,
+        read_target: &mut PassTarget,
+        write_target: &mut PassTarget,
+        compute_commands: &mut Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
+        compute_pipeline_registry: &mut ComputePipelineRegistry,
+        gpu: &wgpu::Device,
+        queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        resource_manager: &mut ComputeResourceManager,
+        compute_target_a: &PassTarget,
+        compute_target_b: &PassTarget,
+    ) -> wgpu::TextureView {
+        // Swap read/write targets and copy previous pass into the new write target
+        std::mem::swap(read_target, write_target);
+        let texture_size = wgpu::Extent3d {
+            width: config.width,
+            height: config.height,
+            depth_or_array_layers: 1,
+        };
+        encoder.copy_texture_to_texture(
+            read_target.texture.as_image_copy(),
+            write_target.texture.as_image_copy(),
+            texture_size,
+        );
+        // Apply compute commands if any, reusing existing do_compute implementation
+        if !compute_commands.is_empty() {
+            let compute_commands_taken = std::mem::take(compute_commands);
+            Self::do_compute(
+                encoder,
+                compute_commands_taken,
+                compute_pipeline_registry,
+                gpu,
+                queue,
+                config,
+                resource_manager,
+                &read_target.view,
+                compute_target_a,
+                compute_target_b,
+            )
+        } else {
+            // Return an owned clone so caller does not keep a borrow on read_target
+            read_target.view.clone()
         }
     }
 
@@ -370,7 +425,7 @@ impl WgpuApp {
         };
 
         // Initialization
-        let (mut read_target, mut write_target) = (&mut self.pass_a, &mut self.pass_b);
+        let (read_target, write_target) = (&mut self.pass_a, &mut self.pass_b);
 
         // Clear any existing compute commands
         if !self.compute_commands.is_empty() {
@@ -388,7 +443,8 @@ impl WgpuApp {
             .begin_all_frames(&self.gpu, &self.queue, &self.config);
 
         // Main command processing loop with barrier handling
-        let mut scene_texture_view = &read_target.view;
+        // Use an owned TextureView here to avoid holding mutable borrows across helper calls.
+        let mut scene_texture_view = read_target.view.clone();
         let mut commands_in_pass: Vec<DrawCommandWithMetadata> = Vec::new();
         let mut barrier_draw_rects_in_pass: Vec<PxRect> = Vec::new();
         let mut clip_temp_stack = Vec::new();
@@ -423,32 +479,20 @@ impl WgpuApp {
                     .map(|cmd| cmd.command.barrier().is_some())
                     .unwrap_or(false)
                 {
-                    // Perform a ping-pong operation
-                    mem::swap(&mut read_target, &mut write_target);
-
-                    encoder.copy_texture_to_texture(
-                        read_target.texture.as_image_copy(),
-                        write_target.texture.as_image_copy(),
-                        texture_size,
+                    // Perform a ping-pong operation (extracted helper)
+                    let final_view_after_compute = Self::handle_ping_pong_and_compute(
+                        &mut encoder,
+                        read_target,
+                        write_target,
+                        &mut self.compute_commands,
+                        &mut self.compute_pipeline_registry,
+                        &self.gpu,
+                        &self.queue,
+                        &self.config,
+                        &mut self.resource_manager.write(),
+                        &self.compute_target_a,
+                        &self.compute_target_b,
                     );
-                    // --- Apply compute effect ---
-                    let final_view_after_compute = if !self.compute_commands.is_empty() {
-                        let compute_commands = mem::take(&mut self.compute_commands);
-                        Self::do_compute(
-                            &mut encoder,
-                            compute_commands,
-                            &mut self.compute_pipeline_registry,
-                            &self.gpu,
-                            &self.queue,
-                            &self.config,
-                            &mut self.resource_manager.write(),
-                            &read_target.view,
-                            &self.compute_target_a,
-                            &self.compute_target_b,
-                        )
-                    } else {
-                        &read_target.view
-                    };
                     scene_texture_view = final_view_after_compute;
                 }
 
@@ -459,7 +503,7 @@ impl WgpuApp {
                     &mut encoder,
                     write_target,
                     &mut commands_in_pass,
-                    scene_texture_view,
+                    &scene_texture_view,
                     &mut self.drawer,
                     &self.gpu,
                     &self.queue,
@@ -511,32 +555,20 @@ impl WgpuApp {
                 .map(|cmd| cmd.command.barrier().is_some())
                 .unwrap_or(false)
             {
-                // Perform a ping-pong operation
-                mem::swap(&mut read_target, &mut write_target);
-
-                encoder.copy_texture_to_texture(
-                    read_target.texture.as_image_copy(),
-                    write_target.texture.as_image_copy(),
-                    texture_size,
+                // Perform a ping-pong operation (extracted helper)
+                let final_view_after_compute = Self::handle_ping_pong_and_compute(
+                    &mut encoder,
+                    read_target,
+                    write_target,
+                    &mut self.compute_commands,
+                    &mut self.compute_pipeline_registry,
+                    &self.gpu,
+                    &self.queue,
+                    &self.config,
+                    &mut self.resource_manager.write(),
+                    &self.compute_target_a,
+                    &self.compute_target_b,
                 );
-                // --- Apply compute effect ---
-                let final_view_after_compute = if !self.compute_commands.is_empty() {
-                    let compute_commands = mem::take(&mut self.compute_commands);
-                    Self::do_compute(
-                        &mut encoder,
-                        compute_commands,
-                        &mut self.compute_pipeline_registry,
-                        &self.gpu,
-                        &self.queue,
-                        &self.config,
-                        &mut self.resource_manager.write(),
-                        &read_target.view,
-                        &self.compute_target_a,
-                        &self.compute_target_b,
-                    )
-                } else {
-                    &read_target.view
-                };
                 scene_texture_view = final_view_after_compute;
             }
 
@@ -547,7 +579,7 @@ impl WgpuApp {
                 &mut encoder,
                 write_target,
                 &mut commands_in_pass,
-                scene_texture_view,
+                &scene_texture_view,
                 &mut self.drawer,
                 &self.gpu,
                 &self.queue,
@@ -576,7 +608,7 @@ impl WgpuApp {
         Ok(())
     }
 
-    fn do_compute<'a>(
+    fn do_compute(
         encoder: &mut wgpu::CommandEncoder,
         commands: Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
         compute_pipeline_registry: &mut ComputePipelineRegistry,
@@ -585,16 +617,16 @@ impl WgpuApp {
         config: &wgpu::SurfaceConfiguration,
         resource_manager: &mut ComputeResourceManager,
         // The initial scene content
-        scene_view: &'a wgpu::TextureView,
+        scene_view: &wgpu::TextureView,
         // Ping-pong targets
-        target_a: &'a PassTarget,
-        target_b: &'a PassTarget,
-    ) -> &'a wgpu::TextureView {
+        target_a: &PassTarget,
+        target_b: &PassTarget,
+    ) -> wgpu::TextureView {
         if commands.is_empty() {
-            return scene_view;
+            return scene_view.clone();
         }
 
-        let mut read_view = scene_view;
+        let mut read_view = scene_view.clone();
         let (mut write_target, mut read_target) = (target_a, target_b);
 
         for (command, size, start_pos) in commands {
@@ -617,35 +649,14 @@ impl WgpuApp {
                     timestamp_writes: None,
                 });
 
-                // Get the area of the compute command
-                let area = match command.barrier() {
-                    BarrierRequirement::Global => PxRect {
-                        x: Px(0),
-                        y: Px(0),
-                        width: Px(config.width as i32),
-                        height: Px(config.height as i32),
-                    },
-                    BarrierRequirement::PaddedLocal {
-                        top,
-                        right,
-                        bottom,
-                        left,
-                    } => {
-                        let padded_x = (start_pos.x - left).max(Px(0));
-                        let padded_y = (start_pos.y - top).max(Px(0));
-                        let padded_width =
-                            (size.width + left + right).min(Px(config.width as i32 - padded_x.0));
-                        let padded_height =
-                            (size.height + top + bottom).min(Px(config.height as i32 - padded_y.0));
-                        PxRect {
-                            x: padded_x,
-                            y: padded_y,
-                            width: padded_width,
-                            height: padded_height,
-                        }
-                    }
-                    BarrierRequirement::Absolute(rect) => rect,
+                // Get the area of the compute command (reuse extract_draw_rect to avoid duplication)
+                let texture_size = wgpu::Extent3d {
+                    width: config.width,
+                    height: config.height,
+                    depth_or_array_layers: 1,
                 };
+                let area =
+                    extract_draw_rect(Some(command.barrier()), size, start_pos, texture_size);
 
                 compute_pipeline_registry.dispatch_erased(
                     gpu,
@@ -655,14 +666,14 @@ impl WgpuApp {
                     &*command,
                     resource_manager,
                     area,
-                    read_view,
+                    &read_view,
                     &write_target.view,
                 );
             } // cpass is dropped here, ending the pass
 
             // The result of this pass is now in write_target.
             // For the next iteration, this will be our read source.
-            read_view = &write_target.view;
+            read_view = write_target.view.clone();
             // Swap targets for the next iteration
             std::mem::swap(&mut write_target, &mut read_target);
         }
@@ -671,6 +682,44 @@ impl WgpuApp {
         // because we swapped one last time at the end of the loop.
         read_view
     }
+}
+
+fn compute_padded_rect(
+    size: PxSize,
+    start_pos: PxPosition,
+    top: Px,
+    right: Px,
+    bottom: Px,
+    left: Px,
+    texture_size: wgpu::Extent3d,
+) -> PxRect {
+    let padded_x = (start_pos.x - left).max(Px(0));
+    let padded_y = (start_pos.y - top).max(Px(0));
+    let padded_width = (size.width + left + right).min(Px(texture_size.width as i32 - padded_x.0));
+    let padded_height =
+        (size.height + top + bottom).min(Px(texture_size.height as i32 - padded_y.0));
+    PxRect {
+        x: padded_x,
+        y: padded_y,
+        width: padded_width,
+        height: padded_height,
+    }
+}
+
+fn clamp_rect_to_texture(mut rect: PxRect, texture_size: wgpu::Extent3d) -> PxRect {
+    rect.x = rect.x.positive().min(texture_size.width).into();
+    rect.y = rect.y.positive().min(texture_size.height).into();
+    rect.width = rect
+        .width
+        .positive()
+        .min(texture_size.width - rect.x.positive())
+        .into();
+    rect.height = rect
+        .height
+        .positive()
+        .min(texture_size.height - rect.y.positive())
+        .into();
+    rect
 }
 
 fn extract_draw_rect(
@@ -691,35 +740,8 @@ fn extract_draw_rect(
             right,
             bottom,
             left,
-        }) => {
-            let padded_x = (start_pos.x - left).max(Px(0));
-            let padded_y = (start_pos.y - top).max(Px(0));
-            let padded_width =
-                (size.width + left + right).min(Px(texture_size.width as i32 - padded_x.0));
-            let padded_height =
-                (size.height + top + bottom).min(Px(texture_size.height as i32 - padded_y.0));
-            PxRect {
-                x: padded_x,
-                y: padded_y,
-                width: padded_width,
-                height: padded_height,
-            }
-        }
-        Some(BarrierRequirement::Absolute(mut rect)) => {
-            rect.x = rect.x.positive().min(texture_size.width).into();
-            rect.y = rect.y.positive().min(texture_size.height).into();
-            rect.width = rect
-                .width
-                .positive()
-                .min(texture_size.width - rect.x.positive())
-                .into();
-            rect.height = rect
-                .height
-                .positive()
-                .min(texture_size.height - rect.y.positive())
-                .into();
-            rect
-        }
+        }) => compute_padded_rect(size, start_pos, top, right, bottom, left, texture_size),
+        Some(BarrierRequirement::Absolute(rect)) => clamp_rect_to_texture(rect, texture_size),
         None => {
             let x = start_pos.x.positive().min(texture_size.width);
             let y = start_pos.y.positive().min(texture_size.height);
@@ -756,10 +778,8 @@ fn render_current_pass(
 
     let load_ops = if *is_first_pass {
         *is_first_pass = false;
-        // If this is the first pass, we load the texture
         wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
     } else {
-        // Otherwise, we load the existing content
         wgpu::LoadOp::Load
     };
 
@@ -779,114 +799,141 @@ fn render_current_pass(
 
     drawer.begin_pass(gpu, queue, config, &mut rpass, scene_texture_view);
 
-    // Submit all batched draw commands to the drawer
+    // Prepare buffered submission state
     let mut buffer: Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)> = Vec::new();
     let mut last_command_type_id = None;
-    // Use a separate variable to track the current batch draw rectangle
     let mut current_batch_draw_rect: Option<PxRect> = None;
     for cmd in mem::take(commands_in_pass).into_iter() {
-        if last_command_type_id != Some(cmd.type_id) || cmd.clip_ops.is_some() {
+        // If the incoming command cannot be merged into the current batch, flush first.
+        if !can_merge_into_batch(&last_command_type_id, cmd.type_id, cmd.clip_ops.is_some()) {
             if !buffer.is_empty() {
-                let commands = mem::take(&mut buffer); // Clear and take the buffer
-                let commands = commands
-                    .iter()
-                    .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
-                    .collect::<Vec<_>>();
-                if let Some(clipped_rect) = clip_stack.last() {
-                    let Some(final_rect) =
-                        current_batch_draw_rect.unwrap().intersection(clipped_rect)
-                    else {
-                        continue;
-                    };
-                    current_batch_draw_rect = Some(final_rect);
-                }
-                rpass.set_scissor_rect(
-                    current_batch_draw_rect.unwrap().x.positive(),
-                    current_batch_draw_rect.unwrap().y.positive(),
-                    current_batch_draw_rect.unwrap().width.positive(),
-                    current_batch_draw_rect.unwrap().height.positive(),
-                );
-                drawer.submit(
+                submit_buffered_commands(
+                    &mut rpass,
+                    drawer,
                     gpu,
                     queue,
                     config,
-                    &mut rpass,
-                    &commands,
+                    &mut buffer,
                     scene_texture_view,
+                    clip_stack,
+                    &mut current_batch_draw_rect,
                 );
-                current_batch_draw_rect = None; // Reset the current batch draw rectangle
             }
-
             last_command_type_id = Some(cmd.type_id);
         }
 
-        // Handle clipping operations
+        // Handle clipping operations (extracted for clarity).
         if let Some(clip_ops) = cmd.clip_ops {
-            match clip_ops {
-                ClipOps::Push(rect) => {
-                    clip_stack.push(rect);
-                }
-                ClipOps::Pop => {
-                    clip_stack.pop();
-                }
-            }
+            handle_clip_ops(clip_ops, clip_stack);
         }
 
-        // Add the command to the buffer
+        // Add the command to the buffer and update the current batch rect (extracted merge helper).
         buffer.push((cmd.command, cmd.size, cmd.start_pos));
-        if let Some(draw_rect) = current_batch_draw_rect {
-            // If we already have a draw rectangle, we need to update it
-            current_batch_draw_rect = Some(draw_rect.union(&cmd.draw_rect));
-        } else {
-            // Otherwise, we set the current batch draw rectangle to the command's draw rectangle
-            current_batch_draw_rect = Some(cmd.draw_rect);
-        }
+        current_batch_draw_rect = Some(merge_batch_rect(current_batch_draw_rect, cmd.draw_rect));
     }
     // If there are any remaining commands in the buffer, submit them
     if !buffer.is_empty() {
-        let commands = mem::take(&mut buffer); // Clear and take the buffer
-        let commands = commands
-            .iter()
-            .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
-            .collect::<Vec<_>>();
-        if let Some(clipped_rect) = clip_stack.last() {
-            if let Some(current_batch_draw_rect) =
-                current_batch_draw_rect.unwrap().intersection(clipped_rect)
-            {
-                rpass.set_scissor_rect(
-                    current_batch_draw_rect.x.positive(),
-                    current_batch_draw_rect.y.positive(),
-                    current_batch_draw_rect.width.positive(),
-                    current_batch_draw_rect.height.positive(),
-                );
-                drawer.submit(
-                    gpu,
-                    queue,
-                    config,
-                    &mut rpass,
-                    &commands,
-                    scene_texture_view,
-                );
-            };
-        } else {
-            rpass.set_scissor_rect(
-                current_batch_draw_rect.unwrap().x.positive(),
-                current_batch_draw_rect.unwrap().y.positive(),
-                current_batch_draw_rect.unwrap().width.positive(),
-                current_batch_draw_rect.unwrap().height.positive(),
-            );
-            drawer.submit(
-                gpu,
-                queue,
-                config,
-                &mut rpass,
-                &commands,
-                scene_texture_view,
-            );
-        }
+        submit_buffered_commands(
+            &mut rpass,
+            drawer,
+            gpu,
+            queue,
+            config,
+            &mut buffer,
+            scene_texture_view,
+            clip_stack,
+            &mut current_batch_draw_rect,
+        );
     }
 
     drawer.end_pass(gpu, queue, config, &mut rpass, scene_texture_view);
+}
+
+fn submit_buffered_commands(
+    rpass: &mut wgpu::RenderPass<'_>,
+    drawer: &mut Drawer,
+    gpu: &wgpu::Device,
+    queue: &wgpu::Queue,
+    config: &wgpu::SurfaceConfiguration,
+    buffer: &mut Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)>,
+    scene_texture_view: &wgpu::TextureView,
+    clip_stack: &mut Vec<PxRect>,
+    current_batch_draw_rect: &mut Option<PxRect>,
+) {
+    // Take the buffered commands and convert to the transient representation expected by drawer.submit
+    let commands = mem::take(buffer);
+    let commands = commands
+        .iter()
+        .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
+        .collect::<Vec<_>>();
+
+    // Apply clipping to the current batch rectangle; if nothing remains, abort early.
+    if !apply_clip_to_batch_rect(clip_stack, current_batch_draw_rect) {
+        return;
+    }
+
+    let rect = current_batch_draw_rect.unwrap();
+    set_scissor_rect_from_pxrect(rpass, rect);
+
+    drawer.submit(gpu, queue, config, rpass, &commands, scene_texture_view);
+    *current_batch_draw_rect = None;
+}
+
+fn set_scissor_rect_from_pxrect(rpass: &mut wgpu::RenderPass<'_>, rect: PxRect) {
+    rpass.set_scissor_rect(
+        rect.x.positive(),
+        rect.y.positive(),
+        rect.width.positive(),
+        rect.height.positive(),
+    );
+}
+
+/// Apply clipping operations in one place to reduce branching inside the main loop.
+fn handle_clip_ops(clip_ops: ClipOps, clip_stack: &mut Vec<PxRect>) {
+    match clip_ops {
+        ClipOps::Push(rect) => clip_stack.push(rect),
+        ClipOps::Pop => {
+            clip_stack.pop();
+        }
+    }
+}
+
+/// Apply clip_stack to current_batch_draw_rect. Returns false if intersection yields nothing
+/// (meaning there is nothing to submit), true otherwise.
+fn apply_clip_to_batch_rect(
+    clip_stack: &mut Vec<PxRect>,
+    current_batch_draw_rect: &mut Option<PxRect>,
+) -> bool {
+    if let Some(clipped_rect) = clip_stack.last() {
+        let Some(current_rect) = current_batch_draw_rect.as_ref() else {
+            return false;
+        };
+        if let Some(final_rect) = current_rect.intersection(clipped_rect) {
+            *current_batch_draw_rect = Some(final_rect);
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
+/// Determine whether `next_type_id` (with potential clipping) can be merged into the current batch.
+/// Equivalent to the negation of the original flush condition:
+/// merge allowed when last_command_type_id == Some(next_type_id) && has_clip == false
+fn can_merge_into_batch(
+    last_command_type_id: &Option<TypeId>,
+    next_type_id: TypeId,
+    has_clip: bool,
+) -> bool {
+    match last_command_type_id {
+        Some(l) => *l == next_type_id && !has_clip,
+        None => false,
+    }
+}
+
+/// Merge the existing optional batch rect with a new command rect.
+fn merge_batch_rect(current: Option<PxRect>, next: PxRect) -> PxRect {
+    current.map(|dr| dr.union(&next)).unwrap_or(next)
 }
 
 struct DrawCommandWithMetadata {

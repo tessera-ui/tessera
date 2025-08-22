@@ -1,6 +1,6 @@
 //! Animation mapping for UI components.
-
-/// Quadratic ease-in-out mapping.
+///
+/// Cubic ease-in-out mapping (smooth start and end).
 /// Input: linear progress in [0.0, 1.0].
 /// Output: eased progress in [0.0, 1.0].
 pub(crate) fn easing(progress: f32) -> f32 {

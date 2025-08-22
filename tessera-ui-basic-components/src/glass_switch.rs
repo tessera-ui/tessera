@@ -102,6 +102,90 @@ impl Default for GlassSwitchArgs {
     }
 }
 
+// Helper functions extracted from glass_switch to reduce closure complexity
+fn raw_progress_from_args(args: &GlassSwitchArgs) -> f32 {
+    if let Some(state) = &args.state {
+        *state.lock().progress.lock()
+    } else if args.checked {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
+    Color {
+        r: off.r + (on.r - off.r) * progress,
+        g: off.g + (on.g - off.g) * progress,
+        b: off.b + (on.b - off.b) * progress,
+        a: off.a + (on.a - off.a) * progress,
+    }
+}
+
+fn update_progress_from_state(state_arc: &Option<Arc<Mutex<GlassSwitchState>>>) {
+    if let Some(state) = state_arc {
+        let s = state.lock();
+        if let Some(last_toggle_time) = *s.last_toggle_time.lock() {
+            let elapsed = last_toggle_time.elapsed();
+            let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
+            let mut p = s.progress.lock();
+            *p = if s.checked { fraction } else { 1.0 - fraction };
+        }
+    }
+}
+
+/// Return true if the given cursor position is inside the component bounds.
+fn is_cursor_inside(size: ComputedData, cursor_pos: Option<PxPosition>) -> bool {
+    cursor_pos
+        .map(|pos| {
+            pos.x.0 >= 0 && pos.x.0 < size.width.0 && pos.y.0 >= 0 && pos.y.0 < size.height.0
+        })
+        .unwrap_or(false)
+}
+
+/// Return true if there is a left-press event in the input.
+fn was_pressed_left(input: &tessera_ui::StateHandlerInput) -> bool {
+    input.cursor_events.iter().any(|e| {
+        matches!(
+            e.content,
+            CursorEventContent::Pressed(PressKeyEventType::Left)
+        )
+    })
+}
+
+fn handle_input_events(
+    state_arc: &Option<Arc<Mutex<GlassSwitchState>>>,
+    on_toggle: &Arc<dyn Fn(bool) + Send + Sync>,
+    checked_initial: bool,
+    input: &mut tessera_ui::StateHandlerInput,
+) {
+    // Update progress first
+    update_progress_from_state(state_arc);
+
+    // Cursor handling
+    let size = input.computed_data;
+    let is_cursor_in = is_cursor_inside(size, input.cursor_position_rel);
+
+    if is_cursor_in {
+        input.requests.cursor_icon = CursorIcon::Pointer;
+    }
+
+    // Handle press events: toggle state and call callback
+    let pressed = was_pressed_left(&*input);
+
+    if pressed && is_cursor_in {
+        // If internal state exists, toggle it and use the toggled value.
+        if let Some(state) = &state_arc {
+            let mut s = state.lock();
+            s.toggle();
+            on_toggle(s.checked);
+        } else {
+            // No internal state: derive new state from initial checked value.
+            let new_state = !checked_initial;
+            on_toggle(new_state);
+        }
+    }
+}
 #[tessera]
 /// A glass-like switch component for toggling a boolean state.
 ///
@@ -147,106 +231,69 @@ impl Default for GlassSwitchArgs {
 ///     are also available.
 pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
     let args: GlassSwitchArgs = args.into();
-    let thumb_size = Dp(args.height.0 - (args.thumb_padding.0 * 2.0));
+    // Precompute pixel sizes to avoid repeated conversions
+    let width_px = args.width.to_px();
+    let height_px = args.height.to_px();
+    let thumb_dp = Dp(args.height.0 - (args.thumb_padding.0 * 2.0));
+    let thumb_px = thumb_dp.to_px();
+    let track_radius = height_px.to_f32() / 2.0;
 
-    // Track (background) as the first child, rendered with fluid_glass
-    let progress = args
-        .state
-        .as_ref()
-        .map(|s| *s.lock().progress.lock())
-        .unwrap_or(if args.checked { 1.0 } else { 0.0 });
-    let track_color = Color {
-        r: args.track_off_color.r + (args.track_on_color.r - args.track_off_color.r) * progress,
-        g: args.track_off_color.g + (args.track_on_color.g - args.track_off_color.g) * progress,
-        b: args.track_off_color.b + (args.track_on_color.b - args.track_off_color.b) * progress,
-        a: args.track_off_color.a + (args.track_on_color.a - args.track_off_color.a) * progress,
-    };
-    let mut arg = FluidGlassArgsBuilder::default()
-        .width(DimensionValue::Fixed(args.width.to_px()))
-        .height(DimensionValue::Fixed(args.height.to_px()))
+    // Track tint color interpolation based on progress
+    let progress = raw_progress_from_args(&args);
+    let track_color = interpolate_color(args.track_off_color, args.track_on_color, progress);
+
+    // Build and render track
+    let mut track_builder = FluidGlassArgsBuilder::default()
+        .width(DimensionValue::Fixed(width_px))
+        .height(DimensionValue::Fixed(height_px))
         .tint_color(track_color)
-        .blur_radius(10.0)
         .shape({
-            let radius = args.height.to_px().to_f32() / 2.0;
             Shape::RoundedRectangle {
-                top_left: radius,
-                top_right: radius,
-                bottom_right: radius,
-                bottom_left: radius,
+                top_left: track_radius,
+                top_right: track_radius,
+                bottom_right: track_radius,
+                bottom_left: track_radius,
                 g2_k_value: 2.0, // Capsule shape
             }
         })
         .blur_radius(8.0);
     if let Some(border) = args.track_border {
-        arg = arg.border(border);
+        track_builder = track_builder.border(border);
     }
-    let track_glass_arg = arg.build().unwrap();
-    fluid_glass(track_glass_arg, None, || {});
+    fluid_glass(track_builder.build().unwrap(), None, || {});
 
-    // Thumb (slider) is always white, opacity changes with progress
+    // Build and render thumb
     let thumb_alpha =
         args.thumb_off_alpha + (args.thumb_on_alpha - args.thumb_off_alpha) * progress;
     let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
-    let mut thumb_glass_arg = FluidGlassArgsBuilder::default()
-        .width(DimensionValue::Fixed(thumb_size.to_px()))
-        .height(DimensionValue::Fixed(thumb_size.to_px()))
+    let mut thumb_builder = FluidGlassArgsBuilder::default()
+        .width(DimensionValue::Fixed(thumb_px))
+        .height(DimensionValue::Fixed(thumb_px))
         .tint_color(thumb_color)
         .refraction_height(1.0)
         .shape(Shape::Ellipse);
     if let Some(border) = args.thumb_border {
-        thumb_glass_arg = thumb_glass_arg.border(border);
+        thumb_builder = thumb_builder.border(border);
     }
-    let thumb_glass_arg = thumb_glass_arg.build().unwrap();
-    fluid_glass(thumb_glass_arg, None, || {});
+    fluid_glass(thumb_builder.build().unwrap(), None, || {});
 
     let on_toggle = args.on_toggle.clone();
-    let state = args.state.clone();
-    let checked = args.checked;
+    let state_arc = args.state.clone();
+    let checked_initial = args.checked;
 
-    state_handler(Box::new(move |input| {
-        if let Some(state) = &state {
-            let state = state.lock();
-            let mut progress = state.progress.lock();
-            if let Some(last_toggle_time) = *state.last_toggle_time.lock() {
-                let elapsed = last_toggle_time.elapsed();
-                let animation_fraction =
-                    (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
-                *progress = if state.checked {
-                    animation_fraction
-                } else {
-                    1.0 - animation_fraction
-                };
-            }
-        }
-
-        let size = input.computed_data;
-        let is_cursor_in = if let Some(pos) = input.cursor_position_rel {
-            pos.x.0 >= 0 && pos.x.0 < size.width.0 && pos.y.0 >= 0 && pos.y.0 < size.height.0
-        } else {
-            false
-        };
-        if is_cursor_in {
-            input.requests.cursor_icon = CursorIcon::Pointer;
-        }
-        for e in input.cursor_events.iter() {
-            if let CursorEventContent::Pressed(PressKeyEventType::Left) = &e.content {
-                if is_cursor_in {
-                    if let Some(state) = &state {
-                        state.lock().toggle();
-                    }
-                    on_toggle(!checked);
-                }
-            }
-        }
+    state_handler(Box::new(move |mut input| {
+        handle_input_events(&state_arc, &on_toggle, checked_initial, &mut input);
     }));
 
+    // Measurement and placement
     measure(Box::new(move |input| {
-        let track_id = input.children_ids[0]; // track is the first child
-        let thumb_id = input.children_ids[1]; // thumb is the second child
-        // Prepare constraints for both children
+        // Expect track then thumb as children
+        let track_id = input.children_ids[0];
+        let thumb_id = input.children_ids[1];
+
         let track_constraint = Constraint::new(
-            DimensionValue::Fixed(args.width.to_px()),
-            DimensionValue::Fixed(args.height.to_px()),
+            DimensionValue::Fixed(width_px),
+            DimensionValue::Fixed(height_px),
         );
         let thumb_constraint = Constraint::new(
             DimensionValue::Wrap {
@@ -258,36 +305,35 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
                 max: None,
             },
         );
-        // Measure both children in parallel
+
+        // Measure both children
         let nodes_constraints = vec![(track_id, track_constraint), (thumb_id, thumb_constraint)];
         let sizes_map = input.measure_children(nodes_constraints)?;
 
         let _track_size = sizes_map.get(&track_id).unwrap();
         let thumb_size = sizes_map.get(&thumb_id).unwrap();
-        let self_width_px = args.width.to_px();
-        let self_height_px = args.height.to_px();
+        let self_width_px = width_px;
+        let self_height_px = height_px;
         let thumb_padding_px = args.thumb_padding.to_px();
 
-        let progress = animation::easing(
-            args.state
-                .as_ref()
-                .map(|s| *s.lock().progress.lock())
-                .unwrap_or(if args.checked { 1.0 } else { 0.0 }),
-        );
-        // Place track at origin
+        // Use eased progress for placement
+        let eased_progress = animation::easing(raw_progress_from_args(&args));
+
         input.place_child(
             track_id,
             PxPosition::new(tessera_ui::Px(0), tessera_ui::Px(0)),
         );
-        // Place thumb according to progress
+
         let start_x = thumb_padding_px;
         let end_x = self_width_px - thumb_size.width - thumb_padding_px;
-        let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * progress;
+        let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * eased_progress;
         let thumb_y = (self_height_px - thumb_size.height) / 2;
+
         input.place_child(
             thumb_id,
             PxPosition::new(tessera_ui::Px(thumb_x as i32), thumb_y),
         );
+
         Ok(ComputedData {
             width: self_width_px,
             height: self_height_px,

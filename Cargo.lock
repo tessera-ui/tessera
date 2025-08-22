@@ -3195,6 +3195,7 @@ name = "tessera-ui-macros"
 version = "0.2.2"
 dependencies = [
  "heck",
+ "proc-macro2",
  "quote",
  "syn",
 ]

@@ -26,6 +26,107 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{ItemFn, parse_macro_input};
 
+/// Helper: parse crate path from attribute TokenStream
+fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Path {
+    if attr.is_empty() {
+        // Default to `tessera_ui` if no path is provided
+        syn::parse_quote!(::tessera_ui)
+    } else {
+        // Parse the provided path, e.g., `crate` or `tessera_ui`
+        syn::parse(attr).expect("Expected a valid path like `crate` or `tessera_ui`")
+    }
+}
+
+/// Helper: tokens to register a component node
+fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_macro2::TokenStream {
+    quote! {
+        {
+            use #crate_path::{TesseraRuntime, ComponentNode};
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.component_tree.add_node(
+                    ComponentNode {
+                        fn_name: stringify!(#fn_name).to_string(),
+                        measure_fn: None,
+                        state_handler_fn: None,
+                    }
+                )
+            });
+        }
+    }
+}
+
+/// Helper: tokens to inject `measure`
+fn measure_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
+    quote! {
+        let measure = {
+            use #crate_path::{MeasureFn, TesseraRuntime};
+            |fun: Box<MeasureFn>| {
+                TesseraRuntime::with_mut(|runtime| {
+                    runtime
+                        .component_tree
+                        .current_node_mut()
+                        .unwrap()
+                        .measure_fn = Some(fun)
+                });
+            }
+        };
+    }
+}
+
+/// Helper: tokens to inject `state_handler`
+fn state_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
+    quote! {
+        let state_handler = {
+            use #crate_path::{StateHandlerFn, TesseraRuntime};
+            |fun: Box<StateHandlerFn>| {
+                TesseraRuntime::with_mut(|runtime| {
+                    runtime
+                        .component_tree
+                        .current_node_mut()
+                        .unwrap()
+                        .state_handler_fn = Some(fun)
+                });
+            }
+        };
+    }
+}
+
+/// Helper: tokens to inject `on_minimize`
+fn on_minimize_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
+    quote! {
+        let on_minimize = {
+            use #crate_path::TesseraRuntime;
+            |fun: Box<dyn Fn(bool) + Send + Sync + 'static>| {
+                TesseraRuntime::with_mut(|runtime| runtime.on_minimize(fun));
+            }
+        };
+    }
+}
+
+/// Helper: tokens to inject `on_close`
+fn on_close_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
+    quote! {
+        let on_close = {
+            use #crate_path::TesseraRuntime;
+            |fun: Box<dyn Fn() + Send + Sync + 'static>| {
+                TesseraRuntime::with_mut(|runtime| runtime.on_close(fun));
+            }
+        };
+    }
+}
+
+/// Helper: tokens to cleanup (pop node)
+fn cleanup_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
+    quote! {
+        {
+            use #crate_path::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| runtime.component_tree.pop_node());
+        }
+    }
+}
+
 /// The `#[tessera]` attribute macro transforms a regular Rust function into a Tessera UI component.
 ///
 /// This macro performs several key transformations:
@@ -88,13 +189,7 @@ use syn::{ItemFn, parse_macro_input};
 /// component function returns early.
 #[proc_macro_attribute]
 pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let crate_path: syn::Path = if attr.is_empty() {
-        // Default to `tessera_ui` if no path is provided
-        syn::parse_quote!(::tessera_ui)
-    } else {
-        // Parse the provided path, e.g., `crate` or `tessera_ui`
-        syn::parse(attr).expect("Expected a valid path like `crate` or `tessera_ui`")
-    };
+    let crate_path: syn::Path = parse_crate_path(attr);
 
     // Parse the input function that will be transformed into a component
     let input_fn = parse_macro_input!(item as ItemFn);
@@ -104,87 +199,35 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_sig = &input_fn.sig; // Function signature (parameters, return type)
     let fn_block = &input_fn.block; // Original function body
 
+    // Prepare token fragments using helpers to keep function small and readable
+    let register_tokens = register_node_tokens(&crate_path, &fn_name);
+    let measure_tokens = measure_inject_tokens(&crate_path);
+    let state_tokens = state_handler_inject_tokens(&crate_path);
+    let on_minimize_tokens = on_minimize_inject_tokens(&crate_path);
+    let on_close_tokens = on_close_inject_tokens(&crate_path);
+    let cleanup = cleanup_tokens(&crate_path);
+
     // Generate the transformed function with Tessera runtime integration
     let expanded = quote! {
         #(#fn_attrs)*
         #fn_vis #fn_sig {
-            // Step 1: Register this function as a component node in the tree
-            {
-                use #crate_path::{TesseraRuntime, ComponentNode};
+            #register_tokens
 
-                TesseraRuntime::with_mut(|runtime| {
-                    runtime.component_tree.add_node(
-                        ComponentNode {
-                            fn_name: stringify!(#fn_name).to_string(),
-                            measure_fn: None,
-                            state_handler_fn: None,
-                        }
-                    )
-                });
-            }
+            #measure_tokens
 
-            // Step 2: Inject the `measure` function into the component scope
-            // This allows components to define custom layout behavior
-            let measure = {
-                use #crate_path::{MeasureFn, TesseraRuntime};
-                |fun: Box<MeasureFn>| {
-                    TesseraRuntime::with_mut(|runtime| {
-                        runtime
-                            .component_tree
-                            .current_node_mut()
-                            .unwrap()
-                            .measure_fn = Some(fun)
-                    });
-                }
-            };
+            #state_tokens
 
-            // Step 3: Inject the `state_handler` function into the component scope
-            // This allows components to handle user interactions and events
-            let state_handler = {
-                use #crate_path::{StateHandlerFn, TesseraRuntime};
-                |fun: Box<StateHandlerFn>| {
-                    TesseraRuntime::with_mut(|runtime| {
-                        runtime
-                            .component_tree
-                            .current_node_mut()
-                            .unwrap()
-                            .state_handler_fn = Some(fun)
-                    });
-                }
-            };
+            #on_minimize_tokens
 
-            // Step 4: Inject the `on_minimize` function into the component scope
-            // This allows components to respond to window minimize events
-            let on_minimize = {
-                use #crate_path::TesseraRuntime;
-                |fun: Box<dyn Fn(bool) + Send + Sync + 'static>| {
-                    TesseraRuntime::with_mut(|runtime| runtime.on_minimize(fun));
-                }
-            };
+            #on_close_tokens
 
-            // Step 4b: Inject the `on_close` function into the component scope
-            // This allows components to respond to window close events
-            let on_close = {
-                use #crate_path::TesseraRuntime;
-                |fun: Box<dyn Fn() + Send + Sync + 'static>| {
-                    TesseraRuntime::with_mut(|runtime| runtime.on_close(fun));
-                }
-            };
-
-            // Step 5: Execute the original function body within a closure
-            // This prevents early returns from breaking the component tree structure
+            // Execute the original function body within a closure to avoid early-return issues
             let result = {
                 let closure = || #fn_block;
                 closure()
             };
 
-            // Step 6: Clean up the component tree by removing this node
-            // This ensures proper tree management and prevents memory leaks
-            {
-                use #crate_path::TesseraRuntime;
-
-                TesseraRuntime::with_mut(|runtime| runtime.component_tree.pop_node());
-            }
+            #cleanup
 
             result
         }

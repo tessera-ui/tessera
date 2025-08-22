@@ -154,6 +154,64 @@ impl Default for SwitchArgs {
     }
 }
 
+// Helper utilities extracted to reduce state_handler complexity.
+fn raw_progress_from_args(args: &SwitchArgs) -> f32 {
+    args.state
+        .as_ref()
+        .map(|s| *s.lock().progress.lock())
+        .unwrap_or(if args.checked { 1.0 } else { 0.0 })
+}
+
+fn update_progress_from_state(state_arc: &Option<Arc<Mutex<SwitchState>>>) {
+    if let Some(state) = state_arc {
+        let s = state.lock();
+        if let Some(last_toggle_time) = *s.last_toggle_time.lock() {
+            let elapsed = last_toggle_time.elapsed();
+            let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
+            let mut p = s.progress.lock();
+            *p = if s.checked { fraction } else { 1.0 - fraction };
+        }
+    }
+}
+
+fn is_cursor_in_component(size: ComputedData, pos_option: Option<tessera_ui::PxPosition>) -> bool {
+    pos_option
+        .map(|pos| {
+            pos.x.0 >= 0 && pos.x.0 < size.width.0 && pos.y.0 >= 0 && pos.y.0 < size.height.0
+        })
+        .unwrap_or(false)
+}
+
+fn handle_input_events_switch(
+    state_arc: &Option<Arc<Mutex<SwitchState>>>,
+    on_toggle: &Arc<dyn Fn(bool) + Send + Sync>,
+    checked_initial: bool,
+    input: &mut tessera_ui::StateHandlerInput,
+) {
+    update_progress_from_state(state_arc);
+
+    let size = input.computed_data;
+    let is_cursor_in = is_cursor_in_component(size, input.cursor_position_rel);
+
+    if is_cursor_in {
+        input.requests.cursor_icon = CursorIcon::Pointer;
+    }
+
+    for e in input.cursor_events.iter() {
+        if let CursorEventContent::Pressed(PressKeyEventType::Left) = &e.content {
+            if is_cursor_in {
+                if let Some(state) = &state_arc {
+                    state.lock().toggle();
+                    let new_state = state.lock().checked;
+                    on_toggle(new_state);
+                } else {
+                    on_toggle(!checked_initial);
+                }
+            }
+        }
+    }
+}
+
 ///
 /// A UI component that displays a toggle switch for boolean state.
 ///
@@ -199,42 +257,9 @@ pub fn switch(args: impl Into<SwitchArgs>) {
     let state = args.state.clone();
     let checked = args.checked;
 
-    state_handler(Box::new(move |input| {
-        if let Some(state) = &state {
-            let state = state.lock();
-            let mut progress = state.progress.lock();
-
-            if let Some(last_toggle_time) = *state.last_toggle_time.lock() {
-                let elapsed = last_toggle_time.elapsed();
-                let animation_fraction =
-                    (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
-
-                *progress = if state.checked {
-                    animation_fraction
-                } else {
-                    1.0 - animation_fraction
-                };
-            }
-        }
-
-        let size = input.computed_data;
-        let is_cursor_in = if let Some(pos) = input.cursor_position_rel {
-            pos.x.0 >= 0 && pos.x.0 < size.width.0 && pos.y.0 >= 0 && pos.y.0 < size.height.0
-        } else {
-            false
-        };
-
-        if is_cursor_in {
-            input.requests.cursor_icon = CursorIcon::Pointer;
-        }
-
-        for e in input.cursor_events.iter() {
-            if let CursorEventContent::Pressed(PressKeyEventType::Left) = &e.content {
-                if is_cursor_in {
-                    on_toggle(!checked);
-                }
-            }
-        }
+    state_handler(Box::new(move |mut input| {
+        // Delegate input handling to the extracted helper.
+        handle_input_events_switch(&state, &on_toggle, checked, &mut input);
     }));
 
     measure(Box::new(move |input| {
@@ -255,11 +280,7 @@ pub fn switch(args: impl Into<SwitchArgs>) {
         let self_height_px = args.height.to_px();
         let thumb_padding_px = args.thumb_padding.to_px();
 
-        let progress = args
-            .state
-            .as_ref()
-            .map(|s| *s.lock().progress.lock())
-            .unwrap_or(if args.checked { 1.0 } else { 0.0 });
+        let progress = raw_progress_from_args(&args);
 
         let start_x = thumb_padding_px;
         let end_x = self_width_px - thumb_size.width - thumb_padding_px;

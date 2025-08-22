@@ -163,6 +163,186 @@ impl Default for SurfaceArgs {
 /// );
 /// ```
 ///
+fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<&Arc<RippleState>>) -> RippleProps {
+    if let Some(ref state) = ripple_state {
+        if let Some((progress, click_pos)) = state.get_animation_progress() {
+            let radius = progress;
+            let alpha = (1.0 - progress) * 0.3;
+            return RippleProps {
+                center: click_pos,
+                radius,
+                alpha,
+                color: args.ripple_color,
+            };
+        }
+    }
+    RippleProps::default()
+}
+
+/// Build a ShapeCommand from surface args and computed ripple props.
+///
+/// Split into small helpers to reduce cyclomatic complexity.
+fn build_rounded_rectangle_command(
+    args: &SurfaceArgs,
+    effective_color: Color,
+    ripple_props: RippleProps,
+    corner_radii: [f32; 4],
+    g2_k_value: f32,
+    interactive: bool,
+) -> ShapeCommand {
+    if interactive {
+        if args.border_width > 0.0 {
+            ShapeCommand::RippleOutlinedRect {
+                color: args.border_color.unwrap_or(effective_color),
+                corner_radii,
+                g2_k_value,
+                shadow: args.shadow,
+                border_width: args.border_width,
+                ripple: ripple_props,
+            }
+        } else {
+            ShapeCommand::RippleRect {
+                color: effective_color,
+                corner_radii,
+                g2_k_value,
+                shadow: args.shadow,
+                ripple: ripple_props,
+            }
+        }
+    } else if args.border_width > 0.0 {
+        ShapeCommand::OutlinedRect {
+            color: args.border_color.unwrap_or(effective_color),
+            corner_radii,
+            g2_k_value,
+            shadow: args.shadow,
+            border_width: args.border_width,
+        }
+    } else {
+        ShapeCommand::Rect {
+            color: effective_color,
+            corner_radii,
+            g2_k_value,
+            shadow: args.shadow,
+        }
+    }
+}
+
+fn build_ellipse_command(
+    args: &SurfaceArgs,
+    effective_color: Color,
+    ripple_props: RippleProps,
+    interactive: bool,
+) -> ShapeCommand {
+    let corner_marker = [-1.0, -1.0, -1.0, -1.0];
+    if interactive {
+        if args.border_width > 0.0 {
+            ShapeCommand::RippleOutlinedRect {
+                color: args.border_color.unwrap_or(effective_color),
+                corner_radii: corner_marker,
+                g2_k_value: 0.0,
+                shadow: args.shadow,
+                border_width: args.border_width,
+                ripple: ripple_props,
+            }
+        } else {
+            ShapeCommand::RippleRect {
+                color: effective_color,
+                corner_radii: corner_marker,
+                g2_k_value: 0.0,
+                shadow: args.shadow,
+                ripple: ripple_props,
+            }
+        }
+    } else if args.border_width > 0.0 {
+        ShapeCommand::OutlinedEllipse {
+            color: args.border_color.unwrap_or(effective_color),
+            shadow: args.shadow,
+            border_width: args.border_width,
+        }
+    } else {
+        ShapeCommand::Ellipse {
+            color: effective_color,
+            shadow: args.shadow,
+        }
+    }
+}
+
+/// Build a ShapeCommand from surface args and computed ripple props.
+/// This delegates to small helpers to keep per-function complexity low.
+fn build_shape_command(
+    args: &SurfaceArgs,
+    effective_color: Color,
+    ripple_props: RippleProps,
+) -> ShapeCommand {
+    let interactive = args.on_click.is_some();
+
+    match args.shape {
+        Shape::RoundedRectangle {
+            top_left,
+            top_right,
+            bottom_right,
+            bottom_left,
+            g2_k_value,
+        } => {
+            let corner_radii = [top_left, top_right, bottom_right, bottom_left];
+            build_rounded_rectangle_command(
+                args,
+                effective_color,
+                ripple_props,
+                corner_radii,
+                g2_k_value,
+                interactive,
+            )
+        }
+        Shape::Ellipse => build_ellipse_command(args, effective_color, ripple_props, interactive),
+    }
+}
+
+/// Main constructor for the shape drawable used by surface.
+/// Delegates ripple computation and shape construction to helpers to reduce complexity.
+fn make_surface_drawable(
+    args: &SurfaceArgs,
+    effective_color: Color,
+    ripple_state: Option<&Arc<RippleState>>,
+) -> ShapeCommand {
+    let ripple_props = build_ripple_props(args, ripple_state);
+    build_shape_command(args, effective_color, ripple_props)
+}
+
+fn compute_surface_size(
+    effective_surface_constraint: Constraint,
+    child_measurement: ComputedData,
+    padding_px: Px,
+) -> (Px, Px) {
+    let min_width = child_measurement.width + padding_px * 2;
+    let min_height = child_measurement.height + padding_px * 2;
+
+    fn clamp_wrap(min: Option<Px>, max: Option<Px>, min_measure: Px) -> Px {
+        min.unwrap_or(Px(0))
+            .max(min_measure)
+            .min(max.unwrap_or(Px::MAX))
+    }
+
+    fn fill_value(min: Option<Px>, max: Option<Px>, min_measure: Px) -> Px {
+        max.expect("Seems that you are trying to fill an infinite dimension, which is not allowed")
+            .max(min_measure)
+            .max(min.unwrap_or(Px(0)))
+    }
+
+    let width = match effective_surface_constraint.width {
+        DimensionValue::Fixed(value) => value,
+        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, min_width),
+        DimensionValue::Fill { min, max } => fill_value(min, max, min_width),
+    };
+
+    let height = match effective_surface_constraint.height {
+        DimensionValue::Fixed(value) => value,
+        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, min_height),
+        DimensionValue::Fill { min, max } => fill_value(min, max, min_height),
+    };
+
+    (width, height)
+}
 #[tessera]
 pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child: impl FnOnce()) {
     (child)();
@@ -186,16 +366,12 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         let effective_surface_constraint =
             surface_intrinsic_constraint.merge(input.parent_constraint);
         // Determine constraint for the child
+        let padding_px: Px = args_measure_clone.padding.into();
         let child_constraint = Constraint::new(
-            remove_padding_from_dimension(
-                effective_surface_constraint.width,
-                args_measure_clone.padding.into(),
-            ),
-            remove_padding_from_dimension(
-                effective_surface_constraint.height,
-                args_measure_clone.padding.into(),
-            ),
+            remove_padding_from_dimension(effective_surface_constraint.width, padding_px),
+            remove_padding_from_dimension(effective_surface_constraint.height, padding_px),
         );
+
         // Measure the child with the computed constraint
         let child_measurement = if !input.children_ids.is_empty() {
             let child_measurement =
@@ -215,7 +391,8 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 height: Px(0),
             }
         };
-        // Add drawable for the surface
+
+        // Determine color and drawable using extracted helpers
         let is_hovered = ripple_state_for_measure
             .as_ref()
             .map(|state| state.is_hovered())
@@ -227,150 +404,18 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             args_measure_clone.color
         };
 
-        let drawable = if args_measure_clone.on_click.is_some() {
-            // Interactive surface with ripple effect
-            let ripple_props = if let Some(ref state) = ripple_state_for_measure {
-                if let Some((progress, click_pos)) = state.get_animation_progress() {
-                    let radius = progress; // Expand from 0 to 1
-                    let alpha = (1.0 - progress) * 0.3; // Fade out
-
-                    RippleProps {
-                        center: click_pos,
-                        radius,
-                        alpha,
-                        color: args_measure_clone.ripple_color,
-                    }
-                } else {
-                    RippleProps::default()
-                }
-            } else {
-                RippleProps::default()
-            };
-
-            match args_measure_clone.shape {
-                Shape::RoundedRectangle {
-                    top_left,
-                    top_right,
-                    bottom_right,
-                    bottom_left,
-                    g2_k_value,
-                } => {
-                    let corner_radii = [top_left, top_right, bottom_right, bottom_left];
-                    if args_measure_clone.border_width > 0.0 {
-                        ShapeCommand::RippleOutlinedRect {
-                            color: args_measure_clone.border_color.unwrap_or(effective_color),
-                            corner_radii,
-                            g2_k_value,
-                            shadow: args_measure_clone.shadow,
-                            border_width: args_measure_clone.border_width,
-                            ripple: ripple_props,
-                        }
-                    } else {
-                        ShapeCommand::RippleRect {
-                            color: effective_color,
-                            corner_radii,
-                            g2_k_value,
-                            shadow: args_measure_clone.shadow,
-                            ripple: ripple_props,
-                        }
-                    }
-                }
-                Shape::Ellipse => {
-                    if args_measure_clone.border_width > 0.0 {
-                        ShapeCommand::RippleOutlinedRect {
-                            color: args_measure_clone.border_color.unwrap_or(effective_color),
-                            corner_radii: [-1.0, -1.0, -1.0, -1.0], // Use negative radius to signify ellipse
-                            g2_k_value: 0.0, // Just for compatibility, not used in ellipse
-                            shadow: args_measure_clone.shadow,
-                            border_width: args_measure_clone.border_width,
-                            ripple: ripple_props,
-                        }
-                    } else {
-                        ShapeCommand::RippleRect {
-                            color: effective_color,
-                            corner_radii: [-1.0, -1.0, -1.0, -1.0], // Use negative radius to signify ellipse
-                            g2_k_value: 0.0, // Just for compatibility, not used in ellipse
-                            shadow: args_measure_clone.shadow,
-                            ripple: ripple_props,
-                        }
-                    }
-                }
-            }
-        } else {
-            // Non-interactive surface
-            match args_measure_clone.shape {
-                Shape::RoundedRectangle {
-                    top_left,
-                    top_right,
-                    bottom_right,
-                    bottom_left,
-                    g2_k_value,
-                } => {
-                    let corner_radii = [top_left, top_right, bottom_right, bottom_left];
-                    if args_measure_clone.border_width > 0.0 {
-                        ShapeCommand::OutlinedRect {
-                            color: args_measure_clone.border_color.unwrap_or(effective_color),
-                            corner_radii,
-                            g2_k_value,
-                            shadow: args_measure_clone.shadow,
-                            border_width: args_measure_clone.border_width,
-                        }
-                    } else {
-                        ShapeCommand::Rect {
-                            color: effective_color,
-                            corner_radii,
-                            g2_k_value,
-                            shadow: args_measure_clone.shadow,
-                        }
-                    }
-                }
-                Shape::Ellipse => {
-                    if args_measure_clone.border_width > 0.0 {
-                        ShapeCommand::OutlinedEllipse {
-                            color: args_measure_clone.border_color.unwrap_or(effective_color),
-                            shadow: args_measure_clone.shadow,
-                            border_width: args_measure_clone.border_width,
-                        }
-                    } else {
-                        ShapeCommand::Ellipse {
-                            color: effective_color,
-                            shadow: args_measure_clone.shadow,
-                        }
-                    }
-                }
-            }
-        };
+        let drawable = make_surface_drawable(
+            &args_measure_clone,
+            effective_color,
+            ripple_state_for_measure.as_ref(),
+        );
 
         input.metadata_mut().push_draw_command(drawable);
 
-        // Calculate the final size of the surface
         let padding_px: Px = args_measure_clone.padding.into();
-        let min_width = child_measurement.width + padding_px * 2;
-        let min_height = child_measurement.height + padding_px * 2;
-        let width = match effective_surface_constraint.width {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(min_width)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => max
-                .expect("Seems that you are trying to fill an infinite width, which is not allowed")
-                .max(min_width)
-                .max(min.unwrap_or(Px(0))),
-        };
-        let height = match effective_surface_constraint.height {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(min_height)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => max
-                .expect(
-                    "Seems that you are trying to fill an infinite height, which is not allowed",
-                )
-                .max(min_height)
-                .max(min.unwrap_or(Px(0))),
-        };
+        let (width, height) =
+            compute_surface_size(effective_surface_constraint, child_measurement, padding_px);
+
         Ok(ComputedData { width, height })
     }));
 

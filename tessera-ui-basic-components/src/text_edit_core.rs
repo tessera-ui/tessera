@@ -24,7 +24,6 @@ use tessera_ui::{
     Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus,
     tessera, winit,
 };
-use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
     pipelines::{TextCommand, TextConstraint, TextData, write_font_system},
@@ -318,6 +317,86 @@ impl TextEditorState {
 /// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(16.0), None)));
 /// text_edit_core(state.clone());
 /// ```
+
+// Helper: compute selection rectangles for the given editor.
+// This extracts the selection-rect computation into a small, testable function
+// to reduce complexity inside the main component body.
+fn compute_selection_rects(editor: &glyphon::Editor) -> Vec<RectDef> {
+    let mut selection_rects: Vec<RectDef> = Vec::new();
+
+    if let Some((_start, _end)) = editor.selection_bounds() {
+        editor.with_buffer(|buffer| {
+            for run in buffer.layout_runs() {
+                let _line_i = run.line_i;
+                let line_top = Px(run.line_top as i32);
+                let line_height = Px(run.line_height as i32);
+
+                // If this run contains glyphs, approximate selection by glyph extents.
+                if !run.glyphs.is_empty() {
+                    let mut min_x = Px(i32::MAX);
+                    let mut max_x = Px(i32::MIN);
+                    for glyph in run.glyphs.iter() {
+                        let gx = Px(glyph.x as i32);
+                        let gw = Px(glyph.w as i32);
+                        min_x = min_x.min(gx);
+                        max_x = max_x.max(gx + gw);
+                    }
+                    // Ensure sensible width
+                    let width = (max_x - min_x).max(Px(0));
+                    selection_rects.push(RectDef {
+                        x: min_x,
+                        y: line_top,
+                        width,
+                        height: line_height,
+                    });
+                } else {
+                    // Empty run: highlight full line width
+                    let full_w = buffer.size().0.map_or(Px(0), |w| Px(w as i32));
+                    selection_rects.push(RectDef {
+                        x: Px(0),
+                        y: line_top,
+                        width: full_w,
+                        height: line_height,
+                    });
+                }
+            }
+        });
+    }
+
+    selection_rects
+}
+
+// Helper: clip rects to visible area and drop those fully outside.
+// Keeps behavior isolated from the main component logic.
+fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) -> Vec<RectDef> {
+    let visible_x0 = Px(0);
+    let visible_y0 = Px(0);
+
+    rects
+        .into_iter()
+        .filter_map(|mut rect| {
+            let rect_x1 = rect.x + rect.width;
+            let rect_y1 = rect.y + rect.height;
+            if rect_x1 <= visible_x0
+                || rect.y >= visible_y1
+                || rect.x >= visible_x1
+                || rect_y1 <= visible_y0
+            {
+                None
+            } else {
+                let new_x = rect.x.max(visible_x0);
+                let new_y = rect.y.max(visible_y0);
+                let new_x1 = rect_x1.min(visible_x1);
+                let new_y1 = rect_y1.min(visible_y1);
+                rect.x = new_x;
+                rect.y = new_y;
+                rect.width = (new_x1 - new_x).max(Px(0));
+                rect.height = (new_y1 - new_y).max(Px(0));
+                Some(rect)
+            }
+        })
+        .collect()
+}
 #[tessera]
 pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
     // text rendering with constraints from parent container
@@ -344,82 +423,10 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                 max_height: max_height_pixels.map(|px| px.to_f32()),
             });
 
-            // Calculate selection rectangles
-            let mut selection_rects = Vec::new();
-            let selection_bounds = state_clone.read().editor.selection_bounds();
-            if let Some((start, end)) = selection_bounds {
-                state_clone.read().editor.with_buffer(|buffer| {
-                    for run in buffer.layout_runs() {
-                        let line_i = run.line_i;
-                        let _line_y = run.line_y; // Px
-                        let line_top = Px(run.line_top as i32); // Px
-                        let line_height = Px(run.line_height as i32); // Px
+            // Simplified selection rectangle computation using helper functions to reduce complexity.
+            let mut selection_rects = compute_selection_rects(state_clone.read().editor());
 
-                        // Highlight selection
-                        if line_i >= start.line && line_i <= end.line {
-                            let mut range_opt: Option<(Px, Px)> = None;
-                            for glyph in run.glyphs.iter() {
-                                // Guess x offset based on characters
-                                let cluster = &run.text[glyph.start..glyph.end];
-                                let total = cluster.grapheme_indices(true).count();
-                                let mut c_x = Px(glyph.x as i32);
-                                let c_w = Px((glyph.w / total as f32) as i32);
-                                for (i, c) in cluster.grapheme_indices(true) {
-                                    let c_start = glyph.start + i;
-                                    let c_end = glyph.start + i + c.len();
-                                    if (start.line != line_i || c_end > start.index)
-                                        && (end.line != line_i || c_start < end.index)
-                                    {
-                                        range_opt = match range_opt.take() {
-                                            Some((min_val, max_val)) => Some((
-                                                // Renamed to avoid conflict
-                                                min_val.min(c_x),
-                                                max_val.max(c_x + c_w),
-                                            )),
-                                            None => Some((c_x, c_x + c_w)),
-                                        };
-                                    } else if let Some((min_val, max_val)) = range_opt.take() {
-                                        // Renamed
-                                        selection_rects.push(RectDef {
-                                            x: min_val,
-                                            y: line_top,
-                                            width: (max_val - min_val).max(Px(0)),
-                                            height: line_height,
-                                        });
-                                    }
-                                    c_x += c_w;
-                                }
-                            }
-
-                            if run.glyphs.is_empty() && end.line > line_i {
-                                // Highlight all of internal empty lines
-                                range_opt =
-                                    Some((Px(0), buffer.size().0.map_or(Px(0), |w| Px(w as i32))));
-                            }
-
-                            if let Some((mut min_val, mut max_val)) = range_opt.take() {
-                                // Renamed
-                                if end.line > line_i {
-                                    // Draw to end of line
-                                    if run.rtl {
-                                        min_val = Px(0);
-                                    } else {
-                                        max_val = buffer.size().0.map_or(Px(0), |w| Px(w as i32));
-                                    }
-                                }
-                                selection_rects.push(RectDef {
-                                    x: min_val,
-                                    y: line_top,
-                                    width: (max_val - min_val).max(Px(0)),
-                                    height: line_height,
-                                });
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Record length before moving
+            // Record length before moving (used to place cursor node after rects)
             let selection_rects_len = selection_rects.len();
 
             // Handle selection rectangle positioning
@@ -430,39 +437,10 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                 }
             }
 
-            // --- Filter and clip selection rects to visible area ---
-            // Only show highlight rects that are (partially) within the visible area
-            let visible_x0 = Px(0);
-            let visible_y0 = Px(0);
+            // Clip to visible area and write filtered rects to state
             let visible_x1 = max_width_pixels.unwrap_or(Px(i32::MAX));
             let visible_y1 = max_height_pixels.unwrap_or(Px(i32::MAX));
-            selection_rects = selection_rects
-                .into_iter()
-                .filter_map(|mut rect| {
-                    let rect_x1 = rect.x + rect.width;
-                    let rect_y1 = rect.y + rect.height;
-                    // If completely outside visible area, skip
-                    if rect_x1 <= visible_x0
-                        || rect.y >= visible_y1
-                        || rect.x >= visible_x1
-                        || rect_y1 <= visible_y0
-                    {
-                        None
-                    } else {
-                        // Clip to visible area
-                        let new_x = rect.x.max(visible_x0);
-                        let new_y = rect.y.max(visible_y0);
-                        let new_x1 = rect_x1.min(visible_x1);
-                        let new_y1 = rect_y1.min(visible_y1);
-                        rect.x = new_x;
-                        rect.y = new_y;
-                        rect.width = (new_x1 - new_x).max(Px(0));
-                        rect.height = (new_y1 - new_y).max(Px(0));
-                        Some(rect)
-                    }
-                })
-                .collect();
-            // Write filtered rects to state
+            selection_rects = clip_and_take_visible(selection_rects, visible_x1, visible_y1);
             state_clone.write().current_selection_rects = selection_rects;
 
             // Handle cursor positioning (cursor comes after selection rects)

@@ -191,7 +191,7 @@ pub mod compute;
 pub mod drawer;
 pub mod reorder;
 
-use std::{sync::Arc, time::Instant};
+use std::{any::TypeId, sync::Arc, time::Instant};
 
 use log::{debug, warn};
 use winit::{
@@ -204,6 +204,7 @@ use winit::{
 
 use crate::{
     Clipboard, ImeState, PxPosition,
+    component_tree::WindowRequests,
     cursor::{CursorEvent, CursorEventContent, CursorState},
     dp::SCALE_FACTOR,
     keyboard_state::KeyboardState,
@@ -557,7 +558,39 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     }
 }
 
+// Helper struct to group render-frame arguments and reduce parameter count.
+// Kept private to this module.
+#[allow(dead_code)]
+struct RenderFrameArgs<'a> {
+    pub cursor_state: &'a mut CursorState,
+    pub keyboard_state: &'a mut KeyboardState,
+    pub ime_state: &'a mut ImeState,
+    #[cfg(target_os = "android")]
+    pub android_ime_opened: &'a mut bool,
+    pub app: &'a mut WgpuApp,
+    #[cfg(target_os = "android")]
+    pub event_loop: &'a ActiveEventLoop,
+    pub clipboard: &'a mut Clipboard,
+}
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
+    fn should_set_cursor_pos(
+        cursor_position: Option<crate::PxPosition>,
+        window_width: f64,
+        window_height: f64,
+        edge_threshold: f64,
+    ) -> bool {
+        if let Some(pos) = cursor_position {
+            let x = pos.x.0 as f64;
+            let y = pos.y.0 as f64;
+            x > edge_threshold
+                && x < window_width - edge_threshold
+                && y > edge_threshold
+                && y < window_height - edge_threshold
+        } else {
+            false
+        }
+    }
+
     /// Executes a single frame rendering cycle.
     ///
     /// This is the core rendering method that orchestrates the entire frame rendering process.
@@ -592,43 +625,58 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///
     /// This method runs on the main thread but coordinates with other threads for
     /// component tree processing and resource management.
-    fn execute_render_frame(
-        entry_point: &F,
-        cursor_state: &mut CursorState,
-        keyboard_state: &mut KeyboardState,
-        ime_state: &mut ImeState,
-        #[cfg(target_os = "android")] android_ime_opened: &mut bool,
-        app: &mut WgpuApp,
-        #[cfg(target_os = "android")] event_loop: &ActiveEventLoop,
-        clipboard: &mut Clipboard,
-    ) {
-        // notify the windowing system before rendering
-        // this will help winit to properly schedule and make assumptions about its internal state
-        app.window.pre_present_notify();
-        // and tell runtime the new size
-        TesseraRuntime::with_mut(|rt| rt.window_size = app.size().into());
-        // render the surface
-        // Clear any registered callbacks
-        TesseraRuntime::with_mut(|rt| rt.clear_frame_callbacks());
-        // timer for performance measurement
+    fn build_component_tree(entry_point: &F) -> std::time::Duration {
         let tree_timer = Instant::now();
-        // build the component tree
         debug!("Building component tree...");
         entry_point();
         let build_tree_cost = tree_timer.elapsed();
         debug!("Component tree built in {build_tree_cost:?}");
-        // timer for performance measurement
+        build_tree_cost
+    }
+
+    fn log_frame_stats(
+        build_tree_cost: std::time::Duration,
+        draw_cost: std::time::Duration,
+        render_cost: std::time::Duration,
+    ) {
+        let total = build_tree_cost + draw_cost + render_cost;
+        let fps = 1.0 / total.as_secs_f32();
+        if fps < 60.0 {
+            warn!(
+                "Jank detected! Frame statistics:
+Build tree cost: {:?}
+Draw commands cost: {:?}
+Render cost: {:?}
+Total frame cost: {:?}
+Fps: {:.2}
+",
+                build_tree_cost,
+                draw_cost,
+                render_cost,
+                total,
+                1.0 / total.as_secs_f32()
+            );
+        }
+    }
+
+    fn compute_draw_commands<'a>(
+        args: &mut RenderFrameArgs<'a>,
+        screen_size: PxSize,
+    ) -> (
+        Vec<(Command, TypeId, PxSize, PxPosition)>,
+        WindowRequests,
+        std::time::Duration,
+    ) {
         let draw_timer = Instant::now();
-        // Compute the draw commands then we can clear component tree for next build
         debug!("Computing draw commands...");
-        let cursor_position = cursor_state.position();
-        let cursor_events = cursor_state.take_events();
-        let keyboard_events = keyboard_state.take_events();
-        let ime_events = ime_state.take_events();
-        let screen_size: PxSize = app.size().into();
+        let cursor_position = args.cursor_state.position();
+        let cursor_events = args.cursor_state.take_events();
+        let keyboard_events = args.keyboard_state.take_events();
+        let ime_events = args.ime_state.take_events();
+
         // Clear any existing compute resources
-        app.resource_manager.write().clear();
-        // Compute the draw commands
+        args.app.resource_manager.write().clear();
+
         let (commands, window_requests) = TesseraRuntime::with_mut(|rt| {
             rt.component_tree.compute(
                 screen_size,
@@ -636,101 +684,239 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
                 cursor_events,
                 keyboard_events,
                 ime_events,
-                keyboard_state.modifiers(),
-                app.resource_manager.clone(),
-                &app.gpu,
-                clipboard,
+                args.keyboard_state.modifiers(),
+                args.app.resource_manager.clone(),
+                &args.app.gpu,
+                args.clipboard,
             )
         });
+
         let draw_cost = draw_timer.elapsed();
         debug!("Draw commands computed in {draw_cost:?}");
+        (commands, window_requests, draw_cost)
+    }
+
+    /// Perform the actual GPU rendering for the provided commands and return the render duration.
+    fn perform_render<'a>(
+        args: &mut RenderFrameArgs<'a>,
+        commands: impl IntoIterator<Item = (Command, TypeId, PxSize, PxPosition)>,
+    ) -> std::time::Duration {
+        let render_timer = Instant::now();
+
+        // skip actual rendering if window is minimized
+        if TesseraRuntime::with(|rt| rt.window_minimized) {
+            args.app.window.request_redraw();
+            return render_timer.elapsed();
+        }
+
+        debug!("Rendering draw commands...");
+        // Forward commands to WgpuApp::render which accepts the same iterator type
+        args.app.render(commands).unwrap();
+        let render_cost = render_timer.elapsed();
+        debug!("Rendered to surface in {render_cost:?}");
+        render_cost
+    }
+
+    fn execute_render_frame(entry_point: &F, args: &mut RenderFrameArgs<'_>) {
+        // notify the windowing system before rendering
+        // this will help winit to properly schedule and make assumptions about its internal state
+        args.app.window.pre_present_notify();
+        // and tell runtime the new size
+        TesseraRuntime::with_mut(|rt| rt.window_size = args.app.size().into());
+        // Clear any registered callbacks
+        TesseraRuntime::with_mut(|rt| rt.clear_frame_callbacks());
+
+        // Build the component tree and measure time
+        let build_tree_cost = Self::build_component_tree(entry_point);
+
+        // Compute draw commands
+        let screen_size: PxSize = args.app.size().into();
+        let (commands, window_requests, draw_cost) = Self::compute_draw_commands(args, screen_size);
+
+        // Clear the component tree (free for next frame)
         TesseraRuntime::with_mut(|rt| rt.component_tree.clear());
-        // Handle the window requests
-        // After compute, check for cursor change requests
+
+        // Handle the window requests (cursor / IME)
         // Only set cursor when not at window edges to let window manager handle resize cursors
-        let cursor_position = cursor_state.position();
-        let window_size = app.size();
+        let cursor_position = args.cursor_state.position();
+        let window_size = args.app.size();
         let edge_threshold = 8.0; // Slightly larger threshold for better UX
 
-        let should_set_cursor = if let Some(pos) = cursor_position {
-            let x = pos.x.0 as f64;
-            let y = pos.y.0 as f64;
-            let width = window_size.width as f64;
-            let height = window_size.height as f64;
-
-            // Check if cursor is within the safe area (not at edges)
-            x > edge_threshold
-                && x < width - edge_threshold
-                && y > edge_threshold
-                && y < height - edge_threshold
-        } else {
-            false // If no cursor position, disallow setting cursor
-        };
+        let should_set_cursor = Self::should_set_cursor_pos(
+            cursor_position,
+            window_size.width as f64,
+            window_size.height as f64,
+            edge_threshold,
+        );
 
         if should_set_cursor {
-            app.window
+            args.app
+                .window
                 .set_cursor(winit::window::Cursor::Icon(window_requests.cursor_icon));
         }
-        // When cursor is at edges, don't set cursor and let window manager handle it
-        // Handle IME requests
+
         if let Some(ime_request) = window_requests.ime_request {
-            app.window.set_ime_allowed(true);
+            args.app.window.set_ime_allowed(true);
             #[cfg(target_os = "android")]
             {
-                if !*android_ime_opened {
-                    show_soft_input(true, event_loop.android_app());
-                    *android_ime_opened = true;
+                if !*args.android_ime_opened {
+                    show_soft_input(true, args.event_loop.android_app());
+                    *args.android_ime_opened = true;
                 }
             }
-            app.window.set_ime_cursor_area::<PxPosition, PxSize>(
+            args.app.window.set_ime_cursor_area::<PxPosition, PxSize>(
                 ime_request.position.unwrap(),
                 ime_request.size,
             );
         } else {
-            app.window.set_ime_allowed(false);
+            args.app.window.set_ime_allowed(false);
             #[cfg(target_os = "android")]
             {
-                if *android_ime_opened {
-                    hide_soft_input(event_loop.android_app());
-                    *android_ime_opened = false;
+                if *args.android_ime_opened {
+                    hide_soft_input(args.event_loop.android_app());
+                    *args.android_ime_opened = false;
                 }
             }
         }
-        // timer for performance measurement
-        let render_timer = Instant::now();
-        // skip actual rendering if window is minimized
-        if TesseraRuntime::with(|rt| rt.window_minimized) {
-            app.window.request_redraw();
-            return;
-        }
-        // Render the commands
-        debug!("Rendering draw commands...");
-        // Render the commands to the surface
-        app.render(commands).unwrap();
-        let render_cost = render_timer.elapsed();
-        debug!("Rendered to surface in {render_cost:?}");
 
-        // print frame statistics
-        let fps = 1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32();
-        if fps < 60.0 {
-            warn!(
-                "Jank detected! Frame statistics:
-    Build tree cost: {:?}
-    Draw commands cost: {:?}
-    Render cost: {:?}
-    Total frame cost: {:?}
-    Fps: {:.2}
-",
-                build_tree_cost,
-                draw_cost,
-                render_cost,
-                build_tree_cost + draw_cost + render_cost,
-                1.0 / (build_tree_cost + draw_cost + render_cost).as_secs_f32()
-            );
-        }
+        // Perform GPU render
+        let render_cost = Self::perform_render(args, commands);
+
+        // Log frame statistics
+        Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
 
         // Currently we render every frame
-        app.window.request_redraw();
+        args.app.window.request_redraw();
+    }
+}
+
+impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
+    // --- Private helper methods extracted from the large match in window_event ---
+    // These keep behavior identical but reduce per-function complexity.
+    fn handle_close_requested(&mut self, event_loop: &ActiveEventLoop) {
+        TesseraRuntime::with(|rt| rt.trigger_close_callbacks());
+        event_loop.exit();
+    }
+
+    fn handle_resized(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+        // Obtain the app inside the method to avoid holding a mutable borrow across other
+        // borrows of `self`.
+        let app = match self.app.as_mut() {
+            Some(app) => app,
+            None => return,
+        };
+
+        if size.width == 0 || size.height == 0 {
+            // Window minimize handling & callback API
+            TesseraRuntime::with_mut(|rt| {
+                if !rt.window_minimized {
+                    rt.window_minimized = true;
+                    rt.trigger_minimize_callbacks(true);
+                }
+            });
+        } else {
+            // Window (un)minimize handling & callback API
+            TesseraRuntime::with_mut(|rt| {
+                if rt.window_minimized {
+                    rt.window_minimized = false;
+                    rt.trigger_minimize_callbacks(false);
+                }
+            });
+            app.resize(size);
+        }
+    }
+
+    fn handle_cursor_moved(&mut self, position: winit::dpi::PhysicalPosition<f64>) {
+        // Update cursor position
+        self.cursor_state
+            .update_position(PxPosition::from_f64_arr2([position.x, position.y]));
+        debug!("Cursor moved to: {}, {}", position.x, position.y);
+    }
+
+    fn handle_cursor_left(&mut self) {
+        // Clear cursor position when it leaves the window
+        // This also set the position to None
+        self.cursor_state.clear();
+        debug!("Cursor left the window");
+    }
+
+    fn handle_mouse_input(
+        &mut self,
+        state: winit::event::ElementState,
+        button: winit::event::MouseButton,
+    ) {
+        let Some(event_content) = CursorEventContent::from_press_event(state, button) else {
+            return; // Ignore unsupported buttons
+        };
+        let event = CursorEvent {
+            timestamp: Instant::now(),
+            content: event_content,
+        };
+        self.cursor_state.push_event(event);
+        debug!("Mouse input: {state:?} button {button:?}");
+    }
+
+    fn handle_mouse_wheel(&mut self, delta: winit::event::MouseScrollDelta) {
+        let event_content = CursorEventContent::from_scroll_event(delta);
+        let event = CursorEvent {
+            timestamp: Instant::now(),
+            content: event_content,
+        };
+        self.cursor_state.push_event(event);
+        debug!("Mouse scroll: {delta:?}");
+    }
+
+    fn handle_touch(&mut self, touch_event: winit::event::Touch) {
+        let pos = PxPosition::from_f64_arr2([touch_event.location.x, touch_event.location.y]);
+        debug!(
+            "Touch event: id {}, phase {:?}, position {:?}",
+            touch_event.id, touch_event.phase, pos
+        );
+        match touch_event.phase {
+            winit::event::TouchPhase::Started => {
+                // Use new touch start handling method
+                self.cursor_state.handle_touch_start(touch_event.id, pos);
+            }
+            winit::event::TouchPhase::Moved => {
+                // Use new touch move handling method, may generate scroll event
+                if let Some(scroll_event) = self.cursor_state.handle_touch_move(touch_event.id, pos)
+                {
+                    // Scroll event is already added to event queue in handle_touch_move
+                    self.cursor_state.push_event(scroll_event);
+                }
+            }
+            winit::event::TouchPhase::Ended | winit::event::TouchPhase::Cancelled => {
+                // Use new touch end handling method
+                self.cursor_state.handle_touch_end(touch_event.id);
+            }
+        }
+    }
+
+    fn handle_keyboard_input(&mut self, event: winit::event::KeyEvent) {
+        debug!("Keyboard input: {event:?}");
+        self.keyboard_state.push_event(event);
+    }
+
+    fn handle_redraw_requested(&mut self) {
+        // Borrow the app here to avoid simultaneous mutable borrows of `self`
+        let app = match self.app.as_mut() {
+            Some(app) => app,
+            None => return,
+        };
+
+        app.resize_if_needed();
+        let mut args = RenderFrameArgs {
+            cursor_state: &mut self.cursor_state,
+            keyboard_state: &mut self.keyboard_state,
+            ime_state: &mut self.ime_state,
+            #[cfg(target_os = "android")]
+            android_ime_opened: &mut self.android_ime_opened,
+            app,
+            #[cfg(target_os = "android")]
+            event_loop,
+            clipboard: &mut self.clipboard,
+        };
+        Self::execute_render_frame(&self.entry_point, &mut args);
     }
 }
 
@@ -850,114 +1036,48 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        let app = match self.app.as_mut() {
-            Some(app) => app,
-            None => return,
-        };
+        // Defer borrowing `app` into specific event handlers to avoid overlapping mutable borrows.
+        // Handlers will obtain a mutable reference to `self.app` as needed.
 
         // Handle window events
         match event {
             WindowEvent::CloseRequested => {
-                TesseraRuntime::with(|rt| rt.trigger_close_callbacks());
-                event_loop.exit();
+                self.handle_close_requested(event_loop);
             }
             WindowEvent::Resized(size) => {
-                if size.width == 0 || size.height == 0 {
-                    // Window minimize handling & callback API
-                    TesseraRuntime::with_mut(|rt| {
-                        if !rt.window_minimized {
-                            rt.window_minimized = true;
-                            rt.trigger_minimize_callbacks(true);
-                        }
-                    });
-                } else {
-                    // Window (un)minimize handling & callback API
-                    TesseraRuntime::with_mut(|rt| {
-                        if rt.window_minimized {
-                            rt.window_minimized = false;
-                            rt.trigger_minimize_callbacks(false);
-                        }
-                    });
-                    app.resize(size);
-                }
+                self.handle_resized(size);
             }
             WindowEvent::CursorMoved {
                 device_id: _,
                 position,
             } => {
-                // Update cursor position
-                self.cursor_state
-                    .update_position(PxPosition::from_f64_arr2([position.x, position.y]));
-                debug!("Cursor moved to: {}, {}", position.x, position.y);
+                self.handle_cursor_moved(position);
             }
             WindowEvent::CursorLeft { device_id: _ } => {
-                // Clear cursor position when it leaves the window
-                // This also set the position to None
-                self.cursor_state.clear();
-                debug!("Cursor left the window");
+                self.handle_cursor_left();
             }
             WindowEvent::MouseInput {
                 device_id: _,
                 state,
                 button,
             } => {
-                let Some(event_content) = CursorEventContent::from_press_event(state, button)
-                else {
-                    return; // Ignore unsupported buttons
-                };
-                let event = CursorEvent {
-                    timestamp: Instant::now(),
-                    content: event_content,
-                };
-                self.cursor_state.push_event(event);
-                debug!("Mouse input: {state:?} button {button:?}");
+                self.handle_mouse_input(state, button);
             }
             WindowEvent::MouseWheel {
                 device_id: _,
                 delta,
                 phase: _,
             } => {
-                let event_content = CursorEventContent::from_scroll_event(delta);
-                let event = CursorEvent {
-                    timestamp: Instant::now(),
-                    content: event_content,
-                };
-                self.cursor_state.push_event(event);
-                debug!("Mouse scroll: {delta:?}");
+                self.handle_mouse_wheel(delta);
             }
             WindowEvent::Touch(touch_event) => {
-                let pos =
-                    PxPosition::from_f64_arr2([touch_event.location.x, touch_event.location.y]);
-                debug!(
-                    "Touch event: id {}, phase {:?}, position {:?}",
-                    touch_event.id, touch_event.phase, pos
-                );
-                match touch_event.phase {
-                    winit::event::TouchPhase::Started => {
-                        // Use new touch start handling method
-                        self.cursor_state.handle_touch_start(touch_event.id, pos);
-                    }
-                    winit::event::TouchPhase::Moved => {
-                        // Use new touch move handling method, may generate scroll event
-                        if let Some(scroll_event) =
-                            self.cursor_state.handle_touch_move(touch_event.id, pos)
-                        {
-                            // Scroll event is already added to event queue in handle_touch_move
-                            self.cursor_state.push_event(scroll_event);
-                        }
-                    }
-                    winit::event::TouchPhase::Ended | winit::event::TouchPhase::Cancelled => {
-                        // Use new touch end handling method
-                        self.cursor_state.handle_touch_end(touch_event.id);
-                    }
-                }
+                self.handle_touch(touch_event);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 *SCALE_FACTOR.get().unwrap().write() = scale_factor;
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                debug!("Keyboard input: {event:?}");
-                self.keyboard_state.push_event(event);
+                self.handle_keyboard_input(event);
             }
             WindowEvent::ModifiersChanged(modifiers) => {
                 debug!("Modifiers changed: {modifiers:?}");
@@ -968,19 +1088,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 self.ime_state.push_event(ime_event);
             }
             WindowEvent::RedrawRequested => {
-                app.resize_if_needed();
-                Self::execute_render_frame(
-                    &self.entry_point,
-                    &mut self.cursor_state,
-                    &mut self.keyboard_state,
-                    &mut self.ime_state,
-                    #[cfg(target_os = "android")]
-                    &mut self.android_ime_opened,
-                    app,
-                    #[cfg(target_os = "android")]
-                    event_loop,
-                    &mut self.clipboard,
-                );
+                self.handle_redraw_requested();
             }
             _ => (),
         }

@@ -89,6 +89,68 @@ pub struct GlassSliderArgs {
     pub disabled: bool,
 }
 
+/// Helper: check if a cursor position is inside a measured component area.
+/// Extracted to reduce duplication and keep the state handler concise.
+fn cursor_within_component(cursor_pos: Option<PxPosition>, computed: &ComputedData) -> bool {
+    if let Some(pos) = cursor_pos {
+        let within_x = pos.x.0 >= 0 && pos.x.0 < computed.width.0;
+        let within_y = pos.y.0 >= 0 && pos.y.0 < computed.height.0;
+        within_x && within_y
+    } else {
+        false
+    }
+}
+
+/// Helper: compute normalized progress (0.0..1.0) from cursor X and width.
+/// Returns None when cursor is not available.
+fn cursor_progress(cursor_pos: Option<PxPosition>, width_f: f32) -> Option<f32> {
+    cursor_pos.map(|pos| (pos.x.0 as f32 / width_f).clamp(0.0, 1.0))
+}
+
+/// Helper: compute progress fill width in Px, clamped to >= 0.
+fn compute_progress_width(total_width: Px, value: f32, border_padding_px: f32) -> Px {
+    let total_f = total_width.0 as f32;
+    let mut w = total_f * value - border_padding_px;
+    if w < 0.0 {
+        w = 0.0;
+    }
+    Px(w as i32)
+}
+
+/// Process cursor events and update the slider state accordingly.
+/// Returns the new value (0.0..1.0) if a change should be emitted.
+fn process_cursor_events(
+    state: &mut GlassSliderState,
+    input: &tessera_ui::StateHandlerInput,
+    width_f: f32,
+) -> Option<f32> {
+    let mut new_value: Option<f32> = None;
+
+    for event in input.cursor_events.iter() {
+        match &event.content {
+            CursorEventContent::Pressed(_) => {
+                state.focus.request_focus();
+                state.is_dragging = true;
+                if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
+                    new_value = Some(v);
+                }
+            }
+            CursorEventContent::Released(_) => {
+                state.is_dragging = false;
+            }
+            _ => {}
+        }
+    }
+
+    if state.is_dragging {
+        if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
+            new_value = Some(v);
+        }
+    }
+
+    new_value
+}
+
 /// Creates a slider component with a frosted glass effect.
 ///
 /// The `glass_slider` allows users to select a value from a continuous range (0.0 to 1.0)
@@ -136,6 +198,8 @@ pub struct GlassSliderArgs {
 #[tessera]
 pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSliderState>>) {
     let args: GlassSliderArgs = args.into();
+    let track_radius = args.track_height.to_px().to_f32() / 2.0;
+    let border_padding_px = args.track_border_width.to_px().to_f32() * 2.0;
 
     // External track (background) with border - capsule shape
     fluid_glass(
@@ -145,12 +209,11 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
             .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
             .shape({
-                let radius = args.track_height.0 as f32 / 2.0;
                 Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
+                    top_left: track_radius,
+                    top_right: track_radius,
+                    bottom_right: track_radius,
+                    bottom_left: track_radius,
                     g2_k_value: 2.0, // Capsule shape
                 }
             })
@@ -161,13 +224,12 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
         None,
         move || {
             // Internal progress fill - capsule shape using surface
-            let progress_width = (args.width.to_px().to_f32() * args.value)
-                - (args.track_border_width.to_px().to_f32() * 2.0);
-            let effective_height = args.track_height.to_px().to_f32()
-                - (args.track_border_width.to_px().to_f32() * 2.0);
+            let progress_width_px =
+                compute_progress_width(args.width.to_px(), args.value, border_padding_px);
+            let effective_height = args.track_height.to_px().to_f32() - border_padding_px;
             fluid_glass(
                 FluidGlassArgsBuilder::default()
-                    .width(DimensionValue::Fixed(Px(progress_width as i32)))
+                    .width(DimensionValue::Fixed(progress_width_px))
                     .height(DimensionValue::Fill {
                         min: None,
                         max: None,
@@ -202,12 +264,8 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
         }
         let mut state = state_handler_state.lock();
 
-        let is_in_component = input.cursor_position_rel.is_some_and(|cursor_pos| {
-            cursor_pos.x.0 >= 0
-                && cursor_pos.x.0 < input.computed_data.width.0
-                && cursor_pos.y.0 >= 0
-                && cursor_pos.y.0 < input.computed_data.height.0
-        });
+        let is_in_component =
+            cursor_within_component(input.cursor_position_rel, &input.computed_data);
 
         // Set cursor to pointer when hovering over the slider
         if is_in_component {
@@ -218,35 +276,9 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
             return;
         }
 
-        let mut new_value = None;
+        let width_f = input.computed_data.width.0 as f32;
 
-        for event in input.cursor_events.iter() {
-            match &event.content {
-                CursorEventContent::Pressed(_) => {
-                    state.focus.request_focus();
-                    state.is_dragging = true;
-
-                    if let Some(pos) = input.cursor_position_rel {
-                        let v =
-                            (pos.x.0 as f32 / input.computed_data.width.0 as f32).clamp(0.0, 1.0);
-                        new_value = Some(v);
-                    }
-                }
-                CursorEventContent::Released(_) => {
-                    state.is_dragging = false;
-                }
-                _ => {}
-            }
-        }
-
-        if state.is_dragging {
-            if let Some(pos) = input.cursor_position_rel {
-                let v = (pos.x.0 as f32 / input.computed_data.width.0 as f32).clamp(0.0, 1.0);
-                new_value = Some(v);
-            }
-        }
-
-        if let Some(v) = new_value {
+        if let Some(v) = process_cursor_events(&mut state, &input, width_f) {
             if (v - args.value).abs() > f32::EPSILON {
                 on_change(v);
             }

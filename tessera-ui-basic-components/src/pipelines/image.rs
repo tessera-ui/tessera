@@ -89,6 +89,7 @@ pub struct ImagePipeline {
 }
 
 impl ImagePipeline {
+    /// Create a new ImagePipeline.
     pub fn new(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
@@ -173,6 +174,132 @@ impl ImagePipeline {
             resources: HashMap::new(),
         }
     }
+
+    /// Return existing resources for `data` or create them.
+    fn get_or_create_resources(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        data: &ImageData,
+    ) -> &ImageResources {
+        self.resources.entry(data.clone()).or_insert_with(|| {
+            Self::create_image_resources(device, queue, config, &self.bind_group_layout, data)
+        })
+    }
+
+    /// Compute the ImageUniforms for a given command size and position.
+    fn compute_uniforms(
+        start_pos: PxPosition,
+        size: PxSize,
+        config: &wgpu::SurfaceConfiguration,
+    ) -> ImageUniforms {
+        // Convert pixel positions/sizes into normalized device coordinates and size ratios.
+        let rect = [
+            (start_pos.x.0 as f32 / config.width as f32) * 2.0 - 1.0
+                + (size.width.0 as f32 / config.width as f32),
+            (start_pos.y.0 as f32 / config.height as f32) * -2.0 + 1.0
+                - (size.height.0 as f32 / config.height as f32),
+            size.width.0 as f32 / config.width as f32,
+            size.height.0 as f32 / config.height as f32,
+        ]
+        .into();
+
+        let is_bgra = matches!(
+            config.format,
+            wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+        );
+
+        ImageUniforms {
+            rect,
+            is_bgra: if is_bgra { 1 } else { 0 },
+        }
+    }
+
+    // Create GPU resources for an image. Kept as a single helper to avoid duplicating
+    // GPU setup logic while keeping `draw` concise.
+    fn create_image_resources(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        layout: &wgpu::BindGroupLayout,
+        data: &ImageData,
+    ) -> ImageResources {
+        let texture_size = wgpu::Extent3d {
+            width: data.width,
+            height: data.height,
+            depth_or_array_layers: 1,
+        };
+        let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: config.format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("diffuse_texture"),
+            view_formats: &[],
+        });
+
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &diffuse_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &data.data,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * data.width),
+                rows_per_image: Some(data.height),
+            },
+            texture_size,
+        );
+
+        let diffuse_texture_view =
+            diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Image Uniform Buffer"),
+            size: ImageUniforms::min_size().get(),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: uniform_buffer.as_entire_binding(),
+                },
+            ],
+            label: Some("diffuse_bind_group"),
+        });
+
+        ImageResources {
+            bind_group: diffuse_bind_group,
+            uniform_buffer,
+        }
+    }
 }
 
 impl DrawablePipeline<ImageCommand> for ImagePipeline {
@@ -188,102 +315,12 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
         render_pass.set_pipeline(&self.pipeline);
 
         for (command, size, start_pos) in commands {
-            let resources = self
-                .resources
-                .entry(command.data.clone())
-                .or_insert_with(|| {
-                    let texture_size = wgpu::Extent3d {
-                        width: command.data.width,
-                        height: command.data.height,
-                        depth_or_array_layers: 1,
-                    };
-                    let diffuse_texture = gpu.create_texture(&wgpu::TextureDescriptor {
-                        size: texture_size,
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: config.format,
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                        label: Some("diffuse_texture"),
-                        view_formats: &[],
-                    });
+            // Use the extracted helper to obtain or create GPU resources.
+            let resources = self.get_or_create_resources(gpu, gpu_queue, config, &command.data);
 
-                    gpu_queue.write_texture(
-                        wgpu::TexelCopyTextureInfo {
-                            texture: &diffuse_texture,
-                            mip_level: 0,
-                            origin: wgpu::Origin3d::ZERO,
-                            aspect: wgpu::TextureAspect::All,
-                        },
-                        &command.data.data,
-                        wgpu::TexelCopyBufferLayout {
-                            offset: 0,
-                            bytes_per_row: Some(4 * command.data.width),
-                            rows_per_image: Some(command.data.height),
-                        },
-                        texture_size,
-                    );
+            // Use the extracted uniforms computation helper (dereference borrowed tuple elements).
+            let uniforms = Self::compute_uniforms(*start_pos, *size, config);
 
-                    let diffuse_texture_view =
-                        diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-                    let diffuse_sampler = gpu.create_sampler(&wgpu::SamplerDescriptor {
-                        address_mode_u: wgpu::AddressMode::ClampToEdge,
-                        address_mode_v: wgpu::AddressMode::ClampToEdge,
-                        address_mode_w: wgpu::AddressMode::ClampToEdge,
-                        mag_filter: wgpu::FilterMode::Linear,
-                        min_filter: wgpu::FilterMode::Nearest,
-                        mipmap_filter: wgpu::FilterMode::Nearest,
-                        ..Default::default()
-                    });
-
-                    let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
-                        label: Some("Image Uniform Buffer"),
-                        size: ImageUniforms::min_size().get(),
-                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                        mapped_at_creation: false,
-                    });
-
-                    let diffuse_bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-                        layout: &self.bind_group_layout,
-                        entries: &[
-                            wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 1,
-                                resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 2,
-                                resource: uniform_buffer.as_entire_binding(),
-                            },
-                        ],
-                        label: Some("diffuse_bind_group"),
-                    });
-
-                    ImageResources {
-                        bind_group: diffuse_bind_group,
-                        uniform_buffer,
-                    }
-                });
-
-            let is_bgra = matches!(
-                config.format,
-                wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
-            );
-            let uniforms = ImageUniforms {
-                rect: [
-                    (start_pos.x.0 as f32 / config.width as f32) * 2.0 - 1.0
-                        + (size.width.0 as f32 / config.width as f32),
-                    (start_pos.y.0 as f32 / config.height as f32) * -2.0 + 1.0
-                        - (size.height.0 as f32 / config.height as f32),
-                    size.width.0 as f32 / config.width as f32,
-                    size.height.0 as f32 / config.height as f32,
-                ]
-                .into(),
-                is_bgra: if is_bgra { 1 } else { 0 },
-            };
             let mut buffer = UniformBuffer::new(Vec::new());
             buffer.write(&uniforms).unwrap();
             gpu_queue.write_buffer(&resources.uniform_buffer, 0, &buffer.into_inner());

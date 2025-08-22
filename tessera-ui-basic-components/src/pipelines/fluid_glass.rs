@@ -1,11 +1,11 @@
-use encase::{ArrayLength, ShaderSize, ShaderType, StorageBuffer};
+use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{PxPosition, PxSize, renderer::DrawablePipeline, wgpu};
 
 use crate::fluid_glass::FluidGlassCommand;
 
 // Define MAX_CONCURRENT_SHAPES, can be adjusted later
-pub const MAX_CONCURRENT_GLASSES: wgpu::BufferAddress = 256;
+pub const MAX_CONCURRENT_GLASSES: usize = 256;
 
 // --- Uniforms ---
 
@@ -37,7 +37,6 @@ struct GlassUniforms {
 
 #[derive(ShaderType)]
 struct GlassInstances {
-    length: ArrayLength,
     #[size(runtime)]
     instances: Vec<GlassUniforms>,
 }
@@ -51,13 +50,30 @@ pub(crate) struct FluidGlassPipeline {
 }
 
 impl FluidGlassPipeline {
+    /// Construct a new FluidGlassPipeline.
+    /// This constructor delegates sampler, bind group layout and pipeline construction
+    /// to small helpers to keep the top-level function short and easier to reason about.
     pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
         let shader = gpu.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Fluid Glass Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("fluid_glass/glass.wgsl").into()),
         });
 
-        let sampler = gpu.create_sampler(&wgpu::SamplerDescriptor {
+        let sampler = Self::create_sampler(gpu);
+        let bind_group_layout = Self::create_bind_group_layout(gpu);
+        let pipeline =
+            Self::create_render_pipeline(gpu, config, sample_count, &shader, &bind_group_layout);
+
+        Self {
+            pipeline,
+            bind_group_layout,
+            sampler,
+        }
+    }
+
+    /// Create the sampler used by the pipeline.
+    fn create_sampler(gpu: &wgpu::Device) -> wgpu::Sampler {
+        gpu.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -65,9 +81,12 @@ impl FluidGlassPipeline {
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
-        });
+        })
+    }
 
-        let bind_group_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    /// Create the bind group layout for instance buffer + scene texture + sampler.
+    fn create_bind_group_layout(gpu: &wgpu::Device) -> wgpu::BindGroupLayout {
+        gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -97,25 +116,34 @@ impl FluidGlassPipeline {
                 },
             ],
             label: Some("fluid_glass_bind_group_layout"),
-        });
+        })
+    }
 
+    /// Create the full render pipeline used for drawing the fluid glass quads.
+    fn create_render_pipeline(
+        gpu: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        sample_count: u32,
+        shader: &wgpu::ShaderModule,
+        bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::RenderPipeline {
         let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Fluid Glass Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[bind_group_layout],
             push_constant_ranges: &[],
         });
 
-        let pipeline = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Fluid Glass Render Pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &shader,
+                module: shader,
                 entry_point: Some("vs_main"),
                 buffers: &[],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader,
+                module: shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
@@ -139,13 +167,7 @@ impl FluidGlassPipeline {
             },
             multiview: None,
             cache: None,
-        });
-
-        Self {
-            pipeline,
-            bind_group_layout,
-            sampler,
-        }
+        })
     }
 }
 
@@ -159,95 +181,161 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         commands: &[(&FluidGlassCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
     ) {
-        if commands.is_empty() {
-            return;
+        // Prepare GPU resources (instances, buffer, bind group) in a single helper to keep
+        // the draw path compact and easy to reason about.
+        let (uniform_buffer, bind_group, instance_count) =
+            match self.prepare_draw_resources(gpu, queue, config, commands, scene_texture_view) {
+                Some(tuple) => tuple,
+                None => return, // Nothing to draw or upload failed.
+            };
+
+        // Issue draw call.
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, &bind_group, &[]);
+        render_pass.draw(0..6, 0..instance_count);
+
+        // Keep buffer alive for duration of draw call.
+        drop(uniform_buffer);
+    }
+}
+
+impl FluidGlassPipeline {
+    /// Small helper: build a single GlassUniforms for one command.
+    fn build_instance(
+        command: &FluidGlassCommand,
+        size: &PxSize,
+        start_pos: &PxPosition,
+        config: &wgpu::SurfaceConfiguration,
+    ) -> GlassUniforms {
+        let args = &command.args;
+        let screen_w = config.width as f32;
+        let screen_h = config.height as f32;
+
+        let rect_uv_bounds = [
+            start_pos.x.0 as f32 / screen_w,
+            start_pos.y.0 as f32 / screen_h,
+            (start_pos.x.0 + size.width.0) as f32 / screen_w,
+            (start_pos.y.0 + size.height.0) as f32 / screen_h,
+        ];
+
+        // Helper to compute corner radii without moving args.
+        let corner_radii = match args.shape {
+            crate::shape_def::Shape::RoundedRectangle {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+                ..
+            } => [top_left, top_right, bottom_right, bottom_left].into(),
+            crate::shape_def::Shape::Ellipse => Vec4::ZERO,
+        };
+
+        let shape_type = match args.shape {
+            crate::shape_def::Shape::RoundedRectangle { .. } => 0.0,
+            crate::shape_def::Shape::Ellipse => 1.0,
+        };
+
+        let g2_k_value = match args.shape {
+            crate::shape_def::Shape::RoundedRectangle { g2_k_value, .. } => g2_k_value,
+            crate::shape_def::Shape::Ellipse => 0.0,
+        };
+
+        let border_width = args
+            .border
+            .as_ref()
+            .map(|b| b.width.0 as f32)
+            .unwrap_or(0.0);
+
+        GlassUniforms {
+            tint_color: args.tint_color.to_array().into(),
+            rect_uv_bounds: rect_uv_bounds.into(),
+            rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
+            ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]).into(),
+            corner_radii,
+            shape_type,
+            g2_k_value,
+            dispersion_height: args.dispersion_height,
+            chroma_multiplier: args.chroma_multiplier,
+            refraction_height: args.refraction_height,
+            refraction_amount: args.refraction_amount,
+            eccentric_factor: args.eccentric_factor,
+            noise_amount: args.noise_amount,
+            noise_scale: args.noise_scale,
+            time: args.time,
+            ripple_radius: args.ripple_radius.unwrap_or(0.0),
+            ripple_alpha: args.ripple_alpha.unwrap_or(0.0),
+            ripple_strength: args.ripple_strength.unwrap_or(0.0),
+            border_width,
+            screen_size: [screen_w, screen_h].into(),
+            light_source: [screen_w * 0.1, screen_h * 0.1].into(),
+            light_scale: 1.0,
         }
+    }
 
-        let mut instances: Vec<GlassUniforms> = commands
+    /// Build per-instance uniforms from commands. Delegates to `build_instance` to keep
+    /// complexity low.
+    fn build_instances(
+        commands: &[(&FluidGlassCommand, PxSize, PxPosition)],
+        config: &wgpu::SurfaceConfiguration,
+    ) -> Vec<GlassUniforms> {
+        commands
             .iter()
-            .map(|(command, size, start_pos)| {
-                let args = &command.args;
-                let screen_w = config.width as f32;
-                let screen_h = config.height as f32;
+            .map(|(cmd, size, pos)| Self::build_instance(cmd, size, pos, config))
+            .collect()
+    }
 
-                let rect_uv_bounds = [
-                    start_pos.x.0 as f32 / screen_w,
-                    start_pos.y.0 as f32 / screen_h,
-                    (start_pos.x.0 + size.width.0) as f32 / screen_w,
-                    (start_pos.y.0 + size.height.0) as f32 / screen_h,
-                ];
-
-                GlassUniforms {
-                    tint_color: args.tint_color.to_array().into(),
-                    rect_uv_bounds: rect_uv_bounds.into(),
-                    rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
-                    ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]).into(),
-                    corner_radii: match args.shape {
-                        crate::shape_def::Shape::RoundedRectangle {
-                            top_left,
-                            top_right,
-                            bottom_right,
-                            bottom_left,
-                            ..
-                        } => [top_left, top_right, bottom_right, bottom_left].into(),
-                        crate::shape_def::Shape::Ellipse => Vec4::ZERO,
-                    },
-                    shape_type: match args.shape {
-                        crate::shape_def::Shape::RoundedRectangle { .. } => 0.0,
-                        crate::shape_def::Shape::Ellipse => 1.0,
-                    },
-                    g2_k_value: match args.shape {
-                        crate::shape_def::Shape::RoundedRectangle { g2_k_value, .. } => g2_k_value,
-                        crate::shape_def::Shape::Ellipse => 0.0,
-                    },
-                    dispersion_height: args.dispersion_height,
-                    chroma_multiplier: args.chroma_multiplier,
-                    refraction_height: args.refraction_height,
-                    refraction_amount: args.refraction_amount,
-                    eccentric_factor: args.eccentric_factor,
-                    noise_amount: args.noise_amount,
-                    noise_scale: args.noise_scale,
-                    time: args.time,
-                    ripple_radius: args.ripple_radius.unwrap_or(0.0),
-                    ripple_alpha: args.ripple_alpha.unwrap_or(0.0),
-                    ripple_strength: args.ripple_strength.unwrap_or(0.0),
-                    border_width: if let Some(border) = args.border {
-                        border.width.0 as f32
-                    } else {
-                        0.0
-                    },
-                    screen_size: [screen_w, screen_h].into(),
-                    light_source: [screen_w * 0.1, screen_h * 0.1].into(),
-                    light_scale: 1.0,
-                }
-            })
-            .collect();
-
+    /// Enforce instance limit by truncating the instances vector in-place.
+    ///
+    /// This is an associated helper so it can be called as `Self::enforce_instance_limit`
+    /// from other pipeline methods.
+    fn enforce_instance_limit(instances: &mut Vec<GlassUniforms>) -> u32 {
         if instances.len() > MAX_CONCURRENT_GLASSES as usize {
             instances.truncate(MAX_CONCURRENT_GLASSES as usize);
         }
+        instances.len() as u32
+    }
 
-        if instances.is_empty() {
-            return;
+    /// Create GPU buffer and upload the instance data. Returns the created buffer or an error.
+    fn create_and_upload_buffer(
+        gpu: &wgpu::Device,
+        queue: &wgpu::Queue,
+        instances: &[GlassUniforms],
+    ) -> Result<wgpu::Buffer, ()> {
+        // Serialize uniforms first so we can determine exact buffer size (avoids magic numbers).
+        let uniforms = GlassInstances {
+            instances: instances.to_vec(),
+        };
+
+        let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
+        if buffer_content.write(&uniforms).is_err() {
+            return Err(());
         }
 
-        let instance_count = instances.len();
-
+        let size = buffer_content.as_ref().len() as wgpu::BufferAddress;
         let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Fluid Glass Storage Buffer"),
-            size: 16 + GlassUniforms::SHADER_SIZE.get() * instances.len() as u64,
+            size,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        let uniforms = GlassInstances {
-            length: Default::default(),
-            instances,
-        };
-
-        let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
-        buffer_content.write(&uniforms).unwrap();
         queue.write_buffer(&uniform_buffer, 0, buffer_content.as_ref());
+        Ok(uniform_buffer)
+    }
+
+    /// Helper to create the uniform/storage buffer and corresponding bind group.
+    /// Returns (buffer, bind_group) on success, or None on failure.
+    fn create_buffer_and_bind_group(
+        &self,
+        gpu: &wgpu::Device,
+        queue: &wgpu::Queue,
+        instances: &[GlassUniforms],
+        scene_texture_view: &wgpu::TextureView,
+    ) -> Option<(wgpu::Buffer, wgpu::BindGroup)> {
+        let uniform_buffer = match Self::create_and_upload_buffer(gpu, queue, instances) {
+            Ok(buf) => buf,
+            Err(_) => return None,
+        };
 
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.bind_group_layout,
@@ -268,8 +356,41 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             label: Some("fluid_glass_bind_group"),
         });
 
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &bind_group, &[]);
-        render_pass.draw(0..6, 0..instance_count as u32);
+        Some((uniform_buffer, bind_group))
+    }
+
+    /// Prepare per-draw GPU resources: build instances, enforce limits, create/upload buffer and bind group.
+    /// Returns (buffer, bind_group, instance_count) if ready to draw, or None when there is nothing to draw or upload fails.
+    fn prepare_draw_resources(
+        &self,
+        gpu: &wgpu::Device,
+        queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        commands: &[(&FluidGlassCommand, PxSize, PxPosition)],
+        scene_texture_view: &wgpu::TextureView,
+    ) -> Option<(wgpu::Buffer, wgpu::BindGroup, u32)> {
+        if commands.is_empty() {
+            return None;
+        }
+
+        // Prepare instance list and enforce a maximum concurrent instance limit.
+        // This keeps the GPU upload bounded and simplifies reasoning in the draw path.
+        let mut instances = Self::build_instances(commands, config);
+        if instances.is_empty() {
+            return None;
+        }
+        let instance_count = Self::enforce_instance_limit(&mut instances);
+        if instances.is_empty() {
+            return None;
+        }
+
+        // Reuse existing helper to create buffer + bind group.
+        let (uniform_buffer, bind_group) =
+            match self.create_buffer_and_bind_group(gpu, queue, &instances, scene_texture_view) {
+                Some(t) => t,
+                None => return None,
+            };
+
+        Some((uniform_buffer, bind_group, instance_count))
     }
 }

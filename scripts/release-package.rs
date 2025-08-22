@@ -69,13 +69,153 @@ fn release_package(
     execute: bool,
     workspace: &Workspace,
 ) -> Result<()> {
-    let package_path = workspace.find_package(package_name)?;
-    let cargo_toml_path = package_path.join("Cargo.toml");
+    // Thin wrapper to keep cognitive complexity low: delegate the heavy work.
+    let (files_to_add, modified_files, release_commit_msg, tag) =
+        prepare_and_collect_release_data(package_name, bump, execute, workspace)?;
+    let dry_run = !execute;
 
-    let mut doc = read_toml(&cargo_toml_path)?;
+    // Run prepublish git steps and publish using existing helpers.
+    perform_git_prepublish_steps(dry_run, &files_to_add, &release_commit_msg, &tag)?;
+    perform_publish_with_modified_files(dry_run, &modified_files, package_name, &tag)?;
+    Ok(())
+}
+
+// Extracted helper to reduce complexity in `release_package`.
+//
+// This file-level helper performs the small, focused steps of creating the
+// changelog file and updating Cargo.toml. Returning the computed `new_version`
+// keeps the remaining logic in `prepare_and_collect_release_data` simple.
+fn prepare_changelog_and_update_cargo(
+    package_name: &str,
+    package_path: &std::path::Path,
+    cargo_toml_path: &std::path::Path,
+    bump: BumpType,
+    execute: bool,
+) -> Result<(String, String, String)> {
+    // Read current version and compute new version.
+    let mut doc = read_toml(cargo_toml_path)?;
     let old_version = doc["package"]["version"].as_str().unwrap_or("").to_string();
     let new_version = bump_version(&old_version, bump)?;
 
+    // Print short summary for user.
+    print_release_summary(
+        package_name,
+        &cargo_toml_path.to_path_buf(),
+        &old_version,
+        &new_version,
+    );
+
+    // Build changelog and write (or preview).
+    let changelog = build_changelog_for_package(package_name, package_path, &new_version)?;
+    let changelog_path = package_path.join("CHANGELOG.md");
+    let changelog_path_str = changelog_path.to_str().unwrap().to_string();
+    let old_changelog = fs::read_to_string(&changelog_path).unwrap_or_default();
+    let new_changelog = format!("{}\n{}", changelog, old_changelog);
+    let dry_run = !execute;
+    write_or_preview_file(
+        dry_run,
+        &changelog_path_str,
+        &new_changelog,
+        Some(&old_changelog),
+    )?;
+
+    // Update Cargo.toml version and run cargo check (or preview).
+    update_cargo_version_and_check(dry_run, &mut doc, cargo_toml_path, &new_version)?;
+
+    Ok((
+        changelog_path_str,
+        cargo_toml_path.to_str().unwrap().to_string(),
+        new_version,
+    ))
+}
+
+fn prepare_and_collect_release_data(
+    package_name: &str,
+    bump: BumpType,
+    execute: bool,
+    workspace: &Workspace,
+) -> Result<(Vec<String>, Vec<(String, String, String)>, String, String)> {
+    // Locate package and read Cargo.toml path
+    let package_path = workspace.find_package(package_name)?;
+    let cargo_toml_path = package_path.join("Cargo.toml");
+
+    // Perform small focused I/O operations (changelog + Cargo write/check).
+    let (changelog_path_str, cargo_toml_path_str, new_version) =
+        prepare_changelog_and_update_cargo(
+            package_name,
+            &package_path,
+            &cargo_toml_path,
+            bump,
+            execute,
+        )?;
+
+    // Prepare files list required for commit/tag.
+    let mut files_to_add = vec![
+        changelog_path_str.clone(),
+        cargo_toml_path_str.clone(),
+        "Cargo.lock".to_string(),
+    ];
+
+    let release_commit_msg = format!("release({}): v{}", package_name, new_version);
+    let tag = format!("{}-v{}", package_name, new_version);
+
+    // Replace path deps with versions across the workspace.
+    let package_versions = workspace.collect_versions()?;
+    let modified_files =
+        replace_path_with_version_in_workspace(workspace, package_name, &package_versions)?;
+
+    for (file, _, _) in &modified_files {
+        files_to_add.push(file.clone());
+    }
+
+    Ok((files_to_add, modified_files, release_commit_msg, tag))
+}
+
+// Helper: update Cargo.toml version and run cargo check (or preview).
+fn update_cargo_version_and_check(
+    dry_run: bool,
+    doc: &mut DocumentMut,
+    cargo_toml_path: &std::path::Path,
+    new_version: &str,
+) -> Result<()> {
+    doc["package"]["version"] = value(new_version.to_string());
+    write_or_preview_file(
+        dry_run,
+        cargo_toml_path.to_str().unwrap(),
+        &doc.to_string(),
+        Some(&fs::read_to_string(&cargo_toml_path)?),
+    )?;
+    run_or_preview_cmd(dry_run, "cargo", &["check", "--workspace"])?;
+    Ok(())
+}
+
+// Helper extracted to reduce cognitive complexity inside release_package.
+fn build_changelog_for_package(
+    package_name: &str,
+    package_path: &std::path::Path,
+    new_version: &str,
+) -> Result<String> {
+    let latest_tag = find_latest_tag(package_name)?;
+    let rel_path = package_path.to_string_lossy();
+    let commits = if let Some(tag) = &latest_tag {
+        collect_commits_since_tag(tag, &rel_path)?
+    } else {
+        collect_commits_since_tag("", &rel_path)?
+    };
+    Ok(generate_changelog(
+        new_version,
+        &commits,
+        latest_tag.as_deref(),
+        package_name,
+    ))
+}
+
+fn print_release_summary(
+    package_name: &str,
+    cargo_toml_path: &std::path::PathBuf,
+    old_version: &str,
+    new_version: &str,
+) {
     println!(
         "\n{} {}",
         "📦",
@@ -98,122 +238,55 @@ fn release_package(
         "🆕",
         format!("New version: {}", new_version).green()
     );
-
-    let latest_tag = find_latest_tag(package_name)?;
-    let rel_path = package_path.to_string_lossy();
-    let commits = if let Some(tag) = &latest_tag {
-        collect_commits_since_tag(tag, &rel_path)?
-    } else {
-        collect_commits_since_tag("", &rel_path)?
-    };
-    let changelog = generate_changelog(&new_version, &commits, latest_tag.as_deref(), package_name);
-
-    let changelog_path = package_path.join("CHANGELOG.md");
-    let changelog_path_str = changelog_path.to_str().unwrap();
-    let old_changelog = std::fs::read_to_string(&changelog_path).unwrap_or_default();
-    let new_changelog = format!("{}\n{}", changelog, old_changelog);
-    let dry_run = !execute;
-    write_or_preview_file(
-        dry_run,
-        changelog_path_str,
-        &new_changelog,
-        Some(&old_changelog),
-    )?;
-
-    doc["package"]["version"] = value(new_version.clone());
-    write_or_preview_file(
-        dry_run,
-        cargo_toml_path.to_str().unwrap(),
-        &doc.to_string(),
-        Some(&fs::read_to_string(&cargo_toml_path)?),
-    )?;
-    run_or_preview_cmd(dry_run, "cargo", &["check", "--workspace"])?;
-
-    let mut files_to_add = vec![
-        changelog_path_str.to_string(),
-        cargo_toml_path.to_str().unwrap().to_string(),
-        "Cargo.lock".to_string(),
-    ];
-
-    let release_commit_msg = format!("release({}): v{}", package_name, new_version);
-    let tag = format!("{}-v{}", package_name, new_version);
-
-    let package_versions = workspace.collect_versions()?;
-    let modified_files =
-        replace_path_with_version_in_workspace(workspace, package_name, &package_versions)?;
-
-    for (file, _, _) in &modified_files {
-        files_to_add.push(file.clone());
-    }
-
-    let add_args: Vec<&str> = files_to_add.iter().map(|s| s.as_str()).collect();
-    run_or_preview_cmd(
-        dry_run,
-        "git",
-        &["add"]
-            .iter()
-            .cloned()
-            .chain(add_args.into_iter())
-            .collect::<Vec<_>>(),
-    )?;
-    run_or_preview_cmd(dry_run, "git", &["commit", "-m", &release_commit_msg])?;
-    run_or_preview_cmd(dry_run, "git", &["tag", &tag])?;
-
-    run_or_preview_cmd(dry_run, "git", &["push"])?;
-    run_or_preview_cmd(dry_run, "git", &["push", "origin", &tag])?;
-
-    for (file, old, new) in &modified_files {
-        write_or_preview_file(dry_run, file, new, Some(old))?;
-    }
-
-    if !modified_files.is_empty() {
-        let temp_commit_msg = "chore: replace path dependencies with version for publish";
-        run_or_preview_cmd(dry_run, "git", &["add", "."])?;
-        run_or_preview_cmd(dry_run, "git", &["commit", "-m", temp_commit_msg])?;
-    }
-
-    run_or_preview_cmd(dry_run, "cargo", &["publish", "-p", package_name])?;
-
-    if !modified_files.is_empty() {
-        run_or_preview_cmd(dry_run, "git", &["reset", "--hard", &tag])?;
-    }
-
-    Ok(())
 }
 
-fn main() -> Result<()> {
-    let cli = Cli::parse();
-    let workspace = Workspace::load("Cargo.toml")?;
-    let publishable_set: HashSet<&_> = PUBLISHABLE_PACKAGES.iter().cloned().collect();
-
-    println!("Analyzing packages to determine version bumps...");
-
-    let mut release_plan = HashMap::new();
-
-    // 1. Determine initial bumps based on commit history for publishable packages
+fn build_release_plan(
+    workspace: &Workspace,
+    cli: &Cli,
+) -> Result<(Vec<String>, HashMap<String, BumpType>)> {
+    // Determine initial bumps for publishable packages.
+    let mut release_plan: HashMap<String, BumpType> = HashMap::new();
     for pkg_name in PUBLISHABLE_PACKAGES {
-        let package = workspace.packages.get(*pkg_name).unwrap();
-        if let Some(bump) = determine_bump_type(package, &workspace, cli.major.as_ref())? {
-            release_plan.insert(package.name.clone(), bump);
+        if let Some(package) = workspace.packages.get(*pkg_name) {
+            if let Some(bump) = determine_bump_type(package, workspace, cli.major.as_ref())? {
+                release_plan.insert(package.name.clone(), bump);
+            }
         }
     }
 
-    // 2. Propagate changes to dependents within the publishable set
+    // Propagate bumps to dependents within the publishable set.
+    let publishable_set: HashSet<&_> = PUBLISHABLE_PACKAGES.iter().cloned().collect();
     let mut final_release_plan = release_plan.clone();
     let all_packages_sorted = workspace.topological_sort()?;
     for package_name in &all_packages_sorted {
         if !publishable_set.contains(package_name.as_str()) {
             continue;
         }
-        let package = workspace.packages.get(package_name).unwrap();
-        for dep in &package.dependencies {
-            if release_plan.contains_key(dep) {
-                final_release_plan
-                    .entry(package_name.clone())
-                    .or_insert(BumpType::Patch);
+        if let Some(package) = workspace.packages.get(package_name) {
+            for dep in &package.dependencies {
+                if release_plan.contains_key(dep) {
+                    final_release_plan
+                        .entry(package_name.clone())
+                        .or_insert(BumpType::Patch);
+                }
             }
         }
     }
+
+    // Build ordered list of packages to release.
+    let mut final_release_order = all_packages_sorted;
+    final_release_order.retain(|pkg| final_release_plan.contains_key(pkg));
+
+    Ok((final_release_order, final_release_plan))
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let workspace = Workspace::load("Cargo.toml")?;
+
+    println!("Analyzing packages to determine version bumps...");
+
+    let (final_release_order, final_release_plan) = build_release_plan(&workspace, &cli)?;
 
     if final_release_plan.is_empty() {
         println!("✅ No packages need to be released.");
@@ -221,24 +294,7 @@ fn main() -> Result<()> {
     }
 
     println!("\n📝 Release Plan:");
-    #[derive(Tabled)]
-    struct PlanEntry {
-        package: String,
-        bump: String,
-    }
-    let mut plan_entries = Vec::new();
-    let mut final_release_order = all_packages_sorted;
-    final_release_order.retain(|pkg| final_release_plan.contains_key(pkg));
-
-    for package_name in &final_release_order {
-        plan_entries.push(PlanEntry {
-            package: package_name.clone(),
-            bump: format!("{:?}", final_release_plan.get(package_name).unwrap()),
-        });
-    }
-    let mut table = tabled::Table::new(plan_entries);
-    table.with(tabled::settings::Style::rounded());
-    println!("{}", table);
+    print_release_plan(&final_release_order, &final_release_plan);
 
     if !cli.execute {
         println!("\nThis is a dry run. To execute the release, run with --execute");
@@ -252,6 +308,27 @@ fn main() -> Result<()> {
     println!("\n✅ All packages released successfully!");
 
     Ok(())
+}
+
+fn print_release_plan(
+    final_release_order: &[String],
+    final_release_plan: &HashMap<String, BumpType>,
+) {
+    #[derive(Tabled)]
+    struct PlanEntry {
+        package: String,
+        bump: String,
+    }
+    let mut plan_entries = Vec::new();
+    for package_name in final_release_order {
+        plan_entries.push(PlanEntry {
+            package: package_name.clone(),
+            bump: format!("{:?}", final_release_plan.get(package_name).unwrap()),
+        });
+    }
+    let mut table = tabled::Table::new(plan_entries);
+    table.with(tabled::settings::Style::rounded());
+    println!("{}", table);
 }
 
 fn determine_bump_type(
@@ -287,34 +364,49 @@ fn determine_bump_type(
     Ok(Some(bump_type))
 }
 
+fn is_git_commit_msg(program: &str, args: &[&str], i: usize) -> bool {
+    program == "git" && args.get(0) == Some(&"commit") && args.get(i.wrapping_sub(1)) == Some(&"-m")
+}
+
+/// Colorize a single dry-run argument. Kept intentionally small and
+/// readable to reduce cognitive complexity.
+fn color_arg(program: &str, args: &[&str], i: usize, arg: &str) -> String {
+    if i == 0 || (arg.starts_with("tessera-") && arg.contains('v')) {
+        return arg.yellow().to_string();
+    }
+    if arg.ends_with(".toml") {
+        return arg.cyan().to_string();
+    }
+    if is_git_commit_msg(program, args, i) {
+        return format!("\"{}\"", arg).blue().to_string();
+    }
+    if arg.starts_with('-') {
+        return arg.blue().to_string();
+    }
+    arg.normal().to_string()
+}
+
+fn format_dry_run_command(program: &str, args: &[&str]) -> String {
+    let mut out = format!("{} {}", "[dry-run]".dimmed(), program.green().bold());
+    if args.is_empty() {
+        return out;
+    }
+
+    // Build colored argument list with a small iterator to keep logic compact.
+    let colored: Vec<String> = args
+        .iter()
+        .enumerate()
+        .map(|(i, &a)| color_arg(program, args, i, a))
+        .collect();
+
+    out.push(' ');
+    out.push_str(&colored.join(" "));
+    out
+}
+
 fn run_or_preview_cmd(dry_run: bool, program: &str, args: &[&str]) -> Result<()> {
     if dry_run {
-        let mut out = format!("{} {}", "[dry-run]".dimmed(), program.green().bold());
-        if !args.is_empty() {
-            for (i, arg) in args.iter().enumerate() {
-                let colored_arg = if i == 0 {
-                    arg.yellow().to_string()
-                } else if arg.ends_with(".toml") {
-                    arg.cyan().to_string()
-                } else if arg.starts_with("tessera-") && arg.contains("v") {
-                    arg.yellow().to_string()
-                } else if arg.starts_with("-") {
-                    arg.blue().to_string()
-                } else {
-                    if program == "git"
-                        && args.get(0) == Some(&"commit")
-                        && args.get(i.wrapping_sub(1)) == Some(&"-m")
-                    {
-                        format!("\"{}\"", arg).blue().to_string()
-                    } else {
-                        arg.normal().to_string()
-                    }
-                };
-                out.push(' ');
-                out.push_str(&colored_arg);
-            }
-        }
-        println!("{}", out);
+        println!("{}", format_dry_run_command(program, args));
         Ok(())
     } else {
         let status = Command::new(program).args(args).status()?;
@@ -323,6 +415,46 @@ fn run_or_preview_cmd(dry_run: bool, program: &str, args: &[&str]) -> Result<()>
         }
         Ok(())
     }
+}
+
+fn perform_git_prepublish_steps(
+    dry_run: bool,
+    files_to_add: &[String],
+    release_commit_msg: &str,
+    tag: &str,
+) -> Result<()> {
+    let add_args: Vec<&str> = files_to_add.iter().map(|s| s.as_str()).collect();
+    let mut cmd: Vec<&str> = vec!["add"];
+    cmd.extend(add_args.into_iter());
+    run_or_preview_cmd(dry_run, "git", &cmd)?;
+    run_or_preview_cmd(dry_run, "git", &["commit", "-m", release_commit_msg])?;
+    run_or_preview_cmd(dry_run, "git", &["tag", tag])?;
+    run_or_preview_cmd(dry_run, "git", &["push"])?;
+    run_or_preview_cmd(dry_run, "git", &["push", "origin", tag])?;
+    Ok(())
+}
+
+fn perform_publish_with_modified_files(
+    dry_run: bool,
+    modified_files: &[(String, String, String)],
+    package_name: &str,
+    tag: &str,
+) -> Result<()> {
+    // Write modified Cargo.toml files (or preview), commit them temporarily for publish,
+    // publish the target package, and finally reset the workspace to the created tag.
+    if !modified_files.is_empty() {
+        for (file, old, new) in modified_files {
+            write_or_preview_file(dry_run, file, new, Some(old))?;
+        }
+        let temp_commit_msg = "chore: replace path dependencies with version for publish";
+        run_or_preview_cmd(dry_run, "git", &["add", "."])?;
+        run_or_preview_cmd(dry_run, "git", &["commit", "-m", temp_commit_msg])?;
+    }
+    run_or_preview_cmd(dry_run, "cargo", &["publish", "-p", package_name])?;
+    if !modified_files.is_empty() {
+        run_or_preview_cmd(dry_run, "git", &["reset", "--hard", tag])?;
+    }
+    Ok(())
 }
 
 fn write_or_preview_file(
@@ -388,19 +520,30 @@ impl Workspace {
             .filter_map(|v| v.as_str().map(String::from))
             .collect();
 
-        let mut packages = HashMap::new();
-        let member_names: HashSet<_> = members
-            .iter()
-            .map(|m| {
-                let path = Path::new(m);
-                read_toml(&path.join("Cargo.toml"))
-                    .ok()
-                    .and_then(|d| d["package"]["name"].as_str().map(|s| s.to_string()))
-                    .unwrap_or_else(|| path.file_name().unwrap().to_str().unwrap().to_string())
-            })
-            .collect();
+        let member_names = Self::collect_member_names(&members)?;
+        let packages = Self::collect_packages(&members, &member_names)?;
+        Ok(Self { members, packages })
+    }
 
-        for member_path in &members {
+    fn collect_member_names(members: &[String]) -> Result<HashSet<String>> {
+        let mut set = HashSet::new();
+        for m in members {
+            let path = Path::new(m);
+            let name = read_toml(&path.join("Cargo.toml"))
+                .ok()
+                .and_then(|d| d["package"]["name"].as_str().map(|s| s.to_string()))
+                .unwrap_or_else(|| path.file_name().unwrap().to_str().unwrap().to_string());
+            set.insert(name);
+        }
+        Ok(set)
+    }
+
+    fn collect_packages(
+        members: &[String],
+        member_names: &HashSet<String>,
+    ) -> Result<HashMap<String, Package>> {
+        let mut packages = HashMap::new();
+        for member_path in members {
             let cargo_toml_path = Path::new(member_path).join("Cargo.toml");
             if !cargo_toml_path.exists() {
                 continue;
@@ -433,8 +576,7 @@ impl Workspace {
                 },
             );
         }
-
-        Ok(Self { members, packages })
+        Ok(packages)
     }
 
     fn find_package(&self, name: &str) -> Result<std::path::PathBuf> {
@@ -503,6 +645,38 @@ impl Workspace {
     }
 }
 
+fn replace_paths_in_doc(
+    doc: &mut DocumentMut,
+    package_versions: &HashMap<String, String>,
+    target_package: &str,
+) -> Result<bool> {
+    // Return true if the document was modified.
+    let mut changed = false;
+    for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
+        if let Some(table) = doc.get_mut(section).and_then(|t| t.as_table_like_mut()) {
+            // Collect keys up-front to avoid borrowing issues while mutating the table.
+            let keys: Vec<_> = table.iter().map(|(k, _)| k.to_string()).collect();
+            for dep in keys {
+                // Skip replacing the package itself.
+                if dep == target_package {
+                    continue;
+                }
+                if let Some(ver) = package_versions.get(&dep) {
+                    if let Some(item) = table.get_mut(&dep) {
+                        if let Some(dep_table) = item.as_table_like_mut() {
+                            if dep_table.remove("path").is_some() {
+                                dep_table.insert("version", value(ver.clone()));
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(changed)
+}
+
 fn replace_path_with_version_in_workspace(
     workspace: &Workspace,
     target_package: &str,
@@ -516,26 +690,7 @@ fn replace_path_with_version_in_workspace(
             continue;
         }
         let mut doc = read_toml(&cargo_toml)?;
-        let mut changed = false;
-        for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
-            if let Some(table) = doc.get_mut(section).and_then(|t| t.as_table_like_mut()) {
-                let keys: Vec<_> = table.iter().map(|(k, _)| k.to_string()).collect();
-                for dep in keys {
-                    if let Some(ver) = package_versions.get(&dep) {
-                        if dep != target_package {
-                            if let Some(item) = table.get_mut(&dep) {
-                                if let Some(dep_table) = item.as_table_like_mut() {
-                                    if dep_table.remove("path").is_some() {
-                                        dep_table.insert("version", value(ver.clone()));
-                                        changed = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let changed = replace_paths_in_doc(&mut doc, package_versions, target_package)?;
         if changed {
             let old = std::fs::read_to_string(&cargo_toml)?;
             let new = doc.to_string();

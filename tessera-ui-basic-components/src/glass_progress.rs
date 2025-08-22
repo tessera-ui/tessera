@@ -46,6 +46,71 @@ pub struct GlassProgressArgs {
     pub track_border_width: Dp,
 }
 
+/// Produce a capsule-shaped RoundedRectangle shape for the given height (px).
+fn capsule_shape_for_height(height_px: f32) -> Shape {
+    let radius = height_px / 2.0;
+    Shape::RoundedRectangle {
+        top_left: radius,
+        top_right: radius,
+        bottom_right: radius,
+        bottom_left: radius,
+        g2_k_value: 2.0,
+    }
+}
+
+/// Compute progress width and inner effective height (excluding borders).
+/// Returns None when progress width is zero or negative.
+fn compute_progress_dims(args: &GlassProgressArgs) -> Option<(Px, f32)> {
+    let progress_width = (args.width.to_px().to_f32() * args.value.clamp(0.0, 1.0))
+        - (args.track_border_width.to_px().to_f32() * 2.0);
+    let effective_height =
+        args.height.to_px().to_f32() - (args.track_border_width.to_px().to_f32() * 2.0);
+
+    if progress_width > 0.0 {
+        Some((Px(progress_width as i32), effective_height))
+    } else {
+        None
+    }
+}
+
+/// Render the outer track and the inner progress fill.
+/// Extracted to reduce the size of `glass_progress` and keep each unit focused.
+fn render_track_and_fill(args: GlassProgressArgs) {
+    fluid_glass(
+        FluidGlassArgsBuilder::default()
+            .width(DimensionValue::Fixed(args.width.to_px()))
+            .height(DimensionValue::Fixed(args.height.to_px()))
+            .tint_color(args.track_tint_color)
+            .blur_radius(args.blur_radius)
+            .shape(capsule_shape_for_height(args.height.to_px().to_f32()))
+            .border(GlassBorder::new(args.track_border_width.into()))
+            .padding(args.track_border_width)
+            .build()
+            .unwrap(),
+        None,
+        move || {
+            // Internal progress fill - capsule shape
+            if let Some((progress_px, effective_height)) = compute_progress_dims(&args) {
+                fluid_glass(
+                    FluidGlassArgsBuilder::default()
+                        .width(DimensionValue::Fixed(progress_px))
+                        .height(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .tint_color(args.progress_tint_color)
+                        .shape(capsule_shape_for_height(effective_height))
+                        .refraction_amount(0.0)
+                        .build()
+                        .unwrap(),
+                    None,
+                    || {},
+                );
+            }
+        },
+    );
+}
+
 /// Creates a progress bar component with a frosted glass effect.
 ///
 /// The `glass_progress` displays a value from a continuous range (0.0 to 1.0)
@@ -75,63 +140,9 @@ pub struct GlassProgressArgs {
 pub fn glass_progress(args: impl Into<GlassProgressArgs>) {
     let args: GlassProgressArgs = args.into();
 
-    // External track (background) with border - capsule shape
-    fluid_glass(
-        FluidGlassArgsBuilder::default()
-            .width(DimensionValue::Fixed(args.width.to_px()))
-            .height(DimensionValue::Fixed(args.height.to_px()))
-            .tint_color(args.track_tint_color)
-            .blur_radius(args.blur_radius)
-            .shape({
-                let radius = args.height.to_px().to_f32() / 2.0;
-                Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
-                    g2_k_value: 2.0,
-                }
-            })
-            .border(GlassBorder::new(args.track_border_width.into()))
-            .padding(args.track_border_width)
-            .build()
-            .unwrap(),
-        None,
-        move || {
-            // Internal progress fill - capsule shape
-            let progress_width = (args.width.to_px().to_f32() * args.value.clamp(0.0, 1.0))
-                - (args.track_border_width.to_px().to_f32() * 2.0);
-            let effective_height =
-                args.height.to_px().to_f32() - (args.track_border_width.to_px().to_f32() * 2.0);
-
-            if progress_width > 0.0 {
-                fluid_glass(
-                    FluidGlassArgsBuilder::default()
-                        .width(DimensionValue::Fixed(Px(progress_width as i32)))
-                        .height(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
-                        .tint_color(args.progress_tint_color)
-                        .shape({
-                            let radius = effective_height / 2.0;
-                            Shape::RoundedRectangle {
-                                top_left: radius,
-                                top_right: radius,
-                                bottom_right: radius,
-                                bottom_left: radius,
-                                g2_k_value: 2.0, // Capsule shape
-                            }
-                        })
-                        .refraction_amount(0.0)
-                        .build()
-                        .unwrap(),
-                    None,
-                    || {},
-                );
-            }
-        },
-    );
+    // Render track and inner fill using extracted helper.
+    let args_for_render = args.clone();
+    render_track_and_fill(args_for_render);
 
     measure(Box::new(move |input| {
         let self_width = args.width.to_px();

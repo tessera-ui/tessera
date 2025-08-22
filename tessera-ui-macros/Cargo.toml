@@ -17,5 +17,6 @@ shard = []
 
 [dependencies]
 heck = "0.5.0"
+proc-macro2 = "1.0"
 quote = "1.0.40"
 syn = { version = "2.0.106", features = ["full"] }

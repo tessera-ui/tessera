@@ -15,6 +15,7 @@ use crate::{CalStyle, app::AppState, cal::evaluate};
 
 #[tessera]
 pub fn display_screen(app_state: Arc<AppState>, style: CalStyle) {
+    // Outer transparent container with padding; delegate inner rendering to small helpers
     surface(
         SurfaceArgsBuilder::default()
             .color(Color::TRANSPARENT)
@@ -23,40 +24,46 @@ pub fn display_screen(app_state: Arc<AppState>, style: CalStyle) {
             .unwrap(),
         None,
         || match style {
-            CalStyle::Glass => {
-                fluid_glass(
-                    FluidGlassArgsBuilder::default()
-                        .padding(Dp(10.0))
-                        .refraction_amount(0.0)
-                        .contrast(1.5)
-                        .build()
-                        .unwrap(),
-                    None,
-                    || {
-                        content(app_state.clone());
-                    },
-                );
-            }
-            CalStyle::Material => {
-                surface(
-                    SurfaceArgsBuilder::default()
-                        .padding(Dp(10.0))
-                        .shape(Shape::RoundedRectangle {
-                            top_left: 25.0,
-                            top_right: 25.0,
-                            bottom_right: 25.0,
-                            bottom_left: 25.0,
-                            g2_k_value: 3.0,
-                        })
-                        .color(Color::GREY)
-                        .build()
-                        .unwrap(),
-                    None,
-                    move || {
-                        content(app_state.clone());
-                    },
-                );
-            }
+            CalStyle::Glass => render_glass_display(app_state.clone()),
+            CalStyle::Material => render_material_display(app_state.clone()),
+        },
+    );
+}
+
+/// Render display when using glass style. Extracted to keep `display_screen` short.
+fn render_glass_display(app_state: Arc<AppState>) {
+    fluid_glass(
+        FluidGlassArgsBuilder::default()
+            .padding(Dp(10.0))
+            .refraction_amount(0.0)
+            .contrast(1.5)
+            .build()
+            .unwrap(),
+        None,
+        || {
+            content(app_state.clone());
+        },
+    );
+}
+
+/// Render display when using material style. Extracted to keep `display_screen` short.
+fn render_material_display(app_state: Arc<AppState>) {
+    surface(
+        SurfaceArgsBuilder::default()
+            .padding(Dp(10.0))
+            .shape(Shape::RoundedRectangle {
+                top_left: 25.0,
+                top_right: 25.0,
+                bottom_right: 25.0,
+                bottom_left: 25.0,
+                g2_k_value: 3.0,
+            })
+            .color(Color::GREY)
+            .build()
+            .unwrap(),
+        None,
+        move || {
+            content(app_state.clone());
         },
     );
 }

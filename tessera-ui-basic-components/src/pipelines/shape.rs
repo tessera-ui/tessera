@@ -165,6 +165,30 @@ impl ShapePipeline {
     }
 }
 
+fn build_instances(
+    commands: &[(&ShapeCommand, PxSize, PxPosition)],
+    config: &wgpu::SurfaceConfiguration,
+) -> Vec<ShapeUniforms> {
+    // Extracted instance-building logic to simplify `draw` and reduce cognitive complexity.
+    commands
+        .iter()
+        .flat_map(|(command, size, start_pos)| {
+            let mut uniforms = rect_to_uniforms(command, *size, *start_pos);
+            uniforms.screen_size = [config.width as f32, config.height as f32].into();
+
+            let has_shadow = uniforms.shadow_color[3] > 0.0 && uniforms.render_params[2] > 0.0;
+
+            if has_shadow {
+                let mut uniforms_for_shadow = uniforms;
+                uniforms_for_shadow.render_params[3] = 2.0;
+                vec![uniforms_for_shadow, uniforms]
+            } else {
+                vec![uniforms]
+            }
+        })
+        .collect()
+}
+
 impl DrawablePipeline<ShapeCommand> for ShapePipeline {
     fn draw(
         &mut self,
@@ -179,27 +203,10 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             return;
         }
 
-        let mut instances: Vec<ShapeUniforms> = commands
-            .iter()
-            .flat_map(|(command, size, start_pos)| {
-                let mut uniforms = rect_to_uniforms(command, *size, *start_pos);
-                uniforms.screen_size = [config.width as f32, config.height as f32].into();
-
-                let has_shadow = uniforms.shadow_color[3] > 0.0 && uniforms.render_params[2] > 0.0;
-
-                if has_shadow {
-                    let mut uniforms_for_shadow = uniforms;
-                    uniforms_for_shadow.render_params[3] = 2.0;
-                    vec![uniforms_for_shadow, uniforms]
-                } else {
-                    vec![uniforms]
-                }
-            })
-            .collect();
+        let mut instances = build_instances(commands, config);
 
         if instances.len() > MAX_CONCURRENT_SHAPES as usize {
-            // In a real application, you might want to handle this more gracefully,
-            // perhaps by splitting the draw call. For now, we'll just truncate.
+            // Truncate if too many instances; splitting into multiple draw calls could be an improvement.
             instances.truncate(MAX_CONCURRENT_SHAPES as usize);
         }
 

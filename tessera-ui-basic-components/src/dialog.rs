@@ -28,6 +28,37 @@ use crate::{
 /// The duration of the full dialog animation.
 const ANIM_TIME: Duration = Duration::from_millis(300);
 
+/// Compute normalized (0..1) linear progress from an optional animation timer.
+/// Placing this here reduces inline complexity inside the component body.
+fn compute_dialog_progress(timer_opt: Option<Instant>) -> f32 {
+    timer_opt.as_ref().map_or(1.0, |timer| {
+        let elapsed = timer.elapsed();
+        if elapsed >= ANIM_TIME {
+            1.0
+        } else {
+            elapsed.as_secs_f32() / ANIM_TIME.as_secs_f32()
+        }
+    })
+}
+
+/// Compute blur radius for glass style scrim.
+fn blur_radius_for(progress: f32, is_open: bool, max_blur_radius: f32) -> f32 {
+    if is_open {
+        progress * max_blur_radius
+    } else {
+        max_blur_radius * (1.0 - progress)
+    }
+}
+
+/// Compute scrim alpha for material style.
+fn scrim_alpha_for(progress: f32, is_open: bool) -> f32 {
+    if is_open {
+        progress * 0.5
+    } else {
+        0.5 * (1.0 - progress)
+    }
+}
+
 /// Defines the visual style of the dialog's scrim.
 #[derive(Default, Clone, Copy)]
 pub enum DialogStyle {
@@ -201,6 +232,81 @@ impl DialogProviderState {
 ///     },
 /// );
 /// ```
+fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
+    match args.style {
+        DialogStyle::Glass => {
+            let blur_radius = blur_radius_for(progress, is_open, 50.0);
+            fluid_glass(
+                FluidGlassArgsBuilder::default()
+                    .on_click(args.on_close_request.clone())
+                    .tint_color(Color::TRANSPARENT)
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .height(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .dispersion_height(0.0)
+                    .refraction_height(0.0)
+                    .block_input(true)
+                    .blur_radius(blur_radius)
+                    .border(None)
+                    .shape(Shape::RoundedRectangle {
+                        top_left: 0.0,
+                        top_right: 0.0,
+                        bottom_right: 0.0,
+                        bottom_left: 0.0,
+                        g2_k_value: 3.0,
+                    })
+                    .noise_amount(0.0)
+                    .build()
+                    .unwrap(),
+                None,
+                || {},
+            );
+        }
+        DialogStyle::Material => {
+            let alpha = scrim_alpha_for(progress, is_open);
+            surface(
+                SurfaceArgsBuilder::default()
+                    .color(Color::BLACK.with_alpha(alpha))
+                    .on_click(Some(args.on_close_request.clone()))
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .height(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .block_input(true)
+                    .build()
+                    .unwrap(),
+                None,
+                || {},
+            );
+        }
+    }
+}
+
+fn make_keyboard_state_handler(
+    on_close: Arc<dyn Fn() + Send + Sync>,
+) -> Box<dyn for<'a> Fn(tessera_ui::StateHandlerInput<'a>) + Send + Sync + 'static> {
+    Box::new(move |input| {
+        input.keyboard_events.drain(..).for_each(|event| {
+            if event.state == winit::event::ElementState::Pressed {
+                if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
+                    event.physical_key
+                {
+                    (on_close)();
+                }
+            }
+        });
+    })
+}
+
 #[tessera]
 pub fn dialog_provider(
     args: DialogProviderArgs,
@@ -212,115 +318,29 @@ pub fn dialog_provider(
     main_content();
 
     // 2. If the dialog is open, render the modal overlay.
-    if state.read().is_open
-        || state
-            .read()
-            .timer
-            .is_some_and(|timer| timer.elapsed() < ANIM_TIME)
-    {
-        let on_close_for_keyboard = args.on_close_request.clone();
+    // Sample state once to avoid repeated locks and improve readability.
+    let (is_open, timer_opt) = {
+        let guard = state.read();
+        (guard.is_open, guard.timer)
+    };
 
-        let progress = animation::easing(state.read().timer.as_ref().map_or(1.0, |timer| {
-            let elapsed = timer.elapsed();
-            if elapsed >= ANIM_TIME {
-                1.0 // Animation is complete
-            } else {
-                elapsed.as_secs_f32() / ANIM_TIME.as_secs_f32()
-            }
-        }));
+    let is_animating = timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME);
 
-        let content_alpha = if state.read().is_open {
+    if is_open || is_animating {
+        let progress = animation::easing(compute_dialog_progress(timer_opt));
+
+        let content_alpha = if is_open {
             progress * 1.0 // Transition from 0 to 1 alpha
         } else {
             1.0 * (1.0 - progress) // Transition from 1 to 0 alpha
         };
 
-        // 2a. Scrim
-        // This Surface covers the entire screen, consuming all mouse clicks
-        // and triggering the close request.
-        match args.style {
-            DialogStyle::Glass => {
-                let max_blur_radius = 50.0; // Maximum blur radius for the dialog
-                let blur_radius = if state.read().is_open {
-                    progress * max_blur_radius // Transition from 0 to max_blur_radius
-                } else {
-                    max_blur_radius * (1.0 - progress) // Transition from 10.0 to max_blur_radius
-                };
-                fluid_glass(
-                    FluidGlassArgsBuilder::default()
-                        .on_click(args.on_close_request)
-                        .tint_color(Color::TRANSPARENT)
-                        .width(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
-                        .height(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
-                        .dispersion_height(0.0)
-                        .refraction_height(0.0)
-                        .block_input(true)
-                        .blur_radius(blur_radius)
-                        .border(None)
-                        .shape(Shape::RoundedRectangle {
-                            top_left: 0.0,
-                            top_right: 0.0,
-                            bottom_right: 0.0,
-                            bottom_left: 0.0,
-                            g2_k_value: 3.0,
-                        })
-                        .noise_amount(0.0)
-                        .build()
-                        .unwrap(),
-                    None,
-                    || {},
-                );
-            }
-            DialogStyle::Material => {
-                let alpha = if state.read().is_open {
-                    progress * 0.5 // Transition from 0 to 0.5 alpha
-                } else {
-                    0.5 * (1.0 - progress) // Transition from 0.5 to 0 alpha
-                };
-                surface(
-                    SurfaceArgsBuilder::default()
-                        .color(Color::BLACK.with_alpha(alpha))
-                        .on_click(Some(args.on_close_request))
-                        .width(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
-                        .height(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
-                        .block_input(true)
-                        .build()
-                        .unwrap(),
-                    None,
-                    || {},
-                );
-            }
-        }
+        // 2a. Scrim (delegated)
+        render_scrim(&args, is_open, progress);
 
-        // 2b. State Handler for intercepting keyboard events.
-        state_handler(Box::new(move |input| {
-            // Atomically consume all keyboard events to prevent them from propagating
-            // to the main content underneath.
-            let events = input.keyboard_events.drain(..).collect::<Vec<_>>();
-
-            // Check the consumed events for the 'Escape' key press.
-            for event in events {
-                if event.state == winit::event::ElementState::Pressed {
-                    if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
-                        event.physical_key
-                    {
-                        (on_close_for_keyboard)();
-                    }
-                }
-            }
-        }));
+        // 2b. State Handler for intercepting keyboard events (delegated)
+        let handler = make_keyboard_state_handler(args.on_close_request.clone());
+        state_handler(handler);
 
         // 2c. Dialog Content
         // The user-defined dialog content is rendered on top of everything.

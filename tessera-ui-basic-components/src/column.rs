@@ -13,7 +13,10 @@
 //! Typical usage involves composing UI elements that should be laid out in a vertical sequence, with customizable
 //! alignment and spacing behaviors.
 use derive_builder::Builder;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node, tessera};
+use tessera_ui::{
+    ComponentNodeMetaDatas, ComputedData, Constraint, DimensionValue, MeasureInput,
+    MeasurementError, NodeId, Px, PxPosition, place_node, tessera,
+};
 
 use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 
@@ -97,32 +100,268 @@ impl<F: FnOnce() + Send + Sync + 'static> AsColumnItem for (F, f32) {
     }
 }
 
+/// Helper struct used to place children with alignment. Local to this module.
+struct PlaceChildrenArgs<'a> {
+    children_sizes: &'a [Option<ComputedData>],
+    children_ids: &'a [NodeId],
+    metadatas: &'a ComponentNodeMetaDatas,
+    final_column_width: Px,
+    final_column_height: Px,
+    total_children_height: Px,
+    main_axis_alignment: MainAxisAlignment,
+    cross_axis_alignment: CrossAxisAlignment,
+    child_count: usize,
+}
+
+/// Helper: classify children into weighted / unweighted and compute total weight.
+fn classify_children(child_weights: &[Option<f32>]) -> (Vec<usize>, Vec<usize>, f32) {
+    let mut weighted_indices = Vec::new();
+    let mut unweighted_indices = Vec::new();
+    let mut total_weight = 0.0;
+    for (i, weight_opt) in child_weights.iter().enumerate() {
+        if let Some(w) = weight_opt {
+            if *w > 0.0 {
+                weighted_indices.push(i);
+                total_weight += w;
+            } else {
+                unweighted_indices.push(i);
+            }
+        } else {
+            unweighted_indices.push(i);
+        }
+    }
+    (weighted_indices, unweighted_indices, total_weight)
+}
+
+/// Measure all non-weighted children (vertical variant).
+/// Returns the accumulated total height of those children.
+fn measure_unweighted_children_for_column(
+    input: &MeasureInput,
+    indices: &[usize],
+    children_sizes: &mut [Option<ComputedData>],
+    max_child_width: &mut Px,
+    column_effective_constraint: &Constraint,
+) -> Result<Px, MeasurementError> {
+    let mut total = Px(0);
+    for &child_idx in indices {
+        let child_id = input.children_ids[child_idx];
+        let parent_offered_constraint_for_child = Constraint::new(
+            column_effective_constraint.width,
+            DimensionValue::Wrap {
+                min: None,
+                max: column_effective_constraint.height.get_max(),
+            },
+        );
+        let child_result = input.measure_child(child_id, &parent_offered_constraint_for_child)?;
+        children_sizes[child_idx] = Some(child_result);
+        total += child_result.height;
+        *max_child_width = (*max_child_width).max(child_result.width);
+    }
+    Ok(total)
+}
+
+/// Measure weighted children by distributing the remaining height proportionally.
+fn measure_weighted_children_for_column(
+    input: &MeasureInput,
+    weighted_indices: &[usize],
+    children_sizes: &mut [Option<ComputedData>],
+    max_child_width: &mut Px,
+    remaining_height: Px,
+    total_weight: f32,
+    column_effective_constraint: &Constraint,
+    child_weights: &[Option<f32>],
+) -> Result<(), MeasurementError> {
+    if total_weight <= 0.0 {
+        return Ok(());
+    }
+    for &child_idx in weighted_indices {
+        let child_weight = child_weights[child_idx].unwrap_or(0.0);
+        let allocated_height =
+            Px((remaining_height.0 as f32 * (child_weight / total_weight)) as i32);
+        let child_id = input.children_ids[child_idx];
+        let parent_offered_constraint_for_child = Constraint::new(
+            column_effective_constraint.width,
+            DimensionValue::Fixed(allocated_height),
+        );
+        let child_result = input.measure_child(child_id, &parent_offered_constraint_for_child)?;
+        children_sizes[child_idx] = Some(child_result);
+        *max_child_width = (*max_child_width).max(child_result.width);
+    }
+    Ok(())
+}
+
+fn calculate_final_column_height(
+    column_effective_constraint: &Constraint,
+    measured_children_height: Px,
+) -> Px {
+    match column_effective_constraint.height {
+        DimensionValue::Fixed(h) => h,
+        DimensionValue::Fill { min, max } => {
+            let mut h = measured_children_height;
+            if let Some(min_h) = min {
+                h = h.max(min_h);
+            }
+            if let Some(max_h) = max {
+                h = h.min(max_h);
+            } else {
+                h = measured_children_height;
+            }
+            h
+        }
+        DimensionValue::Wrap { min, max } => {
+            let mut h = measured_children_height;
+            if let Some(min_h) = min {
+                h = h.max(min_h);
+            }
+            if let Some(max_h) = max {
+                h = h.min(max_h);
+            }
+            h
+        }
+    }
+}
+
+fn calculate_final_column_width(
+    column_effective_constraint: &Constraint,
+    max_child_width: Px,
+    parent_constraint: &Constraint,
+) -> Px {
+    match column_effective_constraint.width {
+        DimensionValue::Fixed(w) => w,
+        DimensionValue::Fill { min, .. } => {
+            let mut w = parent_constraint.width.get_max().unwrap_or(max_child_width);
+            if let Some(min_w) = min {
+                w = w.max(min_w);
+            }
+            w
+        }
+        DimensionValue::Wrap { min, max } => {
+            let mut w = max_child_width;
+            if let Some(min_w) = min {
+                w = w.max(min_w);
+            }
+            if let Some(max_w) = max {
+                w = w.min(max_w);
+            }
+            w
+        }
+    }
+}
+
+/// Measure column when height uses weighted allocation.
+/// Returns (final_width, final_height, total_measured_children_height)
+fn measure_weighted_column(
+    input: &MeasureInput,
+    _args: &ColumnArgs,
+    child_weights: &[Option<f32>],
+    column_effective_constraint: &Constraint,
+    children_sizes: &mut [Option<ComputedData>],
+    max_child_width: &mut Px,
+) -> Result<(Px, Px, Px), MeasurementError> {
+    let available_height_for_children = column_effective_constraint.height.get_max().unwrap();
+
+    let (weighted_children_indices, unweighted_children_indices, total_weight_sum) =
+        classify_children(child_weights);
+
+    let total_height_of_unweighted_children = measure_unweighted_children_for_column(
+        input,
+        &unweighted_children_indices,
+        children_sizes,
+        max_child_width,
+        column_effective_constraint,
+    )?;
+
+    let remaining_height_for_weighted_children =
+        (available_height_for_children - total_height_of_unweighted_children).max(Px(0));
+
+    measure_weighted_children_for_column(
+        input,
+        &weighted_children_indices,
+        children_sizes,
+        max_child_width,
+        remaining_height_for_weighted_children,
+        total_weight_sum,
+        column_effective_constraint,
+        child_weights,
+    )?;
+
+    let total_measured_children_height: Px = children_sizes
+        .iter()
+        .filter_map(|s| s.as_ref().map(|s| s.height))
+        .fold(Px(0), |acc, h| acc + h);
+
+    let final_column_height =
+        calculate_final_column_height(column_effective_constraint, total_measured_children_height);
+    let final_column_width = calculate_final_column_width(
+        column_effective_constraint,
+        *max_child_width,
+        &input.parent_constraint,
+    );
+
+    Ok((
+        final_column_width,
+        final_column_height,
+        total_measured_children_height,
+    ))
+}
+
+fn measure_unweighted_column(
+    input: &MeasureInput,
+    _args: &ColumnArgs,
+    column_effective_constraint: &Constraint,
+    children_sizes: &mut [Option<ComputedData>],
+    max_child_width: &mut Px,
+) -> Result<(Px, Px, Px), MeasurementError> {
+    let n = children_sizes.len();
+    let mut total_children_measured_height = Px(0);
+    for i in 0..n {
+        let child_id = input.children_ids[i];
+        let parent_offered_constraint_for_child = Constraint::new(
+            column_effective_constraint.width,
+            DimensionValue::Wrap {
+                min: None,
+                max: column_effective_constraint.height.get_max(),
+            },
+        );
+        let child_result = input.measure_child(child_id, &parent_offered_constraint_for_child)?;
+        children_sizes[i] = Some(child_result);
+        total_children_measured_height += child_result.height;
+        *max_child_width = (*max_child_width).max(child_result.width);
+    }
+    let final_column_height =
+        calculate_final_column_height(column_effective_constraint, total_children_measured_height);
+    let final_column_width = calculate_final_column_width(
+        column_effective_constraint,
+        *max_child_width,
+        &input.parent_constraint,
+    );
+    Ok((
+        final_column_width,
+        final_column_height,
+        total_children_measured_height,
+    ))
+}
+
 /// A column component that arranges its children vertically.
-/// A layout component that arranges its children in a vertical sequence.
 ///
-/// The `column` component stacks its children one after another in a single column.
-/// It provides extensive control over the alignment and sizing of its children through the `ColumnArgs` struct.
+/// The `column` stacks its children from top to bottom and provides control over sizing,
+/// alignment and proportional space distribution via weights. Use `ColumnArgs` to configure
+/// the column's width/height behavior and alignment policies.
 ///
-/// For a more convenient way to create a `column`, see the [`column_ui!`] macro.
+/// Children may be provided as:
+/// - closures (converted to `ColumnItem` with no weight),
+/// - `ColumnItem` instances, or
+/// - `(closure, weight)` tuples to allocate proportional space.
 ///
 /// # Parameters
-/// - `args`: A [`ColumnArgs`] struct that configures the column's behavior, including:
-///   - `width` and `height`: Define the size constraints of the column itself.
-///   - `main_axis_alignment`: Controls how children are distributed along the vertical axis (e.g., `Start`, `Center`, `End`, `SpaceBetween`).
-///   - `cross_axis_alignment`: Controls how children are aligned along the horizontal axis (e.g., `Start`, `Center`, `End`, `Stretch`).
-/// - `children_items_input`: An array of child components. Each child can be a simple closure, a `ColumnItem` for more complex configurations, or a tuple `(closure, weight)` to assign a flexible layout weight.
+/// - `args`: configuration for width/height and alignment (`ColumnArgs`).
+/// - `children_items_input`: array of items convertible to `ColumnItem` via `AsColumnItem`.
 ///
 /// # Example
-///
-/// The following example demonstrates creating a column with three text labels, centered horizontally
-/// and spaced evenly vertically.
-///
-/// ```
+/// ```rust,ignore
 /// use tessera_ui_basic_components::column::{column_ui, ColumnArgsBuilder};
 /// use tessera_ui_basic_components::text::text;
-/// use tessera_ui_basic_components::alignment::{MainAxisAlignment, CrossAxisAlignment};
 ///
-/// // It is recommended to use the `column_ui!` macro for better ergonomics.
 /// column_ui!(
 ///     ColumnArgsBuilder::default()
 ///         .main_axis_alignment(MainAxisAlignment::SpaceEvenly)
@@ -130,10 +369,13 @@ impl<F: FnOnce() + Send + Sync + 'static> AsColumnItem for (F, f32) {
 ///         .build()
 ///         .unwrap(),
 ///     || text("First item".to_string()),
-///     || text("Second item".to_string()),
-///     || text("Third item".to_string()),
+///     (|| text("Weighted".to_string()), 0.5),
+///     ColumnItem::new(Box::new(|| text("Last".to_string())), None)
 /// );
 /// ```
+///
+/// Note: This function registers a measurement closure that measures children according
+/// to column constraints and then places them using `place_node`.
 #[tessera]
 pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsColumnItem; N]) {
     let children_items: [ColumnItem; N] =
@@ -147,267 +389,111 @@ pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsCo
         child_weights.push(child_item.weight);
     }
 
-    measure(Box::new(move |input| {
-        let column_intrinsic_constraint = Constraint::new(args.width, args.height);
-        // This is the effective constraint for the column itself
-        let column_effective_constraint =
-            column_intrinsic_constraint.merge(input.parent_constraint);
+    measure(Box::new(
+        move |input| -> Result<ComputedData, MeasurementError> {
+            let column_intrinsic_constraint = Constraint::new(args.width, args.height);
+            let column_effective_constraint =
+                column_intrinsic_constraint.merge(input.parent_constraint);
 
-        let mut children_sizes = vec![None; N];
-        let mut max_child_width = Px(0);
+            let mut children_sizes = vec![None; N];
+            let mut max_child_width = Px(0);
 
-        let should_use_weight_for_height = match column_effective_constraint.height {
-            DimensionValue::Fixed(_) => true,
-            DimensionValue::Fill { max: Some(_), .. } => true,
-            DimensionValue::Wrap { max: Some(_), .. } => true,
-            _ => false,
-        };
+            let should_use_weight_for_height = matches!(
+                column_effective_constraint.height,
+                DimensionValue::Fixed(_)
+                    | DimensionValue::Fill { max: Some(_), .. }
+                    | DimensionValue::Wrap { max: Some(_), .. }
+            );
 
-        if should_use_weight_for_height {
-            let available_height_for_children =
-                column_effective_constraint.height.get_max().unwrap();
-
-            let mut weighted_children_indices = Vec::new();
-            let mut unweighted_children_indices = Vec::new();
-            let mut total_weight_sum = 0.0f32;
-
-            for (i, weight_opt) in child_weights.iter().enumerate() {
-                if let Some(w) = weight_opt {
-                    if *w > 0.0 {
-                        weighted_children_indices.push(i);
-                        total_weight_sum += w;
-                    } else {
-                        unweighted_children_indices.push(i);
-                    }
+            let (final_column_width, final_column_height, total_measured_children_height) =
+                if should_use_weight_for_height {
+                    measure_weighted_column(
+                        input,
+                        &args,
+                        &child_weights,
+                        &column_effective_constraint,
+                        &mut children_sizes,
+                        &mut max_child_width,
+                    )?
                 } else {
-                    unweighted_children_indices.push(i);
-                }
-            }
-
-            let mut total_height_of_unweighted_children = Px(0);
-            for &child_idx in &unweighted_children_indices {
-                let Some(child_id) = input.children_ids.get(child_idx).copied() else {
-                    continue;
+                    measure_unweighted_column(
+                        input,
+                        &args,
+                        &column_effective_constraint,
+                        &mut children_sizes,
+                        &mut max_child_width,
+                    )?
                 };
 
-                // Parent (column) offers its own effective width constraint.
-                // Height is Wrap for unweighted children in this path.
-                let parent_offered_constraint_for_child = Constraint::new(
-                    column_effective_constraint.width,
-                    DimensionValue::Wrap {
-                        min: None,
-                        max: column_effective_constraint.height.get_max(),
-                    },
-                );
-
-                // measure_node will fetch the child's intrinsic constraint and merge it with parent_offered_constraint_for_child
-                let child_result =
-                    input.measure_child(child_id, &parent_offered_constraint_for_child)?;
-
-                children_sizes[child_idx] = Some(child_result);
-                total_height_of_unweighted_children += child_result.height;
-                max_child_width = max_child_width.max(child_result.width);
-            }
-
-            let remaining_height_for_weighted_children =
-                (available_height_for_children - total_height_of_unweighted_children).max(Px(0));
-            if total_weight_sum > 0.0 {
-                for &child_idx in &weighted_children_indices {
-                    let child_weight = child_weights[child_idx].unwrap_or(0.0);
-                    let allocated_height_for_child =
-                        Px((remaining_height_for_weighted_children.0 as f32
-                            * (child_weight / total_weight_sum)) as i32);
-                    let child_id = input.children_ids[child_idx];
-
-                    // Parent (column) offers its own effective width constraint.
-                    // Height is Fixed for weighted children.
-                    let parent_offered_constraint_for_child = Constraint::new(
-                        column_effective_constraint.width,
-                        DimensionValue::Fixed(allocated_height_for_child),
-                    );
-
-                    // measure_node will fetch the child's intrinsic constraint and merge it
-                    let child_result =
-                        input.measure_child(child_id, &parent_offered_constraint_for_child)?;
-
-                    children_sizes[child_idx] = Some(child_result);
-                    max_child_width = max_child_width.max(child_result.width);
-                }
-            }
-
-            let total_measured_children_height: Px = children_sizes
-                .iter()
-                .filter_map(|size_opt| size_opt.as_ref().map(|s| s.height))
-                .fold(Px(0), |acc, height| acc + height);
-
-            let final_column_height = match column_effective_constraint.height {
-                DimensionValue::Fixed(h) => h,
-                DimensionValue::Fill { max: Some(h), .. } => h,
-                DimensionValue::Wrap { min, max } => {
-                    let mut h = total_measured_children_height;
-                    if let Some(min_h) = min {
-                        h = h.max(min_h);
-                    }
-                    if let Some(max_h) = max {
-                        h = h.min(max_h);
-                    }
-                    h
-                }
-                _ => available_height_for_children,
-            };
-
-            // column's width is determined by its own effective constraint, or by wrapping content if no explicit max.
-            let final_column_width = match column_effective_constraint.width {
-                DimensionValue::Fixed(w) => w,
-                DimensionValue::Fill { max: Some(w), .. } => w,
-                DimensionValue::Wrap { min, max } => {
-                    let mut w = max_child_width;
-                    if let Some(min_w) = min {
-                        w = w.max(min_w);
-                    }
-                    if let Some(max_w) = max {
-                        w = w.min(max_w);
-                    }
-                    w
-                }
-                _ => max_child_width, // Fill { max: None } or Wrap { max: None } -> wraps content
-            };
-
-            place_children_with_alignment(
-                &children_sizes,
-                input.children_ids,
-                input.metadatas,
+            place_children_with_alignment(&PlaceChildrenArgs {
+                children_sizes: &children_sizes,
+                children_ids: input.children_ids,
+                metadatas: input.metadatas,
                 final_column_width,
                 final_column_height,
-                total_measured_children_height,
-                args.main_axis_alignment,
-                args.cross_axis_alignment,
-                N,
-            );
+                total_children_height: total_measured_children_height,
+                main_axis_alignment: args.main_axis_alignment,
+                cross_axis_alignment: args.cross_axis_alignment,
+                child_count: N,
+            });
 
             Ok(ComputedData {
                 width: final_column_width,
                 height: final_column_height,
             })
-        } else {
-            // Not using weight logic for height (column height is Wrap or Fill without max)
-            let mut total_children_measured_height = Px(0);
-
-            for i in 0..N {
-                let child_id = input.children_ids[i];
-
-                // Parent (column) offers its effective width and Wrap for height
-                let parent_offered_constraint_for_child = Constraint::new(
-                    column_effective_constraint.width,
-                    DimensionValue::Wrap {
-                        min: None,
-                        max: column_effective_constraint.height.get_max(),
-                    },
-                );
-
-                // measure_node will fetch the child's intrinsic constraint and merge it
-                let child_result =
-                    input.measure_child(child_id, &parent_offered_constraint_for_child)?;
-
-                children_sizes[i] = Some(child_result);
-                total_children_measured_height += child_result.height;
-                max_child_width = max_child_width.max(child_result.width);
-            }
-
-            // Determine column's final size based on its own constraints and content
-            let final_column_height = match column_effective_constraint.height {
-                DimensionValue::Fixed(h) => h,
-                DimensionValue::Fill { min, .. } => {
-                    // Max is None if here. Fill should use parent's max height.
-                    let mut h = input
-                        .parent_constraint
-                        .height
-                        .get_max()
-                        .unwrap_or(total_children_measured_height);
-                    if let Some(min_h) = min {
-                        h = h.max(min_h);
-                    }
-                    h
-                }
-                DimensionValue::Wrap { min, max } => {
-                    let mut h = total_children_measured_height;
-                    if let Some(min_h) = min {
-                        h = h.max(min_h);
-                    }
-                    if let Some(max_h) = max {
-                        h = h.min(max_h);
-                    }
-                    h
-                }
-            };
-
-            let final_column_width = match column_effective_constraint.width {
-                DimensionValue::Fixed(w) => w,
-                DimensionValue::Fill { min, max } => {
-                    let mut w = max_child_width;
-                    if let Some(min_w) = min {
-                        w = w.max(min_w);
-                    }
-                    if let Some(max_w) = max {
-                        w = w.min(max_w);
-                    }
-                    // column's own max for Fill
-                    // If Fill has no max, it behaves like Wrap for width determination
-                    else {
-                        w = max_child_width;
-                    }
-                    w
-                }
-                DimensionValue::Wrap { min, max } => {
-                    let mut w = max_child_width;
-                    if let Some(min_w) = min {
-                        w = w.max(min_w);
-                    }
-                    if let Some(max_w) = max {
-                        w = w.min(max_w);
-                    }
-                    w
-                }
-            };
-
-            place_children_with_alignment(
-                &children_sizes,
-                input.children_ids,
-                input.metadatas,
-                final_column_width,
-                final_column_height,
-                total_children_measured_height,
-                args.main_axis_alignment,
-                args.cross_axis_alignment,
-                N,
-            );
-
-            Ok(ComputedData {
-                width: final_column_width,
-                height: final_column_height,
-            })
-        }
-    }));
+        },
+    ));
 
     for child_closure in child_closures {
         child_closure();
     }
 }
 
-fn place_children_with_alignment(
-    children_sizes: &[Option<ComputedData>],
-    children_ids: &[tessera_ui::NodeId],
-    metadatas: &tessera_ui::ComponentNodeMetaDatas,
-    final_column_width: Px,
+/// Place measured children into the column according to main and cross axis alignment.
+///
+/// This helper computes the starting y position and spacing between children based on
+/// `MainAxisAlignment` variants (Start, Center, End, SpaceEvenly, SpaceBetween, SpaceAround)
+/// and aligns each child horizontally using `CrossAxisAlignment`. It calls `place_node` to
+/// record each child's layout position.
+///
+/// `args` contains measured child sizes, node ids, component metadata and final column size.
+fn place_children_with_alignment(args: &PlaceChildrenArgs) {
+    let (mut current_y, spacing_between_children) = calculate_main_axis_layout_for_column(
+        args.final_column_height,
+        args.total_children_height,
+        args.main_axis_alignment,
+        args.child_count,
+    );
+
+    for (i, child_size_opt) in args.children_sizes.iter().enumerate() {
+        if let Some(child_actual_size) = child_size_opt {
+            let child_id = args.children_ids[i];
+            let x_offset = calculate_cross_axis_offset_for_column(
+                child_actual_size,
+                args.final_column_width,
+                args.cross_axis_alignment,
+            );
+            place_node(
+                child_id,
+                PxPosition::new(x_offset, current_y),
+                args.metadatas,
+            );
+            current_y += child_actual_size.height;
+            if i < args.child_count - 1 {
+                current_y += spacing_between_children;
+            }
+        }
+    }
+}
+
+fn calculate_main_axis_layout_for_column(
     final_column_height: Px,
     total_children_height: Px,
     main_axis_alignment: MainAxisAlignment,
-    cross_axis_alignment: CrossAxisAlignment,
     child_count: usize,
-) {
+) -> (Px, Px) {
     let available_space = (final_column_height - total_children_height).max(Px(0));
-
-    let (mut current_y, spacing_between_children) = match main_axis_alignment {
+    match main_axis_alignment {
         MainAxisAlignment::Start => (Px(0), Px(0)),
         MainAxisAlignment::Center => (available_space / 2, Px(0)),
         MainAxisAlignment::End => (available_space, Px(0)),
@@ -436,29 +522,19 @@ fn place_children_with_alignment(
                 (Px(0), Px(0))
             }
         }
-    };
+    }
+}
 
-    for (i, child_size_opt) in children_sizes.iter().enumerate() {
-        if let Some(child_actual_size) = child_size_opt {
-            let child_id = children_ids[i];
-
-            let x_offset = match cross_axis_alignment {
-                CrossAxisAlignment::Start => Px(0),
-                CrossAxisAlignment::Center => {
-                    (final_column_width - child_actual_size.width).max(Px(0)) / 2
-                }
-                CrossAxisAlignment::End => {
-                    (final_column_width - child_actual_size.width).max(Px(0))
-                }
-                CrossAxisAlignment::Stretch => Px(0),
-            };
-
-            place_node(child_id, PxPosition::new(x_offset, current_y), metadatas);
-            current_y += child_actual_size.height;
-            if i < child_count - 1 {
-                current_y += spacing_between_children;
-            }
-        }
+fn calculate_cross_axis_offset_for_column(
+    child_actual_size: &ComputedData,
+    final_column_width: Px,
+    cross_axis_alignment: CrossAxisAlignment,
+) -> Px {
+    match cross_axis_alignment {
+        CrossAxisAlignment::Start => Px(0),
+        CrossAxisAlignment::Center => (final_column_width - child_actual_size.width).max(Px(0)) / 2,
+        CrossAxisAlignment::End => (final_column_width - child_actual_size.width).max(Px(0)),
+        CrossAxisAlignment::Stretch => Px(0),
     }
 }
 

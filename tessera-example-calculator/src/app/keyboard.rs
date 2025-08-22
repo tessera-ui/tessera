@@ -29,190 +29,215 @@ pub fn keyboard(app_state: Arc<AppState>, style: CalStyle) {
         || spacer_v(),
         {
             let app_state = app_state.clone();
-            (
-                move || {
-                    row_ui!(
-                        RowArgsBuilder::default()
-                            .width(DimensionValue::FILLED)
-                            .height(DimensionValue::FILLED)
-                            .build()
-                            .unwrap(),
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("C", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("<-", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                    )
-                },
-                1.0,
-            )
+            (move || row_top(app_state.clone(), style), 1.0)
         },
         || spacer_v(),
         {
             let app_state = app_state.clone();
-            (
-                move || {
-                    row_ui!(
-                        RowArgsBuilder::default()
-                            .width(DimensionValue::FILLED)
-                            .height(DimensionValue::FILLED)
-                            .build()
-                            .unwrap(),
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("1", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("2", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("3", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("*", state, style), 1.0)
-                        },
-                        || spacer_h()
-                    )
-                },
-                1.0,
-            )
+            (move || row_1(app_state.clone(), style), 1.0)
         },
         || spacer_v(),
         {
             let app_state = app_state.clone();
-            (
-                move || {
-                    row_ui!(
-                        RowArgsBuilder::default()
-                            .width(DimensionValue::FILLED)
-                            .height(DimensionValue::FILLED)
-                            .build()
-                            .unwrap(),
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("4", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("5", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("6", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("-", state, style), 1.0)
-                        },
-                        || spacer_h()
-                    )
-                },
-                1.0,
-            )
+            (move || row_2(app_state.clone(), style), 1.0)
         },
         || spacer_v(),
         {
             let app_state = app_state.clone();
-            (
-                move || {
-                    row_ui!(
-                        RowArgsBuilder::default()
-                            .width(DimensionValue::FILLED)
-                            .height(DimensionValue::FILLED)
-                            .build()
-                            .unwrap(),
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("7", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("8", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("9", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("+", state, style), 1.0)
-                        },
-                        || spacer_h()
-                    )
-                },
-                1.0,
-            )
+            (move || row_3(app_state.clone(), style), 1.0)
         },
         || spacer_v(),
         {
             let app_state = app_state.clone();
-            (
-                move || {
-                    row_ui!(
-                        RowArgsBuilder::default()
-                            .width(DimensionValue::FILLED)
-                            .height(DimensionValue::FILLED)
-                            .build()
-                            .unwrap(),
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("0", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key(".", state, style), 1.0)
-                        },
-                        || spacer_h(),
-                        {
-                            let state = app_state.clone();
-                            (move || num_key("/", state, style), 1.0)
-                        },
-                        || spacer_h()
-                    )
-                },
-                1.0,
-            )
+            (move || row_4(app_state.clone(), style), 1.0)
         },
         || spacer_v()
     )
+}
+
+fn row_top(app_state: Arc<AppState>, style: CalStyle) {
+    row_ui!(
+        RowArgsBuilder::default()
+            .width(DimensionValue::FILLED)
+            .height(DimensionValue::FILLED)
+            .build()
+            .unwrap(),
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("C", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("<-", state, style), 1.0)
+        },
+        || spacer_h(),
+    )
+}
+
+fn row_1(app_state: Arc<AppState>, style: CalStyle) {
+    row_ui!(
+        RowArgsBuilder::default()
+            .width(DimensionValue::FILLED)
+            .height(DimensionValue::FILLED)
+            .build()
+            .unwrap(),
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("1", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("2", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("3", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("*", state, style), 1.0)
+        },
+        || spacer_h()
+    )
+}
+
+fn row_2(app_state: Arc<AppState>, style: CalStyle) {
+    row_ui!(
+        RowArgsBuilder::default()
+            .width(DimensionValue::FILLED)
+            .height(DimensionValue::FILLED)
+            .build()
+            .unwrap(),
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("4", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("5", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("6", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("-", state, style), 1.0)
+        },
+        || spacer_h()
+    )
+}
+
+fn row_3(app_state: Arc<AppState>, style: CalStyle) {
+    row_ui!(
+        RowArgsBuilder::default()
+            .width(DimensionValue::FILLED)
+            .height(DimensionValue::FILLED)
+            .build()
+            .unwrap(),
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("7", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("8", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("9", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("+", state, style), 1.0)
+        },
+        || spacer_h()
+    )
+}
+
+fn row_4(app_state: Arc<AppState>, style: CalStyle) {
+    row_ui!(
+        RowArgsBuilder::default()
+            .width(DimensionValue::FILLED)
+            .height(DimensionValue::FILLED)
+            .build()
+            .unwrap(),
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("0", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure(".", state, style), 1.0)
+        },
+        || spacer_h(),
+        {
+            let state = app_state.clone();
+            (make_num_closure("/", state, style), 1.0)
+        },
+        || spacer_h()
+    )
+}
+
+fn make_on_click(key: &'static str, app_state: Arc<AppState>) -> Arc<dyn Fn() + Send + Sync> {
+    // helper to produce the on_click handler; extracted to keep `num_key` concise
+    let key_owned = key.to_string();
+    let app_state = app_state.clone();
+    Arc::new(move || match key_owned.as_str() {
+        "C" => {
+            app_state.expr.write().clear();
+            app_state.result.write().clone_from(&0.0);
+        }
+        "<-" => {
+            let mut expr = app_state.expr.write();
+            expr.pop();
+        }
+        _ => {
+            let mut expr = app_state.expr.write();
+            expr.push_str(key_owned.as_str());
+        }
+    })
+}
+
+/// Returns a simple zero-argument closure that calls `num_key` with the provided parameters.
+/// This reduces repetition in `keyboard` where many identical closure wrappers were used.
+fn make_num_closure(key: &'static str, state: Arc<AppState>, style: CalStyle) -> impl Fn() {
+    let key = key;
+    let state = state;
+    let style = style;
+    // Clone the Arc inside the closure so the closure does not move out of the captured variable.
+    move || num_key(key, state.clone(), style)
 }
 
 #[tessera]
@@ -221,28 +246,17 @@ fn num_key(key: &'static str, app_state: Arc<AppState>, style: CalStyle) {
         return;
     }
 
+    let key_str = key.to_string();
     let ripple_state = app_state
         .ripple_states
-        .entry(key.to_string())
+        .entry(key_str.clone())
         .or_default()
         .clone();
 
-    let on_click = {
-        let app_state = app_state.clone();
-        Arc::new(move || match key {
-            "C" => {
-                app_state.expr.write().clear();
-                app_state.result.write().clone_from(&0.0);
-            }
-            "<-" => {
-                let mut expr = app_state.expr.write();
-                expr.pop();
-            }
-            _ => {
-                let mut expr = app_state.expr.write();
-                expr.push_str(key);
-            }
-        })
+    let on_click = make_on_click(key, app_state.clone());
+
+    let content_closure = move || {
+        key_content(key);
     };
 
     match style {
@@ -258,9 +272,7 @@ fn num_key(key: &'static str, app_state: Arc<AppState>, style: CalStyle) {
                     .build()
                     .unwrap(),
                 ripple_state,
-                move || {
-                    key_content(key);
-                },
+                content_closure,
             );
         }
         CalStyle::Material => {
@@ -274,9 +286,7 @@ fn num_key(key: &'static str, app_state: Arc<AppState>, style: CalStyle) {
                     .build()
                     .unwrap(),
                 ripple_state,
-                move || {
-                    key_content(key);
-                },
+                content_closure,
             );
         }
     }

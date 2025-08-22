@@ -137,7 +137,62 @@ impl DrawCommand for FluidGlassCommand {
     }
 }
 
-#[tessera]
+// Helper: state handler logic extracted to reduce complexity of `fluid_glass`
+// These helpers operate on the injected StateHandlerInput type from the core crate.
+fn handle_click_state(
+    args: &FluidGlassArgs,
+    ripple_state: Option<Arc<RippleState>>,
+    on_click: Arc<dyn Fn() + Send + Sync>,
+    input: &mut tessera_ui::StateHandlerInput,
+) {
+    let size = input.computed_data;
+    let cursor_pos_option = input.cursor_position_rel;
+    let is_cursor_in = cursor_pos_option
+        .map(|pos| is_position_in_component(size, pos))
+        .unwrap_or(false);
+
+    if is_cursor_in {
+        input.requests.cursor_icon = CursorIcon::Pointer;
+
+        if let Some(_event) = input.cursor_events.iter().find(|e| {
+            matches!(
+                e.content,
+                CursorEventContent::Released(PressKeyEventType::Left)
+            )
+        }) {
+            if let Some(ripple_state) = &ripple_state {
+                if let Some(pos) = input.cursor_position_rel {
+                    let size = input.computed_data;
+                    let normalized_pos = [
+                        pos.x.to_f32() / size.width.to_f32(),
+                        pos.y.to_f32() / size.height.to_f32(),
+                    ];
+                    ripple_state.start_animation(normalized_pos);
+                }
+            }
+            on_click();
+        }
+
+        if args.block_input {
+            // Consume all input events to prevent interaction with underlying components
+            input.block_all();
+        }
+    }
+}
+
+fn handle_block_input(input: &mut tessera_ui::StateHandlerInput) {
+    let size = input.computed_data;
+    let cursor_pos_option = input.cursor_position_rel;
+    let is_cursor_in = cursor_pos_option
+        .map(|pos| is_position_in_component(size, pos))
+        .unwrap_or(false);
+
+    if is_cursor_in {
+        // Consume all input events to prevent interaction with underlying components
+        input.block_all();
+    }
+}
+
 /// Creates a fluid glass effect component, which serves as a dynamic and visually appealing background.
 ///
 /// The `fluid_glass` component simulates the look of frosted or distorted glass with a fluid,
@@ -169,6 +224,7 @@ impl DrawCommand for FluidGlassCommand {
 ///
 /// * `child` - A closure that defines the child components to be rendered on top of the glass surface.
 ///   These children will be contained within the bounds of the `fluid_glass` component.
+#[tessera]
 pub fn fluid_glass(
     mut args: FluidGlassArgs,
     ripple_state: Option<Arc<RippleState>>,
@@ -286,55 +342,23 @@ pub fn fluid_glass(
         Ok(ComputedData { width, height })
     }));
 
-    if let Some(on_click) = args.on_click {
+    if let Some(ref on_click) = args.on_click {
         let ripple_state = ripple_state.clone();
-        state_handler(Box::new(move |mut input| {
-            let size = input.computed_data;
-            let cursor_pos_option = input.cursor_position_rel;
-            let is_cursor_in = cursor_pos_option
-                .map(|pos| is_position_in_component(size, pos))
-                .unwrap_or(false);
-
-            if is_cursor_in {
-                input.requests.cursor_icon = CursorIcon::Pointer;
-
-                if let Some(_event) = input.cursor_events.iter().find(|e| {
-                    matches!(
-                        e.content,
-                        CursorEventContent::Released(PressKeyEventType::Left)
-                    )
-                }) {
-                    if let Some(ripple_state) = &ripple_state {
-                        if let Some(pos) = input.cursor_position_rel {
-                            let size = input.computed_data;
-                            let normalized_pos = [
-                                pos.x.to_f32() / size.width.to_f32(),
-                                pos.y.to_f32() / size.height.to_f32(),
-                            ];
-                            ripple_state.start_animation(normalized_pos);
-                        }
-                    }
-                    on_click();
-                }
-
-                if args.block_input {
-                    // Consume all input events to prevent interaction with underlying components
-                    input.block_all();
-                }
-            }
+        let on_click_arc = on_click.clone();
+        let args_for_handler = args.clone();
+        state_handler(Box::new(move |mut input: tessera_ui::StateHandlerInput| {
+            // Delegate to extracted helper to reduce closure complexity.
+            handle_click_state(
+                &args_for_handler,
+                ripple_state.clone(),
+                on_click_arc.clone(),
+                &mut input,
+            );
         }));
     } else if args.block_input {
-        state_handler(Box::new(move |mut input| {
-            let size = input.computed_data;
-            let cursor_pos_option = input.cursor_position_rel;
-            let is_cursor_in = cursor_pos_option
-                .map(|pos| is_position_in_component(size, pos))
-                .unwrap_or(false);
-
-            if is_cursor_in {
-                // Consume all input events to prevent interaction with underlying components
-                input.block_all();
-            }
+        state_handler(Box::new(move |mut input: tessera_ui::StateHandlerInput| {
+            // Delegate to extracted helper for input blocking behavior.
+            handle_block_input(&mut input);
         }));
     }
 }

@@ -487,6 +487,28 @@ fn scrollable_with_overlay_scrollbar(
     );
 }
 
+// Helpers to resolve DimensionValue into concrete Px sizes.
+// This reduces duplication in the measurement code and lowers cyclomatic complexity.
+fn clamp_wrap(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
+    min.unwrap_or(Px(0))
+        .max(measure)
+        .min(max.unwrap_or(Px::MAX))
+}
+
+fn fill_value(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
+    max.expect("Seems that you are trying to fill an infinite dimension, which is not allowed")
+        .max(measure)
+        .max(min.unwrap_or(Px(0)))
+}
+
+fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
+    match dim {
+        DimensionValue::Fixed(v) => v,
+        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, measure),
+        DimensionValue::Fill { min, max } => fill_value(min, max, measure),
+    }
+}
+
 #[tessera]
 fn scrollable_inner(
     args: impl Into<ScrollableArgs>,
@@ -538,35 +560,11 @@ fn scrollable_inner(
 
             // Place child at current interpolated position
             input.place_child(child_node_id, current_child_position);
-            // Calculate the size of the scrollable area
-            let width = match merged_constraint.width {
-                DimensionValue::Fixed(w) => w,
-                DimensionValue::Wrap { min, max } => {
-                    let mut width = child_measurement.width;
-                    if let Some(min_width) = min {
-                        width = width.max(min_width);
-                    }
-                    if let Some(max_width) = max {
-                        width = width.min(max_width);
-                    }
-                    width
-                }
-                DimensionValue::Fill { min: _, max } => max.unwrap(),
-            };
-            let height = match merged_constraint.height {
-                DimensionValue::Fixed(h) => h,
-                DimensionValue::Wrap { min, max } => {
-                    let mut height = child_measurement.height;
-                    if let Some(min_height) = min {
-                        height = height.max(min_height)
-                    }
-                    if let Some(max_height) = max {
-                        height = height.min(max_height)
-                    }
-                    height
-                }
-                DimensionValue::Fill { min: _, max } => max.unwrap(),
-            };
+
+            // Calculate the size of the scrollable area using helpers to reduce inline branching
+            let width = resolve_dimension(merged_constraint.width, child_measurement.width);
+            let height = resolve_dimension(merged_constraint.height, child_measurement.height);
+
             // Pack the size into ComputedData
             let computed_data = ComputedData { width, height };
             // Update the visible size in the state
@@ -662,7 +660,19 @@ fn scrollable_inner(
     child();
 }
 
-/// Constrains a position to stay within the scrollable bounds
+/// Constrains a position to stay within the scrollable bounds.
+///
+/// Split per-axis logic into a helper to simplify reasoning and reduce cyclomatic complexity.
+fn constrain_axis(pos: Px, child_len: Px, container_len: Px) -> Px {
+    if pos > Px::ZERO {
+        Px::ZERO
+    } else if pos.saturating_add(child_len) < container_len {
+        container_len.saturating_sub(child_len)
+    } else {
+        pos
+    }
+}
+
 fn constrain_position(
     position: PxPosition,
     child_size: &ComputedData,
@@ -670,36 +680,17 @@ fn constrain_position(
     vertical_scrollable: bool,
     horizontal_scrollable: bool,
 ) -> PxPosition {
-    let mut constrained = position;
-
-    // Only apply constraints for scrollable directions
-    if horizontal_scrollable {
-        // Check if left edge of the child is out of bounds
-        if constrained.x > Px::ZERO {
-            constrained.x = Px::ZERO;
-        }
-        // Check if right edge of the child is out of bounds
-        if constrained.x.saturating_add(child_size.width) < container_size.width {
-            constrained.x = container_size.width.saturating_sub(child_size.width);
-        }
+    let x = if horizontal_scrollable {
+        constrain_axis(position.x, child_size.width, container_size.width)
     } else {
-        // Not horizontally scrollable, keep at zero
-        constrained.x = Px::ZERO;
-    }
+        Px::ZERO
+    };
 
-    if vertical_scrollable {
-        // Check if top edge of the child is out of bounds
-        if constrained.y > Px::ZERO {
-            constrained.y = Px::ZERO;
-        }
-        // Check if bottom edge of the child is out of bounds
-        if constrained.y.saturating_add(child_size.height) < container_size.height {
-            constrained.y = container_size.height.saturating_sub(child_size.height);
-        }
+    let y = if vertical_scrollable {
+        constrain_axis(position.y, child_size.height, container_size.height)
     } else {
-        // Not vertically scrollable, keep at zero
-        constrained.y = Px::ZERO;
-    }
+        Px::ZERO
+    };
 
-    constrained
+    PxPosition { x, y }
 }

@@ -53,18 +53,80 @@ pub struct CheckmarkPipeline {
 
 impl CheckmarkPipeline {
     pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
-        let shader = gpu.create_shader_module(include_wgsl!("checkmark.wgsl"));
+        // Keep the constructor concise by delegating creation details to small helpers.
+        let shader = Self::create_shader_module(gpu);
+        let uniform_buffer = Self::create_uniform_buffer(gpu);
+        let bind_group_layout = Self::create_bind_group_layout(gpu);
+        let bind_group = Self::create_bind_group(gpu, &bind_group_layout, &uniform_buffer);
+        let pipeline_layout = Self::create_pipeline_layout(gpu, &bind_group_layout);
+        let pipeline = Self::create_pipeline(gpu, &shader, &pipeline_layout, config, sample_count);
+        let (vertex_buffer, index_buffer) = Self::create_buffers(gpu);
 
-        // Create uniform buffer
-        let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
+        Self {
+            pipeline,
+            uniform_buffer,
+            bind_group,
+            vertex_buffer,
+            index_buffer,
+            uniform_staging_buffer: vec![0; CheckmarkUniforms::min_size().get() as usize],
+        }
+    }
+}
+
+/// Small helpers extracted to simplify `draw` and reduce function length/complexity.
+impl CheckmarkPipeline {
+    fn update_uniforms(&mut self, gpu_queue: &wgpu::Queue, uniforms: &CheckmarkUniforms) {
+        let mut buffer = UniformBuffer::new(&mut self.uniform_staging_buffer);
+        buffer
+            .write(uniforms)
+            .expect("Failed to write checkmark uniforms");
+        gpu_queue.write_buffer(&self.uniform_buffer, 0, &self.uniform_staging_buffer);
+    }
+
+    fn update_vertices_for(
+        &mut self,
+        gpu_queue: &wgpu::Queue,
+        ndc_pos: [f32; 2],
+        ndc_size: [f32; 2],
+    ) {
+        let vertices = [
+            CheckmarkVertex {
+                position: [ndc_pos[0], ndc_pos[1] - ndc_size[1], 0.0],
+                uv: [0.0, 1.0],
+            },
+            CheckmarkVertex {
+                position: [ndc_pos[0] + ndc_size[0], ndc_pos[1] - ndc_size[1], 0.0],
+                uv: [1.0, 1.0],
+            },
+            CheckmarkVertex {
+                position: [ndc_pos[0] + ndc_size[0], ndc_pos[1], 0.0],
+                uv: [1.0, 0.0],
+            },
+            CheckmarkVertex {
+                position: [ndc_pos[0], ndc_pos[1], 0.0],
+                uv: [0.0, 0.0],
+            },
+        ];
+
+        gpu_queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+    }
+
+    // Below are small factory helpers to keep `new` focused and short.
+    fn create_shader_module(gpu: &wgpu::Device) -> wgpu::ShaderModule {
+        gpu.create_shader_module(include_wgsl!("checkmark.wgsl"))
+    }
+
+    fn create_uniform_buffer(gpu: &wgpu::Device) -> wgpu::Buffer {
+        gpu.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Checkmark Uniform Buffer"),
             size: CheckmarkUniforms::min_size().get(),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        })
+    }
 
-        // Create bind group layout
-        let bind_group_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    fn create_bind_group_layout(gpu: &wgpu::Device) -> wgpu::BindGroupLayout {
+        gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Checkmark Bind Group Layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -76,37 +138,53 @@ impl CheckmarkPipeline {
                 },
                 count: None,
             }],
-        });
+        })
+    }
 
-        // Create bind group
-        let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
+    fn create_bind_group(
+        gpu: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        uniform_buffer: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
+        gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Checkmark Bind Group"),
-            layout: &bind_group_layout,
+            layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: uniform_buffer.as_entire_binding(),
             }],
-        });
+        })
+    }
 
-        // Create render pipeline layout
-        let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+    fn create_pipeline_layout(
+        gpu: &wgpu::Device,
+        bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::PipelineLayout {
+        gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Checkmark Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[bind_group_layout],
             push_constant_ranges: &[],
-        });
+        })
+    }
 
-        // Create render pipeline
-        let pipeline = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    fn create_pipeline(
+        gpu: &wgpu::Device,
+        shader: &wgpu::ShaderModule,
+        pipeline_layout: &wgpu::PipelineLayout,
+        config: &wgpu::SurfaceConfiguration,
+        sample_count: u32,
+    ) -> wgpu::RenderPipeline {
+        gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Checkmark Pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &shader,
+                module: shader,
                 entry_point: Some("vs_main"),
                 buffers: &[CheckmarkVertex::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader,
+                module: shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
@@ -132,8 +210,10 @@ impl CheckmarkPipeline {
             },
             multiview: None,
             cache: None,
-        });
+        })
+    }
 
+    fn create_buffers(gpu: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer) {
         // Create quad vertices (two triangles forming a rectangle)
         let vertices = [
             CheckmarkVertex {
@@ -168,14 +248,7 @@ impl CheckmarkPipeline {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        Self {
-            pipeline,
-            uniform_buffer,
-            bind_group,
-            vertex_buffer,
-            index_buffer,
-            uniform_staging_buffer: vec![0; CheckmarkUniforms::min_size().get() as usize],
-        }
+        (vertex_buffer, index_buffer)
     }
 }
 
@@ -211,35 +284,11 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
                 padding: command.padding.into(),
             };
 
-            // Update uniform buffer using the staging buffer
-            {
-                let mut buffer = UniformBuffer::new(&mut self.uniform_staging_buffer);
-                buffer.write(&uniforms).unwrap();
-            }
-            gpu_queue.write_buffer(&self.uniform_buffer, 0, &self.uniform_staging_buffer);
+            // Update uniform buffer
+            self.update_uniforms(gpu_queue, &uniforms);
 
-            // Update vertex positions to match the actual position and size
-            let vertices = [
-                CheckmarkVertex {
-                    position: [ndc_pos[0], ndc_pos[1] - ndc_size[1], 0.0],
-                    uv: [0.0, 1.0],
-                },
-                CheckmarkVertex {
-                    position: [ndc_pos[0] + ndc_size[0], ndc_pos[1] - ndc_size[1], 0.0],
-                    uv: [1.0, 1.0],
-                },
-                CheckmarkVertex {
-                    position: [ndc_pos[0] + ndc_size[0], ndc_pos[1], 0.0],
-                    uv: [1.0, 0.0],
-                },
-                CheckmarkVertex {
-                    position: [ndc_pos[0], ndc_pos[1], 0.0],
-                    uv: [0.0, 0.0],
-                },
-            ];
-
-            // Update vertex buffer
-            gpu_queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+            // Update vertex positions
+            self.update_vertices_for(gpu_queue, ndc_pos, ndc_size);
 
             // Set pipeline and draw
             render_pass.draw_indexed(0..6, 0, 0..1);

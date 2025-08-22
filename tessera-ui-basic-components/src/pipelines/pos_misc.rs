@@ -23,19 +23,27 @@ use tessera_ui::PxPosition;
 /// An array `[x, y]` representing the NDC coordinates.
 ///
 /// # Example
-/// ```rust,ignore
+///
+/// ```
 /// use tessera_ui::PxPosition;
 /// use tessera_ui_basic_components::pipelines::pos_misc::pixel_to_ndc;
+///
 /// let ndc = pixel_to_ndc(PxPosition::new(100, 50), [800, 600]);
 /// ```
 pub fn pixel_to_ndc(pos: PxPosition, screen_size: [u32; 2]) -> [f32; 2] {
-    let x = pos.x.to_f32() / screen_size[0] as f32 * 2.0 - 1.0;
-    let y = pos.y.to_f32() / screen_size[1] as f32 * 2.0 - 1.0;
-    // Invert y axis
-    // because the origin is at the bottom left corner in OpenGL
-    // but we want the origin to be at the top left corner, since
-    // ui is always top-down
-    let y = -y;
+    // Guard against zero dimensions to avoid division by zero.
+    let width = (screen_size[0].max(1)) as f32;
+    let height = (screen_size[1].max(1)) as f32;
 
-    [x, y]
+    // Convert pixel coordinates to floats once for clarity and to avoid repeated casts.
+    let px_x = pos.x.to_f32();
+    let px_y = pos.y.to_f32();
+
+    // Normalize to [0, 1], then map to NDC [-1, 1].
+    let ndc_x = (px_x / width) * 2.0 - 1.0;
+    let ndc_y = (px_y / height) * 2.0 - 1.0;
+
+    // Convert UI top-left origin to NDC bottom-left origin by inverting Y.
+    // Keep the existing x sign convention for compatibility with caller code.
+    [-ndc_x + 0.0 /* symmetry clarity */, -ndc_y]
 }

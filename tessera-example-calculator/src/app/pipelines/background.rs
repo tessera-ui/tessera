@@ -140,6 +140,21 @@ impl DrawablePipeline<BackgroundCommand> for BackgroundPipeline {
 
 static START_AT: OnceLock<Instant> = OnceLock::new();
 
+/// Resolve a DimensionValue into a concrete Px value, using sensible defaults
+/// for Wrap/Fill when max is not provided.
+fn resolve_dimension(value: &DimensionValue) -> Px {
+    match value {
+        DimensionValue::Fixed(v) => *v,
+        DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
+        DimensionValue::Fill { max, .. } => max.unwrap_or(Px(0)),
+    }
+}
+
+/// Return the elapsed time in seconds since the pipeline started.
+fn current_time() -> f32 {
+    START_AT.get_or_init(Instant::now).elapsed().as_secs_f32()
+}
+
 #[tessera]
 pub fn background(child: impl FnOnce(), style: CalStyle) {
     match style {
@@ -147,18 +162,10 @@ pub fn background(child: impl FnOnce(), style: CalStyle) {
             child();
 
             measure(Box::new(move |input| {
-                let width = match input.parent_constraint.width {
-                    DimensionValue::Fixed(v) => v,
-                    DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
-                    DimensionValue::Fill { max, .. } => max.unwrap_or(Px(0)),
-                };
-                let height = match input.parent_constraint.height {
-                    DimensionValue::Fixed(v) => v,
-                    DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
-                    DimensionValue::Fill { max, .. } => max.unwrap_or(Px(0)),
-                };
+                let width = resolve_dimension(&input.parent_constraint.width);
+                let height = resolve_dimension(&input.parent_constraint.height);
 
-                let time = START_AT.get_or_init(Instant::now).elapsed().as_secs_f32();
+                let time = current_time();
 
                 input
                     .metadata_mut()

@@ -69,6 +69,181 @@ impl BottomSheetProviderState {
     }
 }
 
+/// Compute eased progress from an optional timer reference.
+fn calc_progress_from_timer(timer: Option<&Instant>) -> f32 {
+    let raw = match timer {
+        None => 1.0,
+        Some(t) => {
+            let elapsed = t.elapsed();
+            if elapsed >= ANIM_TIME {
+                1.0
+            } else {
+                elapsed.as_secs_f32() / ANIM_TIME.as_secs_f32()
+            }
+        }
+    };
+    animation::easing(raw)
+}
+
+/// Compute blur radius for glass style.
+fn blur_radius_for(progress: f32, is_open: bool, max_blur_radius: f32) -> f32 {
+    if is_open {
+        progress * max_blur_radius
+    } else {
+        max_blur_radius * (1.0 - progress)
+    }
+}
+
+/// Compute scrim alpha for material style.
+fn scrim_alpha_for(progress: f32, is_open: bool) -> f32 {
+    if is_open {
+        progress * 0.5
+    } else {
+        0.5 * (1.0 - progress)
+    }
+}
+
+/// Compute Y position for bottom sheet placement.
+fn compute_bottom_sheet_y(
+    parent_height: Px,
+    child_height: Px,
+    progress: f32,
+    is_open: bool,
+) -> i32 {
+    let parent = parent_height.0 as f32;
+    let child = child_height.0 as f32;
+    let y = if is_open {
+        parent - child * progress
+    } else {
+        parent - child * (1.0 - progress)
+    };
+    y as i32
+}
+
+fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
+    // Glass scrim: compute blur radius and render using fluid_glass.
+    let max_blur_radius = 50.0;
+    let blur_radius = blur_radius_for(progress, is_open, max_blur_radius);
+    fluid_glass(
+        FluidGlassArgsBuilder::default()
+            .on_click(args.on_close_request.clone())
+            .tint_color(Color::TRANSPARENT)
+            .width(DimensionValue::Fill {
+                min: None,
+                max: None,
+            })
+            .height(DimensionValue::Fill {
+                min: None,
+                max: None,
+            })
+            .dispersion_height(0.0)
+            .refraction_height(0.0)
+            .block_input(true)
+            .blur_radius(blur_radius)
+            .border(None)
+            .shape(Shape::RoundedRectangle {
+                top_left: 0.0,
+                top_right: 0.0,
+                bottom_right: 0.0,
+                bottom_left: 0.0,
+                g2_k_value: 3.0,
+            })
+            .noise_amount(0.0)
+            .build()
+            .unwrap(),
+        None,
+        || {},
+    );
+}
+
+fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
+    // Material scrim: compute alpha and render a simple dark surface.
+    let scrim_alpha = scrim_alpha_for(progress, is_open);
+    surface(
+        SurfaceArgsBuilder::default()
+            .color(Color::BLACK.with_alpha(scrim_alpha))
+            .on_click(Some(args.on_close_request.clone()))
+            .width(DimensionValue::Fill {
+                min: None,
+                max: None,
+            })
+            .height(DimensionValue::Fill {
+                min: None,
+                max: None,
+            })
+            .block_input(true)
+            .build()
+            .unwrap(),
+        None,
+        || {},
+    );
+}
+
+/// Render scrim according to configured style.
+/// Delegates actual rendering to small, focused helpers to keep the
+/// main API surface concise and improve readability.
+fn render_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
+    match args.style {
+        BottomSheetStyle::Glass => render_glass_scrim(args, progress, is_open),
+        BottomSheetStyle::Material => render_material_scrim(args, progress, is_open),
+    }
+}
+
+/// Snapshot provider state to reduce lock duration and centralize access.
+fn snapshot_state(state: &Arc<RwLock<BottomSheetProviderState>>) -> (bool, Option<Instant>) {
+    let s = state.read();
+    (s.is_open, s.timer)
+}
+
+/// Create the keyboard handler closure used to close the sheet on Escape.
+fn make_keyboard_closure(
+    on_close: Arc<dyn Fn() + Send + Sync>,
+) -> Box<dyn Fn(tessera_ui::StateHandlerInput<'_>) + Send + Sync> {
+    Box::new(move |input: tessera_ui::StateHandlerInput<'_>| {
+        for event in input.keyboard_events.drain(..) {
+            if event.state == winit::event::ElementState::Pressed {
+                if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
+                    event.physical_key
+                {
+                    (on_close)();
+                }
+            }
+        }
+    })
+}
+
+/// Place bottom sheet if present. Extracted to reduce complexity of the parent function.
+fn place_bottom_sheet_if_present(
+    input: &tessera_ui::MeasureInput<'_>,
+    state_for_measure: &Arc<RwLock<BottomSheetProviderState>>,
+    progress: f32,
+) {
+    if input.children_ids.len() <= 2 {
+        return;
+    }
+
+    let bottom_sheet_id = input.children_ids[2];
+
+    let child_size = match input.measure_child(
+        bottom_sheet_id,
+        &Constraint::new(
+            input.parent_constraint.width,
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
+        ),
+    ) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let parent_height = input.parent_constraint.height.get_max().unwrap_or(Px(0));
+    let current_is_open = state_for_measure.read().is_open;
+    let y = compute_bottom_sheet_y(parent_height, child_size.height, progress, current_is_open);
+    input.place_child(bottom_sheet_id, PxPosition::new(Px(0), Px(y as i32)));
+}
+
 #[tessera]
 pub fn bottom_sheet_provider(
     args: BottomSheetProviderArgs,
@@ -76,150 +251,52 @@ pub fn bottom_sheet_provider(
     main_content: impl FnOnce() + Send + Sync + 'static,
     bottom_sheet_content: impl FnOnce(f32) + Send + Sync + 'static,
 ) {
+    // Render main content first.
     main_content();
 
-    if state.read().is_open
-        || state
-            .read()
-            .timer
-            .is_some_and(|timer| timer.elapsed() < ANIM_TIME)
-    {
-        let on_close_for_keyboard = args.on_close_request.clone();
+    // Snapshot state once to minimize locking overhead.
+    let (is_open, timer_opt) = snapshot_state(&state);
 
-        let progress = animation::easing(state.read().timer.as_ref().map_or(1.0, |timer| {
-            let elapsed = timer.elapsed();
-            if elapsed >= ANIM_TIME {
-                1.0
-            } else {
-                elapsed.as_secs_f32() / ANIM_TIME.as_secs_f32()
-            }
-        }));
+    // Fast exit when nothing to render.
+    if !(is_open || timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME)) {
+        return;
+    }
 
-        match args.style {
-            BottomSheetStyle::Glass => {
-                let max_blur_radius = 50.0;
-                let blur_radius = if state.read().is_open {
-                    progress * max_blur_radius
-                } else {
-                    max_blur_radius * (1.0 - progress)
-                };
-                fluid_glass(
-                    FluidGlassArgsBuilder::default()
-                        .on_click(args.on_close_request)
-                        .tint_color(Color::TRANSPARENT)
-                        .width(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
-                        .height(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
-                        .dispersion_height(0.0)
-                        .refraction_height(0.0)
-                        .block_input(true)
-                        .blur_radius(blur_radius)
-                        .border(None)
-                        .shape(Shape::RoundedRectangle {
-                            top_left: 0.0,
-                            top_right: 0.0,
-                            bottom_right: 0.0,
-                            bottom_left: 0.0,
-                            g2_k_value: 3.0,
-                        })
-                        .noise_amount(0.0)
-                        .build()
-                        .unwrap(),
-                    None,
-                    || {},
-                );
-            }
-            BottomSheetStyle::Material => {
-                let scrim_alpha = if state.read().is_open {
-                    progress * 0.5
-                } else {
-                    0.5 * (1.0 - progress)
-                };
-                surface(
-                    SurfaceArgsBuilder::default()
-                        .color(Color::BLACK.with_alpha(scrim_alpha))
-                        .on_click(Some(args.on_close_request))
-                        .width(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
-                        .height(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
-                        .block_input(true)
-                        .build()
-                        .unwrap(),
-                    None,
-                    || {},
-                );
-            }
+    // Prepare values used by rendering and placement.
+    let on_close_for_keyboard = args.on_close_request.clone();
+    let progress = calc_progress_from_timer(timer_opt.as_ref());
+
+    // Render the configured scrim.
+    render_scrim(&args, progress, is_open);
+
+    // Register keyboard handler (close on Escape).
+    let keyboard_closure = make_keyboard_closure(on_close_for_keyboard);
+    state_handler(keyboard_closure);
+
+    // Render bottom sheet content with computed alpha.
+    let content_alpha = if is_open { progress } else { 1.0 - progress };
+    bottom_sheet_content(content_alpha);
+
+    // Measurement: place main content, scrim and bottom sheet.
+    let state_for_measure = state.clone();
+    let measure_closure = Box::new(move |input: &tessera_ui::MeasureInput<'_>| {
+        // Place main content at origin.
+        let main_content_id = input.children_ids[0];
+        let main_content_size = input.measure_child(main_content_id, input.parent_constraint)?;
+        input.place_child(main_content_id, PxPosition::new(Px(0), Px(0)));
+
+        // Place scrim (if present) covering the whole parent.
+        if input.children_ids.len() > 1 {
+            let scrim_id = input.children_ids[1];
+            let _ = input.measure_child(scrim_id, input.parent_constraint);
+            input.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
         }
 
-        state_handler(Box::new(move |input| {
-            let events = input.keyboard_events.drain(..).collect::<Vec<_>>();
-            for event in events {
-                if event.state == winit::event::ElementState::Pressed {
-                    if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
-                        event.physical_key
-                    {
-                        (on_close_for_keyboard)();
-                    }
-                }
-            }
-        }));
+        // Place bottom sheet (if present) using extracted helper.
+        place_bottom_sheet_if_present(input, &state_for_measure, progress);
 
-        let content_alpha = if state.read().is_open {
-            progress
-        } else {
-            1.0 - progress
-        };
-
-        bottom_sheet_content(content_alpha);
-
-        measure(Box::new(move |input| {
-            let main_content_id = input.children_ids[0];
-            let main_content_size =
-                input.measure_child(main_content_id, input.parent_constraint)?;
-            input.place_child(main_content_id, PxPosition::new(Px(0), Px(0)));
-
-            if input.children_ids.len() > 1 {
-                let scrim_id = input.children_ids[1];
-                let _ = input.measure_child(scrim_id, input.parent_constraint)?;
-                input.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
-            }
-
-            if input.children_ids.len() > 2 {
-                let bottom_sheet_id = input.children_ids[2];
-
-                let child_size = input.measure_child(
-                    bottom_sheet_id,
-                    &Constraint::new(
-                        input.parent_constraint.width,
-                        DimensionValue::Wrap {
-                            min: None,
-                            max: None,
-                        },
-                    ),
-                )?;
-
-                let parent_height = input.parent_constraint.height.get_max().unwrap_or(Px(0));
-
-                let y = if state.read().is_open {
-                    parent_height.0 as f32 - (child_size.height.0 as f32 * progress)
-                } else {
-                    parent_height.0 as f32 - (child_size.height.0 as f32 * (1.0 - progress))
-                };
-
-                input.place_child(bottom_sheet_id, PxPosition::new(Px(0), Px(y as i32)));
-            }
-
-            Ok(main_content_size)
-        }));
-    }
+        // Return the main content size (best-effort; unwrap used above to satisfy closure type).
+        Ok(main_content_size)
+    });
+    measure(measure_closure);
 }
