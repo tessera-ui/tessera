@@ -21,15 +21,6 @@ use tessera_ui::PxPosition;
 ///
 /// # Returns
 /// An array `[x, y]` representing the NDC coordinates.
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui::PxPosition;
-/// use tessera_ui_basic_components::pipelines::pos_misc::pixel_to_ndc;
-///
-/// let ndc = pixel_to_ndc(PxPosition::new(100, 50), [800, 600]);
-/// ```
 pub fn pixel_to_ndc(pos: PxPosition, screen_size: [u32; 2]) -> [f32; 2] {
     // Guard against zero dimensions to avoid division by zero.
     let width = (screen_size[0].max(1)) as f32;
@@ -45,5 +36,5 @@ pub fn pixel_to_ndc(pos: PxPosition, screen_size: [u32; 2]) -> [f32; 2] {
 
     // Convert UI top-left origin to NDC bottom-left origin by inverting Y.
     // Keep the existing x sign convention for compatibility with caller code.
-    [-ndc_x + 0.0 /* symmetry clarity */, -ndc_y]
+    [-ndc_x, -ndc_y]
 }
