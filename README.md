@@ -67,7 +67,7 @@ The roadmap is now organized by crate:
   - ~~scrollable~~
 - Add these components
   - radio
-  - bottom sheet
+  - ~~bottom sheet~~
   - tab
   - bottom nav bar
   - side bar
