@@ -295,7 +295,7 @@ fn measure_weighted_column(
     let final_column_width = calculate_final_column_width(
         column_effective_constraint,
         *max_child_width,
-        &input.parent_constraint,
+        input.parent_constraint,
     );
 
     Ok((
@@ -333,7 +333,7 @@ fn measure_unweighted_column(
     let final_column_width = calculate_final_column_width(
         column_effective_constraint,
         *max_child_width,
-        &input.parent_constraint,
+        input.parent_constraint,
     );
     Ok((
         final_column_width,

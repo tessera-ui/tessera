@@ -1,4 +1,3 @@
-#![allow(clippy::needless_return)]
 //! # Switch Component Module
 //!
 //! This module provides a customizable toggle switch UI component for boolean state management in the Tessera UI framework.

@@ -1,4 +1,3 @@
-#![allow(clippy::needless_pass_by_value)]
 //! # Glass Switch Component Module
 //!
 //! This module provides a customizable, glassmorphic-style switch (toggle) UI component for the Tessera UI framework.

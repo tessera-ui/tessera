@@ -17,13 +17,6 @@ use crate::{material_colors::md_colors, misc::create_spacer};
 
 #[tessera]
 pub fn switch_showcase(state: Arc<Mutex<SwitchState>>) {
-    let on_toggle = {
-        let state = state.clone();
-        Arc::new(move |_| {
-            state.lock().toggle();
-        })
-    };
-
     surface(
         SurfaceArgsBuilder::default()
             .color(md_colors::SURFACE_CONTAINER)
@@ -67,7 +60,13 @@ pub fn switch_showcase(state: Arc<Mutex<SwitchState>>) {
                                 SwitchArgsBuilder::default()
                                     .state(Some(state.clone()))
                                     .checked(checked)
-                                    .on_toggle(on_toggle.clone())
+                                    .on_toggle(Arc::new(move |on| {
+                                        if on {
+                                            println!("Switch toggled to OFF");
+                                        } else {
+                                            println!("Switch toggled to ON");
+                                        }
+                                    }))
                                     .build()
                                     .unwrap(),
                             )

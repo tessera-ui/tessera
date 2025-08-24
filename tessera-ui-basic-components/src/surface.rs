@@ -164,7 +164,7 @@ impl Default for SurfaceArgs {
 /// ```
 ///
 fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<&Arc<RippleState>>) -> RippleProps {
-    if let Some(ref state) = ripple_state {
+    if let Some(state) = ripple_state {
         if let Some((progress, click_pos)) = state.get_animation_progress() {
             let radius = progress;
             let alpha = (1.0 - progress) * 0.3;

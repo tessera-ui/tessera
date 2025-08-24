@@ -200,7 +200,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_block = &input_fn.block; // Original function body
 
     // Prepare token fragments using helpers to keep function small and readable
-    let register_tokens = register_node_tokens(&crate_path, &fn_name);
+    let register_tokens = register_node_tokens(&crate_path, fn_name);
     let measure_tokens = measure_inject_tokens(&crate_path);
     let state_tokens = state_handler_inject_tokens(&crate_path);
     let on_minimize_tokens = on_minimize_inject_tokens(&crate_path);

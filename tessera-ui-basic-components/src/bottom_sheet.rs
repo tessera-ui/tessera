@@ -241,7 +241,7 @@ fn place_bottom_sheet_if_present(
     let parent_height = input.parent_constraint.height.get_max().unwrap_or(Px(0));
     let current_is_open = state_for_measure.read().is_open;
     let y = compute_bottom_sheet_y(parent_height, child_size.height, progress, current_is_open);
-    input.place_child(bottom_sheet_id, PxPosition::new(Px(0), Px(y as i32)));
+    input.place_child(bottom_sheet_id, PxPosition::new(Px(0), Px(y)));
 }
 
 #[tessera]

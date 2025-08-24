@@ -40,17 +40,16 @@ fn app(switch_state: Arc<Mutex<GlassSwitchState>>) {
                     },
                 },
                 move || {
-                    let on_toggle = {
-                        let state = switch_state.clone();
-                        Arc::new(move |checked| {
-                            state.lock().checked = checked;
-                            println!("Glass Switch toggled: {checked}");
-                        })
-                    };
                     let args = GlassSwitchArgsBuilder::default()
                         .state(Some(switch_state.clone()))
                         .checked(switch_state.lock().checked)
-                        .on_toggle(on_toggle)
+                        .on_toggle(Arc::new(|on| {
+                            if on {
+                                println!("Glass Switch toggled to OFF");
+                            } else {
+                                println!("Glass Switch toggled to ON");
+                            }
+                        }))
                         .width(Dp(72.0))
                         .height(Dp(40.0))
                         .track_on_color(Color::new(0.2, 0.7, 1.0, 0.5))

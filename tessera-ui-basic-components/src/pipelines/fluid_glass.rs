@@ -289,8 +289,8 @@ impl FluidGlassPipeline {
     /// This is an associated helper so it can be called as `Self::enforce_instance_limit`
     /// from other pipeline methods.
     fn enforce_instance_limit(instances: &mut Vec<GlassUniforms>) -> u32 {
-        if instances.len() > MAX_CONCURRENT_GLASSES as usize {
-            instances.truncate(MAX_CONCURRENT_GLASSES as usize);
+        if instances.len() > MAX_CONCURRENT_GLASSES {
+            instances.truncate(MAX_CONCURRENT_GLASSES);
         }
         instances.len() as u32
     }
@@ -386,10 +386,7 @@ impl FluidGlassPipeline {
 
         // Reuse existing helper to create buffer + bind group.
         let (uniform_buffer, bind_group) =
-            match self.create_buffer_and_bind_group(gpu, queue, &instances, scene_texture_view) {
-                Some(t) => t,
-                None => return None,
-            };
+            self.create_buffer_and_bind_group(gpu, queue, &instances, scene_texture_view)?;
 
         Some((uniform_buffer, bind_group, instance_count))
     }
