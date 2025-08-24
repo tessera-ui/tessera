@@ -1,6 +1,14 @@
 <div align="center">
 
-# **Tessera**
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/logo.svg" alt="Tessera Logo" style="width:320px; height:auto;" />
+
+<br />
+
+<p align="center" style="color: gray;"><em>Gui rust in rust</em></p>
+
+<br />
 
 [![English][readme-en-badge]][readme-en-url]
 [![Stars][stars-badge]][stars-url]

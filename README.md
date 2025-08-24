@@ -1,6 +1,12 @@
 <div align="center">
 
-# **Tessera**
+<img src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/logo.svg" alt="Tessera Logo" style="width:320px; height:auto;" />
+
+<br />
+
+<p align="center" style="color: gray;"><em>Gui rust in rust</em></p>
+
+<br />
 
 [![简体中文][readme-cn-badge]][readme-cn-url]
 [![Stars][stars-badge]][stars-url]
@@ -203,7 +209,7 @@ fn counter_app(app_state: Arc<AppState>) {
 
 ### Running the Example on Windows / Linux
 
-Make sure you have Rust installed: https://rustup.rs/
+Make sure you have Rust installed: <https://rustup.rs/>
 
 ```bash
 # Enter the example directory
