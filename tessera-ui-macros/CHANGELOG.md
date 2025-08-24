@@ -1,3 +1,12 @@
+## [v0.2.3] - 2025-08-25 +08:00
+
+### Changes
+- fix(switch): restore correct on_toggle behavior and stabilize state handling
+- refactor(renderer, components): extract helpers and simplify rendering/compute flow
+- chore(deps): bump syn from 2.0.105 to 2.0.106
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.2.2...tessera-ui-macros-v0.2.3)
+
 ## [v0.2.2] - 2025-08-15 +08:00
 
 ### Changes
