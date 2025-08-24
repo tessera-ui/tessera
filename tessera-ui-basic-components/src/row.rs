@@ -227,16 +227,16 @@ fn measure_weighted_row(
     child_weights: &[Option<f32>],
     row_effective_constraint: &Constraint,
 ) -> Result<ComputedData, MeasurementError> {
-    // 准备测量时的缓冲区和元数据：
-    // - `children_sizes` 用于存放每个子节点的测量结果（宽、高）。
-    // - `max_child_height` 跟踪所有子节点的最大高度，用于计算行的最终高度。
-    // - `available_width_for_children` 是在当前约束下可用于分配给子项的总宽度（仅在 Fill/Fixed/Wrap(max) 时存在）。
+    // Prepare buffers and metadata for measurement:
+    // - `children_sizes` stores each child's measurement result (width, height).
+    // - `max_child_height` tracks the maximum height among children to compute the row's final height.
+    // - `available_width_for_children` is the total width available to allocate to children under the current constraint (present only for Fill/Fixed/Wrap(max)).
     let n = input.children_ids.len();
     let mut children_sizes = vec![None; n];
     let mut max_child_height = Px(0);
     let available_width_for_children = row_effective_constraint.width.get_max().unwrap();
 
-    // 把子项分为加权（weighted）与非加权（unweighted），并计算总权重。
+    // Classify children into weighted and unweighted and compute the total weight.
     let (weighted_indices, unweighted_indices, total_weight) = classify_children(child_weights);
 
     let total_width_of_unweighted_children = measure_unweighted_children(
@@ -289,9 +289,9 @@ fn measure_unweighted_row(
     args: &RowArgs,
     row_effective_constraint: &Constraint,
 ) -> Result<ComputedData, MeasurementError> {
-    // 测量不带权重的行：
-    // 对每个子节点，基于 row 的有效约束为其生成一个“包裹型”的约束（Wrap），
-    // 并使用 `input.measure_child` 获取子节点的实际尺寸，累计总宽度与最大高度。
+    // Measure an unweighted row:
+    // For each child, create a 'wrap' constraint based on the row's effective constraint,
+    // use `input.measure_child` to obtain its actual size, and accumulate total width and max height.
     let n = input.children_ids.len();
     let mut children_sizes = vec![None; n];
     let mut total_children_measured_width = Px(0);
@@ -316,11 +316,8 @@ fn measure_unweighted_row(
         max_child_height = max_child_height.max(child_result.height);
     }
 
-    let final_row_width = calculate_final_row_width(
-        row_effective_constraint,
-        total_children_measured_width,
-        input.parent_constraint,
-    );
+    let final_row_width =
+        calculate_final_row_width(row_effective_constraint, total_children_measured_width);
     let final_row_height = calculate_final_row_height(row_effective_constraint, max_child_height);
 
     place_children_with_alignment(&PlaceChildrenArgs {
@@ -342,8 +339,8 @@ fn measure_unweighted_row(
 }
 
 fn classify_children(child_weights: &[Option<f32>]) -> (Vec<usize>, Vec<usize>, f32) {
-    // 将子项分为有权重与无权重两类，并计算所有有权重子项的权重总和。
-    // 返回值：(weighted_indices, unweighted_indices, total_weight)
+    // Split children into weighted and unweighted categories and compute the total weight of weighted children.
+    // Returns: (weighted_indices, unweighted_indices, total_weight)
     let mut weighted_indices = Vec::new();
     let mut unweighted_indices = Vec::new();
     let mut total_weight = 0.0;
@@ -354,7 +351,7 @@ fn classify_children(child_weights: &[Option<f32>]) -> (Vec<usize>, Vec<usize>, 
                 weighted_indices.push(i);
                 total_weight += w;
             } else {
-                // weight == 0.0 被视为非加权项（不会参与剩余空间分配）
+                // weight == 0.0 is treated as an unweighted item (it won't participate in remaining-space allocation)
                 unweighted_indices.push(i);
             }
         } else {
@@ -371,9 +368,9 @@ fn measure_unweighted_children(
     max_child_height: &mut Px,
     row_effective_constraint: &Constraint,
 ) -> Result<Px, MeasurementError> {
-    // 测量所有非加权子项并返回它们的总宽度。
-    // 对每个非加权子项，传入一个 Wrap 类型的约束（max 为 row 的可用最大值），
-    // 并更新 children_sizes 与 max_child_height。
+    // Measure all unweighted children and return their total width.
+    // For each unweighted child, pass a Wrap-type constraint (max is the row's available maximum),
+    // and update children_sizes and max_child_height.
     let mut total_width = Px(0);
     for &child_idx in unweighted_indices {
         let child_id = input.children_ids[child_idx];
@@ -395,10 +392,10 @@ fn measure_unweighted_children(
 fn measure_weighted_children(
     args: &mut MeasureWeightedChildrenArgs,
 ) -> Result<(), MeasurementError> {
-    // 为每个加权子项按比例分配剩余宽度并进行测量：
-    // - 分配宽度 = remaining_width * (child_weight / total_weight)
-    // - 使用 Fixed(allocated_width) 的约束测量子节点
-    // - 更新 children_sizes 与 max_child_height
+    // Allocate remaining width proportionally for each weighted child and measure them:
+    // - allocated_width = remaining_width * (child_weight / total_weight)
+    // - measure the child using a Fixed(allocated_width) constraint
+    // - update children_sizes and max_child_height
     if args.total_weight > 0.0 {
         for &child_idx in args.weighted_indices {
             let child_weight = args.child_weights[child_idx].unwrap_or(0.0);
@@ -422,23 +419,22 @@ fn measure_weighted_children(
 fn calculate_final_row_width(
     row_effective_constraint: &Constraint,
     total_children_measured_width: Px,
-    parent_constraint: &Constraint,
 ) -> Px {
-    // 依据行的宽度约束类型决定最终宽度：
-    // - Fixed: 使用固定宽度
-    // - Fill: 尝试占据父容器可用最大宽度（受 min 限制）
-    // - Wrap: 使用子项总宽度，并受 min/max 限制约束
+    // Decide the final width based on the row's width constraint type:
+    // - Fixed: use the fixed width
+    // - Fill: try to occupy the parent's available maximum width (limited by min)
+    // - Wrap: use the total width of children, limited by min/max constraints
     match row_effective_constraint.width {
         DimensionValue::Fixed(w) => w,
-        DimensionValue::Fill { min, .. } => {
-            let mut w = parent_constraint
-                .width
-                .get_max()
-                .unwrap_or(total_children_measured_width);
-            if let Some(min_w) = min {
-                w = w.max(min_w);
+        DimensionValue::Fill { min, max } => {
+            if let Some(max) = max {
+                let w = max;
+                if let Some(min) = min { w.max(min) } else { w }
+            } else {
+                panic!(
+                    "Seem that you are using Fill without max constraint, which is not supported in Row width."
+                );
             }
-            w
         }
         DimensionValue::Wrap { min, max } => {
             let mut w = total_children_measured_width;
@@ -454,23 +450,25 @@ fn calculate_final_row_width(
 }
 
 fn calculate_final_row_height(row_effective_constraint: &Constraint, max_child_height: Px) -> Px {
-    // 根据高度约束类型计算最终高度：
-    // - Fixed: 使用固定高度
-    // - Fill: 在 min/max 范围内尽可能使用子项最大高度
-    // - Wrap: 基于子项最大高度并受 min/max 限制约束
+    // Calculate the final height based on the height constraint type:
+    // - Fixed: use the fixed height
+    // - Fill: use the maximum height available from the parent (limited by min)
+    // - Wrap: use the maximum child height, limited by min/max
     match row_effective_constraint.height {
         DimensionValue::Fixed(h) => h,
         DimensionValue::Fill { min, max } => {
-            let mut h = max_child_height;
-            if let Some(min_h) = min {
-                h = h.max(min_h);
-            }
             if let Some(max_h) = max {
-                h = h.min(max_h);
+                let h = max_h;
+                if let Some(min_h) = min {
+                    h.max(min_h)
+                } else {
+                    h
+                }
             } else {
-                h = max_child_height;
+                panic!(
+                    "Seem that you are using Fill without max constraint, which is not supported in Row height."
+                );
             }
-            h
         }
         DimensionValue::Wrap { min, max } => {
             let mut h = max_child_height;
@@ -486,9 +484,10 @@ fn calculate_final_row_height(row_effective_constraint: &Constraint, max_child_h
 }
 
 fn place_children_with_alignment(args: &PlaceChildrenArgs) {
-    // 根据主轴（水平）布局计算初始 x 与子项间距，然后迭代已测量的子项：
-    // - 使用 calculate_cross_axis_offset 计算每个子项在纵向（交叉轴）上的偏移
-    // - 通过 place_node 将子节点放置到对应坐标
+    // Compute the initial x and spacing between children according to the main axis (horizontal),
+    // then iterate measured children:
+    // - use calculate_cross_axis_offset to compute each child's offset on the cross axis (vertical)
+    // - place each child with place_node at the computed coordinates
     let (mut current_x, spacing) = calculate_main_axis_layout(args);
 
     for (i, child_size_opt) in args.children_sizes.iter().enumerate() {
@@ -514,8 +513,8 @@ fn place_children_with_alignment(args: &PlaceChildrenArgs) {
 }
 
 fn calculate_main_axis_layout(args: &PlaceChildrenArgs) -> (Px, Px) {
-    // 计算主轴上的起始位置和子项之间的间距：
-    // 返回 (start_x, spacing_between_children)
+    // Calculate the start position on the main axis and the spacing between children:
+    // Returns (start_x, spacing_between_children)
     let available_space = (args.final_row_width - args.total_children_width).max(Px(0));
     match args.main_axis_alignment {
         MainAxisAlignment::Start => (Px(0), Px(0)),
@@ -562,11 +561,11 @@ fn calculate_cross_axis_offset(
     final_row_height: Px,
     cross_axis_alignment: CrossAxisAlignment,
 ) -> Px {
-    // 计算子项在交叉轴（垂直方向）上的偏移：
-    // - Start: 顶部对齐 (0)
-    // - Center: 居中 (剩余高度 / 2)
-    // - End: 底部对齐 (剩余高度)
-    // - Stretch: 不偏移（子项会被拉伸以填充高度，拉伸逻辑由测量阶段处理）
+    // Compute child's offset on the cross axis (vertical):
+    // - Start: align to top (0)
+    // - Center: center (remaining_height / 2)
+    // - End: align to bottom (remaining_height)
+    // - Stretch: no offset (the child will be stretched to fill height; stretching handled in measurement)
     match cross_axis_alignment {
         CrossAxisAlignment::Start => Px(0),
         CrossAxisAlignment::Center => (final_row_height - child_actual_size.height).max(Px(0)) / 2,

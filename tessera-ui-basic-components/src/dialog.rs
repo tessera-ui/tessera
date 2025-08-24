@@ -108,9 +108,7 @@ impl DialogProviderState {
 
     /// Close the dialog
     pub fn close(&mut self) {
-        if !self.is_open {
-            // Already closed, no action needed
-        } else {
+        if self.is_open {
             self.is_open = false; // Mark as closed
             let mut timer = Instant::now();
             if let Some(old_timer) = self.timer {

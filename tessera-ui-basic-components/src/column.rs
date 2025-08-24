@@ -197,16 +197,17 @@ fn calculate_final_column_height(
     match column_effective_constraint.height {
         DimensionValue::Fixed(h) => h,
         DimensionValue::Fill { min, max } => {
-            let mut h = measured_children_height;
-            if let Some(min_h) = min {
-                h = h.max(min_h);
-            }
-            if let Some(max_h) = max {
-                h = h.min(max_h);
+            if let Some(max) = max {
+                if let Some(min) = min {
+                    max.max(min)
+                } else {
+                    max
+                }
             } else {
-                h = measured_children_height;
+                panic!(
+                    "Seems that you are trying to use Fill without max in a non-infinite parent constraint. This is not supported. Parent constraint: {column_effective_constraint:?}"
+                );
             }
-            h
         }
         DimensionValue::Wrap { min, max } => {
             let mut h = measured_children_height;
@@ -228,12 +229,18 @@ fn calculate_final_column_width(
 ) -> Px {
     match column_effective_constraint.width {
         DimensionValue::Fixed(w) => w,
-        DimensionValue::Fill { min, .. } => {
-            let mut w = parent_constraint.width.get_max().unwrap_or(max_child_width);
-            if let Some(min_w) = min {
-                w = w.max(min_w);
+        DimensionValue::Fill { min, max } => {
+            if let Some(max) = max {
+                if let Some(min) = min {
+                    max.max(min)
+                } else {
+                    max
+                }
+            } else {
+                panic!(
+                    "Seems that you are trying to use Fill without max in a non-infinite parent constraint. This is not supported. Parent constraint: {parent_constraint:?}"
+                );
             }
-            w
         }
         DimensionValue::Wrap { min, max } => {
             let mut w = max_child_width;

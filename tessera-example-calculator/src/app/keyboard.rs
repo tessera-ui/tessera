@@ -233,9 +233,6 @@ fn make_on_click(key: &'static str, app_state: Arc<AppState>) -> Arc<dyn Fn() + 
 /// Returns a simple zero-argument closure that calls `num_key` with the provided parameters.
 /// This reduces repetition in `keyboard` where many identical closure wrappers were used.
 fn make_num_closure(key: &'static str, state: Arc<AppState>, style: CalStyle) -> impl Fn() {
-    let key = key;
-    let state = state;
-    let style = style;
     // Clone the Arc inside the closure so the closure does not move out of the captured variable.
     move || num_key(key, state.clone(), style)
 }
