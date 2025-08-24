@@ -270,6 +270,13 @@ Tessera 采用多 crate 的工作区结构：
 
 请阅读 [贡献指南](docs/CONTRIBUTING_zh-CN.md) 了解如何为项目做出贡献。
 
+## 致谢
+
+- [wgpu](https://github.com/gfx-rs/wgpu)，强大的图形 API 抽象层。
+- [winit](https://github.com/rust-windowing/winit)，跨平台窗口和事件处理库。
+- [glyphon](https://github.com/grovesNL/glyphon)，文本渲染解决方案。
+- 原始 Logo 设计由 [@ktechhydle](https://github.com/ktechhydle) 完成。
+
 ## 许可证
 
 Tessera 采用 [MIT 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE) 或 [Apache 2.0 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE)双重许可。

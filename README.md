@@ -270,6 +270,13 @@ Tessera adopts a multi-crate workspace structure:
 
 Read the [Contributing Guide](CONTRIBUTING.md) for details on how to contribute to the project.
 
+## Acknowledgements
+
+- [wgpu](https://github.com/gfx-rs/wgpuhttps://github.com/gfx-rs/wgpu), for the powerful graphics API abstraction.
+- [winit](https://github.com/rust-windowing/winit), for the cross-platform windowing and event handling.
+- [glyphon](https://github.com/grovesNL/glyphon), for the text rendering solution.
+- Original logo design by [@ktechhydle](https://github.com/ktechhydle)
+
 ## License
 
 Tessera is licensed under either of the [MIT License](LICENSE) or the [Apache License 2.0](LICENSE).
