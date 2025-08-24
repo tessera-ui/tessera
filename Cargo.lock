@@ -3184,7 +3184,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-ui-basic-components"
-version = "1.8.0"
+version = "1.9.0"
 dependencies = [
  "bytemuck",
  "derive_builder",

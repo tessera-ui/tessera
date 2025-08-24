@@ -1,3 +1,20 @@
+## [v1.9.0] - 2025-08-25 +08:00
+
+### Changes
+- feat(text-editor): replace line-based scrolling with smooth pixel-based scrolling
+- refactor: optimize loop logic and condition checks
+- fix(tessera-ui-basic-components): enforce Fill constraint handling and fix row/column/dialog layout logic
+- fix(switch): restore correct on_toggle behavior and stabilize state handling
+- fix(pipelines): correct x-coordinate sign in pixel_to_ndc function
+- docs(pipelines): remove example from pixel_to_ndc doc comment
+- refactor(renderer, components): extract helpers and simplify rendering/compute flow
+- fix(fluid_glass): change cursor event from pressed to released
+- feat(fluid_glass): support independent corner radii
+- feat(bottom_sheet): introduce glass style for scrim
+- refactor(dialog): unify glass dialog and introduce dialog styles
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.8.0...tessera-ui-basic-components-v1.9.0)
+
 ## [v1.8.0] - 2025-08-15 +08:00
 
 ### Changes
