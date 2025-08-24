@@ -1,3 +1,12 @@
+## [v1.10.1] - 2025-08-25 +08:00
+
+### Changes
+- refactor: optimize loop logic and condition checks
+- refactor(renderer, components): extract helpers and simplify rendering/compute flow
+- fix(render): change current_batch_draw_rect to Option type for better handling of draw rectangles
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.10.0...tessera-ui-v1.10.1)
+
 ## [v1.10.0] - 2025-08-15 +08:00
 
 ### Changes
