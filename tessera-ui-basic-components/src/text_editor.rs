@@ -231,290 +231,273 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
     }
 
     // Event handling at the outermost layer - can access full surface area
-    {
-        let state_for_handler = state.clone();
-        state_handler(Box::new(move |input| {
-            let size = input.computed_data; // This is the full surface size
-            let cursor_pos_option = input.cursor_position_rel;
-            let is_cursor_in_editor = cursor_pos_option
-                .map(|pos| is_position_in_component(size, pos))
-                .unwrap_or(false);
 
-            // Set text input cursor when hovering
-            if is_cursor_in_editor {
-                input.requests.cursor_icon = winit::window::CursorIcon::Text;
-            }
+    let state_for_handler = state.clone();
+    state_handler(Box::new(move |input| {
+        let size = input.computed_data; // This is the full surface size
+        let cursor_pos_option = input.cursor_position_rel;
+        let is_cursor_in_editor = cursor_pos_option
+            .map(|pos| is_position_in_component(size, pos))
+            .unwrap_or(false);
 
-            // Handle click events - now we have a full clickable area from surface
-            if is_cursor_in_editor {
-                // Handle mouse pressed events
-                let click_events: Vec<_> = input
-                    .cursor_events
-                    .iter()
-                    .filter(|event| matches!(event.content, CursorEventContent::Pressed(_)))
-                    .collect();
+        // Set text input cursor when hovering
+        if is_cursor_in_editor {
+            input.requests.cursor_icon = winit::window::CursorIcon::Text;
+        }
 
-                // Handle mouse released events (end of drag)
-                let release_events: Vec<_> = input
-                    .cursor_events
-                    .iter()
-                    .filter(|event| matches!(event.content, CursorEventContent::Released(_)))
-                    .collect();
+        // Handle click events - now we have a full clickable area from surface
+        if is_cursor_in_editor {
+            // Handle mouse pressed events
+            let click_events: Vec<_> = input
+                .cursor_events
+                .iter()
+                .filter(|event| matches!(event.content, CursorEventContent::Pressed(_)))
+                .collect();
 
-                if !click_events.is_empty() {
-                    // Request focus if not already focused
-                    if !state_for_handler.read().focus_handler().is_focused() {
-                        state_for_handler
-                            .write()
-                            .focus_handler_mut()
-                            .request_focus();
-                    }
+            // Handle mouse released events (end of drag)
+            let release_events: Vec<_> = input
+                .cursor_events
+                .iter()
+                .filter(|event| matches!(event.content, CursorEventContent::Released(_)))
+                .collect();
 
-                    // Handle cursor positioning for clicks
-                    if let Some(cursor_pos) = cursor_pos_option {
-                        // Calculate the relative position within the text area
-                        let padding_px: Px = editor_args.padding.into();
-                        let border_width_px = Px(editor_args.border_width as i32); // Assuming border_width is integer pixels
-
-                        let text_relative_x_px = cursor_pos.x - padding_px - border_width_px;
-                        let text_relative_y_px = cursor_pos.y - padding_px - border_width_px;
-
-                        // Only process if the click is within the text area (non-negative relative coords)
-                        if text_relative_x_px >= Px(0) && text_relative_y_px >= Px(0) {
-                            let text_relative_pos =
-                                PxPosition::new(text_relative_x_px, text_relative_y_px);
-                            // Determine click type and handle accordingly
-                            let click_type = state_for_handler
-                                .write()
-                                .handle_click(text_relative_pos, click_events[0].timestamp);
-
-                            match click_type {
-                                ClickType::Single => {
-                                    // Single click: position cursor
-                                    state_for_handler.write().editor_mut().action(
-                                        &mut write_font_system(),
-                                        Action::Click {
-                                            x: text_relative_pos.x.0,
-                                            y: text_relative_pos.y.0,
-                                        },
-                                    );
-                                }
-                                ClickType::Double => {
-                                    // Double click: select word
-                                    state_for_handler.write().editor_mut().action(
-                                        &mut write_font_system(),
-                                        Action::DoubleClick {
-                                            x: text_relative_pos.x.0,
-                                            y: text_relative_pos.y.0,
-                                        },
-                                    );
-                                }
-                                ClickType::Triple => {
-                                    // Triple click: select line
-                                    state_for_handler.write().editor_mut().action(
-                                        &mut write_font_system(),
-                                        Action::TripleClick {
-                                            x: text_relative_pos.x.0,
-                                            y: text_relative_pos.y.0,
-                                        },
-                                    );
-                                }
-                            }
-
-                            // Start potential drag operation
-                            state_for_handler.write().start_drag();
-                        }
-                    }
+            if !click_events.is_empty() {
+                // Request focus if not already focused
+                if !state_for_handler.read().focus_handler().is_focused() {
+                    state_for_handler
+                        .write()
+                        .focus_handler_mut()
+                        .request_focus();
                 }
 
-                // Handle drag events (mouse move while dragging)
-                // This happens every frame when cursor position changes during drag
-                if state_for_handler.read().is_dragging()
-                    && let Some(cursor_pos) = cursor_pos_option
-                {
+                // Handle cursor positioning for clicks
+                if let Some(cursor_pos) = cursor_pos_option {
+                    // Calculate the relative position within the text area
                     let padding_px: Px = editor_args.padding.into();
-                    let border_width_px = Px(editor_args.border_width as i32);
+                    let border_width_px = Px(editor_args.border_width as i32); // Assuming border_width is integer pixels
 
                     let text_relative_x_px = cursor_pos.x - padding_px - border_width_px;
                     let text_relative_y_px = cursor_pos.y - padding_px - border_width_px;
 
+                    // Only process if the click is within the text area (non-negative relative coords)
                     if text_relative_x_px >= Px(0) && text_relative_y_px >= Px(0) {
-                        let current_pos_px =
+                        let text_relative_pos =
                             PxPosition::new(text_relative_x_px, text_relative_y_px);
-                        let last_pos_px = state_for_handler.read().last_click_position();
+                        // Determine click type and handle accordingly
+                        let click_type = state_for_handler
+                            .write()
+                            .handle_click(text_relative_pos, click_events[0].timestamp);
 
-                        if last_pos_px != Some(current_pos_px) {
-                            // Extend selection by dragging
-                            state_for_handler.write().editor_mut().action(
-                                &mut write_font_system(),
-                                Action::Drag {
-                                    x: current_pos_px.x.0,
-                                    y: current_pos_px.y.0,
-                                },
-                            );
-
-                            // Update last position to current position
-                            state_for_handler
-                                .write()
-                                .update_last_click_position(current_pos_px);
+                        match click_type {
+                            ClickType::Single => {
+                                // Single click: position cursor
+                                state_for_handler.write().editor_mut().action(
+                                    &mut write_font_system(),
+                                    Action::Click {
+                                        x: text_relative_pos.x.0,
+                                        y: text_relative_pos.y.0,
+                                    },
+                                );
+                            }
+                            ClickType::Double => {
+                                // Double click: select word
+                                state_for_handler.write().editor_mut().action(
+                                    &mut write_font_system(),
+                                    Action::DoubleClick {
+                                        x: text_relative_pos.x.0,
+                                        y: text_relative_pos.y.0,
+                                    },
+                                );
+                            }
+                            ClickType::Triple => {
+                                // Triple click: select line
+                                state_for_handler.write().editor_mut().action(
+                                    &mut write_font_system(),
+                                    Action::TripleClick {
+                                        x: text_relative_pos.x.0,
+                                        y: text_relative_pos.y.0,
+                                    },
+                                );
+                            }
                         }
+
+                        // Start potential drag operation
+                        state_for_handler.write().start_drag();
                     }
-                }
-
-                // Handle mouse release events (end drag)
-                if !release_events.is_empty() {
-                    state_for_handler.write().stop_drag();
-                }
-
-                let scroll_events: Vec<_> = input
-                    .cursor_events
-                    .iter()
-                    .filter_map(|event| match &event.content {
-                        CursorEventContent::Scroll(scroll_event) => Some(scroll_event),
-                        _ => None,
-                    })
-                    .collect();
-
-                // Handle scroll events (only when focused and cursor is in editor)
-                if state_for_handler.read().focus_handler().is_focused() {
-                    for scroll_event in scroll_events {
-                        // Convert scroll delta to lines
-                        let lines_to_scroll = scroll_event.delta_y as i32;
-
-                        if lines_to_scroll != 0 {
-                            // Scroll up for positive delta_y, down for negative
-                            let action = glyphon::Action::Scroll {
-                                lines: -lines_to_scroll,
-                            };
-                            state_for_handler
-                                .write()
-                                .editor_mut()
-                                .action(&mut write_font_system(), action);
-                        }
-                    }
-                }
-
-                // Only block cursor events when focused to prevent propagation
-                if state_for_handler.read().focus_handler().is_focused() {
-                    input.cursor_events.clear();
                 }
             }
 
-            // Handle keyboard events (only when focused)
-            if state_for_handler.read().focus_handler().is_focused() {
-                // Handle keyboard events
-                {
-                    let is_ctrl =
-                        input.key_modifiers.control_key() || input.key_modifiers.super_key();
+            // Handle drag events (mouse move while dragging)
+            // This happens every frame when cursor position changes during drag
+            if state_for_handler.read().is_dragging()
+                && let Some(cursor_pos) = cursor_pos_option
+            {
+                let padding_px: Px = editor_args.padding.into();
+                let border_width_px = Px(editor_args.border_width as i32);
 
-                    // Custom handling for Ctrl+A (Select All)
-                    let select_all_event_index =
-                        input.keyboard_events.iter().position(|key_event| {
-                            if let winit::keyboard::Key::Character(s) = &key_event.logical_key {
-                                is_ctrl
-                                    && s.to_lowercase() == "a"
-                                    && key_event.state == winit::event::ElementState::Pressed
-                            } else {
-                                false
-                            }
-                        });
+                let text_relative_x_px = cursor_pos.x - padding_px - border_width_px;
+                let text_relative_y_px = cursor_pos.y - padding_px - border_width_px;
 
-                    if let Some(_index) = select_all_event_index {
-                        let mut state = state_for_handler.write();
-                        let editor = state.editor_mut();
-                        // Set cursor to the beginning of the document
-                        editor.set_cursor(glyphon::Cursor::new(0, 0));
-                        // Set selection to start from the beginning
-                        editor.set_selection(glyphon::cosmic_text::Selection::Normal(
-                            glyphon::Cursor::new(0, 0),
-                        ));
-                        // Move cursor to the end, which extends the selection (use BufferEnd for full document)
-                        editor.action(
+                if text_relative_x_px >= Px(0) && text_relative_y_px >= Px(0) {
+                    let current_pos_px = PxPosition::new(text_relative_x_px, text_relative_y_px);
+                    let last_pos_px = state_for_handler.read().last_click_position();
+
+                    if last_pos_px != Some(current_pos_px) {
+                        // Extend selection by dragging
+                        state_for_handler.write().editor_mut().action(
                             &mut write_font_system(),
-                            glyphon::Action::Motion(glyphon::cosmic_text::Motion::BufferEnd),
+                            Action::Drag {
+                                x: current_pos_px.x.0,
+                                y: current_pos_px.y.0,
+                            },
                         );
-                    } else {
-                        // Original logic for other keys
-                        let mut all_actions = Vec::new();
-                        {
-                            let state = state_for_handler.read();
-                            for key_event in input.keyboard_events.iter().cloned() {
-                                if let Some(actions) = map_key_event_to_action(
-                                    key_event,
-                                    input.key_modifiers,
-                                    state.editor(),
-                                    input.clipboard,
-                                ) {
-                                    all_actions.extend(actions);
-                                }
-                            }
-                        }
 
-                        if !all_actions.is_empty() {
-                            let mut state = state_for_handler.write();
-                            for action in all_actions {
-                                state.editor_mut().action(&mut write_font_system(), action);
-                            }
-                        }
-                    }
-                    // Block all keyboard events to prevent propagation
-                    input.keyboard_events.clear();
-                }
-
-                // Handle IME events
-                {
-                    let ime_events: Vec<_> = input.ime_events.drain(..).collect();
-
-                    for event in ime_events {
-                        let mut state = state_for_handler.write();
-                        match event {
-                            winit::event::Ime::Commit(text) => {
-                                // Clear preedit string if it exists
-                                if let Some(preedit_text) = state.preedit_string.take() {
-                                    for _ in 0..preedit_text.chars().count() {
-                                        state.editor_mut().action(
-                                            &mut write_font_system(),
-                                            glyphon::Action::Backspace,
-                                        );
-                                    }
-                                }
-                                // Insert the committed text
-                                for c in text.chars() {
-                                    state.editor_mut().action(
-                                        &mut write_font_system(),
-                                        glyphon::Action::Insert(c),
-                                    );
-                                }
-                            }
-                            winit::event::Ime::Preedit(text, _cursor_offset) => {
-                                // Remove the old preedit text if it exists
-                                if let Some(old_preedit) = state.preedit_string.take() {
-                                    for _ in 0..old_preedit.chars().count() {
-                                        state.editor_mut().action(
-                                            &mut write_font_system(),
-                                            glyphon::Action::Backspace,
-                                        );
-                                    }
-                                }
-                                // Insert the new preedit text
-                                for c in text.chars() {
-                                    state.editor_mut().action(
-                                        &mut write_font_system(),
-                                        glyphon::Action::Insert(c),
-                                    );
-                                }
-                                state.preedit_string = Some(text.to_string());
-                            }
-                            _ => {}
-                        }
+                        // Update last position to current position
+                        state_for_handler
+                            .write()
+                            .update_last_click_position(current_pos_px);
                     }
                 }
-
-                // Request IME window
-                input.requests.ime_request = Some(ImeRequest::new(size.into()));
             }
-        }));
-    }
+
+            // Handle mouse release events (end drag)
+            if !release_events.is_empty() {
+                state_for_handler.write().stop_drag();
+            }
+
+            let scroll_events: Vec<_> = input
+                .cursor_events
+                .iter()
+                .filter_map(|event| match &event.content {
+                    CursorEventContent::Scroll(scroll_event) => Some(scroll_event),
+                    _ => None,
+                })
+                .collect();
+
+            // Handle scroll events (only when focused and cursor is in editor)
+            if state_for_handler.read().focus_handler().is_focused() {
+                for scroll_event in scroll_events {
+                    // Convert scroll delta to lines
+                    let scroll = -scroll_event.delta_y;
+
+                    // Scroll up for positive, down for negative
+                    let action = glyphon::Action::Scroll { pixels: scroll };
+                    state_for_handler
+                        .write()
+                        .editor_mut()
+                        .action(&mut write_font_system(), action);
+                }
+            }
+
+            // Only block cursor events when focused to prevent propagation
+            if state_for_handler.read().focus_handler().is_focused() {
+                input.cursor_events.clear();
+            }
+        }
+
+        // Handle keyboard events (only when focused)
+        if state_for_handler.read().focus_handler().is_focused() {
+            // Handle keyboard events
+            let is_ctrl = input.key_modifiers.control_key() || input.key_modifiers.super_key();
+
+            // Custom handling for Ctrl+A (Select All)
+            let select_all_event_index = input.keyboard_events.iter().position(|key_event| {
+                if let winit::keyboard::Key::Character(s) = &key_event.logical_key {
+                    is_ctrl
+                        && s.to_lowercase() == "a"
+                        && key_event.state == winit::event::ElementState::Pressed
+                } else {
+                    false
+                }
+            });
+
+            if let Some(_index) = select_all_event_index {
+                let mut state = state_for_handler.write();
+                let editor = state.editor_mut();
+                // Set cursor to the beginning of the document
+                editor.set_cursor(glyphon::Cursor::new(0, 0));
+                // Set selection to start from the beginning
+                editor.set_selection(glyphon::cosmic_text::Selection::Normal(
+                    glyphon::Cursor::new(0, 0),
+                ));
+                // Move cursor to the end, which extends the selection (use BufferEnd for full document)
+                editor.action(
+                    &mut write_font_system(),
+                    glyphon::Action::Motion(glyphon::cosmic_text::Motion::BufferEnd),
+                );
+            } else {
+                // Original logic for other keys
+                let mut all_actions = Vec::new();
+                {
+                    let state = state_for_handler.read();
+                    for key_event in input.keyboard_events.iter().cloned() {
+                        if let Some(actions) = map_key_event_to_action(
+                            key_event,
+                            input.key_modifiers,
+                            state.editor(),
+                            input.clipboard,
+                        ) {
+                            all_actions.extend(actions);
+                        }
+                    }
+                }
+
+                if !all_actions.is_empty() {
+                    let mut state = state_for_handler.write();
+                    for action in all_actions {
+                        state.editor_mut().action(&mut write_font_system(), action);
+                    }
+                }
+            }
+            // Block all keyboard events to prevent propagation
+            input.keyboard_events.clear();
+
+            // Handle IME events
+            let ime_events: Vec<_> = input.ime_events.drain(..).collect();
+            for event in ime_events {
+                let mut state = state_for_handler.write();
+                match event {
+                    winit::event::Ime::Commit(text) => {
+                        // Clear preedit string if it exists
+                        if let Some(preedit_text) = state.preedit_string.take() {
+                            for _ in 0..preedit_text.chars().count() {
+                                state
+                                    .editor_mut()
+                                    .action(&mut write_font_system(), glyphon::Action::Backspace);
+                            }
+                        }
+                        // Insert the committed text
+                        for c in text.chars() {
+                            state
+                                .editor_mut()
+                                .action(&mut write_font_system(), glyphon::Action::Insert(c));
+                        }
+                    }
+                    winit::event::Ime::Preedit(text, _cursor_offset) => {
+                        // Remove the old preedit text if it exists
+                        if let Some(old_preedit) = state.preedit_string.take() {
+                            for _ in 0..old_preedit.chars().count() {
+                                state
+                                    .editor_mut()
+                                    .action(&mut write_font_system(), glyphon::Action::Backspace);
+                            }
+                        }
+                        // Insert the new preedit text
+                        for c in text.chars() {
+                            state
+                                .editor_mut()
+                                .action(&mut write_font_system(), glyphon::Action::Insert(c));
+                        }
+                        state.preedit_string = Some(text.to_string());
+                    }
+                    _ => {}
+                }
+            }
+
+            // Request IME window
+            input.requests.ime_request = Some(ImeRequest::new(size.into()));
+        }
+    }));
 }
 
 /// Create surface arguments based on editor configuration and state
