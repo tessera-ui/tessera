@@ -21,6 +21,52 @@ struct PassTarget {
     view: wgpu::TextureView,
 }
 
+// WGPU context for ping-pong operations
+struct WgpuContext<'a> {
+    encoder: &'a mut wgpu::CommandEncoder,
+    gpu: &'a wgpu::Device,
+    queue: &'a wgpu::Queue,
+    config: &'a wgpu::SurfaceConfiguration,
+}
+
+// Parameters for render_current_pass function
+struct RenderCurrentPassParams<'a> {
+    msaa_view: &'a Option<wgpu::TextureView>,
+    is_first_pass: &'a mut bool,
+    encoder: &'a mut wgpu::CommandEncoder,
+    write_target: &'a PassTarget,
+    commands_in_pass: &'a mut Vec<DrawCommandWithMetadata>,
+    scene_texture_view: &'a wgpu::TextureView,
+    drawer: &'a mut Drawer,
+    gpu: &'a wgpu::Device,
+    queue: &'a wgpu::Queue,
+    config: &'a wgpu::SurfaceConfiguration,
+    clip_stack: &'a mut Vec<PxRect>,
+}
+
+// Parameters for do_compute function
+struct DoComputeParams<'a> {
+    encoder: &'a mut wgpu::CommandEncoder,
+    commands: Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
+    compute_pipeline_registry: &'a mut ComputePipelineRegistry,
+    gpu: &'a wgpu::Device,
+    queue: &'a wgpu::Queue,
+    config: &'a wgpu::SurfaceConfiguration,
+    resource_manager: &'a mut ComputeResourceManager,
+    scene_view: &'a wgpu::TextureView,
+    target_a: &'a PassTarget,
+    target_b: &'a PassTarget,
+}
+
+// Compute resources for ping-pong operations
+struct ComputeResources<'a> {
+    compute_commands: &'a mut Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
+    compute_pipeline_registry: &'a mut ComputePipelineRegistry,
+    resource_manager: &'a mut ComputeResourceManager,
+    compute_target_a: &'a PassTarget,
+    compute_target_b: &'a PassTarget,
+}
+
 pub struct WgpuApp {
     /// Avoiding release the window
     #[allow(unused)]
@@ -344,45 +390,38 @@ impl WgpuApp {
     // Helper does ping-pong copy and optional compute; returns an owned TextureView to avoid
     // holding mutable borrows on pass targets across the caller scope.
     fn handle_ping_pong_and_compute(
-        encoder: &mut wgpu::CommandEncoder,
+        context: WgpuContext<'_>,
         read_target: &mut PassTarget,
         write_target: &mut PassTarget,
-        compute_commands: &mut Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
-        compute_pipeline_registry: &mut ComputePipelineRegistry,
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        resource_manager: &mut ComputeResourceManager,
-        compute_target_a: &PassTarget,
-        compute_target_b: &PassTarget,
+        compute_resources: ComputeResources<'_>,
     ) -> wgpu::TextureView {
         // Swap read/write targets and copy previous pass into the new write target
         std::mem::swap(read_target, write_target);
         let texture_size = wgpu::Extent3d {
-            width: config.width,
-            height: config.height,
+            width: context.config.width,
+            height: context.config.height,
             depth_or_array_layers: 1,
         };
-        encoder.copy_texture_to_texture(
+        context.encoder.copy_texture_to_texture(
             read_target.texture.as_image_copy(),
             write_target.texture.as_image_copy(),
             texture_size,
         );
         // Apply compute commands if any, reusing existing do_compute implementation
-        if !compute_commands.is_empty() {
-            let compute_commands_taken = std::mem::take(compute_commands);
-            Self::do_compute(
-                encoder,
-                compute_commands_taken,
-                compute_pipeline_registry,
-                gpu,
-                queue,
-                config,
-                resource_manager,
-                &read_target.view,
-                compute_target_a,
-                compute_target_b,
-            )
+        if !compute_resources.compute_commands.is_empty() {
+            let compute_commands_taken = std::mem::take(compute_resources.compute_commands);
+            Self::do_compute(DoComputeParams {
+                encoder: context.encoder,
+                commands: compute_commands_taken,
+                compute_pipeline_registry: compute_resources.compute_pipeline_registry,
+                gpu: context.gpu,
+                queue: context.queue,
+                config: context.config,
+                resource_manager: compute_resources.resource_manager,
+                scene_view: &read_target.view,
+                target_a: compute_resources.compute_target_a,
+                target_b: compute_resources.compute_target_b,
+            })
         } else {
             // Return an owned clone so caller does not keep a borrow on read_target
             read_target.view.clone()
@@ -481,35 +520,39 @@ impl WgpuApp {
                 {
                     // Perform a ping-pong operation (extracted helper)
                     let final_view_after_compute = Self::handle_ping_pong_and_compute(
-                        &mut encoder,
+                        WgpuContext {
+                            encoder: &mut encoder,
+                            gpu: &self.gpu,
+                            queue: &self.queue,
+                            config: &self.config,
+                        },
                         read_target,
                         write_target,
-                        &mut self.compute_commands,
-                        &mut self.compute_pipeline_registry,
-                        &self.gpu,
-                        &self.queue,
-                        &self.config,
-                        &mut self.resource_manager.write(),
-                        &self.compute_target_a,
-                        &self.compute_target_b,
+                        ComputeResources {
+                            compute_commands: &mut self.compute_commands,
+                            compute_pipeline_registry: &mut self.compute_pipeline_registry,
+                            resource_manager: &mut self.resource_manager.write(),
+                            compute_target_a: &self.compute_target_a,
+                            compute_target_b: &self.compute_target_b,
+                        },
                     );
                     scene_texture_view = final_view_after_compute;
                 }
 
                 // Render the current pass before starting a new one
-                render_current_pass(
-                    &self.msaa_view,
-                    &mut is_first_pass,
-                    &mut encoder,
+                render_current_pass(RenderCurrentPassParams {
+                    msaa_view: &self.msaa_view,
+                    is_first_pass: &mut is_first_pass,
+                    encoder: &mut encoder,
                     write_target,
-                    &mut commands_in_pass,
-                    &scene_texture_view,
-                    &mut self.drawer,
-                    &self.gpu,
-                    &self.queue,
-                    &self.config,
-                    &mut clip_stack,
-                );
+                    commands_in_pass: &mut commands_in_pass,
+                    scene_texture_view: &scene_texture_view,
+                    drawer: &mut self.drawer,
+                    gpu: &self.gpu,
+                    queue: &self.queue,
+                    config: &self.config,
+                    clip_stack: &mut clip_stack,
+                });
                 commands_in_pass.clear();
                 barrier_draw_rects_in_pass.clear();
             }
@@ -557,35 +600,39 @@ impl WgpuApp {
             {
                 // Perform a ping-pong operation (extracted helper)
                 let final_view_after_compute = Self::handle_ping_pong_and_compute(
-                    &mut encoder,
+                    WgpuContext {
+                        encoder: &mut encoder,
+                        gpu: &self.gpu,
+                        queue: &self.queue,
+                        config: &self.config,
+                    },
                     read_target,
                     write_target,
-                    &mut self.compute_commands,
-                    &mut self.compute_pipeline_registry,
-                    &self.gpu,
-                    &self.queue,
-                    &self.config,
-                    &mut self.resource_manager.write(),
-                    &self.compute_target_a,
-                    &self.compute_target_b,
+                    ComputeResources {
+                        compute_commands: &mut self.compute_commands,
+                        compute_pipeline_registry: &mut self.compute_pipeline_registry,
+                        resource_manager: &mut self.resource_manager.write(),
+                        compute_target_a: &self.compute_target_a,
+                        compute_target_b: &self.compute_target_b,
+                    },
                 );
                 scene_texture_view = final_view_after_compute;
             }
 
             // Render the current pass before starting a new one
-            render_current_pass(
-                &self.msaa_view,
-                &mut is_first_pass,
-                &mut encoder,
+            render_current_pass(RenderCurrentPassParams {
+                msaa_view: &self.msaa_view,
+                is_first_pass: &mut is_first_pass,
+                encoder: &mut encoder,
                 write_target,
-                &mut commands_in_pass,
-                &scene_texture_view,
-                &mut self.drawer,
-                &self.gpu,
-                &self.queue,
-                &self.config,
-                &mut clip_stack,
-            );
+                commands_in_pass: &mut commands_in_pass,
+                scene_texture_view: &scene_texture_view,
+                drawer: &mut self.drawer,
+                gpu: &self.gpu,
+                queue: &self.queue,
+                config: &self.config,
+                clip_stack: &mut clip_stack,
+            });
             commands_in_pass.clear();
             barrier_draw_rects_in_pass.clear();
         }
@@ -608,30 +655,17 @@ impl WgpuApp {
         Ok(())
     }
 
-    fn do_compute(
-        encoder: &mut wgpu::CommandEncoder,
-        commands: Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
-        compute_pipeline_registry: &mut ComputePipelineRegistry,
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        resource_manager: &mut ComputeResourceManager,
-        // The initial scene content
-        scene_view: &wgpu::TextureView,
-        // Ping-pong targets
-        target_a: &PassTarget,
-        target_b: &PassTarget,
-    ) -> wgpu::TextureView {
-        if commands.is_empty() {
-            return scene_view.clone();
+    fn do_compute(params: DoComputeParams<'_>) -> wgpu::TextureView {
+        if params.commands.is_empty() {
+            return params.scene_view.clone();
         }
 
-        let mut read_view = scene_view.clone();
-        let (mut write_target, mut read_target) = (target_a, target_b);
+        let mut read_view = params.scene_view.clone();
+        let (mut write_target, mut read_target) = (params.target_a, params.target_b);
 
-        for (command, size, start_pos) in commands {
+        for (command, size, start_pos) in params.commands {
             // Ensure the write target is cleared before use
-            encoder.clear_texture(
+            params.encoder.clear_texture(
                 &write_target.texture,
                 &ImageSubresourceRange {
                     aspect: wgpu::TextureAspect::All,
@@ -644,27 +678,29 @@ impl WgpuApp {
 
             // Create and dispatch the compute pass
             {
-                let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("Compute Pass"),
-                    timestamp_writes: None,
-                });
+                let mut cpass = params
+                    .encoder
+                    .begin_compute_pass(&wgpu::ComputePassDescriptor {
+                        label: Some("Compute Pass"),
+                        timestamp_writes: None,
+                    });
 
                 // Get the area of the compute command (reuse extract_draw_rect to avoid duplication)
                 let texture_size = wgpu::Extent3d {
-                    width: config.width,
-                    height: config.height,
+                    width: params.config.width,
+                    height: params.config.height,
                     depth_or_array_layers: 1,
                 };
                 let area =
                     extract_draw_rect(Some(command.barrier()), size, start_pos, texture_size);
 
-                compute_pipeline_registry.dispatch_erased(
-                    gpu,
-                    queue,
-                    config,
+                params.compute_pipeline_registry.dispatch_erased(
+                    params.gpu,
+                    params.queue,
+                    params.config,
                     &mut cpass,
                     &*command,
-                    resource_manager,
+                    params.resource_manager,
                     area,
                     &read_view,
                     &write_target.view,
@@ -757,65 +793,61 @@ fn extract_draw_rect(
     }
 }
 
-fn render_current_pass(
-    msaa_view: &Option<wgpu::TextureView>,
-    is_first_pass: &mut bool,
-    encoder: &mut wgpu::CommandEncoder,
-    write_target: &PassTarget,
-    commands_in_pass: &mut Vec<DrawCommandWithMetadata>,
-    scene_texture_view: &wgpu::TextureView,
-    drawer: &mut Drawer,
-    gpu: &wgpu::Device,
-    queue: &wgpu::Queue,
-    config: &wgpu::SurfaceConfiguration,
-    clip_stack: &mut Vec<PxRect>,
-) {
-    let (view, resolve_target) = if let Some(msaa_view) = msaa_view {
-        (msaa_view, Some(&write_target.view))
+fn render_current_pass(params: RenderCurrentPassParams<'_>) {
+    let (view, resolve_target) = if let Some(msaa_view) = params.msaa_view {
+        (msaa_view, Some(&params.write_target.view))
     } else {
-        (&write_target.view, None)
+        (&params.write_target.view, None)
     };
 
-    let load_ops = if *is_first_pass {
-        *is_first_pass = false;
+    let load_ops = if *params.is_first_pass {
+        *params.is_first_pass = false;
         wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
     } else {
         wgpu::LoadOp::Load
     };
 
-    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: Some("Render Pass"),
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view,
-            depth_slice: None,
-            resolve_target,
-            ops: wgpu::Operations {
-                load: load_ops,
-                store: wgpu::StoreOp::Store,
-            },
-        })],
-        ..Default::default()
-    });
+    let mut rpass = params
+        .encoder
+        .begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                depth_slice: None,
+                resolve_target,
+                ops: wgpu::Operations {
+                    load: load_ops,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        });
 
-    drawer.begin_pass(gpu, queue, config, &mut rpass, scene_texture_view);
+    params.drawer.begin_pass(
+        params.gpu,
+        params.queue,
+        params.config,
+        &mut rpass,
+        params.scene_texture_view,
+    );
 
     // Prepare buffered submission state
     let mut buffer: Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)> = Vec::new();
     let mut last_command_type_id = None;
     let mut current_batch_draw_rect: Option<PxRect> = None;
-    for cmd in mem::take(commands_in_pass).into_iter() {
+    for cmd in mem::take(params.commands_in_pass).into_iter() {
         // If the incoming command cannot be merged into the current batch, flush first.
         if !can_merge_into_batch(&last_command_type_id, cmd.type_id, cmd.clip_ops.is_some()) {
             if !buffer.is_empty() {
                 submit_buffered_commands(
                     &mut rpass,
-                    drawer,
-                    gpu,
-                    queue,
-                    config,
+                    params.drawer,
+                    params.gpu,
+                    params.queue,
+                    params.config,
                     &mut buffer,
-                    scene_texture_view,
-                    clip_stack,
+                    params.scene_texture_view,
+                    params.clip_stack,
                     &mut current_batch_draw_rect,
                 );
             }
@@ -824,7 +856,7 @@ fn render_current_pass(
 
         // Handle clipping operations (extracted for clarity).
         if let Some(clip_ops) = cmd.clip_ops {
-            handle_clip_ops(clip_ops, clip_stack);
+            handle_clip_ops(clip_ops, params.clip_stack);
         }
 
         // Add the command to the buffer and update the current batch rect (extracted merge helper).
@@ -835,18 +867,24 @@ fn render_current_pass(
     if !buffer.is_empty() {
         submit_buffered_commands(
             &mut rpass,
-            drawer,
-            gpu,
-            queue,
-            config,
+            params.drawer,
+            params.gpu,
+            params.queue,
+            params.config,
             &mut buffer,
-            scene_texture_view,
-            clip_stack,
+            params.scene_texture_view,
+            params.clip_stack,
             &mut current_batch_draw_rect,
         );
     }
 
-    drawer.end_pass(gpu, queue, config, &mut rpass, scene_texture_view);
+    params.drawer.end_pass(
+        params.gpu,
+        params.queue,
+        params.config,
+        &mut rpass,
+        params.scene_texture_view,
+    );
 }
 
 fn submit_buffered_commands(
@@ -857,7 +895,7 @@ fn submit_buffered_commands(
     config: &wgpu::SurfaceConfiguration,
     buffer: &mut Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)>,
     scene_texture_view: &wgpu::TextureView,
-    clip_stack: &mut Vec<PxRect>,
+    clip_stack: &mut [PxRect],
     current_batch_draw_rect: &mut Option<PxRect>,
 ) {
     // Take the buffered commands and convert to the transient representation expected by drawer.submit
@@ -901,7 +939,7 @@ fn handle_clip_ops(clip_ops: ClipOps, clip_stack: &mut Vec<PxRect>) {
 /// Apply clip_stack to current_batch_draw_rect. Returns false if intersection yields nothing
 /// (meaning there is nothing to submit), true otherwise.
 fn apply_clip_to_batch_rect(
-    clip_stack: &mut Vec<PxRect>,
+    clip_stack: &mut [PxRect],
     current_batch_draw_rect: &mut Option<PxRect>,
 ) -> bool {
     if let Some(clipped_rect) = clip_stack.last() {

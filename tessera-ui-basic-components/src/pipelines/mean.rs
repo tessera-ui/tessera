@@ -183,6 +183,7 @@ impl ComputablePipeline<MeanCommand> for MeanPipeline {
     /// - `resource_manager`: Resource manager for compute buffers.
     /// - `input_view`: Source texture view.
     /// - `output_view`: Destination texture view.
+    ///
     /// Dispatches the mean luminance compute shader.
     /// - `target_area`: The area of the output texture to be affected (PxRect).
     fn dispatch(

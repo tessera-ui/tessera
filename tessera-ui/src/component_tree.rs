@@ -21,6 +21,19 @@ pub use node::{
     WindowRequests, measure_node, measure_nodes, place_node,
 };
 
+/// Parameters for the compute function
+pub struct ComputeParams<'a> {
+    pub screen_size: PxSize,
+    pub cursor_position: Option<PxPosition>,
+    pub cursor_events: Vec<CursorEvent>,
+    pub keyboard_events: Vec<winit::event::KeyEvent>,
+    pub ime_events: Vec<winit::event::Ime>,
+    pub modifiers: winit::keyboard::ModifiersState,
+    pub compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
+    pub gpu: &'a wgpu::Device,
+    pub clipboard: &'a mut Clipboard,
+}
+
 /// Respents a component tree
 pub struct ComponentTree {
     /// We use indextree as the tree structure
@@ -109,16 +122,19 @@ impl ComponentTree {
     /// the rendering instructions with their associated sizes and positions.
     pub fn compute(
         &mut self,
-        screen_size: PxSize,
-        mut cursor_position: Option<PxPosition>,
-        mut cursor_events: Vec<CursorEvent>,
-        mut keyboard_events: Vec<winit::event::KeyEvent>,
-        mut ime_events: Vec<winit::event::Ime>,
-        modifiers: winit::keyboard::ModifiersState,
-        compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
-        gpu: &wgpu::Device,
-        clipboard: &mut Clipboard,
+        params: ComputeParams<'_>,
     ) -> (Vec<(Command, TypeId, PxSize, PxPosition)>, WindowRequests) {
+        let ComputeParams {
+            screen_size,
+            mut cursor_position,
+            mut cursor_events,
+            mut keyboard_events,
+            mut ime_events,
+            modifiers,
+            compute_resource_manager,
+            gpu,
+            clipboard,
+        } = params;
         let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
             return (vec![], WindowRequests::default());
         };

@@ -201,12 +201,12 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
             let row_intrinsic_constraint = Constraint::new(args.width, args.height);
             let row_effective_constraint = row_intrinsic_constraint.merge(input.parent_constraint);
 
-            let should_use_weight_for_width = match row_effective_constraint.width {
-                DimensionValue::Fixed(_) => true,
-                DimensionValue::Fill { max: Some(_), .. } => true,
-                DimensionValue::Wrap { max: Some(_), .. } => true,
-                _ => false,
-            };
+            let should_use_weight_for_width = matches!(
+                row_effective_constraint.width,
+                DimensionValue::Fixed(_)
+                    | DimensionValue::Fill { max: Some(_), .. }
+                    | DimensionValue::Wrap { max: Some(_), .. }
+            );
 
             if should_use_weight_for_width {
                 measure_weighted_row(input, &args, &child_weights, &row_effective_constraint)
@@ -297,8 +297,7 @@ fn measure_unweighted_row(
     let mut total_children_measured_width = Px(0);
     let mut max_child_height = Px(0);
 
-    for i in 0..n {
-        let child_id = input.children_ids[i];
+    for (i, &child_id) in input.children_ids.iter().enumerate().take(n) {
         let parent_offered_constraint_for_child = Constraint::new(
             match row_effective_constraint.width {
                 DimensionValue::Fixed(v) => DimensionValue::Wrap {

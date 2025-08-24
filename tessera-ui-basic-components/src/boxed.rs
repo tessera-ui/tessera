@@ -163,10 +163,7 @@ pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxe
         let mut max_child_height = Px(0);
         let mut children_sizes = vec![None; N];
 
-        for i in 0..N {
-            let Some(child_id) = input.children_ids.get(i).copied() else {
-                continue;
-            };
+        for (i, &child_id) in input.children_ids.iter().enumerate().take(N) {
             let child_result = input.measure_child(child_id, &effective_constraint)?;
             max_child_width = max_child_width.max(child_result.width);
             max_child_height = max_child_height.max(child_result.height);

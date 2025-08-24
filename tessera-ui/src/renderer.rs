@@ -678,17 +678,18 @@ Fps: {:.2}
         args.app.resource_manager.write().clear();
 
         let (commands, window_requests) = TesseraRuntime::with_mut(|rt| {
-            rt.component_tree.compute(
-                screen_size,
-                cursor_position,
-                cursor_events,
-                keyboard_events,
-                ime_events,
-                args.keyboard_state.modifiers(),
-                args.app.resource_manager.clone(),
-                &args.app.gpu,
-                args.clipboard,
-            )
+            rt.component_tree
+                .compute(crate::component_tree::ComputeParams {
+                    screen_size,
+                    cursor_position,
+                    cursor_events,
+                    keyboard_events,
+                    ime_events,
+                    modifiers: args.keyboard_state.modifiers(),
+                    compute_resource_manager: args.app.resource_manager.clone(),
+                    gpu: &args.app.gpu,
+                    clipboard: args.clipboard,
+                })
         });
 
         let draw_cost = draw_timer.elapsed();

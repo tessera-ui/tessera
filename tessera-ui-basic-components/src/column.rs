@@ -321,8 +321,7 @@ fn measure_unweighted_column(
 ) -> Result<(Px, Px, Px), MeasurementError> {
     let n = children_sizes.len();
     let mut total_children_measured_height = Px(0);
-    for i in 0..n {
-        let child_id = input.children_ids[i];
+    for (i, &child_id) in input.children_ids.iter().enumerate().take(n) {
         let parent_offered_constraint_for_child = Constraint::new(
             column_effective_constraint.width,
             DimensionValue::Wrap {

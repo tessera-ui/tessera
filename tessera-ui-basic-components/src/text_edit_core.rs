@@ -317,7 +317,6 @@ impl TextEditorState {
 /// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(16.0), None)));
 /// text_edit_core(state.clone());
 /// ```
-
 // Helper: compute selection rectangles for the given editor.
 // This extracts the selection-rect computation into a small, testable function
 // to reduce complexity inside the main component body.
