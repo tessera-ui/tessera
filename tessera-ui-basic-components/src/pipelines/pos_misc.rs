@@ -35,6 +35,5 @@ pub fn pixel_to_ndc(pos: PxPosition, screen_size: [u32; 2]) -> [f32; 2] {
     let ndc_y = (px_y / height) * 2.0 - 1.0;
 
     // Convert UI top-left origin to NDC bottom-left origin by inverting Y.
-    // Keep the existing x sign convention for compatibility with caller code.
-    [-ndc_x, -ndc_y]
+    [ndc_x, -ndc_y]
 }
