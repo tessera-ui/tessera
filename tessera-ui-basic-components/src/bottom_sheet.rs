@@ -5,7 +5,7 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, Constraint, DimensionValue, Px, PxPosition, tessera, winit};
+use tessera_ui::{Color, DimensionValue, Px, PxPosition, tessera, winit};
 
 use crate::{
     animation,
@@ -224,16 +224,7 @@ fn place_bottom_sheet_if_present(
 
     let bottom_sheet_id = input.children_ids[2];
 
-    let child_size = match input.measure_child(
-        bottom_sheet_id,
-        &Constraint::new(
-            input.parent_constraint.width,
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
-        ),
-    ) {
+    let child_size = match input.measure_child(bottom_sheet_id, input.parent_constraint) {
         Ok(s) => s,
         Err(_) => return,
     };
@@ -288,7 +279,7 @@ pub fn bottom_sheet_provider(
         // Place scrim (if present) covering the whole parent.
         if input.children_ids.len() > 1 {
             let scrim_id = input.children_ids[1];
-            let _ = input.measure_child(scrim_id, input.parent_constraint);
+            input.measure_child(scrim_id, input.parent_constraint)?;
             input.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
         }
 
