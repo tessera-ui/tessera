@@ -68,7 +68,7 @@ The roadmap is now organized by crate:
   - ~~checkbox~~
   - ~~dialog~~
   - ~~slider~~
-  - text_editor
+  - ~~text_editor~~
   - ~~progress~~
   - ~~scrollable~~
 - Add these components
