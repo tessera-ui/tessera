@@ -1,6 +1,7 @@
 ## [v0.2.3] - 2025-08-25 +08:00
 
 ### Changes
+
 - fix(switch): restore correct on_toggle behavior and stabilize state handling
 - refactor(renderer, components): extract helpers and simplify rendering/compute flow
 - chore(deps): bump syn from 2.0.105 to 2.0.106
@@ -10,6 +11,7 @@
 ## [v0.2.2] - 2025-08-15 +08:00
 
 ### Changes
+
 - chore(deps): bump syn from 2.0.104 to 2.0.105
 - fix(docs): update code block in shard function example to ignore syntax highlighting
 
@@ -18,6 +20,7 @@
 ## [v0.2.1] - 2025-08-08 +08:00
 
 ### Changes
+
 - fix(tessera-ui-macros): update version to 0.2.0 and adjust syn dependency features
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.2.0...tessera-ui-macros-v0.2.1)
@@ -55,6 +58,7 @@
 ## [v0.1.2] - 2025-07-25 +08:00
 
 ### Changes
+
 - chore: update Cargo.toml to include homepage.workspace for all packages
 
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-macros-v0.1.1...tessera-ui-macros-v0.1.2)
@@ -62,6 +66,7 @@
 ## [v0.1.1] - 2025-07-24 +08:00
 
 ### Changes
+
 - chore: transfer repo to https://github.com/tessera-ui/tessera
 - feat(tessera-ui): add on_close callback for window close events
 - feat(runtime): add minimize state handling and callback system
@@ -71,4 +76,3 @@
 - docs(readme): update relative links in READMEs to absolute URLs
 - docs(readme): use absolute paths for images and links in READMEs
 - chore(rename): rename `tessera` to `tessera-ui`
-

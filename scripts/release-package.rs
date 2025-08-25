@@ -775,7 +775,7 @@ fn generate_changelog(
     let now = Local::now();
     let date = now.format("%Y-%m-%d %:z");
     let new_tag = format!("{}-v{}", package, new_version);
-    let mut s = format!("## [v{}] - {}\n\n### Changes\n", new_version, date);
+    let mut s = format!("## [v{}] - {}\n\n### Changes\n\n", new_version, date);
     for c in commits {
         if let Some((_, msg)) = c.split_once(' ') {
             s.push_str(&format!("- {}\n", msg));
