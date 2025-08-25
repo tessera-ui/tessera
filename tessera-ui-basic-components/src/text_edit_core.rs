@@ -28,6 +28,7 @@ use tessera_ui::{
 use crate::{
     pipelines::{TextCommand, TextConstraint, TextData, write_font_system},
     selection_highlight_rect::selection_highlight_rect,
+    text_edit_core::cursor::CURSOR_WIDRH,
 };
 
 /// Definition of a rectangular selection highlight
@@ -322,45 +323,23 @@ impl TextEditorState {
 // to reduce complexity inside the main component body.
 fn compute_selection_rects(editor: &glyphon::Editor) -> Vec<RectDef> {
     let mut selection_rects: Vec<RectDef> = Vec::new();
+    let (selection_start, selection_end) = editor.selection_bounds().unwrap_or_default();
 
-    if let Some((_start, _end)) = editor.selection_bounds() {
-        editor.with_buffer(|buffer| {
-            for run in buffer.layout_runs() {
-                let _line_i = run.line_i;
-                let line_top = Px(run.line_top as i32);
-                let line_height = Px(run.line_height as i32);
+    editor.with_buffer(|buffer| {
+        for run in buffer.layout_runs() {
+            let line_top = Px(run.line_top as i32);
+            let line_height = Px(run.line_height as i32);
 
-                // If this run contains glyphs, approximate selection by glyph extents.
-                if !run.glyphs.is_empty() {
-                    let mut min_x = Px(i32::MAX);
-                    let mut max_x = Px(i32::MIN);
-                    for glyph in run.glyphs.iter() {
-                        let gx = Px(glyph.x as i32);
-                        let gw = Px(glyph.w as i32);
-                        min_x = min_x.min(gx);
-                        max_x = max_x.max(gx + gw);
-                    }
-                    // Ensure sensible width
-                    let width = (max_x - min_x).max(Px(0));
-                    selection_rects.push(RectDef {
-                        x: min_x,
-                        y: line_top,
-                        width,
-                        height: line_height,
-                    });
-                } else {
-                    // Empty run: highlight full line width
-                    let full_w = buffer.size().0.map_or(Px(0), |w| Px(w as i32));
-                    selection_rects.push(RectDef {
-                        x: Px(0),
-                        y: line_top,
-                        width: full_w,
-                        height: line_height,
-                    });
-                }
+            if let Some((x, w)) = run.highlight(selection_start, selection_end) {
+                selection_rects.push(RectDef {
+                    x: Px(x as i32),
+                    y: line_top,
+                    width: Px(w as i32),
+                    height: line_height,
+                });
             }
-        });
-    }
+        }
+    });
 
     selection_rects
 }
@@ -402,6 +381,9 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
     {
         let state_clone = state.clone();
         measure(Box::new(move |input| {
+            // Enable clipping for clip to visible area
+            input.enable_clipping();
+
             // surface provides constraints that should be respected for text layout
             let max_width_pixels: Option<Px> = match input.parent_constraint.width {
                 DimensionValue::Fixed(w) => Some(w),
@@ -431,7 +413,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
             // Handle selection rectangle positioning
             for (i, rect_def) in selection_rects.iter().enumerate() {
                 if let Some(rect_node_id) = input.children_ids.get(i).copied() {
-                    let _ = input.measure_child(rect_node_id, input.parent_constraint);
+                    input.measure_child(rect_node_id, input.parent_constraint)?;
                     input.place_child(rect_node_id, PxPosition::new(rect_def.x, rect_def.y));
                 }
             }
@@ -447,7 +429,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
                 let cursor_pos = PxPosition::new(Px(cursor_pos_raw.0), Px(cursor_pos_raw.1));
                 let cursor_node_index = selection_rects_len;
                 if let Some(cursor_node_id) = input.children_ids.get(cursor_node_index).copied() {
-                    let _ = input.measure_child(cursor_node_id, input.parent_constraint);
+                    input.measure_child(cursor_node_id, input.parent_constraint)?;
                     input.place_child(cursor_node_id, cursor_pos);
                 }
             }
@@ -465,7 +447,7 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
             };
 
             Ok(ComputedData {
-                width: text_data.size[0].into(),
+                width: Px::from(text_data.size[0]) + CURSOR_WIDRH.to_px(), // Add padding for cursor
                 height: constrained_height.into(),
             })
         }));

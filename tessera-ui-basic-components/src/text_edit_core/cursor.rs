@@ -11,7 +11,7 @@ use tessera_ui::{Color, ComputedData, Dp, Px, tessera};
 use crate::pipelines::ShapeCommand;
 
 /// Width of the text cursor in device-independent pixels.
-const CURSOR_WIDRH: Dp = Dp(2.5);
+pub(crate) const CURSOR_WIDRH: Dp = Dp(2.5);
 
 /// A blinking cursor component for text editing interfaces.
 ///
