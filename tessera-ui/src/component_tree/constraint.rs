@@ -193,23 +193,6 @@ pub enum DimensionValue {
     Fill { min: Option<Px>, max: Option<Px> },
 }
 
-impl DimensionValue {
-    /// Zero-sized dimension, equivalent to `Fixed(Px(0))`.
-    pub const ZERO: Self = DimensionValue::Fixed(Px(0));
-
-    /// Fill with no constraints.
-    pub const FILLED: Self = DimensionValue::Fill {
-        min: None,
-        max: None,
-    };
-
-    /// Wrap with no constraints.
-    pub const WRAP: Self = DimensionValue::Wrap {
-        min: None,
-        max: None,
-    };
-}
-
 impl Default for DimensionValue {
     /// Returns the default dimension value: `Wrap { min: None, max: None }`.
     ///
@@ -225,6 +208,21 @@ impl Default for DimensionValue {
 }
 
 impl DimensionValue {
+    /// Zero-sized dimension, equivalent to `Fixed(Px(0))`.
+    pub const ZERO: Self = DimensionValue::Fixed(Px(0));
+
+    /// Fill with no constraints.
+    pub const FILLED: Self = DimensionValue::Fill {
+        min: None,
+        max: None,
+    };
+
+    /// Wrap with no constraints.
+    pub const WRAP: Self = DimensionValue::Wrap {
+        min: None,
+        max: None,
+    };
+
     /// Converts this dimension value to a maximum pixel value.
     ///
     /// This method is useful during layout calculation when you need to determine
