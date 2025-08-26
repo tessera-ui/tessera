@@ -1,3 +1,15 @@
+## [v1.9.1] - 2025-08-26 +08:00
+
+### Changes
+
+- refactor(ui): simplify conditional checks in keyboard event handlers and state updates
+- refactor(image, constraint): replace to_max_px with get_max for constraint handling
+- fix(bottom-sheet): simplify child measurement logic and remove unnecessary constraints
+- chore: add new line in changelog sections for better readability
+- fix(text-editor/renderer): improve text selection rendering and clipping system
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.9.0...tessera-ui-basic-components-v1.9.1)
+
 ## [v1.9.0] - 2025-08-25 +08:00
 
 ### Changes
