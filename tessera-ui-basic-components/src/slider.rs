@@ -167,18 +167,18 @@ fn update_value_on_drag(
     new_value: &mut Option<f32>,
     width_f: f32,
 ) {
-    if state.is_dragging {
-        if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
-            *new_value = Some(v);
-        }
+    if state.is_dragging
+        && let Some(v) = cursor_progress(input.cursor_position_rel, width_f)
+    {
+        *new_value = Some(v);
     }
 }
 
 fn notify_on_change(new_value: Option<f32>, args: &SliderArgs) {
-    if let Some(v) = new_value {
-        if (v - args.value).abs() > f32::EPSILON {
-            (args.on_change)(v);
-        }
+    if let Some(v) = new_value
+        && (v - args.value).abs() > f32::EPSILON
+    {
+        (args.on_change)(v);
     }
 }
 

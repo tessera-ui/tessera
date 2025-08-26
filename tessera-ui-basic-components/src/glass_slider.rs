@@ -142,10 +142,10 @@ fn process_cursor_events(
         }
     }
 
-    if state.is_dragging {
-        if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
-            new_value = Some(v);
-        }
+    if state.is_dragging
+        && let Some(v) = cursor_progress(input.cursor_position_rel, width_f)
+    {
+        new_value = Some(v);
     }
 
     new_value
@@ -168,7 +168,7 @@ fn process_cursor_events(
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```
 /// use std::sync::Arc;
 /// use parking_lot::Mutex;
 /// use tessera_ui_basic_components::glass_slider::{glass_slider, GlassSliderArgsBuilder, GlassSliderState};
@@ -278,10 +278,10 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
 
         let width_f = input.computed_data.width.0 as f32;
 
-        if let Some(v) = process_cursor_events(&mut state, &input, width_f) {
-            if (v - args.value).abs() > f32::EPSILON {
-                on_change(v);
-            }
+        if let Some(v) = process_cursor_events(&mut state, &input, width_f)
+            && (v - args.value).abs() > f32::EPSILON
+        {
+            on_change(v);
         }
     }));
 

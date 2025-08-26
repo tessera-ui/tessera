@@ -160,15 +160,15 @@ fn handle_click_state(
                 CursorEventContent::Released(PressKeyEventType::Left)
             )
         }) {
-            if let Some(ripple_state) = &ripple_state {
-                if let Some(pos) = input.cursor_position_rel {
-                    let size = input.computed_data;
-                    let normalized_pos = [
-                        pos.x.to_f32() / size.width.to_f32(),
-                        pos.y.to_f32() / size.height.to_f32(),
-                    ];
-                    ripple_state.start_animation(normalized_pos);
-                }
+            if let Some(ripple_state) = &ripple_state
+                && let Some(pos) = input.cursor_position_rel
+            {
+                let size = input.computed_data;
+                let normalized_pos = [
+                    pos.x.to_f32() / size.width.to_f32(),
+                    pos.y.to_f32() / size.height.to_f32(),
+                ];
+                ripple_state.start_animation(normalized_pos);
             }
             on_click();
         }
@@ -230,13 +230,13 @@ pub fn fluid_glass(
     ripple_state: Option<Arc<RippleState>>,
     child: impl FnOnce(),
 ) {
-    if let Some(ripple_state) = &ripple_state {
-        if let Some((progress, center)) = ripple_state.get_animation_progress() {
-            args.ripple_center = Some(center);
-            args.ripple_radius = Some(progress);
-            args.ripple_alpha = Some((1.0 - progress) * 0.3);
-            args.ripple_strength = Some(progress);
-        }
+    if let Some(ripple_state) = &ripple_state
+        && let Some((progress, center)) = ripple_state.get_animation_progress()
+    {
+        args.ripple_center = Some(center);
+        args.ripple_radius = Some(progress);
+        args.ripple_alpha = Some((1.0 - progress) * 0.3);
+        args.ripple_strength = Some(progress);
     }
     (child)();
     let args_measure_clone = args.clone();

@@ -125,7 +125,7 @@ fn render_track_and_fill(args: GlassProgressArgs) {
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```
 /// use tessera_ui_basic_components::glass_progress::{glass_progress, GlassProgressArgsBuilder};
 ///
 /// // In your component function

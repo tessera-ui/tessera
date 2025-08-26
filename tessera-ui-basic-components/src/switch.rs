@@ -197,15 +197,15 @@ fn handle_input_events_switch(
     }
 
     for e in input.cursor_events.iter() {
-        if let CursorEventContent::Pressed(PressKeyEventType::Left) = &e.content {
-            if is_cursor_in {
-                if let Some(state) = &state_arc {
-                    state.lock().toggle();
-                    let new_state = state.lock().checked;
-                    on_toggle(new_state);
-                } else {
-                    on_toggle(!checked_initial);
-                }
+        if let CursorEventContent::Pressed(PressKeyEventType::Left) = &e.content
+            && is_cursor_in
+        {
+            if let Some(state) = &state_arc {
+                state.lock().toggle();
+                let new_state = state.lock().checked;
+                on_toggle(new_state);
+            } else {
+                on_toggle(!checked_initial);
             }
         }
     }

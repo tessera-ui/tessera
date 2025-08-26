@@ -294,12 +294,11 @@ fn make_keyboard_state_handler(
 ) -> Box<dyn for<'a> Fn(tessera_ui::StateHandlerInput<'a>) + Send + Sync + 'static> {
     Box::new(move |input| {
         input.keyboard_events.drain(..).for_each(|event| {
-            if event.state == winit::event::ElementState::Pressed {
-                if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
+            if event.state == winit::event::ElementState::Pressed
+                && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
                     event.physical_key
-                {
-                    (on_close)();
-                }
+            {
+                (on_close)();
             }
         });
     })
