@@ -37,8 +37,8 @@ jobs:
         with:
           targets: aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
-      - name: Install xbuild
-        run: cargo install xbuild
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         id: setup-ndk
@@ -47,4 +47,8 @@ jobs:
       - name: Check Android target
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: x build  --platform android --arch arm64 -p example
+        run: |
+          cargo ndk -t aarch64-linux-android check -p tessera-ui --verbose
+          cargo ndk -t aarch64-linux-android check -p tessera-ui-basic-components --verbose
+          cargo ndk -t aarch64-linux-android check -p tessera-ui-macros --verbose
+          cargo ndk -t aarch64-linux-android check -p tessera-ui-shard --verbose
