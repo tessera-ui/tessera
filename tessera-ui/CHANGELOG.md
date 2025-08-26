@@ -1,3 +1,17 @@
+## [v1.10.2] - 2025-08-26 +08:00
+
+### Changes
+
+- refactor(lib, renderer): clean up example code and improve formatting in documentation
+- refactor(image, constraint): replace to_max_px with get_max for constraint handling
+- refactor(tessera-ui): reorganize DimensionValue implementation structure
+- fix(cursor): improve cursor position cleanup to prevent premature clearing
+- chore(deps): bump arboard from 3.6.0 to 3.6.1
+- chore: add new line in changelog sections for better readability
+- fix(text-editor/renderer): improve text selection rendering and clipping system
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.10.1...tessera-ui-v1.10.2)
+
 ## [v1.10.1] - 2025-08-25 +08:00
 
 ### Changes
