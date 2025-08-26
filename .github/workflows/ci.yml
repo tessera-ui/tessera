@@ -12,9 +12,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_and_test:
+    name: Build and Test
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -27,3 +27,24 @@ jobs:
         run: cargo install rust-script
       - name: Check formatting
         run: cargo fmt --all -- --check && rust-script scripts/check-imports.rs .
+
+  check_android:
+    name: Check Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - name: Install xbuild
+        run: cargo install xbuild
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r28c
+      - name: Check Android target
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: cargo xbuild check --all-targets --target aarch64-linux-android
