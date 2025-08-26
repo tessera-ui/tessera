@@ -59,7 +59,7 @@ The roadmap is now organized by crate:
 - ~~Optimize rendering performance~~
 
 - ~~Design how to provide async API to components~~
-- Optimize touch screen adaptation
+- ~~Optimize touch screen adaptation~~
 - ~~router~~
 
 ### tessera-ui-basic-components (v2.0.0 roadmap)
