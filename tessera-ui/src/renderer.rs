@@ -194,6 +194,7 @@ pub mod reorder;
 use std::{any::TypeId, sync::Arc, time::Instant};
 
 use log::{debug, warn};
+use tessera_ui_macros::tessera;
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
@@ -629,7 +630,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     fn build_component_tree(entry_point: &F) -> std::time::Duration {
         let tree_timer = Instant::now();
         debug!("Building component tree...");
-        entry_point();
+        entry_wrapper(entry_point);
         let build_tree_cost = tree_timer.elapsed();
         debug!("Component tree built in {build_tree_cost:?}");
         build_tree_cost
@@ -1342,4 +1343,18 @@ pub fn hide_soft_input(android_app: &AndroidApp) {
     if env.exception_check().unwrap_or(false) {
         let _ = env.exception_clear();
     }
+}
+
+/// Entry point wrapper for tessera applications.
+///
+/// # Why this is needed
+///
+/// Tessera component entry points must be functions annotated with the `tessera` macro.
+/// Unlike some other frameworks, we cannot detect whether a provided closure has been
+/// annotated with `tessera`. Wrapping the entry function guarantees it is invoked from
+/// a `tessera`-annotated function, ensuring correct behavior regardless of how the user
+/// supplied their entry point.
+#[tessera(crate)]
+fn entry_wrapper(entry: impl Fn()) {
+    entry();
 }
