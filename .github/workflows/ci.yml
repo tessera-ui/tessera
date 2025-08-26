@@ -47,4 +47,4 @@ jobs:
       - name: Check Android target
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: cargo xbuild check --all-targets --target aarch64-linux-android
+        run: x build  --platform android --arch arm64 -p example
