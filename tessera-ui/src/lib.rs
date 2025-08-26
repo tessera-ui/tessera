@@ -29,25 +29,6 @@
 //! - Using `tessera_basic_components` for common UI elements
 //! - Basic layout with `row`, `column`, and `surface` components
 //!
-//! ```rust,ignore
-//! use tessera_ui::{Renderer, Color, Dp};
-//! use tessera_ui_basic_components::*;
-//! use tessera_ui_macros::tessera;
-//!
-//! #[tessera]
-//! fn my_app() {
-//!     surface(
-//!         SurfaceArgs {
-//!             color: Color::WHITE,
-//!             padding: Dp(20.0),
-//!             ..Default::default()
-//!         },
-//!         None,
-//!         || text("Hello, Tessera!"),
-//!     );
-//! }
-//! ```
-//!
 //! ### 🟡 **Intermediate Users** - Custom Layout and Interaction
 //!
 //! For developers who want to create custom components and handle complex layouts:
@@ -65,25 +46,21 @@
 //! - Managing component state through explicit state handlers
 //! - Working with the constraint-based layout system
 //!
-//! ```rust,ignore
-//! use tessera_ui::{measure_node, place_node, ComputedData, Constraint, PxPosition};
-//! use tessera_ui_macros::tessera;
+//! ```
+//! use tessera_ui::{measure_node, place_node, ComputedData, Constraint, PxPosition, tessera};
 //!
 //! #[tessera]
-//! fn custom_layout() {
-//!     measure(|input| {
-//!         let mut total_width = 0;
-//!         for (i, &child_id) in input.children_ids.iter().enumerate() {
-//!             let child_size = measure_node(child_id, input.parent_constraint, input.metadatas)?;
-//!             place_node(child_id, PxPosition::new(total_width.into(), 0.into()), input.metadatas);
-//!             total_width += child_size.width.to_i32();
-//!         }
-//!         Ok(ComputedData::from_size((total_width.into(), input.parent_constraint.height.min_value())))
-//!     });
+//! fn custom_layout(child: impl FnOnce()) {
+//!     child();
 //!
-//!     state_handler(|input| {
+//!     measure(Box::new(|input| {
+//!         // Custom measurement logic here
+//! #        Ok(ComputedData::ZERO) // Make doc tests happy
+//!     }));
+//!
+//!     state_handler(Box::new(|input| {
 //!         // Handle user interactions here
-//!     });
+//!     }));
 //! }
 //! ```
 //!
@@ -92,6 +69,7 @@
 //! For developers building custom visual effects and rendering pipelines:
 //!
 //! **Advanced rendering modules:**
+//!
 //! - [`renderer::drawer`] - Custom drawable pipelines and draw commands
 //! - [`renderer::compute`] - GPU compute pipelines for advanced effects
 //! - [`DrawCommand`], [`ComputeCommand`] - Low-level rendering commands
@@ -99,29 +77,16 @@
 //! - [`PipelineRegistry`], [`ComputePipelineRegistry`] - Pipeline management
 //!
 //! **Key concepts:**
+//!
 //! - Creating custom WGPU shaders and pipelines
 //! - Managing GPU resources and compute operations
 //! - Understanding the rendering command system
 //! - Implementing advanced visual effects like lighting, shadows, and particles
 //!
-//! ```rust,ignore
-//! use tessera_ui::renderer::{DrawCommand, DrawablePipeline};
-//! use wgpu::{Device, Queue, RenderPass};
-//!
-//! struct MyCustomPipeline {
-//!     // Your pipeline state
-//! }
-//!
-//! impl DrawablePipeline for MyCustomPipeline {
-//!     fn draw<'a>(&'a self, render_pass: &mut RenderPass<'a>) {
-//!         // Custom rendering logic
-//!     }
-//! }
-//! ```
-//!
 //! ## Core Modules
 //!
 //! ### Essential Types and Functions
+//!
 //! - [`Renderer`] - Main application renderer and lifecycle manager
 //! - [`measure_node`], [`place_node`] - Core layout functions
 //! - [`Constraint`], [`DimensionValue`] - Layout constraint system
@@ -129,17 +94,20 @@
 //! - [`Color`] - Color representation and utilities
 //!
 //! ### Component System
+//!
 //! - [`ComponentTree`] - Component tree management
 //! - [`ComponentNode`] - Individual component node representation
 //! - [`ComputedData`] - Layout computation results
 //! - [`StateHandlerFn`] - State management and event handling
 //!
 //! ### Event Handling
+//!
 //! - [`CursorEvent`] - Mouse and touch input events
 //! - [`Focus`] - Focus management system
 //! - [`PressKeyEventType`] - Keyboard input handling
 //!
 //! ### Rendering System
+//!
 //! - [`renderer::drawer`] - Drawing pipeline system
 //! - [`renderer::compute`] - Compute pipeline system
 //! - [`DrawCommand`], [`ComputeCommand`] - Rendering commands

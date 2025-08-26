@@ -26,7 +26,7 @@
 //!
 //! The most common way to use the renderer is through the [`Renderer::run`] method:
 //!
-//! ```rust,no_run
+//! ```no_run
 //! use tessera_ui::Renderer;
 //!
 //! // Define your UI entry point
@@ -37,9 +37,9 @@
 //! // Run the application
 //! Renderer::run(
 //!     my_app,  // Entry point function
-//!     |_app| {
+//!     |app| {
 //!         // Register rendering pipelines
-//!         // tessera_ui_basic_components::pipelines::register_pipelines(app);
+//!         // For example, tessera_ui_basic_components::pipelines::register_pipelines(app);
 //!     }
 //! ).unwrap();
 //! ```
@@ -48,10 +48,10 @@
 //!
 //! You can customize the renderer behavior using [`TesseraConfig`]:
 //!
-//! ```rust,no_run
+//! ```no_run
 //! use tessera_ui::{Renderer, renderer::TesseraConfig};
 //!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! # fn foo() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = TesseraConfig {
 //!     sample_count: 8,  // 8x MSAA
 //!     ..Default::default()
@@ -86,15 +86,15 @@
 //!
 //! ### Android
 //!
-//! ```rust,no_run
+//! ```no_run
 //! use tessera_ui::Renderer;
-//! # #[cfg(target_os = "android")]
+//! #[cfg(target_os = "android")]
 //! use winit::platform::android::activity::AndroidApp;
 //!
 //! fn entry_point() {}
 //! fn register_pipelines(_: &mut tessera_ui::renderer::WgpuApp) {}
 //!
-//! # #[cfg(target_os = "android")]
+//! #[cfg(target_os = "android")]
 //! fn android_main(android_app: AndroidApp) {
 //!     Renderer::run(entry_point, register_pipelines, android_app).unwrap();
 //! }
@@ -165,7 +165,7 @@
 //!
 //! ### Custom Rendering Pipeline
 //!
-//! ```rust,no_run
+//! ```no_run
 //! use tessera_ui::{Renderer, renderer::WgpuApp};
 //!
 //! fn register_custom_pipelines(app: &mut WgpuApp) {
@@ -356,7 +356,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// use tessera_ui::Renderer;
     ///
     /// fn my_ui() {
@@ -397,7 +397,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// use tessera_ui::{Renderer, renderer::TesseraConfig};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -458,7 +458,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// use tessera_ui::Renderer;
     /// use winit::platform::android::activity::AndroidApp;
     ///
@@ -506,7 +506,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// use tessera_ui::{Renderer, renderer::TesseraConfig};
     /// use winit::platform::android::activity::AndroidApp;
     ///
