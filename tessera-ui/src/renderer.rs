@@ -572,6 +572,7 @@ struct RenderFrameArgs<'a> {
     pub event_loop: &'a ActiveEventLoop,
     pub clipboard: &'a mut Clipboard,
 }
+
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     fn should_set_cursor_pos(
         cursor_position: Option<crate::PxPosition>,
@@ -723,7 +724,7 @@ Fps: {:.2}
         // this will help winit to properly schedule and make assumptions about its internal state
         args.app.window.pre_present_notify();
         // and tell runtime the new size
-        TesseraRuntime::with_mut(|rt| rt.window_size = args.app.size().into());
+        TesseraRuntime::with_mut(|rt: &mut TesseraRuntime| rt.window_size = args.app.size().into());
         // Clear any registered callbacks
         TesseraRuntime::with_mut(|rt| rt.clear_frame_callbacks());
 
@@ -785,6 +786,9 @@ Fps: {:.2}
 
         // Log frame statistics
         Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
+
+        // End of frame cleanup
+        args.cursor_state.frame_cleanup();
 
         // Currently we render every frame
         args.app.window.request_redraw();
@@ -898,7 +902,10 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         self.keyboard_state.push_event(event);
     }
 
-    fn handle_redraw_requested(&mut self) {
+    fn handle_redraw_requested(
+        &mut self,
+        #[cfg(target_os = "android")] event_loop: &ActiveEventLoop,
+    ) {
         // Borrow the app here to avoid simultaneous mutable borrows of `self`
         let app = match self.app.as_mut() {
             Some(app) => app,
@@ -1089,6 +1096,9 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 self.ime_state.push_event(ime_event);
             }
             WindowEvent::RedrawRequested => {
+                #[cfg(target_os = "android")]
+                self.handle_redraw_requested(event_loop);
+                #[cfg(not(target_os = "android"))]
                 self.handle_redraw_requested();
             }
             _ => (),

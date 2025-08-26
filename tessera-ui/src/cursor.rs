@@ -201,9 +201,19 @@ pub struct CursorState {
     touch_scroll_config: TouchScrollConfig,
     /// Current inertial scrolling state, if active.
     active_inertia: Option<ActiveInertia>,
+    /// If true, the cursor position will be cleared on the next frame.
+    clear_position_on_next_frame: bool,
 }
 
 impl CursorState {
+    /// Cleans up the cursor state at the end of a frame.
+    pub(crate) fn frame_cleanup(&mut self) {
+        if self.clear_position_on_next_frame {
+            self.update_position(None);
+            self.clear_position_on_next_frame = false;
+        }
+    }
+
     /// Adds a cursor event to the processing queue.
     ///
     /// Events are stored in a bounded queue to prevent memory issues during UI performance
@@ -416,6 +426,7 @@ impl CursorState {
         self.update_position(None);
         self.active_inertia = None;
         self.touch_points.clear();
+        self.clear_position_on_next_frame = false;
     }
 
     /// Returns the current cursor position, if any.
@@ -629,7 +640,7 @@ impl CursorState {
         self.push_event(release_event);
 
         if self.touch_points.is_empty() && self.active_inertia.is_none() {
-            self.update_position(None);
+            self.clear_position_on_next_frame = true;
         }
     }
 }
