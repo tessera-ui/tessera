@@ -48,7 +48,7 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          cargo ndk -t aarch64-linux-android check -p tessera-ui --verbose
-          cargo ndk -t aarch64-linux-android check -p tessera-ui-basic-components --verbose
-          cargo ndk -t aarch64-linux-android check -p tessera-ui-macros --verbose
-          cargo ndk -t aarch64-linux-android check -p tessera-ui-shard --verbose
+          cargo ndk -t arm64-v8a check -p tessera-ui --verbose
+          cargo ndk -t arm64-v8a check -p tessera-ui-basic-components --verbose
+          cargo ndk -t arm64-v8a check -p tessera-ui-macros --verbose
+          cargo ndk -t arm64-v8a check -p tessera-ui-shard --verbose
