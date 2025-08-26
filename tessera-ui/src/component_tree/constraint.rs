@@ -223,39 +223,6 @@ impl DimensionValue {
         max: None,
     };
 
-    /// Converts this dimension value to a maximum pixel value.
-    ///
-    /// This method is useful during layout calculation when you need to determine
-    /// the maximum space a component might occupy.
-    ///
-    /// # Parameters
-    /// - `default`: The value to use when no maximum is specified
-    ///
-    /// # Returns
-    /// - For `Fixed`: Returns the fixed value
-    /// - For `Wrap` and `Fill`: Returns the `max` value if specified, otherwise the `default`
-    ///
-    /// # Example
-    /// ```
-    /// # use tessera_ui::Px;
-    /// # use tessera_ui::DimensionValue;
-    /// let fixed = DimensionValue::Fixed(Px(100));
-    /// assert_eq!(fixed.to_max_px(Px(200)), Px(100));
-    ///
-    /// let wrap_unbounded = DimensionValue::Wrap { min: None, max: None };
-    /// assert_eq!(wrap_unbounded.to_max_px(Px(200)), Px(200));
-    ///
-    /// let wrap_bounded = DimensionValue::Wrap { min: None, max: Some(Px(150)) };
-    /// assert_eq!(wrap_bounded.to_max_px(Px(200)), Px(150));
-    /// ```
-    pub fn to_max_px(&self, default: Px) -> Px {
-        match self {
-            DimensionValue::Fixed(value) => *value,
-            DimensionValue::Wrap { max, .. } => max.unwrap_or(default),
-            DimensionValue::Fill { max, .. } => max.unwrap_or(default),
-        }
-    }
-
     /// Returns the maximum value of this dimension, if defined.
     ///
     /// This method extracts the maximum constraint from a dimension value,
