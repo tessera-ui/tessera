@@ -1,7 +1,5 @@
 <div align="center">
 
-<div align="center">
-
 <img src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/logo.svg" alt="Tessera Logo" style="width:320px; height:auto;" />
 
 <br />
