@@ -1,3 +1,11 @@
+## [v0.2.4] - 2025-08-26 +08:00
+
+### Changes
+
+- chore: add new line in changelog sections for better readability
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.2.3...tessera-ui-macros-v0.2.4)
+
 ## [v0.2.3] - 2025-08-25 +08:00
 
 ### Changes
