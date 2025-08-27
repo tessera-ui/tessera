@@ -25,7 +25,7 @@ tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 flexi_logger = { version = "0.31.2", features = ["async", "trc"] }
-clap = { version = "4.5.45", features = ["derive"] }
+clap = { version = "4.5.46", features = ["derive"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15.1"
