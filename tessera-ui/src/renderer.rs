@@ -193,8 +193,8 @@ pub mod reorder;
 
 use std::{any::TypeId, sync::Arc, time::Instant};
 
-use log::{debug, warn};
 use tessera_ui_macros::tessera;
+use tracing::{debug, instrument, warn};
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
@@ -249,7 +249,7 @@ use winit::platform::android::{
 ///     ..Default::default()
 /// };
 /// ```
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct TesseraConfig {
     /// The number of samples to use for Multi-Sample Anti-Aliasing (MSAA).
     ///
@@ -258,7 +258,6 @@ pub struct TesseraConfig {
     ///
     /// ## Supported Values
     /// - `1`: Disables MSAA (best performance, lower quality)
-    /// - `2`: 2x MSAA (moderate performance impact)
     /// - `4`: 4x MSAA (balanced quality/performance)
     /// - `8`: 8x MSAA (high quality, higher performance cost)
     ///
@@ -337,7 +336,6 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
 }
 
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
-    #[cfg(not(target_os = "android"))]
     /// Runs the Tessera application with default configuration on desktop platforms.
     ///
     /// This is the most convenient way to start a Tessera application on Windows, Linux, or macOS.
@@ -375,11 +373,12 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///     Ok(())
     /// }
     /// ```
+    #[cfg(not(target_os = "android"))]
+    #[tracing::instrument(level = "info", skip(entry_point, register_pipelines_fn))]
     pub fn run(entry_point: F, register_pipelines_fn: R) -> Result<(), EventLoopError> {
         Self::run_with_config(entry_point, register_pipelines_fn, Default::default())
     }
 
-    #[cfg(not(target_os = "android"))]
     /// Runs the Tessera application with custom configuration on desktop platforms.
     ///
     /// This method allows you to customize the renderer behavior through [`TesseraConfig`].
@@ -415,6 +414,8 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(target_os = "android"))]
+    #[tracing::instrument(level = "info", skip(entry_point, register_pipelines_fn))]
     pub fn run_with_config(
         entry_point: F,
         register_pipelines_fn: R,
@@ -440,7 +441,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         event_loop.run_app(&mut renderer)
     }
 
-    #[cfg(target_os = "android")]
     /// Runs the Tessera application with default configuration on Android.
     ///
     /// This method is specifically for Android applications and requires an `AndroidApp` instance
@@ -475,6 +475,8 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///     ).unwrap();
     /// }
     /// ```
+    #[cfg(target_os = "android")]
+    #[tracing::instrument(level = "info", skip(entry_point, register_pipelines_fn, android_app))]
     pub fn run(
         entry_point: F,
         register_pipelines_fn: R,
@@ -488,7 +490,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         )
     }
 
-    #[cfg(target_os = "android")]
     /// Runs the Tessera application with custom configuration on Android.
     ///
     /// This method allows you to customize the renderer behavior on Android through [`TesseraConfig`].
@@ -528,6 +529,8 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///     ).unwrap();
     /// }
     /// ```
+    #[cfg(target_os = "android")]
+    #[tracing::instrument(level = "info", skip(entry_point, register_pipelines_fn, android_app))]
     pub fn run_with_config(
         entry_point: F,
         register_pipelines_fn: R,
@@ -561,7 +564,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
 
 // Helper struct to group render-frame arguments and reduce parameter count.
 // Kept private to this module.
-#[allow(dead_code)]
 struct RenderFrameArgs<'a> {
     pub cursor_state: &'a mut CursorState,
     pub keyboard_state: &'a mut KeyboardState,
@@ -627,6 +629,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///
     /// This method runs on the main thread but coordinates with other threads for
     /// component tree processing and resource management.
+    #[instrument(level = "debug", skip(entry_point))]
     fn build_component_tree(entry_point: &F) -> std::time::Duration {
         let tree_timer = Instant::now();
         debug!("Building component tree...");
@@ -661,6 +664,7 @@ Fps: {:.2}
         }
     }
 
+    #[instrument(level = "debug", skip(args))]
     fn compute_draw_commands<'a>(
         args: &mut RenderFrameArgs<'a>,
         screen_size: PxSize,
@@ -700,6 +704,7 @@ Fps: {:.2}
     }
 
     /// Perform the actual GPU rendering for the provided commands and return the render duration.
+    #[instrument(level = "debug", skip(args, commands))]
     fn perform_render<'a>(
         args: &mut RenderFrameArgs<'a>,
         commands: impl IntoIterator<Item = (Command, TypeId, PxSize, PxPosition)>,
@@ -720,6 +725,7 @@ Fps: {:.2}
         render_cost
     }
 
+    #[tracing::instrument(level = "debug", skip(entry_point, args))]
     fn execute_render_frame(entry_point: &F, args: &mut RenderFrameArgs<'_>) {
         // notify the windowing system before rendering
         // this will help winit to properly schedule and make assumptions about its internal state
@@ -959,6 +965,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
     /// After WGPU initialization, the `register_pipelines_fn` is called to set up
     /// all rendering pipelines. This typically includes basic component pipelines
     /// and any custom shaders your application requires.
+    #[tracing::instrument(level = "debug", skip(self, event_loop))]
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Just return if the app is already created
         if self.app.is_some() {
@@ -1039,6 +1046,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
     /// - Touch events (mobile platforms)
     /// - IME events (different implementations per platform)
     /// - Scale factor changes (high-DPI displays)
+    #[tracing::instrument(level = "debug", skip(self, event_loop))]
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,

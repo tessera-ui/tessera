@@ -137,9 +137,9 @@ fn app(state: Arc<AppState>) {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _logger = flexi_logger::Logger::try_with_env()?
-        .write_mode(flexi_logger::WriteMode::Async)
-        .start()?;
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     let app_state = Arc::new(AppState::new());
 

@@ -11,8 +11,8 @@ mod text_editors;
 
 use std::sync::Arc;
 
-use log::error;
 use tessera_ui::Renderer;
+use tracing::error;
 
 use app::app;
 use app_state::AppState;
@@ -23,11 +23,12 @@ use tessera_ui::winit::platform::android::activity::AndroidApp;
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
 fn android_main(android_app: AndroidApp) {
-    use android_logger::Config;
-    use log::{LevelFilter, error, info};
+    // Initialize tracing subscriber for Android (EnvFilter still honored)
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_max_level(tracing::Level::INFO)
+        .init();
 
-    android_logger::init_once(Config::default().with_max_level(LevelFilter::Info));
-    info!("Starting Android app...");
     let app_state = Arc::new(AppState::new());
     Renderer::run(
         || app(app_state.clone()),
@@ -45,9 +46,14 @@ fn main() {}
 
 #[cfg(not(target_os = "android"))]
 pub fn desktop_main() -> Result<(), Box<dyn std::error::Error>> {
-    let _logger = flexi_logger::Logger::try_with_env_or_str("info")?
-        .write_mode(flexi_logger::WriteMode::Async)
-        .start()?;
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .or_else(|_| tracing_subscriber::EnvFilter::try_new("off,tessera_ui=info"))
+        .unwrap();
+    tracing_subscriber::fmt()
+        .pretty()
+        .with_env_filter(filter)
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+        .init();
 
     let app_state = Arc::new(AppState::new());
 

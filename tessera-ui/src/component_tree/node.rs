@@ -8,9 +8,9 @@ use std::{
 
 use dashmap::DashMap;
 use indextree::NodeId;
-use log::debug;
 use parking_lot::RwLock;
 use rayon::prelude::*;
+use tracing::debug;
 use winit::window::CursorIcon;
 
 use crate::{

@@ -1,7 +1,7 @@
 use std::{any::TypeId, mem, sync::Arc};
 
-use log::{error, info, warn};
 use parking_lot::RwLock;
+use tracing::{error, info, warn};
 use wgpu::{ImageSubresourceRange, TextureFormat};
 use winit::window::Window;
 

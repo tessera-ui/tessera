@@ -15,7 +15,7 @@ shard = ["tessera-ui-shard"]
 
 [dependencies]
 bytemuck = { version = "1.23.2", features = ["derive"] }
-log = "0.4.27"
+tracing = "0.1.41"
 parking_lot = "0.12.3"
 pollster = "0.4.0"
 wgpu = "26.0.1"

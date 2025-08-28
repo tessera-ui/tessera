@@ -1,8 +1,8 @@
 mod app;
 mod cal;
 
-use log::error;
 use tessera_ui::{Renderer, router::router_root};
+use tracing::error;
 
 use crate::app::AppDestination;
 
@@ -37,10 +37,16 @@ struct Cli {
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
 fn android_main(android_app: AndroidApp) {
-    use android_logger::Config;
-    use log::{LevelFilter, error, info};
+    // Bridge any remaining `log` crate usage into `tracing`
+    tracing_log::LogTracer::init().ok();
 
-    android_logger::init_once(Config::default().with_max_level(LevelFilter::Info));
+    // Initialize tracing subscriber for Android (EnvFilter still honored)
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_max_level(tracing::Level::INFO)
+        .init();
+
+    tracing::info!("Starting Android app...");
 
     Renderer::run(
         || {
@@ -59,7 +65,7 @@ fn android_main(android_app: AndroidApp) {
         },
         android_app.clone(),
     )
-    .unwrap_or_else(|err| error!("App failed to run: {}", err));
+    .unwrap_or_else(|err| tracing::error!("App failed to run: {}", err));
 }
 
 #[allow(dead_code)]
@@ -71,9 +77,11 @@ pub fn desktop_main() -> anyhow::Result<()> {
     use tessera_ui::renderer::TesseraConfig;
     let cli = Cli::parse();
 
-    let _logger = flexi_logger::Logger::try_with_env_or_str("info")?
-        .write_mode(flexi_logger::WriteMode::Async)
-        .start()?;
+    tracing_subscriber::fmt()
+        .pretty()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_max_level(tracing::Level::INFO)
+        .init();
 
     Renderer::run_with_config(
         move || router_root(AppDestination { style: cli.style }),

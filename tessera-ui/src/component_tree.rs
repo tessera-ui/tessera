@@ -3,9 +3,9 @@ mod node;
 
 use std::{any::TypeId, num::NonZero, sync::Arc, time::Instant};
 
-use log::debug;
 use parking_lot::RwLock;
 use rayon::prelude::*;
+use tracing::{debug, warn};
 
 use crate::{
     Clipboard, ComputeResourceManager, Px, PxRect,
@@ -120,6 +120,7 @@ impl ComponentTree {
     ///
     /// Returns a tuple of (commands, window_requests) where commands contain
     /// the rendering instructions with their associated sizes and positions.
+    #[tracing::instrument(level = "debug", skip(self, params))]
     pub fn compute(
         &mut self,
         params: ComputeParams<'_>,
@@ -241,7 +242,7 @@ impl ComponentTree {
                     )
                 }
             } else {
-                log::warn!(
+                warn!(
                     "Computed data not found for node {node_id:?} during state handler execution."
                 );
             }
@@ -262,6 +263,7 @@ impl ComponentTree {
 ///
 /// The function maintains thread-safety by using DashMap's concurrent access
 /// capabilities, allowing multiple threads to safely read and modify metadata.
+#[tracing::instrument(level = "trace", skip(tree, metadatas))]
 fn compute_draw_commands_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
@@ -281,6 +283,7 @@ fn compute_draw_commands_parallel(
     )
 }
 
+#[tracing::instrument(level = "trace", skip(tree, metadatas))]
 fn compute_draw_commands_inner_parallel(
     start_pos: PxPosition,
     is_root: bool,

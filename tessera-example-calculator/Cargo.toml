@@ -17,15 +17,12 @@ anyhow = "1.0.99"
 bytemuck = "1.23.1"
 dashmap = "6.1.0"
 derive_builder = "0.20.2"
-log = "0.4.27"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 parking_lot = "0.12.4"
 rsc = "3.0.0"
 tessera-ui = { path = "../tessera-ui" }
 tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-flexi_logger = { version = "0.31.2", features = ["async", "trc"] }
 clap = { version = "4.5.46", features = ["derive"] }
-
-[target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.15.1"

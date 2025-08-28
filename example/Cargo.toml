@@ -17,15 +17,13 @@ path = "src/main.rs"
 tessera-ui = { path = "../tessera-ui" }
 tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
 tokio = { version = "1.47.1", features = ["full"] }
-log = "0.4.27"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 parking_lot = "0.12.4"
 winit = "0.30.12"
 wgpu = "26.0.1"
 bytemuck = { version = "1.23.2", features = ["derive"] }
 image = "0.25.6"
-
-[target.'cfg(not(target_os = "android"))'.dependencies]
-flexi_logger = { version = "0.31.2", features = ["async", "trc"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15.1"
