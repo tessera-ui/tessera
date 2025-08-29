@@ -725,7 +725,7 @@ Fps: {:.2}
         render_cost
     }
 
-    #[tracing::instrument(level = "debug", skip(entry_point, args))]
+    #[instrument(level = "debug", skip(entry_point, args))]
     fn execute_render_frame(entry_point: &F, args: &mut RenderFrameArgs<'_>) {
         // notify the windowing system before rendering
         // this will help winit to properly schedule and make assumptions about its internal state
