@@ -229,7 +229,7 @@ impl ScrollableStateInner {
 /// use parking_lot::RwLock;
 /// use tessera_ui::{DimensionValue, Dp};
 /// use tessera_ui_basic_components::{
-///     column::{column_ui, ColumnArgs},
+///     column::{column, ColumnArgs},
 ///     scrollable::{scrollable, ScrollableArgs, ScrollableState, ScrollBarLayout},
 ///     text::text,
 /// };
@@ -246,19 +246,18 @@ impl ScrollableStateInner {
 ///     },
 ///     scrollable_state.clone(),
 ///     || {
-///         column_ui!(
-///             ColumnArgs::default(),
-///             || text("Item 1".to_string()),
-///             || text("Item 2".to_string()),
-///             || text("Item 3".to_string()),
-///             || text("Item 4".to_string()),
-///             || text("Item 5".to_string()),
-///             || text("Item 6".to_string()),
-///             || text("Item 7".to_string()),
-///             || text("Item 8".to_string()),
-///             || text("Item 9".to_string()),
-///             || text("Item 10".to_string()),
-///         );
+///         column(ColumnArgs::default(), |scope| {
+///             scope.child(|| text("Item 1".to_string()));
+///             scope.child(|| text("Item 2".to_string()));
+///             scope.child(|| text("Item 3".to_string()));
+///             scope.child(|| text("Item 4".to_string()));
+///             scope.child(|| text("Item 5".to_string()));
+///             scope.child(|| text("Item 6".to_string()));
+///             scope.child(|| text("Item 7".to_string()));
+///             scope.child(|| text("Item 8".to_string()));
+///             scope.child(|| text("Item 9".to_string()));
+///             scope.child(|| text("Item 10".to_string()));
+///         });
 ///     },
 /// );
 ///
@@ -271,19 +270,18 @@ impl ScrollableStateInner {
 ///     },
 ///     scrollable_state,
 ///     || {
-///         column_ui!(
-///             ColumnArgs::default(),
-///             || text("Item 1".to_string()),
-///             || text("Item 2".to_string()),
-///             || text("Item 3".to_string()),
-///             || text("Item 4".to_string()),
-///             || text("Item 5".to_string()),
-///             || text("Item 6".to_string()),
-///             || text("Item 7".to_string()),
-///             || text("Item 8".to_string()),
-///             || text("Item 9".to_string()),
-///             || text("Item 10".to_string()),
-///         );
+///         column(ColumnArgs::default(), |scope| {
+///             scope.child(|| text("Item 1".to_string()));
+///             scope.child(|| text("Item 2".to_string()));
+///             scope.child(|| text("Item 3".to_string()));
+///             scope.child(|| text("Item 4".to_string()));
+///             scope.child(|| text("Item 5".to_string()));
+///             scope.child(|| text("Item 6".to_string()));
+///             scope.child(|| text("Item 7".to_string()));
+///             scope.child(|| text("Item 8".to_string()));
+///             scope.child(|| text("Item 9".to_string()));
+///             scope.child(|| text("Item 10".to_string()));
+///         });
 ///     },
 /// );
 /// ```

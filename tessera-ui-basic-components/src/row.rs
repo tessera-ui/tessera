@@ -21,11 +21,11 @@
 //!
 //! ## Example
 //! ```
-//! use tessera_ui_basic_components::{row::{row_ui, RowArgs}, text::text};
-//! row_ui!(RowArgs::default(),
-//!     || text("A".to_string()),
-//!     || text("B".to_string()),
-//! );
+//! use tessera_ui_basic_components::{row::{row, RowArgs}, text::text};
+//! row(RowArgs::default(), |scope| {
+//!     scope.child(|| text("A".to_string()));
+//!     scope.child(|| text("B".to_string()));
+//! });
 //! ```
 use derive_builder::Builder;
 use tessera_ui::{

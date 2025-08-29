@@ -162,17 +162,19 @@ impl From<Px> for SpacerArgs {
 /// # Example
 /// ```
 /// use tessera_ui_basic_components::{
-///     row::{row_ui, RowArgs},
+///     row::{row, RowArgs},
 ///     spacer::{spacer, SpacerArgs},
 ///     text::text,
 /// };
 ///
-/// row_ui!(
+/// row(
 ///     RowArgs::default(),
-///     || text("Left".to_string()),
-///     // This spacer will fill the available width, pushing "Right" to the end.
-///     || spacer(SpacerArgs::fill_width()),
-///     || text("Right".to_string()),
+///     |scope| {
+///         scope.child(|| text("Left".to_string()));
+///         // This spacer will fill the available width, pushing "Right" to the end.
+///         scope.child(|| spacer(SpacerArgs::fill_width()));
+///         scope.child(|| text("Right".to_string()));
+///     }
 /// );
 /// ```
 ///
