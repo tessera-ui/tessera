@@ -3,10 +3,8 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use tessera_ui::{DimensionValue, Dp, tessera};
 use tessera_ui_basic_components::{
-    column::ColumnArgsBuilder,
-    column_ui,
-    row::RowArgsBuilder,
-    row_ui,
+    column::{ColumnArgsBuilder, column},
+    row::{RowArgsBuilder, row},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     switch::{SwitchArgsBuilder, SwitchState, switch},
@@ -36,9 +34,8 @@ pub fn switch_showcase(state: Arc<Mutex<SwitchState>>) {
             .unwrap(),
         None,
         move || {
-            column_ui!(
-                ColumnArgsBuilder::default().build().unwrap(),
-                || {
+            column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
+                scope.child(|| {
                     text(
                         TextArgsBuilder::default()
                             .text("Switch Component".to_string())
@@ -47,14 +44,13 @@ pub fn switch_showcase(state: Arc<Mutex<SwitchState>>) {
                             .build()
                             .unwrap(),
                     )
-                },
-                || (create_spacer(12))(),
-                move || {
-                    row_ui!(
-                        RowArgsBuilder::default().build().unwrap(),
-                        || text("Off"),
-                        || (create_spacer(16))(),
-                        move || {
+                });
+                scope.child(|| (create_spacer(12))());
+                scope.child(move || {
+                    row(RowArgsBuilder::default().build().unwrap(), |scope| {
+                        scope.child(|| text("Off"));
+                        scope.child(|| (create_spacer(16))());
+                        scope.child(move || {
                             let checked = state.lock().checked;
                             switch(
                                 SwitchArgsBuilder::default()
@@ -70,12 +66,12 @@ pub fn switch_showcase(state: Arc<Mutex<SwitchState>>) {
                                     .build()
                                     .unwrap(),
                             )
-                        },
-                        || (create_spacer(16))(),
-                        || text("On"),
-                    )
-                }
-            )
+                        });
+                        scope.child(|| (create_spacer(16))());
+                        scope.child(|| text("On"));
+                    })
+                });
+            })
         },
     )
 }

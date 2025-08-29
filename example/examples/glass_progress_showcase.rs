@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use tessera_ui::{Color, DimensionValue, Dp, renderer::Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    column::{ColumnArgsBuilder, column_ui},
+    column::{ColumnArgsBuilder, column},
     glass_progress::{GlassProgressArgsBuilder, glass_progress},
     glass_slider::{GlassSliderArgsBuilder, GlassSliderState, glass_slider},
     spacer::{SpacerArgsBuilder, spacer},
@@ -47,13 +47,8 @@ fn app(state: Arc<AppState>) {
                     })
                 };
 
-                column_ui!(
-                    ColumnArgsBuilder::default()
-                        .main_axis_alignment(MainAxisAlignment::Center)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .build()
-                        .unwrap(),
-                    {
+                let children: [Box<dyn Fn() + Send + Sync>; 9] = [
+                    Box::new({
                         let state = state_for_column.clone();
                         move || {
                             glass_progress(
@@ -65,60 +60,72 @@ fn app(state: Arc<AppState>) {
                                     .unwrap(),
                             )
                         }
-                    },
-                    || spacer(
-                        SpacerArgsBuilder::default()
-                            .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
-                            .build()
-                            .unwrap()
-                    ),
-                    || text(
-                        TextArgsBuilder::default()
-                            .text("Glass Progress ↑".to_string())
-                            .color(Color::WHITE)
-                            .build()
-                            .unwrap()
-                    ),
-                    || spacer(
-                        SpacerArgsBuilder::default()
-                            .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
-                            .build()
-                            .unwrap()
-                    ),
-                    {
+                    }),
+                    Box::new(|| {
+                        spacer(
+                            SpacerArgsBuilder::default()
+                                .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
+                                .build()
+                                .unwrap(),
+                        )
+                    }),
+                    Box::new(|| {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Glass Progress ↑".to_string())
+                                .color(Color::WHITE)
+                                .build()
+                                .unwrap(),
+                        )
+                    }),
+                    Box::new(|| {
+                        spacer(
+                            SpacerArgsBuilder::default()
+                                .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
+                                .build()
+                                .unwrap(),
+                        )
+                    }),
+                    Box::new({
                         let state = state_for_column.clone();
                         move || {
                             glass_slider(
                                 GlassSliderArgsBuilder::default()
                                     .value(*state.value.lock())
-                                    .on_change(on_change)
+                                    .on_change(on_change.clone())
                                     .width(Dp(250.0))
                                     .build()
                                     .unwrap(),
                                 state.slider_state.clone(),
                             )
                         }
-                    },
-                    || spacer(
-                        SpacerArgsBuilder::default()
-                            .height(tessera_ui::DimensionValue::Fixed(Dp(10.0).to_px()))
-                            .build()
-                            .unwrap()
-                    ),
-                    || text(
-                        TextArgsBuilder::default()
-                            .text("Glass Slider ↑".to_string())
-                            .color(Color::WHITE)
-                            .build()
-                            .unwrap()
-                    ),
-                    || spacer(
-                        SpacerArgsBuilder::default()
-                            .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
-                            .build()
-                            .unwrap()
-                    ),
-                    {
+                    }),
+                    Box::new(|| {
+                        spacer(
+                            SpacerArgsBuilder::default()
+                                .height(tessera_ui::DimensionValue::Fixed(Dp(10.0).to_px()))
+                                .build()
+                                .unwrap(),
+                        )
+                    }),
+                    Box::new(|| {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Glass Slider ↑".to_string())
+                                .color(Color::WHITE)
+                                .build()
+                                .unwrap(),
+                        )
+                    }),
+                    Box::new(|| {
+                        spacer(
+                            SpacerArgsBuilder::default()
+                                .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
+                                .build()
+                                .unwrap(),
+                        )
+                    }),
+                    Box::new({
                         let state = state_for_column.clone();
                         move || {
                             text(
@@ -128,6 +135,19 @@ fn app(state: Arc<AppState>) {
                                     .build()
                                     .unwrap(),
                             )
+                        }
+                    }),
+                ];
+
+                column(
+                    ColumnArgsBuilder::default()
+                        .main_axis_alignment(MainAxisAlignment::Center)
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .build()
+                        .unwrap(),
+                    |scope| {
+                        for child in children {
+                            scope.child(move || child());
                         }
                     },
                 )

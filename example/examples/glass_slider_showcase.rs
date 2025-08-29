@@ -4,11 +4,9 @@ use parking_lot::Mutex;
 use tessera_ui::{Color, DimensionValue, Dp, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::MainAxisAlignment,
-    column::ColumnArgsBuilder,
-    column_ui,
+    column::{ColumnArgsBuilder, column},
     glass_slider::{GlassSliderArgsBuilder, GlassSliderState, glass_slider},
-    row::RowArgsBuilder,
-    row_ui,
+    row::{RowArgsBuilder, row},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -47,54 +45,64 @@ fn app(state: Arc<AppState>) {
                 })
             };
 
-            column_ui!(
-                ColumnArgsBuilder::default()
-                    .main_axis_alignment(MainAxisAlignment::Center)
-                    .build()
-                    .unwrap(),
-                move || {
+            let children: [Box<dyn Fn() + Send + Sync>; 2] = [
+                Box::new(move || {
                     let on_change_clone = on_change.clone();
                     let state_clone = state.clone();
-                    row_ui!(
+                    row(
                         RowArgsBuilder::default()
                             .main_axis_alignment(MainAxisAlignment::SpaceBetween)
                             .cross_axis_alignment(
-                                tessera_ui_basic_components::alignment::CrossAxisAlignment::Center
+                                tessera_ui_basic_components::alignment::CrossAxisAlignment::Center,
                             )
                             .width(tessera_ui::DimensionValue::Fixed(Dp(300.0).to_px()))
                             .build()
                             .unwrap(),
-                        move || {
-                            glass_slider(
-                                GlassSliderArgsBuilder::default()
-                                    .value(value)
-                                    .on_change(on_change_clone)
-                                    .track_tint_color(Color::new(0.3, 0.3, 0.3, 0.15))
-                                    .progress_tint_color(Color::new(0.2, 0.7, 1.0, 0.25))
-                                    .blur_radius(8.0)
-                                    .build()
-                                    .unwrap(),
-                                state_clone.slider_state.clone(),
-                            )
+                        |scope| {
+                            scope.child(move || {
+                                glass_slider(
+                                    GlassSliderArgsBuilder::default()
+                                        .value(value)
+                                        .on_change(on_change_clone)
+                                        .track_tint_color(Color::new(0.3, 0.3, 0.3, 0.15))
+                                        .progress_tint_color(Color::new(0.2, 0.7, 1.0, 0.25))
+                                        .blur_radius(8.0)
+                                        .build()
+                                        .unwrap(),
+                                    state_clone.slider_state.clone(),
+                                )
+                            });
+                            scope.child(move || {
+                                text(
+                                    TextArgsBuilder::default()
+                                        .text(format!("{value:.2}"))
+                                        .build()
+                                        .unwrap(),
+                                )
+                            });
                         },
-                        move || {
-                            text(
-                                TextArgsBuilder::default()
-                                    .text(format!("{value:.2}"))
-                                    .build()
-                                    .unwrap(),
-                            )
-                        }
                     )
-                },
-                move || {
+                }),
+                Box::new(move || {
                     text(
                         TextArgsBuilder::default()
                             .text("Glass Slider Demo".to_string())
                             .build()
                             .unwrap(),
                     )
-                }
+                }),
+            ];
+
+            column(
+                ColumnArgsBuilder::default()
+                    .main_axis_alignment(MainAxisAlignment::Center)
+                    .build()
+                    .unwrap(),
+                |scope| {
+                    for child in children {
+                        scope.child(move || child());
+                    }
+                },
             )
         },
     )

@@ -18,8 +18,7 @@ use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
     ripple_state::RippleState,
-    row::RowArgsBuilder,
-    row_ui,
+    row::{RowArgsBuilder, row},
     surface::{SurfaceArgs, surface},
     text::{TextArgsBuilder, text},
 };
@@ -57,43 +56,47 @@ fn counter_app(#[state] app_state: AppState, #[route_controller] controller: Rou
         },
         None,
         move || {
-            row_ui![
+            row(
                 RowArgsBuilder::default()
                     .main_axis_alignment(MainAxisAlignment::SpaceBetween)
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .build()
                     .unwrap(),
-                move || {
-                    button(
-                        ButtonArgsBuilder::default()
-                            .on_click(Arc::new(move || {
-                                // Increment the click count
-                                app_state_clone // Use the cloned app_state
-                                    .click_count
-                                    .fetch_add(1, atomic::Ordering::Relaxed);
-                                // Navigate to the counter_app2 route if click_count > 5
-                                if app_state_clone.click_count.load(atomic::Ordering::Relaxed) > 5 {
-                                    app_state_clone
+                |scope| {
+                    scope.child(move || {
+                        button(
+                            ButtonArgsBuilder::default()
+                                .on_click(Arc::new(move || {
+                                    // Increment the click count
+                                    app_state_clone // Use the cloned app_state
                                         .click_count
-                                        .store(0, atomic::Ordering::Relaxed); // Reset count
-                                    controller.push(CounterApp2Destination {});
-                                }
-                            }))
-                            .build()
-                            .unwrap(),
-                        button_state_clone, // Use the cloned button_state
-                        move || text("click me!"),
-                    )
+                                        .fetch_add(1, atomic::Ordering::Relaxed);
+                                    // Navigate to the counter_app2 route if click_count > 5
+                                    if app_state_clone.click_count.load(atomic::Ordering::Relaxed)
+                                        > 5
+                                    {
+                                        app_state_clone
+                                            .click_count
+                                            .store(0, atomic::Ordering::Relaxed); // Reset count
+                                        controller.push(CounterApp2Destination {});
+                                    }
+                                }))
+                                .build()
+                                .unwrap(),
+                            button_state_clone, // Use the cloned button_state
+                            move || text("click me!"),
+                        )
+                    });
+                    scope.child(move || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text(format!("Count: {click_count}"))
+                                .build()
+                                .unwrap(),
+                        )
+                    });
                 },
-                move || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text(format!("Count: {click_count}"))
-                            .build()
-                            .unwrap(),
-                    )
-                }
-            ];
+            );
         },
     );
 }
@@ -114,44 +117,48 @@ fn counter_app2(#[state] app_state: AppState, #[route_controller] controller: Ro
         },
         None,
         move || {
-            row_ui![
+            row(
                 RowArgsBuilder::default()
                     .main_axis_alignment(MainAxisAlignment::SpaceBetween)
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .build()
                     .unwrap(),
-                move || {
-                    button(
-                        ButtonArgsBuilder::default()
-                            .color(Color::RED) // Set button color to red
-                            .on_click(Arc::new(move || {
-                                // Increment the click count
-                                app_state_clone // Use the cloned app_state
-                                    .click_count
-                                    .fetch_add(1, atomic::Ordering::Relaxed);
-                                // Navigate back to the counter_app route if click_count > 5
-                                if app_state_clone.click_count.load(atomic::Ordering::Relaxed) > 5 {
-                                    app_state_clone
+                |scope| {
+                    scope.child(move || {
+                        button(
+                            ButtonArgsBuilder::default()
+                                .color(Color::RED) // Set button color to red
+                                .on_click(Arc::new(move || {
+                                    // Increment the click count
+                                    app_state_clone // Use the cloned app_state
                                         .click_count
-                                        .store(0, atomic::Ordering::Relaxed); // Reset count
-                                    controller.pop();
-                                }
-                            }))
-                            .build()
-                            .unwrap(),
-                        button_state_clone, // Use the cloned button_state
-                        move || text("click me!"),
-                    )
+                                        .fetch_add(1, atomic::Ordering::Relaxed);
+                                    // Navigate back to the counter_app route if click_count > 5
+                                    if app_state_clone.click_count.load(atomic::Ordering::Relaxed)
+                                        > 5
+                                    {
+                                        app_state_clone
+                                            .click_count
+                                            .store(0, atomic::Ordering::Relaxed); // Reset count
+                                        controller.pop();
+                                    }
+                                }))
+                                .build()
+                                .unwrap(),
+                            button_state_clone, // Use the cloned button_state
+                            move || text("click me!"),
+                        )
+                    });
+                    scope.child(move || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text(format!("Count: {click_count}"))
+                                .build()
+                                .unwrap(),
+                        )
+                    });
                 },
-                move || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text(format!("Count: {click_count}"))
-                            .build()
-                            .unwrap(),
-                    )
-                }
-            ];
+            );
         },
     );
 }

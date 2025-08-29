@@ -26,8 +26,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::Alignment,
-    boxed::BoxedArgsBuilder,
-    boxed_ui,
+    boxed::{BoxedArgsBuilder, boxed},
     pos_misc::is_position_in_component,
     scrollable::scrollbar::{ScrollBarArgs, ScrollBarState, scrollbar_h, scrollbar_v},
 };
@@ -444,45 +443,47 @@ fn scrollable_with_overlay_scrollbar(
     scrollbar_args_h: ScrollBarArgs,
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
-    boxed_ui!(
+    boxed(
         BoxedArgsBuilder::default()
             .width(args.width)
             .height(args.height)
             .alignment(Alignment::BottomEnd)
             .build()
             .unwrap(),
-        {
-            let state = state.clone();
-            let args = args.clone();
-            move || {
-                scrollable_inner(
-                    args,
-                    state.inner.clone(),
-                    state.scrollbar_state_v.clone(),
-                    state.scrollbar_state_h.clone(),
-                    child,
-                );
-            }
-        },
-        {
-            let scrollbar_args_v = scrollbar_args_v.clone();
-            let args = args.clone();
-            let state = state.clone();
-            move || {
-                if args.vertical {
-                    scrollbar_v(scrollbar_args_v, state.scrollbar_state_v.clone());
+        |scope| {
+            scope.child({
+                let state = state.clone();
+                let args = args.clone();
+                move || {
+                    scrollable_inner(
+                        args,
+                        state.inner.clone(),
+                        state.scrollbar_state_v.clone(),
+                        state.scrollbar_state_h.clone(),
+                        child,
+                    );
                 }
-            }
-        },
-        {
-            let scrollbar_args_h = scrollbar_args_h.clone();
-            let args = args.clone();
-            let state = state.clone();
-            move || {
-                if args.horizontal {
-                    scrollbar_h(scrollbar_args_h, state.scrollbar_state_h.clone());
+            });
+            scope.child({
+                let scrollbar_args_v = scrollbar_args_v.clone();
+                let args = args.clone();
+                let state = state.clone();
+                move || {
+                    if args.vertical {
+                        scrollbar_v(scrollbar_args_v, state.scrollbar_state_v.clone());
+                    }
                 }
-            }
+            });
+            scope.child({
+                let scrollbar_args_h = scrollbar_args_h.clone();
+                let args = args.clone();
+                let state = state.clone();
+                move || {
+                    if args.horizontal {
+                        scrollbar_h(scrollbar_args_h, state.scrollbar_state_h.clone());
+                    }
+                }
+            });
         },
     );
 }

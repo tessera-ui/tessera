@@ -4,8 +4,7 @@ use parking_lot::Mutex;
 use tessera_ui::{Color, DimensionValue, Dp, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::Alignment,
-    boxed::BoxedArgs,
-    boxed_ui,
+    boxed::{BoxedArgs, boxed},
     glass_switch::{GlassSwitchArgsBuilder, GlassSwitchState, glass_switch},
     surface::{SurfaceArgsBuilder, surface},
 };
@@ -27,36 +26,38 @@ fn app(switch_state: Arc<Mutex<GlassSwitchState>>) {
             .unwrap(),
         None,
         move || {
-            boxed_ui!(
+            boxed(
                 BoxedArgs {
                     alignment: Alignment::Center,
                     width: DimensionValue::Fill {
                         min: None,
-                        max: None
+                        max: None,
                     },
                     height: DimensionValue::Fill {
                         min: None,
-                        max: None
+                        max: None,
                     },
                 },
-                move || {
-                    let args = GlassSwitchArgsBuilder::default()
-                        .state(Some(switch_state.clone()))
-                        .checked(switch_state.lock().checked)
-                        .on_toggle(Arc::new(|on| {
-                            if on {
-                                println!("Glass Switch toggled to OFF");
-                            } else {
-                                println!("Glass Switch toggled to ON");
-                            }
-                        }))
-                        .width(Dp(72.0))
-                        .height(Dp(40.0))
-                        .track_on_color(Color::new(0.2, 0.7, 1.0, 0.5))
-                        .track_off_color(Color::new(0.8, 0.8, 0.8, 0.5))
-                        .build()
-                        .unwrap();
-                    glass_switch(args);
+                |scope| {
+                    scope.child(move || {
+                        let args = GlassSwitchArgsBuilder::default()
+                            .state(Some(switch_state.clone()))
+                            .checked(switch_state.lock().checked)
+                            .on_toggle(Arc::new(|on| {
+                                if on {
+                                    println!("Glass Switch toggled to OFF");
+                                } else {
+                                    println!("Glass Switch toggled to ON");
+                                }
+                            }))
+                            .width(Dp(72.0))
+                            .height(Dp(40.0))
+                            .track_on_color(Color::new(0.2, 0.7, 1.0, 0.5))
+                            .track_off_color(Color::new(0.8, 0.8, 0.8, 0.5))
+                            .build()
+                            .unwrap();
+                        glass_switch(args);
+                    });
                 },
             )
         },

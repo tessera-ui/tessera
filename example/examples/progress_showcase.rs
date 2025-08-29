@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use tessera_ui::{Color, DimensionValue, Dp, renderer::Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    column::{ColumnArgsBuilder, column_ui},
+    column::{ColumnArgsBuilder, column},
     progress::{ProgressArgsBuilder, progress},
     slider::{SliderArgsBuilder, SliderState, slider},
     spacer::{SpacerArgsBuilder, spacer},
@@ -47,72 +47,82 @@ fn app(state: Arc<AppState>) {
                     })
                 };
 
-                column_ui!(
+                column(
                     ColumnArgsBuilder::default()
                         .main_axis_alignment(MainAxisAlignment::Center)
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .build()
                         .unwrap(),
-                    {
-                        let state = state_for_column.clone();
-                        move || {
-                            progress(
-                                ProgressArgsBuilder::default()
-                                    .value(*state.value.lock())
+                    |scope| {
+                        scope.child({
+                            let state = state_for_column.clone();
+                            move || {
+                                progress(
+                                    ProgressArgsBuilder::default()
+                                        .value(*state.value.lock())
+                                        .build()
+                                        .unwrap(),
+                                )
+                            }
+                        });
+                        scope.child(|| {
+                            spacer(
+                                SpacerArgsBuilder::default()
+                                    .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
                                     .build()
                                     .unwrap(),
                             )
-                        }
-                    },
-                    || spacer(
-                        SpacerArgsBuilder::default()
-                            .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
-                            .build()
-                            .unwrap()
-                    ),
-                    || text("progress ↑"),
-                    || spacer(
-                        SpacerArgsBuilder::default()
-                            .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
-                            .build()
-                            .unwrap()
-                    ),
-                    {
-                        let state = state_for_column.clone();
-                        move || {
-                            slider(
-                                SliderArgsBuilder::default()
-                                    .value(*state.value.lock())
-                                    .on_change(on_change)
-                                    .build()
-                                    .unwrap(),
-                                state.slider_state.clone(),
-                            )
-                        }
-                    },
-                    || spacer(
-                        SpacerArgsBuilder::default()
-                            .height(tessera_ui::DimensionValue::Fixed(Dp(10.0).to_px()))
-                            .build()
-                            .unwrap()
-                    ),
-                    || text("slider ↑"),
-                    || spacer(
-                        SpacerArgsBuilder::default()
-                            .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
-                            .build()
-                            .unwrap()
-                    ),
-                    {
-                        let state = state_for_column.clone();
-                        move || {
-                            text(
-                                TextArgsBuilder::default()
-                                    .text(format!("Value: {:.2}", *state.value.lock()))
+                        });
+                        scope.child(|| text("progress ↑"));
+                        scope.child(|| {
+                            spacer(
+                                SpacerArgsBuilder::default()
+                                    .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
                                     .build()
                                     .unwrap(),
                             )
-                        }
+                        });
+                        scope.child({
+                            let state = state_for_column.clone();
+                            move || {
+                                slider(
+                                    SliderArgsBuilder::default()
+                                        .value(*state.value.lock())
+                                        .on_change(on_change)
+                                        .build()
+                                        .unwrap(),
+                                    state.slider_state.clone(),
+                                )
+                            }
+                        });
+                        scope.child(|| {
+                            spacer(
+                                SpacerArgsBuilder::default()
+                                    .height(tessera_ui::DimensionValue::Fixed(Dp(10.0).to_px()))
+                                    .build()
+                                    .unwrap(),
+                            )
+                        });
+                        scope.child(|| text("slider ↑"));
+                        scope.child(|| {
+                            spacer(
+                                SpacerArgsBuilder::default()
+                                    .height(tessera_ui::DimensionValue::Fixed(Dp(20.0).to_px()))
+                                    .build()
+                                    .unwrap(),
+                            )
+                        });
+                        scope.child({
+                            let state = state_for_column.clone();
+                            move || {
+                                text(
+                                    TextArgsBuilder::default()
+                                        .text(format!("Value: {:.2}", *state.value.lock()))
+                                        .build()
+                                        .unwrap(),
+                                )
+                            }
+                        });
                     },
                 )
             }

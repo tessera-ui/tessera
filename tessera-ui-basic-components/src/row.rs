@@ -35,8 +35,6 @@ use tessera_ui::{
 
 use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 
-pub use crate::row_ui;
-
 /// Arguments for the `row` component.
 #[derive(Builder, Clone, Debug)]
 #[builder(pattern = "owned")]
@@ -61,57 +59,29 @@ impl Default for RowArgs {
     }
 }
 
-/// Represents a child item within a row layout.
-pub struct RowItem {
-    /// Optional weight for flexible space distribution
-    pub weight: Option<f32>,
-    /// The actual child component
-    pub child: Box<dyn FnOnce() + Send + Sync>,
+/// A scope for declaratively adding children to a `row` component.
+pub struct RowScope<'a> {
+    child_closures: &'a mut Vec<Box<dyn FnOnce() + Send + Sync>>,
+    child_weights: &'a mut Vec<Option<f32>>,
 }
 
-impl RowItem {
-    /// Creates a new `RowItem` with optional weight.
-    pub fn new(child: Box<dyn FnOnce() + Send + Sync>, weight: Option<f32>) -> Self {
-        RowItem { weight, child }
+impl<'a> RowScope<'a> {
+    /// Adds a child component to the row.
+    pub fn child<F>(&mut self, child_closure: F)
+    where
+        F: FnOnce() + Send + Sync + 'static,
+    {
+        self.child_closures.push(Box::new(child_closure));
+        self.child_weights.push(None);
     }
 
-    /// Creates a weighted row item
-    pub fn weighted(child: Box<dyn FnOnce() + Send + Sync>, weight: f32) -> Self {
-        RowItem {
-            weight: Some(weight),
-            child,
-        }
-    }
-}
-
-/// Trait to allow various types to be converted into a `RowItem`.
-pub trait AsRowItem {
-    fn into_row_item(self) -> RowItem;
-}
-
-impl AsRowItem for RowItem {
-    fn into_row_item(self) -> RowItem {
-        self
-    }
-}
-
-/// Default conversion: a simple function closure becomes a `RowItem` without weight.
-impl<F: FnOnce() + Send + Sync + 'static> AsRowItem for F {
-    fn into_row_item(self) -> RowItem {
-        RowItem {
-            weight: None,
-            child: Box::new(self),
-        }
-    }
-}
-
-/// Allow (FnOnce, weight) to be a RowItem
-impl<F: FnOnce() + Send + Sync + 'static> AsRowItem for (F, f32) {
-    fn into_row_item(self) -> RowItem {
-        RowItem {
-            weight: Some(self.1),
-            child: Box::new(self.0),
-        }
+    /// Adds a child component to the row with a specified weight for flexible space distribution.
+    pub fn child_weighted<F>(&mut self, child_closure: F, weight: f32)
+    where
+        F: FnOnce() + Send + Sync + 'static,
+    {
+        self.child_closures.push(Box::new(child_closure));
+        self.child_weights.push(Some(weight));
     }
 }
 
@@ -139,65 +109,39 @@ struct MeasureWeightedChildrenArgs<'a> {
 }
 
 /// A row component that arranges its children horizontally.
-/// A layout component that arranges its children horizontally.
 ///
 /// The `row` component is a fundamental building block for creating horizontal layouts.
 /// It takes a set of child components and arranges them one after another in a single
 /// row. The layout behavior can be extensively customized through the `RowArgs` struct.
 ///
-/// # Arguments
-///
-/// * `args`: A `RowArgs` struct that configures the layout properties of the row.
-///   - `width` and `height`: Control the dimensions of the row container. They can be
-///     set to `DimensionValue::Wrap` to fit the content, `DimensionValue::Fixed` for a
-///     specific size, or `DimensionValue::Fill` to occupy available space.
-///   - `main_axis_alignment`: Determines how children are distributed along the horizontal
-///     axis (e.g., `Start`, `Center`, `End`, `SpaceBetween`).
-///   - `cross_axis_alignment`: Determines how children are aligned along the vertical
-///     axis (e.g., `Start`, `Center`, `End`, `Stretch`).
-///
-/// * `children_items_input`: An array of child components to be displayed in the row.
-///   Children can be simple closures, or they can be wrapped in `RowItem` to provide
-///   a `weight` for flexible space distribution. Weighted children will expand to fill
-///   any remaining space in the row according to their weight proportion.
-///
-/// # Example
-///
-/// A simple row with three text components, centered horizontally and vertically.
-///
-/// ```
-/// use tessera_ui_basic_components::{row::{row_ui, RowArgs}, text::text};
-/// use tessera_ui_basic_components::alignment::{MainAxisAlignment, CrossAxisAlignment};
-/// use tessera_ui::{DimensionValue, Dp};
-///
-/// let args = RowArgs {
-///     main_axis_alignment: MainAxisAlignment::Center,
-///     cross_axis_alignment: CrossAxisAlignment::Center,
-///     width: DimensionValue::Fill { min: None, max: None },
-///     height: DimensionValue::Fixed(Dp(50.0).into()),
-/// };
-///
-/// row_ui!(args,
-///     || text("First".to_string()),
-///     || text("Second".to_string()),
-///     || text("Third".to_string()),
-/// );
-/// ```
+/// Children are added via the `scope` closure, which provides a `RowScope`
+/// to add children declaratively.
 #[tessera]
-pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem; N]) {
-    let children_items: [RowItem; N] =
-        children_items_input.map(|item_input| item_input.into_row_item());
+pub fn row<F>(args: RowArgs, scope_config: F)
+where
+    F: FnOnce(&mut RowScope),
+{
+    let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
+    let mut child_weights: Vec<Option<f32>> = Vec::new();
 
-    let mut child_closures = Vec::with_capacity(N);
-    let mut child_weights = Vec::with_capacity(N);
-
-    for child_item in children_items {
-        child_closures.push(child_item.child);
-        child_weights.push(child_item.weight);
+    {
+        let mut scope = RowScope {
+            child_closures: &mut child_closures,
+            child_weights: &mut child_weights,
+        };
+        scope_config(&mut scope);
     }
+
+    let n = child_closures.len();
 
     measure(Box::new(
         move |input| -> Result<ComputedData, MeasurementError> {
+            assert_eq!(
+                input.children_ids.len(),
+                n,
+                "Mismatch between children defined in scope and runtime children count"
+            );
+
             let row_intrinsic_constraint = Constraint::new(args.width, args.height);
             let row_effective_constraint = row_intrinsic_constraint.merge(input.parent_constraint);
 
@@ -209,9 +153,9 @@ pub fn row<const N: usize>(args: RowArgs, children_items_input: [impl AsRowItem;
             );
 
             if should_use_weight_for_width {
-                measure_weighted_row(input, &args, &child_weights, &row_effective_constraint)
+                measure_weighted_row(input, &args, &child_weights, &row_effective_constraint, n)
             } else {
-                measure_unweighted_row(input, &args, &row_effective_constraint)
+                measure_unweighted_row(input, &args, &row_effective_constraint, n)
             }
         },
     ));
@@ -226,12 +170,12 @@ fn measure_weighted_row(
     args: &RowArgs,
     child_weights: &[Option<f32>],
     row_effective_constraint: &Constraint,
+    n: usize,
 ) -> Result<ComputedData, MeasurementError> {
     // Prepare buffers and metadata for measurement:
     // - `children_sizes` stores each child's measurement result (width, height).
     // - `max_child_height` tracks the maximum height among children to compute the row's final height.
     // - `available_width_for_children` is the total width available to allocate to children under the current constraint (present only for Fill/Fixed/Wrap(max)).
-    let n = input.children_ids.len();
     let mut children_sizes = vec![None; n];
     let mut max_child_height = Px(0);
     let available_width_for_children = row_effective_constraint.width.get_max().unwrap();
@@ -288,11 +232,11 @@ fn measure_unweighted_row(
     input: &MeasureInput,
     args: &RowArgs,
     row_effective_constraint: &Constraint,
+    n: usize,
 ) -> Result<ComputedData, MeasurementError> {
     // Measure an unweighted row:
     // For each child, create a 'wrap' constraint based on the row's effective constraint,
     // use `input.measure_child` to obtain its actual size, and accumulate total width and max height.
-    let n = input.children_ids.len();
     let mut children_sizes = vec![None; n];
     let mut total_children_measured_width = Px(0);
     let mut max_child_height = Px(0);
@@ -571,37 +515,4 @@ fn calculate_cross_axis_offset(
         CrossAxisAlignment::End => (final_row_height - child_actual_size.height).max(Px(0)),
         CrossAxisAlignment::Stretch => Px(0),
     }
-}
-
-/// A declarative macro to simplify the creation of a [`row`](crate::row::row) component.
-///
-/// The first argument is the `RowArgs` struct, followed by a variable number of
-/// child components. Each child expression will be converted to a `RowItem`
-/// using the `AsRowItem` trait. This allows passing closures, `RowItem` instances,
-/// or `(FnOnce, weight)` tuples.
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui_basic_components::{row::{row_ui, RowArgs, RowItem}, text::text};
-///
-/// row_ui![
-///     RowArgs::default(),
-///     || text("Hello".to_string()), // Closure
-///     (|| text("Weighted".to_string()), 0.5), // Weighted closure
-///     RowItem::new(Box::new(|| text("Item".to_string())), None) // RowItem instance
-/// ];
-/// ```
-#[macro_export]
-macro_rules! row_ui {
-    ($args:expr $(, $child:expr)* $(,)?) => {
-        {
-            use $crate::row::AsRowItem;
-            $crate::row::row($args, [
-                $(
-                    $child.into_row_item()
-                ),*
-            ])
-        }
-    };
 }

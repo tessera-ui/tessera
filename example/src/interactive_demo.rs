@@ -4,11 +4,9 @@ use tessera_ui::{Color, Dp, tessera};
 use tessera_ui_basic_components::{
     button::{ButtonArgsBuilder, button},
     checkbox::{CheckboxArgsBuilder, checkbox},
-    column::ColumnArgsBuilder,
-    column_ui,
+    column::{ColumnArgsBuilder, column},
     glass_button::{GlassButtonArgs, glass_button},
-    row::RowArgsBuilder,
-    row_ui,
+    row::{RowArgsBuilder, row},
     text::{TextArgsBuilder, text},
 };
 
@@ -123,36 +121,40 @@ fn checkbox_row_component(app_state: Arc<AppState>) {
         })
     };
 
-    row_ui!(
+    row(
         RowArgsBuilder::default()
             .cross_axis_alignment(
-                tessera_ui_basic_components::alignment::CrossAxisAlignment::Center
+                tessera_ui_basic_components::alignment::CrossAxisAlignment::Center,
             )
             .build()
             .unwrap(),
-        move || checkbox(
-            CheckboxArgsBuilder::default()
-                .checked(checked)
-                .on_toggle(on_toggle)
-                .state(Some(app_state.checkbox_state.state.clone()))
-                .build()
-                .unwrap()
-        ),
-        || create_spacer(8)(),
-        move || {
-            let label = if checked {
-                "Checkbox is ON (GPU-rendered checkmark)"
-            } else {
-                "Checkbox is OFF (Click to see animation)"
-            };
-            text(
-                TextArgsBuilder::default()
-                    .text(label.to_string())
-                    .color(md_colors::ON_SURFACE)
-                    .build()
-                    .unwrap(),
-            )
-        }
+        |scope| {
+            scope.child(move || {
+                checkbox(
+                    CheckboxArgsBuilder::default()
+                        .checked(checked)
+                        .on_toggle(on_toggle)
+                        .state(Some(app_state.checkbox_state.state.clone()))
+                        .build()
+                        .unwrap(),
+                )
+            });
+            scope.child(|| create_spacer(8)());
+            scope.child(move || {
+                let label = if checked {
+                    "Checkbox is ON (GPU-rendered checkmark)"
+                } else {
+                    "Checkbox is OFF (Click to see animation)"
+                };
+                text(
+                    TextArgsBuilder::default()
+                        .text(label.to_string())
+                        .color(md_colors::ON_SURFACE)
+                        .build()
+                        .unwrap(),
+                )
+            });
+        },
     )
 }
 
@@ -239,27 +241,26 @@ fn glass_button_danger(app_state: Arc<AppState>) {
 /// Demo component showcasing interactive surfaces and buttons
 #[tessera]
 pub fn interactive_demo(app_state: Arc<AppState>) {
-    column_ui!(
-        ColumnArgsBuilder::default().build().unwrap(),
-        || title_component(),
-        || (create_spacer(16))(),
-        || buttons_heading(),
-        {
+    column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
+        scope.child(title_component);
+        scope.child(|| (create_spacer(16))());
+        scope.child(buttons_heading);
+        scope.child({
             let app_state = app_state.clone();
             move || primary_button_component(app_state.clone())
-        },
-        || (create_spacer(8))(),
-        {
+        });
+        scope.child(|| (create_spacer(8))());
+        scope.child({
             let app_state = app_state.clone();
             move || success_button_component(app_state.clone())
-        },
-        || (create_spacer(8))(),
-        {
+        });
+        scope.child(|| (create_spacer(8))());
+        scope.child({
             let app_state = app_state.clone();
             move || danger_button_component(app_state.clone())
-        },
-        || (create_spacer(16))(),
-        || {
+        });
+        scope.child(|| (create_spacer(16))());
+        scope.child(|| {
             text(
                 TextArgsBuilder::default()
                     .text("Animated Checkboxes with Custom Checkmark:".to_string())
@@ -268,30 +269,30 @@ pub fn interactive_demo(app_state: Arc<AppState>) {
                     .build()
                     .unwrap(),
             )
-        },
-        {
+        });
+        scope.child({
             let app_state = app_state.clone();
             move || checkbox_row_component(app_state.clone())
-        },
-        || (create_spacer(8))(),
-        {
+        });
+        scope.child(|| (create_spacer(8))());
+        scope.child({
             let app_state = app_state.clone();
             move || glass_button_primary(app_state.clone())
-        },
-        || (create_spacer(8))(),
-        {
+        });
+        scope.child(|| (create_spacer(8))());
+        scope.child({
             let app_state = app_state.clone();
             move || glass_button_secondary(app_state.clone())
-        },
-        || (create_spacer(8))(),
-        {
+        });
+        scope.child(|| (create_spacer(8))());
+        scope.child({
             let app_state = app_state.clone();
             move || glass_button_success(app_state.clone())
-        },
-        || (create_spacer(8))(),
-        {
+        });
+        scope.child(|| (create_spacer(8))());
+        scope.child({
             let app_state = app_state.clone();
             move || glass_button_danger(app_state.clone())
-        },
-    )
+        });
+    })
 }

@@ -7,7 +7,10 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use tessera_ui::{shard, tessera};
-use tessera_ui_basic_components::{RippleState, column::ColumnArgsBuilder, column_ui};
+use tessera_ui_basic_components::{
+    RippleState,
+    column::{ColumnArgsBuilder, column},
+};
 
 use crate::CalStyle;
 
@@ -38,27 +41,29 @@ impl Default for AppState {
 pub fn app(#[state] state: AppState, style: CalStyle) {
     background(
         || {
-            column_ui!(
+            column(
                 ColumnArgsBuilder::default()
                     .width(tessera_ui::DimensionValue::FILLED)
                     .height(tessera_ui::DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                {
-                    let state = state.clone();
-                    move || {
-                        display_screen(state, style);
-                    }
-                },
-                (
-                    {
+                |scope| {
+                    scope.child({
                         let state = state.clone();
                         move || {
-                            keyboard(state, style);
+                            display_screen(state, style);
                         }
-                    },
-                    1.0
-                )
+                    });
+                    scope.child_weighted(
+                        {
+                            let state = state.clone();
+                            move || {
+                                keyboard(state, style);
+                            }
+                        },
+                        1.0,
+                    );
+                },
             );
         },
         style,

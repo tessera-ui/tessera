@@ -7,14 +7,10 @@
 //!
 //! Typical use cases include tooltips, badges, composite controls, or any scenario where
 //! multiple widgets need to share the same space with flexible alignment.
-//!
-//! This module also provides supporting types and a macro for ergonomic usage.
 use derive_builder::Builder;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, tessera};
+use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node, tessera};
 
 use crate::alignment::Alignment;
-
-pub use crate::boxed_ui;
 
 /// Arguments for the `Boxed` component.
 #[derive(Clone, Debug, Builder)]
@@ -37,33 +33,18 @@ impl Default for BoxedArgs {
     }
 }
 
-/// `BoxedItem` represents a stackable child component.
-pub struct BoxedItem {
-    pub child: Box<dyn FnOnce() + Send + Sync>,
+/// A scope for declaratively adding children to a `boxed` component.
+pub struct BoxedScope<'a> {
+    child_closures: &'a mut Vec<Box<dyn FnOnce() + Send + Sync>>,
 }
 
-impl BoxedItem {
-    pub fn new(child: Box<dyn FnOnce() + Send + Sync>) -> Self {
-        BoxedItem { child }
-    }
-}
-
-/// A trait for converting various types into a `BoxedItem`.
-pub trait AsBoxedItem {
-    fn into_boxed_item(self) -> BoxedItem;
-}
-
-impl AsBoxedItem for BoxedItem {
-    fn into_boxed_item(self) -> BoxedItem {
-        self
-    }
-}
-
-impl<F: FnOnce() + Send + Sync + 'static> AsBoxedItem for F {
-    fn into_boxed_item(self) -> BoxedItem {
-        BoxedItem {
-            child: Box::new(self),
-        }
+impl<'a> BoxedScope<'a> {
+    /// Adds a child component to the box.
+    pub fn child<F>(&mut self, child_closure: F)
+    where
+        F: FnOnce() + Send + Sync + 'static,
+    {
+        self.child_closures.push(Box::new(child_closure));
     }
 }
 
@@ -127,43 +108,41 @@ fn compute_child_offset(
 /// The size of the container is determined by the dimensions of the largest child,
 /// and the alignment of the children within the container can be customized.
 ///
-/// It's useful for creating layered UIs where components need to be placed
-/// relative to a common parent.
-///
-/// # Arguments
-///
-/// * `args`: A `BoxedArgs` struct that specifies the configuration for the container.
-///   - `alignment`: Controls how children are positioned within the box.
-///     See [`Alignment`](crate::alignment::Alignment) for available options.
-///   - `width`: The width of the container. Can be fixed, fill the parent, or wrap the content.
-///     See [`DimensionValue`](tessera_ui::DimensionValue) for details.
-///   - `height`: The height of the container. Can be fixed, fill the parent, or wrap the content.
-///     See [`DimensionValue`](tessera_ui::DimensionValue) for details.
-///
-/// * `children_items_input`: An array of child components to be rendered inside the box.
-///   Any component that implements the `AsBoxedItem` trait can be a child.
+/// Children are added via the `scope` closure, which provides a `BoxedScope`
+/// to add children declaratively.
 #[tessera]
-pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxedItem; N]) {
-    // Convert inputs to boxed items and collect their closures.
-    let children_items: [BoxedItem; N] =
-        children_items_input.map(|item_input| item_input.into_boxed_item());
+pub fn boxed<F>(args: BoxedArgs, scope_config: F)
+where
+    F: FnOnce(&mut BoxedScope),
+{
+    let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
 
-    let mut child_closures = Vec::with_capacity(N);
-    for child_item in children_items {
-        child_closures.push(child_item.child);
+    {
+        let mut scope = BoxedScope {
+            child_closures: &mut child_closures,
+        };
+        scope_config(&mut scope);
     }
+
+    let n = child_closures.len();
 
     // Measurement closure: measure all present children and compute container size.
     measure(Box::new(move |input| {
+        assert_eq!(
+            input.children_ids.len(),
+            n,
+            "Mismatch between children defined in scope and runtime children count"
+        );
+
         let boxed_intrinsic_constraint = Constraint::new(args.width, args.height);
         let effective_constraint = boxed_intrinsic_constraint.merge(input.parent_constraint);
 
         // Track largest child sizes
         let mut max_child_width = Px(0);
         let mut max_child_height = Px(0);
-        let mut children_sizes = vec![None; N];
+        let mut children_sizes = vec![None; n];
 
-        for (i, &child_id) in input.children_ids.iter().enumerate().take(N) {
+        for (i, &child_id) in input.children_ids.iter().enumerate().take(n) {
             let child_result = input.measure_child(child_id, &effective_constraint)?;
             max_child_width = max_child_width.max(child_result.width);
             max_child_height = max_child_height.max(child_result.height);
@@ -185,7 +164,7 @@ pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxe
                     child_size.width,
                     child_size.height,
                 );
-                input.place_child(child_id, PxPosition::new(x, y));
+                place_node(child_id, PxPosition::new(x, y), input.metadatas);
             }
         }
 
@@ -199,19 +178,4 @@ pub fn boxed<const N: usize>(args: BoxedArgs, children_items_input: [impl AsBoxe
     for child_closure in child_closures {
         child_closure();
     }
-}
-
-/// A macro for simplifying `Boxed` component declarations.
-#[macro_export]
-macro_rules! boxed_ui {
-    ($args:expr $(, $child:expr)* $(,)?) => {
-        {
-            use $crate::boxed::AsBoxedItem;
-            $crate::boxed::boxed($args, [
-                $(
-                    $child.into_boxed_item()
-                ),*
-            ])
-        }
-    };
 }

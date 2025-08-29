@@ -3,8 +3,7 @@ use std::sync::Arc;
 use tessera_ui::{Color, DimensionValue, Dp, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::Alignment,
-    boxed::BoxedArgs,
-    boxed_ui,
+    boxed::{BoxedArgs, boxed},
     glass_button::{GlassButtonArgsBuilder, glass_button},
     image::{ImageArgsBuilder, ImageSource, image, load_image_from_source},
     pipelines::image::ImageData,
@@ -31,39 +30,41 @@ fn app(ripple_state: Arc<RippleState>, image_resource: &ImageData) {
             .unwrap(),
         None,
         move || {
-            boxed_ui!(
+            boxed(
                 BoxedArgs {
                     alignment: Alignment::Center,
                     width: DimensionValue::Fill {
                         min: None,
-                        max: None
+                        max: None,
                     },
                     height: DimensionValue::Fill {
                         min: None,
-                        max: None
+                        max: None,
                     },
                 },
-                move || {
-                    image(
-                        ImageArgsBuilder::default()
-                            .data(image_resource)
+                |scope| {
+                    scope.child(move || {
+                        image(
+                            ImageArgsBuilder::default()
+                                .data(image_resource)
+                                .build()
+                                .unwrap(),
+                        );
+                    });
+                    scope.child(move || {
+                        let button_args = GlassButtonArgsBuilder::default()
+                            .on_click(Arc::new(|| println!("Glass Button 1 clicked!")))
+                            .width(DimensionValue::Fixed(Dp(50.0).into()))
+                            .height(DimensionValue::Fixed(Dp(50.0).into()))
+                            .noise_amount(0.0)
+                            .padding(Dp(15.0))
+                            .shape(Shape::Ellipse)
+                            .contrast(0.6)
                             .build()
-                            .unwrap(),
-                    );
-                },
-                move || {
-                    let button_args = GlassButtonArgsBuilder::default()
-                        .on_click(Arc::new(|| println!("Glass Button 1 clicked!")))
-                        .width(DimensionValue::Fixed(Dp(50.0).into()))
-                        .height(DimensionValue::Fixed(Dp(50.0).into()))
-                        .noise_amount(0.0)
-                        .padding(Dp(15.0))
-                        .shape(Shape::Ellipse)
-                        .contrast(0.6)
-                        .build()
-                        .unwrap();
+                            .unwrap();
 
-                    glass_button(button_args, ripple_state.clone(), move || {});
+                        glass_button(button_args, ripple_state.clone(), move || {});
+                    });
                 },
             )
         },

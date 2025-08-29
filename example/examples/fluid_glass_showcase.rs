@@ -3,10 +3,10 @@
 use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    boxed::{AsBoxedItem, BoxedArgs, boxed},
+    boxed::{BoxedArgs, boxed},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
-    row::{AsRowItem, RowArgsBuilder, row},
+    row::{RowArgsBuilder, row},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
@@ -59,19 +59,18 @@ fn app(image_resource: &ImageData) {
                     alignment: Alignment::Center,
                     ..Default::default()
                 },
-                [
+                |scope| {
                     // Background content layer
-                    (move || {
+                    scope.child(move || {
                         image(
                             ImageArgsBuilder::default()
                                 .data(image_resource)
                                 .build()
                                 .unwrap(),
                         );
-                    })
-                    .into_boxed_item(),
+                    });
                     // Fluid glass overlay
-                    (move || {
+                    scope.child(move || {
                         row(
                             RowArgsBuilder::default()
                                 .main_axis_alignment(MainAxisAlignment::SpaceAround)
@@ -82,8 +81,8 @@ fn app(image_resource: &ImageData) {
                                 })
                                 .build()
                                 .unwrap(),
-                            [
-                                (move || {
+                            |scope| {
+                                scope.child(move || {
                                     fluid_glass(
                                         FluidGlassArgsBuilder::default()
                                             .width(DimensionValue::Fixed(Px(350)))
@@ -102,9 +101,8 @@ fn app(image_resource: &ImageData) {
                                         None,
                                         || {},
                                     )
-                                })
-                                .into_row_item(),
-                                (move || {
+                                });
+                                scope.child(move || {
                                     fluid_glass(
                                         FluidGlassArgsBuilder::default()
                                             .blur_radius(10.0)
@@ -123,13 +121,11 @@ fn app(image_resource: &ImageData) {
                                         None,
                                         || {},
                                     )
-                                })
-                                .into_row_item(),
-                            ],
+                                });
+                            },
                         )
-                    })
-                    .into_boxed_item(),
-                ],
+                    });
+                },
             )
         },
     );

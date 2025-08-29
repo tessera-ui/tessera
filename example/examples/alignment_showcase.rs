@@ -3,8 +3,8 @@
 use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    column::{AsColumnItem, ColumnArgsBuilder, column},
-    row::{AsRowItem, RowArgsBuilder, row},
+    column::{ColumnArgsBuilder, column},
+    row::{RowArgsBuilder, row},
     shape_def::Shape,
     spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, surface},
@@ -52,9 +52,9 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .build()
             .unwrap(),
-        [
+        |scope| {
             // Title
-            (move || {
+            scope.child(move || {
                 text(
                     TextArgsBuilder::default()
                         .text(title.to_string())
@@ -63,10 +63,9 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
                         .build()
                         .unwrap(),
                 )
-            })
-            .into_column_item(),
+            });
             // Alignment Demo Container - Fixed Width，Visible Background Border
-            (move || {
+            scope.child(move || {
                 surface(
                     SurfaceArgs {
                         color: Color::new(0.9, 0.9, 0.9, 1.0), // Gray background to see borders clearly
@@ -98,17 +97,16 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .build()
                                 .unwrap(),
-                            [
-                                (|| small_box("1", Color::new(0.2, 0.6, 0.9, 1.0))).into_row_item(),
-                                (|| small_box("2", Color::new(0.9, 0.2, 0.2, 1.0))).into_row_item(),
-                                (|| small_box("3", Color::new(0.2, 0.8, 0.3, 1.0))).into_row_item(),
-                            ],
+                            |scope| {
+                                scope.child(|| small_box("1", Color::new(0.2, 0.6, 0.9, 1.0)));
+                                scope.child(|| small_box("2", Color::new(0.9, 0.2, 0.2, 1.0)));
+                                scope.child(|| small_box("3", Color::new(0.2, 0.8, 0.3, 1.0)));
+                            },
                         );
                     },
                 );
-            })
-            .into_column_item(),
-        ],
+            });
+        },
     );
 }
 
@@ -145,9 +143,9 @@ fn app() {
                     }) // Fill Height
                     .build()
                     .unwrap(),
-                [
+                |scope| {
                     // Main Title
-                    Box::new(|| {
+                    scope.child(|| {
                         text(
                             TextArgsBuilder::default()
                                 .text("Tessera Alignment Demo".to_string())
@@ -156,16 +154,16 @@ fn app() {
                                 .build()
                                 .unwrap(),
                         )
-                    }) as Box<dyn FnOnce() + Send + Sync>,
+                    });
                     // Spacing
-                    Box::new(|| {
+                    scope.child(|| {
                         spacer(SpacerArgs {
                             width: DimensionValue::Fixed(Px(0)),
                             height: DimensionValue::Fixed(Px(30)),
                         })
-                    }) as Box<dyn FnOnce() + Send + Sync>,
+                    });
                     // row Alignment Demo Title
-                    Box::new(|| {
+                    scope.child(|| {
                         text(
                             TextArgsBuilder::default()
                                 .text("row Main Axis Alignment:".to_string())
@@ -174,58 +172,52 @@ fn app() {
                                 .build()
                                 .unwrap(),
                         )
-                    }) as Box<dyn FnOnce() + Send + Sync>,
+                    });
                     // Spacing
-                    Box::new(|| {
+                    scope.child(|| {
                         spacer(SpacerArgs {
                             width: DimensionValue::Fixed(Px(0)),
                             height: DimensionValue::Fixed(Px(15)),
                         })
-                    }) as Box<dyn FnOnce() + Send + Sync>,
+                    });
                     // RowAlignment Demo
-                    Box::new(|| row_demo_line("Start", MainAxisAlignment::Start))
-                        as Box<dyn FnOnce() + Send + Sync>,
-                    Box::new(|| {
+                    scope.child(|| row_demo_line("Start", MainAxisAlignment::Start));
+                    scope.child(|| {
                         spacer(SpacerArgs {
                             width: DimensionValue::Fixed(Px(0)),
                             height: DimensionValue::Fixed(Px(20)),
                         })
-                    }) as Box<dyn FnOnce() + Send + Sync>,
-                    Box::new(|| row_demo_line("Center", MainAxisAlignment::Center))
-                        as Box<dyn FnOnce() + Send + Sync>,
-                    Box::new(|| {
+                    });
+                    scope.child(|| row_demo_line("Center", MainAxisAlignment::Center));
+                    scope.child(|| {
                         spacer(SpacerArgs {
                             width: DimensionValue::Fixed(Px(0)),
                             height: DimensionValue::Fixed(Px(20)),
                         })
-                    }) as Box<dyn FnOnce() + Send + Sync>,
-                    Box::new(|| row_demo_line("End", MainAxisAlignment::End))
-                        as Box<dyn FnOnce() + Send + Sync>,
-                    Box::new(|| {
+                    });
+                    scope.child(|| row_demo_line("End", MainAxisAlignment::End));
+                    scope.child(|| {
                         spacer(SpacerArgs {
                             width: DimensionValue::Fixed(Px(0)),
                             height: DimensionValue::Fixed(Px(20)),
                         })
-                    }) as Box<dyn FnOnce() + Send + Sync>,
-                    Box::new(|| row_demo_line("SpaceEvenly", MainAxisAlignment::SpaceEvenly))
-                        as Box<dyn FnOnce() + Send + Sync>,
-                    Box::new(|| {
+                    });
+                    scope.child(|| row_demo_line("SpaceEvenly", MainAxisAlignment::SpaceEvenly));
+                    scope.child(|| {
                         spacer(SpacerArgs {
                             width: DimensionValue::Fixed(Px(0)),
                             height: DimensionValue::Fixed(Px(20)),
                         })
-                    }) as Box<dyn FnOnce() + Send + Sync>,
-                    Box::new(|| row_demo_line("SpaceBetween", MainAxisAlignment::SpaceBetween))
-                        as Box<dyn FnOnce() + Send + Sync>,
-                    Box::new(|| {
+                    });
+                    scope.child(|| row_demo_line("SpaceBetween", MainAxisAlignment::SpaceBetween));
+                    scope.child(|| {
                         spacer(SpacerArgs {
                             width: DimensionValue::Fixed(Px(0)),
                             height: DimensionValue::Fixed(Px(20)),
                         })
-                    }) as Box<dyn FnOnce() + Send + Sync>,
-                    Box::new(|| row_demo_line("SpaceAround", MainAxisAlignment::SpaceAround))
-                        as Box<dyn FnOnce() + Send + Sync>,
-                ],
+                    });
+                    scope.child(|| row_demo_line("SpaceAround", MainAxisAlignment::SpaceAround));
+                },
             );
         },
     );

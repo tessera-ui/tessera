@@ -4,10 +4,8 @@ use parking_lot::Mutex;
 use tessera_ui::{Color, DimensionValue, Dp, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::MainAxisAlignment,
-    column::ColumnArgsBuilder,
-    column_ui,
-    row::RowArgsBuilder,
-    row_ui,
+    column::{ColumnArgsBuilder, column},
+    row::{RowArgsBuilder, row},
     slider::{SliderArgsBuilder, SliderState, slider},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -47,51 +45,55 @@ fn app(state: Arc<AppState>) {
                 })
             };
 
-            column_ui!(
+            column(
                 ColumnArgsBuilder::default()
                     .main_axis_alignment(MainAxisAlignment::Center)
                     .build()
                     .unwrap(),
-                move || {
-                    let on_change_clone = on_change.clone();
-                    let state_clone = state.clone();
-                    row_ui!(
-                        RowArgsBuilder::default()
-                            .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                            .cross_axis_alignment(
-                                tessera_ui_basic_components::alignment::CrossAxisAlignment::Center
-                            )
-                            .width(tessera_ui::DimensionValue::Fixed(Dp(300.0).to_px()))
-                            .build()
-                            .unwrap(),
-                        move || {
-                            slider(
-                                SliderArgsBuilder::default()
-                                    .value(value)
-                                    .on_change(on_change_clone)
-                                    .build()
-                                    .unwrap(),
-                                state_clone.slider_state.clone(),
-                            )
-                        },
-                        move || {
-                            text(
-                                TextArgsBuilder::default()
-                                    .text(format!("{value:.2}"))
-                                    .build()
-                                    .unwrap(),
-                            )
-                        }
-                    )
+                |scope| {
+                    scope.child(move || {
+                        let on_change_clone = on_change.clone();
+                        let state_clone = state.clone();
+                        row(
+                            RowArgsBuilder::default()
+                                .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                                .cross_axis_alignment(
+                                    tessera_ui_basic_components::alignment::CrossAxisAlignment::Center,
+                                )
+                                .width(tessera_ui::DimensionValue::Fixed(Dp(300.0).to_px()))
+                                .build()
+                                .unwrap(),
+                            |scope| {
+                                scope.child(move || {
+                                    slider(
+                                        SliderArgsBuilder::default()
+                                            .value(value)
+                                            .on_change(on_change_clone)
+                                            .build()
+                                            .unwrap(),
+                                        state_clone.slider_state.clone(),
+                                    )
+                                });
+                                scope.child(move || {
+                                    text(
+                                        TextArgsBuilder::default()
+                                            .text(format!("{value:.2}"))
+                                            .build()
+                                            .unwrap(),
+                                    )
+                                });
+                            },
+                        )
+                    });
+                    scope.child(move || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Slide me!".to_string())
+                                .build()
+                                .unwrap(),
+                        )
+                    });
                 },
-                move || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Slide me!".to_string())
-                            .build()
-                            .unwrap(),
-                    )
-                }
             )
         },
     )

@@ -1,9 +1,7 @@
 use tessera_ui::{Color, DimensionValue, tessera};
 use tessera_ui_basic_components::{
-    column::ColumnArgsBuilder,
-    column_ui,
-    row::RowArgsBuilder,
-    row_ui,
+    column::{ColumnArgsBuilder, column},
+    row::{RowArgsBuilder, row},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::text,
@@ -12,21 +10,19 @@ use tessera_ui_basic_components::{
 /// Header row component with two text items
 #[tessera]
 pub fn header_row() {
-    row_ui![
-        RowArgsBuilder::default().build().unwrap(),
-        (|| text("Hello, this is tessera"), 1.0f32),
-        (|| text("Hello, this is another tessera"), 1.0f32)
-    ]
+    row(RowArgsBuilder::default().build().unwrap(), |scope| {
+        scope.child_weighted(|| text("Hello, this is tessera"), 1.0f32);
+        scope.child_weighted(|| text("Hello, this is another tessera"), 1.0f32);
+    })
 }
 
 /// Vertical text column component
 #[tessera]
 pub fn text_column() {
-    column_ui!(
-        ColumnArgsBuilder::default().build().unwrap(),
-        (|| text("This is a column"), 1.0f32),
-        (|| text("Another item in column"), 1.0f32)
-    )
+    column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
+        scope.child_weighted(|| text("This is a column"), 1.0f32);
+        scope.child_weighted(|| text("Another item in column"), 1.0f32);
+    })
 }
 
 /// Content section with header and text column
@@ -51,11 +47,10 @@ pub fn content_section() {
             .unwrap(),
         None, // Non-interactive content section
         || {
-            column_ui!(
-                ColumnArgsBuilder::default().build().unwrap(),
-                || header_row(),
-                || text_column()
-            );
+            column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
+                scope.child(header_row);
+                scope.child(text_column);
+            });
         },
     )
 }

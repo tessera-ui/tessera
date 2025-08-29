@@ -26,7 +26,7 @@ use tessera_ui::{Color, DimensionValue, Dp, tessera};
 
 use crate::{
     alignment::Alignment,
-    boxed::{BoxedArgs, boxed_ui},
+    boxed::{BoxedArgsBuilder, boxed},
     checkmark::{CheckmarkArgsBuilder, checkmark},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -243,21 +243,25 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
                             .unwrap(),
                         None,
                         move || {
-                            boxed_ui!(
-                                BoxedArgs {
-                                    alignment: Alignment::Center,
-                                    ..Default::default()
+                            boxed(
+                                BoxedArgsBuilder::default()
+                                    .alignment(Alignment::Center)
+                                    .build()
+                                    .unwrap(),
+                                |scope| {
+                                    scope.child(move || {
+                                        checkmark(
+                                            CheckmarkArgsBuilder::default()
+                                                .color(args.checkmark_color)
+                                                .stroke_width(args.checkmark_stroke_width)
+                                                .progress(progress)
+                                                .size(Dp(args.size.0 * 0.8))
+                                                .padding([2.0, 2.0])
+                                                .build()
+                                                .unwrap(),
+                                        )
+                                    });
                                 },
-                                move || checkmark(
-                                    CheckmarkArgsBuilder::default()
-                                        .color(args.checkmark_color)
-                                        .stroke_width(args.checkmark_stroke_width)
-                                        .progress(progress)
-                                        .size(Dp(args.size.0 * 0.8))
-                                        .padding([2.0, 2.0])
-                                        .build()
-                                        .unwrap()
-                                )
                             );
                         },
                     )

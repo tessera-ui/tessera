@@ -9,11 +9,11 @@ use tessera_ui_basic_components::{
         bottom_sheet_provider,
     },
     button::{ButtonArgsBuilder, button},
-    column::{ColumnArgsBuilder, column_ui},
+    column::{ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     glass_button::{GlassButtonArgsBuilder, glass_button},
     ripple_state::RippleState,
-    row::{RowArgsBuilder, row_ui},
+    row::{RowArgsBuilder, row},
     shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
@@ -42,76 +42,78 @@ fn bottom_sheet_main_content(app_state: Arc<RwLock<AppState>>) {
     let button_ripple = state.read().button_ripple.clone();
     let style_button_ripple = state.read().style_button_ripple.clone();
 
-    column_ui!(
+    column(
         ColumnArgsBuilder::default()
             .main_axis_alignment(MainAxisAlignment::Center)
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .width(DimensionValue::Fill {
                 min: None,
-                max: None
+                max: None,
             })
             .height(DimensionValue::Fill {
                 min: None,
-                max: None
+                max: None,
             })
             .build()
             .unwrap(),
-        move || {
-            button(
-                ButtonArgsBuilder::default()
-                    .on_click(Arc::new(move || {
-                        state.write().bottom_sheet_state.write().open();
-                    }))
-                    .build()
-                    .unwrap(),
-                button_ripple,
-                || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Show Bottom Sheet".to_string())
-                            .build()
-                            .unwrap(),
-                    )
-                },
-            );
-        },
-        || {
-            spacer(
-                SpacerArgsBuilder::default()
-                    .height(DimensionValue::Fixed(Px(20)))
-                    .build()
-                    .unwrap(),
-            )
-        },
-        move || {
-            let state = app_state.clone();
-            button(
-                ButtonArgsBuilder::default()
-                    .on_click(Arc::new(move || {
-                        let mut state = state.write();
-                        state.style = match state.style {
-                            ShowcaseStyle::Material => ShowcaseStyle::Glass,
-                            ShowcaseStyle::Glass => ShowcaseStyle::Material,
+        |scope| {
+            scope.child(move || {
+                button(
+                    ButtonArgsBuilder::default()
+                        .on_click(Arc::new(move || {
+                            state.write().bottom_sheet_state.write().open();
+                        }))
+                        .build()
+                        .unwrap(),
+                    button_ripple,
+                    || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Show Bottom Sheet".to_string())
+                                .build()
+                                .unwrap(),
+                        )
+                    },
+                );
+            });
+            scope.child(|| {
+                spacer(
+                    SpacerArgsBuilder::default()
+                        .height(DimensionValue::Fixed(Px(20)))
+                        .build()
+                        .unwrap(),
+                )
+            });
+            scope.child(move || {
+                let state = app_state.clone();
+                button(
+                    ButtonArgsBuilder::default()
+                        .on_click(Arc::new(move || {
+                            let mut state = state.write();
+                            state.style = match state.style {
+                                ShowcaseStyle::Material => ShowcaseStyle::Glass,
+                                ShowcaseStyle::Glass => ShowcaseStyle::Material,
+                            };
+                        }))
+                        .build()
+                        .unwrap(),
+                    style_button_ripple,
+                    move || {
+                        let state = app_state.clone();
+                        let text_content = match state.read().style {
+                            ShowcaseStyle::Material => "Switch to Glass",
+                            ShowcaseStyle::Glass => "Switch to Material",
                         };
-                    }))
-                    .build()
-                    .unwrap(),
-                style_button_ripple,
-                move || {
-                    let state = app_state.clone();
-                    let text_content = match state.read().style {
-                        ShowcaseStyle::Material => "Switch to Glass",
-                        ShowcaseStyle::Glass => "Switch to Material",
-                    };
-                    text(
-                        TextArgsBuilder::default()
-                            .text(text_content.to_string())
-                            .build()
-                            .unwrap(),
-                    )
-                },
-            );
-        }
+                        text(
+                            TextArgsBuilder::default()
+                                .text(text_content.to_string())
+                                .build()
+                                .unwrap(),
+                        )
+                    },
+                );
+            });
+        },
     );
 }
 
@@ -119,32 +121,34 @@ fn bottom_sheet_main_content(app_state: Arc<RwLock<AppState>>) {
 fn bottom_sheet_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
     let state = app_state.clone();
     let close_button_ripple = state.read().close_button_ripple.clone();
-    row_ui!(
+    row(
         RowArgsBuilder::default()
             .main_axis_alignment(MainAxisAlignment::Center)
             .cross_axis_alignment(CrossAxisAlignment::End)
             .width(DimensionValue::Fill {
                 min: None,
-                max: None
+                max: None,
             })
             .height(DimensionValue::Fill {
                 min: None,
-                max: None
+                max: None,
             })
             .build()
             .unwrap(),
-        {
-            let state = app_state.clone();
-            let style = state.read().style;
-            move || match style {
-                ShowcaseStyle::Material => {
-                    main_content_material(state, content_alpha, close_button_ripple.clone());
+        |scope| {
+            scope.child({
+                let state = app_state.clone();
+                let style = state.read().style;
+                move || match style {
+                    ShowcaseStyle::Material => {
+                        main_content_material(state, content_alpha, close_button_ripple.clone());
+                    }
+                    ShowcaseStyle::Glass => {
+                        main_content_glass(state, content_alpha, close_button_ripple.clone());
+                    }
                 }
-                ShowcaseStyle::Glass => {
-                    main_content_glass(state, content_alpha, close_button_ripple.clone());
-                }
-            }
-        }
+            });
+        },
     );
 }
 
@@ -222,9 +226,8 @@ fn main_content_material(
             .unwrap(),
         None,
         move || {
-            column_ui!(
-                ColumnArgsBuilder::default().build().unwrap(),
-                move || {
+            column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
+                scope.child(move || {
                     text(
                         TextArgsBuilder::default()
                             .color(Color::BLACK.with_alpha(content_alpha))
@@ -232,16 +235,16 @@ fn main_content_material(
                             .build()
                             .unwrap(),
                     );
-                },
-                || {
+                });
+                scope.child(|| {
                     spacer(
                         SpacerArgsBuilder::default()
                             .height(DimensionValue::Fixed(Px(10)))
                             .build()
                             .unwrap(),
                     );
-                },
-                move || {
+                });
+                scope.child(move || {
                     button(
                         ButtonArgsBuilder::default()
                             .color(Color::new(0.2, 0.5, 0.8, content_alpha))
@@ -261,8 +264,8 @@ fn main_content_material(
                             )
                         },
                     );
-                }
-            );
+                });
+            });
         },
     );
 }
@@ -293,9 +296,8 @@ fn main_content_glass(
             .unwrap(),
         None,
         move || {
-            column_ui!(
-                ColumnArgsBuilder::default().build().unwrap(),
-                move || {
+            column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
+                scope.child(move || {
                     text(
                         TextArgsBuilder::default()
                             .color(Color::BLACK.with_alpha(content_alpha))
@@ -303,16 +305,16 @@ fn main_content_glass(
                             .build()
                             .unwrap(),
                     );
-                },
-                || {
+                });
+                scope.child(|| {
                     spacer(
                         SpacerArgsBuilder::default()
                             .height(DimensionValue::Fixed(Px(10)))
                             .build()
                             .unwrap(),
                     );
-                },
-                move || {
+                });
+                scope.child(move || {
                     glass_button(
                         GlassButtonArgsBuilder::default()
                             .tint_color(Color::new(0.2, 0.5, 0.8, content_alpha / 3.0))
@@ -332,8 +334,8 @@ fn main_content_glass(
                             )
                         },
                     );
-                }
-            );
+                });
+            });
         },
     );
 }

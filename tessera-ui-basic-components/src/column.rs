@@ -4,14 +4,20 @@
 //! over alignment, sizing, and flexible space distribution via weights. It is suitable for building user interfaces
 //! where elements need to be organized from top to bottom, such as forms, lists, or grouped controls.
 //!
-//! Key features include:
-//! - Main/cross axis alignment options
-//! - Support for fixed, fill, or wrap sizing
-//! - Weighted children for proportional space allocation
-//! - Ergonomic macro for declarative usage
+//! Children are added declaratively within a `scope` closure, which provides methods to add children with or without weights.
 //!
-//! Typical usage involves composing UI elements that should be laid out in a vertical sequence, with customizable
-//! alignment and spacing behaviors.
+//! # Example
+//! ```rust,ignore
+//! use tessera_ui_basic_components::column::{column, ColumnArgs};
+//! use tessera_ui_basic_components::text::text;
+//! use tessera_ui_basic_components::spacer::spacer;
+//!
+//! column(ColumnArgs::default(), |scope| {
+//!     scope.child(|| text("First item".to_string()));
+//!     scope.child_weighted(|| spacer(), 1.0); // This spacer will be flexible
+//!     scope.child(|| text("Last item".to_string()));
+//! });
+//! ```
 use derive_builder::Builder;
 use tessera_ui::{
     ComponentNodeMetaDatas, ComputedData, Constraint, DimensionValue, MeasureInput,
@@ -19,8 +25,6 @@ use tessera_ui::{
 };
 
 use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
-
-pub use crate::column_ui;
 
 /// Arguments for the `column` component.
 #[derive(Builder, Clone, Debug)]
@@ -46,57 +50,118 @@ impl Default for ColumnArgs {
     }
 }
 
-/// Represents a child item within a column layout.
-pub struct ColumnItem {
-    /// Optional weight for flexible space distribution
-    pub weight: Option<f32>,
-    /// The actual child component
-    pub child: Box<dyn FnOnce() + Send + Sync>,
+/// A scope for declaratively adding children to a `column` component.
+pub struct ColumnScope<'a> {
+    child_closures: &'a mut Vec<Box<dyn FnOnce() + Send + Sync>>,
+    child_weights: &'a mut Vec<Option<f32>>,
 }
 
-impl ColumnItem {
-    /// Creates a new `ColumnItem` with optional weight.
-    pub fn new(child: Box<dyn FnOnce() + Send + Sync>, weight: Option<f32>) -> Self {
-        ColumnItem { weight, child }
+impl<'a> ColumnScope<'a> {
+    /// Adds a child component to the column.
+    pub fn child<F>(&mut self, child_closure: F)
+    where
+        F: FnOnce() + Send + Sync + 'static,
+    {
+        self.child_closures.push(Box::new(child_closure));
+        self.child_weights.push(None);
     }
 
-    /// Creates a weighted column item
-    pub fn weighted(child: Box<dyn FnOnce() + Send + Sync>, weight: f32) -> Self {
-        ColumnItem {
-            weight: Some(weight),
-            child,
-        }
-    }
-}
-
-/// Trait to allow various types to be converted into a `ColumnItem`.
-pub trait AsColumnItem {
-    fn into_column_item(self) -> ColumnItem;
-}
-
-impl AsColumnItem for ColumnItem {
-    fn into_column_item(self) -> ColumnItem {
-        self
+    /// Adds a child component to the column with a specified weight for flexible space distribution.
+    pub fn child_weighted<F>(&mut self, child_closure: F, weight: f32)
+    where
+        F: FnOnce() + Send + Sync + 'static,
+    {
+        self.child_closures.push(Box::new(child_closure));
+        self.child_weights.push(Some(weight));
     }
 }
 
-/// Default conversion: a simple function closure becomes a `ColumnItem` without weight.
-impl<F: FnOnce() + Send + Sync + 'static> AsColumnItem for F {
-    fn into_column_item(self) -> ColumnItem {
-        ColumnItem {
-            weight: None,
-            child: Box::new(self),
-        }
-    }
-}
+/// A column component that arranges its children vertically.
+///
+/// The `column` stacks its children from top to bottom and provides control over sizing,
+/// alignment and proportional space distribution via weights. Children are added via the
+/// `scope` closure, which provides a `ColumnScope` to add children declaratively.
+#[tessera]
+pub fn column<F>(args: ColumnArgs, scope_config: F)
+where
+    F: FnOnce(&mut ColumnScope),
+{
+    let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
+    let mut child_weights: Vec<Option<f32>> = Vec::new();
 
-/// Allow (FnOnce, weight) to be a ColumnItem
-impl<F: FnOnce() + Send + Sync + 'static> AsColumnItem for (F, f32) {
-    fn into_column_item(self) -> ColumnItem {
-        ColumnItem {
-            weight: Some(self.1),
-            child: Box::new(self.0),
-        }
+    {
+        let mut scope = ColumnScope {
+            child_closures: &mut child_closures,
+            child_weights: &mut child_weights,
+        };
+        scope_config(&mut scope);
+    }
+
+    let n = child_closures.len();
+
+    measure(Box::new(
+        move |input| -> Result<ComputedData, MeasurementError> {
+            assert_eq!(
+                input.children_ids.len(),
+                n,
+                "Mismatch between children defined in scope and runtime children count"
+            );
+
+            let column_intrinsic_constraint = Constraint::new(args.width, args.height);
+            let column_effective_constraint =
+                column_intrinsic_constraint.merge(input.parent_constraint);
+
+            let mut children_sizes = vec![None; n];
+            let mut max_child_width = Px(0);
+
+            let should_use_weight_for_height = matches!(
+                column_effective_constraint.height,
+                DimensionValue::Fixed(_)
+                    | DimensionValue::Fill { max: Some(_), .. }
+                    | DimensionValue::Wrap { max: Some(_), .. }
+            );
+
+            let (final_column_width, final_column_height, total_measured_children_height) =
+                if should_use_weight_for_height {
+                    measure_weighted_column(
+                        input,
+                        &args,
+                        &child_weights,
+                        &column_effective_constraint,
+                        &mut children_sizes,
+                        &mut max_child_width,
+                    )?
+                } else {
+                    measure_unweighted_column(
+                        input,
+                        &args,
+                        &column_effective_constraint,
+                        &mut children_sizes,
+                        &mut max_child_width,
+                    )?
+                };
+
+            place_children_with_alignment(&PlaceChildrenArgs {
+                children_sizes: &children_sizes,
+                children_ids: input.children_ids,
+                metadatas: input.metadatas,
+                final_column_width,
+                final_column_height,
+                total_children_height: total_measured_children_height,
+                main_axis_alignment: args.main_axis_alignment,
+                cross_axis_alignment: args.cross_axis_alignment,
+                child_count: n,
+            });
+
+            Ok(ComputedData {
+                width: final_column_width,
+                height: final_column_height,
+            })
+        },
+    ));
+
+    for child_closure in child_closures {
+        child_closure();
     }
 }
 
@@ -348,113 +413,6 @@ fn measure_unweighted_column(
     ))
 }
 
-/// A column component that arranges its children vertically.
-///
-/// The `column` stacks its children from top to bottom and provides control over sizing,
-/// alignment and proportional space distribution via weights. Use `ColumnArgs` to configure
-/// the column's width/height behavior and alignment policies.
-///
-/// Children may be provided as:
-/// - closures (converted to `ColumnItem` with no weight),
-/// - `ColumnItem` instances, or
-/// - `(closure, weight)` tuples to allocate proportional space.
-///
-/// # Parameters
-/// - `args`: configuration for width/height and alignment (`ColumnArgs`).
-/// - `children_items_input`: array of items convertible to `ColumnItem` via `AsColumnItem`.
-///
-/// # Example
-/// ```rust,ignore
-/// use tessera_ui_basic_components::column::{column_ui, ColumnArgsBuilder};
-/// use tessera_ui_basic_components::text::text;
-///
-/// column_ui!(
-///     ColumnArgsBuilder::default()
-///         .main_axis_alignment(MainAxisAlignment::SpaceEvenly)
-///         .cross_axis_alignment(CrossAxisAlignment::Center)
-///         .build()
-///         .unwrap(),
-///     || text("First item".to_string()),
-///     (|| text("Weighted".to_string()), 0.5),
-///     ColumnItem::new(Box::new(|| text("Last".to_string())), None)
-/// );
-/// ```
-///
-/// Note: This function registers a measurement closure that measures children according
-/// to column constraints and then places them using `place_node`.
-#[tessera]
-pub fn column<const N: usize>(args: ColumnArgs, children_items_input: [impl AsColumnItem; N]) {
-    let children_items: [ColumnItem; N] =
-        children_items_input.map(|item_input| item_input.into_column_item());
-
-    let mut child_closures = Vec::with_capacity(N);
-    let mut child_weights = Vec::with_capacity(N);
-
-    for child_item in children_items {
-        child_closures.push(child_item.child);
-        child_weights.push(child_item.weight);
-    }
-
-    measure(Box::new(
-        move |input| -> Result<ComputedData, MeasurementError> {
-            let column_intrinsic_constraint = Constraint::new(args.width, args.height);
-            let column_effective_constraint =
-                column_intrinsic_constraint.merge(input.parent_constraint);
-
-            let mut children_sizes = vec![None; N];
-            let mut max_child_width = Px(0);
-
-            let should_use_weight_for_height = matches!(
-                column_effective_constraint.height,
-                DimensionValue::Fixed(_)
-                    | DimensionValue::Fill { max: Some(_), .. }
-                    | DimensionValue::Wrap { max: Some(_), .. }
-            );
-
-            let (final_column_width, final_column_height, total_measured_children_height) =
-                if should_use_weight_for_height {
-                    measure_weighted_column(
-                        input,
-                        &args,
-                        &child_weights,
-                        &column_effective_constraint,
-                        &mut children_sizes,
-                        &mut max_child_width,
-                    )?
-                } else {
-                    measure_unweighted_column(
-                        input,
-                        &args,
-                        &column_effective_constraint,
-                        &mut children_sizes,
-                        &mut max_child_width,
-                    )?
-                };
-
-            place_children_with_alignment(&PlaceChildrenArgs {
-                children_sizes: &children_sizes,
-                children_ids: input.children_ids,
-                metadatas: input.metadatas,
-                final_column_width,
-                final_column_height,
-                total_children_height: total_measured_children_height,
-                main_axis_alignment: args.main_axis_alignment,
-                cross_axis_alignment: args.cross_axis_alignment,
-                child_count: N,
-            });
-
-            Ok(ComputedData {
-                width: final_column_width,
-                height: final_column_height,
-            })
-        },
-    ));
-
-    for child_closure in child_closures {
-        child_closure();
-    }
-}
-
 /// Place measured children into the column according to main and cross axis alignment.
 ///
 /// This helper computes the starting y position and spacing between children based on
@@ -542,36 +500,4 @@ fn calculate_cross_axis_offset_for_column(
         CrossAxisAlignment::End => (final_column_width - child_actual_size.width).max(Px(0)),
         CrossAxisAlignment::Stretch => Px(0),
     }
-}
-
-/// A declarative macro to simplify the creation of a [`column`](crate::column::column) component.
-///
-/// The first argument is the `ColumnArgs` struct, followed by a variable number of
-/// child components. Each child expression will be converted to a `ColumnItem`
-/// using the `AsColumnItem` trait. This allows passing closures, `ColumnItem` instances,
-/// or `(FnOnce, weight)` tuples.
-///
-/// # Example
-/// ```
-/// use tessera_ui_basic_components::{column::{column_ui, ColumnArgs, ColumnItem}, text::text};
-///
-/// column_ui!(
-///     ColumnArgs::default(),
-///     || text("Hello".to_string()), // Closure
-///     (|| text("Weighted".to_string()), 0.5), // Weighted closure
-///     ColumnItem::new(Box::new(|| text("Item".to_string())), None) // ColumnItem instance
-/// );
-/// ```
-#[macro_export]
-macro_rules! column_ui {
-    ($args:expr $(, $child:expr)* $(,)?) => {
-        {
-            use $crate::column::AsColumnItem;
-            $crate::column::column($args, [
-                $(
-                    $child.into_column_item()
-                ),*
-            ])
-        }
-    };
 }

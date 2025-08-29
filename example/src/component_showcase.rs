@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use tessera_ui::{Color, DimensionValue, Dp, tessera};
 use tessera_ui_basic_components::{
-    column::ColumnArgsBuilder,
-    column_ui,
+    column::{ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -44,10 +43,9 @@ fn surface_showcase(state: Arc<AppState>) {
                 .unwrap(),
             None, // Non-interactive container
             || {
-                column_ui!(
-                    ColumnArgsBuilder::default().build().unwrap(),
+                column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
                     // Title inside the card
-                    || {
+                    scope.child(|| {
                         text(
                             TextArgsBuilder::default()
                                 .text("Surface Components".to_string())
@@ -56,13 +54,13 @@ fn surface_showcase(state: Arc<AppState>) {
                                 .build()
                                 .unwrap(),
                         )
-                    },
+                    });
                     // Spacer
-                    || (create_spacer(12))(),
+                    scope.child(|| (create_spacer(12))());
                     // Content
-                    || text("Surface looks like an enhanced rect"),
-                    || (create_spacer(8))(),
-                    || {
+                    scope.child(|| text("Surface looks like an enhanced rect"));
+                    scope.child(|| (create_spacer(8))());
+                    scope.child(|| {
                         surface(
                             SurfaceArgsBuilder::default()
                                 .width(DimensionValue::Fixed(Dp(100.0).into()))
@@ -73,11 +71,11 @@ fn surface_showcase(state: Arc<AppState>) {
                             None,
                             || {},
                         );
-                    },
-                    || (create_spacer(8))(),
-                    || text("surface can be clicked"),
-                    || (create_spacer(8))(),
-                    || {
+                    });
+                    scope.child(|| (create_spacer(8))());
+                    scope.child(|| text("surface can be clicked"));
+                    scope.child(|| (create_spacer(8))());
+                    scope.child(|| {
                         surface(
                             SurfaceArgsBuilder::default()
                                 .color(Color::RED)
@@ -91,11 +89,11 @@ fn surface_showcase(state: Arc<AppState>) {
                             None,
                             || {},
                         );
-                    },
-                    || (create_spacer(8))(),
-                    || text("surface can have ripple anim on click"),
-                    || (create_spacer(8))(),
-                    {
+                    });
+                    scope.child(|| (create_spacer(8))());
+                    scope.child(|| text("surface can have ripple anim on click"));
+                    scope.child(|| (create_spacer(8))());
+                    scope.child({
                         let state = state.clone();
                         move || {
                             surface(
@@ -112,10 +110,10 @@ fn surface_showcase(state: Arc<AppState>) {
                                 || {},
                             );
                         }
-                    },
-                    || (create_spacer(8))(),
-                    || text("surface can have rounded corners"),
-                    {
+                    });
+                    scope.child(|| (create_spacer(8))());
+                    scope.child(|| text("surface can have rounded corners"));
+                    scope.child({
                         let state = state.clone();
                         move || {
                             surface(
@@ -139,10 +137,10 @@ fn surface_showcase(state: Arc<AppState>) {
                                 || {},
                             );
                         }
-                    },
-                    || (create_spacer(8))(),
-                    || text("surface can be an ellipse"),
-                    {
+                    });
+                    scope.child(|| (create_spacer(8))());
+                    scope.child(|| text("surface can be an ellipse"));
+                    scope.child({
                         let state = state.clone();
                         move || {
                             surface(
@@ -160,8 +158,8 @@ fn surface_showcase(state: Arc<AppState>) {
                                 || {},
                             );
                         }
-                    },
-                )
+                    });
+                })
             },
         )
     }
@@ -195,10 +193,9 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                 .unwrap(),
             None,
             || {
-                column_ui!(
-                    ColumnArgsBuilder::default().build().unwrap(),
+                column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
                     // Title
-                    || {
+                    scope.child(|| {
                         text(
                             TextArgsBuilder::default()
                                 .text("Fluid Glass Components".to_string())
@@ -207,13 +204,13 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                 .build()
                                 .unwrap(),
                         )
-                    },
-                    || (create_spacer(12))(),
+                    });
+                    scope.child(|| (create_spacer(12))());
                     // Content
-                    || text("fluid_glass is glass-like surface"),
-                    || (create_spacer(8))(),
+                    scope.child(|| text("fluid_glass is glass-like surface"));
+                    scope.child(|| (create_spacer(8))());
                     // Basic fluid glass with ripple
-                    {
+                    scope.child({
                         move || {
                             fluid_glass(
                                 FluidGlassArgsBuilder::default()
@@ -227,10 +224,10 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                 || {},
                             );
                         }
-                    },
-                    || (create_spacer(8))(),
-                    || text("fluid_glass with border and ripple"),
-                    {
+                    });
+                    scope.child(|| (create_spacer(8))());
+                    scope.child(|| text("fluid_glass with border and ripple"));
+                    scope.child({
                         let state = state.clone();
                         move || {
                             fluid_glass(
@@ -247,10 +244,10 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                 || {},
                             );
                         }
-                    },
-                    || (create_spacer(8))(),
-                    || text("fluid_glass with rounded corners and ripple"),
-                    {
+                    });
+                    scope.child(|| (create_spacer(8))());
+                    scope.child(|| text("fluid_glass with rounded corners and ripple"));
+                    scope.child({
                         let state = state.clone();
                         move || {
                             fluid_glass(
@@ -274,10 +271,10 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                 || {},
                             );
                         }
-                    },
-                    || (create_spacer(8))(),
-                    || text("fluid_glass as ellipse with ripple and border"),
-                    {
+                    });
+                    scope.child(|| (create_spacer(8))());
+                    scope.child(|| text("fluid_glass as ellipse with ripple and border"));
+                    scope.child({
                         let state = state.clone();
                         move || {
                             fluid_glass(
@@ -295,8 +292,8 @@ fn fluid_glass_showcase(state: Arc<AppState>) {
                                 || {},
                             );
                         }
-                    }
-                )
+                    });
+                })
             },
         )
     }
@@ -326,7 +323,7 @@ fn text_editor_showcase(state: Arc<AppState>) {
             .unwrap(),
         None, // Non-interactive container
         move || {
-            column_ui!(
+            column(
                 ColumnArgsBuilder::default()
                     .width(DimensionValue::Fill {
                         min: None,
@@ -334,37 +331,41 @@ fn text_editor_showcase(state: Arc<AppState>) {
                     })
                     .build()
                     .unwrap(),
-                // Title inside the card
-                || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Text Editor Components".to_string())
-                            .size(tessera_ui::Dp(24.0))
-                            .color(md_colors::ON_SURFACE)
-                            .build()
-                            .unwrap(),
-                    )
+                |scope| {
+                    // Title inside the card
+                    scope.child(|| {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Text Editor Components".to_string())
+                                .size(tessera_ui::Dp(24.0))
+                                .color(md_colors::ON_SURFACE)
+                                .build()
+                                .unwrap(),
+                        )
+                    });
+                    // Spacer
+                    scope.child(|| (create_spacer(12))());
+                    // Content
+                    scope.child(move || {
+                        text_editor(
+                            TextEditorArgsBuilder::default()
+                                .height(Some(DimensionValue::Fixed(Dp(250.0).into())))
+                                .width(Some(DimensionValue::Fill {
+                                    min: None,
+                                    max: None,
+                                }))
+                                .selection_color(Some(Color::new(
+                                    md_colors::PRIMARY.r,
+                                    md_colors::PRIMARY.g,
+                                    md_colors::PRIMARY.b,
+                                    0.4,
+                                ))) // Material Design primary color with transparency
+                                .build()
+                                .unwrap(),
+                            editor_state_clone.clone(),
+                        )
+                    });
                 },
-                // Spacer
-                || (create_spacer(12))(),
-                // Content
-                move || text_editor(
-                    TextEditorArgsBuilder::default()
-                        .height(Some(DimensionValue::Fixed(Dp(250.0).into())))
-                        .width(Some(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        }))
-                        .selection_color(Some(Color::new(
-                            md_colors::PRIMARY.r,
-                            md_colors::PRIMARY.g,
-                            md_colors::PRIMARY.b,
-                            0.4,
-                        ))) // Material Design primary color with transparency
-                        .build()
-                        .unwrap(),
-                    editor_state_clone.clone()
-                ),
             )
         },
     )
@@ -420,7 +421,7 @@ fn performance_showcase(state: Arc<AppState>) {
             .unwrap(),
         None, // Non-interactive
         move || {
-            column_ui!(
+            column(
                 ColumnArgsBuilder::default()
                     .width(DimensionValue::Fill {
                         min: None,
@@ -428,20 +429,22 @@ fn performance_showcase(state: Arc<AppState>) {
                     })
                     .build()
                     .unwrap(),
-                // Title inside the card
-                || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Performance Monitoring".to_string())
-                            .size(tessera_ui::Dp(24.0))
-                            .color(md_colors::ON_SURFACE)
-                            .build()
-                            .unwrap(),
-                    )
+                |scope| {
+                    // Title inside the card
+                    scope.child(|| {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Performance Monitoring".to_string())
+                                .size(tessera_ui::Dp(24.0))
+                                .color(md_colors::ON_SURFACE)
+                                .build()
+                                .unwrap(),
+                        )
+                    });
+                    scope.child(|| (create_spacer(12))());
+                    // Content
+                    scope.child(move || perf_display(metrics_clone.clone()));
                 },
-                || (create_spacer(12))(),
-                // Content
-                move || perf_display(metrics_clone.clone())
             )
         },
     )
@@ -450,7 +453,7 @@ fn performance_showcase(state: Arc<AppState>) {
 /// Main component showcase that organizes all components
 #[tessera]
 pub fn component_showcase(state: Arc<AppState>) {
-    column_ui!(
+    column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::Fill {
                 min: None,
@@ -458,73 +461,75 @@ pub fn component_showcase(state: Arc<AppState>) {
             })
             .build()
             .unwrap(),
-        // Welcome section
-        || {
-            surface(
-                SurfaceArgsBuilder::default()
-                    .color(md_colors::PRIMARY_CONTAINER)
-                    .shape(Shape::RoundedRectangle {
-                        top_left: 25.0,
-                        top_right: 25.0,
-                        bottom_right: 25.0,
-                        bottom_left: 25.0,
-                        g2_k_value: 3.0,
-                    })
-                    .padding(Dp(24.0))
-                    .width(DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
-                    .build()
-                    .unwrap(),
-                None, // Non-interactive
-                || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Tessera UI Framework Component Showcase".to_string())
-                            .size(tessera_ui::Dp(24.0))
-                            .color(md_colors::ON_SURFACE)
-                            .build()
-                            .unwrap(),
-                    );
-                },
-            )
-        },
-        || create_spacer(24)(),
-        // surface components
-        {
-            let state_clone = state.clone();
-            move || surface_showcase(state_clone.clone())
-        },
-        || create_spacer(24)(),
-        // fluid glass components
-        {
-            let state_clone = state.clone();
-            move || fluid_glass_showcase(state_clone.clone())
-        },
-        || create_spacer(24)(),
-        // text editor components
-        {
-            let state_clone = state.clone();
-            move || text_editor_showcase(state_clone.clone())
-        },
-        || create_spacer(24)(),
-        // Switch component
-        {
-            let state_clone = state.clone();
-            move || switch_showcase(state_clone.switch_state.state.clone())
-        },
-        || create_spacer(24)(),
-        // Interactive components
-        {
-            let state_clone = state.clone();
-            move || interactive_showcase(state_clone.clone())
-        },
-        || create_spacer(24)(),
-        // Performance monitoring
-        {
-            let state_clone = state.clone();
-            move || performance_showcase(state_clone.clone())
+        |scope| {
+            // Welcome section
+            scope.child(|| {
+                surface(
+                    SurfaceArgsBuilder::default()
+                        .color(md_colors::PRIMARY_CONTAINER)
+                        .shape(Shape::RoundedRectangle {
+                            top_left: 25.0,
+                            top_right: 25.0,
+                            bottom_right: 25.0,
+                            bottom_left: 25.0,
+                            g2_k_value: 3.0,
+                        })
+                        .padding(Dp(24.0))
+                        .width(DimensionValue::Fill {
+                            min: None,
+                            max: None,
+                        })
+                        .build()
+                        .unwrap(),
+                    None, // Non-interactive
+                    || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text("Tessera UI Framework Component Showcase".to_string())
+                                .size(tessera_ui::Dp(24.0))
+                                .color(md_colors::ON_SURFACE)
+                                .build()
+                                .unwrap(),
+                        );
+                    },
+                )
+            });
+            scope.child(|| create_spacer(24)());
+            // surface components
+            scope.child({
+                let state_clone = state.clone();
+                move || surface_showcase(state_clone.clone())
+            });
+            scope.child(|| create_spacer(24)());
+            // fluid glass components
+            scope.child({
+                let state_clone = state.clone();
+                move || fluid_glass_showcase(state_clone.clone())
+            });
+            scope.child(|| create_spacer(24)());
+            // text editor components
+            scope.child({
+                let state_clone = state.clone();
+                move || text_editor_showcase(state_clone.clone())
+            });
+            scope.child(|| create_spacer(24)());
+            // Switch component
+            scope.child({
+                let state_clone = state.clone();
+                move || switch_showcase(state_clone.switch_state.state.clone())
+            });
+            scope.child(|| create_spacer(24)());
+            // Interactive components
+            scope.child({
+                let state_clone = state.clone();
+                move || interactive_showcase(state_clone.clone())
+            });
+            scope.child(|| create_spacer(24)());
+            // Performance monitoring
+            scope.child({
+                let state_clone = state.clone();
+                move || performance_showcase(state_clone.clone())
+            });
         },
     )
 }

@@ -4,8 +4,7 @@ use tessera_ui::{Color, Dp, tessera};
 use tessera_ui_basic_components::{
     alignment::MainAxisAlignment,
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
-    row::RowArgsBuilder,
-    row_ui,
+    row::{RowArgsBuilder, row},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -70,34 +69,36 @@ fn render_material_display(app_state: Arc<AppState>) {
 
 #[tessera]
 fn content(app_state: Arc<AppState>) {
-    row_ui!(
+    row(
         RowArgsBuilder::default()
             .width(tessera_ui::DimensionValue::FILLED)
             .height(tessera_ui::DimensionValue::WRAP)
             .main_axis_alignment(MainAxisAlignment::End)
             .build()
             .unwrap(),
-        move || {
-            let expr = app_state.expr.read();
+        |scope| {
+            scope.child(move || {
+                let expr = app_state.expr.read();
 
-            let content = if expr.is_empty() {
-                String::new()
-            } else if let Ok(result) = evaluate(&expr, &mut app_state.interpreter.write()) {
-                app_state.result.write().clone_from(&result);
-                format!("{expr} = {:.2}", app_state.result.read())
-            } else {
-                format!("{expr}")
-            };
+                let content = if expr.is_empty() {
+                    String::new()
+                } else if let Ok(result) = evaluate(&expr, &mut app_state.interpreter.write()) {
+                    app_state.result.write().clone_from(&result);
+                    format!("{expr} = {:.2}", app_state.result.read())
+                } else {
+                    format!("{expr}")
+                };
 
-            let content = content.replace("/", "÷").replace("*", "×");
+                let content = content.replace("/", "÷").replace("*", "×");
 
-            text(
-                TextArgsBuilder::default()
-                    .text(content)
-                    .color(Color::WHITE.with_alpha(0.5))
-                    .build()
-                    .unwrap(),
-            )
-        }
+                text(
+                    TextArgsBuilder::default()
+                        .text(content)
+                        .color(Color::WHITE.with_alpha(0.5))
+                        .build()
+                        .unwrap(),
+                )
+            });
+        },
     );
 }

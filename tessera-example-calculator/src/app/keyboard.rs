@@ -3,14 +3,11 @@ use std::sync::Arc;
 use tessera_ui::{Color, DimensionValue, Dp, tessera};
 use tessera_ui_basic_components::{
     alignment::Alignment,
-    boxed::BoxedArgsBuilder,
-    boxed_ui,
+    boxed::{BoxedArgsBuilder, boxed},
     button::{ButtonArgsBuilder, button},
-    column::ColumnArgsBuilder,
-    column_ui,
+    column::{ColumnArgsBuilder, column},
     glass_button::{GlassButtonArgsBuilder, glass_button},
-    row::RowArgsBuilder,
-    row_ui,
+    row::{RowArgsBuilder, row},
     shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},
     text::{TextArgsBuilder, text},
@@ -20,193 +17,280 @@ use crate::{CalStyle, app::AppState};
 
 #[tessera]
 pub fn keyboard(app_state: Arc<AppState>, style: CalStyle) {
-    column_ui!(
+    column(
         ColumnArgsBuilder::default()
             .width(tessera_ui::DimensionValue::FILLED)
             .height(tessera_ui::DimensionValue::FILLED)
             .build()
             .unwrap(),
-        || spacer_v(),
-        {
-            let app_state = app_state.clone();
-            (move || row_top(app_state.clone(), style), 1.0)
+        |scope| {
+            scope.child(spacer_v);
+            scope.child_weighted(
+                {
+                    let app_state = app_state.clone();
+                    move || row_top(app_state.clone(), style)
+                },
+                1.0,
+            );
+            scope.child(spacer_v);
+            scope.child_weighted(
+                {
+                    let app_state = app_state.clone();
+                    move || row_1(app_state.clone(), style)
+                },
+                1.0,
+            );
+            scope.child(spacer_v);
+            scope.child_weighted(
+                {
+                    let app_state = app_state.clone();
+                    move || row_2(app_state.clone(), style)
+                },
+                1.0,
+            );
+            scope.child(spacer_v);
+            scope.child_weighted(
+                {
+                    let app_state = app_state.clone();
+                    move || row_3(app_state.clone(), style)
+                },
+                1.0,
+            );
+            scope.child(spacer_v);
+            scope.child_weighted(
+                {
+                    let app_state = app_state.clone();
+                    move || row_4(app_state.clone(), style)
+                },
+                1.0,
+            );
+            scope.child(spacer_v);
         },
-        || spacer_v(),
-        {
-            let app_state = app_state.clone();
-            (move || row_1(app_state.clone(), style), 1.0)
-        },
-        || spacer_v(),
-        {
-            let app_state = app_state.clone();
-            (move || row_2(app_state.clone(), style), 1.0)
-        },
-        || spacer_v(),
-        {
-            let app_state = app_state.clone();
-            (move || row_3(app_state.clone(), style), 1.0)
-        },
-        || spacer_v(),
-        {
-            let app_state = app_state.clone();
-            (move || row_4(app_state.clone(), style), 1.0)
-        },
-        || spacer_v()
     )
 }
 
 fn row_top(app_state: Arc<AppState>, style: CalStyle) {
-    row_ui!(
+    row(
         RowArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("", state, style), 1.0)
+        |scope| {
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("C", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("<-", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
         },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("", state, style), 1.0)
-        },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("C", state, style), 1.0)
-        },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("<-", state, style), 1.0)
-        },
-        || spacer_h(),
     )
 }
 
 fn row_1(app_state: Arc<AppState>, style: CalStyle) {
-    row_ui!(
+    row(
         RowArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("1", state, style), 1.0)
+        |scope| {
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("1", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("2", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("3", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("*", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
         },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("2", state, style), 1.0)
-        },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("3", state, style), 1.0)
-        },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("*", state, style), 1.0)
-        },
-        || spacer_h()
     )
 }
 
 fn row_2(app_state: Arc<AppState>, style: CalStyle) {
-    row_ui!(
+    row(
         RowArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("4", state, style), 1.0)
+        |scope| {
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("4", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("5", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("6", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("-", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
         },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("5", state, style), 1.0)
-        },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("6", state, style), 1.0)
-        },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("-", state, style), 1.0)
-        },
-        || spacer_h()
     )
 }
 
 fn row_3(app_state: Arc<AppState>, style: CalStyle) {
-    row_ui!(
+    row(
         RowArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("7", state, style), 1.0)
+        |scope| {
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("7", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("8", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("9", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("+", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
         },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("8", state, style), 1.0)
-        },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("9", state, style), 1.0)
-        },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("+", state, style), 1.0)
-        },
-        || spacer_h()
     )
 }
 
 fn row_4(app_state: Arc<AppState>, style: CalStyle) {
-    row_ui!(
+    row(
         RowArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("", state, style), 1.0)
+        |scope| {
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("0", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure(".", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
+            scope.child_weighted(
+                {
+                    let state = app_state.clone();
+                    make_num_closure("/", state, style)
+                },
+                1.0,
+            );
+            scope.child(spacer_h);
         },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("0", state, style), 1.0)
-        },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure(".", state, style), 1.0)
-        },
-        || spacer_h(),
-        {
-            let state = app_state.clone();
-            (make_num_closure("/", state, style), 1.0)
-        },
-        || spacer_h()
     )
 }
 
@@ -297,20 +381,24 @@ fn key_content(key: &'static str) {
         "/" => "÷",
         _ => key,
     };
-    boxed_ui!(
+    boxed(
         BoxedArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .alignment(Alignment::Center)
             .build()
             .unwrap(),
-        || text(
-            TextArgsBuilder::default()
-                .text(key.to_string())
-                .color(Color::WHITE.with_alpha(0.5))
-                .build()
-                .unwrap(),
-        )
+        |scope| {
+            scope.child(|| {
+                text(
+                    TextArgsBuilder::default()
+                        .text(key.to_string())
+                        .color(Color::WHITE.with_alpha(0.5))
+                        .build()
+                        .unwrap(),
+                )
+            });
+        },
     )
 }
 
