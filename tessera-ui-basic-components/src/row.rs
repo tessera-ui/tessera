@@ -234,29 +234,36 @@ fn measure_unweighted_row(
     row_effective_constraint: &Constraint,
     n: usize,
 ) -> Result<ComputedData, MeasurementError> {
-    // Measure an unweighted row:
-    // For each child, create a 'wrap' constraint based on the row's effective constraint,
-    // use `input.measure_child` to obtain its actual size, and accumulate total width and max height.
     let mut children_sizes = vec![None; n];
     let mut total_children_measured_width = Px(0);
     let mut max_child_height = Px(0);
 
-    for (i, &child_id) in input.children_ids.iter().enumerate().take(n) {
-        let parent_offered_constraint_for_child = Constraint::new(
-            match row_effective_constraint.width {
-                DimensionValue::Fixed(v) => DimensionValue::Wrap {
-                    min: None,
-                    max: Some(v),
-                },
-                DimensionValue::Fill { max, .. } => DimensionValue::Wrap { min: None, max },
-                DimensionValue::Wrap { max, .. } => DimensionValue::Wrap { min: None, max },
+    let parent_offered_constraint_for_child = Constraint::new(
+        match row_effective_constraint.width {
+            DimensionValue::Fixed(v) => DimensionValue::Wrap {
+                min: None,
+                max: Some(v),
             },
-            row_effective_constraint.height,
-        );
-        let child_result = input.measure_child(child_id, &parent_offered_constraint_for_child)?;
-        children_sizes[i] = Some(child_result);
-        total_children_measured_width += child_result.width;
-        max_child_height = max_child_height.max(child_result.height);
+            DimensionValue::Fill { max, .. } => DimensionValue::Wrap { min: None, max },
+            DimensionValue::Wrap { max, .. } => DimensionValue::Wrap { min: None, max },
+        },
+        row_effective_constraint.height,
+    );
+
+    let children_to_measure: Vec<_> = input
+        .children_ids
+        .iter()
+        .map(|&child_id| (child_id, parent_offered_constraint_for_child))
+        .collect();
+
+    let children_results = input.measure_children(children_to_measure)?;
+
+    for (i, &child_id) in input.children_ids.iter().enumerate().take(n) {
+        if let Some(child_result) = children_results.get(&child_id) {
+            children_sizes[i] = Some(*child_result);
+            total_children_measured_width += child_result.width;
+            max_child_height = max_child_height.max(child_result.height);
+        }
     }
 
     let final_row_width =
@@ -311,36 +318,51 @@ fn measure_unweighted_children(
     max_child_height: &mut Px,
     row_effective_constraint: &Constraint,
 ) -> Result<Px, MeasurementError> {
-    // Measure all unweighted children and return their total width.
-    // For each unweighted child, pass a Wrap-type constraint (max is the row's available maximum),
-    // and update children_sizes and max_child_height.
     let mut total_width = Px(0);
+
+    let parent_offered_constraint_for_child = Constraint::new(
+        DimensionValue::Wrap {
+            min: None,
+            max: row_effective_constraint.width.get_max(),
+        },
+        row_effective_constraint.height,
+    );
+
+    let children_to_measure: Vec<_> = unweighted_indices
+        .iter()
+        .map(|&child_idx| {
+            (
+                input.children_ids[child_idx],
+                parent_offered_constraint_for_child,
+            )
+        })
+        .collect();
+
+    let children_results = input.measure_children(children_to_measure)?;
+
     for &child_idx in unweighted_indices {
         let child_id = input.children_ids[child_idx];
-        let parent_offered_constraint_for_child = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: row_effective_constraint.width.get_max(),
-            },
-            row_effective_constraint.height,
-        );
-        let child_result = input.measure_child(child_id, &parent_offered_constraint_for_child)?;
-        children_sizes[child_idx] = Some(child_result);
-        total_width += child_result.width;
-        *max_child_height = (*max_child_height).max(child_result.height);
+        if let Some(child_result) = children_results.get(&child_id) {
+            children_sizes[child_idx] = Some(*child_result);
+            total_width += child_result.width;
+            *max_child_height = (*max_child_height).max(child_result.height);
+        }
     }
+
     Ok(total_width)
 }
 
 fn measure_weighted_children(
     args: &mut MeasureWeightedChildrenArgs,
 ) -> Result<(), MeasurementError> {
-    // Allocate remaining width proportionally for each weighted child and measure them:
-    // - allocated_width = remaining_width * (child_weight / total_weight)
-    // - measure the child using a Fixed(allocated_width) constraint
-    // - update children_sizes and max_child_height
-    if args.total_weight > 0.0 {
-        for &child_idx in args.weighted_indices {
+    if args.total_weight <= 0.0 {
+        return Ok(());
+    }
+
+    let children_to_measure: Vec<_> = args
+        .weighted_indices
+        .iter()
+        .map(|&child_idx| {
             let child_weight = args.child_weights[child_idx].unwrap_or(0.0);
             let allocated_width =
                 Px((args.remaining_width.0 as f32 * (child_weight / args.total_weight)) as i32);
@@ -349,13 +371,20 @@ fn measure_weighted_children(
                 DimensionValue::Fixed(allocated_width),
                 args.row_effective_constraint.height,
             );
-            let child_result = args
-                .input
-                .measure_child(child_id, &parent_offered_constraint_for_child)?;
-            args.children_sizes[child_idx] = Some(child_result);
+            (child_id, parent_offered_constraint_for_child)
+        })
+        .collect();
+
+    let children_results = args.input.measure_children(children_to_measure)?;
+
+    for &child_idx in args.weighted_indices {
+        let child_id = args.input.children_ids[child_idx];
+        if let Some(child_result) = children_results.get(&child_id) {
+            args.children_sizes[child_idx] = Some(*child_result);
             *args.max_child_height = (*args.max_child_height).max(child_result.height);
         }
     }
+
     Ok(())
 }
 

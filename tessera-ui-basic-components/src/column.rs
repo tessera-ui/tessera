@@ -208,20 +208,36 @@ fn measure_unweighted_children_for_column(
     column_effective_constraint: &Constraint,
 ) -> Result<Px, MeasurementError> {
     let mut total = Px(0);
+
+    let parent_offered_constraint_for_child = Constraint::new(
+        column_effective_constraint.width,
+        DimensionValue::Wrap {
+            min: None,
+            max: column_effective_constraint.height.get_max(),
+        },
+    );
+
+    let children_to_measure: Vec<_> = indices
+        .iter()
+        .map(|&child_idx| {
+            (
+                input.children_ids[child_idx],
+                parent_offered_constraint_for_child,
+            )
+        })
+        .collect();
+
+    let children_results = input.measure_children(children_to_measure)?;
+
     for &child_idx in indices {
         let child_id = input.children_ids[child_idx];
-        let parent_offered_constraint_for_child = Constraint::new(
-            column_effective_constraint.width,
-            DimensionValue::Wrap {
-                min: None,
-                max: column_effective_constraint.height.get_max(),
-            },
-        );
-        let child_result = input.measure_child(child_id, &parent_offered_constraint_for_child)?;
-        children_sizes[child_idx] = Some(child_result);
-        total += child_result.height;
-        *max_child_width = (*max_child_width).max(child_result.width);
+        if let Some(child_result) = children_results.get(&child_id) {
+            children_sizes[child_idx] = Some(*child_result);
+            total += child_result.height;
+            *max_child_width = (*max_child_width).max(child_result.width);
+        }
     }
+
     Ok(total)
 }
 
@@ -239,19 +255,32 @@ fn measure_weighted_children_for_column(
     if total_weight <= 0.0 {
         return Ok(());
     }
+
+    let children_to_measure: Vec<_> = weighted_indices
+        .iter()
+        .map(|&child_idx| {
+            let child_weight = child_weights[child_idx].unwrap_or(0.0);
+            let allocated_height =
+                Px((remaining_height.0 as f32 * (child_weight / total_weight)) as i32);
+            let child_id = input.children_ids[child_idx];
+            let parent_offered_constraint_for_child = Constraint::new(
+                column_effective_constraint.width,
+                DimensionValue::Fixed(allocated_height),
+            );
+            (child_id, parent_offered_constraint_for_child)
+        })
+        .collect();
+
+    let children_results = input.measure_children(children_to_measure)?;
+
     for &child_idx in weighted_indices {
-        let child_weight = child_weights[child_idx].unwrap_or(0.0);
-        let allocated_height =
-            Px((remaining_height.0 as f32 * (child_weight / total_weight)) as i32);
         let child_id = input.children_ids[child_idx];
-        let parent_offered_constraint_for_child = Constraint::new(
-            column_effective_constraint.width,
-            DimensionValue::Fixed(allocated_height),
-        );
-        let child_result = input.measure_child(child_id, &parent_offered_constraint_for_child)?;
-        children_sizes[child_idx] = Some(child_result);
-        *max_child_width = (*max_child_width).max(child_result.width);
+        if let Some(child_result) = children_results.get(&child_id) {
+            children_sizes[child_idx] = Some(*child_result);
+            *max_child_width = (*max_child_width).max(child_result.width);
+        }
     }
+
     Ok(())
 }
 
@@ -386,19 +415,31 @@ fn measure_unweighted_column(
 ) -> Result<(Px, Px, Px), MeasurementError> {
     let n = children_sizes.len();
     let mut total_children_measured_height = Px(0);
+
+    let parent_offered_constraint_for_child = Constraint::new(
+        column_effective_constraint.width,
+        DimensionValue::Wrap {
+            min: None,
+            max: column_effective_constraint.height.get_max(),
+        },
+    );
+
+    let children_to_measure: Vec<_> = input
+        .children_ids
+        .iter()
+        .map(|&child_id| (child_id, parent_offered_constraint_for_child))
+        .collect();
+
+    let children_results = input.measure_children(children_to_measure)?;
+
     for (i, &child_id) in input.children_ids.iter().enumerate().take(n) {
-        let parent_offered_constraint_for_child = Constraint::new(
-            column_effective_constraint.width,
-            DimensionValue::Wrap {
-                min: None,
-                max: column_effective_constraint.height.get_max(),
-            },
-        );
-        let child_result = input.measure_child(child_id, &parent_offered_constraint_for_child)?;
-        children_sizes[i] = Some(child_result);
-        total_children_measured_height += child_result.height;
-        *max_child_width = (*max_child_width).max(child_result.width);
+        if let Some(child_result) = children_results.get(&child_id) {
+            children_sizes[i] = Some(*child_result);
+            total_children_measured_height += child_result.height;
+            *max_child_width = (*max_child_width).max(child_result.width);
+        }
     }
+
     let final_column_height =
         calculate_final_column_height(column_effective_constraint, total_children_measured_height);
     let final_column_width = calculate_final_column_width(
