@@ -100,7 +100,7 @@ fn app(state: Arc<AppState>) {
                     .unwrap(),
                 |scope| {
                     for child in children {
-                        scope.child(move || child());
+                        scope.child(child);
                     }
                 },
             )

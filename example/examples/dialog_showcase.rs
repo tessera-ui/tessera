@@ -147,7 +147,7 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
                             ColumnArgsBuilder::default().build().unwrap(),
                             move |scope| {
                                 for child in children {
-                                    scope.child(move || child());
+                                    scope.child(child);
                                 }
                             },
                         );

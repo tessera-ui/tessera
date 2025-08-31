@@ -129,7 +129,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     Renderer::run_with_config(
-        || tabs_showcase_app(),
+        tabs_showcase_app,
         |app| {
             tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
