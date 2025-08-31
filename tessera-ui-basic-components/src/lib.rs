@@ -78,6 +78,7 @@ pub mod slider;
 pub mod spacer;
 pub mod surface;
 pub mod switch;
+pub mod tabs;
 pub mod text;
 pub mod text_edit_core;
 pub mod text_editor;
