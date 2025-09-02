@@ -309,7 +309,7 @@ impl TextEditorState {
     ///
     /// * `key_event` - The keyboard event to map.
     /// * `key_modifiers` - The current keyboard modifier state.
-    /// * `editor` - Reference to the editor for clipboard operations.
+    /// * `clipboard` - Mutable reference to the clipboard for clipboard operations.
     ///
     /// # Returns
     ///
