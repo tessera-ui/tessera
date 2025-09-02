@@ -16,20 +16,22 @@
 
 mod cursor;
 
-use std::{sync::Arc, time::Instant};
-
-use glyphon::Edit;
-use parking_lot::RwLock;
-use tessera_ui::{
-    Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus,
-    tessera, winit,
-};
-
 use crate::{
     pipelines::{TextCommand, TextConstraint, TextData, write_font_system},
     selection_highlight_rect::selection_highlight_rect,
     text_edit_core::cursor::CURSOR_WIDRH,
 };
+use glyphon::{
+    Cursor, Edit,
+    cosmic_text::{self, Selection},
+};
+use parking_lot::RwLock;
+use std::{sync::Arc, time::Instant};
+use tessera_ui::{
+    Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus,
+    tessera, winit,
+};
+use winit::keyboard::NamedKey;
 
 /// Definition of a rectangular selection highlight
 #[derive(Clone, Debug)]
@@ -80,7 +82,7 @@ pub enum ClickType {
 pub struct TextEditorState {
     line_height: Px,
     pub(crate) editor: glyphon::Editor<'static>,
-    bink_timer: Instant,
+    blink_timer: Instant,
     focus_handler: Focus,
     pub(crate) selection_color: Color,
     pub(crate) current_selection_rects: Vec<RectDef>,
@@ -130,7 +132,7 @@ impl TextEditorState {
         Self {
             line_height: line_height_px,
             editor,
-            bink_timer: Instant::now(),
+            blink_timer: Instant::now(),
             focus_handler: Focus::new(),
             selection_color,
             current_selection_rects: Vec::new(),
@@ -192,13 +194,13 @@ impl TextEditorState {
     }
 
     /// Returns the current blink timer instant (for cursor blinking).
-    pub fn bink_timer(&self) -> Instant {
-        self.bink_timer
+    pub fn blink_timer(&self) -> Instant {
+        self.blink_timer
     }
 
     /// Resets the blink timer to the current instant.
-    pub fn update_bink_timer(&mut self) {
-        self.bink_timer = Instant::now();
+    pub fn update_blink_timer(&mut self) {
+        self.blink_timer = Instant::now();
     }
 
     /// Returns the current selection highlight color.
@@ -296,6 +298,139 @@ impl TextEditorState {
     pub fn update_last_click_position(&mut self, position: PxPosition) {
         self.last_click_position = Some(position);
     }
+
+    /// Map keyboard events to text editing actions
+    /// Maps a keyboard event to a list of text editing actions for the editor.
+    ///
+    /// This function translates keyboard input (including modifiers) into editing actions
+    /// such as character insertion, deletion, navigation, and clipboard operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `key_event` - The keyboard event to map.
+    /// * `key_modifiers` - The current keyboard modifier state.
+    /// * `editor` - Reference to the editor for clipboard operations.
+    ///
+    /// # Returns
+    ///
+    /// An optional vector of `glyphon::Action` to be applied to the editor.
+    pub fn map_key_event_to_action(
+        &mut self,
+        key_event: winit::event::KeyEvent,
+        key_modifiers: winit::keyboard::ModifiersState,
+        clipboard: &mut Clipboard,
+    ) -> Option<Vec<glyphon::Action>> {
+        let editor = &mut self.editor;
+
+        match key_event.state {
+            winit::event::ElementState::Pressed => {}
+            winit::event::ElementState::Released => return None,
+        }
+
+        match key_event.logical_key {
+            winit::keyboard::Key::Named(named_key) => match named_key {
+                NamedKey::Backspace => Some(vec![glyphon::Action::Backspace]),
+                NamedKey::Delete => Some(vec![glyphon::Action::Delete]),
+                NamedKey::Enter => Some(vec![glyphon::Action::Enter]),
+                NamedKey::Escape => Some(vec![glyphon::Action::Escape]),
+                NamedKey::Tab => Some(vec![glyphon::Action::Insert(' '); 4]),
+                NamedKey::ArrowLeft => {
+                    if key_modifiers.control_key() {
+                        editor.set_selection(Selection::None);
+
+                        Some(vec![glyphon::Action::Motion(cosmic_text::Motion::LeftWord)])
+                    } else {
+                        // if we have selected text, we need to clear it and not perform any action
+                        if editor.selection_bounds().is_some() {
+                            editor.set_selection(Selection::None);
+
+                            return None;
+                        }
+
+                        Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Left)])
+                    }
+                }
+                NamedKey::ArrowRight => {
+                    if key_modifiers.control_key() {
+                        editor.set_selection(Selection::None);
+
+                        Some(vec![glyphon::Action::Motion(
+                            cosmic_text::Motion::RightWord,
+                        )])
+                    } else {
+                        if editor.selection_bounds().is_some() {
+                            editor.set_selection(Selection::None);
+
+                            return None;
+                        }
+
+                        Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Right)])
+                    }
+                }
+                NamedKey::ArrowUp => {
+                    // if we are on the first line, we move the cursor to the beginning of the line
+                    if editor.cursor().line == 0 {
+                        editor.set_cursor(Cursor::new(0, 0));
+
+                        return None;
+                    }
+
+                    Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Up)])
+                }
+                NamedKey::ArrowDown => {
+                    let last_line_index =
+                        editor.with_buffer(|buffer| buffer.lines.len().saturating_sub(1));
+
+                    // if we are on the last line, we move the cursor to the end of the line
+                    if editor.cursor().line >= last_line_index {
+                        let last_col =
+                            editor.with_buffer(|buffer| buffer.lines[last_line_index].text().len());
+
+                        editor.set_cursor(Cursor::new(last_line_index, last_col));
+                        return None;
+                    }
+
+                    Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Down)])
+                }
+                NamedKey::Home => Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Home)]),
+                NamedKey::End => Some(vec![glyphon::Action::Motion(cosmic_text::Motion::End)]),
+                NamedKey::Space => Some(vec![glyphon::Action::Insert(' ')]),
+                _ => None,
+            },
+
+            winit::keyboard::Key::Character(s) => {
+                let is_ctrl = key_modifiers.control_key() || key_modifiers.super_key();
+                if is_ctrl {
+                    match s.to_lowercase().as_str() {
+                        "c" => {
+                            if let Some(text) = editor.copy_selection() {
+                                clipboard.set_text(&text);
+                            }
+                            return None;
+                        }
+                        "v" => {
+                            if let Some(text) = clipboard.get_text() {
+                                return Some(text.chars().map(glyphon::Action::Insert).collect());
+                            }
+
+                            return None;
+                        }
+                        "x" => {
+                            if let Some(text) = editor.copy_selection() {
+                                clipboard.set_text(&text);
+                                // Use Backspace action to delete selection
+                                return Some(vec![glyphon::Action::Backspace]);
+                            }
+                            return None;
+                        }
+                        _ => {}
+                    }
+                }
+                Some(s.chars().map(glyphon::Action::Insert).collect::<Vec<_>>())
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Core text editing component for rendering text, selection, and cursor.
@@ -375,6 +510,7 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
         })
         .collect()
 }
+
 #[tessera]
 pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
     // text rendering with constraints from parent container
@@ -467,93 +603,6 @@ pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
 
     // Cursor rendering (only when focused)
     if state.read().focus_handler().is_focused() {
-        cursor::cursor(state.read().line_height(), state.read().bink_timer());
-    }
-}
-
-/// Map keyboard events to text editing actions
-/// Maps a keyboard event to a list of text editing actions for the editor.
-///
-/// This function translates keyboard input (including modifiers) into editing actions
-/// such as character insertion, deletion, navigation, and clipboard operations.
-///
-/// # Arguments
-///
-/// * `key_event` - The keyboard event to map.
-/// * `key_modifiers` - The current keyboard modifier state.
-/// * `editor` - Reference to the editor for clipboard operations.
-///
-/// # Returns
-///
-/// An optional vector of `glyphon::Action` to be applied to the editor.
-pub fn map_key_event_to_action(
-    key_event: winit::event::KeyEvent,
-    key_modifiers: winit::keyboard::ModifiersState,
-    editor: &glyphon::Editor,
-    clipboard: &mut Clipboard,
-) -> Option<Vec<glyphon::Action>> {
-    match key_event.state {
-        winit::event::ElementState::Pressed => {}
-        winit::event::ElementState::Released => return None,
-    }
-
-    match key_event.logical_key {
-        winit::keyboard::Key::Named(named_key) => {
-            use glyphon::cosmic_text;
-            use winit::keyboard::NamedKey;
-
-            match named_key {
-                NamedKey::Backspace => Some(vec![glyphon::Action::Backspace]),
-                NamedKey::Delete => Some(vec![glyphon::Action::Delete]),
-                NamedKey::Enter => Some(vec![glyphon::Action::Enter]),
-                NamedKey::Escape => Some(vec![glyphon::Action::Escape]),
-                NamedKey::Tab => Some(vec![glyphon::Action::Insert(' '); 4]),
-                NamedKey::ArrowLeft => {
-                    Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Left)])
-                }
-                NamedKey::ArrowRight => {
-                    Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Right)])
-                }
-                NamedKey::ArrowUp => Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Up)]),
-                NamedKey::ArrowDown => {
-                    Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Down)])
-                }
-                NamedKey::Home => Some(vec![glyphon::Action::Motion(cosmic_text::Motion::Home)]),
-                NamedKey::End => Some(vec![glyphon::Action::Motion(cosmic_text::Motion::End)]),
-                NamedKey::Space => Some(vec![glyphon::Action::Insert(' ')]),
-                _ => None,
-            }
-        }
-        winit::keyboard::Key::Character(s) => {
-            let is_ctrl = key_modifiers.control_key() || key_modifiers.super_key();
-            if is_ctrl {
-                match s.to_lowercase().as_str() {
-                    "c" => {
-                        if let Some(text) = editor.copy_selection() {
-                            clipboard.set_text(&text);
-                        }
-                        return None;
-                    }
-                    "v" => {
-                        if let Some(text) = clipboard.get_text() {
-                            return Some(text.chars().map(glyphon::Action::Insert).collect());
-                        }
-
-                        return None;
-                    }
-                    "x" => {
-                        if let Some(text) = editor.copy_selection() {
-                            clipboard.set_text(&text);
-                            // Use Backspace action to delete selection
-                            return Some(vec![glyphon::Action::Backspace]);
-                        }
-                        return None;
-                    }
-                    _ => {}
-                }
-            }
-            Some(s.chars().map(glyphon::Action::Insert).collect::<Vec<_>>())
-        }
-        _ => None,
+        cursor::cursor(state.read().line_height(), state.read().blink_timer());
     }
 }
