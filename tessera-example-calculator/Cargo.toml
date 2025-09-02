@@ -18,7 +18,7 @@ bytemuck = "1.23.1"
 dashmap = "6.1.0"
 derive_builder = "0.20.2"
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
 parking_lot = "0.12.4"
 rsc = "3.0.0"
 tessera-ui = { path = "../tessera-ui" }
