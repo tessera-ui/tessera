@@ -16,22 +16,24 @@
 
 mod cursor;
 
-use crate::{
-    pipelines::{TextCommand, TextConstraint, TextData, write_font_system},
-    selection_highlight_rect::selection_highlight_rect,
-    text_edit_core::cursor::CURSOR_WIDRH,
-};
+use std::{sync::Arc, time::Instant};
+
 use glyphon::{
     Cursor, Edit,
     cosmic_text::{self, Selection},
 };
 use parking_lot::RwLock;
-use std::{sync::Arc, time::Instant};
 use tessera_ui::{
     Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus,
     tessera, winit,
 };
 use winit::keyboard::NamedKey;
+
+use crate::{
+    pipelines::{TextCommand, TextConstraint, TextData, write_font_system},
+    selection_highlight_rect::selection_highlight_rect,
+    text_edit_core::cursor::CURSOR_WIDRH,
+};
 
 /// Definition of a rectangular selection highlight
 #[derive(Clone, Debug)]
