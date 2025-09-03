@@ -16,19 +16,21 @@
 //! The [`text_editor`] component can be configured using [`TextEditorArgs`] for layout and appearance customization.
 //!
 //! Typical use cases include form inputs, code editors, chat boxes, and any scenario requiring rich text input within a Tessera UI application.
+use std::sync::Arc;
+
+use derive_builder::Builder;
+use glyphon::{Action, Edit};
+use parking_lot::RwLock;
+use tessera_ui::{
+    Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, tessera, winit,
+};
+
 use crate::{
     pipelines::write_font_system,
     pos_misc::is_position_in_component,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text_edit_core::{ClickType, text_edit_core},
-};
-use derive_builder::Builder;
-use glyphon::{Action, Edit};
-use parking_lot::RwLock;
-use std::sync::Arc;
-use tessera_ui::{
-    Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, tessera, winit,
 };
 
 /// State structure for the text editor, managing text content, cursor, selection, and editing logic.
