@@ -88,10 +88,10 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
                     SurfaceArgsBuilder::default()
                         .color(Color::new(0.2, 0.2, 0.2, 1.0).with_alpha(content_alpha))
                         .shape(Shape::RoundedRectangle {
-                            top_left: 10.0,
-                            top_right: 10.0,
-                            bottom_right: 10.0,
-                            bottom_left: 10.0,
+                            top_left: 25.0,
+                            top_right: 25.0,
+                            bottom_right: 25.0,
+                            bottom_left: 25.0,
                             g2_k_value: 3.0,
                         })
                         .padding(Dp(20.0))
