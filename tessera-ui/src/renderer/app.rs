@@ -663,8 +663,6 @@ impl WgpuApp {
         self.queue.submit(Some(encoder.finish()));
         output_frame.present();
 
-        println!("Not dummy");
-
         Ok(())
     }
 
