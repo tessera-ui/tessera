@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
-use uuid::Uuid;
-
 pub type ComputeResource = wgpu::Buffer;
-pub type ComputeResourceRef = uuid::Uuid;
+pub type ComputeResourceRef = usize;
 
 #[derive(Debug)]
 pub struct ComputeResourceManager {
-    resources: HashMap<Uuid, ComputeResource>,
+    idx: usize,
+    resources: HashMap<usize, ComputeResource>,
 }
 
 impl Default for ComputeResourceManager {
@@ -19,30 +18,28 @@ impl Default for ComputeResourceManager {
 impl ComputeResourceManager {
     pub fn new() -> Self {
         Self {
+            idx: 0,
             resources: HashMap::new(),
         }
     }
 
     /// Clear all resources.
     pub fn clear(&mut self) {
+        self.idx = 0;
         self.resources.clear();
     }
 
     /// Move a buffer into the resource manager.
     pub fn push(&mut self, buffer: wgpu::Buffer) -> ComputeResourceRef {
-        let id = Uuid::new_v4();
-        self.resources.insert(id, buffer);
+        self.resources.insert(self.idx, buffer);
+        let id = self.idx;
+        self.idx += 1;
         id
     }
 
     /// Access a resource in ref by its ID.
     pub fn get(&self, id: &ComputeResourceRef) -> Option<&ComputeResource> {
         self.resources.get(id)
-    }
-
-    /// Remove a resource by its ID.
-    pub fn remove(&mut self, id: &ComputeResourceRef) -> Option<ComputeResource> {
-        self.resources.remove(id)
     }
 
     /// Check if a resource exists by its ID.
