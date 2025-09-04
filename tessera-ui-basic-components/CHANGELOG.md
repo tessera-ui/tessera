@@ -1,3 +1,11 @@
+## [v1.10.1] - 2025-09-04 +08:00
+
+### Changes
+
+- fix(fluid_glass): relax FluidGlassArgs equality by ignoring on_click callback pointer
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.10.0...tessera-ui-basic-components-v1.10.1)
+
 ## [v1.10.0] - 2025-09-04 +08:00
 
 ### Changes
