@@ -191,11 +191,7 @@ pub mod compute;
 pub mod drawer;
 pub mod reorder;
 
-use std::{
-    any::TypeId,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{any::TypeId, sync::Arc, time::Instant};
 
 use tessera_ui_macros::tessera;
 use tracing::{debug, instrument, warn};
@@ -336,8 +332,6 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     clipboard: Clipboard,
     /// Commands from the previous frame, for dirty rectangle optimization
     previous_commands: Vec<(Command, TypeId, PxSize, PxPosition)>,
-    last_frame_time: Instant,
-    target_frame_duration: Duration,
     #[cfg(target_os = "android")]
     /// Android-specific state tracking whether the soft keyboard is currently open
     android_ime_opened: bool,
@@ -445,8 +439,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             config,
             clipboard,
             previous_commands: Vec::new(),
-            last_frame_time: Instant::now(),
-            target_frame_duration: Duration::from_secs_f64(1.0 / 60.0),
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -568,8 +560,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             config,
             clipboard,
             previous_commands: Vec::new(),
-            last_frame_time: Instant::now(),
-            target_frame_duration: Duration::from_secs_f64(1.0 / 60.0),
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -973,16 +963,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         &mut self,
         #[cfg(target_os = "android")] event_loop: &ActiveEventLoop,
     ) {
-        let now = Instant::now();
-        if now.duration_since(self.last_frame_time) < self.target_frame_duration {
-            // Not enough time has passed. Request another frame and return early.
-            if let Some(app) = self.app.as_mut() {
-                app.window.request_redraw();
-            }
-            return;
-        }
-        self.last_frame_time = now;
-
         // Borrow the app here to avoid simultaneous mutable borrows of `self`
         let app = match self.app.as_mut() {
             Some(app) => app,
@@ -1048,17 +1028,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
             .with_transparent(true);
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         let register_pipelines_fn = self.register_pipelines_fn.clone();
-
-        // Get the monitor's refresh rate
-        if let Some(monitor) = window.current_monitor()
-            && let Some(video_mode) = monitor.video_modes().next()
-        {
-            let refresh_rate = video_mode.refresh_rate_millihertz();
-            if refresh_rate > 0 {
-                self.target_frame_duration =
-                    Duration::from_secs_f64(1000.0 / f64::from(refresh_rate));
-            }
-        }
 
         let mut wgpu_app = pollster::block_on(WgpuApp::new(window, self.config.sample_count));
 
