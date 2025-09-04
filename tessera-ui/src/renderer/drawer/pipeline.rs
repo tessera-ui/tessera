@@ -143,6 +143,8 @@
 //! The `scene_texture_view` parameter provides access to the current scene texture,
 //! enabling effects that sample from the background or perform post-processing.
 
+use std::{any::TypeId, collections::HashMap};
+
 use crate::{PxPosition, px::PxSize, renderer::DrawCommand};
 
 /// Core trait for implementing custom graphics rendering pipelines.
@@ -546,11 +548,9 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
 ///
 /// # Performance Considerations
 ///
-/// - Pipeline lookup is O(n) where n is the number of registered pipelines
-/// - Register frequently used pipelines first for better average performance
-/// - Consider the order of registration based on command frequency
+/// - Pipeline lookup is O(1) on average due to HashMap implementation.
 pub struct PipelineRegistry {
-    pub(crate) pipelines: Vec<Box<dyn ErasedDrawablePipeline>>,
+    pub(crate) pipelines: HashMap<TypeId, Box<dyn ErasedDrawablePipeline>>,
 }
 
 impl Default for PipelineRegistry {
@@ -571,7 +571,7 @@ impl PipelineRegistry {
     /// ```
     pub fn new() -> Self {
         Self {
-            pipelines: Vec::new(),
+            pipelines: HashMap::new(),
         }
     }
 
@@ -609,11 +609,6 @@ impl PipelineRegistry {
     /// registry.register(ShapePipeline::new(&device, &config, sample_count));
     /// registry.register(TextPipeline::new(&device, &config, sample_count));
     /// ```
-    ///
-    /// # Registration Order
-    ///
-    /// The order of registration can affect performance since pipeline lookup
-    /// is performed linearly. Consider registering more frequently used pipelines first.
     pub fn register<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static>(
         &mut self,
         pipeline: P,
@@ -622,7 +617,7 @@ impl PipelineRegistry {
             pipeline,
             _marker: std::marker::PhantomData,
         });
-        self.pipelines.push(erased);
+        self.pipelines.insert(TypeId::of::<T>(), erased);
     }
 
     pub(crate) fn begin_all_passes(
@@ -633,7 +628,7 @@ impl PipelineRegistry {
         render_pass: &mut wgpu::RenderPass<'_>,
         scene_texture_view: &wgpu::TextureView,
     ) {
-        for pipeline in self.pipelines.iter_mut() {
+        for pipeline in self.pipelines.values_mut() {
             pipeline.begin_pass(gpu, gpu_queue, config, render_pass, scene_texture_view);
         }
     }
@@ -646,7 +641,7 @@ impl PipelineRegistry {
         render_pass: &mut wgpu::RenderPass<'_>,
         scene_texture_view: &wgpu::TextureView,
     ) {
-        for pipeline in self.pipelines.iter_mut() {
+        for pipeline in self.pipelines.values_mut() {
             pipeline.end_pass(gpu, gpu_queue, config, render_pass, scene_texture_view);
         }
     }
@@ -657,7 +652,7 @@ impl PipelineRegistry {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
     ) {
-        for pipeline in self.pipelines.iter_mut() {
+        for pipeline in self.pipelines.values_mut() {
             pipeline.begin_frame(gpu, gpu_queue, config);
         }
     }
@@ -668,7 +663,7 @@ impl PipelineRegistry {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
     ) {
-        for pipeline in self.pipelines.iter_mut() {
+        for pipeline in self.pipelines.values_mut() {
             pipeline.end_frame(gpu, gpu_queue, config);
         }
     }
@@ -686,8 +681,9 @@ impl PipelineRegistry {
             return;
         }
 
-        for pipeline in self.pipelines.iter_mut() {
-            if pipeline.draw_erased(
+        let command_type_id = commands[0].0.as_any().type_id();
+        if let Some(pipeline) = self.pipelines.get_mut(&command_type_id) {
+            if !pipeline.draw_erased(
                 gpu,
                 gpu_queue,
                 config,
@@ -695,13 +691,15 @@ impl PipelineRegistry {
                 commands,
                 scene_texture_view,
             ) {
-                return;
+                panic!(
+                    "FATAL: A command in a batch has a different type than the first one. This should not happen."
+                )
             }
+        } else {
+            panic!(
+                "No pipeline found for command {:?}",
+                std::any::type_name_of_val(commands[0].0)
+            );
         }
-
-        panic!(
-            "No pipeline found for command {:?}",
-            std::any::type_name_of_val(commands[0].0)
-        );
     }
 }

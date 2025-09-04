@@ -173,6 +173,8 @@
 //!
 //! The framework automatically handles format conversions when necessary.
 
+use std::{any::TypeId, collections::HashMap};
+
 use crate::{PxRect, compute::resource::ComputeResourceManager};
 
 use super::command::ComputeCommand;
@@ -394,9 +396,7 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
 ///
 /// # Performance Considerations
 ///
-/// - All registered pipelines are called for each command until one handles it
-/// - Register more commonly used pipelines first for better average performance
-/// - Consider the frequency of different compute operations when ordering registrations
+/// - Pipeline lookup is O(1) on average due to HashMap implementation.
 ///
 /// # Thread Safety
 ///
@@ -404,7 +404,7 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
 /// parallel execution in the rendering system.
 #[derive(Default)]
 pub struct ComputePipelineRegistry {
-    pipelines: Vec<Box<dyn ErasedComputablePipeline>>,
+    pipelines: HashMap<TypeId, Box<dyn ErasedComputablePipeline>>,
 }
 
 impl ComputePipelineRegistry {
@@ -453,12 +453,6 @@ impl ComputePipelineRegistry {
     /// registry.register(ColorGradingPipeline::new(&device));
     /// ```
     ///
-    /// # Registration Order
-    ///
-    /// Unlike drawable pipelines, compute pipelines are dispatched to all registered
-    /// pipelines until one handles the command. Consider registering more frequently
-    /// used pipelines first for better performance.
-    ///
     /// # Thread Safety
     ///
     /// The pipeline must implement `Send + Sync` to be compatible with Tessera's
@@ -471,7 +465,7 @@ impl ComputePipelineRegistry {
             pipeline,
             _command: std::marker::PhantomData,
         });
-        self.pipelines.push(erased_pipeline);
+        self.pipelines.insert(TypeId::of::<C>(), erased_pipeline);
     }
 
     /// Dispatches a command to its corresponding registered pipeline.
@@ -487,7 +481,8 @@ impl ComputePipelineRegistry {
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
-        for pipeline in self.pipelines.iter_mut() {
+        let command_type_id = command.as_any().type_id();
+        if let Some(pipeline) = self.pipelines.get_mut(&command_type_id) {
             pipeline.dispatch_erased(
                 device,
                 queue,
@@ -498,6 +493,11 @@ impl ComputePipelineRegistry {
                 target_area,
                 input_view,
                 output_view,
+            );
+        } else {
+            panic!(
+                "No pipeline found for command {:?}",
+                std::any::type_name_of_val(command)
             );
         }
     }
