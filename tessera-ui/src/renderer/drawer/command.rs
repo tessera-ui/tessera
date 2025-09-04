@@ -15,6 +15,7 @@ use crate::{dyn_eq::DynPartialEqDraw, renderer::command::BarrierRequirement};
 /// ```
 /// use tessera_ui::{BarrierRequirement, DrawCommand};
 ///
+/// #[derive(PartialEq, Clone)]
 /// struct RectangleCommand {
 ///     color: [f32; 4],
 ///     corner_radius: f32,
