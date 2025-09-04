@@ -783,15 +783,13 @@ Fps: {:.2}
         }
 
         if dirty {
-            debug!("DIRTY FRAME: Redrawing.");
             // Perform GPU render
             let render_cost = Self::perform_render(args, new_commands.clone());
             // Log frame statistics
             Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
         } else {
-            debug!("CLEAN FRAME: Skipping render.");
-            // If the frame is clean, we don't need to render.
-            // We still need to handle window requests and cleanup.
+            // Perform a dummy render
+            args.app.render_dummy().unwrap();
         }
 
         // Clear the component tree (free for next frame)

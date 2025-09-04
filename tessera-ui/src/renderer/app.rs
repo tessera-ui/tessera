@@ -663,6 +663,31 @@ impl WgpuApp {
         self.queue.submit(Some(encoder.finish()));
         output_frame.present();
 
+        println!("Not dummy");
+
+        Ok(())
+    }
+
+    pub(crate) fn render_dummy(&mut self) -> Result<(), wgpu::SurfaceError> {
+        let output_frame = self.surface.get_current_texture()?;
+        let mut encoder = self
+            .gpu
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder(Dummy)"),
+            });
+
+        encoder.copy_texture_to_texture(
+            self.pass_b.texture.as_image_copy(),
+            output_frame.texture.as_image_copy(),
+            wgpu::Extent3d {
+                width: self.config.width,
+                height: self.config.height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        self.queue.submit(Some(encoder.finish()));
+        output_frame.present();
         Ok(())
     }
 
