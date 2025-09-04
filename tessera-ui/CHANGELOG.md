@@ -1,3 +1,19 @@
+## [v1.11.0] - 2025-09-04 +08:00
+
+### Changes
+
+- refactor(renderer): simplify surface configuration using AutoVsync and automatic composite alpha
+- docs(command): add example struct for implementing DrawCommand trait
+- refactor(renderer.compute): replace Uuid-based resource IDs with sequential usize indices
+- perf(renderer): add dirty frame detection and dynamic command equality
+- perf(renderer): Optimize pipeline dispatch to O(1)
+- chore(deps): bump uuid from 1.18.0 to 1.18.1
+- refactor(renderer): use imported tracing::instrument attribute
+- refactor(logging): replace log/flexi_logger/android_logger with tracing
+- feat(renderer): add entry point wrapper to ensure proper tessera macro usage
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.10.2...tessera-ui-v1.11.0)
+
 ## [v1.10.2] - 2025-08-26 +08:00
 
 ### Changes
