@@ -136,11 +136,6 @@ impl PartialEq for FluidGlassArgs {
             && self.ripple_strength == other.ripple_strength
             && self.border == other.border
             && self.block_input == other.block_input
-            && match (&self.on_click, &other.on_click) {
-                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
-                (None, None) => true,
-                _ => false,
-            }
     }
 }
 
