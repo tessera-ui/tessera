@@ -201,22 +201,13 @@ impl WgpuApp {
         // Create surface configuration
         let size = window.inner_size();
         let caps = surface.get_capabilities(&adapter);
-        // Choose the present mode
-        let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
-            // Fifo is the fallback, it is the most compatible and stable
-            wgpu::PresentMode::Fifo
-        } else {
-            // Immediate is the least preferred, it can cause tearing and is not recommended
-            wgpu::PresentMode::Immediate
-        };
-        info!("Using present mode: {present_mode:?}");
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
             format: caps.formats[0],
             width: size.width,
             height: size.height,
-            present_mode,
-            alpha_mode: caps.alpha_modes[0],
+            present_mode: wgpu::PresentMode::AutoVsync,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
