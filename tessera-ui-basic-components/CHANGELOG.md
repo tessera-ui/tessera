@@ -1,3 +1,21 @@
+## [v1.10.0] - 2025-09-04 +08:00
+
+### Changes
+
+- perf(renderer): add dirty frame detection and dynamic command equality
+- style(text_editor): reorder and deduplicate imports
+- Fix Imports
+- Update Doc Comments
+- Update Text Editor & Core
+- feat(tessera-ui-basic-components): add Tabs component and example
+- perf(tessera-ui-basic-components): batch child measurements to use measure_children
+- docs(tessera-ui-basic-components): update examples to scoped child API
+- feat(tessera-ui-basic-components): introduce scoped child API and update examples
+- refactor(logging): replace log/flexi_logger/android_logger with tracing
+- chore(deps): bump encase from 0.11.1 to 0.11.2
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.9.1...tessera-ui-basic-components-v1.10.0)
+
 ## [v1.9.1] - 2025-08-26 +08:00
 
 ### Changes
