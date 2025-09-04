@@ -758,10 +758,10 @@ Fps: {:.2}
         } else {
             for (new_cmd_tuple, old_cmd_tuple) in new_commands.iter().zip(previous_commands.iter())
             {
-                let (new_cmd, _, _, _) = new_cmd_tuple;
-                let (old_cmd, _, _, _) = old_cmd_tuple;
+                let (new_cmd, _, new_size, new_pos) = new_cmd_tuple;
+                let (old_cmd, _, old_size, old_pos) = old_cmd_tuple;
 
-                let are_equal = match (new_cmd, old_cmd) {
+                let content_are_equal = match (new_cmd, old_cmd) {
                     (Command::Draw(new_draw_cmd), Command::Draw(old_draw_cmd)) => {
                         new_draw_cmd.dyn_eq(old_draw_cmd.as_ref())
                     }
@@ -775,7 +775,7 @@ Fps: {:.2}
                     _ => false, // Mismatched command types
                 };
 
-                if !are_equal {
+                if !content_are_equal || new_size != old_size || new_pos != old_pos {
                     dirty = true;
                     break;
                 }
