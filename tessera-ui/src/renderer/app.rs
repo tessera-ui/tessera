@@ -216,7 +216,7 @@ impl WgpuApp {
             width: size.width,
             height: size.height,
             present_mode,
-            alpha_mode: caps.alpha_modes[0],
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
