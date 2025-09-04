@@ -1,3 +1,12 @@
+## [v1.11.1] - 2025-09-04 +08:00
+
+### Changes
+
+- fix(renderer): change present mode from AutoVsync to Fifo for improved frame synchronization
+- fix(renderer): take position and size into account for dirty frame detection
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.11.0...tessera-ui-v1.11.1)
+
 ## [v1.11.0] - 2025-09-04 +08:00
 
 ### Changes
