@@ -101,6 +101,17 @@ impl Command {
     }
 }
 
+impl Clone for Command {
+    fn clone(&self) -> Self {
+        match self {
+            Command::Draw(cmd) => Command::Draw(cmd.clone_box()),
+            Command::Compute(cmd) => Command::Compute(cmd.clone_box()),
+            Command::ClipPush(rect) => Command::ClipPush(*rect),
+            Command::ClipPop => Command::ClipPop,
+        }
+    }
+}
+
 /// Automatic conversion from boxed draw commands to unified commands
 impl From<Box<dyn DrawCommand>> for Command {
     fn from(val: Box<dyn DrawCommand>) -> Self {

@@ -10,7 +10,7 @@ use tessera_ui_basic_components::surface::{SurfaceArgsBuilder, surface};
 
 use crate::CalStyle;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BackgroundCommand {
     pub time: f32,
 }

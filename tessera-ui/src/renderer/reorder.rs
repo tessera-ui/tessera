@@ -343,7 +343,7 @@ mod tests {
     // --- Mock Commands ---
     // Mocks to simulate different command types for testing reordering logic.
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq, Clone)]
     struct MockDrawCommand {
         barrier_req: Option<BarrierRequirement>,
     }
@@ -354,7 +354,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq, Clone)]
     struct MockDrawCommand2 {
         barrier_req: Option<BarrierRequirement>,
     }
@@ -365,7 +365,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq, Clone)]
     struct MockComputeCommand {
         barrier_req: BarrierRequirement,
     }
@@ -376,7 +376,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq, Clone)]
     struct MockComputeCommand2 {
         barrier_req: BarrierRequirement,
     }

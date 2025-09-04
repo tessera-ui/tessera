@@ -4,7 +4,7 @@ use tessera_ui::{Color, DrawCommand, PxPosition, PxSize};
 use super::ShapeUniforms;
 
 /// Represents a shape drawable
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ShapeCommand {
     /// A filled rectangle
     Rect {

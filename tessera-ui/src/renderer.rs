@@ -330,6 +330,8 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     config: TesseraConfig,
     /// Clipboard manager
     clipboard: Clipboard,
+    /// Commands from the previous frame, for dirty rectangle optimization
+    previous_commands: Vec<(Command, TypeId, PxSize, PxPosition)>,
     #[cfg(target_os = "android")]
     /// Android-specific state tracking whether the soft keyboard is currently open
     android_ime_opened: bool,
@@ -436,6 +438,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             ime_state,
             config,
             clipboard,
+            previous_commands: Vec::new(),
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -556,6 +559,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             android_ime_opened: false,
             config,
             clipboard,
+            previous_commands: Vec::new(),
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -725,8 +729,12 @@ Fps: {:.2}
         render_cost
     }
 
-    #[instrument(level = "debug", skip(entry_point, args))]
-    fn execute_render_frame(entry_point: &F, args: &mut RenderFrameArgs<'_>) {
+    #[instrument(level = "debug", skip(entry_point, args, previous_commands))]
+    fn execute_render_frame(
+        entry_point: &F,
+        args: &mut RenderFrameArgs<'_>,
+        previous_commands: &mut Vec<(Command, TypeId, PxSize, PxPosition)>,
+    ) {
         // notify the windowing system before rendering
         // this will help winit to properly schedule and make assumptions about its internal state
         args.app.window.pre_present_notify();
@@ -740,7 +748,51 @@ Fps: {:.2}
 
         // Compute draw commands
         let screen_size: PxSize = args.app.size().into();
-        let (commands, window_requests, draw_cost) = Self::compute_draw_commands(args, screen_size);
+        let (new_commands, window_requests, draw_cost) =
+            Self::compute_draw_commands(args, screen_size);
+
+        // --- Dirty Rectangle Logic ---
+        let mut dirty = false;
+        if new_commands.len() != previous_commands.len() {
+            dirty = true;
+        } else {
+            for (new_cmd_tuple, old_cmd_tuple) in new_commands.iter().zip(previous_commands.iter())
+            {
+                let (new_cmd, _, _, _) = new_cmd_tuple;
+                let (old_cmd, _, _, _) = old_cmd_tuple;
+
+                let are_equal = match (new_cmd, old_cmd) {
+                    (Command::Draw(new_draw_cmd), Command::Draw(old_draw_cmd)) => {
+                        new_draw_cmd.dyn_eq(old_draw_cmd.as_ref())
+                    }
+                    (Command::Compute(new_compute_cmd), Command::Compute(old_compute_cmd)) => {
+                        new_compute_cmd.dyn_eq(old_compute_cmd.as_ref())
+                    }
+                    (Command::ClipPop, Command::ClipPop) => true,
+                    (Command::ClipPush(new_rect), Command::ClipPush(old_rect)) => {
+                        new_rect == old_rect
+                    }
+                    _ => false, // Mismatched command types
+                };
+
+                if !are_equal {
+                    dirty = true;
+                    break;
+                }
+            }
+        }
+
+        if dirty {
+            debug!("DIRTY FRAME: Redrawing.");
+            // Perform GPU render
+            let render_cost = Self::perform_render(args, new_commands.clone());
+            // Log frame statistics
+            Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
+        } else {
+            debug!("CLEAN FRAME: Skipping render.");
+            // If the frame is clean, we don't need to render.
+            // We still need to handle window requests and cleanup.
+        }
 
         // Clear the component tree (free for next frame)
         TesseraRuntime::with_mut(|rt| rt.component_tree.clear());
@@ -788,16 +840,14 @@ Fps: {:.2}
             }
         }
 
-        // Perform GPU render
-        let render_cost = Self::perform_render(args, commands);
-
-        // Log frame statistics
-        Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
-
         // End of frame cleanup
         args.cursor_state.frame_cleanup();
 
-        // Currently we render every frame
+        // Store the commands for the next frame's comparison
+        *previous_commands = new_commands;
+
+        // Currently we render every frame, but with dirty checking, this could be conditional.
+        // For now, we still request a redraw to keep the event loop spinning for animations.
         args.app.window.request_redraw();
     }
 }
@@ -931,7 +981,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             event_loop,
             clipboard: &mut self.clipboard,
         };
-        Self::execute_render_frame(&self.entry_point, &mut args);
+        Self::execute_render_frame(&self.entry_point, &mut args, &mut self.previous_commands);
     }
 }
 

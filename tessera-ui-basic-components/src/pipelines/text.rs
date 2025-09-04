@@ -187,7 +187,7 @@ let constraint = TextConstraint { max_width: Some(200.0), max_height: Some(50.0)
 let data = TextData::new("Hello".to_string(), color, 16.0, 1.2, constraint);
 ```
 */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TextData {
     /// glyphon text buffer
     text_buffer: glyphon::Buffer,

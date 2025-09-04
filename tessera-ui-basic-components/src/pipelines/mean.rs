@@ -26,7 +26,7 @@ use tessera_ui::{
 // --- Command ---
 
 /// A command to calculate the mean luminance of the input texture.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// Command to calculate the mean luminance of the input texture.
 ///
 /// # Example

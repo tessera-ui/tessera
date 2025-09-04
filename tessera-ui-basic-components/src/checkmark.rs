@@ -112,7 +112,7 @@ pub fn checkmark(args: impl Into<CheckmarkArgs>) {
     // Measure the component and push the draw command within the measure function
     measure(Box::new(move |input| {
         // Push the draw command to the current node's metadata
-        input.metadata_mut().push_draw_command(command.clone());
+        input.metadata_mut().push_draw_command(command);
 
         Ok(ComputedData {
             width: Px::new(size_px.to_f32() as i32),

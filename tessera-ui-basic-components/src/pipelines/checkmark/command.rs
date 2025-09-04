@@ -1,7 +1,7 @@
 use tessera_ui::{Color, DrawCommand};
 
 /// Command for drawing an animated checkmark
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CheckmarkCommand {
     /// Color of the checkmark stroke
     pub color: Color,

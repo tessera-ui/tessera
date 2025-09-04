@@ -2,6 +2,7 @@ use tessera_ui::{ComputeCommand, renderer::command::BarrierRequirement};
 
 /// A synchronous command to execute a gaussian blur.
 /// BlurCommand only describes blur parameters
+#[derive(Debug, Clone, PartialEq)]
 pub struct BlurCommand {
     /// Blur radius.
     pub radius: f32,

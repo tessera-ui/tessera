@@ -133,6 +133,8 @@ pub mod color;
 mod component_tree;
 mod cursor;
 pub mod dp;
+pub mod dyn_eq;
+pub mod dyn_eq_compute;
 pub mod focus_state;
 mod ime_state;
 mod keyboard_state;

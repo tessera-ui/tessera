@@ -18,7 +18,7 @@ use tessera_ui::{
 /// use tessera_ui_basic_components::pipelines::contrast::ContrastCommand;
 /// let command = ContrastCommand::new(1.2, mean_result_handle);
 /// ```
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ContrastCommand {
     /// The contrast adjustment factor.
     pub contrast: f32,

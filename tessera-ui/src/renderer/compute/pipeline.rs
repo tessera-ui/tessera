@@ -175,7 +175,7 @@
 
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{PxRect, compute::resource::ComputeResourceManager};
+use crate::{PxRect, compute::resource::ComputeResourceManager, renderer::command::AsAny};
 
 use super::command::ComputeCommand;
 
@@ -346,7 +346,7 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
-        if let Some(command) = command.as_any().downcast_ref::<C>() {
+        if let Some(command) = AsAny::as_any(command).downcast_ref::<C>() {
             self.pipeline.dispatch(
                 device,
                 queue,
@@ -481,7 +481,7 @@ impl ComputePipelineRegistry {
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
-        let command_type_id = command.as_any().type_id();
+        let command_type_id = AsAny::as_any(command).type_id();
         if let Some(pipeline) = self.pipelines.get_mut(&command_type_id) {
             pipeline.dispatch_erased(
                 device,

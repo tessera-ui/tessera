@@ -3,7 +3,7 @@
 //! This module defines the core traits and types for graphics rendering commands
 //! in the unified command system.
 
-use crate::renderer::command::{AsAny, BarrierRequirement};
+use crate::{dyn_eq::DynPartialEqDraw, renderer::command::BarrierRequirement};
 
 /// Trait for graphics rendering commands that can be processed by draw pipelines.
 ///
@@ -27,7 +27,7 @@ use crate::renderer::command::{AsAny, BarrierRequirement};
 ///     }
 /// }
 /// ```
-pub trait DrawCommand: AsAny + Send + Sync {
+pub trait DrawCommand: DynPartialEqDraw + Send + Sync {
     /// Specifies barrier requirements for this draw operation.
     ///
     /// Return `Some(BarrierRequirement::SampleBackground)` if your command needs

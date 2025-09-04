@@ -23,7 +23,7 @@ use crate::{
     shape_def::Shape,
 };
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GlassBorder {
     pub width: Px,
 }
@@ -113,6 +113,37 @@ pub struct FluidGlassArgs {
     pub block_input: bool,
 }
 
+impl PartialEq for FluidGlassArgs {
+    fn eq(&self, other: &Self) -> bool {
+        self.tint_color == other.tint_color
+            && self.shape == other.shape
+            && self.blur_radius == other.blur_radius
+            && self.dispersion_height == other.dispersion_height
+            && self.chroma_multiplier == other.chroma_multiplier
+            && self.refraction_height == other.refraction_height
+            && self.refraction_amount == other.refraction_amount
+            && self.eccentric_factor == other.eccentric_factor
+            && self.noise_amount == other.noise_amount
+            && self.noise_scale == other.noise_scale
+            && self.time == other.time
+            && self.contrast == other.contrast
+            && self.width == other.width
+            && self.height == other.height
+            && self.padding == other.padding
+            && self.ripple_center == other.ripple_center
+            && self.ripple_radius == other.ripple_radius
+            && self.ripple_alpha == other.ripple_alpha
+            && self.ripple_strength == other.ripple_strength
+            && self.border == other.border
+            && self.block_input == other.block_input
+            && match (&self.on_click, &other.on_click) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+    }
+}
+
 impl FluidGlassArgsBuilder {
     fn validate(&self) -> Result<(), String> {
         Ok(())
@@ -126,7 +157,7 @@ impl Default for FluidGlassArgs {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct FluidGlassCommand {
     pub args: FluidGlassArgs,
 }
