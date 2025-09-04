@@ -1,3 +1,16 @@
+## [v1.11.2] - 2025-09-05 +08:00
+
+### Changes
+
+- perf(renderer): add dummy render on clean frames to drive immediate-mode updates with lower cost
+- Revert "perf(renderer): throttle frames based on dynamic monitor refresh rate"
+- perf(renderer): throttle frames based on dynamic monitor refresh rate
+- refactor(renderer): set alpha mode to Auto for improved compatibility
+- Revert "refactor(renderer): simplify surface configuration using AutoVsync and automatic composite alpha"
+- Revert "fix(renderer): change present mode from AutoVsync to Fifo for improved frame synchronization"
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.11.1...tessera-ui-v1.11.2)
+
 ## [v1.11.1] - 2025-09-04 +08:00
 
 ### Changes
