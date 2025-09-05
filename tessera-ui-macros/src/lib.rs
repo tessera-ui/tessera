@@ -127,66 +127,70 @@ fn cleanup_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     }
 }
 
-/// The `#[tessera]` attribute macro transforms a regular Rust function into a Tessera UI component.
+/// Transforms a regular Rust function into a Tessera UI component.
 ///
-/// This macro performs several key transformations:
-/// 1. Registers the function as a node in the Tessera component tree
-/// 2. Injects `measure`, `state_handler` and `on_minimize` functions into the component scope
-/// 3. Manages component tree lifecycle (push/pop operations)
-/// 4. Provides error safety by wrapping the original function body
+/// # What It Generates
+/// The macro rewrites the function body so that on every invocation (every frame in an
+/// immediate‑mode pass) it:
+/// 1. Registers a new component node (push) into the global `ComponentTree`
+/// 2. Injects helper closures:
+///    * `measure(Box<MeasureFn>)` – supply layout measuring logic
+///    * `state_handler(Box<StateHandlerFn>)` – supply per‑frame interaction / event handling
+///    * `on_minimize(Box<dyn Fn(bool) + Send + Sync>)` – window minimize life‑cycle hook
+///    * `on_close(Box<dyn Fn() + Send + Sync>)` – window close life‑cycle hook
+/// 3. Executes the original user code inside an inner closure to prevent early `return`
+///    from skipping cleanup
+/// 4. Pops (removes) the component node (ensuring balanced push/pop even with early return)
 ///
-/// ## Parameters
+/// # Usage
 ///
-/// - `_attr`: Attribute arguments (currently unused)
-/// - `item`: The function to be transformed into a component
+/// Annotate a free function (no captured self) with `#[tessera]`. You may then (optionally)
+/// call any of the injected helpers exactly once (last call wins if repeated).
 ///
-/// ## Generated Code
-///
-/// The macro generates code that:
-///
-/// - Accesses the Tessera runtime to manage the component tree
-/// - Creates a new component node with the function name
-/// - Provides closures for `measure` and `state_handler` functionality
-/// - Executes the original function body within a safe closure
-/// - Cleans up the component tree after execution
-///
-/// ## Example
+/// # Example
 ///
 /// ```rust,ignore
-/// use tessera_ui_macros::tessera;
+/// use tessera_ui::tessera;
 ///
 /// #[tessera]
-/// fn button_component(label: String) {
-///     // The macro provides access to these functions:
-///     measure(Box::new(|_| {
-///         // Custom layout logic
+/// pub fn simple_button(label: String) {
+///     // Optional layout definition
+///     measure(Box::new(|_input| {
 ///         use tessera_ui::{ComputedData, Px};
-///         Ok(ComputedData {
-///             width: Px(100),
-///             height: Px(50),
-///         })
-///     }));
-///     
-///     state_handler(Box::new(|_| {
-///         // Event handling logic
+///         Ok(ComputedData { width: Px(90), height: Px(32) })
 ///     }));
 ///
-///     on_minimize(Box::new(|minimized| {
-///         if minimized {
-///             println!("Window minimized!");
-///         } else {
-///             println!("Window restored!");
-///         }
+///     // Optional interaction handling
+///     state_handler(Box::new(|input| {
+///         // Inspect input.cursor_events / keyboard_events ...
+///         let _ = input.cursor_events.len();
 ///     }));
+///
+///     on_close(Box::new(|| {
+///         println!("Window closing – component had registered an on_close hook.");
+///     }));
+///
+///     // Build children here (invoke child closures so they register themselves)
+///     // child();
 /// }
 /// ```
 ///
-/// ## Error Handling
+/// # Error Handling & Early Return
 ///
-/// The macro wraps the original function body in a closure to prevent
-/// early returns from breaking the component tree structure. This ensures
-/// that the component tree is always properly cleaned up, even if the
-/// component function returns early.
+/// Your original function body is wrapped in an inner closure; an early `return` inside
+/// the body only returns from that closure, after which cleanup (node pop) still occurs.
+///
+/// # Parameters
+///
+/// * Attribute arguments are currently unused; pass nothing or `#[tessera]`.
+///
+/// # When NOT to Use
+///
+/// * For function that should not be a component.
+///
+/// # See Also
+///
+/// * [`#[shard]`](crate::shard) for navigation‑aware components with injectable shard state.
 #[proc_macro_attribute]
 pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let crate_path: syn::Path = parse_crate_path(attr);
@@ -237,25 +241,96 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[cfg(feature = "shard")]
+/// Transforms a function into a *shard component* that can be navigated to via the routing
+/// system and (optionally) provided with a lazily‑initialized per‑shard state.
+///
+/// # Features
+/// * Generates a `StructNameDestination` (UpperCamelCase + `Destination`) implementing
+///   `tessera_ui_shard::router::RouterDestination`
+/// * (Optional) Injects a single `#[state]` parameter whose type:
+///   - Must implement `Default + Send + Sync + 'static`
+///   - Is constructed (or reused) and passed to your function body
+/// * Produces a stable shard ID: `module_path!()::function_name`
+///
+/// # Lifecycle
+/// A shard state lives:
+/// * For the lifetime of the application if its `ShardStateLifeCycle` returns `Application`
+/// * Until the destination is `pop()`‑ed if the lifecycle is `Shard` (default)
+///
+/// When `pop()` is called and the underlying state lifecycle is `Shard`, the registry
+/// entry is removed, freeing the state.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use tessera_ui::{shard, tessera};
+///
+/// #[tessera]
+/// #[shard]
+/// fn profile_page(#[state] state: ProfileState) {
+///     // Build your UI. You can navigate:
+///     // router::push(OtherPageDestination { ... });
+/// }
+///
+/// #[derive(Default)]
+/// struct ProfileState {
+///     // fields...
+/// }
+/// ```
+///
+/// Pushing a shard:
+///
+/// ```rust,ignore
+/// use tessera_ui::router;
+/// router::push(ProfilePageDestination { /* fields from fn params (excluding #[state]) */ });
+/// ```
+///
+/// # Parameter Transformation
+/// * At most one parameter may be annotated with `#[state]`.
+/// * That parameter is removed from the *generated* function signature and supplied implicitly.
+/// * All other parameters remain explicit and become public fields on the generated
+///   `*Destination` struct.
+///
+/// # Generated Destination (Conceptual)
+/// ```text
+/// struct ProfilePageDestination { /* non-state params as public fields */ }
+/// impl RouterDestination for ProfilePageDestination {
+///     fn exec_component(&self) { profile_page(/* fields */); }
+///     fn shard_id(&self) -> &'static str { "<module>::profile_page" }
+/// }
+/// ```
+///
+/// # Limitations
+/// * No support for multiple `#[state]` params (compile panic if violated)
+/// * Do not manually implement `RouterDestination` for these pages; rely on generation
+///
+/// # See Also
+/// * Routing helpers: `tessera_ui::router::{push, pop, router_root}`
+/// * Shard state registry: `tessera_ui_shard::ShardRegistry`
+///
+/// # Safety
+/// Internally uses an unsafe cast inside the registry to recover `Arc<T>` from
+/// `Arc<dyn ShardState>`; this is encapsulated and not exposed.
+///
+/// # Errors / Panics
+/// * Panics at compile time if multiple `#[state]` parameters are used or unsupported
+///   pattern forms are encountered.
 #[proc_macro_attribute]
 pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     use heck::ToUpperCamelCase;
     use syn::Pat;
 
     let crate_path: syn::Path = if attr.is_empty() {
-        // Default to `tessera_ui` if no path is provided
         syn::parse_quote!(::tessera_ui)
     } else {
-        // Parse the provided path, e.g., `crate` or `tessera_ui`
         syn::parse(attr).expect("Expected a valid path like `crate` or `tessera_ui`")
     };
 
     // 1. Parse the function marked by the macro
     let mut func = parse_macro_input!(input as ItemFn);
 
-    // 2. Handle #[state] and #[route_controller] parameters, ensuring they are unique and removing them from the signature
+    // 2. Handle #[state] parameters, ensuring it's unique and removing it from the signature
     let mut state_param = None;
-    let mut controller_param = None;
     let mut new_inputs = syn::punctuated::Punctuated::new();
     for arg in func.sig.inputs.iter() {
         if let syn::FnArg::Typed(pat_type) = arg {
@@ -263,10 +338,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 .attrs
                 .iter()
                 .any(|attr| attr.path().is_ident("state"));
-            let is_controller = pat_type
-                .attrs
-                .iter()
-                .any(|attr| attr.path().is_ident("route_controller"));
             if is_state {
                 if state_param.is_some() {
                     panic!(
@@ -276,21 +347,12 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 state_param = Some(pat_type.clone());
                 continue;
             }
-            if is_controller {
-                if controller_param.is_some() {
-                    panic!(
-                        "#[shard] function must have at most one parameter marked with #[route_controller]."
-                    );
-                }
-                controller_param = Some(pat_type.clone());
-                continue;
-            }
         }
         new_inputs.push(arg.clone());
     }
     func.sig.inputs = new_inputs;
 
-    // 3. Extract the name and type of the state/controller parameters
+    // 3. Extract the name and type of the state parameter
     let (state_name, state_type) = if let Some(state_param) = state_param {
         let name = match *state_param.pat {
             Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
@@ -299,17 +361,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
             ),
         };
         (Some(name), Some(state_param.ty))
-    } else {
-        (None, None)
-    };
-    let (controller_name, controller_type) = if let Some(controller_param) = controller_param {
-        let name = match *controller_param.pat {
-            Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
-            _ => panic!(
-                "Unsupported parameter pattern in #[shard] function. Please use a simple identifier like `ctrl`."
-            ),
-        };
-        (Some(name), Some(controller_param.ty))
     } else {
         (None, None)
     };
@@ -343,7 +394,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         _ => panic!("Unsupported parameter type in #[shard] function."),
     });
 
-    // Only keep the parameters that are not marked with #[state] or #[route_controller]
+    // Only keep the parameters that are not marked with #[state]
     let param_idents: Vec<_> = func
         .sig
         .inputs
@@ -366,28 +417,8 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
         if let Some(state_type) = state_type {
             let state_name = state_name.as_ref().unwrap();
-            let controller_inject = if let Some((ref ctrl_name, ref ctrl_ty)) =
-                controller_name.zip(controller_type.as_ref())
-            {
-                quote! {
-                    // Inject RouteController instance here
-                    let #ctrl_name = #ctrl_ty::new();
-                }
-            } else {
-                quote! {}
-            };
             quote! {
                 // Generate a RouterDestination struct for the function
-                /// This struct represents a route destination for the #[shard] function
-                ///
-                /// # Example
-                ///
-                /// ```ignore
-                /// controller.push(AboutPageDestination {
-                ///     title: "About".to_string(),
-                ///     description: "This is the about page.".to_string(),
-                /// })
-                /// ```
                 #func_vis struct #struct_name {
                     #(#dest_fields),*
                 }
@@ -414,12 +445,10 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
 
                     // Call the global registry and pass the original function body as a closure
-                    // Inject state/controller here
                     unsafe {
                         #crate_path::tessera_ui_shard::ShardRegistry::get().init_or_get::<#state_type, _, _>(
                             SHARD_ID,
                             |#state_name| {
-                                #controller_inject
                                 #func_body
                             },
                         )
@@ -427,16 +456,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 }
             }
         } else {
-            let controller_inject = if let Some((ref ctrl_name, ref ctrl_ty)) =
-                controller_name.zip(controller_type.as_ref())
-            {
-                quote! {
-                    // Inject RouteController instance here
-                    let #ctrl_name = #ctrl_ty::new();
-                }
-            } else {
-                quote! {}
-            };
             quote! {
                 // Generate a RouterDestination struct for the function
                 #func_vis struct #struct_name {
@@ -461,7 +480,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 // Rebuild the function, keeping its attributes and visibility, but using the modified signature
                 #(#func_attrs)*
                 #func_vis #func_sig_modified {
-                    #controller_inject
                     #func_body
                 }
             }

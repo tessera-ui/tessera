@@ -180,4 +180,4 @@ use ime_state::ImeState;
 #[cfg(feature = "shard")]
 pub use tessera_ui_macros::shard;
 #[cfg(feature = "shard")]
-pub use tessera_ui_shard::{self, router::RouteController};
+pub use tessera_ui_shard;

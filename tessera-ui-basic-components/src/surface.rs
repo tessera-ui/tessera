@@ -17,7 +17,7 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
-    PxPosition, tessera, winit::window::CursorIcon,
+    PxPosition, PxSize, tessera, winit::window::CursorIcon,
 };
 
 use crate::{
@@ -28,141 +28,73 @@ use crate::{
     shape_def::Shape,
 };
 
-///
-/// Arguments for the [`surface`] component.
-///
-/// This struct defines the configurable properties for the [`surface`] container,
-/// which provides a background, optional shadow, border, shape, and interactive
-/// ripple effect. The surface is commonly used to wrap content and visually
-/// separate it from the background or other UI elements.
-///
-/// # Fields
-///
-/// - `color`: The fill color of the surface (RGBA). Defaults to a blue-gray.
-/// - `hover_color`: The color displayed when the surface is hovered. If `None`, no hover effect is applied.
-/// - `shape`: The geometric shape of the surface (e.g., rounded rectangle, ellipse).
-/// - `shadow`: Optional shadow properties for elevation effects.
-/// - `padding`: Padding inside the surface, applied to all sides.
-/// - `width`: Optional explicit width constraint. If `None`, wraps content.
-/// - `height`: Optional explicit height constraint. If `None`, wraps content.
-/// - `border_width`: Width of the border. If greater than 0, an outline is drawn.
-/// - `border_color`: Optional color for the border. If `None` and `border_width > 0`, uses `color`.
-/// - `on_click`: Optional callback for click events. If set, the surface becomes interactive and shows a ripple effect.
-/// - `ripple_color`: The color of the ripple effect for interactive surfaces.
-///
-/// # Example
-///
-/// ```
-/// use std::sync::Arc;
-/// use tessera_ui::{Color, Dp};
-/// use tessera_ui_basic_components::{
-///     pipelines::ShadowProps,
-///     ripple_state::RippleState,
-///     surface::{surface, SurfaceArgs},
-/// };
-///
-/// let ripple_state = Arc::new(RippleState::new());
-/// surface(
-///     SurfaceArgs {
-///         color: Color::from_rgb(0.95, 0.95, 1.0),
-///         shadow: Some(ShadowProps::default()),
-///         padding: Dp(16.0),
-///         border_width: 1.0,
-///         border_color: Some(Color::from_rgb(0.7, 0.7, 0.9)),
-///         ..Default::default()
-///     },
-///     Some(ripple_state.clone()),
-///     || {},
-/// );
-/// ```
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SurfaceArgs {
-    /// The fill color of the surface (RGBA).
+    /// Base fill color of the surface.
+    /// If `hover_color` is provided and the cursor is inside (interactive variant),
+    /// that hover color will temporarily replace this value.
     #[builder(default = "Color::new(0.4745, 0.5255, 0.7961, 1.0)")]
     pub color: Color,
-    /// The hover color of the surface (RGBA). If None, no hover effect is applied.
+
+    /// Optional hover color used when:
+    /// * `on_click` is `Some(..)` (interactive surface) AND
+    /// * The cursor is currently inside the surface bounds.
     #[builder(default)]
     pub hover_color: Option<Color>,
-    /// The shape of the surface (e.g., rounded rectangle, ellipse).
+
+    /// Geometric outline of the surface (rounded rectangle / ellipse / capsule variants).
     #[builder(default)]
     pub shape: Shape,
-    /// The shadow properties of the surface.
+
+    /// Optional shadow/elevation style. When present it is passed through to the shape pipeline.
     #[builder(default)]
     pub shadow: Option<ShadowProps>,
-    /// The padding inside the surface.
+
+    /// Internal padding applied symmetrically (left/right & top/bottom). Child content is
+    /// positioned at (padding, padding). Also influences measured minimum size.
     #[builder(default = "Dp(0.0)")]
     pub padding: Dp,
-    /// Optional explicit width behavior for the surface. Defaults to Wrap {min: None, max: None} if None.
+
+    /// Optional explicit width constraint (Fixed / Wrap / Fill). If `None`, defaults to `Wrap`.
     #[builder(default, setter(strip_option))]
     pub width: Option<DimensionValue>,
-    /// Optional explicit height behavior for the surface. Defaults to Wrap {min: None, max: None} if None.
+
+    /// Optional explicit height constraint (Fixed / Wrap / Fill). If `None`, defaults to `Wrap`.
     #[builder(default, setter(strip_option))]
     pub height: Option<DimensionValue>,
-    /// Width of the border. If > 0, an outline will be drawn.
+
+    /// Border stroke width in device‑independent pixels (Dp->Px converted). `0.0` means no border.
     #[builder(default = "0.0")]
     pub border_width: f32,
-    /// Optional color for the border (RGBA). If None and border_width > 0, `color` will be used.
+
+    /// Border color (only used when `border_width > 0.0`). Defaults to `color` if `None`.
     #[builder(default)]
     pub border_color: Option<Color>,
-    /// Optional click callback function. If provided, surface becomes interactive with ripple effect.
+
+    /// Optional click handler. Presence of this value makes the surface interactive:
+    /// * Cursor changes to pointer when hovered
+    /// * Press / release events are captured
+    /// * Ripple animation starts on press if a `RippleState` is provided
     #[builder(default)]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
-    /// The ripple color (RGB) for interactive surfaces.
+
+    /// Color of the ripple effect (if interactive & ripple state provided).
     #[builder(default = "Color::from_rgb(1.0, 1.0, 1.0)")]
     pub ripple_color: Color,
-    /// Whether the surface should block all input events.
+
+    /// If true, all input events inside the surface bounds are blocked (stop propagation),
+    /// after (optionally) handling its own click logic.
     #[builder(default = "false")]
     pub block_input: bool,
 }
 
-// Manual implementation of Default because derive_builder's default conflicts with our specific defaults
 impl Default for SurfaceArgs {
     fn default() -> Self {
         SurfaceArgsBuilder::default().build().unwrap()
     }
 }
 
-///
-/// A basic container component that provides a customizable background, optional shadow,
-/// border, shape, and interactive ripple effect. The surface is typically used to wrap
-/// content and visually separate it from the background or other UI elements.
-///
-/// If `args.on_click` is set, the surface becomes interactive and displays a ripple
-/// animation on click. In this case, a [`RippleState`] must be provided to manage
-/// the ripple effect and hover state.
-///
-/// # Parameters
-///
-/// - `args`: [`SurfaceArgs`] struct specifying appearance, layout, and interaction.
-/// - `ripple_state`: Optional [`RippleState`] for interactive surfaces. Required if `on_click` is set.
-/// - `child`: Closure that builds the child content inside the surface.
-///
-/// # Example
-///
-/// ```
-/// use std::sync::Arc;
-/// use tessera_ui::{Color, Dp};
-/// use tessera_ui_basic_components::{
-///     pipelines::ShadowProps,
-///     surface::{surface, SurfaceArgs},
-///     text::text,
-/// };
-///
-/// surface(
-///     SurfaceArgs {
-///         color: Color::from_rgb(1.0, 1.0, 1.0),
-///         shadow: Some(ShadowProps::default()),
-///         padding: Dp(12.0),
-///         ..Default::default()
-///     },
-///     None,
-///     || {
-///         text("Content in a surface".to_string());
-///     },
-/// );
-/// ```
-///
 fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<&Arc<RippleState>>) -> RippleProps {
     if let Some(state) = ripple_state
         && let Some((progress, click_pos)) = state.get_animation_progress()
@@ -179,9 +111,6 @@ fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<&Arc<RippleState>
     RippleProps::default()
 }
 
-/// Build a ShapeCommand from surface args and computed ripple props.
-///
-/// Split into small helpers to reduce cyclomatic complexity.
 fn build_rounded_rectangle_command(
     args: &SurfaceArgs,
     effective_color: Color,
@@ -267,12 +196,11 @@ fn build_ellipse_command(
     }
 }
 
-/// Build a ShapeCommand from surface args and computed ripple props.
-/// This delegates to small helpers to keep per-function complexity low.
 fn build_shape_command(
     args: &SurfaceArgs,
     effective_color: Color,
     ripple_props: RippleProps,
+    size: PxSize,
 ) -> ShapeCommand {
     let interactive = args.on_click.is_some();
 
@@ -295,18 +223,41 @@ fn build_shape_command(
             )
         }
         Shape::Ellipse => build_ellipse_command(args, effective_color, ripple_props, interactive),
+        Shape::HorizontalCapsule => {
+            let radius = size.height.to_f32() / 2.0;
+            let corner_radii = [radius, radius, radius, radius];
+            build_rounded_rectangle_command(
+                args,
+                effective_color,
+                ripple_props,
+                corner_radii,
+                2.0, // Use G1 curve for perfect circle
+                interactive,
+            )
+        }
+        Shape::VerticalCapsule => {
+            let radius = size.width.to_f32() / 2.0;
+            let corner_radii = [radius, radius, radius, radius];
+            build_rounded_rectangle_command(
+                args,
+                effective_color,
+                ripple_props,
+                corner_radii,
+                2.0, // Use G1 curve for perfect circle
+                interactive,
+            )
+        }
     }
 }
 
-/// Main constructor for the shape drawable used by surface.
-/// Delegates ripple computation and shape construction to helpers to reduce complexity.
 fn make_surface_drawable(
     args: &SurfaceArgs,
     effective_color: Color,
     ripple_state: Option<&Arc<RippleState>>,
+    size: PxSize,
 ) -> ShapeCommand {
     let ripple_props = build_ripple_props(args, ripple_state);
-    build_shape_command(args, effective_color, ripple_props)
+    build_shape_command(args, effective_color, ripple_props, size)
 }
 
 fn compute_surface_size(
@@ -344,6 +295,55 @@ fn compute_surface_size(
     (width, height)
 }
 #[tessera]
+/// Renders a styled rectangular (or elliptic / capsule) container and optionally
+/// provides interactive click + ripple feedback.
+///
+/// # Behavior
+/// * Child closure is executed first so that nested components are registered.
+/// * Layout (`measure`) phase:
+///   - Measures (optional) single child (if present) with padding removed from constraints
+///   - Computes final size using `width` / `height` (Wrap / Fill / Fixed) merging parent constraints
+///   - Pushes a shape draw command sized to computed width/height
+/// * Interaction (`state_handler`) phase (only when `on_click` is `Some`):
+///   - Tracks cursor containment
+///   - Sets hover state on provided `RippleState`
+///   - Starts ripple animation on mouse press
+///   - Invokes `on_click` on mouse release inside bounds
+///   - Optionally blocks further event propagation if `block_input` is true
+/// * Non‑interactive variant only blocks events if `block_input` and cursor inside.
+///
+/// # Ripple
+/// Ripple requires a `RippleState` (pass in `Some(Arc<RippleState>)`). Without it, the surface
+/// still detects clicks but no animation is shown.
+///
+/// # Sizing
+/// Effective minimum size = child size + `padding * 2` in each axis (if child exists).
+///
+/// # Example
+/// ```rust,ignore
+/// use std::sync::Arc;
+/// use tessera_ui::{Dp, tessera, Color};
+/// use tessera_ui_basic_components::{
+///     surface::{surface, SurfaceArgsBuilder},
+///     ripple_state::RippleState,
+/// };
+///
+/// #[tessera]
+/// fn example_box() {
+///     let ripple = Arc::new(RippleState::new());
+///     surface(
+///         SurfaceArgsBuilder::default()
+///             .padding(Dp(8.0))
+///             .on_click(Arc::new(|| println!("Surface clicked")))
+///             .build()
+///             .unwrap(),
+///         Some(ripple),
+///         || {
+///             // child content here
+///         },
+///     );
+/// }
+/// ```
 pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child: impl FnOnce()) {
     (child)();
     let ripple_state_for_measure = ripple_state.clone();
@@ -351,7 +351,6 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
     let args_for_handler = args.clone();
 
     measure(Box::new(move |input| {
-        // Determine surface's intrinsic constraint based on args
         let surface_intrinsic_width = args_measure_clone.width.unwrap_or(DimensionValue::Wrap {
             min: None,
             max: None,
@@ -362,21 +361,17 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         });
         let surface_intrinsic_constraint =
             Constraint::new(surface_intrinsic_width, surface_intrinsic_height);
-        // Merge with parent_constraint to get effective_surface_constraint
         let effective_surface_constraint =
             surface_intrinsic_constraint.merge(input.parent_constraint);
-        // Determine constraint for the child
         let padding_px: Px = args_measure_clone.padding.into();
         let child_constraint = Constraint::new(
             remove_padding_from_dimension(effective_surface_constraint.width, padding_px),
             remove_padding_from_dimension(effective_surface_constraint.height, padding_px),
         );
 
-        // Measure the child with the computed constraint
         let child_measurement = if !input.children_ids.is_empty() {
             let child_measurement =
                 input.measure_child(input.children_ids[0], &child_constraint)?;
-            // place the child
             input.place_child(
                 input.children_ids[0],
                 PxPosition {
@@ -392,7 +387,6 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             }
         };
 
-        // Determine color and drawable using extracted helpers
         let is_hovered = ripple_state_for_measure
             .as_ref()
             .map(|state| state.is_hovered())
@@ -404,22 +398,22 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             args_measure_clone.color
         };
 
-        let drawable = make_surface_drawable(
-            &args_measure_clone,
-            effective_color,
-            ripple_state_for_measure.as_ref(),
-        );
-
-        input.metadata_mut().push_draw_command(drawable);
-
         let padding_px: Px = args_measure_clone.padding.into();
         let (width, height) =
             compute_surface_size(effective_surface_constraint, child_measurement, padding_px);
 
+        let drawable = make_surface_drawable(
+            &args_measure_clone,
+            effective_color,
+            ripple_state_for_measure.as_ref(),
+            PxSize::new(width, height),
+        );
+
+        input.metadata_mut().push_draw_command(drawable);
+
         Ok(ComputedData { width, height })
     }));
 
-    // Event handling for interactive surfaces
     if args.on_click.is_some() {
         let args_for_handler = args.clone();
         let state_for_handler = ripple_state;
@@ -430,19 +424,15 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
 
-            // Update hover state
             if let Some(ref state) = state_for_handler {
                 state.set_hovered(is_cursor_in_surface);
             }
 
-            // Set cursor to pointer if hovered and clickable
             if is_cursor_in_surface && args_for_handler.on_click.is_some() {
                 input.requests.cursor_icon = CursorIcon::Pointer;
             }
 
-            // Handle mouse events
             if is_cursor_in_surface {
-                // Check for mouse press events to start ripple
                 let press_events: Vec<_> = input
                     .cursor_events
                     .iter()
@@ -454,7 +444,6 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     })
                     .collect();
 
-                // Check for mouse release events (click)
                 let release_events: Vec<_> = input
                     .cursor_events
                     .iter()
@@ -470,29 +459,24 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     && let (Some(cursor_pos), Some(state)) =
                         (cursor_pos_option, state_for_handler.as_ref())
                 {
-                    // Convert cursor position to normalized coordinates [-0.5, 0.5]
                     let normalized_x = (cursor_pos.x.to_f32() / size.width.to_f32()) - 0.5;
                     let normalized_y = (cursor_pos.y.to_f32() / size.height.to_f32()) - 0.5;
 
-                    // Start ripple animation
                     state.start_animation([normalized_x, normalized_y]);
                 }
 
-                if !release_events.is_empty() {
-                    // Trigger click callback
-                    if let Some(ref on_click) = args_for_handler.on_click {
-                        on_click();
-                    }
+                if !release_events.is_empty()
+                    && let Some(ref on_click) = args_for_handler.on_click
+                {
+                    on_click();
                 }
 
-                // Block all events to prevent propagation
                 if args_for_handler.block_input {
                     input.block_all();
                 }
             }
         }));
     } else {
-        // Non-interactive surface, still block all cursor events inside the surface
         state_handler(Box::new(move |mut input| {
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;

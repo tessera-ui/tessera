@@ -218,7 +218,6 @@ impl FluidGlassPipeline {
             (start_pos.y.0 + size.height.0) as f32 / screen_h,
         ];
 
-        // Helper to compute corner radii without moving args.
         let corner_radii = match args.shape {
             crate::shape_def::Shape::RoundedRectangle {
                 top_left,
@@ -228,16 +227,28 @@ impl FluidGlassPipeline {
                 ..
             } => [top_left, top_right, bottom_right, bottom_left].into(),
             crate::shape_def::Shape::Ellipse => Vec4::ZERO,
+            crate::shape_def::Shape::HorizontalCapsule => {
+                let radius = size.height.to_f32() / 2.0;
+                [radius, radius, radius, radius].into()
+            }
+            crate::shape_def::Shape::VerticalCapsule => {
+                let radius = size.width.to_f32() / 2.0;
+                [radius, radius, radius, radius].into()
+            }
         };
 
         let shape_type = match args.shape {
             crate::shape_def::Shape::RoundedRectangle { .. } => 0.0,
             crate::shape_def::Shape::Ellipse => 1.0,
+            crate::shape_def::Shape::HorizontalCapsule => 0.0,
+            crate::shape_def::Shape::VerticalCapsule => 0.0,
         };
 
         let g2_k_value = match args.shape {
             crate::shape_def::Shape::RoundedRectangle { g2_k_value, .. } => g2_k_value,
             crate::shape_def::Shape::Ellipse => 0.0,
+            crate::shape_def::Shape::HorizontalCapsule => 2.0,
+            crate::shape_def::Shape::VerticalCapsule => 2.0,
         };
 
         let border_width = args

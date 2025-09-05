@@ -84,11 +84,11 @@ impl ShardRegistry {
         f(ret)
     }
 
-    pub(crate) fn with_mut_dyn<F, R>(&self, id: &str, f: F) -> R
+    pub(crate) fn with_mut_dyn<F, R>(&self, id: &str, f: F) -> Option<R>
     where
         F: FnOnce(Arc<dyn ShardState>) -> R,
     {
-        let shard_ref = self.shards.get(id).expect("Shard not found");
-        f(shard_ref.value().clone())
+        let shard_ref = self.shards.get(id)?;
+        Some(f(shard_ref.value().clone()))
     }
 }

@@ -11,8 +11,10 @@ use std::sync::{
 };
 
 use tessera_ui::{
-    Color, Dp, Renderer, RouteController, renderer::TesseraConfig, router::router_root, shard,
-    tessera,
+    Color, Dp, Renderer,
+    renderer::TesseraConfig,
+    router::{self, router_root},
+    shard, tessera,
 };
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
@@ -43,7 +45,7 @@ impl Default for AppState {
 /// Main counter application component
 #[tessera]
 #[shard]
-fn counter_app(#[state] app_state: AppState, #[route_controller] controller: RouteController) {
+fn counter_app(#[state] app_state: AppState) {
     let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
     let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
     let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
@@ -78,7 +80,7 @@ fn counter_app(#[state] app_state: AppState, #[route_controller] controller: Rou
                                         app_state_clone
                                             .click_count
                                             .store(0, atomic::Ordering::Relaxed); // Reset count
-                                        controller.push(CounterApp2Destination {});
+                                        router::push(CounterApp2Destination {});
                                     }
                                 }))
                                 .build()
@@ -104,7 +106,7 @@ fn counter_app(#[state] app_state: AppState, #[route_controller] controller: Rou
 /// Main counter application component, but this one's button is red :)
 #[tessera]
 #[shard]
-fn counter_app2(#[state] app_state: AppState, #[route_controller] controller: RouteController) {
+fn counter_app2(#[state] app_state: AppState) {
     let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
     let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
     let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
@@ -140,7 +142,7 @@ fn counter_app2(#[state] app_state: AppState, #[route_controller] controller: Ro
                                         app_state_clone
                                             .click_count
                                             .store(0, atomic::Ordering::Relaxed); // Reset count
-                                        controller.pop();
+                                        router::pop();
                                     }
                                 }))
                                 .build()

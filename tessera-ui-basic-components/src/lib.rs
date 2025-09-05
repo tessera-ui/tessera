@@ -70,6 +70,7 @@ pub mod pos_misc;
 pub mod progress;
 pub mod ripple_state;
 pub use ripple_state::RippleState;
+pub mod bottom_nav_bar;
 pub mod row;
 pub mod scrollable;
 pub mod selection_highlight_rect;
