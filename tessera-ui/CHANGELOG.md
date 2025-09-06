@@ -1,3 +1,15 @@
+## [v1.12.0] - 2025-09-06 +08:00
+
+### Changes
+
+- refactor(color): make methods to const for better optimization
+- fix(renderer): suppress unwrap on dummy render to avoid panic
+- feat(bottom-nav-bar): implement bottom navigation bar component and simplify routing API
+- chore(deps): bump windows from 0.61.3 to 0.62.0
+- refactor(renderer): remove debug println from render loop
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.11.2...tessera-ui-v1.12.0)
+
 ## [v1.11.2] - 2025-09-05 +08:00
 
 ### Changes
