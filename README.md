@@ -75,7 +75,7 @@ The roadmap is now organized by crate:
   - radio
   - ~~bottom sheet~~
   - ~~tab~~
-  - bottom nav bar
+  - ~~bottom nav bar~~
   - side bar
 
 ## Comparison with `egui`
