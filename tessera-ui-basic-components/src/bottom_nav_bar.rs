@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::{Duration, Instant}};
 
 use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, tessera};
@@ -6,11 +6,25 @@ use tessera_ui::{Color, DimensionValue, tessera};
 use crate::{
     RippleState,
     alignment::MainAxisAlignment,
+    animation,
     button::{ButtonArgsBuilder, button},
     row::{RowArgsBuilder, row},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
+
+const ANIMATION_DURATION: Duration = Duration::from_millis(300);
+const ACTIVE_COLOR: Color = Color::from_rgb_u8(225, 235, 255);
+const INACTIVE_COLOR: Color = Color::WHITE;
+
+fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
+    Color {
+        r: from.r + (to.r - from.r) * progress,
+        g: from.g + (to.g - from.g) * progress,
+        b: from.b + (to.b - from.b) * progress,
+        a: from.a + (to.a - from.a) * progress,
+    }
+}
 
 /// A horizontal bottom navigation bar that hosts multiple navigation items (children),
 /// each with its own click callback. The currently selected item is visually highlighted
@@ -90,6 +104,11 @@ where
         scope_config(&mut scope);
     }
 
+    let progress = {
+        let mut state = state.write();
+        state.animation_progress().unwrap_or(1.0)
+    };
+
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -107,31 +126,37 @@ where
                 move |row_scope| {
                     for (index, (child_content, on_click)) in child_closures.into_iter().enumerate()
                     {
-                        let state = state.clone();
+                        let state_clone = state.clone();
                         row_scope.child(move || {
-                            let is_active = state.read().selected() == index;
-                            let ripple_state = state.write().ripple_state(index);
-
-                            let button_args = if is_active {
-                                ButtonArgsBuilder::default()
-                                    .color(Color::from_rgb_u8(225, 235, 255)) // Active pill color
-                                    .shape(Shape::HorizontalCapsule)
-                                    .on_click(Arc::new(move || {
-                                        state.write().set_selected(index);
-                                        on_click();
-                                    }))
-                                    .build()
-                                    .unwrap()
-                            } else {
-                                ButtonArgsBuilder::default()
-                                    .color(Color::TRANSPARENT)
-                                    .on_click(Arc::new(move || {
-                                        state.write().set_selected(index);
-                                        on_click();
-                                    }))
-                                    .build()
-                                    .unwrap()
+                            let (selected, previous_selected) = {
+                                let s = state_clone.read();
+                                (s.selected(), s.previous_selected())
                             };
+                            let ripple_state = state_clone.write().ripple_state(index);
+
+                            let (color, shape) = if index == selected {
+                                (
+                                    interpolate_color(INACTIVE_COLOR, ACTIVE_COLOR, progress),
+                                    Shape::HorizontalCapsule,
+                                )
+                            } else if index == previous_selected {
+                                (
+                                    interpolate_color(ACTIVE_COLOR, INACTIVE_COLOR, progress),
+                                    Shape::HorizontalCapsule,
+                                )
+                            } else {
+                                (INACTIVE_COLOR, Shape::default())
+                            };
+
+                            let button_args = ButtonArgsBuilder::default()
+                                .color(color)
+                                .shape(shape)
+                                .on_click(Arc::new(move || {
+                                    state_clone.write().set_selected(index);
+                                    on_click();
+                                }))
+                                .build()
+                                .unwrap();
 
                             button(button_args, ripple_state, || {
                                 child_content();
@@ -151,7 +176,9 @@ where
 /// on its associated button.
 pub struct BottomNavBarState {
     selected: usize,
+    previous_selected: usize,
     ripple_states: HashMap<usize, Arc<RippleState>>,
+    anim_start_time: Option<Instant>,
 }
 
 impl Default for BottomNavBarState {
@@ -165,7 +192,9 @@ impl BottomNavBarState {
     pub fn new(selected: usize) -> Self {
         Self {
             selected,
+            previous_selected: selected,
             ripple_states: HashMap::new(),
+            anim_start_time: None,
         }
     }
 
@@ -173,8 +202,30 @@ impl BottomNavBarState {
         self.selected
     }
 
+    pub fn previous_selected(&self) -> usize {
+        self.previous_selected
+    }
+
     fn set_selected(&mut self, index: usize) {
-        self.selected = index;
+        if self.selected != index {
+            self.previous_selected = self.selected;
+            self.selected = index;
+            self.anim_start_time = Some(Instant::now());
+        }
+    }
+
+    fn animation_progress(&mut self) -> Option<f32> {
+        if let Some(start_time) = self.anim_start_time {
+            let elapsed = start_time.elapsed();
+            if elapsed < ANIMATION_DURATION {
+                Some(animation::easing(elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()))
+            } else {
+                self.anim_start_time = None;
+                None
+            }
+        } else {
+            None
+        }
     }
 
     fn ripple_state(&mut self, index: usize) -> Arc<RippleState> {
