@@ -1,3 +1,11 @@
+## [v0.3.0] - 2025-09-06 +08:00
+
+### Changes
+
+- feat(bottom-nav-bar): implement bottom navigation bar component and simplify routing API
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-shard-v0.2.1...tessera-ui-shard-v0.3.0)
+
 ## [v0.2.1] - 2025-08-26 +08:00
 
 ### Changes

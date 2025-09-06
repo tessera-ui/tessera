@@ -3046,7 +3046,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-ui-shard"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "dashmap",
  "parking_lot",
