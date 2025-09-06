@@ -1,3 +1,11 @@
+## [v0.3.0] - 2025-09-06 +08:00
+
+### Changes
+
+- feat(bottom-nav-bar): implement bottom navigation bar component and simplify routing API
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.2.4...tessera-ui-macros-v0.3.0)
+
 ## [v0.2.4] - 2025-08-26 +08:00
 
 ### Changes
