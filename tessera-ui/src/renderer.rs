@@ -789,7 +789,7 @@ Fps: {:.2}
             Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
         } else {
             // Perform a dummy render
-            args.app.render_dummy().unwrap();
+            let _ = args.app.render_dummy();
         }
 
         // Clear the component tree (free for next frame)
