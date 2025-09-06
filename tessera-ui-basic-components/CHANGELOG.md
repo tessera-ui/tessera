@@ -1,3 +1,12 @@
+## [v1.11.0] - 2025-09-06 +08:00
+
+### Changes
+
+- feat(animation): add easing-based selection transition to bottom nav bar
+- feat(bottom-nav-bar): implement bottom navigation bar component and simplify routing API
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.10.2...tessera-ui-basic-components-v1.11.0)
+
 ## [v1.10.2] - 2025-09-05 +08:00
 
 ### Changes
