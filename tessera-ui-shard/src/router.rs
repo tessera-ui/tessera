@@ -4,12 +4,13 @@
 //! [`RouterDestination`]. These destinations are managed in a LIFO stack.
 //!
 //! # Responsibilities
+//!
 //! * Maintain an ordered stack (`route_stack`) of active destinations
 //! * Expose [`push`] / [`pop`] helpers that also manage shard state lifetimes
 //! * Remove per‑shard state from the registry when a destination whose lifecycle is
-//! `ShardStateLifeCycle::Shard` is popped
+//!   `ShardStateLifeCycle::Shard` is popped
 //! * Keep routing logic minimal; rendering happens when the top destination's
-//! `exec_component()` is invoked every frame by `router_root`
+//!   `exec_component()` is invoked every frame by `router_root`
 //!
 //! # Typical Usage
 //!

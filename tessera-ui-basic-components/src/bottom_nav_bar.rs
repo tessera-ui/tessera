@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::{Duration, Instant}};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, tessera};
@@ -218,7 +222,9 @@ impl BottomNavBarState {
         if let Some(start_time) = self.anim_start_time {
             let elapsed = start_time.elapsed();
             if elapsed < ANIMATION_DURATION {
-                Some(animation::easing(elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()))
+                Some(animation::easing(
+                    elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32(),
+                ))
             } else {
                 self.anim_start_time = None;
                 None
