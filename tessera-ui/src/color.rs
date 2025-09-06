@@ -184,7 +184,7 @@ impl Color {
     /// let custom_color = Color::from_rgba_u8(76, 178, 51, 204);
     /// ```
     #[inline]
-    pub fn from_rgba_u8(r: u8, g: u8, b: u8, a: u8) -> Self {
+    pub const fn from_rgba_u8(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self {
             r: r as f32 / 255.0,
             g: g as f32 / 255.0,
@@ -214,7 +214,7 @@ impl Color {
     /// let dark_green = Color::from_rgb_u8(0, 100, 0);
     /// ```
     #[inline]
-    pub fn from_rgb_u8(r: u8, g: u8, b: u8) -> Self {
+    pub const fn from_rgb_u8(r: u8, g: u8, b: u8) -> Self {
         Self::from_rgba_u8(r, g, b, 255)
     }
 
@@ -237,7 +237,7 @@ impl Color {
     /// assert_eq!(array, [0.5, 0.3, 0.8, 1.0]);
     /// ```
     #[inline]
-    pub fn to_array(self) -> [f32; 4] {
+    pub const fn to_array(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
 
@@ -258,7 +258,7 @@ impl Color {
     /// assert_eq!(semi_transparent_color.a, 0.5);
     /// ```
     #[inline]
-    pub fn with_alpha(self, alpha: f32) -> Self {
+    pub const fn with_alpha(self, alpha: f32) -> Self {
         Self {
             r: self.r,
             g: self.g,
