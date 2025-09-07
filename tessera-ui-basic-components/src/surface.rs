@@ -48,7 +48,7 @@ pub struct SurfaceArgs {
     pub shape: Shape,
 
     /// Optional shadow/elevation style. When present it is passed through to the shape pipeline.
-    #[builder(default)]
+    #[builder(default, setter(strip_option))]
     pub shadow: Option<ShadowProps>,
 
     /// Internal padding applied symmetrically (left/right & top/bottom). Child content is
