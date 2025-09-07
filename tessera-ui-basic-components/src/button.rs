@@ -26,7 +26,10 @@ use derive_builder::Builder;
 use tessera_ui::{Color, DimensionValue, Dp, tessera};
 
 use crate::{
-    pipelines::ShadowProps, ripple_state::RippleState, shape_def::Shape, surface::{surface, SurfaceArgsBuilder}
+    pipelines::ShadowProps,
+    ripple_state::RippleState,
+    shape_def::Shape,
+    surface::{SurfaceArgsBuilder, surface},
 };
 
 /// Arguments for the `button` component.
@@ -152,7 +155,7 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
     }
 
     // Set shadow if available
-    if let Some(shadow) = args.shadow.clone() {
+    if let Some(shadow) = args.shadow {
         builder = builder.shadow(shadow);
     }
 

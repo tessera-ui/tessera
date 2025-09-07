@@ -94,6 +94,7 @@ use crate::{
     alignment::MainAxisAlignment,
     animation,
     button::{ButtonArgsBuilder, button},
+    pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -102,6 +103,7 @@ use crate::{
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
 const ACTIVE_COLOR: Color = Color::from_rgb_u8(225, 235, 255);
 const INACTIVE_COLOR: Color = Color::WHITE;
+const ACTIVE_COLOR_SHADOW: Color = Color::from_rgba_u8(100, 115, 140, 100);
 
 fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
     Color {
@@ -170,6 +172,7 @@ where
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .color(Color::from_rgb(9.333, 9.333, 9.333))
+            .shadow(ShadowProps::default())
             .build()
             .unwrap(),
         None,
@@ -191,27 +194,32 @@ where
                             };
                             let ripple_state = state_clone.write().ripple_state(index);
 
-                            let (color, shape) = if index == selected {
-                                (
-                                    interpolate_color(INACTIVE_COLOR, ACTIVE_COLOR, progress),
-                                    Shape::HorizontalCapsule,
-                                )
+                            let color;
+                            let shadow_color;
+                            if index == selected {
+                                color = interpolate_color(INACTIVE_COLOR, ACTIVE_COLOR, progress);
+                                shadow_color =
+                                    interpolate_color(INACTIVE_COLOR, ACTIVE_COLOR_SHADOW, progress)
                             } else if index == previous_selected {
-                                (
-                                    interpolate_color(ACTIVE_COLOR, INACTIVE_COLOR, progress),
-                                    Shape::HorizontalCapsule,
-                                )
+                                color = interpolate_color(ACTIVE_COLOR, INACTIVE_COLOR, progress);
+                                shadow_color =
+                                    interpolate_color(ACTIVE_COLOR_SHADOW, INACTIVE_COLOR, progress)
                             } else {
-                                (INACTIVE_COLOR, Shape::default())
-                            };
+                                color = INACTIVE_COLOR;
+                                shadow_color = INACTIVE_COLOR;
+                            }
 
                             let button_args = ButtonArgsBuilder::default()
                                 .color(color)
-                                .shape(shape)
+                                .shape(Shape::HorizontalCapsule)
                                 .on_click(Arc::new(move || {
                                     state_clone.write().set_selected(index);
                                     on_click();
                                 }))
+                                .shadow(ShadowProps {
+                                    color: shadow_color,
+                                    ..Default::default()
+                                })
                                 .build()
                                 .unwrap();
 
