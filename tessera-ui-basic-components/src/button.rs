@@ -26,9 +26,7 @@ use derive_builder::Builder;
 use tessera_ui::{Color, DimensionValue, Dp, tessera};
 
 use crate::{
-    ripple_state::RippleState,
-    shape_def::Shape,
-    surface::{SurfaceArgsBuilder, surface},
+    pipelines::ShadowProps, ripple_state::RippleState, shape_def::Shape, surface::{surface, SurfaceArgsBuilder}
 };
 
 /// Arguments for the `button` component.
@@ -66,23 +64,9 @@ pub struct ButtonArgs {
     /// Optional color for the border (RGBA). If None and border_width > 0, `color` will be used.
     #[builder(default)]
     pub border_color: Option<Color>,
-}
-
-impl std::fmt::Debug for ButtonArgs {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ButtonArgs")
-            .field("color", &self.color)
-            .field("hover_color", &self.hover_color)
-            .field("shape", &self.shape)
-            .field("padding", &self.padding)
-            .field("width", &self.width)
-            .field("height", &self.height)
-            .field("on_click", &"<callback>")
-            .field("ripple_color", &self.ripple_color)
-            .field("border_width", &self.border_width)
-            .field("border_color", &self.border_color)
-            .finish()
-    }
+    /// Shadow of the button. If None, no shadow is applied.
+    #[builder(default, setter(strip_option))]
+    pub shadow: Option<ShadowProps>,
 }
 
 impl Default for ButtonArgs {
@@ -165,6 +149,11 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
     // Set height if available
     if let Some(height) = args.height {
         builder = builder.height(height);
+    }
+
+    // Set shadow if available
+    if let Some(shadow) = args.shadow.clone() {
+        builder = builder.shadow(shadow);
     }
 
     builder
