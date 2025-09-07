@@ -294,7 +294,7 @@ fn compute_surface_size(
 
     (width, height)
 }
-#[tessera]
+
 /// Renders a styled rectangular (or elliptic / capsule) container and optionally
 /// provides interactive click + ripple feedback.
 ///
@@ -344,6 +344,7 @@ fn compute_surface_size(
 ///     );
 /// }
 /// ```
+#[tessera]
 pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child: impl FnOnce()) {
     (child)();
     let ripple_state_for_measure = ripple_state.clone();

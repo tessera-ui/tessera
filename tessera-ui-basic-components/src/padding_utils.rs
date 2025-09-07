@@ -23,7 +23,7 @@ pub fn remove_padding_from_dimension(dimension: DimensionValue, padding: Px) -> 
     match dimension {
         DimensionValue::Fixed(value) => DimensionValue::Fixed((value - padding * 2).max(Px(0))),
         DimensionValue::Wrap { min, max } => DimensionValue::Wrap {
-            min: sub_opt_px(min, padding),
+            min,
             max: sub_opt_px(max, padding),
         },
         DimensionValue::Fill { min, max } => DimensionValue::Fill {
