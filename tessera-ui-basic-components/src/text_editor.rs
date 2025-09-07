@@ -35,11 +35,12 @@ use crate::{
 
 /// State structure for the text editor, managing text content, cursor, selection, and editing logic.
 ///
-/// This is a re-export of [`TextEditorState`](crate::text_edit_core::TextEditorState) from the core text editing module.
+/// This is a re-export of [`TextEditorState`] from the core text editing module.
 /// It encapsulates all stateful aspects of the editor, including text buffer, cursor position, selection range,
 /// focus handling, and IME/preedit support. The state should be wrapped in `Arc<RwLock<...>>` for safe sharing between UI and event handlers.
 ///
 /// # Example
+///
 /// ```
 /// use tessera_ui_basic_components::text_editor::TextEditorState;
 /// use tessera_ui::Dp;

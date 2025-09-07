@@ -416,8 +416,8 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(target_os = "android"))]
     #[tracing::instrument(level = "info", skip(entry_point, register_pipelines_fn))]
+    #[cfg(not(any(target_os = "android")))]
     pub fn run_with_config(
         entry_point: F,
         register_pipelines_fn: R,

@@ -27,15 +27,11 @@ use crate::{
     surface::{SurfaceArgsBuilder, surface},
 };
 
-///
 /// Stores the interactive state for the [`slider`] component, such as whether the slider is currently being dragged by the user.
 /// This struct should be managed via [`Arc<Mutex<SliderState>>`] and passed to the [`slider`] function to enable correct interaction handling.
 ///
-/// # Fields
 /// - `is_dragging`: Indicates whether the user is actively dragging the slider thumb.
 /// - `focus`: Manages keyboard focus for the slider component.
-///
-/// Typically, you create and manage this state using [`use_state`] or similar state management utilities.
 ///
 /// [`slider`]: crate::slider
 pub struct SliderState {
@@ -267,12 +263,14 @@ fn measure_slider(
 ///   - `value` (`f32`): The current value of the slider, in the range `[0.0, 1.0]`.
 ///   - `on_change` (`Arc<dyn Fn(f32) + Send + Sync>`): Callback invoked when the user changes the slider's value.
 ///   - `width`, `track_height`, `active_track_color`, `inactive_track_color`, `disabled`: Appearance and interaction options.
-/// - `state`: Shared state for the slider, used to track interaction (e.g., dragging, focus). Create and manage this using [`use_state`] or similar, and pass it to the slider for correct behavior.
+/// - `state`: Shared state for the slider, used to track interaction (e.g., dragging, focus).
 ///
 /// # State Management
-/// The `state` parameter must be an [`Arc<Mutex<SliderState>>`]. You can create and manage it using the `use_state` hook or any other state management approach compatible with your application.
+///
+/// The `state` parameter must be an [`Arc<Mutex<SliderState>>`].
 ///
 /// # Example
+///
 /// ```
 /// use std::sync::Arc;
 /// use parking_lot::Mutex;

@@ -1,3 +1,86 @@
+//! A component that displays content sliding up from the bottom of the screen.
+//!
+//! The `bottom_sheet_provider` is the core of this module. It manages the presentation
+//! and dismissal of a "bottom sheet" — a common UI pattern for showing contextual
+//! information or actions.
+//!
+//! # Key Components
+//!
+//! * **[`bottom_sheet_provider`]**: The main component function that you call to create the UI.
+//!   It orchestrates the main content, the scrim (background overlay), and the sheet content itself.
+//! * **[`BottomSheetProviderState`]**: A state object that you must create and manage to control
+//!   the bottom sheet. Use its [`open()`](BottomSheetProviderState::open) and
+//!   [`close()`](BottomSheetProviderState::close) methods to show and hide the sheet.
+//! * **[`BottomSheetProviderArgs`]**: Configuration for the provider, including the visual
+//!   [`style`](BottomSheetStyle) and the mandatory `on_close_request` callback.
+//! * **[`BottomSheetStyle`]**: Defines the appearance of the background scrim, either `Material`
+//!   (a simple dark overlay) or `Glass` (a blurred, translucent effect).
+//!
+//! # Behavior
+//!
+//! - The sheet animates smoothly into and out of view.
+//! - It displays a background scrim that blocks interaction with the main content.
+//! - Clicking the scrim or pressing the `Escape` key triggers the `on_close_request` callback.
+//!
+//! # Example
+//!
+//! ```
+//! use std::sync::Arc;
+//! use parking_lot::RwLock;
+//! use tessera_ui::{tessera, Renderer};
+//! use tessera_ui_basic_components::{
+//!     bottom_sheet::{
+//!         bottom_sheet_provider, BottomSheetProviderArgsBuilder, BottomSheetProviderState
+//!     },
+//!     button::{button, ButtonArgsBuilder},
+//!     ripple_state::RippleState,
+//!     text::{text, TextArgsBuilder},
+//! };
+//!
+//! // 1. Define an application state to hold the bottom sheet's state.
+//! #[derive(Default)]
+//! struct AppState {
+//!     sheet_state: Arc<RwLock<BottomSheetProviderState>>,
+//!     ripple_state: Arc<RippleState>,
+//! }
+//!
+//! #[tessera]
+//! fn app(state: Arc<RwLock<AppState>>) {
+//!     let sheet_state = state.read().sheet_state.clone();
+//!
+//!     // 2. Use the bottom_sheet_provider.
+//!     bottom_sheet_provider(
+//!         BottomSheetProviderArgsBuilder::default()
+//!             // 3. Provide a callback to handle close requests.
+//!             .on_close_request(Arc::new({
+//!                 let sheet_state = sheet_state.clone();
+//!                 move || sheet_state.write().close()
+//!             }))
+//!             .build()
+//!             .unwrap(),
+//!         sheet_state.clone(),
+//!         // 4. Define the main content that is always visible.
+//!         move || {
+//!             button(
+//!                 ButtonArgsBuilder::default()
+//!                     .on_click(Arc::new({
+//!                         let sheet_state = sheet_state.clone();
+//!                         move || sheet_state.write().open()
+//!                     }))
+//!                     .build()
+//!                     .unwrap(),
+//!                 state.read().ripple_state.clone(),
+//!                 || text(TextArgsBuilder::default().text("Show Sheet".to_string()).build().unwrap())
+//!             );
+//!         },
+//!         // 5. Define the content of the bottom sheet itself.
+//!         // It receives an `alpha` value for fade animations.
+//!         |alpha| {
+//!             text(TextArgsBuilder::default().text("This is the bottom sheet!".to_string()).build().unwrap());
+//!         }
+//!     );
+//! }
+//! ```
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -17,22 +100,56 @@ use crate::{
 const ANIM_TIME: Duration = Duration::from_millis(300);
 
 /// Defines the visual style of the bottom sheet's scrim.
+///
+/// The scrim is the overlay that appears behind the bottom sheet, covering the main content.
 #[derive(Default, Clone, Copy)]
 pub enum BottomSheetStyle {
     /// A translucent glass effect that blurs the content behind it.
+    /// This style is more resource-intensive and may not be suitable for all targets.
     Glass,
-    /// A simple, semi-transparent dark overlay.
+    /// A simple, semi-transparent dark overlay. This is the default style.
     #[default]
     Material,
 }
 
+/// Configuration arguments for the [`bottom_sheet_provider`].
 #[derive(Builder)]
 pub struct BottomSheetProviderArgs {
+    /// A callback that is invoked when the user requests to close the sheet.
+    ///
+    /// This can be triggered by clicking the scrim or pressing the `Escape` key.
+    /// The callback is responsible for calling [`BottomSheetProviderState::close()`].
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
+    /// The visual style of the scrim. See [`BottomSheetStyle`].
     #[builder(default)]
     pub style: BottomSheetStyle,
 }
 
+/// Manages the open/closed state of a [`bottom_sheet_provider`].
+///
+/// This state object must be created by the application and passed to the
+/// [`bottom_sheet_provider`]. It is used to control the visibility of the sheet
+/// programmatically.
+///
+/// For safe shared access across different parts of your UI (e.g., a button that opens
+/// the sheet and the provider itself), this state should be wrapped in an `Arc<RwLock<>>`.
+///
+/// # Example
+///
+/// ```
+/// use std::sync::Arc;
+/// use parking_lot::RwLock;
+/// use tessera_ui_basic_components::bottom_sheet::BottomSheetProviderState;
+///
+/// // Create the state, wrapped for shared access.
+/// let sheet_state = Arc::new(RwLock::new(BottomSheetProviderState::default()));
+///
+/// // Later, in an event handler (e.g., a button click):
+/// sheet_state.write().open();
+///
+/// // Or to close it:
+/// sheet_state.write().close();
+/// ```
 #[derive(Default)]
 pub struct BottomSheetProviderState {
     is_open: bool,
@@ -40,6 +157,10 @@ pub struct BottomSheetProviderState {
 }
 
 impl BottomSheetProviderState {
+    /// Initiates the animation to open the bottom sheet.
+    ///
+    /// If the sheet is already open, this has no effect. If the sheet is currently
+    /// closing, it will reverse direction and start opening from its current position.
     pub fn open(&mut self) {
         if !self.is_open {
             self.is_open = true;
@@ -54,6 +175,10 @@ impl BottomSheetProviderState {
         }
     }
 
+    /// Initiates the animation to close the bottom sheet.
+    ///
+    /// If the sheet is already closed, this has no effect. If the sheet is currently
+    /// opening, it will reverse direction and start closing from its current position.
     pub fn close(&mut self) {
         if self.is_open {
             self.is_open = false;
@@ -234,6 +359,22 @@ fn place_bottom_sheet_if_present(
     input.place_child(bottom_sheet_id, PxPosition::new(Px(0), Px(y)));
 }
 
+/// Renders a bottom sheet UI group, managing its animation, scrim, and content.
+///
+/// This is the main function for creating a bottom sheet. It should be called within a
+/// component that manages the application's state.
+///
+/// # Arguments
+///
+/// - `args`: Configuration options, including the style and close request handler.
+///   See [`BottomSheetProviderArgs`].
+/// - `state`: The shared state object that controls whether the sheet is open or closed.
+///   See [`BottomSheetProviderState`].
+/// - `main_content`: A closure that renders the primary UI content, which is always visible
+///   behind the sheet.
+/// - `bottom_sheet_content`: A closure that renders the content of the sheet itself. It
+///   receives a `f32` argument representing the current animation progress (alpha),
+///   which can be used to fade content in and out.
 #[tessera]
 pub fn bottom_sheet_provider(
     args: BottomSheetProviderArgs,

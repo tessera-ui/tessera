@@ -98,9 +98,7 @@ impl Default for ScrollableArgs {
 
 /// Holds the state for a `scrollable` component, managing scroll position and interaction.
 ///
-/// This state should be created and managed using `use_state` or a similar state management
-/// hook provided by the UI framework. It tracks the current and target scroll positions,
-/// the size of the scrollable content, and focus state.
+/// It tracks the current and target scroll positions, the size of the scrollable content, and focus state.
 ///
 /// The scroll position is smoothly interpolated over time to create a fluid scrolling effect.
 #[derive(Default)]

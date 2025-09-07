@@ -19,22 +19,6 @@ use crate::pipelines::ShapeCommand;
 /// - `width`: The width of the highlight rectangle, in physical pixels (`Px`).
 /// - `height`: The height of the highlight rectangle, in physical pixels (`Px`).
 /// - `color`: The fill color of the rectangle, including alpha for transparency (`Color`).
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui::{Color, Px};
-/// use tessera_ui_basic_components::selection_highlight_rect::selection_highlight_rect;
-///
-/// // Renders a selection highlight rectangle with a width of 100px, a height of 20px,
-/// // and a semi-transparent blue color.
-/// selection_highlight_rect(
-///     Px(100),
-///     Px(20),
-///     Color::new(0.2, 0.4, 1.0, 0.3),
-/// );
-/// ```
-///
 #[tessera]
 pub fn selection_highlight_rect(
     width: Px,

@@ -211,14 +211,13 @@ fn handle_input_events_switch(
     }
 }
 
-///
 /// A UI component that displays a toggle switch for boolean state.
 ///
 /// The `switch` component provides a customizable on/off control, commonly used for toggling settings.
 /// It can be controlled via external state (`SwitchState`) or by using the `checked` and `on_toggle` parameters.
 ///
 /// # Arguments
-/// * `args` - Parameters for configuring the switch, see [`SwitchArgs`](crate::switch::SwitchArgs).
+/// * `args` - Parameters for configuring the switch, see [`SwitchArgs`].
 ///
 /// # Example
 /// ```

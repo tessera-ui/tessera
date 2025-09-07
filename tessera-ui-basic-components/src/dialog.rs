@@ -1,14 +1,93 @@
-//! Provides a modal dialog component for overlaying content and intercepting user input.
+//! A modal dialog component for displaying critical information or actions.
 //!
-//! This module defines a dialog provider for creating modal dialogs in UI applications.
-//! It allows rendering custom dialog content above the main application, blocking interaction
-//! with underlying elements and intercepting keyboard/mouse events (such as ESC or scrim click)
-//! to trigger close actions. Typical use cases include confirmation dialogs, alerts, and
-//! any scenario requiring user attention before proceeding.
+//! This module provides [`dialog_provider`], a component that renders content in a modal
+//! overlay. When active, the dialog sits on top of the primary UI, blocks interactions
+//! with the content behind it (via a "scrim"), and can be dismissed by user actions
+//! like pressing the `Escape` key or clicking the scrim.
 //!
-//! The dialog is managed via [`DialogProviderArgs`] and the [`dialog_provider`] function.
-//! See the example in [`dialog_provider`] for usage details.
-
+//! # Key Components
+//!
+//! * **[`dialog_provider`]**: The main function that wraps your UI to provide dialog capabilities.
+//! * **[`DialogProviderState`]**: A state object you create and manage to control the
+//!   dialog's visibility using its [`open()`](DialogProviderState::open) and
+//!   [`close()`](DialogProviderState::close) methods.
+//! * **[`DialogProviderArgs`]**: Configuration for the provider, including the visual
+//!   [`style`](DialogStyle) of the scrim and the mandatory `on_close_request` callback.
+//! * **[`DialogStyle`]**: Defines the scrim's appearance, either `Material` (a simple dark
+//!   overlay) or `Glass` (a blurred, translucent effect).
+//!
+//! # Usage
+//!
+//! The `dialog_provider` acts as a wrapper around your main content. It takes the main
+//! content and the dialog content as separate closures.
+//!
+//! 1.  **Create State**: In your application's state, create an `Arc<RwLock<DialogProviderState>>`.
+//! 2.  **Wrap Content**: Call `dialog_provider` at a high level in your component tree.
+//! 3.  **Provide Content**: Pass two closures to `dialog_provider`:
+//!     - `main_content`: Renders the UI that is always visible.
+//!     - `dialog_content`: Renders the content of the dialog box itself. This closure
+//!       receives an `f32` alpha value for animating its appearance.
+//! 4.  **Control Visibility**: From an event handler (e.g., a button's `on_click`), call
+//!     `dialog_state.write().open()` to show the dialog.
+//! 5.  **Handle Closing**: The `on_close_request` callback you provide is responsible for
+//!     calling `dialog_state.write().close()` to dismiss the dialog.
+//!
+//! # Example
+//!
+//! ```
+//! use std::sync::Arc;
+//! use parking_lot::RwLock;
+//! use tessera_ui::{tessera, Renderer};
+//! use tessera_ui_basic_components::{
+//!     dialog::{dialog_provider, DialogProviderArgsBuilder, DialogProviderState},
+//!     button::{button, ButtonArgsBuilder},
+//!     ripple_state::RippleState,
+//!     text::{text, TextArgsBuilder},
+//! };
+//!
+//! // Define an application state.
+//! #[derive(Default)]
+//! struct AppState {
+//!     dialog_state: Arc<RwLock<DialogProviderState>>,
+//!     ripple_state: Arc<RippleState>,
+//! }
+//!
+//! #[tessera]
+//! fn app(state: Arc<RwLock<AppState>>) {
+//!     let dialog_state = state.read().dialog_state.clone();
+//!
+//!     // Use the dialog_provider.
+//!     dialog_provider(
+//!         DialogProviderArgsBuilder::default()
+//!             // Provide a callback to handle close requests.
+//!             .on_close_request(Arc::new({
+//!                 let dialog_state = dialog_state.clone();
+//!                 move || dialog_state.write().close()
+//!             }))
+//!             .build()
+//!             .unwrap(),
+//!         dialog_state.clone(),
+//!         // Define the main content.
+//!         move || {
+//!             button(
+//!                 ButtonArgsBuilder::default()
+//!                     .on_click(Arc::new({
+//!                         let dialog_state = dialog_state.clone();
+//!                         move || dialog_state.write().open()
+//!                     }))
+//!                     .build()
+//!                     .unwrap(),
+//!                 state.read().ripple_state.clone(),
+//!                 || text(TextArgsBuilder::default().text("Show Dialog".to_string()).build().unwrap())
+//!             );
+//!         },
+//!         // Define the dialog content.
+//!         |alpha| {
+//!             text(TextArgsBuilder::default().text("This is a dialog!".to_string()).build().unwrap());
+//!         }
+//!     );
+//! }
+//! ```
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -123,113 +202,6 @@ impl DialogProviderState {
     }
 }
 
-/// A provider component that manages the rendering and event flow for a modal dialog.
-///
-/// This component should be used as one of the outermost layers of the application.
-/// It renders the main content, and when `is_open` is true, it overlays a modal
-/// dialog, intercepting all input events to create a modal experience.
-///
-/// The dialog can be closed by calling the `on_close_request` callback, which can be
-/// triggered by clicking the background scrim or pressing the `ESC` key.
-///
-/// # Arguments
-///
-/// * `args` - The arguments for configuring the dialog provider. See [`DialogProviderArgs`].
-/// * `main_content` - A closure that renders the main content of the application,
-///   which is visible whether the dialog is open or closed.
-/// * `dialog_content` - A closure that renders the content of the dialog, which is
-///   only visible when `args.is_open` is `true`.
-///
-/// # Example
-///
-/// ```
-/// use std::sync::Arc;
-///
-/// use parking_lot::RwLock;
-/// use tessera_ui::Color;
-/// use tessera_ui_basic_components::{
-///     dialog::{DialogProviderArgsBuilder, DialogProviderState, dialog_provider, DialogStyle},
-///     button::{ButtonArgsBuilder, button},
-///     text::{TextArgsBuilder, text},
-///     ripple_state::RippleState,
-/// };
-///
-/// #[derive(Default)]
-/// struct State {
-///     show_dialog: bool,
-/// }
-///
-/// # let state = Arc::new(RwLock::new(State::default()));
-/// # let ripple_state = Arc::new(RippleState::default());
-/// # let dialog_state = Arc::new(RwLock::new(DialogProviderState::default()));
-/// // ...
-///
-/// dialog_provider(
-///     DialogProviderArgsBuilder::default()
-///         .on_close_request(Arc::new({
-///             let state = state.clone();
-///             move || state.write().show_dialog = false
-///         }))
-///         .style(DialogStyle::Glass) // Or DialogStyle::Material
-///         .build()
-///         .unwrap(),
-///     dialog_state.clone(),
-///     // Main content
-///     {
-///         let state = state.clone();
-///         let ripple = ripple_state.clone();
-///         let dialog_state = dialog_state.clone();
-///         move || {
-///             button(
-///                 ButtonArgsBuilder::default()
-///                     .on_click(Arc::new(move || {
-///                         state.write().show_dialog = true;
-///                         dialog_state.write().open();
-///                     }))
-///                     .build()
-///                     .unwrap(),
-///                 ripple, // ripple state
-///                 || {
-///                     text(
-///                         TextArgsBuilder::default()
-///                             .text("Show Dialog".to_string())
-///                             .build()
-///                             .unwrap(),
-///                     );
-///                 },
-///             );
-///         }
-///     },
-///     // Dialog content
-///     {
-///         let state = state.clone();
-///         let ripple = ripple_state.clone();
-///         let dialog_state = dialog_state.clone();
-///         move |content_alpha| {
-///             button(
-///                 ButtonArgsBuilder::default()
-///                     .color(Color::GREEN.with_alpha(content_alpha))
-///                     .on_click(Arc::new(move || {
-///                         state.write().show_dialog = false;
-///                         dialog_state.write().close();
-///                     }))
-///                     .build()
-///                     .unwrap(),
-///                 ripple,
-///                 || {
-///                     text(
-///                         TextArgsBuilder::default()
-///                             .color(Color::BLACK.with_alpha(content_alpha))
-///                             .text("Dialog Content".to_string())
-///                             .build()
-///                             .unwrap(),
-///                     );
-///                 },
-///             );
-///         }
-///     },
-/// );
-/// ```
 fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
     match args.style {
         DialogStyle::Glass => {
@@ -304,6 +276,22 @@ fn make_keyboard_state_handler(
     })
 }
 
+/// A provider component that manages the rendering and event flow for a modal dialog.
+///
+/// This component should be used as one of the outermost layers of the application.
+/// It renders the main content, and when `is_open` is true, it overlays a modal
+/// dialog, intercepting all input events to create a modal experience.
+///
+/// The dialog can be closed by calling the `on_close_request` callback, which can be
+/// triggered by clicking the background scrim or pressing the `ESC` key.
+///
+/// # Arguments
+///
+/// - `args` - The arguments for configuring the dialog provider. See [`DialogProviderArgs`].
+/// - `main_content` - A closure that renders the main content of the application,
+///   which is visible whether the dialog is open or closed.
+/// - `dialog_content` - A closure that renders the content of the dialog, which is
+///   only visible when `args.is_open` is `true`.
 #[tessera]
 pub fn dialog_provider(
     args: DialogProviderArgs,

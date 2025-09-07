@@ -1,3 +1,8 @@
+//! Defines the [`Shape`] enum and its variants, used for describing the geometric form of UI components.
+//!
+//! This module provides a flexible way to define very basic components' shape, including
+//! [`crate::surface::surface`], [`crate::fluid_glass::fluid_glass`].
+
 /// Shape definitions for UI components
 ///
 /// `Shape` is used by multiple components (`surface`, `fluid_glass`, sliders, progress, buttons)
@@ -62,6 +67,7 @@ impl Default for Shape {
     /// Returns the default shape, which is a rectangle with zero corner radius.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::shape_def::Shape;
     /// let default_shape = Shape::default();

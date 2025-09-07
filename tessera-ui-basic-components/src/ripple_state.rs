@@ -1,10 +1,16 @@
+//! This module defines the [`RippleState`] struct, which manages the state for ripple animations in interactive UI components.
+//!
+//! Currently, two foundational components use it to display ripple animations: [`crate::surface::surface`] and [`crate::fluid_glass::fluid_glass`].
+//!
+//! Other components composed from those, such as [`crate::button::button`], also leverage it to provide ripple effects.
+
 use std::sync::atomic;
 
-///
 /// `RippleState` manages the animation and hover state for ripple effects in interactive UI components.
 /// It is designed to be shared across components using `Arc<RippleState>`, enabling coordinated animation and hover feedback.
 ///
 /// # Example
+///
 /// ```
 /// use std::sync::Arc;
 /// use tessera_ui_basic_components::ripple_state::RippleState;
@@ -23,7 +29,6 @@ use std::sync::atomic;
 /// // Set hover state on pointer enter/leave
 /// ripple_state.set_hovered(true);
 /// ```
-///
 pub struct RippleState {
     /// Whether the ripple animation is currently active.
     pub is_animating: atomic::AtomicBool,

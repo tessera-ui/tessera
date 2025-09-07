@@ -1,3 +1,85 @@
+//! A bottom navigation bar for switching between primary application screens.
+//!
+//! This module provides the [`bottom_nav_bar`] component, which creates a persistent,
+//! horizontal bar at the bottom of the UI. It is designed to work with a router to
+//! control which main screen or "shard" is currently visible.
+//!
+//! # Key Components
+//!
+//! * **[`bottom_nav_bar`]**: The main function that renders the navigation bar.
+//! * **[`BottomNavBarState`]**: A state object that must be created to track the
+//!   currently selected navigation item.
+//! * **[`BottomNavBarScope`]**: A scope provided to the `bottom_nav_bar`'s closure
+//!   to add individual navigation items.
+//!
+//! # Usage
+//!
+//! The typical layout involves placing the `bottom_nav_bar` in a `column` below a
+//! `router_root` component. This ensures the navigation bar remains visible while the
+//! content above it changes.
+//!
+//! 1.  **Create State**: Create an `Arc<RwLock<BottomNavBarState>>` at a high level
+//!     in your application state.
+//! 2.  **Define Layout**: In your root component, create a `column`. Place a `router_root`
+//!     in the first (weighted) child slot and the `bottom_nav_bar` in the second.
+//! 3.  **Add Items**: Inside the `bottom_nav_bar` closure, use the provided scope's
+//!     [`child`](BottomNavBarScope::child) method to add each navigation destination.
+//!     - The first argument to `child` is a closure that renders the item's content (e.g., an icon or text).
+//!     - The second argument is an `on_click` closure where you perform the navigation,
+//!       typically by calling `tessera_ui::router::push` with the destination shard.
+//!
+//! # Example
+//!
+//! ```
+//! use std::sync::Arc;
+//! use parking_lot::RwLock;
+//! use tessera_ui::{tessera, router::{self, router_root}};
+//! use tessera_ui_basic_components::{
+//!     bottom_nav_bar::{bottom_nav_bar, BottomNavBarState},
+//!     column::{ColumnArgsBuilder, column},
+//!     text::{text, TextArgsBuilder},
+//! };
+//!
+//! // Assume HomeScreenDestination and ProfileScreenDestination are defined shards.
+//! # use tessera_ui::shard;
+//! # #[tessera] #[shard] fn home_screen() {}
+//! # #[tessera] #[shard] fn profile_screen() {}
+//!
+//! #[tessera]
+//! fn app_root() {
+//!     let nav_bar_state = Arc::new(RwLock::new(BottomNavBarState::new(0)));
+//!
+//!     column(ColumnArgsBuilder::default().build().unwrap(), move |scope| {
+//!         // The router viewport takes up the remaining space.
+//!         scope.child_weighted(|| {
+//!             router_root(HomeScreenDestination {});
+//!         }, 1.0);
+//!
+//!         // The navigation bar is always visible at the bottom.
+//!         scope.child(move || {
+//!             bottom_nav_bar(nav_bar_state.clone(), |nav_scope| {
+//!                 // Add the "Home" item.
+//!                 nav_scope.child(
+//!                     || text(TextArgsBuilder::default().text("Home".to_string()).build().unwrap()),
+//!                     move || {
+//!                         router::pop(); // Clear the backstack
+//!                         router::push(HomeScreenDestination {});
+//!                     },
+//!                 );
+//!
+//!                 // Add the "Profile" item.
+//!                 nav_scope.child(
+//!                     || text(TextArgsBuilder::default().text("Profile".to_string()).build().unwrap()),
+//!                     move || {
+//!                         router::pop();
+//!                         router::push(ProfileScreenDestination {});
+//!                     },
+//!                 );
+//!             });
+//!         });
+//!     });
+//! }
+//! ```
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -57,35 +139,6 @@ fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
 /// Internally the bar is:
 /// * A full‑width `surface` (non‑interactive container)
 /// * A `row` whose children are spaced using `MainAxisAlignment::SpaceAround`
-///
-/// # Example
-///
-/// ```
-/// use std::sync::Arc;
-/// use parking_lot::RwLock;
-/// use tessera_ui_basic_components::{
-///     bottom_nav_bar::{bottom_nav_bar, BottomNavBarState},
-///     text::text,
-/// };
-/// use tessera_ui::router;
-///
-/// let nav_state = Arc::new(RwLock::new(BottomNavBarState::new(0)));
-/// bottom_nav_bar(nav_state.clone(), |scope| {
-///     scope.child(
-///         || text("Home"),
-///         || {
-///             router::pop();
-///             // push new destination...
-///         },
-///     );
-///     scope.child(
-///         || text("Profile"),
-///         || {
-///             // navigate to profile...
-///         },
-///     );
-/// });
-/// ```
 ///
 /// # Notes
 ///
@@ -202,10 +255,13 @@ impl BottomNavBarState {
         }
     }
 
+    /// Returns the index of the currently selected navigation item.
     pub fn selected(&self) -> usize {
         self.selected
     }
 
+    /// Returns the index of the previously selected navigation item.
+    /// This is useful for animations when transitioning between selected items.
     pub fn previous_selected(&self) -> usize {
         self.previous_selected
     }

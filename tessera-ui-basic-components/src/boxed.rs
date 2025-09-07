@@ -2,7 +2,7 @@
 //!
 //! The `Boxed` module enables stacking and aligning several UI elements on top of each other,
 //! making it ideal for building layered interfaces, overlays, decorations, or custom backgrounds.
-//! Children are positioned according to the specified [`Alignment`](crate::alignment::Alignment),
+//! Children are positioned according to the specified [`Alignment`],
 //! and the container size adapts to the largest child or can be customized via [`DimensionValue`].
 //!
 //! Typical use cases include tooltips, badges, composite controls, or any scenario where

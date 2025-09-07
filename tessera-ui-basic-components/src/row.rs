@@ -5,12 +5,13 @@
 //! This module defines a flexible and composable row layout component, allowing child components to be arranged horizontally with customizable alignment, sizing, and weighted space distribution. It is a fundamental building block for constructing responsive UI layouts, such as toolbars, navigation bars, forms, and any scenario requiring horizontal stacking of elements.
 //!
 //! ## Features
+//!
 //! - Horizontal arrangement of child components
 //! - Support for main/cross axis alignment and flexible sizing
 //! - Weighted children for proportional space allocation
-//! - Declarative macro [`row_ui!`] for ergonomic usage
 //!
 //! ## Typical Usage
+//!
 //! Use the [`row`] component to build horizontal layouts, optionally combining with [`column`](crate::column) for complex grid or responsive designs.
 //!
 //! See the documentation and examples for details on arguments and usage patterns.

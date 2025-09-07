@@ -1,7 +1,7 @@
 //! This module provides the `image` component and related utilities for rendering images in Tessera UI.
 //!
 //! It supports loading image data from file paths or raw bytes, decoding them into a format suitable for GPU rendering,
-//! and displaying them as part of the UI component tree. The main entry point is the [`image`] component, which can be
+//! and displaying them as part of the UI component tree. The main entry point is the [`image()`] component, which can be
 //! sized explicitly or use the intrinsic dimensions of the image. Image data should be loaded and decoded outside the
 //! main UI loop for optimal performance, using [`load_image_from_source`].
 //!

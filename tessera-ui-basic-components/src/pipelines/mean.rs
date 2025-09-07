@@ -5,7 +5,7 @@
 //!
 //! ## Functionality
 //! - Calculates the average (mean) luminance of a given texture using a compute shader.
-//! - Exposes a [`MeanCommand`](MeanCommand) for issuing the operation and a [`MeanPipeline`](MeanPipeline) for dispatching the compute workload.
+//! - Exposes a [`MeanCommand`] for issuing the operation and a [`MeanPipeline`] for dispatching the compute workload.
 //!
 //! ## Typical Use Cases
 //! - Image processing and analysis

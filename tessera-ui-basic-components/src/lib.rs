@@ -7,13 +7,17 @@
 //!
 //! First, you need to register the pipelines provided by this crate.
 //!
-//! ```rust,ignore
-//! use tessera_ui::renderer::WgpuApp;
+//! ```no_run
+//! use tessera_ui::renderer::Renderer;
 //! use tessera_ui_basic_components::pipelines::register_pipelines;
 //!
-//! fn setup(app: &mut WgpuApp) {
-//!     register_pipelines(app);
-//! }
+//! Renderer::run(
+//!     // ...
+//!     # || {}, // Placeholder for root component
+//!     |app| {
+//!         tessera_ui_basic_components::pipelines::register_pipelines(app);
+//!     }
+//! );
 //! ```
 //!
 //! Then you can use the components in your UI.
@@ -49,6 +53,8 @@
 //! ```
 
 mod animation;
+mod padding_utils;
+mod selection_highlight_rect;
 
 pub mod alignment;
 pub mod bottom_sheet;
@@ -64,7 +70,6 @@ pub mod glass_progress;
 pub mod glass_slider;
 pub mod glass_switch;
 pub mod image;
-pub mod padding_utils;
 pub mod pipelines;
 pub mod pos_misc;
 pub mod progress;
@@ -73,7 +78,6 @@ pub use ripple_state::RippleState;
 pub mod bottom_nav_bar;
 pub mod row;
 pub mod scrollable;
-pub mod selection_highlight_rect;
 pub mod shape_def;
 pub mod side_bar;
 pub mod slider;
