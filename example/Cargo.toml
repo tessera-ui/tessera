@@ -13,6 +13,10 @@ path = "src/lib.rs"
 name = "example"
 path = "src/main.rs"
 
+[[bin]]
+name = "side_bar_showcase"
+path = "examples/side_bar_showcase.rs"
+
 [dependencies]
 tessera-ui = { path = "../tessera-ui" }
 tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
