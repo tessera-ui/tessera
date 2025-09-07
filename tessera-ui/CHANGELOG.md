@@ -1,3 +1,11 @@
+## [v1.12.1] - 2025-09-07 +08:00
+
+### Changes
+
+- docs(basic-components): refine rustdoc, unify intra-doc links, add module docs, tidy examples
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.12.0...tessera-ui-v1.12.1)
+
 ## [v1.12.0] - 2025-09-06 +08:00
 
 ### Changes
