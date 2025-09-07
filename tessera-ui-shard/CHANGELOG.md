@@ -1,3 +1,11 @@
+## [v0.3.1] - 2025-09-07 +08:00
+
+### Changes
+
+- style(bottom-nav-bar): format imports and docs(router) comment wrapping
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-shard-v0.3.0...tessera-ui-shard-v0.3.1)
+
 ## [v0.3.0] - 2025-09-06 +08:00
 
 ### Changes
