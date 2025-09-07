@@ -126,55 +126,55 @@ Tessera 和 `egui` 都是 Rust 生态中优秀的即时模式 UI 框架，但它
 下面是一个使用 `tessera_basic_components` 的简单计数器应用，展示了 `Tessera` 的基本用法。
 
 ```rust
-/// 主计数器应用组件
+/// 计数器应用主组件
 #[tessera]
-fn counter_app(app_state: Arc<AppState>) {
-    {
-        let button_state_clone = app_state.button_state.clone(); // 为清晰起见重命名
-        let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
-        let app_state_clone = app_state.clone(); // 为按钮的 on_click 克隆 app_state
+#[shard]
+fn counter_app(#[state] app_state: AppState) {
+    let button_state_clone = app_state.button_state.clone();
+    let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
+    let app_state_clone = app_state.clone();
 
-        surface(
-            SurfaceArgs {
-                color: [1.0, 1.0, 1.0, 1.0], // 白色背景
-                padding: Dp(25.0),
-                ..Default::default()
-            },
-            None,
-            move || {
-                row_ui![
-                    RowArgsBuilder::default()
-                        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .build()
-                        .unwrap(),
-                    move || {
+    surface(
+        SurfaceArgs {
+            color: Color::WHITE,
+            padding: Dp(25.0),
+            ..Default::default()
+        },
+        None,
+        move || {
+            row(
+                RowArgsBuilder::default()
+                    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .build()
+                    .unwrap(),
+                |scope| {
+                    scope.child(move || {
                         button(
                             ButtonArgsBuilder::default()
                                 .on_click(Arc::new(move || {
-                                    // 增加点击次数
-                                    app_state_clone // 使用克隆的 app_state
+                                    app_state_clone
                                         .click_count
                                         .fetch_add(1, atomic::Ordering::Relaxed);
                                 }))
                                 .build()
                                 .unwrap(),
-                            button_state_clone, // 使用克隆的 button_state
+                            button_state_clone,
                             move || text("click me!"),
                         )
-                    },
-                    move || {
+                    });
+                    scope.child(move || {
                         text(
                             TextArgsBuilder::default()
-                                .text(format!("Count: {}", click_count))
+                                .text(format!("Count: {click_count}"))
                                 .build()
                                 .unwrap(),
                         )
-                    }
-                ];
-            },
-        );
-    }
+                    });
+                },
+            );
+        },
+    );
 }
 ```
 

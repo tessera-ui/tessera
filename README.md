@@ -130,53 +130,53 @@ Here is a simple counter application using `tessera_basic_components` that demon
 ```rust
 /// Main counter application component
 #[tessera]
-fn counter_app(app_state: Arc<AppState>) {
-    {
-        let button_state_clone = app_state.button_state.clone(); // Renamed for clarity
-        let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
-        let app_state_clone = app_state.clone(); // Clone app_state for the button's on_click
+#[shard]
+fn counter_app(#[state] app_state: AppState) {
+    let button_state_clone = app_state.button_state.clone();
+    let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
+    let app_state_clone = app_state.clone();
 
-        surface(
-            SurfaceArgs {
-                color: [1.0, 1.0, 1.0, 1.0], // White background
-                padding: Dp(25.0),
-                ..Default::default()
-            },
-            None,
-            move || {
-                row_ui![
-                    RowArgsBuilder::default()
-                        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .build()
-                        .unwrap(),
-                    move || {
+    surface(
+        SurfaceArgs {
+            color: Color::WHITE,
+            padding: Dp(25.0),
+            ..Default::default()
+        },
+        None,
+        move || {
+            row(
+                RowArgsBuilder::default()
+                    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .build()
+                    .unwrap(),
+                |scope| {
+                    scope.child(move || {
                         button(
                             ButtonArgsBuilder::default()
                                 .on_click(Arc::new(move || {
-                                    // Increment the click count
-                                    app_state_clone // Use the cloned app_state
+                                    app_state_clone
                                         .click_count
                                         .fetch_add(1, atomic::Ordering::Relaxed);
                                 }))
                                 .build()
                                 .unwrap(),
-                            button_state_clone, // Use the cloned button_state
+                            button_state_clone,
                             move || text("click me!"),
                         )
-                    },
-                    move || {
+                    });
+                    scope.child(move || {
                         text(
                             TextArgsBuilder::default()
-                                .text(format!("Count: {}", click_count))
+                                .text(format!("Count: {click_count}"))
                                 .build()
                                 .unwrap(),
                         )
-                    }
-                ];
-            },
-        );
-    }
+                    });
+                },
+            );
+        },
+    );
 }
 ```
 
