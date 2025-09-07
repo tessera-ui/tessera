@@ -75,7 +75,7 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
   - ~~bottom sheet~~
   - ~~tab~~
   - ~~bottom nav bar~~
-  - side bar
+  - ~~side bar~~
 
 ## 与 `egui` 的对比
 
