@@ -1,3 +1,14 @@
+## [v1.12.0] - 2025-09-07 +08:00
+
+### Changes
+
+- docs(basic-components): refine rustdoc, unify intra-doc links, add module docs, tidy examples
+- feat(components): add SideBar component
+- fix(padding-utils): correct min constraint adjustment for wrap dimensions and relocate tessera attribute
+- style(bottom-nav-bar): format imports and docs(router) comment wrapping
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.11.0...tessera-ui-basic-components-v1.12.0)
+
 ## [v1.11.0] - 2025-09-06 +08:00
 
 ### Changes
