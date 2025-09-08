@@ -213,8 +213,10 @@ where
                                 .color(color)
                                 .shape(Shape::HorizontalCapsule)
                                 .on_click(Arc::new(move || {
-                                    state_clone.write().set_selected(index);
-                                    on_click();
+                                    if index != selected {
+                                        state_clone.write().set_selected(index);
+                                        on_click();
+                                    }
                                 }))
                                 .shadow(ShadowProps {
                                     color: shadow_color,
