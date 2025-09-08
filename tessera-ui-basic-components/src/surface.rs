@@ -371,8 +371,14 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         );
 
         let child_measurement = if !input.children_ids.is_empty() {
-            let child_measurement =
-                input.measure_child(input.children_ids[0], &child_constraint)?;
+            let child_measurements = input.measure_children(
+                input
+                    .children_ids
+                    .iter()
+                    .copied()
+                    .map(|node_id| (node_id, child_constraint))
+                    .collect(),
+            )?;
             input.place_child(
                 input.children_ids[0],
                 PxPosition {
@@ -380,7 +386,16 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                     y: args.padding.into(),
                 },
             );
-            child_measurement
+            let mut max_width = Px::ZERO;
+            let mut max_height = Px::ZERO;
+            for measurement in child_measurements.values() {
+                max_width = max_width.max(measurement.width);
+                max_height = max_height.max(measurement.height);
+            }
+            ComputedData {
+                width: max_width,
+                height: max_height,
+            }
         } else {
             ComputedData {
                 width: Px(0),

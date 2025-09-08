@@ -377,8 +377,12 @@ fn scrollable_with_alongside_scrollbar(
     measure(Box::new(move |input| {
         // Record the final size
         let mut final_size = ComputedData::ZERO;
-        // Get parent constraint as content constraint
-        let mut content_contraint = input.parent_constraint.to_owned();
+        // Merge arg constraints with parent constraints
+        let self_constraint = Constraint {
+            width: args.width,
+            height: args.height,
+        };
+        let mut content_contraint = self_constraint.merge(&input.parent_constraint);
         // measure the scrollbar
         if args.vertical {
             let scrollbar_node_id = input.children_ids[1];
