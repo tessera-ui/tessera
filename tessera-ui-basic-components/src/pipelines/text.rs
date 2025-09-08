@@ -11,7 +11,7 @@
 
 mod command;
 
-use std::sync::OnceLock;
+use std::{num::NonZero, sync::OnceLock};
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -22,6 +22,39 @@ pub use command::{TextCommand, TextConstraint};
 /// It costs a lot to create a glyphon font system, so we use a static one
 /// to share it every where and avoid creating it multiple times.
 static FONT_SYSTEM: OnceLock<RwLock<glyphon::FontSystem>> = OnceLock::new();
+
+/// Create TextData is a heavy operation, so we provide a lru cache to store recently used TextData.
+static TEXT_DATA_CACHE: OnceLock<RwLock<lru::LruCache<LruKey, TextData>>> = OnceLock::new();
+
+#[derive(PartialEq)]
+struct LruKey {
+    text: String,
+    color: Color,
+    size: f32,
+    line_height: f32,
+    constraint: TextConstraint,
+}
+
+impl Eq for LruKey {}
+
+impl std::hash::Hash for LruKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.text.hash(state);
+        self.color.r.to_bits().hash(state);
+        self.color.g.to_bits().hash(state);
+        self.color.b.to_bits().hash(state);
+        self.color.a.to_bits().hash(state);
+        self.size.to_bits().hash(state);
+        self.line_height.to_bits().hash(state);
+        self.constraint.hash(state);
+    }
+}
+
+fn write_lru_cache() -> RwLockWriteGuard<'static, lru::LruCache<LruKey, TextData>> {
+    TEXT_DATA_CACHE
+        .get_or_init(|| RwLock::new(lru::LruCache::new(NonZero::new(100).unwrap())))
+        .write()
+}
 
 #[cfg(target_os = "android")]
 fn init_font_system() -> RwLock<glyphon::FontSystem> {
@@ -171,22 +204,22 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
 /// Text data for rendering, including buffer and size.
 ///
 /// # Fields
+///
 /// - `text_buffer`: The glyphon text buffer.
 /// - `size`: The size of the text area [width, height].
 ///
 /// # Example
 ///
-/**
-```rust
-use tessera_ui_basic_components::pipelines::text::TextData;
-use tessera_ui::Color;
-use tessera_ui_basic_components::pipelines::text::TextConstraint;
-
-let color = Color::from_rgb(1.0, 1.0, 1.0);
-let constraint = TextConstraint { max_width: Some(200.0), max_height: Some(50.0) };
-let data = TextData::new("Hello".to_string(), color, 16.0, 1.2, constraint);
-```
-*/
+///
+/// ```rust
+/// use tessera_ui_basic_components::pipelines::text::TextData;
+/// use tessera_ui::Color;
+/// use tessera_ui_basic_components::pipelines::text::TextConstraint;
+///
+/// let color = Color::from_rgb(1.0, 1.0, 1.0);
+/// let constraint = TextConstraint { max_width: Some(200.0), max_height: Some(50.0) };
+/// let data = TextData::new("Hello".to_string(), color, 16.0, 1.2, constraint);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextData {
     /// glyphon text buffer
@@ -210,7 +243,19 @@ impl TextData {
         size: f32,
         line_height: f32,
         constraint: TextConstraint,
-    ) -> TextData {
+    ) -> Self {
+        // Check cache first
+        let key = LruKey {
+            text: text.clone(),
+            color,
+            size,
+            line_height,
+            constraint: constraint.clone(),
+        };
+        if let Some(cache) = write_lru_cache().get(&key) {
+            return cache.clone();
+        }
+
         // Create text buffer
         let mut text_buffer = glyphon::Buffer::new(
             &mut write_font_system(),
@@ -251,10 +296,14 @@ impl TextData {
             run_width = run_width.max(run.line_w);
         }
         // build text data
-        Self {
+        let result = Self {
             text_buffer,
             size: [run_width as u32, total_height.ceil() as u32],
-        }
+        };
+        // Insert into cache
+        write_lru_cache().put(key, result.clone());
+        // Return result
+        result
     }
 
     pub fn from_buffer(text_buffer: glyphon::Buffer) -> Self {
