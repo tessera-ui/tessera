@@ -7,7 +7,7 @@
 //! ## Usage
 //!
 //! ```rust,ignore
-//! use tessera_ui_macros::tessera;
+//! use tessera_ui::tessera;
 //!
 //! #[tessera]
 //! fn my_component() {
@@ -17,6 +17,7 @@
 //! ```
 //!
 //! The `#[tessera]` macro automatically:
+//!
 //! - Registers the function as a component in the Tessera component tree
 //! - Injects `measure`, `state_handler` and `on_minimize` functions into the component scope
 //! - Handles component tree management (adding/removing nodes)
