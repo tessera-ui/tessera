@@ -235,6 +235,7 @@ impl TextData {
                 .family(fontdb::Family::SansSerif)
                 .color(color),
             glyphon::Shaping::Advanced,
+            None,
         );
         text_buffer.shape_until_scroll(&mut write_font_system(), false);
         // Calculate text bounds
