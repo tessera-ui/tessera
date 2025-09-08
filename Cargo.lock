@@ -628,9 +628,9 @@ dependencies = [
 
 [[package]]
 name = "cosmic-text-tessera-fork"
-version = "0.15.3"
+version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f000b5f619fea2d78a33a85da3df93ad315d2a91a345e691b40f61d2523f428"
+checksum = "41641b8336b6d66c74789e67cdef80b3ac4523d1b56582f9094b697c7f3a1fb5"
 dependencies = [
  "bitflags 2.9.1",
  "fontdb",
@@ -1183,9 +1183,9 @@ dependencies = [
 
 [[package]]
 name = "glyphon-tessera-fork"
-version = "0.9.3"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a01e4640101d7df4124ca4d2149bf8f3e8567fdc1397edaafeb2f797fe1efaac"
+checksum = "1b2b283265e9233b5b0a7a362d70e85775ddfd092c527aacaf582a64a1a26ae6"
 dependencies = [
  "cosmic-text-tessera-fork",
  "etagere",
