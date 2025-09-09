@@ -88,7 +88,7 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Px, PxPosition, tessera, winit};
+use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, tessera, winit};
 
 use crate::{
     animation,
@@ -247,7 +247,7 @@ fn compute_bottom_sheet_y(
 
 fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
     // Glass scrim: compute blur radius and render using fluid_glass.
-    let max_blur_radius = 50.0;
+    let max_blur_radius = 5.0;
     let blur_radius = blur_radius_for(progress, is_open, max_blur_radius);
     fluid_glass(
         FluidGlassArgsBuilder::default()
@@ -286,8 +286,8 @@ fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open:
     let scrim_alpha = scrim_alpha_for(progress, is_open);
     surface(
         SurfaceArgsBuilder::default()
-            .color(Color::BLACK.with_alpha(scrim_alpha))
-            .on_click(Some(args.on_close_request.clone()))
+            .style(Color::BLACK.with_alpha(scrim_alpha).into())
+            .on_click(args.on_close_request.clone())
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -359,6 +359,62 @@ fn place_bottom_sheet_if_present(
     input.place_child(bottom_sheet_id, PxPosition::new(Px(0), Px(y)));
 }
 
+fn render_content(
+    style: BottomSheetStyle,
+    bottom_sheet_content: impl FnOnce() + Send + Sync + 'static,
+) {
+    match style {
+        BottomSheetStyle::Glass => {
+            fluid_glass(
+                FluidGlassArgsBuilder::default()
+                    .shape(Shape::RoundedRectangle {
+                        top_left: 50.0,
+                        top_right: 50.0,
+                        bottom_right: 0.0,
+                        bottom_left: 0.0,
+                        g2_k_value: 3.0,
+                    })
+                    .tint_color(Color::new(0.6, 0.8, 1.0, 0.3)) // Give it a slight blue tint
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .refraction_amount(25.0)
+                    .padding(Dp(20.0))
+                    .blur_radius(10.0)
+                    .block_input(true)
+                    .build()
+                    .unwrap(),
+                None,
+                bottom_sheet_content,
+            );
+        }
+        BottomSheetStyle::Material => {
+            surface(
+                SurfaceArgsBuilder::default()
+                    .style(Color::new(0.2, 0.2, 0.2, 1.0).into())
+                    .shape(Shape::RoundedRectangle {
+                        top_left: 25.0,
+                        top_right: 25.0,
+                        bottom_right: 0.0,
+                        bottom_left: 0.0,
+                        g2_k_value: 3.0,
+                    })
+                    .width(DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .padding(Dp(20.0))
+                    .block_input(true)
+                    .build()
+                    .unwrap(),
+                None,
+                bottom_sheet_content,
+            );
+        }
+    }
+}
+
 /// Renders a bottom sheet UI group, managing its animation, scrim, and content.
 ///
 /// This is the main function for creating a bottom sheet. It should be called within a
@@ -380,7 +436,7 @@ pub fn bottom_sheet_provider(
     args: BottomSheetProviderArgs,
     state: Arc<RwLock<BottomSheetProviderState>>,
     main_content: impl FnOnce() + Send + Sync + 'static,
-    bottom_sheet_content: impl FnOnce(f32) + Send + Sync + 'static,
+    bottom_sheet_content: impl FnOnce() + Send + Sync + 'static,
 ) {
     // Render main content first.
     main_content();
@@ -404,9 +460,8 @@ pub fn bottom_sheet_provider(
     let keyboard_closure = make_keyboard_closure(on_close_for_keyboard);
     state_handler(keyboard_closure);
 
-    // Render bottom sheet content with computed alpha.
-    let content_alpha = if is_open { progress } else { 1.0 - progress };
-    bottom_sheet_content(content_alpha);
+    // Render bottom sheet content.
+    render_content(args.style, bottom_sheet_content);
 
     // Measurement: place main content, scrim and bottom sheet.
     let state_for_measure = state.clone();

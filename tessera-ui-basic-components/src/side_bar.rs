@@ -5,7 +5,7 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Px, PxPosition, tessera, winit};
+use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, tessera, winit};
 
 use crate::{
     animation,
@@ -116,7 +116,7 @@ fn compute_side_bar_x(child_width: Px, progress: f32, is_open: bool) -> i32 {
 
 fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) {
     // Glass scrim: compute blur radius and render using fluid_glass.
-    let max_blur_radius = 50.0;
+    let max_blur_radius = 5.0;
     let blur_radius = blur_radius_for(progress, is_open, max_blur_radius);
     fluid_glass(
         FluidGlassArgsBuilder::default()
@@ -155,8 +155,8 @@ fn render_material_scrim(args: &SideBarProviderArgs, progress: f32, is_open: boo
     let scrim_alpha = scrim_alpha_for(progress, is_open);
     surface(
         SurfaceArgsBuilder::default()
-            .color(Color::BLACK.with_alpha(scrim_alpha))
-            .on_click(Some(args.on_close_request.clone()))
+            .style(Color::BLACK.with_alpha(scrim_alpha).into())
+            .on_click(args.on_close_request.clone())
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -232,7 +232,7 @@ pub fn side_bar_provider(
     args: SideBarProviderArgs,
     state: Arc<RwLock<SideBarProviderState>>,
     main_content: impl FnOnce() + Send + Sync + 'static,
-    side_bar_content: impl FnOnce(f32) + Send + Sync + 'static,
+    side_bar_content: impl FnOnce() + Send + Sync + 'static,
 ) {
     // Render main content first.
     main_content();
@@ -257,8 +257,7 @@ pub fn side_bar_provider(
     state_handler(keyboard_closure);
 
     // Render side bar content with computed alpha.
-    let content_alpha = if is_open { progress } else { 1.0 - progress };
-    side_bar_content(content_alpha);
+    side_bar_content_wrapper(args.style, side_bar_content);
 
     // Measurement: place main content, scrim and side bar.
     let state_for_measure = state.clone();
@@ -282,4 +281,58 @@ pub fn side_bar_provider(
         Ok(main_content_size)
     });
     measure(measure_closure);
+}
+
+#[tessera]
+fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send + Sync + 'static) {
+    match style {
+        SideBarStyle::Glass => {
+            fluid_glass(
+                FluidGlassArgsBuilder::default()
+                    .shape(Shape::RoundedRectangle {
+                        top_left: 0.0,
+                        top_right: 25.0,
+                        bottom_right: 25.0,
+                        bottom_left: 0.0,
+                        g2_k_value: 3.0,
+                    })
+                    .tint_color(Color::new(0.6, 0.8, 1.0, 0.3))
+                    .width(DimensionValue::from(Dp(250.0)))
+                    .height(tessera_ui::DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .padding(Dp(16.0))
+                    .block_input(true)
+                    .build()
+                    .unwrap(),
+                None,
+                content,
+            );
+        }
+        SideBarStyle::Material => {
+            surface(
+                SurfaceArgsBuilder::default()
+                    .style(Color::new(0.9, 0.9, 0.9, 1.0).into())
+                    .width(DimensionValue::from(Dp(250.0)))
+                    .height(tessera_ui::DimensionValue::Fill {
+                        min: None,
+                        max: None,
+                    })
+                    .padding(Dp(16.0))
+                    .shape(Shape::RoundedRectangle {
+                        top_left: 0.0,
+                        top_right: 25.0,
+                        bottom_right: 25.0,
+                        bottom_left: 0.0,
+                        g2_k_value: 3.0,
+                    })
+                    .block_input(true)
+                    .build()
+                    .unwrap(),
+                None,
+                content,
+            );
+        }
+    }
 }

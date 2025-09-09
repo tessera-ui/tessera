@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     scope.child(|| {
                         surface(
                             SurfaceArgs {
-                                color: Color::new(1.0, 0.2, 0.2, 1.0),
+                                style: Color::new(1.0, 0.2, 0.2, 1.0).into(),
                                 width: Some(DimensionValue::Fixed(Dp(1000.0).into())),
                                 height: Some(DimensionValue::Fixed(Dp(600.0).into())),
                                 ..Default::default()
@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     scope.child(|| {
                         surface(
                             SurfaceArgs {
-                                color: Color::new(0.2, 1.0, 0.2, 0.8),
+                                style: Color::new(0.2, 1.0, 0.2, 0.8).into(),
                                 width: Some(DimensionValue::Fixed(Dp(600.0).into())),
                                 height: Some(DimensionValue::Fixed(Dp(400.0).into())),
                                 ..Default::default()
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     scope.child(|| {
                         surface(
                             SurfaceArgs {
-                                color: Color::new(0.2, 0.4, 1.0, 0.7),
+                                style: Color::new(0.2, 0.4, 1.0, 0.7).into(),
                                 width: Some(DimensionValue::Fixed(Dp(300.0).into())),
                                 height: Some(DimensionValue::Fixed(Dp(200.0).into())),
                                 ..Default::default()

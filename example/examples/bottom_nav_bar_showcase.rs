@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 use tessera_ui::{
     Color, DimensionValue, Renderer,
     renderer::TesseraConfig,
-    router::{self, router_root},
+    router::{Router, router_root},
     shard, tessera,
 };
 use tessera_ui_basic_components::{
@@ -25,7 +25,7 @@ where
 {
     surface(
         SurfaceArgs {
-            color: Color::WHITE,
+            style: Color::WHITE.into(),
             width: Some(DimensionValue::FILLED),
             height: Some(DimensionValue::FILLED),
             ..Default::default()
@@ -117,22 +117,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 nav_scope.child(
                                     || text("Home"),
                                     move || {
-                                        router::pop();
-                                        router::push(HomeScreenDestination {});
+                                        Router::with_mut(|router| {
+                                            router.reset_with(HomeScreenDestination {});
+                                        });
                                     },
                                 );
                                 nav_scope.child(
                                     || text("Favorites"),
                                     move || {
-                                        router::pop();
-                                        router::push(FavoritesScreenDestination {});
+                                        Router::with_mut(|router| {
+                                            router.reset_with(FavoritesScreenDestination {});
+                                        });
                                     },
                                 );
                                 nav_scope.child(
                                     || text("Profile"),
                                     move || {
-                                        router::pop();
-                                        router::push(ProfileScreenDestination {});
+                                        Router::with_mut(|router| {
+                                            router.reset_with(ProfileScreenDestination {});
+                                        });
                                     },
                                 );
                             });

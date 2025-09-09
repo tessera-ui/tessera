@@ -62,6 +62,7 @@ pub use command::{RippleProps, ShadowProps, ShapeCommand};
 pub struct ShapeUniforms {
     pub corner_radii: Vec4, // x:tl, y:tr, z:br, w:bl
     pub primary_color: Vec4,
+    pub border_color: Vec4,
     pub shadow_color: Vec4,
     pub render_params: Vec4,
     pub ripple_params: Vec4,

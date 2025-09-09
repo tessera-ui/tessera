@@ -17,7 +17,7 @@ pub fn display_screen(app_state: Arc<AppState>, style: CalStyle) {
     // Outer transparent container with padding; delegate inner rendering to small helpers
     surface(
         SurfaceArgsBuilder::default()
-            .color(Color::TRANSPARENT)
+            .style(Color::TRANSPARENT.into())
             .padding(Dp(5.0))
             .build()
             .unwrap(),
@@ -57,7 +57,7 @@ fn render_material_display(app_state: Arc<AppState>) {
                 bottom_left: 25.0,
                 g2_k_value: 3.0,
             })
-            .color(Color::GREY)
+            .style(Color::GREY.into())
             .build()
             .unwrap(),
         None,

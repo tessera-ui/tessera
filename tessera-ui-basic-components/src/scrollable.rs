@@ -382,7 +382,7 @@ fn scrollable_with_alongside_scrollbar(
             width: args.width,
             height: args.height,
         };
-        let mut content_contraint = self_constraint.merge(&input.parent_constraint);
+        let mut content_contraint = self_constraint.merge(input.parent_constraint);
         // measure the scrollbar
         if args.vertical {
             let scrollbar_node_id = input.children_ids[1];

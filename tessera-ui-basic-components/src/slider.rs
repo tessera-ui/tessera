@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasureInput,
     MeasurementError, Px, PxPosition, StateHandlerInput, focus_state::Focus, tessera,
@@ -108,29 +108,28 @@ fn cursor_progress(cursor_pos: Option<PxPosition>, width_f: f32) -> Option<f32> 
 
 fn handle_slider_state(
     input: &mut StateHandlerInput,
-    state: &Arc<Mutex<SliderState>>,
+    state: &Arc<RwLock<SliderState>>,
     args: &SliderArgs,
 ) {
     if args.disabled {
         return;
     }
 
-    let mut state = state.lock();
     let is_in_component = cursor_within_component(input.cursor_position_rel, &input.computed_data);
 
     if is_in_component {
         input.requests.cursor_icon = CursorIcon::Pointer;
     }
 
-    if !is_in_component && !state.is_dragging {
+    if !is_in_component && !state.read().is_dragging {
         return;
     }
 
     let width_f = input.computed_data.width.0 as f32;
     let mut new_value: Option<f32> = None;
 
-    handle_cursor_events(input, &mut state, &mut new_value, width_f);
-    update_value_on_drag(input, &state, &mut new_value, width_f);
+    handle_cursor_events(input, &mut state.write(), &mut new_value, width_f);
+    update_value_on_drag(input, &state.read(), &mut new_value, width_f);
     notify_on_change(new_value, args);
 }
 
@@ -183,7 +182,7 @@ fn render_track(args: &SliderArgs) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(args.width.to_px()))
             .height(DimensionValue::Fixed(args.track_height.to_px()))
-            .color(args.inactive_track_color)
+            .style(args.inactive_track_color.into())
             .shape({
                 let radius = args.track_height.to_px().to_f32() / 2.0;
                 Shape::RoundedRectangle {
@@ -212,7 +211,7 @@ fn render_progress_fill(args: &SliderArgs) {
                 min: None,
                 max: None,
             })
-            .color(args.active_track_color)
+            .style(args.active_track_color.into())
             .shape({
                 let radius = args.track_height.to_px().to_f32() / 2.0;
                 Shape::RoundedRectangle {
@@ -302,7 +301,7 @@ fn measure_slider(
 /// - [`SliderState`]
 /// Helper: check if a cursor position is inside a measured component area.
 #[tessera]
-pub fn slider(args: impl Into<SliderArgs>, state: Arc<Mutex<SliderState>>) {
+pub fn slider(args: impl Into<SliderArgs>, state: Arc<RwLock<SliderState>>) {
     let args: SliderArgs = args.into();
 
     render_track(&args);

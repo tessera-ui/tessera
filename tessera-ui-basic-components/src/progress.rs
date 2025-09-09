@@ -71,7 +71,7 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     // Child 1: The background track. It's drawn first.
     surface(
         SurfaceArgsBuilder::default()
-            .color(args.track_color)
+            .style(args.track_color.into())
             .shape({
                 Shape::RoundedRectangle {
                     top_left: radius,
@@ -98,7 +98,7 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     // Child 2: The progress fill. It's drawn on top of the track.
     surface(
         SurfaceArgsBuilder::default()
-            .color(args.progress_color)
+            .style(args.progress_color.into())
             .shape({
                 Shape::RoundedRectangle {
                     top_left: radius,

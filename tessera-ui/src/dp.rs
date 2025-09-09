@@ -37,7 +37,7 @@
 //! convert between them using the provided methods, with the conversion automatically
 //! applying the current scale factor.
 
-use std::sync::OnceLock;
+use std::{fmt::Display, sync::OnceLock};
 
 use parking_lot::RwLock;
 
@@ -110,6 +110,12 @@ pub static SCALE_FACTOR: OnceLock<RwLock<f64>> = OnceLock::new();
 /// ```
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Dp(pub f64);
+
+impl Display for Dp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:.2}dp", self.0)
+    }
+}
 
 impl Dp {
     /// A constant representing zero density-independent pixels.

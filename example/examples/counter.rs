@@ -13,7 +13,7 @@ use std::sync::{
 use tessera_ui::{
     Color, Dp, Renderer,
     renderer::TesseraConfig,
-    router::{self, router_root},
+    router::{Router, router_root},
     shard, tessera,
 };
 use tessera_ui_basic_components::{
@@ -52,7 +52,7 @@ fn counter_app(#[state] app_state: AppState) {
 
     surface(
         SurfaceArgs {
-            color: Color::WHITE, // White background
+            style: Color::WHITE.into(), // White background
             padding: Dp(25.0),
             ..Default::default()
         },
@@ -80,7 +80,9 @@ fn counter_app(#[state] app_state: AppState) {
                                         app_state_clone
                                             .click_count
                                             .store(0, atomic::Ordering::Relaxed); // Reset count
-                                        router::push(CounterApp2Destination {});
+                                        Router::with_mut(|router| {
+                                            router.push(CounterApp2Destination {});
+                                        });
                                     }
                                 }))
                                 .build()
@@ -113,7 +115,7 @@ fn counter_app2(#[state] app_state: AppState) {
 
     surface(
         SurfaceArgs {
-            color: Color::WHITE, // White background
+            style: Color::WHITE.into(), // White background
             padding: Dp(25.0),
             ..Default::default()
         },
@@ -142,7 +144,9 @@ fn counter_app2(#[state] app_state: AppState) {
                                         app_state_clone
                                             .click_count
                                             .store(0, atomic::Ordering::Relaxed); // Reset count
-                                        router::pop();
+                                        Router::with_mut(|router| {
+                                            router.pop();
+                                        });
                                     }
                                 }))
                                 .build()

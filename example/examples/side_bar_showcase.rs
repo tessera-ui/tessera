@@ -1,14 +1,12 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, Px, Renderer, tessera};
+use tessera_ui::{Color, DimensionValue, Px, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgsBuilder, column},
-    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     ripple_state::RippleState,
-    shape_def::Shape,
     side_bar::{SideBarProviderArgsBuilder, SideBarProviderState, SideBarStyle, side_bar_provider},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
@@ -42,7 +40,7 @@ fn app(state: Arc<RwLock<AppState>>) {
 
     surface(
         SurfaceArgsBuilder::default()
-            .color(Color::WHITE)
+            .style(Color::WHITE.into())
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -176,67 +174,8 @@ fn app(state: Arc<RwLock<AppState>>) {
                             )
                         }
                     },
-                    move |content_alpha| {
-                        let style = state.read().style;
-                        match style {
-                            ShowcaseStyle::Material => surface(
-                                SurfaceArgsBuilder::default()
-                                    .color(Color::new(0.9, 0.9, 0.9, content_alpha))
-                                    .width(DimensionValue::from(Dp(250.0)))
-                                    .height(tessera_ui::DimensionValue::Fill {
-                                        min: None,
-                                        max: None,
-                                    })
-                                    .shape(Shape::RoundedRectangle {
-                                        top_left: 0.0,
-                                        top_right: 25.0,
-                                        bottom_right: 25.0,
-                                        bottom_left: 0.0,
-                                        g2_k_value: 3.0,
-                                    })
-                                    .build()
-                                    .unwrap(),
-                                None,
-                                || {
-                                    text(
-                                        TextArgsBuilder::default()
-                                            .text("Side Bar Content".to_string())
-                                            .color(Color::BLACK.with_alpha(content_alpha))
-                                            .build()
-                                            .unwrap(),
-                                    )
-                                },
-                            ),
-                            ShowcaseStyle::Glass => fluid_glass(
-                                FluidGlassArgsBuilder::default()
-                                    .shape(Shape::RoundedRectangle {
-                                        top_left: 0.0,
-                                        top_right: 25.0,
-                                        bottom_right: 25.0,
-                                        bottom_left: 0.0,
-                                        g2_k_value: 3.0,
-                                    })
-                                    .tint_color(Color::new(0.6, 0.8, 1.0, content_alpha / 3.0))
-                                    .width(DimensionValue::from(Dp(250.0)))
-                                    .height(tessera_ui::DimensionValue::Fill {
-                                        min: None,
-                                        max: None,
-                                    })
-                                    .block_input(true)
-                                    .build()
-                                    .unwrap(),
-                                None,
-                                || {
-                                    text(
-                                        TextArgsBuilder::default()
-                                            .text("Side Bar Content".to_string())
-                                            .color(Color::BLACK.with_alpha(content_alpha))
-                                            .build()
-                                            .unwrap(),
-                                    )
-                                },
-                            ),
-                        }
+                    move || {
+                        text("Side Bar Content");
                     },
                 )
             }

@@ -243,7 +243,7 @@ pub fn switch(args: impl Into<SwitchArgs>) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(thumb_size.to_px()))
             .height(DimensionValue::Fixed(thumb_size.to_px()))
-            .color(args.thumb_color)
+            .style(args.thumb_color.into())
             .shape(Shape::Ellipse)
             .build()
             .unwrap(),

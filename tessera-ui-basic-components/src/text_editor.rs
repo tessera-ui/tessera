@@ -122,9 +122,9 @@ pub struct TextEditorArgs {
     /// Background color of the text editor (RGBA). Defaults to light gray.
     #[builder(default = "None")]
     pub background_color: Option<Color>,
-    /// Border width in pixels. Defaults to 1.0.
-    #[builder(default = "1.0")]
-    pub border_width: f32,
+    /// Border width in Dp. Defaults to 1.0 Dp.
+    #[builder(default = "Dp(1.0)")]
+    pub border_width: Dp,
     /// Border color (RGBA). Defaults to gray.
     #[builder(default = "None")]
     pub border_color: Option<Color>,
@@ -275,7 +275,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                 if let Some(cursor_pos) = cursor_pos_option {
                     // Calculate the relative position within the text area
                     let padding_px: Px = editor_args.padding.into();
-                    let border_width_px = Px(editor_args.border_width as i32); // Assuming border_width is integer pixels
+                    let border_width_px = Px(editor_args.border_width.to_pixels_u32() as i32); // Assuming border_width is integer pixels
 
                     let text_relative_x_px = cursor_pos.x - padding_px - border_width_px;
                     let text_relative_y_px = cursor_pos.y - padding_px - border_width_px;
@@ -334,7 +334,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                 && let Some(cursor_pos) = cursor_pos_option
             {
                 let padding_px: Px = editor_args.padding.into();
-                let border_width_px = Px(editor_args.border_width as i32);
+                let border_width_px = Px(editor_args.border_width.to_pixels_u32() as i32);
 
                 let text_relative_x_px = cursor_pos.x - padding_px - border_width_px;
                 let text_relative_y_px = cursor_pos.y - padding_px - border_width_px;
@@ -535,10 +535,20 @@ fn create_surface_args(
         });
     }
 
+    let style = if args.border_width.to_pixels_f32() > 0.0 {
+        crate::surface::SurfaceStyle::FilledOutlined {
+            fill_color: determine_background_color(args, state),
+            border_color: determine_border_color(args, state).unwrap(),
+            border_width: args.border_width,
+        }
+    } else {
+        crate::surface::SurfaceStyle::Filled {
+            color: determine_background_color(args, state),
+        }
+    };
+
     builder
-        .color(determine_background_color(args, state))
-        .border_width(determine_border_width(args, state))
-        .border_color(determine_border_color(args, state))
+        .style(style)
         .shape(args.shape)
         .padding(args.padding)
         .build()
@@ -558,11 +568,6 @@ fn determine_background_color(
         args.background_color
             .unwrap_or(Color::new(0.95, 0.95, 0.95, 1.0)) // Default light gray when not focused
     }
-}
-
-/// Determine border width
-fn determine_border_width(args: &TextEditorArgs, _state: &Arc<RwLock<TextEditorState>>) -> f32 {
-    args.border_width
 }
 
 /// Determine border color based on focus state
@@ -596,7 +601,7 @@ impl TextEditorArgs {
         TextEditorArgsBuilder::default()
             .min_width(Some(Dp(120.0)))
             .background_color(Some(Color::WHITE))
-            .border_width(1.0)
+            .border_width(Dp(1.0))
             .border_color(Some(Color::new(0.7, 0.7, 0.7, 1.0)))
             .shape(Shape::RoundedRectangle {
                 top_left: 4.0,
@@ -620,7 +625,7 @@ impl TextEditorArgs {
     /// ```
     pub fn outlined() -> Self {
         Self::simple()
-            .with_border_width(2.0)
+            .with_border_width(Dp(1.0))
             .with_focus_border_color(Color::new(0.0, 0.5, 1.0, 1.0))
     }
 
@@ -637,7 +642,6 @@ impl TextEditorArgs {
         TextEditorArgsBuilder::default()
             .min_width(Some(Dp(120.0)))
             .background_color(Some(Color::WHITE))
-            .border_width(0.0)
             .shape(Shape::RoundedRectangle {
                 top_left: 0.0,
                 top_right: 0.0,
@@ -720,11 +724,12 @@ impl TextEditorArgs {
     /// Sets the border width in pixels.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
-    /// let args = TextEditorArgs::simple().with_border_width(2.0);
+    /// let args = TextEditorArgs::simple().with_border_width(Dp(1.0));
     /// ```
-    pub fn with_border_width(mut self, width: f32) -> Self {
+    pub fn with_border_width(mut self, width: Dp) -> Self {
         self.border_width = width;
         self
     }

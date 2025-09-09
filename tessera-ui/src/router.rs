@@ -50,9 +50,8 @@
 //! * [`tessera_ui_shard::router::RouterDestination`]
 //! * `#[shard]` macro which generates `*Destination` structs.
 use tessera_ui_macros::tessera;
-use tessera_ui_shard::router::{Router, RouterDestination};
 
-pub use tessera_ui_shard::router::{pop, push};
+pub use tessera_ui_shard::router::{Router, RouterDestination};
 
 /// Root component that drives the shard router stack each frame.
 ///
@@ -62,15 +61,14 @@ pub use tessera_ui_shard::router::{pop, push};
 /// * `root_dest` - The destination pushed only once when the stack is empty.
 ///
 /// # Notes
+///
 /// Keep `router_root` exactly once at the point in your tree that should display
 /// the active routed component. Wrapping it multiple times would still execute
 /// only one top destination but wastes layout work.
 #[tessera(crate)]
 pub fn router_root(root_dest: impl RouterDestination + 'static) {
+    Router::try_init(root_dest);
     Router::with_mut(|router| {
-        if router.is_empty() {
-            router.push(root_dest);
-        }
         router
             .last()
             .expect("Router stack should not be empty")

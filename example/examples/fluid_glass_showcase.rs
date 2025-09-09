@@ -16,7 +16,7 @@ use tessera_ui_basic_components::{
 fn small_box(color: Color) {
     surface(
         SurfaceArgsBuilder::default()
-            .color(color)
+            .style(color.into())
             .shape(Shape::RoundedRectangle {
                 top_left: 25.0,
                 top_right: 25.0,

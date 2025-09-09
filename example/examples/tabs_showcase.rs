@@ -45,7 +45,7 @@ fn tabs_showcase_app(#[state] app_state: AppState) {
 
     surface(
         SurfaceArgs {
-            color: Color::WHITE,
+            style: Color::WHITE.into(),
             padding: Dp(25.0),
             width: Some(DimensionValue::FILLED),
             height: Some(DimensionValue::FILLED),
@@ -74,7 +74,7 @@ fn tabs_showcase_app(#[state] app_state: AppState) {
                             move || {
                                 surface(
                                     SurfaceArgs {
-                                        color,
+                                        style: color.into(),
                                         ..Default::default()
                                     },
                                     None,

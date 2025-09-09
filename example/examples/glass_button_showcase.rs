@@ -25,7 +25,7 @@ fn app(ripple_state: Arc<RippleState>, image_resource: &ImageData) {
                 min: None,
                 max: None,
             })
-            .color(Color::WHITE)
+            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,

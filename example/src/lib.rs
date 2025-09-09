@@ -1,21 +1,11 @@
 mod app;
-mod app_state;
-mod component_showcase;
-mod content_section;
-mod interactive_demo;
+mod example_components;
 mod material_colors;
-mod misc;
-mod performance_display;
-mod switch_showcase;
-mod text_editors;
-
-use std::sync::Arc;
 
 use tessera_ui::Renderer;
 use tracing::error;
 
 use app::app;
-use app_state::AppState;
 
 #[cfg(target_os = "android")]
 use tessera_ui::winit::platform::android::activity::AndroidApp;
@@ -55,14 +45,9 @@ pub fn desktop_main() -> Result<(), Box<dyn std::error::Error>> {
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .init();
 
-    let app_state = Arc::new(AppState::new());
-
-    Renderer::run(
-        || app(app_state.clone()),
-        |app| {
-            tessera_ui_basic_components::pipelines::register_pipelines(app);
-        },
-    )
+    Renderer::run(app, |app| {
+        tessera_ui_basic_components::pipelines::register_pipelines(app);
+    })
     .unwrap_or_else(|e| error!("App failed to run: {e}"));
     Ok(())
 }

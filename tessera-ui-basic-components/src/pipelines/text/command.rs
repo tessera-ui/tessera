@@ -15,7 +15,7 @@ impl DrawCommand for TextCommand {
 }
 
 /// Describes size constraints for a text draw
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TextConstraint {
     /// Maximum width of the text
     /// If None, it will be calculated by the text renderer
@@ -23,6 +23,21 @@ pub struct TextConstraint {
     /// Maximum height of the text
     /// If None, it will be calculated by the text renderer
     pub max_height: Option<f32>,
+}
+
+impl std::hash::Hash for TextConstraint {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        if let Some(w) = self.max_width {
+            w.to_bits().hash(state);
+        } else {
+            0u32.hash(state); // Hash a constant for None
+        }
+        if let Some(h) = self.max_height {
+            h.to_bits().hash(state);
+        } else {
+            0u32.hash(state); // Hash a constant for None
+        }
+    }
 }
 
 impl TextConstraint {

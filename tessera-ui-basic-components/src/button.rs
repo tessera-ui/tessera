@@ -57,13 +57,14 @@ pub struct ButtonArgs {
     #[builder(default, setter(strip_option))]
     pub height: Option<DimensionValue>,
     /// The click callback function
-    pub on_click: Arc<dyn Fn() + Send + Sync>,
+    #[builder(default, setter(strip_option))]
+    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// The ripple color (RGB) for the button.
     #[builder(default = "Color::from_rgb(1.0, 1.0, 1.0)")]
     pub ripple_color: Color,
     /// Width of the border. If > 0, an outline will be drawn.
-    #[builder(default = "0.0")]
-    pub border_width: f32,
+    #[builder(default = "Dp(0.0)")]
+    pub border_width: Dp,
     /// Optional color for the border (RGBA). If None and border_width > 0, `color` will be used.
     #[builder(default)]
     pub border_color: Option<Color>,
@@ -142,6 +143,31 @@ pub fn button(args: impl Into<ButtonArgs>, ripple_state: Arc<RippleState>, child
 
 /// Create surface arguments based on button configuration
 fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
+    let style = if args.border_width.to_pixels_f32() > 0.0 {
+        crate::surface::SurfaceStyle::FilledOutlined {
+            fill_color: args.color,
+            border_color: args.border_color.unwrap_or(args.color),
+            border_width: args.border_width,
+        }
+    } else {
+        crate::surface::SurfaceStyle::Filled { color: args.color }
+    };
+
+    let hover_style = if let Some(hover_color) = args.hover_color {
+        let style = if args.border_width.to_pixels_f32() > 0.0 {
+            crate::surface::SurfaceStyle::FilledOutlined {
+                fill_color: hover_color,
+                border_color: args.border_color.unwrap_or(hover_color),
+                border_width: args.border_width,
+            }
+        } else {
+            crate::surface::SurfaceStyle::Filled { color: hover_color }
+        };
+        Some(style)
+    } else {
+        None
+    };
+
     let mut builder = SurfaceArgsBuilder::default();
 
     // Set width if available
@@ -159,15 +185,17 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         builder = builder.shadow(shadow);
     }
 
+    // Set on_click handler if available
+    if let Some(on_click) = args.on_click.clone() {
+        builder = builder.on_click(on_click);
+    }
+
     builder
-        .color(args.color)
-        .hover_color(args.hover_color)
+        .style(style)
+        .hover_style(hover_style)
         .shape(args.shape)
         .padding(args.padding)
-        .border_width(args.border_width)
-        .border_color(args.border_color)
         .ripple_color(args.ripple_color)
-        .on_click(Some(args.on_click.clone()))
         .build()
         .unwrap()
 }
@@ -248,7 +276,7 @@ impl ButtonArgs {
         self
     }
 
-    pub fn with_border(mut self, width: f32, color: Option<Color>) -> Self {
+    pub fn with_border(mut self, width: Dp, color: Option<Color>) -> Self {
         self.border_width = width;
         self.border_color = color;
         self

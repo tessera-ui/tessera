@@ -241,8 +241,8 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
             let alpha = scrim_alpha_for(progress, is_open);
             surface(
                 SurfaceArgsBuilder::default()
-                    .color(Color::BLACK.with_alpha(alpha))
-                    .on_click(Some(args.on_close_request.clone()))
+                    .style(Color::BLACK.with_alpha(alpha).into())
+                    .on_click(args.on_close_request.clone())
                     .width(DimensionValue::Fill {
                         min: None,
                         max: None,

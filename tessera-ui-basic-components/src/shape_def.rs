@@ -83,3 +83,33 @@ impl Default for Shape {
         }
     }
 }
+
+impl Shape {
+    /// A pure rectangle shape with no rounded corners.
+    pub const RECTANGLE: Self = Shape::RoundedRectangle {
+        top_left: 0.0,
+        top_right: 0.0,
+        bottom_right: 0.0,
+        bottom_left: 0.0,
+        g2_k_value: 3.0,
+    };
+
+    /// A Quick helper to create a uniform rounded rectangle shape.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tessera_ui_basic_components::shape_def::Shape;
+    /// let shape = Shape::rounded_rectangle(8.0);
+    /// assert_eq!(shape, Shape::RoundedRectangle { top_left: 8.0, top_right: 8.0, bottom_right: 8.0, bottom_left: 8.0, g2_k_value: 3.0 });
+    /// ```
+    pub const fn rounded_rectangle(radius: f32) -> Self {
+        Shape::RoundedRectangle {
+            top_left: radius,
+            top_right: radius,
+            bottom_right: radius,
+            bottom_left: radius,
+            g2_k_value: 3.0,
+        }
+    }
+}

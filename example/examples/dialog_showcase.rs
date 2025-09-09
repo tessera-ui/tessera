@@ -86,7 +86,11 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
             scope.child(move || {
                 surface(
                     SurfaceArgsBuilder::default()
-                        .color(Color::new(0.2, 0.2, 0.2, 1.0).with_alpha(content_alpha))
+                        .style(
+                            Color::new(0.2, 0.2, 0.2, 1.0)
+                                .with_alpha(content_alpha)
+                                .into(),
+                        )
                         .shape(Shape::RoundedRectangle {
                             top_left: 25.0,
                             top_right: 25.0,
@@ -163,7 +167,7 @@ fn dialog_provider_wrapper(app_state: Arc<RwLock<AppState>>) {
     let state_for_provider = app_state.clone();
     surface(
         SurfaceArgsBuilder::default()
-            .color(Color::WHITE)
+            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,

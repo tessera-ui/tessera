@@ -78,6 +78,51 @@ pub enum ShapeCommand {
         /// Width of the border
         border_width: f32,
     },
+    /// A filled rectangle with an outline
+    FilledOutlinedRect {
+        /// Color of the rectangle (RGBA)
+        color: Color,
+        /// Color of the border (RGBA)
+        border_color: Color,
+        /// Corner radii of the rectangle (tl, tr, br, bl)
+        corner_radii: [f32; 4],
+        /// G2 exponent for rounded corners.
+        /// k=2.0 results in standard G1 circular corners.
+        g2_k_value: f32,
+        /// Shadow properties of the rectangle (applied to the outline shape)
+        shadow: Option<ShadowProps>,
+        /// Width of the border
+        border_width: f32,
+    },
+    /// A filled rectangle with an outline and ripple effect animation
+    RippleFilledOutlinedRect {
+        /// Color of the rectangle (RGBA)
+        color: Color,
+        /// Color of the border (RGBA)
+        border_color: Color,
+        /// Corner radii of the rectangle (tl, tr, br, bl)
+        corner_radii: [f32; 4],
+        /// G2 exponent for rounded corners.
+        /// k=2.0 results in standard G1 circular corners.
+        g2_k_value: f32,
+        /// Shadow properties of the rectangle (applied to the outline shape)
+        shadow: Option<ShadowProps>,
+        /// Width of the border
+        border_width: f32,
+        /// Ripple effect properties
+        ripple: RippleProps,
+    },
+    /// A filled ellipse with an outline
+    FilledOutlinedEllipse {
+        /// Color of the ellipse (RGBA)
+        color: Color,
+        /// Color of the border (RGBA)
+        border_color: Color,
+        /// Shadow properties of the ellipse (applied to the outline shape)
+        shadow: Option<ShadowProps>,
+        /// Width of the border
+        border_width: f32,
+    },
 }
 
 impl DrawCommand for ShapeCommand {
@@ -137,83 +182,155 @@ pub(crate) fn rect_to_uniforms(
     size: PxSize,
     position: PxPosition,
 ) -> ShapeUniforms {
-    let (primary_color_rgba, corner_radii, g2_k_value, shadow, border_width, render_mode, ripple) =
-        match command {
-            ShapeCommand::Rect {
-                color,
-                corner_radii,
-                g2_k_value,
-                shadow,
-            } => (*color, *corner_radii, *g2_k_value, *shadow, 0.0, 0.0, None),
-            ShapeCommand::OutlinedRect {
-                color,
-                corner_radii,
-                g2_k_value,
-                shadow,
-                border_width,
-            } => (
-                *color,
-                *corner_radii,
-                *g2_k_value,
-                *shadow,
-                *border_width,
-                1.0,
-                None,
-            ),
-            ShapeCommand::RippleRect {
-                color,
-                corner_radii,
-                g2_k_value,
-                shadow,
-                ripple,
-            } => (
-                *color,
-                *corner_radii,
-                *g2_k_value,
-                *shadow,
-                0.0,
-                3.0,
-                Some(*ripple),
-            ),
-            ShapeCommand::RippleOutlinedRect {
-                color,
-                corner_radii,
-                g2_k_value,
-                shadow,
-                border_width,
-                ripple,
-            } => (
-                *color,
-                *corner_radii,
-                *g2_k_value,
-                *shadow,
-                *border_width,
-                4.0,
-                Some(*ripple),
-            ),
-            ShapeCommand::Ellipse { color, shadow } => (
-                *color,
-                [-1.0, -1.0, -1.0, -1.0],
-                0.0,
-                *shadow,
-                0.0,
-                0.0,
-                None,
-            ),
-            ShapeCommand::OutlinedEllipse {
-                color,
-                shadow,
-                border_width,
-            } => (
-                *color,
-                [-1.0, -1.0, -1.0, -1.0],
-                0.0,
-                *shadow,
-                *border_width,
-                1.0,
-                None,
-            ),
-        };
+    let (
+        primary_color_rgba,
+        border_color_rgba,
+        corner_radii,
+        g2_k_value,
+        shadow,
+        border_width,
+        render_mode,
+        ripple,
+    ) = match command {
+        ShapeCommand::Rect {
+            color,
+            corner_radii,
+            g2_k_value,
+            shadow,
+        } => (
+            *color,
+            Color::TRANSPARENT,
+            *corner_radii,
+            *g2_k_value,
+            *shadow,
+            0.0,
+            0.0,
+            None,
+        ),
+        ShapeCommand::OutlinedRect {
+            color,
+            corner_radii,
+            g2_k_value,
+            shadow,
+            border_width,
+        } => (
+            *color,
+            Color::TRANSPARENT,
+            *corner_radii,
+            *g2_k_value,
+            *shadow,
+            *border_width,
+            1.0,
+            None,
+        ),
+        ShapeCommand::RippleRect {
+            color,
+            corner_radii,
+            g2_k_value,
+            shadow,
+            ripple,
+        } => (
+            *color,
+            Color::TRANSPARENT,
+            *corner_radii,
+            *g2_k_value,
+            *shadow,
+            0.0,
+            3.0,
+            Some(*ripple),
+        ),
+        ShapeCommand::RippleOutlinedRect {
+            color,
+            corner_radii,
+            g2_k_value,
+            shadow,
+            border_width,
+            ripple,
+        } => (
+            *color,
+            Color::TRANSPARENT,
+            *corner_radii,
+            *g2_k_value,
+            *shadow,
+            *border_width,
+            4.0,
+            Some(*ripple),
+        ),
+        ShapeCommand::Ellipse { color, shadow } => (
+            *color,
+            Color::TRANSPARENT,
+            [-1.0, -1.0, -1.0, -1.0],
+            0.0,
+            *shadow,
+            0.0,
+            0.0,
+            None,
+        ),
+        ShapeCommand::OutlinedEllipse {
+            color,
+            shadow,
+            border_width,
+        } => (
+            *color,
+            Color::TRANSPARENT,
+            [-1.0, -1.0, -1.0, -1.0],
+            0.0,
+            *shadow,
+            *border_width,
+            1.0,
+            None,
+        ),
+        ShapeCommand::FilledOutlinedRect {
+            color,
+            border_color,
+            corner_radii,
+            g2_k_value,
+            shadow,
+            border_width,
+        } => (
+            *color,
+            *border_color,
+            *corner_radii,
+            *g2_k_value,
+            *shadow,
+            *border_width,
+            5.0,
+            None,
+        ),
+        ShapeCommand::RippleFilledOutlinedRect {
+            color,
+            border_color,
+            corner_radii,
+            g2_k_value,
+            shadow,
+            border_width,
+            ripple,
+        } => (
+            *color,
+            *border_color,
+            *corner_radii,
+            *g2_k_value,
+            *shadow,
+            *border_width,
+            5.0,
+            Some(*ripple),
+        ),
+        ShapeCommand::FilledOutlinedEllipse {
+            color,
+            border_color,
+            shadow,
+            border_width,
+        } => (
+            *color,
+            *border_color,
+            [-1.0, -1.0, -1.0, -1.0],
+            0.0,
+            *shadow,
+            *border_width,
+            5.0,
+            None,
+        ),
+    };
 
     let width = size.width;
     let height = size.height;
@@ -241,6 +358,7 @@ pub(crate) fn rect_to_uniforms(
     ShapeUniforms {
         corner_radii: corner_radii.into(),
         primary_color: primary_color_rgba.to_array().into(),
+        border_color: border_color_rgba.to_array().into(),
         shadow_color: shadow_rgba_color.to_array().into(),
         render_params: [
             shadow_offset_vec[0],

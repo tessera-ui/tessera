@@ -137,7 +137,7 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
         SurfaceArgsBuilder::default()
             .width(width.into())
             .height(height.into())
-            .color(color)
+            .style(color.into())
             .shape({
                 let radius = width.to_f32() / 2.0;
                 Shape::RoundedRectangle {
@@ -171,7 +171,7 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
                     g2_k_value: 2.0,
                 }
             })
-            .color(color)
+            .style(color.into())
             .build()
             .unwrap(),
         None,
@@ -185,7 +185,7 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
         SurfaceArgsBuilder::default()
             .width(width.into())
             .height(height.into())
-            .color(color)
+            .style(color.into())
             .shape({
                 let radius = height.to_f32() / 2.0;
                 Shape::RoundedRectangle {
@@ -219,7 +219,7 @@ fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
                     g2_k_value: 2.0,
                 }
             })
-            .color(color)
+            .style(color.into())
             .build()
             .unwrap(),
         None,

@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         || {
                             surface(
                                 SurfaceArgs {
-                                    color: Color::new(0.9, 0.9, 0.9, 1.0),
+                                    style: Color::new(0.9, 0.9, 0.9, 1.0).into(),
                                     ..Default::default()
                                 },
                                 None,
@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             || {
                                 surface(
                                     SurfaceArgs {
-                                        color: Color::new(0.9, 1.0, 0.9, 1.0),
+                                        style: Color::new(0.9, 1.0, 0.9, 1.0).into(),
                                         ..Default::default()
                                     },
                                     None,
@@ -131,7 +131,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         || {
                             surface(
                                 SurfaceArgs {
-                                    color: Color::new(1.0, 0.9, 0.9, 1.0),
+                                    style: Color::new(1.0, 0.9, 0.9, 1.0).into(),
                                     ..Default::default()
                                 },
                                 None,

@@ -29,7 +29,7 @@ impl AppState {
 fn app(state: Arc<AppState>) {
     surface(
         SurfaceArgsBuilder::default()
-            .color(Color::WHITE)
+            .style(Color::WHITE.into())
             .padding(Dp(20.0))
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)

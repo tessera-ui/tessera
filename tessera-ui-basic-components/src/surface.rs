@@ -28,20 +28,46 @@ use crate::{
     shape_def::Shape,
 };
 
+/// Defines the visual style of the surface (fill, outline, or both).
+#[derive(Clone)]
+pub enum SurfaceStyle {
+    /// A solid color fill.
+    Filled { color: Color },
+    /// A solid color outline with a transparent fill.
+    Outlined { color: Color, width: Dp },
+    /// A solid color fill with a solid color outline.
+    FilledOutlined {
+        fill_color: Color,
+        border_color: Color,
+        border_width: Dp,
+    },
+}
+
+impl Default for SurfaceStyle {
+    fn default() -> Self {
+        SurfaceStyle::Filled {
+            color: Color::new(0.4745, 0.5255, 0.7961, 1.0),
+        }
+    }
+}
+
+impl From<Color> for SurfaceStyle {
+    fn from(color: Color) -> Self {
+        SurfaceStyle::Filled { color }
+    }
+}
+
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SurfaceArgs {
-    /// Base fill color of the surface.
-    /// If `hover_color` is provided and the cursor is inside (interactive variant),
-    /// that hover color will temporarily replace this value.
-    #[builder(default = "Color::new(0.4745, 0.5255, 0.7961, 1.0)")]
-    pub color: Color,
-
-    /// Optional hover color used when:
-    /// * `on_click` is `Some(..)` (interactive surface) AND
-    /// * The cursor is currently inside the surface bounds.
+    /// Defines the visual style of the surface (fill, outline, or both).
     #[builder(default)]
-    pub hover_color: Option<Color>,
+    pub style: SurfaceStyle,
+
+    /// Optional style to apply when the cursor is hovering over the surface.
+    /// This is only active when `on_click` is also provided.
+    #[builder(default)]
+    pub hover_style: Option<SurfaceStyle>,
 
     /// Geometric outline of the surface (rounded rectangle / ellipse / capsule variants).
     #[builder(default)]
@@ -64,19 +90,11 @@ pub struct SurfaceArgs {
     #[builder(default, setter(strip_option))]
     pub height: Option<DimensionValue>,
 
-    /// Border stroke width in device‑independent pixels (Dp->Px converted). `0.0` means no border.
-    #[builder(default = "0.0")]
-    pub border_width: f32,
-
-    /// Border color (only used when `border_width > 0.0`). Defaults to `color` if `None`.
-    #[builder(default)]
-    pub border_color: Option<Color>,
-
     /// Optional click handler. Presence of this value makes the surface interactive:
     /// * Cursor changes to pointer when hovered
     /// * Press / release events are captured
     /// * Ripple animation starts on press if a `RippleState` is provided
-    #[builder(default)]
+    #[builder(default, setter(strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
 
     /// Color of the ripple effect (if interactive & ripple state provided).
@@ -113,92 +131,141 @@ fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<&Arc<RippleState>
 
 fn build_rounded_rectangle_command(
     args: &SurfaceArgs,
-    effective_color: Color,
+    style: &SurfaceStyle,
     ripple_props: RippleProps,
     corner_radii: [f32; 4],
     g2_k_value: f32,
     interactive: bool,
 ) -> ShapeCommand {
-    if interactive {
-        if args.border_width > 0.0 {
-            ShapeCommand::RippleOutlinedRect {
-                color: args.border_color.unwrap_or(effective_color),
-                corner_radii,
-                g2_k_value,
-                shadow: args.shadow,
-                border_width: args.border_width,
-                ripple: ripple_props,
-            }
-        } else {
-            ShapeCommand::RippleRect {
-                color: effective_color,
-                corner_radii,
-                g2_k_value,
-                shadow: args.shadow,
-                ripple: ripple_props,
+    match style {
+        SurfaceStyle::Filled { color } => {
+            if interactive {
+                ShapeCommand::RippleRect {
+                    color: *color,
+                    corner_radii,
+                    g2_k_value,
+                    shadow: args.shadow,
+                    ripple: ripple_props,
+                }
+            } else {
+                ShapeCommand::Rect {
+                    color: *color,
+                    corner_radii,
+                    g2_k_value,
+                    shadow: args.shadow,
+                }
             }
         }
-    } else if args.border_width > 0.0 {
-        ShapeCommand::OutlinedRect {
-            color: args.border_color.unwrap_or(effective_color),
-            corner_radii,
-            g2_k_value,
-            shadow: args.shadow,
-            border_width: args.border_width,
+        SurfaceStyle::Outlined { color, width } => {
+            if interactive {
+                ShapeCommand::RippleOutlinedRect {
+                    color: *color,
+                    corner_radii,
+                    g2_k_value,
+                    shadow: args.shadow,
+                    border_width: width.to_pixels_f32(),
+                    ripple: ripple_props,
+                }
+            } else {
+                ShapeCommand::OutlinedRect {
+                    color: *color,
+                    corner_radii,
+                    g2_k_value,
+                    shadow: args.shadow,
+                    border_width: width.to_pixels_f32(),
+                }
+            }
         }
-    } else {
-        ShapeCommand::Rect {
-            color: effective_color,
-            corner_radii,
-            g2_k_value,
-            shadow: args.shadow,
+        SurfaceStyle::FilledOutlined {
+            fill_color,
+            border_color,
+            border_width,
+        } => {
+            if interactive {
+                ShapeCommand::RippleFilledOutlinedRect {
+                    color: *fill_color,
+                    border_color: *border_color,
+                    corner_radii,
+                    g2_k_value,
+                    shadow: args.shadow,
+                    border_width: border_width.to_pixels_f32(),
+                    ripple: ripple_props,
+                }
+            } else {
+                ShapeCommand::FilledOutlinedRect {
+                    color: *fill_color,
+                    border_color: *border_color,
+                    corner_radii,
+                    g2_k_value,
+                    shadow: args.shadow,
+                    border_width: border_width.to_pixels_f32(),
+                }
+            }
         }
     }
 }
 
 fn build_ellipse_command(
     args: &SurfaceArgs,
-    effective_color: Color,
+    style: &SurfaceStyle,
     ripple_props: RippleProps,
     interactive: bool,
 ) -> ShapeCommand {
     let corner_marker = [-1.0, -1.0, -1.0, -1.0];
-    if interactive {
-        if args.border_width > 0.0 {
-            ShapeCommand::RippleOutlinedRect {
-                color: args.border_color.unwrap_or(effective_color),
-                corner_radii: corner_marker,
-                g2_k_value: 0.0,
-                shadow: args.shadow,
-                border_width: args.border_width,
-                ripple: ripple_props,
-            }
-        } else {
-            ShapeCommand::RippleRect {
-                color: effective_color,
-                corner_radii: corner_marker,
-                g2_k_value: 0.0,
-                shadow: args.shadow,
-                ripple: ripple_props,
+    match style {
+        SurfaceStyle::Filled { color } => {
+            if interactive {
+                ShapeCommand::RippleRect {
+                    color: *color,
+                    corner_radii: corner_marker,
+                    g2_k_value: 0.0,
+                    shadow: args.shadow,
+                    ripple: ripple_props,
+                }
+            } else {
+                ShapeCommand::Ellipse {
+                    color: *color,
+                    shadow: args.shadow,
+                }
             }
         }
-    } else if args.border_width > 0.0 {
-        ShapeCommand::OutlinedEllipse {
-            color: args.border_color.unwrap_or(effective_color),
-            shadow: args.shadow,
-            border_width: args.border_width,
+        SurfaceStyle::Outlined { color, width } => {
+            if interactive {
+                ShapeCommand::RippleOutlinedRect {
+                    color: *color,
+                    corner_radii: corner_marker,
+                    g2_k_value: 0.0,
+                    shadow: args.shadow,
+                    border_width: width.to_pixels_f32(),
+                    ripple: ripple_props,
+                }
+            } else {
+                ShapeCommand::OutlinedEllipse {
+                    color: *color,
+                    shadow: args.shadow,
+                    border_width: width.to_pixels_f32(),
+                }
+            }
         }
-    } else {
-        ShapeCommand::Ellipse {
-            color: effective_color,
-            shadow: args.shadow,
+        SurfaceStyle::FilledOutlined {
+            fill_color,
+            border_color,
+            border_width,
+        } => {
+            // NOTE: No ripple variant for FilledOutlinedEllipse yet.
+            ShapeCommand::FilledOutlinedEllipse {
+                color: *fill_color,
+                border_color: *border_color,
+                shadow: args.shadow,
+                border_width: border_width.to_pixels_f32(),
+            }
         }
     }
 }
 
 fn build_shape_command(
     args: &SurfaceArgs,
-    effective_color: Color,
+    style: &SurfaceStyle,
     ripple_props: RippleProps,
     size: PxSize,
 ) -> ShapeCommand {
@@ -215,20 +282,20 @@ fn build_shape_command(
             let corner_radii = [top_left, top_right, bottom_right, bottom_left];
             build_rounded_rectangle_command(
                 args,
-                effective_color,
+                style,
                 ripple_props,
                 corner_radii,
                 g2_k_value,
                 interactive,
             )
         }
-        Shape::Ellipse => build_ellipse_command(args, effective_color, ripple_props, interactive),
+        Shape::Ellipse => build_ellipse_command(args, style, ripple_props, interactive),
         Shape::HorizontalCapsule => {
             let radius = size.height.to_f32() / 2.0;
             let corner_radii = [radius, radius, radius, radius];
             build_rounded_rectangle_command(
                 args,
-                effective_color,
+                style,
                 ripple_props,
                 corner_radii,
                 2.0, // Use G1 curve for perfect circle
@@ -240,7 +307,7 @@ fn build_shape_command(
             let corner_radii = [radius, radius, radius, radius];
             build_rounded_rectangle_command(
                 args,
-                effective_color,
+                style,
                 ripple_props,
                 corner_radii,
                 2.0, // Use G1 curve for perfect circle
@@ -252,12 +319,12 @@ fn build_shape_command(
 
 fn make_surface_drawable(
     args: &SurfaceArgs,
-    effective_color: Color,
+    style: &SurfaceStyle,
     ripple_state: Option<&Arc<RippleState>>,
     size: PxSize,
 ) -> ShapeCommand {
     let ripple_props = build_ripple_props(args, ripple_state);
-    build_shape_command(args, effective_color, ripple_props, size)
+    build_shape_command(args, style, ripple_props, size)
 }
 
 fn compute_surface_size(
@@ -408,10 +475,10 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             .map(|state| state.is_hovered())
             .unwrap_or(false);
 
-        let effective_color = if is_hovered && args_measure_clone.hover_color.is_some() {
-            args_measure_clone.hover_color.unwrap()
+        let effective_style = if is_hovered && args_measure_clone.hover_style.is_some() {
+            args_measure_clone.hover_style.as_ref().unwrap()
         } else {
-            args_measure_clone.color
+            &args_measure_clone.style
         };
 
         let padding_px: Px = args_measure_clone.padding.into();
@@ -420,7 +487,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
 
         let drawable = make_surface_drawable(
             &args_measure_clone,
-            effective_color,
+            effective_style,
             ripple_state_for_measure.as_ref(),
             PxSize::new(width, height),
         );

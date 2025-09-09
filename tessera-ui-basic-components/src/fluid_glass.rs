@@ -312,10 +312,12 @@ pub fn fluid_glass(
             let blur_command = BlurCommand {
                 radius: args.blur_radius,
                 direction: (1.0, 0.0), // Horizontal
+                padding: Px(args.refraction_height as i32),
             };
             let blur_command2 = BlurCommand {
                 radius: args.blur_radius,
                 direction: (0.0, 1.0), // Vertical
+                padding: Px(args.refraction_height as i32),
             };
             let mut metadata = input.metadata_mut();
             metadata.push_compute_command(blur_command);

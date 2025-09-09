@@ -1,6 +1,7 @@
 struct ShapeUniforms {
     corner_radii: vec4f,       // x:tl, y:tr, z:br, w:bl
     primary_color: vec4f,
+    border_color: vec4f,
     shadow_color: vec4f,
     render_params: vec4f,
     ripple_params: vec4f,
@@ -276,6 +277,44 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
             final_color = vec4f(blended_color, primary_color_uniform.a * max(0.0, outline_alpha));
 
+        } else if render_mode == 5.0 { // --- Draw Fill with Outline ---
+            // Calculate ripple effect
+            let p_pixel = p_normalized * size;
+            let center_pixel = ripple_center * size;
+            let dist_to_ripple_center_pixel = distance(p_pixel, center_pixel);
+            
+            let min_dimension = min(size.x, size.y);
+            let normalized_dist = dist_to_ripple_center_pixel / min_dimension;
+            let ripple_effect = calculate_ripple_effect(normalized_dist, ripple_radius);
+            let ripple_final_alpha = ripple_effect * ripple_alpha;
+
+            // Blend primary color with ripple effect
+            let ripple_mixed_fill_color = mix(primary_color_uniform.rgb, ripple_color_rgb, ripple_final_alpha);
+
+            if border_width <= 0.0 { // If no border, just do a normal fill
+                let object_alpha = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
+                if object_alpha <= 0.001 {
+                    discard;
+                }
+                final_color = vec4f(ripple_mixed_fill_color, primary_color_uniform.a * object_alpha);
+            } else {
+                let dist_inner_edge = dist_object + border_width;
+                let aa = fwidth(dist_object);
+
+                // Smoothly transition from border color to fill color
+                // t is 0 for fill, 1 for border
+                let t = smoothstep(-aa, aa, dist_inner_edge);
+                let blended_color = mix(ripple_mixed_fill_color, instance.border_color.rgb, t);
+
+                // Handle transparency of the whole shape
+                let object_alpha = 1.0 - smoothstep(-aa, aa, dist_object);
+
+                if (object_alpha <= 0.001) {
+                    discard;
+                }
+                // Use the alpha from the primary color for the whole object
+                final_color = vec4f(blended_color, primary_color_uniform.a * object_alpha);
+            }
         } else {
             // Should not happen with valid render_mode
             discard;

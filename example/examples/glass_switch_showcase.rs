@@ -21,7 +21,7 @@ fn app(switch_state: Arc<Mutex<GlassSwitchState>>) {
                 min: None,
                 max: None,
             })
-            .color(Color::WHITE)
+            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,

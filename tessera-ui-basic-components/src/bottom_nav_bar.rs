@@ -86,7 +86,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use tessera_ui::{Color, DimensionValue, tessera};
 
 use crate::{
@@ -153,8 +153,7 @@ pub fn bottom_nav_bar<F>(state: Arc<RwLock<BottomNavBarState>>, scope_config: F)
 where
     F: FnOnce(&mut BottomNavBarScope),
 {
-    let mut child_closures: Vec<(Box<dyn FnOnce() + Send + Sync>, Arc<dyn Fn() + Send + Sync>)> =
-        Vec::new();
+    let mut child_closures = Vec::new();
 
     {
         let mut scope = BottomNavBarScope {
@@ -171,8 +170,9 @@ where
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .color(Color::from_rgb(9.333, 9.333, 9.333))
+            .style(Color::from_rgb(9.333, 9.333, 9.333).into())
             .shadow(ShadowProps::default())
+            .block_input(true)
             .build()
             .unwrap(),
         None,
@@ -215,7 +215,7 @@ where
                                 .on_click(Arc::new(move || {
                                     if index != selected {
                                         state_clone.write().set_selected(index);
-                                        on_click();
+                                        on_click.lock().take().unwrap()();
                                     }
                                 }))
                                 .shadow(ShadowProps {
@@ -310,7 +310,10 @@ impl BottomNavBarState {
 
 /// Scope passed to the closure for defining children of the BottomNavBar.
 pub struct BottomNavBarScope<'a> {
-    child_closures: &'a mut Vec<(Box<dyn FnOnce() + Send + Sync>, Arc<dyn Fn() + Send + Sync>)>,
+    child_closures: &'a mut Vec<(
+        Box<dyn FnOnce() + Send + Sync>,
+        Arc<Mutex<Option<Box<dyn FnOnce() + Send + Sync>>>>,
+    )>,
 }
 
 impl<'a> BottomNavBarScope<'a> {
@@ -324,9 +327,11 @@ impl<'a> BottomNavBarScope<'a> {
     pub fn child<C, O>(&mut self, child: C, on_click: O)
     where
         C: FnOnce() + Send + Sync + 'static,
-        O: Fn() + Send + Sync + 'static,
+        O: FnOnce() + Send + Sync + 'static,
     {
-        self.child_closures
-            .push((Box::new(child), Arc::new(on_click)));
+        self.child_closures.push((
+            Box::new(child),
+            Arc::new(Mutex::new(Some(Box::new(on_click)))),
+        ));
     }
 }

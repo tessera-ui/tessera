@@ -16,7 +16,7 @@ use tessera_ui_basic_components::{
 fn small_box(text_content: &'static str, color: Color) {
     surface(
         SurfaceArgs {
-            color,
+            style: color.into(),
             shape: Shape::RoundedRectangle {
                 top_left: 25.0,
                 top_right: 25.0,
@@ -68,7 +68,7 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
             scope.child(move || {
                 surface(
                     SurfaceArgs {
-                        color: Color::new(0.9, 0.9, 0.9, 1.0), // Gray background to see borders clearly
+                        style: Color::new(0.9, 0.9, 0.9, 1.0).into(), // Gray background to see borders clearly
                         shape: Shape::RoundedRectangle {
                             top_left: 25.0,
                             top_right: 25.0,
@@ -115,7 +115,7 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
 fn app() {
     surface(
         SurfaceArgs {
-            color: Color::WHITE, // White Background
+            style: Color::WHITE.into(), // White Background
             padding: Dp(20.0),
             width: Some(DimensionValue::Fill {
                 min: None,

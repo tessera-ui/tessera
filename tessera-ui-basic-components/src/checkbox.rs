@@ -216,14 +216,17 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(args.size.to_px()))
             .height(DimensionValue::Fixed(args.size.to_px()))
-            .color(if args.checked {
-                args.checked_color
-            } else {
-                args.color
-            })
-            .hover_color(args.hover_color)
+            .style(
+                if args.checked {
+                    args.checked_color
+                } else {
+                    args.color
+                }
+                .into(),
+            )
+            .hover_style(args.hover_color.map(|c| c.into()))
             .shape(args.shape)
-            .on_click(Some(on_click))
+            .on_click(on_click)
             .build()
             .unwrap(),
         ripple_state,
@@ -238,7 +241,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
                     surface(
                         SurfaceArgsBuilder::default()
                             .padding(Dp(2.0))
-                            .color(Color::TRANSPARENT)
+                            .style(Color::TRANSPARENT.into())
                             .build()
                             .unwrap(),
                         None,

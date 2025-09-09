@@ -191,7 +191,7 @@ where
 
     surface(
         SurfaceArgs {
-            color: args.indicator_color,
+            style: args.indicator_color.into(),
             width: Some(DimensionValue::FILLED),
             height: Some(DimensionValue::FILLED),
             ..Default::default()
