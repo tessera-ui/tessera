@@ -726,7 +726,9 @@ impl TextEditorArgs {
     /// # Example
     ///
     /// ```
+    /// use tessera_ui::Dp;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    ///
     /// let args = TextEditorArgs::simple().with_border_width(Dp(1.0));
     /// ```
     pub fn with_border_width(mut self, width: Dp) -> Self {
@@ -737,6 +739,7 @@ impl TextEditorArgs {
     /// Sets the border color.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Color;

@@ -74,8 +74,7 @@
 //!             );
 //!         },
 //!         // 5. Define the content of the bottom sheet itself.
-//!         // It receives an `alpha` value for fade animations.
-//!         |alpha| {
+//!         || {
 //!             text(TextArgsBuilder::default().text("This is the bottom sheet!".to_string()).build().unwrap());
 //!         }
 //!     );

@@ -33,7 +33,7 @@
 //! ```
 //! use std::sync::Arc;
 //! use parking_lot::RwLock;
-//! use tessera_ui::{tessera, router::{self, router_root}};
+//! use tessera_ui::{tessera, router::{Router, router_root}};
 //! use tessera_ui_basic_components::{
 //!     bottom_nav_bar::{bottom_nav_bar, BottomNavBarState},
 //!     column::{ColumnArgsBuilder, column},
@@ -62,8 +62,9 @@
 //!                 nav_scope.child(
 //!                     || text(TextArgsBuilder::default().text("Home".to_string()).build().unwrap()),
 //!                     move || {
-//!                         router::pop(); // Clear the backstack
-//!                         router::push(HomeScreenDestination {});
+//!                         Router::with_mut(|router| {
+//!                             router.reset_with(HomeScreenDestination {});
+//!                         });
 //!                     },
 //!                 );
 //!
@@ -71,8 +72,9 @@
 //!                 nav_scope.child(
 //!                     || text(TextArgsBuilder::default().text("Profile".to_string()).build().unwrap()),
 //!                     move || {
-//!                         router::pop();
-//!                         router::push(ProfileScreenDestination {});
+//!                         Router::with_mut(|router| {
+//!                             router.reset_with(ProfileScreenDestination {});
+//!                         });
 //!                     },
 //!                 );
 //!             });

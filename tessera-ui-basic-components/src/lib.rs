@@ -40,7 +40,7 @@
 //! let ripple_state = Arc::new(RippleState::new());
 //! button(
 //!     ButtonArgs {
-//!         on_click: Arc::new(|| { /* Handle click */ }),
+//!         on_click: Some(Arc::new(|| { /* Handle click */ })),
 //!         ..Default::default()
 //!     },
 //!     ripple_state,

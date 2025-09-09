@@ -34,6 +34,7 @@ pub use command::{RippleProps, ShadowProps, ShapeCommand};
 /// Uniforms for shape rendering pipeline.
 ///
 /// # Fields
+///
 /// - `size_cr_border_width`: Size, corner radius, border width.
 /// - `primary_color`: Main fill color.
 /// - `shadow_color`: Shadow color.
@@ -41,23 +42,6 @@ pub use command::{RippleProps, ShadowProps, ShapeCommand};
 /// - `ripple_params`: Ripple effect parameters.
 /// - `ripple_color`: Ripple color.
 /// - `g2_k_value`: G2 curve parameter for rounded rectangles.
-///
-/// # Example
-/// ```
-/// use tessera_ui_basic_components::pipelines::shape::ShapeUniforms;
-/// let uniforms = ShapeUniforms {
-///     corner_radii: glam::Vec4::ZERO,
-///     primary_color: glam::Vec4::ZERO,
-///     shadow_color: glam::Vec4::ZERO,
-///     render_params: glam::Vec4::ZERO,
-///     ripple_params: glam::Vec4::ZERO,
-///     ripple_color: glam::Vec4::ZERO,
-///     g2_k_value: 0.0,
-///     border_width: 0.0,
-///     position: glam::Vec4::ZERO,
-///     screen_size: glam::Vec2::ZERO,
-/// };
-/// ```
 #[derive(ShaderType, Clone, Copy, Debug, PartialEq)]
 pub struct ShapeUniforms {
     pub corner_radii: Vec4, // x:tl, y:tr, z:br, w:bl

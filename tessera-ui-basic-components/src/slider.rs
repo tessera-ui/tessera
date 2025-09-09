@@ -272,12 +272,12 @@ fn measure_slider(
 ///
 /// ```
 /// use std::sync::Arc;
-/// use parking_lot::Mutex;
+/// use parking_lot::RwLock;
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::slider::{slider, SliderArgs, SliderState, SliderArgsBuilder};
 ///
 /// // In a real application, you would manage the state.
-/// let slider_state = Arc::new(Mutex::new(SliderState::new()));
+/// let slider_state = Arc::new(RwLock::new(SliderState::new()));
 ///
 /// // Create a slider with a width of 200dp and an initial value of 0.5.
 /// slider(

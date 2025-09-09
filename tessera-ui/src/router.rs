@@ -13,7 +13,7 @@
 //! # Typical Minimal Usage
 //!
 //! ```
-//! use tessera_ui::{tessera, shard, router::{router_root, self}};
+//! use tessera_ui::{tessera, shard, router::{router_root, Router}};
 //!
 //! #[shard]
 //! #[tessera]
@@ -27,10 +27,14 @@
 //! # fn settings_screen() { /* ... */ }
 //!
 //! // Somewhere inside an event (e.g. button click) to navigate:
-//! router::push(SettingsScreenDestination {});
+//! Router::with_mut(|router| {
+//!     router.push(SettingsScreenDestination {});
+//! });
 //!
 //! // To go back:
-//! router::pop();
+//! Router::with_mut(|router| {
+//!     router.pop();
+//! });
 //! ```
 //!
 //! # Behavior
