@@ -25,6 +25,7 @@ use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, tessera};
 
 use crate::{
+    RippleState,
     alignment::Alignment,
     boxed::{BoxedArgsBuilder, boxed},
     checkmark::{CheckmarkArgsBuilder, checkmark},
@@ -32,28 +33,16 @@ use crate::{
     surface::{SurfaceArgsBuilder, surface},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct CheckboxState {
-    pub ripple: Arc<crate::ripple_state::RippleState>,
+    pub ripple: Arc<RippleState>,
     pub checkmark: Arc<RwLock<CheckmarkState>>,
-}
-
-impl CheckboxState {
-    pub fn new(checked: bool) -> Self {
-        Self {
-            ripple: Arc::new(crate::ripple_state::RippleState::new()),
-            checkmark: Arc::new(RwLock::new(CheckmarkState::new(checked))),
-        }
-    }
 }
 
 /// Arguments for the `checkbox` component.
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct CheckboxArgs {
-    #[builder(default)]
-    pub checked: bool,
-
     #[builder(default = "Arc::new(|_| {})")]
     pub on_toggle: Arc<dyn Fn(bool) + Send + Sync>,
 
@@ -82,9 +71,6 @@ pub struct CheckboxArgs {
 
     #[builder(default)]
     pub hover_color: Option<Color>,
-
-    #[builder(default = "None")]
-    pub state: Option<Arc<CheckboxState>>,
 }
 
 impl Default for CheckboxArgs {
@@ -101,6 +87,12 @@ pub struct CheckmarkState {
     pub checked: bool,
     progress: f32,
     last_toggle_time: Option<Instant>,
+}
+
+impl Default for CheckmarkState {
+    fn default() -> Self {
+        Self::new(false)
+    }
 }
 
 impl CheckmarkState {
@@ -180,44 +172,33 @@ impl CheckmarkState {
 /// });
 /// ```
 #[tessera]
-pub fn checkbox(args: impl Into<CheckboxArgs>) {
+pub fn checkbox(args: impl Into<CheckboxArgs>, state: Arc<CheckboxState>) {
     let args: CheckboxArgs = args.into();
 
-    // Optional external animation state, similar to Switch component pattern
-    let state = args.state.clone();
-
     // If a state is provided, set up an updater to advance the animation each frame
-    if let Some(state_for_handler) = state.clone() {
-        let checkmark_state = state_for_handler.checkmark.clone();
-        state_handler(Box::new(move |_input| {
-            checkmark_state.write().update_progress();
-        }));
-    }
+    let checkmark_state = state.checkmark.clone();
+    state_handler(Box::new(move |_input| {
+        checkmark_state.write().update_progress();
+    }));
 
     // Click handler: toggle animation state if present, otherwise simply forward toggle callback
     let on_click = {
         let state = state.clone();
         let on_toggle = args.on_toggle.clone();
-        let checked_initial = args.checked;
         Arc::new(move || {
-            if let Some(state) = &state {
-                state.checkmark.write().toggle();
-                on_toggle(state.checkmark.read().checked);
-            } else {
-                // Fallback: no internal animation state, just invert checked value
-                on_toggle(!checked_initial);
-            }
+            state.checkmark.write().toggle();
+            on_toggle(state.checkmark.read().checked);
         })
     };
 
-    let ripple_state = state.as_ref().map(|s| s.ripple.clone());
+    let ripple_state = state.ripple.clone();
 
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(args.size.to_px()))
             .height(DimensionValue::Fixed(args.size.to_px()))
             .style(
-                if args.checked {
+                if state.checkmark.read().checked {
                     args.checked_color
                 } else {
                     args.color
@@ -229,14 +210,11 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
             .on_click(on_click)
             .build()
             .unwrap(),
-        ripple_state,
+        Some(ripple_state),
         {
             let state_for_child = state.clone();
             move || {
-                let progress = state_for_child
-                    .as_ref()
-                    .map(|s| s.checkmark.read().progress())
-                    .unwrap_or(if args.checked { 1.0 } else { 0.0 });
+                let progress = state_for_child.checkmark.read().progress();
                 if progress > 0.0 {
                     surface(
                         SurfaceArgsBuilder::default()

@@ -61,7 +61,7 @@ pub mod bottom_sheet;
 pub mod boxed;
 pub mod button;
 pub mod checkbox;
-pub mod checkmark;
+mod checkmark;
 pub mod column;
 pub mod dialog;
 pub mod fluid_glass;
