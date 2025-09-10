@@ -102,6 +102,7 @@ use crate::{
     animation,
     boxed::{BoxedArgsBuilder, boxed},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    pipelines::ShadowProps,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
@@ -318,7 +319,10 @@ fn dialog_content_wrapper(
                     surface(
                         SurfaceArgsBuilder::default()
                             .style(Color::WHITE.with_alpha(alpha).into())
-                            .shadow(Default::default())
+                            .shadow(ShadowProps {
+                                color: Color::BLACK.with_alpha(alpha / 4.0),
+                                ..Default::default()
+                            })
                             .shape(Shape::RoundedRectangle {
                                 top_left: 25.0,
                                 top_right: 25.0,
