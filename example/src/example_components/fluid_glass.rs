@@ -8,11 +8,11 @@ use tessera_ui_basic_components::{
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
+    glass_slider::{GlassSliderArgsBuilder, GlassSliderState, glass_slider},
     image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     shape_def::Shape,
-    slider::{SliderArgsBuilder, SliderState, slider},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -50,7 +50,7 @@ struct ExampleGlassState {
 
 struct ConfigSliderState<T: Display> {
     value: T,
-    slider_state: Arc<RwLock<SliderState>>,
+    slider_state: Arc<RwLock<GlassSliderState>>,
 }
 
 impl<T: Display> ConfigSliderState<T> {
@@ -249,7 +249,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
 
             let state = state_for_glass.clone();
             scope.child(move || {
-                surface_config_slider(
+                glass_config_slider(
                     "Width",
                     state.read().width.value.0 as f32 / 500.0,
                     {
@@ -274,7 +274,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
             let state = state_for_glass.clone();
 
             scope.child(move || {
-                surface_config_slider(
+                glass_config_slider(
                     "Height",
                     state.read().height.value.0 as f32 / 500.0,
                     {
@@ -298,7 +298,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
 
             let state = state_for_glass.clone();
             scope.child(move || {
-                surface_config_slider(
+                glass_config_slider(
                     "Coner Radius",
                     state.read().coner_radius.value.0 / 100.0,
                     {
@@ -322,7 +322,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
 
             let state = state_for_glass.clone();
             scope.child(move || {
-                surface_config_slider(
+                glass_config_slider(
                     "Border Width",
                     state.read().border_width.value.0 as f32 / 20.0,
                     {
@@ -346,7 +346,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
 
             let state = state_for_glass.clone();
             scope.child(move || {
-                surface_config_slider(
+                glass_config_slider(
                     "Refraction Strength",
                     state.read().refraction_amount.value / 100.0,
                     {
@@ -370,7 +370,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
 
             let state = state_for_glass.clone();
             scope.child(move || {
-                surface_config_slider(
+                glass_config_slider(
                     "Refraction Height",
                     state.read().refraction_height.value / 50.0,
                     {
@@ -387,11 +387,11 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
 }
 
 #[tessera]
-fn surface_config_slider(
+fn glass_config_slider(
     label: &str,
     value: f32,
     on_change: Arc<dyn Fn(f32) + Send + Sync>,
-    state: Arc<RwLock<SliderState>>,
+    state: Arc<RwLock<GlassSliderState>>,
 ) {
     let label = label.to_string();
     column(
@@ -424,8 +424,8 @@ fn surface_config_slider(
                     });
 
                     scope.child(move || {
-                        slider(
-                            SliderArgsBuilder::default()
+                        glass_slider(
+                            GlassSliderArgsBuilder::default()
                                 .value(value)
                                 .on_change(on_change)
                                 .width(Dp(300.0))

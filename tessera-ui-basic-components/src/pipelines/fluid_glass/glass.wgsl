@@ -4,6 +4,7 @@ struct GlassUniforms {
     tint_color: vec4<f32>,
     rect_uv_bounds: vec4<f32>,
     corner_radii: vec4<f32>, // top-left, top-right, bottom-right, bottom-left
+    clip_rect_uv: vec4<f32>,
 
     // vec2s
     rect_size_px: vec2<f32>,
@@ -170,6 +171,14 @@ fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
 
+    // Prepare UV mapping and clip bounds
+    let rect_uv_start = instance.rect_uv_bounds.xy;
+    let px_to_uv_ratio = (instance.rect_uv_bounds.zw - rect_uv_start) / instance.rect_size_px;
+    let base_uv = rect_uv_start + local_coord * px_to_uv_ratio;
+
+    let min_uv = instance.clip_rect_uv.xy;
+    let max_uv = instance.clip_rect_uv.zw;
+
     var sd: f32;
     if instance.shape_type == 1.0 {
         sd = sdf_ellipse(centered_coord, half_size);
@@ -177,6 +186,7 @@ fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<
         sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
     }
 
+    // Compute refracted coord with edge fade near clip rect to reduce stretching
     var refracted_coord = local_coord;
     if sd < 0.0 && -sd < instance.refraction_height {
         var normal: vec2<f32>;
@@ -188,12 +198,29 @@ fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<
 
         let refracted_distance = circle_map(1.0 - (-sd / instance.refraction_height)) * instance.refraction_amount;
         let refracted_direction = normalize(normal + instance.eccentric_factor * normalize(centered_coord));
-        refracted_coord = local_coord + refracted_distance * refracted_direction;
+
+        // Attenuate only when the refracted sample would exceed clip rect
+        let uv_offset_dir = refracted_direction * px_to_uv_ratio;
+        let uv_offset = uv_offset_dir * refracted_distance;
+
+        let to_max = max_uv - base_uv;
+        let to_min = base_uv - min_uv;
+        // choose distance towards the edge in the offset direction per-axis
+        let avail = select(to_min, to_max, uv_offset >= vec2<f32>(0.0, 0.0));
+
+        let overflow_vec = max(abs(uv_offset) - avail, vec2<f32>(0.0, 0.0));
+        let overflow = max(overflow_vec.x, overflow_vec.y);
+
+        // soften over ~2 px in UV space
+        let softness_uv = max(1e-6, 2.0 * max(px_to_uv_ratio.x, px_to_uv_ratio.y));
+        let fade = clamp(1.0 - overflow / softness_uv, 0.0, 1.0);
+
+        refracted_coord = local_coord + (refracted_distance * fade) * refracted_direction;
     }
 
-    let rect_uv_start = instance.rect_uv_bounds.xy;
-    let px_to_uv_ratio = (instance.rect_uv_bounds.zw - rect_uv_start) / instance.rect_size_px;
-    let sample_uv = rect_uv_start + refracted_coord * px_to_uv_ratio;
+    // Final sample UV with clamp to the clip rect
+    var sample_uv = rect_uv_start + refracted_coord * px_to_uv_ratio;
+    sample_uv = clamp(sample_uv, min_uv, max_uv);
     return textureSample(t_diffuse, s_diffuse, sample_uv);
 }
 

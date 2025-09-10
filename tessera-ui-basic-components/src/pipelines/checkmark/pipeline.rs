@@ -3,6 +3,7 @@ use encase::{ShaderType, UniformBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxPosition, PxSize,
+    px::PxRect,
     renderer::DrawablePipeline,
     wgpu::{self, include_wgsl, util::DeviceExt},
 };
@@ -261,6 +262,7 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&CheckmarkCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
+        _clip_rect: Option<PxRect>,
     ) {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.bind_group, &[]);

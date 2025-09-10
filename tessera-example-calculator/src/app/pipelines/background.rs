@@ -3,7 +3,9 @@ use std::{sync::OnceLock, time::Instant};
 use bytemuck::{Pod, Zeroable};
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, DrawCommand, DrawablePipeline, Px, PxPosition,
-    PxSize, tessera,
+    PxSize,
+    px::PxRect,
+    tessera,
     wgpu::{self, util::DeviceExt},
 };
 use tessera_ui_basic_components::surface::{SurfaceArgsBuilder, surface};
@@ -108,6 +110,7 @@ impl DrawablePipeline<BackgroundCommand> for BackgroundPipeline {
         render_pass: &mut wgpu::RenderPass,
         commands: &[(&BackgroundCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
+        _clip_rect: Option<PxRect>,
     ) {
         if let Some((command, size, _)) = commands.first() {
             let uniforms = Uniforms {

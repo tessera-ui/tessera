@@ -15,7 +15,7 @@ use std::{num::NonZero, sync::OnceLock};
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tessera_ui::{Color, DrawablePipeline, PxPosition, PxSize, wgpu};
+use tessera_ui::{Color, DrawablePipeline, PxPosition, PxSize, px::PxRect, wgpu};
 
 pub use command::{TextCommand, TextConstraint};
 
@@ -162,6 +162,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&TextCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
+        _clip_rect: Option<PxRect>,
     ) {
         if commands.is_empty() {
             return;

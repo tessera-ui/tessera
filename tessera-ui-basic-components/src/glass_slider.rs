@@ -5,7 +5,7 @@
 //! select a continuous value between 0.0 and 1.0 by dragging a thumb along a track, and is suitable
 //! for dashboards, settings panels, or any interface requiring visually appealing value selection.
 //!
-//! Typical usage involves integrating the slider into a component tree, passing state via `Arc<Mutex<GlassSliderState>>`,
+//! Typical usage involves integrating the slider into a component tree, passing state via `Arc<RwLock<GlassSliderState>>`,
 //! and customizing appearance through `GlassSliderArgs`. The component is designed to fit seamlessly into
 //! glassmorphism-themed user interfaces.
 //!
@@ -14,7 +14,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
     focus_state::Focus, tessera, winit::window::CursorIcon,
@@ -163,32 +163,31 @@ fn process_cursor_events(
 ///   - `value`: The current value of the slider, must be between 0.0 and 1.0.
 ///   - `on_change`: A callback function that is triggered when the slider's value changes.
 ///     It receives the new value as an `f32`.
-/// * `state` - An `Arc<Mutex<GlassSliderState>>` to manage the component's interactive state,
+/// * `state` - An `Arc<RwLock<GlassSliderState>>` to manage the component's interactive state,
 ///   such as dragging and focus.
 ///
 /// # Example
 ///
 /// ```
 /// use std::sync::Arc;
-/// use parking_lot::Mutex;
+/// use parking_lot::RwLock;
 /// use tessera_ui_basic_components::glass_slider::{glass_slider, GlassSliderArgsBuilder, GlassSliderState};
 ///
 /// // In your application state
-/// let slider_value = Arc::new(Mutex::new(0.5));
-/// let slider_state = Arc::new(Mutex::new(GlassSliderState::new()));
+/// let slider_value = Arc::new(RwLock::new(0.5));
+/// let slider_state = Arc::new(RwLock::new(GlassSliderState::new()));
 ///
 /// // In your component function
-/// let value = *slider_value.lock();
 /// let on_change_callback = {
 ///     let slider_value = slider_value.clone();
 ///     Arc::new(move |new_value| {
-///         *slider_value.lock() = new_value;
+///         *slider_value.write() = new_value;
 ///     })
 /// };
 ///
 /// glass_slider(
 ///     GlassSliderArgsBuilder::default()
-///         .value(value)
+///         .value(*slider_value.read())
 ///         .on_change(on_change_callback)
 ///         .build()
 ///         .unwrap(),
@@ -196,7 +195,7 @@ fn process_cursor_events(
 /// );
 /// ```
 #[tessera]
-pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSliderState>>) {
+pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<RwLock<GlassSliderState>>) {
     let args: GlassSliderArgs = args.into();
     let track_radius = args.track_height.to_px().to_f32() / 2.0;
     let border_padding_px = args.track_border_width.to_px().to_f32() * 2.0;
@@ -255,14 +254,12 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
     );
 
     let on_change = args.on_change.clone();
-    let state_handler_state = state.clone();
     let disabled = args.disabled;
 
     state_handler(Box::new(move |input| {
         if disabled {
             return;
         }
-        let mut state = state_handler_state.lock();
 
         let is_in_component =
             cursor_within_component(input.cursor_position_rel, &input.computed_data);
@@ -272,13 +269,13 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<Mutex<GlassSlid
             input.requests.cursor_icon = CursorIcon::Pointer;
         }
 
-        if !is_in_component && !state.is_dragging {
+        if !is_in_component && !state.read().is_dragging {
             return;
         }
 
         let width_f = input.computed_data.width.0 as f32;
 
-        if let Some(v) = process_cursor_events(&mut state, &input, width_f)
+        if let Some(v) = process_cursor_events(&mut state.write(), &input, width_f)
             && (v - args.value).abs() > f32::EPSILON
         {
             on_change(v);

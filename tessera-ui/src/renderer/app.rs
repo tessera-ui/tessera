@@ -966,14 +966,24 @@ fn submit_buffered_commands(
         .collect::<Vec<_>>();
 
     // Apply clipping to the current batch rectangle; if nothing remains, abort early.
-    if !apply_clip_to_batch_rect(clip_stack, current_batch_draw_rect) {
+    let (current_clip_rect, anything_to_submit) =
+        apply_clip_to_batch_rect(clip_stack, current_batch_draw_rect);
+    if !anything_to_submit {
         return;
     }
 
     let rect = current_batch_draw_rect.unwrap();
     set_scissor_rect_from_pxrect(rpass, rect);
 
-    drawer.submit(gpu, queue, config, rpass, &commands, scene_texture_view);
+    drawer.submit(
+        gpu,
+        queue,
+        config,
+        rpass,
+        &commands,
+        scene_texture_view,
+        current_clip_rect,
+    );
     *current_batch_draw_rect = None;
 }
 
@@ -988,21 +998,24 @@ fn set_scissor_rect_from_pxrect(rpass: &mut wgpu::RenderPass<'_>, rect: PxRect) 
 
 /// Apply clip_stack to current_batch_draw_rect. Returns false if intersection yields nothing
 /// (meaning there is nothing to submit), true otherwise.
+///
+/// Also returns the current clipping rectangle (if any) for potential use by the caller.
 fn apply_clip_to_batch_rect(
-    clip_stack: &mut [PxRect],
+    clip_stack: &[PxRect],
     current_batch_draw_rect: &mut Option<PxRect>,
-) -> bool {
+) -> (Option<PxRect>, bool) {
     if let Some(clipped_rect) = clip_stack.last() {
         let Some(current_rect) = current_batch_draw_rect.as_ref() else {
-            return false;
+            return (Some(*clipped_rect), false);
         };
         if let Some(final_rect) = current_rect.intersection(clipped_rect) {
             *current_batch_draw_rect = Some(final_rect);
+            return (Some(*clipped_rect), true);
         } else {
-            return false;
+            return (Some(*clipped_rect), false);
         }
     }
-    true
+    (None, true)
 }
 
 /// Determine whether `next_type_id` (with potential clipping) can be merged into the current batch.

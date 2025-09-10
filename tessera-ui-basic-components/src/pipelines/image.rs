@@ -6,7 +6,9 @@ use std::{
 
 use encase::{ShaderType, UniformBuffer};
 use glam::Vec4;
-use tessera_ui::{DrawCommand, PxPosition, PxSize, renderer::drawer::DrawablePipeline, wgpu};
+use tessera_ui::{
+    DrawCommand, PxPosition, PxSize, px::PxRect, renderer::drawer::DrawablePipeline, wgpu,
+};
 
 #[derive(Debug, Clone)]
 /// Image pixel data for rendering.
@@ -311,6 +313,7 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&ImageCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
+        _clip_rect: Option<PxRect>,
     ) {
         render_pass.set_pipeline(&self.pipeline);
 

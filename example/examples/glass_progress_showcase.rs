@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use tessera_ui::{Color, DimensionValue, Dp, renderer::Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
@@ -14,14 +14,14 @@ use tessera_ui_basic_components::{
 
 struct AppState {
     value: Arc<Mutex<f32>>,
-    slider_state: Arc<Mutex<GlassSliderState>>,
+    slider_state: Arc<RwLock<GlassSliderState>>,
 }
 
 impl AppState {
     fn new() -> Self {
         Self {
             value: Arc::new(Mutex::new(0.5)),
-            slider_state: Arc::new(Mutex::new(GlassSliderState::new())),
+            slider_state: Arc::new(RwLock::new(GlassSliderState::new())),
         }
     }
 }

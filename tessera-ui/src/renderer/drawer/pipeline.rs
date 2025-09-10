@@ -145,7 +145,11 @@
 
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{PxPosition, px::PxSize, renderer::DrawCommand};
+use crate::{
+    PxPosition,
+    px::{PxRect, PxSize},
+    renderer::DrawCommand,
+};
 
 /// Core trait for implementing custom graphics rendering pipelines.
 ///
@@ -306,6 +310,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&T, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
+        clip_rect: Option<PxRect>,
     );
 
     /// Called once at the end of the render pass.
@@ -419,6 +424,7 @@ pub trait ErasedDrawablePipeline {
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
+        clip_rect: Option<PxRect>,
     ) -> bool;
 }
 
@@ -480,6 +486,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
+        clip_rect: Option<PxRect>,
     ) -> bool {
         if commands.is_empty() {
             return true;
@@ -506,6 +513,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
                 render_pass,
                 &typed_commands,
                 scene_texture_view,
+                clip_rect,
             );
             true
         } else {
@@ -676,6 +684,7 @@ impl PipelineRegistry {
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
+        clip_rect: Option<PxRect>,
     ) {
         if commands.is_empty() {
             return;
@@ -690,6 +699,7 @@ impl PipelineRegistry {
                 render_pass,
                 commands,
                 scene_texture_view,
+                clip_rect,
             ) {
                 panic!(
                     "FATAL: A command in a batch has a different type than the first one. This should not happen."

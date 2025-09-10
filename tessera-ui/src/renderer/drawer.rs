@@ -6,7 +6,10 @@
 pub mod command;
 mod pipeline;
 
-use crate::{PxPosition, px::PxSize};
+use crate::{
+    PxPosition,
+    px::{PxRect, PxSize},
+};
 
 pub use command::DrawCommand;
 pub use pipeline::{DrawablePipeline, PipelineRegistry};
@@ -92,6 +95,7 @@ impl Drawer {
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
+        clip_rect: Option<PxRect>,
     ) {
         self.pipeline_registry.dispatch(
             gpu,
@@ -100,6 +104,7 @@ impl Drawer {
             render_pass,
             commands,
             scene_texture_view,
+            clip_rect,
         );
     }
 }

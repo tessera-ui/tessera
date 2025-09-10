@@ -22,6 +22,7 @@ use encase::{ArrayLength, ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxPosition, PxSize,
+    px::PxRect,
     renderer::DrawablePipeline,
     wgpu::{self, include_wgsl},
 };
@@ -183,6 +184,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&ShapeCommand, PxSize, PxPosition)],
         _scene_texture_view: &wgpu::TextureView,
+        _clip_rect: Option<PxRect>,
     ) {
         if commands.is_empty() {
             return;

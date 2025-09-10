@@ -1,6 +1,6 @@
 use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
-use tessera_ui::{PxPosition, PxSize, renderer::DrawablePipeline, wgpu};
+use tessera_ui::{PxPosition, PxSize, px::PxRect, renderer::DrawablePipeline, wgpu};
 
 use crate::fluid_glass::FluidGlassCommand;
 
@@ -14,6 +14,7 @@ struct GlassUniforms {
     tint_color: Vec4,
     rect_uv_bounds: Vec4,
     corner_radii: Vec4,
+    clip_rect_uv: Vec4,
     rect_size_px: Vec2,
     ripple_center: Vec2,
     shape_type: f32,
@@ -180,14 +181,21 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&FluidGlassCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
+        clip_rect: Option<PxRect>,
     ) {
         // Prepare GPU resources (instances, buffer, bind group) in a single helper to keep
         // the draw path compact and easy to reason about.
-        let (uniform_buffer, bind_group, instance_count) =
-            match self.prepare_draw_resources(gpu, queue, config, commands, scene_texture_view) {
-                Some(tuple) => tuple,
-                None => return, // Nothing to draw or upload failed.
-            };
+        let (uniform_buffer, bind_group, instance_count) = match self.prepare_draw_resources(
+            gpu,
+            queue,
+            config,
+            commands,
+            scene_texture_view,
+            clip_rect,
+        ) {
+            Some(tuple) => tuple,
+            None => return, // Nothing to draw or upload failed.
+        };
 
         // Issue draw call.
         render_pass.set_pipeline(&self.pipeline);
@@ -206,10 +214,23 @@ impl FluidGlassPipeline {
         size: &PxSize,
         start_pos: &PxPosition,
         config: &wgpu::SurfaceConfiguration,
+        clip_rect: Option<PxRect>,
     ) -> GlassUniforms {
         let args = &command.args;
         let screen_w = config.width as f32;
         let screen_h = config.height as f32;
+
+        let clip_rect_uv = if let Some(rect) = clip_rect {
+            [
+                rect.x.0 as f32 / screen_w,
+                rect.y.0 as f32 / screen_h,
+                (rect.x.0 + rect.width.0) as f32 / screen_w,
+                (rect.y.0 + rect.height.0) as f32 / screen_h,
+            ]
+            .into()
+        } else {
+            [0.0, 0.0, 1.0, 1.0].into() // Default to full screen if no clip rect is provided
+        };
 
         let rect_uv_bounds = [
             start_pos.x.0 as f32 / screen_w,
@@ -260,6 +281,7 @@ impl FluidGlassPipeline {
         GlassUniforms {
             tint_color: args.tint_color.to_array().into(),
             rect_uv_bounds: rect_uv_bounds.into(),
+            clip_rect_uv,
             rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
             ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]).into(),
             corner_radii,
@@ -288,10 +310,11 @@ impl FluidGlassPipeline {
     fn build_instances(
         commands: &[(&FluidGlassCommand, PxSize, PxPosition)],
         config: &wgpu::SurfaceConfiguration,
+        clip_rect: Option<PxRect>,
     ) -> Vec<GlassUniforms> {
         commands
             .iter()
-            .map(|(cmd, size, pos)| Self::build_instance(cmd, size, pos, config))
+            .map(|(cmd, size, pos)| Self::build_instance(cmd, size, pos, config, clip_rect))
             .collect()
     }
 
@@ -379,6 +402,7 @@ impl FluidGlassPipeline {
         config: &wgpu::SurfaceConfiguration,
         commands: &[(&FluidGlassCommand, PxSize, PxPosition)],
         scene_texture_view: &wgpu::TextureView,
+        clip_rect: Option<PxRect>,
     ) -> Option<(wgpu::Buffer, wgpu::BindGroup, u32)> {
         if commands.is_empty() {
             return None;
@@ -386,7 +410,7 @@ impl FluidGlassPipeline {
 
         // Prepare instance list and enforce a maximum concurrent instance limit.
         // This keeps the GPU upload bounded and simplifies reasoning in the draw path.
-        let mut instances = Self::build_instances(commands, config);
+        let mut instances = Self::build_instances(commands, config, clip_rect);
         if instances.is_empty() {
             return None;
         }
