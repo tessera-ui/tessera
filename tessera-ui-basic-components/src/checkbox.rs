@@ -136,14 +136,12 @@ impl CheckmarkState {
 ///
 /// The checkbox is a standard UI element that allows users to select or deselect an option.
 /// It visually represents its state, typically as a square box that is either empty or contains a checkmark.
-/// The component handles its own animation and state transitions when an optional `CheckboxState` is provided.
+/// The component handles its own animation and state transitions.
 ///
 /// # Arguments
 ///
-/// The component is configured by passing `CheckboxArgs`.
+/// The component is configured by passing `CheckboxArgs` and a `CheckboxState`.
 ///
-/// * `checked`: A `bool` indicating whether the checkbox is currently checked. This determines its
-///   visual appearance.
 /// * `on_toggle`: A callback function `Arc<dyn Fn(bool) + Send + Sync>` that is invoked when the user
 ///   clicks the checkbox. It receives the new `checked` state as an argument, allowing the
 ///   application state to be updated.
@@ -152,24 +150,28 @@ impl CheckmarkState {
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::checkbox::{checkbox, CheckboxArgs};
+/// use parking_lot::RwLock;
+/// use tessera_ui_basic_components::checkbox::{checkbox, CheckboxArgs, CheckboxState, CheckmarkState};
 ///
 /// // Create a checkbox that is initially unchecked.
-/// // The `on_toggle` callback is triggered when the user clicks it.
-/// checkbox(CheckboxArgs {
-///     checked: false,
-///     on_toggle: Arc::new(|new_state| {
-///         // In a real app, you would update your state here.
-///         println!("Checkbox toggled to: {}", new_state);
-///     }),
-///     ..Default::default()
-/// });
+/// let unchecked_state = Arc::new(CheckboxState::default());
+/// checkbox(
+///     CheckboxArgs {
+///         on_toggle: Arc::new(|new_state| {
+///             // In a real app, you would update your state here.
+///             println!("Checkbox toggled to: {}", new_state);
+///         }),
+///         ..Default::default()
+///     },
+///     unchecked_state,
+/// );
 ///
 /// // Create a checkbox that is initially checked.
-/// checkbox(CheckboxArgs {
-///     checked: true,
+/// let checked_state = Arc::new(CheckboxState {
+///     checkmark: Arc::new(RwLock::new(CheckmarkState::new(true))),
 ///     ..Default::default()
 /// });
+/// checkbox(CheckboxArgs::default(), checked_state);
 /// ```
 #[tessera]
 pub fn checkbox(args: impl Into<CheckboxArgs>, state: Arc<CheckboxState>) {

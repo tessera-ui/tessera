@@ -84,17 +84,7 @@ impl Default for CheckmarkArgs {
 ///     Defaults to `[2.0, 2.0]`.
 /// *   `size`: The size of the checkmark area as a `Dp` value. Defaults to `Dp(20.0)`.
 ///
-/// # Example
-///
-/// ```
-/// use tessera_ui::Color;
-/// use tessera_ui_basic_components::checkmark::{checkmark, CheckmarkArgs};
-///
-/// checkmark(CheckmarkArgs {
-///     color: Color::from_rgb(0.0, 0.7, 0.0),
-///     ..Default::default()
-/// });
-/// ```
+
 #[tessera]
 pub fn checkmark(args: impl Into<CheckmarkArgs>) {
     let args: CheckmarkArgs = args.into();
