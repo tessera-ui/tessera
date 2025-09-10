@@ -108,6 +108,7 @@ pub struct TextArgs {
     ///
     /// This is the actual string that will be displayed on screen. It can contain
     /// Unicode characters and will be rendered using the specified font properties.
+    #[builder(setter(into))]
     pub text: String,
 
     /// The color of the text.

@@ -29,7 +29,8 @@ use tessera_ui_basic_components::{
 };
 
 use crate::example_components::{
-    surface::SurfaceShowcaseDestination, text::TextShowcaseDestination,
+    layouts::LayoutsShowcaseDestination, surface::SurfaceShowcaseDestination,
+    text::TextShowcaseDestination,
 };
 
 #[derive(Default)]
@@ -161,6 +162,15 @@ fn home(
     side_bar_state: Arc<RwLock<SideBarProviderState>>,
 ) {
     let examples = vec![
+        ComponentExampleDesc::new(
+            "Layouts (Row, Column, Boxed)",
+            "Components for arranging items horizontally, vertically, and with alignment.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(LayoutsShowcaseDestination {});
+                });
+            },
+        ),
         ComponentExampleDesc::new(
             "Text",
             "Basic text component, support colorful emoji",
