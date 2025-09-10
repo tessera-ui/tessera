@@ -18,7 +18,7 @@ use tessera_ui_basic_components::{
     boxed::{BoxedArgsBuilder, boxed},
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgs, column},
-    dialog::{DialogProviderArgsBuilder, DialogProviderState, dialog_provider},
+    dialog::{DialogProviderArgsBuilder, DialogProviderState, DialogStyle, dialog_provider},
     pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
@@ -75,6 +75,7 @@ pub fn app(#[state] app_state: AppState) {
                             .on_close_request(Arc::new(move || {
                                 dialog_state.write().close();
                             }))
+                            .style(DialogStyle::Glass)
                             .build()
                             .unwrap(),
                         state_for_dialog.dialog_state.clone(),
