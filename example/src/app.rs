@@ -29,8 +29,8 @@ use tessera_ui_basic_components::{
 };
 
 use crate::example_components::{
-    layouts::LayoutsShowcaseDestination, surface::SurfaceShowcaseDestination,
-    text::TextShowcaseDestination,
+    button::ButtonShowcaseDestination, layouts::LayoutsShowcaseDestination,
+    surface::SurfaceShowcaseDestination, text::TextShowcaseDestination,
 };
 
 #[derive(Default)]
@@ -162,6 +162,15 @@ fn home(
     side_bar_state: Arc<RwLock<SideBarProviderState>>,
 ) {
     let examples = vec![
+        ComponentExampleDesc::new(
+            "Button",
+            "A clickable component with ripple effects for user interaction.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(ButtonShowcaseDestination {});
+                });
+            },
+        ),
         ComponentExampleDesc::new(
             "Layouts (Row, Column, Boxed)",
             "Components for arranging items horizontally, vertically, and with alignment.",
