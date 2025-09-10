@@ -90,11 +90,8 @@ impl Router {
     /// Returns `None` if the stack is empty.
     pub fn pop(&mut self) -> Option<Box<dyn RouterDestination>> {
         let dest = self.route_stack.pop()?;
-        let Some(life_cycle) =
-            ShardRegistry::get().with_mut_dyn(dest.shard_id(), |state| state.life_cycle())
-        else {
-            return Some(dest);
-        };
+        // Decide cleanup by destination lifecycle, defaulting to Shard.
+        let life_cycle = dest.life_cycle();
         if life_cycle == ShardStateLifeCycle::Shard {
             // Remove per-shard state when destination is discarded
             ShardRegistry::get().shards.remove(dest.shard_id());
@@ -146,4 +143,12 @@ pub trait RouterDestination: Send + Sync {
     fn exec_component(&self);
     /// Stable shard identifier used for state registry lookups / cleanup.
     fn shard_id(&self) -> &'static str;
+    /// Lifecycle policy for the shard state tied to this destination.
+    ///
+    /// Default is `Shard`, which means the associated shard state will be
+    /// removed from the registry when this destination is popped.
+    /// Override in generated implementations to persist for the whole app.
+    fn life_cycle(&self) -> ShardStateLifeCycle {
+        ShardStateLifeCycle::Shard
+    }
 }

@@ -254,11 +254,11 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * Produces a stable shard ID: `module_path!()::function_name`
 ///
 /// # Lifecycle
-/// A shard state lives:
-/// * For the lifetime of the application if its `ShardStateLifeCycle` returns `Application`
-/// * Until the destination is `pop()`‑ed if the lifecycle is `Shard` (default)
+/// Controlled by the generated destination (via `#[state(...)]`).
+/// * Default: `Shard` – state is removed when the destination is `pop()`‑ed
+/// * Override: `#[state(app)]` (or `#[state(application)]`) – persist for the entire application
 ///
-/// When `pop()` is called and the underlying state lifecycle is `Shard`, the registry
+/// When `pop()` is called and the destination lifecycle is `Shard`, the registry
 /// entry is removed, freeing the state.
 ///
 /// # Example
@@ -331,14 +331,37 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     let mut func = parse_macro_input!(input as ItemFn);
 
     // 2. Handle #[state] parameters, ensuring it's unique and removing it from the signature
+    //    Also parse optional lifecycle argument: #[state(app)] or #[state(shard)]
     let mut state_param = None;
+    let mut state_lifecycle: Option<proc_macro2::TokenStream> = None;
     let mut new_inputs = syn::punctuated::Punctuated::new();
     for arg in func.sig.inputs.iter() {
         if let syn::FnArg::Typed(pat_type) = arg {
-            let is_state = pat_type
-                .attrs
-                .iter()
-                .any(|attr| attr.path().is_ident("state"));
+            // Detect #[state] and parse optional argument
+            let mut is_state = false;
+            let mut lifecycle_override: Option<proc_macro2::TokenStream> = None;
+            for attr in &pat_type.attrs {
+                if attr.path().is_ident("state") {
+                    is_state = true;
+                    // Try parse an optional argument: #[state(app)] / #[state(shard)]
+                    if let Ok(arg_ident) = attr.parse_args::<syn::Ident>() {
+                        let s = arg_ident.to_string().to_lowercase();
+                        if s == "app" || s == "application" {
+                            lifecycle_override = Some(
+                                quote! { #crate_path::tessera_ui_shard::ShardStateLifeCycle::Application },
+                            );
+                        } else if s == "shard" {
+                            lifecycle_override = Some(
+                                quote! { #crate_path::tessera_ui_shard::ShardStateLifeCycle::Shard },
+                            );
+                        } else {
+                            panic!(
+                                "Unsupported #[state(...)] argument in #[shard]: expected `app` or `shard`"
+                            );
+                        }
+                    }
+                }
+            }
             if is_state {
                 if state_param.is_some() {
                     panic!(
@@ -346,6 +369,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     );
                 }
                 state_param = Some(pat_type.clone());
+                state_lifecycle = lifecycle_override;
                 continue;
             }
         }
@@ -410,6 +434,18 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         .collect();
 
     // 6. Use quote! to generate the new TokenStream code
+    //    Prepare optional lifecycle override method for RouterDestination impl.
+    let lifecycle_method_tokens = if let Some(lc) = state_lifecycle.clone() {
+        quote! {
+            fn life_cycle(&self) -> #crate_path::tessera_ui_shard::ShardStateLifeCycle {
+                #lc
+            }
+        }
+    } else {
+        // Default is `Shard` per RouterDestination trait; no override needed.
+        quote! {}
+    };
+
     let expanded = {
         // `exec_component` only passes struct fields (unmarked parameters).
         let exec_args = param_idents
@@ -437,6 +473,8 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     fn shard_id(&self) -> &'static str {
                         concat!(module_path!(), "::", #func_name_str)
                     }
+
+                    #lifecycle_method_tokens
                 }
 
                 // Rebuild the function, keeping its attributes and visibility, but using the modified signature
@@ -476,6 +514,8 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     fn shard_id(&self) -> &'static str {
                         concat!(module_path!(), "::", #func_name_str)
                     }
+
+                    #lifecycle_method_tokens
                 }
 
                 // Rebuild the function, keeping its attributes and visibility, but using the modified signature

@@ -12,11 +12,7 @@ use dashmap::DashMap;
 static REGISTRY: OnceLock<ShardRegistry> = OnceLock::new();
 
 /// Trait for shard state that can be auto-injected into `shard component`.
-pub trait ShardState: Any + Send + Sync {
-    fn life_cycle(&self) -> ShardStateLifeCycle {
-        ShardStateLifeCycle::Shard
-    }
-}
+pub trait ShardState: Any + Send + Sync {}
 
 /// Describes the lifecycle of this ShardState.
 ///
@@ -82,13 +78,5 @@ impl ShardRegistry {
         std::mem::forget(arc_t);
 
         f(ret)
-    }
-
-    pub(crate) fn with_mut_dyn<F, R>(&self, id: &str, f: F) -> Option<R>
-    where
-        F: FnOnce(Arc<dyn ShardState>) -> R,
-    {
-        let shard_ref = self.shards.get(id)?;
-        Some(f(shard_ref.value().clone()))
     }
 }
