@@ -95,10 +95,12 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, tessera, winit};
+use tessera_ui::{Color, DimensionValue, Dp, tessera, winit};
 
 use crate::{
+    alignment::Alignment,
     animation,
+    boxed::{BoxedArgsBuilder, boxed},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -205,7 +207,7 @@ impl DialogProviderState {
 fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
     match args.style {
         DialogStyle::Glass => {
-            let blur_radius = blur_radius_for(progress, is_open, 50.0);
+            let blur_radius = blur_radius_for(progress, is_open, 5.0);
             fluid_glass(
                 FluidGlassArgsBuilder::default()
                     .on_click(args.on_close_request.clone())
@@ -276,6 +278,67 @@ fn make_keyboard_state_handler(
     })
 }
 
+#[tessera]
+fn dialog_content_wrapper(
+    style: DialogStyle,
+    alpha: f32,
+    content: impl FnOnce() + Send + Sync + 'static,
+) {
+    boxed(
+        BoxedArgsBuilder::default()
+            .width(DimensionValue::FILLED)
+            .height(DimensionValue::FILLED)
+            .alignment(Alignment::Center)
+            .build()
+            .unwrap(),
+        |scope| {
+            scope.child(move || match style {
+                DialogStyle::Glass => {
+                    fluid_glass(
+                        FluidGlassArgsBuilder::default()
+                            .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
+                            .blur_radius(5.0 * alpha)
+                            .shape(Shape::RoundedRectangle {
+                                top_left: 25.0,
+                                top_right: 25.0,
+                                bottom_right: 25.0,
+                                bottom_left: 25.0,
+                                g2_k_value: 3.0,
+                            })
+                            .refraction_amount(32.0 * alpha)
+                            .block_input(true)
+                            .padding(Dp(16.0))
+                            .build()
+                            .unwrap(),
+                        None,
+                        content,
+                    );
+                }
+                DialogStyle::Material => {
+                    surface(
+                        SurfaceArgsBuilder::default()
+                            .style(Color::WHITE.with_alpha(alpha).into())
+                            .shadow(Default::default())
+                            .shape(Shape::RoundedRectangle {
+                                top_left: 25.0,
+                                top_right: 25.0,
+                                bottom_right: 25.0,
+                                bottom_left: 25.0,
+                                g2_k_value: 3.0,
+                            })
+                            .padding(Dp(16.0))
+                            .block_input(true)
+                            .build()
+                            .unwrap(),
+                        None,
+                        content,
+                    );
+                }
+            });
+        },
+    );
+}
+
 /// A provider component that manages the rendering and event flow for a modal dialog.
 ///
 /// This component should be used as one of the outermost layers of the application.
@@ -297,7 +360,7 @@ pub fn dialog_provider(
     args: DialogProviderArgs,
     state: Arc<RwLock<DialogProviderState>>,
     main_content: impl FnOnce(),
-    dialog_content: impl FnOnce(f32),
+    dialog_content: impl FnOnce(f32) + Send + Sync + 'static,
 ) {
     // 1. Render the main application content unconditionally.
     main_content();
@@ -329,6 +392,8 @@ pub fn dialog_provider(
 
         // 2c. Dialog Content
         // The user-defined dialog content is rendered on top of everything.
-        dialog_content(content_alpha);
+        dialog_content_wrapper(args.style, content_alpha, move || {
+            dialog_content(content_alpha);
+        });
     }
 }

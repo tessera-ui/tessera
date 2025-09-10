@@ -18,6 +18,7 @@ use tessera_ui_basic_components::{
     boxed::{BoxedArgsBuilder, boxed},
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgs, column},
+    dialog::{DialogProviderArgsBuilder, DialogProviderState, dialog_provider},
     pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
@@ -39,6 +40,7 @@ struct AppState {
     bottom_nav_bar_state: Arc<RwLock<BottomNavBarState>>,
     bottom_sheet_state: Arc<RwLock<BottomSheetProviderState>>,
     side_bar_state: Arc<RwLock<SideBarProviderState>>,
+    dialog_state: Arc<RwLock<DialogProviderState>>,
 }
 
 #[tessera]
@@ -46,6 +48,7 @@ struct AppState {
 pub fn app(#[state] app_state: AppState) {
     let state_for_bottom_sheet = app_state.clone();
     let state_for_side_bar = app_state.clone();
+    let state_for_dialog = app_state.clone();
     side_bar_provider(
         SideBarProviderArgsBuilder::default()
             .on_close_request(Arc::new(move || {
@@ -66,52 +69,82 @@ pub fn app(#[state] app_state: AppState) {
                     .unwrap(),
                 app_state.bottom_sheet_state.clone(),
                 move || {
-                    column(ColumnArgs::default(), |scope| {
-                        scope.child(|| {
-                            top_app_bar();
-                        });
-                        let bottom_sheet_state = app_state.bottom_sheet_state.clone();
-                        let side_bar_state = app_state.side_bar_state.clone();
-                        scope.child_weighted(
-                            move || {
-                                router_root(HomeDestination {
-                                    bottom_sheet_state,
-                                    side_bar_state,
+                    let dialog_state = app_state.dialog_state.clone();
+                    dialog_provider(
+                        DialogProviderArgsBuilder::default()
+                            .on_close_request(Arc::new(move || {
+                                dialog_state.write().close();
+                            }))
+                            .build()
+                            .unwrap(),
+                        state_for_dialog.dialog_state.clone(),
+                        move || {
+                            column(ColumnArgs::default(), |scope| {
+                                scope.child(|| {
+                                    top_app_bar();
                                 });
-                            },
-                            1.0,
-                        );
-                        let bottom_sheet_state = app_state.bottom_sheet_state.clone();
-                        let side_bar_state = app_state.side_bar_state.clone();
-                        scope.child(move || {
-                            bottom_nav_bar(app_state.bottom_nav_bar_state.clone(), |scope| {
-                                scope.child(
+                                let bottom_sheet_state = app_state.bottom_sheet_state.clone();
+                                let side_bar_state = app_state.side_bar_state.clone();
+                                let dialog_state = app_state.dialog_state.clone();
+                                scope.child_weighted(
                                     move || {
-                                        text("Home");
-                                    },
-                                    move || {
-                                        Router::with_mut(|router| {
-                                            router.reset_with(HomeDestination {
-                                                bottom_sheet_state: bottom_sheet_state.clone(),
-                                                side_bar_state: side_bar_state.clone(),
-                                            });
+                                        router_root(HomeDestination {
+                                            bottom_sheet_state,
+                                            side_bar_state,
+                                            dialog_state,
                                         });
                                     },
+                                    1.0,
                                 );
+                                let bottom_sheet_state = app_state.bottom_sheet_state.clone();
+                                let side_bar_state = app_state.side_bar_state.clone();
+                                let dialog_state = app_state.dialog_state.clone();
+                                scope.child(move || {
+                                    bottom_nav_bar(
+                                        app_state.bottom_nav_bar_state.clone(),
+                                        |scope| {
+                                            scope.child(
+                                                move || {
+                                                    text("Home");
+                                                },
+                                                move || {
+                                                    Router::with_mut(|router| {
+                                                        router.reset_with(HomeDestination {
+                                                            bottom_sheet_state: bottom_sheet_state
+                                                                .clone(),
+                                                            side_bar_state: side_bar_state.clone(),
+                                                            dialog_state: dialog_state.clone(),
+                                                        });
+                                                    });
+                                                },
+                                            );
 
-                                scope.child(
-                                    || {
-                                        text("About");
-                                    },
-                                    || {
-                                        Router::with_mut(|router| {
-                                            router.reset_with(AboutDestination {});
-                                        });
-                                    },
-                                );
+                                            scope.child(
+                                                || {
+                                                    text("About");
+                                                },
+                                                || {
+                                                    Router::with_mut(|router| {
+                                                        router.reset_with(AboutDestination {});
+                                                    });
+                                                },
+                                            );
+                                        },
+                                    );
+                                });
                             });
-                        });
-                    });
+                        },
+                        move |alpha| {
+                            text(
+                                TextArgsBuilder::default()
+                                    .text("Hello from Dialog!")
+                                    .size(Dp(20.0))
+                                    .color(Color::BLACK.with_alpha(alpha))
+                                    .build()
+                                    .unwrap(),
+                            );
+                        },
+                    );
                 },
                 || {
                     text(
@@ -161,8 +194,16 @@ fn home(
     #[state] home_state: HomeState,
     bottom_sheet_state: Arc<RwLock<BottomSheetProviderState>>,
     side_bar_state: Arc<RwLock<SideBarProviderState>>,
+    dialog_state: Arc<RwLock<DialogProviderState>>,
 ) {
     let examples = vec![
+        ComponentExampleDesc::new(
+            "Dialog",
+            "A modal window that appears on top of the main content.",
+            move || {
+                dialog_state.write().open();
+            },
+        ),
         ComponentExampleDesc::new(
             "Checkbox",
             "A control that allows the user to select a binary 'on' or 'off' option.",
