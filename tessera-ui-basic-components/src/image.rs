@@ -66,7 +66,8 @@ pub fn load_image_from_source(source: &ImageSource) -> Result<ImageData, image::
 pub struct ImageArgs {
     /// The decoded image data, represented by [`ImageData`]. This contains the raw pixel
     /// buffer and the image's dimensions.
-    pub data: ImageData,
+    #[builder(setter(into))]
+    pub data: Arc<ImageData>,
 
     /// An optional explicit width for the image. If `None`, the image's intrinsic
     /// width will be used.
@@ -81,7 +82,10 @@ pub struct ImageArgs {
 
 impl From<ImageData> for ImageArgs {
     fn from(data: ImageData) -> Self {
-        ImageArgsBuilder::default().data(data).build().unwrap()
+        ImageArgsBuilder::default()
+            .data(Arc::new(data))
+            .build()
+            .unwrap()
     }
 }
 

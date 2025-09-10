@@ -54,7 +54,7 @@ impl Eq for ImageData {}
 /// let cmd = ImageCommand { data: img_data };
 /// ```
 pub struct ImageCommand {
-    pub data: ImageData,
+    pub data: Arc<ImageData>,
 }
 
 impl DrawCommand for ImageCommand {

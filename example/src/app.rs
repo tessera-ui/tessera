@@ -31,8 +31,8 @@ use tessera_ui_basic_components::{
 
 use crate::example_components::{
     button::ButtonShowcaseDestination, checkbox::CheckboxShowcaseDestination,
-    layouts::LayoutsShowcaseDestination, surface::SurfaceShowcaseDestination,
-    text::TextShowcaseDestination,
+    fluid_glass::FluidGlassShowcaseDestination, layouts::LayoutsShowcaseDestination,
+    surface::SurfaceShowcaseDestination, text::TextShowcaseDestination,
 };
 
 #[derive(Default)]
@@ -197,6 +197,15 @@ fn home(
     dialog_state: Arc<RwLock<DialogProviderState>>,
 ) {
     let examples = vec![
+        ComponentExampleDesc::new(
+            "Fluid Glass",
+            "A component that creates a frosted glass effect over a background.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(FluidGlassShowcaseDestination {});
+                });
+            },
+        ),
         ComponentExampleDesc::new(
             "Dialog",
             "A modal window that appears on top of the main content.",
