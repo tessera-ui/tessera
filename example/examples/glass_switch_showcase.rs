@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::Alignment,
@@ -10,7 +10,7 @@ use tessera_ui_basic_components::{
 };
 
 #[tessera]
-fn app(switch_state: Arc<Mutex<GlassSwitchState>>) {
+fn app(switch_state: Arc<RwLock<GlassSwitchState>>) {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fill {
@@ -41,8 +41,6 @@ fn app(switch_state: Arc<Mutex<GlassSwitchState>>) {
                 |scope| {
                     scope.child(move || {
                         let args = GlassSwitchArgsBuilder::default()
-                            .state(Some(switch_state.clone()))
-                            .checked(switch_state.lock().checked)
                             .on_toggle(Arc::new(|on| {
                                 if on {
                                     println!("Glass Switch toggled to OFF");
@@ -56,7 +54,7 @@ fn app(switch_state: Arc<Mutex<GlassSwitchState>>) {
                             .track_off_color(Color::new(0.8, 0.8, 0.8, 0.5))
                             .build()
                             .unwrap();
-                        glass_switch(args);
+                        glass_switch(args, switch_state.clone());
                     });
                 },
             )
@@ -65,7 +63,7 @@ fn app(switch_state: Arc<Mutex<GlassSwitchState>>) {
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let switch_state = Arc::new(Mutex::new(GlassSwitchState::new(false)));
+    let switch_state = Arc::new(RwLock::new(GlassSwitchState::new(false)));
     Renderer::run(
         {
             let switch_state = switch_state.clone();

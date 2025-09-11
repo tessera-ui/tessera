@@ -14,7 +14,7 @@ use std::{
 };
 
 use derive_builder::Builder;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
     PxPosition, tessera, winit::window::CursorIcon,
@@ -31,36 +31,36 @@ const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 /// State for the `glass_switch` component, handling animation.
 pub struct GlassSwitchState {
     pub checked: bool,
-    progress: Mutex<f32>,
-    last_toggle_time: Mutex<Option<Instant>>,
+    progress: f32,
+    last_toggle_time: Option<Instant>,
+}
+
+impl Default for GlassSwitchState {
+    fn default() -> Self {
+        Self::new(false)
+    }
 }
 
 impl GlassSwitchState {
     pub fn new(initial_state: bool) -> Self {
         Self {
             checked: initial_state,
-            progress: Mutex::new(if initial_state { 1.0 } else { 0.0 }),
-            last_toggle_time: Mutex::new(None),
+            progress: if initial_state { 1.0 } else { 0.0 },
+            last_toggle_time: None,
         }
     }
 
     pub fn toggle(&mut self) {
         self.checked = !self.checked;
-        *self.last_toggle_time.lock() = Some(Instant::now());
+        self.last_toggle_time = Some(Instant::now());
     }
 }
 
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct GlassSwitchArgs {
-    #[builder(default)]
-    pub state: Option<Arc<Mutex<GlassSwitchState>>>,
-
-    #[builder(default = "false")]
-    pub checked: bool,
-
-    #[builder(default = "Arc::new(|_| {})")]
-    pub on_toggle: Arc<dyn Fn(bool) + Send + Sync>,
+    #[builder(default, setter(strip_option))]
+    pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
 
     #[builder(default = "Dp(52.0)")]
     pub width: Dp,
@@ -101,17 +101,6 @@ impl Default for GlassSwitchArgs {
     }
 }
 
-// Helper functions extracted from glass_switch to reduce closure complexity
-fn raw_progress_from_args(args: &GlassSwitchArgs) -> f32 {
-    if let Some(state) = &args.state {
-        *state.lock().progress.lock()
-    } else if args.checked {
-        1.0
-    } else {
-        0.0
-    }
-}
-
 fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
     Color {
         r: off.r + (on.r - off.r) * progress,
@@ -121,15 +110,13 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
     }
 }
 
-fn update_progress_from_state(state_arc: &Option<Arc<Mutex<GlassSwitchState>>>) {
-    if let Some(state) = state_arc {
-        let s = state.lock();
-        if let Some(last_toggle_time) = *s.last_toggle_time.lock() {
-            let elapsed = last_toggle_time.elapsed();
-            let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
-            let mut p = s.progress.lock();
-            *p = if s.checked { fraction } else { 1.0 - fraction };
-        }
+fn update_progress_from_state(state: Arc<RwLock<GlassSwitchState>>) {
+    let last_toggle_time = state.read().last_toggle_time;
+    if let Some(last_toggle_time) = last_toggle_time {
+        let elapsed = last_toggle_time.elapsed();
+        let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
+        let checked = state.read().checked;
+        state.write().progress = if checked { fraction } else { 1.0 - fraction };
     }
 }
 
@@ -153,13 +140,17 @@ fn was_pressed_left(input: &tessera_ui::StateHandlerInput) -> bool {
 }
 
 fn handle_input_events(
-    state_arc: &Option<Arc<Mutex<GlassSwitchState>>>,
-    on_toggle: &Arc<dyn Fn(bool) + Send + Sync>,
-    checked_initial: bool,
+    state: Arc<RwLock<GlassSwitchState>>,
+    on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
     input: &mut tessera_ui::StateHandlerInput,
 ) {
+    let Some(on_toggle) = on_toggle else {
+        // No callback provided, do nothing (act disabled)
+        return;
+    };
+
     // Update progress first
-    update_progress_from_state(state_arc);
+    update_progress_from_state(state.clone());
 
     // Cursor handling
     let size = input.computed_data;
@@ -174,15 +165,8 @@ fn handle_input_events(
 
     if pressed && is_cursor_in {
         // If internal state exists, toggle it and use the toggled value.
-        if let Some(state) = &state_arc {
-            let mut s = state.lock();
-            s.toggle();
-            on_toggle(s.checked);
-        } else {
-            // No internal state: derive new state from initial checked value.
-            let new_state = !checked_initial;
-            on_toggle(new_state);
-        }
+        state.write().toggle();
+        on_toggle(state.read().checked);
     }
 }
 #[tessera]
@@ -196,28 +180,27 @@ fn handle_input_events(
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::glass_switch::{glass_switch, GlassSwitchArgs, GlassSwitchArgsBuilder};
+/// use tessera_ui_basic_components::glass_switch::{glass_switch, GlassSwitchArgs, GlassSwitchArgsBuilder, GlassSwitchState};
+/// use parking_lot::RwLock;
 ///
-/// // In a real app, you would manage the state.
-/// // This example shows how to create a switch that is initially off.
+/// // In a real app, you would manage the state in shard state or elsewhere.
+/// let state = Arc::new(RwLock::new(GlassSwitchState::new(false)));
+///
 /// glass_switch(
 ///     GlassSwitchArgsBuilder::default()
-///         .checked(false)
 ///         .on_toggle(Arc::new(|new_state| {
 ///             // Update your application state here
 ///             println!("Switch toggled to: {}", new_state);
 ///         }))
 ///         .build()
 ///         .unwrap(),
+///     state.clone()
 /// );
 ///
-/// // An initially checked switch
-/// glass_switch(
-///     GlassSwitchArgsBuilder::default()
-///         .checked(true)
-///         .build()
-///         .unwrap(),
-/// );
+/// // Use the state to toggle the switch programmatically if needed.
+/// state.write().toggle(); // Toggle the switch state
+/// // or get the current on/off state
+/// assert_eq!(state.read().checked, true); // true here after toggle
 /// ```
 ///
 /// # Arguments
@@ -228,7 +211,7 @@ fn handle_input_events(
 ///     It receives the new boolean state.
 ///   - Other arguments for customization like `width`, `height`, `track_on_color`, `track_off_color`, etc.
 ///     are also available.
-pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
+pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: Arc<RwLock<GlassSwitchState>>) {
     let args: GlassSwitchArgs = args.into();
     // Precompute pixel sizes to avoid repeated conversions
     let width_px = args.width.to_px();
@@ -238,7 +221,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
     let track_radius = height_px.to_f32() / 2.0;
 
     // Track tint color interpolation based on progress
-    let progress = raw_progress_from_args(&args);
+    let progress = state.read().progress;
     let track_color = interpolate_color(args.track_off_color, args.track_on_color, progress);
 
     // Build and render track
@@ -276,12 +259,10 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
     }
     fluid_glass(thumb_builder.build().unwrap(), None, || {});
 
+    let state_clone = state.clone();
     let on_toggle = args.on_toggle.clone();
-    let state_arc = args.state.clone();
-    let checked_initial = args.checked;
-
     state_handler(Box::new(move |mut input| {
-        handle_input_events(&state_arc, &on_toggle, checked_initial, &mut input);
+        handle_input_events(state_clone.clone(), on_toggle.clone(), &mut input);
     }));
 
     // Measurement and placement
@@ -316,7 +297,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
         let thumb_padding_px = args.thumb_padding.to_px();
 
         // Use eased progress for placement
-        let eased_progress = animation::easing(raw_progress_from_args(&args));
+        let eased_progress = animation::easing(state.read().progress);
 
         input.place_child(
             track_id,

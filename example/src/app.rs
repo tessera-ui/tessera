@@ -33,8 +33,8 @@ use crate::example_components::{
     button::ButtonShowcaseDestination, checkbox::CheckboxShowcaseDestination,
     fluid_glass::FluidGlassShowcaseDestination, glass_button::GlassButtonShowcaseDestination,
     glass_progress::GlassProgressShowcaseDestination, glass_slider::GlassSliderShowcaseDestination,
-    layouts::LayoutsShowcaseDestination, surface::SurfaceShowcaseDestination,
-    text::TextShowcaseDestination,
+    glass_switch::GlassSwitchShowcaseDestination, layouts::LayoutsShowcaseDestination,
+    surface::SurfaceShowcaseDestination, text::TextShowcaseDestination,
 };
 
 #[derive(Default)]
@@ -200,6 +200,15 @@ fn home(
     dialog_state: Arc<RwLock<DialogProviderState>>,
 ) {
     let examples = vec![
+        ComponentExampleDesc::new(
+            "Glass Switch",
+            "A switch with a frosted glass effect.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(GlassSwitchShowcaseDestination {});
+                });
+            },
+        ),
         ComponentExampleDesc::new(
             "Glass Slider",
             "A slider with a frosted glass effect.",
