@@ -7,5 +7,6 @@ pub mod glass_slider;
 pub mod glass_switch;
 pub mod image;
 pub mod layouts;
+pub mod progress;
 pub mod surface;
 pub mod text;

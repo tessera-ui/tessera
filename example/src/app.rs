@@ -34,8 +34,8 @@ use crate::example_components::{
     fluid_glass::FluidGlassShowcaseDestination, glass_button::GlassButtonShowcaseDestination,
     glass_progress::GlassProgressShowcaseDestination, glass_slider::GlassSliderShowcaseDestination,
     glass_switch::GlassSwitchShowcaseDestination, image::ImageShowcaseDestination,
-    layouts::LayoutsShowcaseDestination, surface::SurfaceShowcaseDestination,
-    text::TextShowcaseDestination,
+    layouts::LayoutsShowcaseDestination, progress::ProgressShowcaseDestination,
+    surface::SurfaceShowcaseDestination, text::TextShowcaseDestination,
 };
 
 #[derive(Default)]
@@ -201,6 +201,11 @@ fn home(
     dialog_state: Arc<RwLock<DialogProviderState>>,
 ) {
     let examples = vec![
+        ComponentExampleDesc::new("Progress", "A standard component to show progress.", || {
+            Router::with_mut(|router| {
+                router.push(ProgressShowcaseDestination {});
+            });
+        }),
         ComponentExampleDesc::new("Image", "A component to display images.", || {
             Router::with_mut(|router| {
                 router.push(ImageShowcaseDestination {});
