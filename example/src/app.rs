@@ -35,7 +35,8 @@ use crate::example_components::{
     glass_progress::GlassProgressShowcaseDestination, glass_slider::GlassSliderShowcaseDestination,
     glass_switch::GlassSwitchShowcaseDestination, image::ImageShowcaseDestination,
     layouts::LayoutsShowcaseDestination, progress::ProgressShowcaseDestination,
-    surface::SurfaceShowcaseDestination, text::TextShowcaseDestination,
+    slider::SliderShowcaseDestination, surface::SurfaceShowcaseDestination,
+    text::TextShowcaseDestination,
 };
 
 #[derive(Default)]
@@ -201,6 +202,15 @@ fn home(
     dialog_state: Arc<RwLock<DialogProviderState>>,
 ) {
     let examples = vec![
+        ComponentExampleDesc::new(
+            "Slider",
+            "A control that allows selecting a value from a range.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(SliderShowcaseDestination {});
+                });
+            },
+        ),
         ComponentExampleDesc::new("Progress", "A standard component to show progress.", || {
             Router::with_mut(|router| {
                 router.push(ProgressShowcaseDestination {});

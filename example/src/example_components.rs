@@ -8,5 +8,6 @@ pub mod glass_switch;
 pub mod image;
 pub mod layouts;
 pub mod progress;
+pub mod slider;
 pub mod surface;
 pub mod text;
