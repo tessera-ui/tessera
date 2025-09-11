@@ -110,11 +110,17 @@ impl Color {
     /// Full intensity blue with no red or green components, fully opaque.
     pub const BLUE: Color = Color::new(0.0, 0.0, 1.0, 1.0);
 
-    /// Gray color
+    /// Gray color (0.12, 0.12, 0.12, 1).
     pub const GRAY: Color = Color::new(0.12, 0.12, 0.12, 1.0);
 
     /// Alias for [Color::GRAY].
     pub const GREY: Color = Color::GRAY;
+
+    /// Teal color (0, 0.5, 0.5, 1).
+    pub const TEAL: Color = Color::new(0.0, 0.5, 0.5, 1.0);
+
+    /// Orange color (1, 0.5, 0, 1).
+    pub const ORANGE: Color = Color::new(1.0, 0.5, 0.0, 1.0);
 
     /// Creates a new `Color` from four `f32` values (red, green, blue, alpha).
     ///
