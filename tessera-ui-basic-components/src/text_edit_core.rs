@@ -70,17 +70,6 @@ pub enum ClickType {
 ///
 /// This struct manages the text buffer, selection, cursor position, focus, and user interaction state.
 /// It is designed to be shared between UI components via an `Arc<RwLock<TextEditorState>>`.
-///
-/// # Example
-/// ```
-/// use std::sync::Arc;
-/// use parking_lot::RwLock;
-/// use tessera_ui::Dp;
-/// use tessera_ui_basic_components::text_edit_core::{TextEditorState, text_edit_core};
-///
-/// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(16.0), None)));
-/// // Use `text_edit_core(state.clone())` inside your component tree.
-/// ```
 pub struct TextEditorState {
     line_height: Px,
     pub(crate) editor: glyphon::Editor<'static>,
@@ -104,13 +93,6 @@ impl TextEditorState {
     ///
     /// * `size` - Font size in Dp.
     /// * `line_height` - Optional line height in Dp. If `None`, uses 1.2x the font size.
-    ///
-    /// # Example
-    /// ```
-    /// use tessera_ui::Dp;
-    /// use tessera_ui_basic_components::text_edit_core::TextEditorState;
-    /// let state = TextEditorState::new(Dp(16.0), None);
-    /// ```
     pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
         Self::with_selection_color(size, line_height, Color::new(0.5, 0.7, 1.0, 0.4))
     }
@@ -435,29 +417,7 @@ impl TextEditorState {
     }
 }
 
-/// Core text editing component for rendering text, selection, and cursor.
-///
-/// This component is responsible for rendering the text buffer, selection highlights, and cursor.
-/// It does not handle user events directly; instead, it is intended to be used inside a container
-/// that manages user interaction and passes state updates via `TextEditorState`.
-///
-/// # Arguments
-///
-/// * `state` - Shared state for the text editor, typically wrapped in `Arc<RwLock<...>>`.
-///
-/// # Example
-/// ```
-/// use std::sync::Arc;
-/// use parking_lot::RwLock;
-/// use tessera_ui::Dp;
-/// use tessera_ui_basic_components::text_edit_core::{TextEditorState, text_edit_core};
-///
-/// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(16.0), None)));
-/// text_edit_core(state.clone());
-/// ```
-// Helper: compute selection rectangles for the given editor.
-// This extracts the selection-rect computation into a small, testable function
-// to reduce complexity inside the main component body.
+/// Compute selection rectangles for the given editor.
 fn compute_selection_rects(editor: &glyphon::Editor) -> Vec<RectDef> {
     let mut selection_rects: Vec<RectDef> = Vec::new();
     let (selection_start, selection_end) = editor.selection_bounds().unwrap_or_default();
@@ -481,8 +441,7 @@ fn compute_selection_rects(editor: &glyphon::Editor) -> Vec<RectDef> {
     selection_rects
 }
 
-// Helper: clip rects to visible area and drop those fully outside.
-// Keeps behavior isolated from the main component logic.
+/// Clip rects to visible area and drop those fully outside.
 fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) -> Vec<RectDef> {
     let visible_x0 = Px(0);
     let visible_y0 = Px(0);
@@ -513,6 +472,15 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
         .collect()
 }
 
+/// Core text editing component for rendering text, selection, and cursor.
+///
+/// This component is responsible for rendering the text buffer, selection highlights, and cursor.
+/// It does not handle user events directly; instead, it is intended to be used inside a container
+/// that manages user interaction and passes state updates via `TextEditorState`.
+///
+/// # Arguments
+///
+/// * `state` - Shared state for the text editor, typically wrapped in `Arc<RwLock<...>>`.
 #[tessera]
 pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
     // text rendering with constraints from parent container

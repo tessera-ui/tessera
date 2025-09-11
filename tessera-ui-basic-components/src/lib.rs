@@ -86,5 +86,5 @@ pub mod surface;
 pub mod switch;
 pub mod tabs;
 pub mod text;
-pub mod text_edit_core;
+mod text_edit_core;
 pub mod text_editor;
