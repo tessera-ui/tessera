@@ -80,7 +80,6 @@ impl Display for ExampleGlassState {
 
 impl Default for ExampleGlassState {
     fn default() -> Self {
-        println!("Loading image from path: {}", IMAGE_PATH);
         let image_data = Arc::new(
             load_image_from_source(&ImageSource::Path(IMAGE_PATH.to_string()))
                 .expect("Failed to load image"),
