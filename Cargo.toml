@@ -13,7 +13,7 @@ members = [
 license = "MIT OR Apache-2.0"
 edition = "2024"
 repository = "https://github.com/tessera-ui/tessera"
-homepage = "https://tessera-ui.github.io/tessera-official-website"
+homepage = "https://tessera-ui.github.io"
 
 [profile.release]
 codegen-units = 1
