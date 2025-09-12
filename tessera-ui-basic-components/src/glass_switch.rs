@@ -6,7 +6,7 @@
 //! The component supports extensive customization, including size, color, border, and animation, and is designed for stateless usage with external state management.
 //! Typical usage involves integrating the switch into application UIs where a clear, elegant toggle is desired.
 //!
-//! See [`glass_switch()`](tessera-ui-basic-components/src/glass_switch.rs:142) for usage details and customization options.
+//! See [`glass_switch`] for usage details and customization options.
 
 use std::{
     sync::Arc,
