@@ -1,3 +1,12 @@
+## [v0.4.0] - 2025-09-12 +08:00
+
+### Changes
+
+- feat(shard, macros, router)!: destination-controlled shard state lifecycle with optional lifecycle argument
+- refactor(example): rework(ing) demos to better showcase components and updated APIs
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-shard-v0.3.1...tessera-ui-shard-v0.4.0)
+
 ## [v0.3.1] - 2025-09-07 +08:00
 
 ### Changes
