@@ -51,11 +51,11 @@ pub struct ButtonArgs {
     #[builder(default = "Dp(12.0)")]
     pub padding: Dp,
     /// Optional explicit width behavior for the button.
-    #[builder(default, setter(strip_option))]
-    pub width: Option<DimensionValue>,
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
+    pub width: DimensionValue,
     /// Optional explicit height behavior for the button.
-    #[builder(default, setter(strip_option))]
-    pub height: Option<DimensionValue>,
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
+    pub height: DimensionValue,
     /// The click callback function
     #[builder(default, setter(strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
@@ -170,16 +170,6 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
 
     let mut builder = SurfaceArgsBuilder::default();
 
-    // Set width if available
-    if let Some(width) = args.width {
-        builder = builder.width(width);
-    }
-
-    // Set height if available
-    if let Some(height) = args.height {
-        builder = builder.height(height);
-    }
-
     // Set shadow if available
     if let Some(shadow) = args.shadow {
         builder = builder.shadow(shadow);
@@ -196,6 +186,8 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         .shape(args.shape)
         .padding(args.padding)
         .ripple_color(args.ripple_color)
+        .width(args.width)
+        .height(args.height)
         .build()
         .unwrap()
 }
@@ -262,12 +254,12 @@ impl ButtonArgs {
     }
 
     pub fn with_width(mut self, width: DimensionValue) -> Self {
-        self.width = Some(width);
+        self.width = width;
         self
     }
 
     pub fn with_height(mut self, height: DimensionValue) -> Self {
-        self.height = Some(height);
+        self.height = height;
         self
     }
 

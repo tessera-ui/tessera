@@ -35,12 +35,12 @@ pub struct GlassButtonArgs {
     /// The padding of the button.
     #[builder(default = "Dp(12.0)")]
     pub padding: Dp,
-    /// Optional explicit width behavior for the button.
-    #[builder(default, setter(strip_option))]
-    pub width: Option<DimensionValue>,
-    /// Optional explicit height behavior for the button.
-    #[builder(default, setter(strip_option))]
-    pub height: Option<DimensionValue>,
+    /// Explicit width behavior for the button. Defaults to `WRAP`.
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
+    pub width: DimensionValue,
+    /// Explicit height behavior for the button. Defaults to `WRAP`.
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
+    pub height: DimensionValue,
 
     // Glass visual properties
     #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
@@ -173,12 +173,6 @@ pub fn glass_button(
             .ripple_strength(progress);
     }
 
-    if let Some(width) = args.width {
-        glass_args_builder = glass_args_builder.width(width);
-    }
-    if let Some(height) = args.height {
-        glass_args_builder = glass_args_builder.height(height);
-    }
     if let Some(contrast) = args.contrast {
         glass_args_builder = glass_args_builder.contrast(contrast);
     }
@@ -193,6 +187,8 @@ pub fn glass_button(
         .refraction_amount(args.refraction_amount)
         .noise_amount(args.noise_amount)
         .noise_scale(args.noise_scale)
+        .width(args.width)
+        .height(args.height)
         .time(args.time)
         .padding(args.padding);
 

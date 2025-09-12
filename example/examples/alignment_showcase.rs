@@ -25,8 +25,8 @@ fn small_box(text_content: &'static str, color: Color) {
                 g2_k_value: 3.0,
             },
             padding: Dp(8.0),
-            width: Some(DimensionValue::Fixed(Px(40))),
-            height: Some(DimensionValue::Fixed(Px(40))),
+            width: DimensionValue::Fixed(Px(40)),
+            height: DimensionValue::Fixed(Px(40)),
             ..Default::default()
         },
         None,
@@ -77,8 +77,8 @@ fn row_demo_line(title: &'static str, alignment: MainAxisAlignment) {
                             g2_k_value: 3.0,
                         },
                         padding: Dp(10.0),
-                        width: Some(DimensionValue::Fixed(Px(400))), // Sufficient Fixed Width
-                        height: Some(DimensionValue::Fixed(Px(70))),
+                        width: DimensionValue::Fixed(Px(400)), // Sufficient Fixed Width
+                        height: DimensionValue::Fixed(Px(70)),
                         ..Default::default()
                     },
                     None,
@@ -117,14 +117,8 @@ fn app() {
         SurfaceArgs {
             style: Color::WHITE.into(), // White Background
             padding: Dp(20.0),
-            width: Some(DimensionValue::Fill {
-                min: None,
-                max: None,
-            }), // Fill Width
-            height: Some(DimensionValue::Fill {
-                min: None,
-                max: None,
-            }), // Fill Height
+            width: DimensionValue::FILLED,
+            height: DimensionValue::FILLED,
             ..Default::default()
         },
         None,

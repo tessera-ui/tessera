@@ -82,11 +82,11 @@ pub struct FluidGlassArgs {
     #[builder(default, setter(strip_option))]
     pub contrast: Option<f32>,
     /// The optional width of the component, defined as a `DimensionValue`.
-    #[builder(default, setter(strip_option))]
-    pub width: Option<DimensionValue>,
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
+    pub width: DimensionValue,
     /// The optional height of the component, defined as a `DimensionValue`.
-    #[builder(default, setter(strip_option))]
-    pub height: Option<DimensionValue>,
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
+    pub height: DimensionValue,
 
     #[builder(default = "Dp(0.0)")]
     pub padding: Dp,
@@ -267,14 +267,8 @@ pub fn fluid_glass(
     (child)();
     let args_measure_clone = args.clone();
     measure(Box::new(move |input| {
-        let glass_intrinsic_width = args_measure_clone.width.unwrap_or(DimensionValue::Wrap {
-            min: None,
-            max: None,
-        });
-        let glass_intrinsic_height = args_measure_clone.height.unwrap_or(DimensionValue::Wrap {
-            min: None,
-            max: None,
-        });
+        let glass_intrinsic_width = args_measure_clone.width;
+        let glass_intrinsic_height = args_measure_clone.height;
         let glass_intrinsic_constraint =
             Constraint::new(glass_intrinsic_width, glass_intrinsic_height);
         let effective_glass_constraint = glass_intrinsic_constraint.merge(input.parent_constraint);

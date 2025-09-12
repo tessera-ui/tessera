@@ -69,15 +69,13 @@ pub struct ImageArgs {
     #[builder(setter(into))]
     pub data: Arc<ImageData>,
 
-    /// An optional explicit width for the image. If `None`, the image's intrinsic
-    /// width will be used.
-    #[builder(default, setter(strip_option))]
-    pub width: Option<DimensionValue>,
+    /// Explicit width for the image.
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
+    pub width: DimensionValue,
 
-    /// An optional explicit height for the image. If `None`, the image's intrinsic
-    /// height will be used.
-    #[builder(default, setter(strip_option))]
-    pub height: Option<DimensionValue>,
+    /// Explicit height for the image.
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
+    pub height: DimensionValue,
 }
 
 impl From<ImageData> for ImageArgs {
@@ -138,14 +136,8 @@ pub fn image(args: impl Into<ImageArgs>) {
         let intrinsic_width = Px(image_args.data.width as i32);
         let intrinsic_height = Px(image_args.data.height as i32);
 
-        let image_intrinsic_width = image_args.width.unwrap_or(DimensionValue::Wrap {
-            min: Some(intrinsic_width),
-            max: Some(intrinsic_width),
-        });
-        let image_intrinsic_height = image_args.height.unwrap_or(DimensionValue::Wrap {
-            min: Some(intrinsic_height),
-            max: Some(intrinsic_height),
-        });
+        let image_intrinsic_width = image_args.width;
+        let image_intrinsic_height = image_args.height;
 
         let image_intrinsic_constraint =
             Constraint::new(image_intrinsic_width, image_intrinsic_height);

@@ -82,13 +82,13 @@ pub struct SurfaceArgs {
     #[builder(default = "Dp(0.0)")]
     pub padding: Dp,
 
-    /// Optional explicit width constraint (Fixed / Wrap / Fill). If `None`, defaults to `Wrap`.
-    #[builder(default, setter(strip_option))]
-    pub width: Option<DimensionValue>,
+    /// Explicit width constraint (Fixed / Wrap / Fill). Defaults to `Wrap`.
+    #[builder(default = "DimensionValue::WRAP")]
+    pub width: DimensionValue,
 
-    /// Optional explicit height constraint (Fixed / Wrap / Fill). If `None`, defaults to `Wrap`.
-    #[builder(default, setter(strip_option))]
-    pub height: Option<DimensionValue>,
+    /// Explicit height constraint (Fixed / Wrap / Fill). Defaults to `Wrap`.
+    #[builder(default = "DimensionValue::WRAP")]
+    pub height: DimensionValue,
 
     /// Optional click handler. Presence of this value makes the surface interactive:
     /// * Cursor changes to pointer when hovered
@@ -419,14 +419,8 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
     let args_for_handler = args.clone();
 
     measure(Box::new(move |input| {
-        let surface_intrinsic_width = args_measure_clone.width.unwrap_or(DimensionValue::Wrap {
-            min: None,
-            max: None,
-        });
-        let surface_intrinsic_height = args_measure_clone.height.unwrap_or(DimensionValue::Wrap {
-            min: None,
-            max: None,
-        });
+        let surface_intrinsic_width = args_measure_clone.width;
+        let surface_intrinsic_height = args_measure_clone.height;
         let surface_intrinsic_constraint =
             Constraint::new(surface_intrinsic_width, surface_intrinsic_height);
         let effective_surface_constraint =

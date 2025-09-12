@@ -48,43 +48,13 @@ use crate::{
 /// ```
 pub use crate::text_edit_core::TextEditorState;
 
-/// Arguments for the `text_editor` component.
-///
-/// # Example
-/// ```
-/// use tessera_ui_basic_components::text_editor::{TextEditorArgs, TextEditorArgsBuilder, TextEditorState};
-/// use tessera_ui::{Dp, DimensionValue, Px};
-/// use std::sync::Arc;
-/// use parking_lot::RwLock;
-///
-/// // Create a text editor with a fixed width and height.
-/// let editor_args_fixed = TextEditorArgsBuilder::default()
-///     .width(Some(DimensionValue::Fixed(Px(200)))) // pixels
-///     .height(Some(DimensionValue::Fixed(Px(100)))) // pixels
-///     .build()
-///     .unwrap();
-///
-/// // Create a text editor that fills available width up to 500px, with a min width of 50px
-/// let editor_args_fill_wrap = TextEditorArgsBuilder::default()
-///     .width(Some(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) })) // pixels
-///     .height(Some(DimensionValue::Wrap { min: None, max: None }))
-///     .build()
-///     .unwrap();
-///
-/// // Create the editor state
-/// let editor_state = Arc::new(RwLock::new(TextEditorState::new(Dp(10.0), None)));
-///
-/// // text_editor(editor_args_fixed, editor_state.clone());
-/// // text_editor(editor_args_fill_wrap, editor_state.clone());
-/// ```
-#[derive(Debug, Default, Builder, Clone)]
-#[builder(pattern = "owned")]
 /// Arguments for configuring the [`text_editor`] component.
 ///
 /// `TextEditorArgs` provides flexible options for layout, appearance, and interaction of the text editor.
 /// All fields are optional and have sensible defaults. Use the builder pattern or convenience methods for construction.
 ///
 /// # Fields
+///
 /// - `width`, `height`: Optional constraints for the editor's size (logical pixels or fill/wrap).
 /// - `min_width`, `min_height`: Minimum size in density-independent pixels (Dp).
 /// - `background_color`, `focus_background_color`: Editor background color (normal/focused).
@@ -94,25 +64,28 @@ pub use crate::text_edit_core::TextEditorState;
 /// - `selection_color`: Highlight color for selected text.
 ///
 /// # Example
+///
 /// ```
 /// use tessera_ui_basic_components::text_editor::{TextEditorArgs, TextEditorArgsBuilder};
-/// use tessera_ui::{Dp, DimensionValue, Px};
+/// use tessera_ui::{Dp, DimensionValue, Px, Color};
 ///
 /// let args = TextEditorArgsBuilder::default()
-///     .width(Some(DimensionValue::Fixed(Px(300))))
-///     .height(Some(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) }))
-///     .background_color(Some(tessera_ui::Color::WHITE))
+///     .width(DimensionValue::Fixed(Px(300)))
+///     .height(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) })
+///     .background_color(Some(Color::WHITE))
 ///     .padding(Dp(8.0))
 ///     .build()
 ///     .unwrap();
 /// ```
+#[derive(Debug, Default, Builder, Clone)]
+#[builder(pattern = "owned")]
 pub struct TextEditorArgs {
-    /// Optional width constraint for the text editor. Values are in logical pixels or fill/wrap.
-    #[builder(default = "None")]
-    pub width: Option<DimensionValue>,
-    /// Optional height constraint for the text editor. Values are in logical pixels or fill/wrap.
-    #[builder(default = "None")]
-    pub height: Option<DimensionValue>,
+    /// Width constraint for the text editor. Defaults to `Wrap`.
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
+    pub width: DimensionValue,
+    /// Height constraint for the text editor. Defaults to `Wrap`.
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
+    pub height: DimensionValue,
     /// Minimum width in density-independent pixels. Defaults to 120dp if not specified.
     #[builder(default = "None")]
     pub min_width: Option<Dp>,
@@ -129,13 +102,13 @@ pub struct TextEditorArgs {
     #[builder(default = "None")]
     pub border_color: Option<Color>,
     /// The shape of the text editor container.
-    #[builder(default = "                Shape::RoundedRectangle {
-                    top_left: 4.0,
-                    top_right: 4.0,
-                    bottom_right: 4.0,
-                    bottom_left: 4.0,
-                    g2_k_value: 3.0,
-                }")]
+    #[builder(default = "Shape::RoundedRectangle {
+                            top_left: 4.0,
+                            top_right: 4.0,
+                            bottom_right: 4.0,
+                            bottom_left: 4.0,
+                            g2_k_value: 3.0,
+                        }")]
     pub shape: Shape,
     /// Padding inside the text editor. Defaults to 5.0 Dp.
     #[builder(default = "Dp(5.0)")]
@@ -166,8 +139,8 @@ pub struct TextEditorArgs {
 /// use parking_lot::RwLock;
 ///
 /// let args = TextEditorArgsBuilder::default()
-///     .width(Some(DimensionValue::Fixed(Px(300))))
-///     .height(Some(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) }))
+///     .width(DimensionValue::Fixed(Px(300)))
+///     .height(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) })
 ///     .build()
 ///     .unwrap();
 ///
@@ -200,8 +173,8 @@ pub struct TextEditorArgs {
 /// use parking_lot::RwLock;
 ///
 /// let args = TextEditorArgsBuilder::default()
-///     .width(Some(DimensionValue::Fixed(Px(300))))
-///     .height(Some(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) }))
+///     .width(DimensionValue::Fixed(Px(300)))
+///     .height(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) })
 ///     .build()
 ///     .unwrap();
 ///
@@ -505,36 +478,6 @@ fn create_surface_args(
     args: &TextEditorArgs,
     state: &Arc<RwLock<TextEditorState>>,
 ) -> crate::surface::SurfaceArgs {
-    let mut builder = SurfaceArgsBuilder::default();
-
-    // Set width if available
-    if let Some(width) = args.width {
-        builder = builder.width(width);
-    } else {
-        // Use default with minimum
-        builder = builder.width(DimensionValue::Wrap {
-            min: args.min_width.map(|dp| dp.into()).or(Some(Px(120))), // Default minimum width 120px
-            max: None,
-        });
-    }
-
-    // Set height if available
-    if let Some(height) = args.height {
-        builder = builder.height(height);
-    } else {
-        // Use line height as basis with some padding
-        let line_height_px = state.read().line_height();
-        let padding_px: Px = args.padding.into();
-        let min_height_px = args
-            .min_height
-            .map(|dp| dp.into())
-            .unwrap_or(line_height_px + padding_px * 2 + Px(10)); // +10 for comfortable spacing
-        builder = builder.height(DimensionValue::Wrap {
-            min: Some(min_height_px),
-            max: None,
-        });
-    }
-
     let style = if args.border_width.to_pixels_f32() > 0.0 {
         crate::surface::SurfaceStyle::FilledOutlined {
             fill_color: determine_background_color(args, state),
@@ -547,10 +490,12 @@ fn create_surface_args(
         }
     };
 
-    builder
+    SurfaceArgsBuilder::default()
         .style(style)
         .shape(args.shape)
         .padding(args.padding)
+        .width(args.width)
+        .height(args.height)
         .build()
         .unwrap()
 }
@@ -593,6 +538,7 @@ impl TextEditorArgs {
     /// - Border: 1px gray, rounded rectangle
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple();
@@ -659,32 +605,35 @@ impl TextEditorArgs {
     /// Sets the width constraint for the editor.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::{DimensionValue, Px};
     /// let args = TextEditorArgs::simple().with_width(DimensionValue::Fixed(Px(200)));
     /// ```
     pub fn with_width(mut self, width: DimensionValue) -> Self {
-        self.width = Some(width);
+        self.width = width;
         self
     }
 
     /// Sets the height constraint for the editor.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::{DimensionValue, Px};
     /// let args = TextEditorArgs::simple().with_height(DimensionValue::Fixed(Px(100)));
     /// ```
     pub fn with_height(mut self, height: DimensionValue) -> Self {
-        self.height = Some(height);
+        self.height = height;
         self
     }
 
     /// Sets the minimum width in Dp.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Dp;
@@ -698,6 +647,7 @@ impl TextEditorArgs {
     /// Sets the minimum height in Dp.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Dp;
@@ -766,6 +716,7 @@ impl TextEditorArgs {
     /// Sets the inner padding in Dp.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Dp;
@@ -779,6 +730,7 @@ impl TextEditorArgs {
     /// Sets the border color when focused.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Color;
@@ -792,6 +744,7 @@ impl TextEditorArgs {
     /// Sets the background color when focused.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Color;
@@ -805,6 +758,7 @@ impl TextEditorArgs {
     /// Sets the selection highlight color.
     ///
     /// # Example
+    ///
     /// ```
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Color;

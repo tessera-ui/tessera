@@ -47,8 +47,8 @@ fn tabs_showcase_app(#[state] app_state: AppState) {
         SurfaceArgs {
             style: Color::WHITE.into(),
             padding: Dp(25.0),
-            width: Some(DimensionValue::FILLED),
-            height: Some(DimensionValue::FILLED),
+            width: DimensionValue::FILLED,
+            height: DimensionValue::FILLED,
             ..Default::default()
         },
         None,

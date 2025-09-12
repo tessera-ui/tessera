@@ -26,8 +26,8 @@ where
     surface(
         SurfaceArgs {
             style: Color::WHITE.into(),
-            width: Some(DimensionValue::FILLED),
-            height: Some(DimensionValue::FILLED),
+            width: DimensionValue::FILLED,
+            height: DimensionValue::FILLED,
             ..Default::default()
         },
         None,
