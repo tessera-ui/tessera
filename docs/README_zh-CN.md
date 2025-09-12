@@ -2,11 +2,9 @@
 
 <img src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/logo.svg" alt="Tessera Logo" style="width:320px; height:auto;" />
 
-<br />
+# Tessera
 
-<p align="center" style="color: gray;"><em>Gui rust in rust</em></p>
-
-<br />
+[website](https://tessera-ui.github.io/) · [crates.io](https://crates.io/crates/tessera-ui) · [docs.rs](https://docs.rs/tessera-ui/)
 
 [![English][readme-en-badge]][readme-en-url]
 [![Stars][stars-badge]][stars-url]
