@@ -67,7 +67,7 @@ fn release_package(
     package_name: &str,
     bump: BumpType,
     execute: bool,
-    workspace: &Workspace,
+    workspace: &mut Workspace,
 ) -> Result<()> {
     // Thin wrapper to keep cognitive complexity low: delegate the heavy work.
     let (files_to_add, modified_files, release_commit_msg, tag) =
@@ -133,7 +133,7 @@ fn prepare_and_collect_release_data(
     package_name: &str,
     bump: BumpType,
     execute: bool,
-    workspace: &Workspace,
+    workspace: &mut Workspace,
 ) -> Result<(Vec<String>, Vec<(String, String, String)>, String, String)> {
     // Locate package and read Cargo.toml path
     let package_path = workspace.find_package(package_name)?;
@@ -167,6 +167,9 @@ fn prepare_and_collect_release_data(
     for (file, _, _) in &modified_files {
         files_to_add.push(file.clone());
     }
+
+    // Update version in workspace state for next package release.
+    workspace.packages.get_mut(package_name).unwrap().version = new_version.clone();
 
     Ok((files_to_add, modified_files, release_commit_msg, tag))
 }
@@ -282,7 +285,7 @@ fn build_release_plan(
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let workspace = Workspace::load("Cargo.toml")?;
+    let mut workspace = Workspace::load("Cargo.toml")?;
 
     println!("Analyzing packages to determine version bumps...");
 
@@ -302,7 +305,7 @@ fn main() -> Result<()> {
 
     for package_name in &final_release_order {
         let bump = *final_release_plan.get(package_name).unwrap();
-        release_package(package_name, bump, cli.execute, &workspace)?;
+        release_package(package_name, bump, cli.execute, &mut workspace)?;
     }
 
     println!("\n✅ All packages released successfully!");
