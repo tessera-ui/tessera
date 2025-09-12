@@ -43,13 +43,13 @@ use tessera_ui::{ComputedData, Constraint, DimensionValue, Dp, Px, tessera};
 pub struct SpacerArgs {
     /// The desired width behavior of the spacer.
     ///
-    /// Defaults to `Fixed(Px(0))`. Use `Fill { min: None, max: None }` for an expanding spacer.
-    #[builder(default = "DimensionValue::Fixed(Px(0))")]
+    /// Defaults to `Fixed(Px(0))`.
+    #[builder(default = "DimensionValue::Fixed(Px(0))", setter(into))]
     pub width: DimensionValue,
     /// The desired height behavior of the spacer.
     ///
-    /// Defaults to `Fixed(Px(0))`. Use `Fill { min: None, max: None }` for an expanding spacer.
-    #[builder(default = "DimensionValue::Fixed(Px(0))")]
+    /// Defaults to `Fixed(Px(0))`.
+    #[builder(default = "DimensionValue::Fixed(Px(0))", setter(into))]
     pub height: DimensionValue,
 }
 
