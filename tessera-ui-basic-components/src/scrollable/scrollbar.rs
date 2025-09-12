@@ -135,8 +135,8 @@ fn compute_thumb_color(state_lock: &Arc<RwLock<ScrollBarState>>, args: &ScrollBa
 fn render_track_surface_v(width: Px, height: Px, color: Color) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(width.into())
-            .height(height.into())
+            .width(width)
+            .height(height)
             .style(color.into())
             .shape({
                 let radius = width.to_f32() / 2.0;
@@ -159,8 +159,8 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
 fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(width.into())
-            .height(height.into())
+            .width(width)
+            .height(height)
             .shape({
                 let radius = width.to_f32() / 2.0;
                 Shape::RoundedRectangle {
@@ -183,8 +183,8 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
 fn render_track_surface_h(width: Px, height: Px, color: Color) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(width.into())
-            .height(height.into())
+            .width(width)
+            .height(height)
             .style(color.into())
             .shape({
                 let radius = height.to_f32() / 2.0;
@@ -207,8 +207,8 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
 fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(width.into())
-            .height(height.into())
+            .width(width)
+            .height(height)
             .shape({
                 let radius = height.to_f32() / 2.0;
                 Shape::RoundedRectangle {
