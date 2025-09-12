@@ -9,5 +9,6 @@ pub mod image;
 pub mod layouts;
 pub mod progress;
 pub mod slider;
+pub mod spacer;
 pub mod surface;
 pub mod text;

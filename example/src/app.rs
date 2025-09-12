@@ -35,8 +35,8 @@ use crate::example_components::{
     glass_progress::GlassProgressShowcaseDestination, glass_slider::GlassSliderShowcaseDestination,
     glass_switch::GlassSwitchShowcaseDestination, image::ImageShowcaseDestination,
     layouts::LayoutsShowcaseDestination, progress::ProgressShowcaseDestination,
-    slider::SliderShowcaseDestination, surface::SurfaceShowcaseDestination,
-    text::TextShowcaseDestination,
+    slider::SliderShowcaseDestination, spacer::SpacerShowcaseDestination,
+    surface::SurfaceShowcaseDestination, text::TextShowcaseDestination,
 };
 
 #[derive(Default)]
@@ -202,6 +202,15 @@ fn home(
     dialog_state: Arc<RwLock<DialogProviderState>>,
 ) {
     let examples = vec![
+        ComponentExampleDesc::new(
+            "Spacer",
+            "A component to create empty space in a layout.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(SpacerShowcaseDestination {});
+                });
+            },
+        ),
         ComponentExampleDesc::new(
             "Slider",
             "A control that allows selecting a value from a range.",
