@@ -83,11 +83,11 @@ pub struct SurfaceArgs {
     pub padding: Dp,
 
     /// Explicit width constraint (Fixed / Wrap / Fill). Defaults to `Wrap`.
-    #[builder(default = "DimensionValue::WRAP")]
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub width: DimensionValue,
 
     /// Explicit height constraint (Fixed / Wrap / Fill). Defaults to `Wrap`.
-    #[builder(default = "DimensionValue::WRAP")]
+    #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub height: DimensionValue,
 
     /// Optional click handler. Presence of this value makes the surface interactive:
