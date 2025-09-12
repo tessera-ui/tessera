@@ -1,17 +1,20 @@
 use std::{
+    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use derive_builder::Builder;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, PxPosition,
     place_node, tessera,
 };
 
 use crate::{
-    animation,
+    RippleState, animation,
+    button::{ButtonArgsBuilder, button},
+    shape_def::Shape,
     surface::{SurfaceArgs, surface},
 };
 
@@ -38,8 +41,8 @@ fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
 }
 
 pub struct TabsState {
-    pub active_tab: usize,
-    pub prev_active_tab: usize,
+    active_tab: usize,
+    prev_active_tab: usize,
     progress: f32,
     last_switch_time: Option<Instant>,
     indicator_from_width: Px,
@@ -48,6 +51,13 @@ pub struct TabsState {
     indicator_to_x: Px,
     content_scroll_offset: Px,
     target_content_scroll_offset: Px,
+    ripple_states: HashMap<usize, Arc<RippleState>>,
+}
+
+impl Default for TabsState {
+    fn default() -> Self {
+        Self::new(0)
+    }
 }
 
 impl TabsState {
@@ -63,6 +73,7 @@ impl TabsState {
             indicator_to_x: Px(0),
             content_scroll_offset: Px(0),
             target_content_scroll_offset: Px(0),
+            ripple_states: Default::default(),
         }
     }
 
@@ -84,17 +95,21 @@ impl TabsState {
             self.progress = 0.0;
         }
     }
+
+    pub fn active_tab(&self) -> usize {
+        self.active_tab
+    }
+
+    pub fn prev_active_tab(&self) -> usize {
+        self.prev_active_tab
+    }
 }
 
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TabsArgs {
-    #[builder(default = "0")]
-    pub active_tab: usize,
     #[builder(default = "Color::new(0.4745, 0.5255, 0.7961, 1.0)")]
     pub indicator_color: Color,
-    #[builder(default)]
-    pub state: Option<Arc<Mutex<TabsState>>>,
     #[builder(default = "DimensionValue::FILLED")]
     pub width: DimensionValue,
     #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
@@ -117,7 +132,7 @@ pub struct TabsScope<'a> {
 }
 
 impl<'a> TabsScope<'a> {
-    pub fn tab<F1, F2>(&mut self, title: F1, content: F2)
+    pub fn child<F1, F2>(&mut self, title: F1, content: F2)
     where
         F1: FnOnce() + Send + Sync + 'static,
         F2: FnOnce() + Send + Sync + 'static,
@@ -130,11 +145,10 @@ impl<'a> TabsScope<'a> {
 }
 
 #[tessera]
-fn tabs_content_container<F>(scroll_offset: Px, children: F)
-where
-    F: FnOnce(),
-{
-    children();
+fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Send + Sync>>) {
+    for child in children {
+        child();
+    }
 
     measure(Box::new(
         move |input| -> Result<ComputedData, MeasurementError> {
@@ -170,7 +184,7 @@ where
 }
 
 #[tessera]
-pub fn tabs<F>(args: TabsArgs, scope_config: F)
+pub fn tabs<F>(args: TabsArgs, state: Arc<RwLock<TabsState>>, scope_config: F)
 where
     F: FnOnce(&mut TabsScope),
 {
@@ -179,12 +193,7 @@ where
     scope_config(&mut scope);
 
     let num_tabs = tabs.len();
-    let active_tab = if let Some(state) = &args.state {
-        state.lock().active_tab
-    } else {
-        args.active_tab
-    }
-    .min(num_tabs.saturating_sub(1));
+    let active_tab = state.read().active_tab.min(num_tabs.saturating_sub(1));
 
     let (title_closures, content_closures): (Vec<_>, Vec<_>) =
         tabs.into_iter().map(|def| (def.title, def.content)).unzip();
@@ -200,40 +209,77 @@ where
         || {},
     );
 
-    for title in title_closures {
-        title();
+    let titles_count = title_closures.len();
+    for (index, child) in title_closures.into_iter().enumerate() {
+        let color = if index == active_tab {
+            Color::new(0.9, 0.9, 0.9, 1.0) // Active tab color
+        } else {
+            Color::TRANSPARENT
+        };
+        let ripple_state = state
+            .write()
+            .ripple_states
+            .entry(index)
+            .or_insert_with(|| Arc::new(RippleState::new()))
+            .clone();
+        let state_clone = state.clone();
+
+        let shape = if index == 0 {
+            Shape::RoundedRectangle {
+                top_left: 25.0,
+                top_right: 0.0,
+                bottom_right: 0.0,
+                bottom_left: 0.0,
+                g2_k_value: 3.0,
+            }
+        } else if index == titles_count - 1 {
+            Shape::RoundedRectangle {
+                top_left: 0.0,
+                top_right: 25.0,
+                bottom_right: 0.0,
+                bottom_left: 0.0,
+                g2_k_value: 3.0,
+            }
+        } else {
+            Shape::RECTANGLE
+        };
+
+        button(
+            ButtonArgsBuilder::default()
+                .color(color)
+                .on_click(Arc::new(move || {
+                    state_clone.write().set_active_tab(index);
+                }))
+                .width(DimensionValue::FILLED)
+                .shape(shape)
+                .build()
+                .unwrap(),
+            ripple_state,
+            child,
+        );
     }
 
-    let scroll_offset = if let Some(state) = &args.state {
-        let state = state.lock();
-        let eased_progress = animation::easing(state.progress);
-        let offset = state.content_scroll_offset.0 as f32
-            + (state.target_content_scroll_offset.0 - state.content_scroll_offset.0) as f32
+    let scroll_offset = {
+        let eased_progress = animation::easing(state.read().progress);
+        let offset = state.read().content_scroll_offset.0 as f32
+            + (state.read().target_content_scroll_offset.0 - state.read().content_scroll_offset.0)
+                as f32
                 * eased_progress;
         Px(offset as i32)
-    } else {
-        Px(0)
     };
 
-    tabs_content_container(scroll_offset, move || {
-        for content in content_closures {
-            content();
+    tabs_content_container(scroll_offset, content_closures);
+
+    let state_clone = state.clone();
+    state_handler(Box::new(move |_| {
+        let last_switch_time = state_clone.read().last_switch_time;
+        if let Some(last_switch_time) = last_switch_time {
+            let elapsed = last_switch_time.elapsed();
+            let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
+            state_clone.write().progress = fraction;
         }
-    });
+    }));
 
-    if let Some(state) = &args.state {
-        let state = state.clone();
-        state_handler(Box::new(move |_| {
-            let mut state = state.lock();
-            if let Some(last_switch_time) = state.last_switch_time {
-                let elapsed = last_switch_time.elapsed();
-                let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
-                state.progress = fraction;
-            }
-        }));
-    }
-
-    let state = args.state.clone();
     let tabs_args = args.clone();
 
     measure(Box::new(
@@ -293,18 +339,15 @@ where
             let content_container_size =
                 input.measure_child(content_container_id, &content_container_constraint)?;
 
-            if let Some(state) = &state {
-                let mut state = state.lock();
-                let final_width = titles_total_width;
-                let target_offset = -Px(active_tab as i32 * final_width.0);
-                if state.target_content_scroll_offset != target_offset {
-                    state.content_scroll_offset = state.target_content_scroll_offset;
-                    state.target_content_scroll_offset = target_offset;
-                }
+            let final_width = titles_total_width;
+            let target_offset = -Px(active_tab as i32 * final_width.0);
+            let target_content_scroll_offset = state.read().target_content_scroll_offset;
+            if target_content_scroll_offset != target_offset {
+                state.write().content_scroll_offset = target_content_scroll_offset;
+                state.write().target_content_scroll_offset = target_offset;
             }
 
-            let (indicator_width, indicator_x) = if let Some(state) = &state {
-                let mut state = state.lock();
+            let (indicator_width, indicator_x) = {
                 let active_title_width = title_sizes.get(active_tab).map_or(Px(0), |s| s.width);
                 let active_title_x: Px = title_sizes
                     .iter()
@@ -312,25 +355,18 @@ where
                     .map(|s| s.width)
                     .fold(Px(0), |acc, w| acc + w);
 
-                state.indicator_to_width = active_title_width;
-                state.indicator_to_x = active_title_x;
+                state.write().indicator_to_width = active_title_width;
+                state.write().indicator_to_x = active_title_x;
 
-                let eased_progress = animation::easing(state.progress);
-                let width = Px((state.indicator_from_width.0 as f32
-                    + (state.indicator_to_width.0 - state.indicator_from_width.0) as f32
+                let eased_progress = animation::easing(state.read().progress);
+                let width = Px((state.read().indicator_from_width.0 as f32
+                    + (state.read().indicator_to_width.0 - state.read().indicator_from_width.0)
+                        as f32
                         * eased_progress) as i32);
-                let x = Px((state.indicator_from_x.0 as f32
-                    + (state.indicator_to_x.0 - state.indicator_from_x.0) as f32 * eased_progress)
-                    as i32);
+                let x = Px((state.read().indicator_from_x.0 as f32
+                    + (state.read().indicator_to_x.0 - state.read().indicator_from_x.0) as f32
+                        * eased_progress) as i32);
                 (width, x)
-            } else {
-                let active_title_width = title_sizes.get(active_tab).map_or(Px(0), |s| s.width);
-                let active_title_x: Px = title_sizes
-                    .iter()
-                    .take(active_tab)
-                    .map(|s| s.width)
-                    .fold(Px(0), |acc, w| acc + w);
-                (active_title_width, active_title_x)
             };
 
             let indicator_height = Dp(2.0).into();

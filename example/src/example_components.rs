@@ -12,4 +12,5 @@ pub mod slider;
 pub mod spacer;
 pub mod surface;
 pub mod switch;
+pub mod tabs;
 pub mod text;

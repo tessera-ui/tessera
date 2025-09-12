@@ -2,47 +2,31 @@
 
 use std::sync::Arc;
 
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use tessera_ui::{
     Color, DimensionValue, Dp,
     renderer::{Renderer, TesseraConfig},
     shard, tessera,
 };
 use tessera_ui_basic_components::{
-    button::{ButtonArgsBuilder, button},
-    ripple_state::RippleState,
     surface::{SurfaceArgs, surface},
     tabs::{TabsArgsBuilder, TabsState, tabs},
     text::{TextArgsBuilder, text},
 };
 
 /// Shared application state
-#[derive(Clone)]
+#[derive(Default)]
 struct AppState {
-    /// Ripple states for each tab title button
-    title_ripple_states: Vec<Arc<RippleState>>,
-    tabs_state: Arc<Mutex<TabsState>>,
+    tabs_state: Arc<RwLock<TabsState>>,
 }
 
-const NUM_TABS: usize = 3;
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            title_ripple_states: (0..NUM_TABS)
-                .map(|_| Arc::new(RippleState::new()))
-                .collect(),
-            tabs_state: Arc::new(Mutex::new(TabsState::new(0))),
-        }
-    }
-}
+const NUM_TABS: usize = 5;
 
 /// Main tabs showcase component
 #[tessera]
 #[shard]
 fn tabs_showcase_app(#[state] app_state: AppState) {
-    let active_tab = app_state.tabs_state.lock().active_tab;
-
+    let tabs_state = app_state.tabs_state.clone();
     surface(
         SurfaceArgs {
             style: Color::WHITE.into(),
@@ -54,51 +38,18 @@ fn tabs_showcase_app(#[state] app_state: AppState) {
         None,
         move || {
             tabs(
-                TabsArgsBuilder::default()
-                    .active_tab(active_tab)
-                    .state(Some(app_state.tabs_state.clone()))
-                    .build()
-                    .unwrap(),
+                TabsArgsBuilder::default().build().unwrap(),
+                tabs_state,
                 |scope| {
                     for i in 0..NUM_TABS {
-                        let app_state_clone = app_state.clone();
-                        let title_ripple_state = app_state.title_ripple_states[i].clone();
-
-                        let color = if i == active_tab {
-                            Color::new(0.9, 0.9, 0.9, 1.0) // Active tab color
-                        } else {
-                            Color::TRANSPARENT
-                        };
-
-                        scope.tab(
+                        scope.child(
                             move || {
-                                surface(
-                                    SurfaceArgs {
-                                        style: color.into(),
-                                        ..Default::default()
-                                    },
-                                    None,
-                                    move || {
-                                        button(
-                                            ButtonArgsBuilder::default()
-                                                .color(Color::TRANSPARENT)
-                                                .on_click(Arc::new(move || {
-                                                    app_state_clone.tabs_state.lock().set_active_tab(i);
-                                                }))
-                                                .build()
-                                                .unwrap(),
-                                            title_ripple_state,
-                                            move || {
-                                                text(
-                                                    TextArgsBuilder::default()
-                                                        .text(format!("Tab {}", i + 1))
-                                                        .build()
-                                                        .unwrap(),
-                                                )
-                                            },
-                                        )
-                                    },
-                                )
+                                text(
+                                    TextArgsBuilder::default()
+                                        .text(format!("Tab {}", i + 1))
+                                        .build()
+                                        .unwrap(),
+                                );
                             },
                             move || {
                                 text(

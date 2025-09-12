@@ -37,7 +37,7 @@ use crate::example_components::{
     layouts::LayoutsShowcaseDestination, progress::ProgressShowcaseDestination,
     slider::SliderShowcaseDestination, spacer::SpacerShowcaseDestination,
     surface::SurfaceShowcaseDestination, switch::SwitchShowcaseDestination,
-    text::TextShowcaseDestination,
+    tabs::TabsShowcaseDestination, text::TextShowcaseDestination,
 };
 
 #[derive(Default)]
@@ -203,6 +203,15 @@ fn home(
     dialog_state: Arc<RwLock<DialogProviderState>>,
 ) {
     let examples = vec![
+        ComponentExampleDesc::new(
+            "Tabs",
+            "A component for switching between different views.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(TabsShowcaseDestination {});
+                });
+            },
+        ),
         ComponentExampleDesc::new(
             "Switch",
             "A control that allows toggling between on and off states.",
