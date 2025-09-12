@@ -1,3 +1,43 @@
+//! A tabs component that provides a horizontal tab bar with animated indicator and paged content.
+//!
+//! The `tabs` component renders a row of tab titles and a content area. It manages an internal
+//! animated indicator that transitions between active tabs and scrolls the content area to match
+//! the selected tab. State (see [`TabsState`]) is provided by the application to control the
+//! currently active tab and animation progress.
+//!
+//! # Key Components
+//!
+//! * **[`tabs`]**: The main component function. Call it inside a component to render a tab group.
+//! * **[`TabsState`]**: Holds active tab index, animation progress and per-tab ripple states.
+//! * **[`TabsArgs`]**: Configuration for the tabs layout and indicator color.
+//!
+//! # Behavior
+//!
+//! - The active tab indicator animates between tabs using an easing function.
+//! - Clicking a tab updates the shared [`TabsState`] (via [`TabsState::set_active_tab`] ) and
+//!   triggers the indicator/content animation.
+//! - The component registers a `state_handler` to advance the animation while a transition is in progress.
+//!
+//! # Example
+//!
+//! ```
+//! use std::sync::Arc;
+//! use parking_lot::RwLock;
+//! use tessera_ui_basic_components::tabs::{tabs, TabsArgsBuilder, TabsState};
+//!
+//! // Shared state for the tabs (start on tab 0)
+//! let tabs_state = Arc::new(RwLock::new(TabsState::new(0)));
+//!
+//! // Render a simple tab group with two tabs (titles and contents are closures)
+//! tabs(
+//!     TabsArgsBuilder::default().build().unwrap(),
+//!     tabs_state.clone(),
+//!     |scope| {
+//!         scope.child(|| { /* title 0 */ }, || { /* content 0 */ });
+//!         scope.child(|| { /* title 1 */ }, || { /* content 1 */ });
+//!     },
+//! );
+//! ```
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -40,6 +80,12 @@ fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
     }
 }
 
+/// Holds the mutable state used by the [`tabs`] component.
+///
+/// Create and share this value across UI parts with `Arc<RwLock<TabsState>>`. The state tracks the
+/// active tab index, previous index, animation progress and cached values used to animate the
+/// indicator and content scrolling. The component mutates parts of this state when a tab is
+/// switched; callers may also read the active tab via [`TabsState::active_tab`].
 pub struct TabsState {
     active_tab: usize,
     prev_active_tab: usize,
@@ -61,6 +107,7 @@ impl Default for TabsState {
 }
 
 impl TabsState {
+    /// Create a new state with the specified initial active tab.
     pub fn new(initial_tab: usize) -> Self {
         Self {
             active_tab: initial_tab,
@@ -77,6 +124,11 @@ impl TabsState {
         }
     }
 
+    /// Set the active tab index and initiate the transition animation.
+    ///
+    /// If the requested index equals the current active tab this is a no-op.
+    /// Otherwise the method updates cached indicator/content positions and resets the animation
+    /// progress so the component will animate to the new active tab.
     pub fn set_active_tab(&mut self, index: usize) {
         if self.active_tab != index {
             self.prev_active_tab = self.active_tab;
@@ -96,15 +148,21 @@ impl TabsState {
         }
     }
 
+    /// Returns the currently active tab index.
     pub fn active_tab(&self) -> usize {
         self.active_tab
     }
 
+    /// Returns the previously active tab index (useful during animated transitions).
     pub fn prev_active_tab(&self) -> usize {
         self.prev_active_tab
     }
 }
 
+/// Configuration arguments for the [`tabs`] component.
+///
+/// * `indicator_color` - Color used to draw the active tab indicator.
+/// * `width`/`height` - Preferred size behavior for the tabs component.
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TabsArgs {
@@ -183,6 +241,18 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
     ));
 }
 
+/// Renders a tabs control with a row of titles and a paged content area.
+///
+/// # Arguments
+///
+/// - `args`: Configuration for indicator color and preferred sizing. See [`TabsArgs`].
+/// - `state`: Shared state (typically `Arc<RwLock<TabsState>>`) used to read and update the active tab
+///   and animation progress.
+/// - `scope_config`: A closure that receives a [`TabsScope`] which should be used to register each
+///   tab via `scope.child(title_closure, content_closure)`.
+///
+/// The function renders the title buttons (using `button(...)`) and a content container that pages
+/// horizontally between tab contents. Clicking a title will call [`TabsState::set_active_tab`].
 #[tessera]
 pub fn tabs<F>(args: TabsArgs, state: Arc<RwLock<TabsState>>, scope_config: F)
 where
