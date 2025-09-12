@@ -1,3 +1,14 @@
+## [v1.13.0] - 2025-09-12 +08:00
+
+### Changes
+
+- feat(color): add TEAL and ORANGE color constants with descriptions
+- feat(renderer, basic-components, example)!: propagate clip-aware drawing and clamp Fluid Glass sampling
+- fix(test): update examples to new Router API and clean up docs
+- refactor(example): rework(ing) demos to better showcase components and updated APIs
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.12.1...tessera-ui-v1.13.0)
+
 ## [v1.12.1] - 2025-09-07 +08:00
 
 ### Changes
