@@ -38,6 +38,7 @@ use crate::example_components::{
     slider::SliderShowcaseDestination, spacer::SpacerShowcaseDestination,
     surface::SurfaceShowcaseDestination, switch::SwitchShowcaseDestination,
     tabs::TabsShowcaseDestination, text::TextShowcaseDestination,
+    text_editor::TextEditorShowcaseDestination,
 };
 
 #[derive(Default)]
@@ -203,6 +204,15 @@ fn home(
     dialog_state: Arc<RwLock<DialogProviderState>>,
 ) {
     let examples = vec![
+        ComponentExampleDesc::new(
+            "Text Editor",
+            "A basic component for multiline text input.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(TextEditorShowcaseDestination {});
+                });
+            },
+        ),
         ComponentExampleDesc::new(
             "Tabs",
             "A component for switching between different views.",
