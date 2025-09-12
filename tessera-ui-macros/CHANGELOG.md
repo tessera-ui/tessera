@@ -1,3 +1,12 @@
+## [v0.4.0] - 2025-09-12 +08:00
+
+### Changes
+
+- feat(shard, macros, router)!: destination-controlled shard state lifecycle with optional lifecycle argument
+- fix(docs): correct import path for tessera macro usage example
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.3.0...tessera-ui-macros-v0.4.0)
+
 ## [v0.3.0] - 2025-09-06 +08:00
 
 ### Changes
