@@ -22,7 +22,7 @@ use std::{
 };
 
 use derive_builder::Builder;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
     PxPosition, tessera, winit::window::CursorIcon,
@@ -43,51 +43,62 @@ const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 /// This struct can be shared between multiple switches or managed externally to control the checked state and animation.
 ///
 /// # Fields
+///
 /// - `checked`: Indicates whether the switch is currently on (`true`) or off (`false`).
 ///
 /// # Example
 /// ```
 /// use tessera_ui_basic_components::switch::{SwitchState, SwitchArgs, switch};
-/// use std::sync::{Arc};
-/// use parking_lot::Mutex;
+/// use std::sync::Arc;
+/// use parking_lot::RwLock;
 ///
-/// let state = Arc::new(Mutex::new(SwitchState::new(false)));
+/// let state = Arc::new(RwLock::new(SwitchState::new(false)));
 ///
 /// switch(SwitchArgs {
-///     state: Some(state.clone()),
-///     on_toggle: Arc::new(move |checked| {
-///         state.lock().checked = checked;
-///     }),
+///     on_toggle: Some(Arc::new(move |checked| {
+///         println!("Switch toggled: {}", checked);
+///     })),
 ///     ..Default::default()
-/// });
+/// }, state.clone());
 /// ```
 pub struct SwitchState {
-    pub checked: bool,
-    progress: Mutex<f32>,
-    last_toggle_time: Mutex<Option<Instant>>,
+    checked: bool,
+    progress: f32,
+    last_toggle_time: Option<Instant>,
+}
+
+impl Default for SwitchState {
+    fn default() -> Self {
+        Self::new(false)
+    }
 }
 
 impl SwitchState {
     /// Creates a new `SwitchState` with the given initial checked state.
     ///
     /// # Arguments
+    ///
     /// * `initial_state` - Whether the switch should start as checked (`true`) or unchecked (`false`).
     pub fn new(initial_state: bool) -> Self {
         Self {
             checked: initial_state,
-            progress: Mutex::new(if initial_state { 1.0 } else { 0.0 }),
-            last_toggle_time: Mutex::new(None),
+            progress: if initial_state { 1.0 } else { 0.0 },
+            last_toggle_time: None,
         }
     }
 
     /// Toggles the checked state and updates the animation timestamp.
     pub fn toggle(&mut self) {
         self.checked = !self.checked;
-        *self.last_toggle_time.lock() = Some(Instant::now());
+        self.last_toggle_time = Some(Instant::now());
+    }
+
+    /// Returns whether the switch is currently checked.
+    pub fn is_checked(&self) -> bool {
+        self.checked
     }
 }
 
-///
 /// Arguments for configuring the `switch` component.
 ///
 /// This struct allows customization of the switch's state, appearance, and behavior.
@@ -104,29 +115,26 @@ impl SwitchState {
 /// - `thumb_padding`: Padding between the thumb and the track edge.
 ///
 /// # Example
+///
 /// ```
-/// use tessera_ui_basic_components::switch::{SwitchArgs, switch};
+/// use tessera_ui_basic_components::switch::{SwitchArgs, switch, SwitchState};
 /// use std::sync::Arc;
+/// use parking_lot::RwLock;
+///
+/// let state = Arc::new(RwLock::new(SwitchState::new(false)));
 ///
 /// switch(SwitchArgs {
-///     checked: true,
-///     on_toggle: Arc::new(|checked| {
+///     on_toggle: Some(Arc::new(|checked| {
 ///         println!("Switch toggled: {}", checked);
-///     }),
+///     })),
 ///     ..Default::default()
-/// });
+/// }, state.clone());
 /// ```
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SwitchArgs {
-    #[builder(default)]
-    pub state: Option<Arc<Mutex<SwitchState>>>,
-
-    #[builder(default = "false")]
-    pub checked: bool,
-
-    #[builder(default = "Arc::new(|_| {})")]
-    pub on_toggle: Arc<dyn Fn(bool) + Send + Sync>,
+    #[builder(default, setter(strip_option))]
+    pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
 
     #[builder(default = "Dp(52.0)")]
     pub width: Dp,
@@ -153,23 +161,13 @@ impl Default for SwitchArgs {
     }
 }
 
-// Helper utilities extracted to reduce state_handler complexity.
-fn raw_progress_from_args(args: &SwitchArgs) -> f32 {
-    args.state
-        .as_ref()
-        .map(|s| *s.lock().progress.lock())
-        .unwrap_or(if args.checked { 1.0 } else { 0.0 })
-}
-
-fn update_progress_from_state(state_arc: &Option<Arc<Mutex<SwitchState>>>) {
-    if let Some(state) = state_arc {
-        let s = state.lock();
-        if let Some(last_toggle_time) = *s.last_toggle_time.lock() {
-            let elapsed = last_toggle_time.elapsed();
-            let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
-            let mut p = s.progress.lock();
-            *p = if s.checked { fraction } else { 1.0 - fraction };
-        }
+fn update_progress_from_state(state: &Arc<RwLock<SwitchState>>) {
+    let last_toggle_time = state.read().last_toggle_time;
+    if let Some(last_toggle_time) = last_toggle_time {
+        let elapsed = last_toggle_time.elapsed();
+        let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
+        let checked = state.read().checked;
+        state.write().progress = if checked { fraction } else { 1.0 - fraction };
     }
 }
 
@@ -182,12 +180,15 @@ fn is_cursor_in_component(size: ComputedData, pos_option: Option<tessera_ui::PxP
 }
 
 fn handle_input_events_switch(
-    state_arc: &Option<Arc<Mutex<SwitchState>>>,
-    on_toggle: &Arc<dyn Fn(bool) + Send + Sync>,
-    checked_initial: bool,
+    state: &Arc<RwLock<SwitchState>>,
+    on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
     input: &mut tessera_ui::StateHandlerInput,
 ) {
-    update_progress_from_state(state_arc);
+    let Some(on_toggle) = on_toggle else {
+        return; // No-op if no on_toggle is provided (disabled state)
+    };
+
+    update_progress_from_state(state);
 
     let size = input.computed_data;
     let is_cursor_in = is_cursor_in_component(size, input.cursor_position_rel);
@@ -200,14 +201,19 @@ fn handle_input_events_switch(
         if let CursorEventContent::Pressed(PressKeyEventType::Left) = &e.content
             && is_cursor_in
         {
-            if let Some(state) = &state_arc {
-                state.lock().toggle();
-                let new_state = state.lock().checked;
-                on_toggle(new_state);
-            } else {
-                on_toggle(!checked_initial);
-            }
+            state.write().toggle();
+            let new_state = state.read().checked;
+            on_toggle(new_state);
         }
+    }
+}
+
+fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
+    Color {
+        r: off.r + (on.r - off.r) * progress,
+        g: off.g + (on.g - off.g) * progress,
+        b: off.b + (on.b - off.b) * progress,
+        a: off.a + (on.a - off.a) * progress,
     }
 }
 
@@ -220,22 +226,25 @@ fn handle_input_events_switch(
 /// * `args` - Parameters for configuring the switch, see [`SwitchArgs`].
 ///
 /// # Example
+///
 /// ```
-/// use tessera_ui_basic_components::switch::{SwitchArgs, switch};
+/// use tessera_ui_basic_components::switch::{SwitchArgs, switch, SwitchState};
 /// use std::sync::Arc;
+/// use parking_lot::RwLock;
+///
+/// let state = Arc::new(RwLock::new(SwitchState::new(false)));
 ///
 /// switch(SwitchArgs {
-///     checked: false,
-///     on_toggle: Arc::new(|checked| {
+///     on_toggle: Some(Arc::new(|checked| {
 ///         println!("Switch toggled: {}", checked);
-///     }),
+///     })),
 ///     width: tessera_ui::Dp(60.0),
 ///     height: tessera_ui::Dp(36.0),
 ///     ..Default::default()
-/// });
+/// }, state.clone());
 /// ```
 #[tessera]
-pub fn switch(args: impl Into<SwitchArgs>) {
+pub fn switch(args: impl Into<SwitchArgs>, state: Arc<RwLock<SwitchState>>) {
     let args: SwitchArgs = args.into();
     let thumb_size = Dp(args.height.0 - (args.thumb_padding.0 * 2.0));
 
@@ -252,12 +261,11 @@ pub fn switch(args: impl Into<SwitchArgs>) {
     );
 
     let on_toggle = args.on_toggle.clone();
-    let state = args.state.clone();
-    let checked = args.checked;
+    let progress = state.read().progress;
 
     state_handler(Box::new(move |mut input| {
         // Delegate input handling to the extracted helper.
-        handle_input_events_switch(&state, &on_toggle, checked, &mut input);
+        handle_input_events_switch(&state, &on_toggle, &mut input);
     }));
 
     measure(Box::new(move |input| {
@@ -278,8 +286,6 @@ pub fn switch(args: impl Into<SwitchArgs>) {
         let self_height_px = args.height.to_px();
         let thumb_padding_px = args.thumb_padding.to_px();
 
-        let progress = raw_progress_from_args(&args);
-
         let start_x = thumb_padding_px;
         let end_x = self_width_px - thumb_size.width - thumb_padding_px;
         let eased = animation::easing(progress);
@@ -292,11 +298,7 @@ pub fn switch(args: impl Into<SwitchArgs>) {
             PxPosition::new(tessera_ui::Px(thumb_x as i32), thumb_y),
         );
 
-        let track_color = if args.checked {
-            args.track_checked_color
-        } else {
-            args.track_color
-        };
+        let track_color = interpolate_color(args.track_color, args.track_checked_color, progress);
         let track_command = ShapeCommand::Rect {
             color: track_color,
             corner_radii: glam::Vec4::splat((self_height_px.0 as f32) / 2.0).into(),

@@ -11,4 +11,5 @@ pub mod progress;
 pub mod slider;
 pub mod spacer;
 pub mod surface;
+pub mod switch;
 pub mod text;

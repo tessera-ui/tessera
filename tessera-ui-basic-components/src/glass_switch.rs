@@ -30,7 +30,7 @@ const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 
 /// State for the `glass_switch` component, handling animation.
 pub struct GlassSwitchState {
-    pub checked: bool,
+    checked: bool,
     progress: f32,
     last_toggle_time: Option<Instant>,
 }
@@ -42,6 +42,7 @@ impl Default for GlassSwitchState {
 }
 
 impl GlassSwitchState {
+    /// Creates a new `GlassSwitchState` with the given initial checked state.
     pub fn new(initial_state: bool) -> Self {
         Self {
             checked: initial_state,
@@ -50,9 +51,15 @@ impl GlassSwitchState {
         }
     }
 
+    /// Toggles the switch state.
     pub fn toggle(&mut self) {
         self.checked = !self.checked;
         self.last_toggle_time = Some(Instant::now());
+    }
+
+    /// Returns whether the switch is currently checked.
+    pub fn is_checked(&self) -> bool {
+        self.checked
     }
 }
 
@@ -200,7 +207,7 @@ fn handle_input_events(
 /// // Use the state to toggle the switch programmatically if needed.
 /// state.write().toggle(); // Toggle the switch state
 /// // or get the current on/off state
-/// assert_eq!(state.read().checked, true); // true here after toggle
+/// assert_eq!(state.read().is_checked(), true); // true here after toggle
 /// ```
 ///
 /// # Arguments
