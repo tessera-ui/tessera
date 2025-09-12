@@ -1,3 +1,79 @@
+//! A component that displays content sliding in from the left side of the screen.
+//!
+//! The `side_bar_provider` manages the presentation and dismissal of a "side bar" — a common UI
+//! pattern for showing navigation or contextual controls.
+//!
+//! # Key Components
+//!
+//! * **[`side_bar_provider`]**: The main component function that orchestrates the main content,
+//!   the scrim (background overlay), and the side bar content itself.
+//! * **[`SideBarProviderState`]**: A state object that applications create and manipulate to
+//!   control the side bar visibility. Call its [`open()`] and [`close()`] methods to change state.
+//! * **[`SideBarProviderArgs`]**: Configuration for the provider, including the visual [`style`]
+//!   and the mandatory `on_close_request` callback.
+//! * **[`SideBarStyle`]**: Visual variants for scrim and container (Material or Glass).
+//!
+//! # Behavior
+//!
+//! - The side bar animates smoothly in and out from the left edge.
+//! - A scrim blocks interaction with the main content while the side bar is visible.
+//! - Clicking the scrim or pressing the `Escape` key will invoke the provided `on_close_request`
+//!   callback.
+//! # Example
+//!
+//! ```
+//! use std::sync::Arc;
+//! use parking_lot::RwLock;
+//! use tessera_ui::{tessera, Renderer};
+//! use tessera_ui_basic_components::{
+//!     side_bar::{side_bar_provider, SideBarProviderArgsBuilder, SideBarProviderState, SideBarStyle},
+//!     button::{button, ButtonArgsBuilder},
+//!     ripple_state::RippleState,
+//!     text::{text, TextArgsBuilder},
+//! };
+//!
+//! // 1. Define an application state to hold the side bar's state.
+//! #[derive(Default)]
+//! struct AppState {
+//!     bar_state: Arc<RwLock<SideBarProviderState>>,
+//!     ripple_state: Arc<RippleState>,
+//! }
+//!
+//! #[tessera]
+//! fn app(state: Arc<RwLock<AppState>>) {
+//!     let bar_state = state.read().bar_state.clone();
+//!     // 2. Use the side_bar_provider.
+//!     side_bar_provider(
+//!         SideBarProviderArgsBuilder::default()
+//!             // 3. Provide a callback to handle close requests.
+//!             .on_close_request(Arc::new({
+//!                 let bar_state = bar_state.clone();
+//!                 move || bar_state.write().close()
+//!             }))
+//!             .build()
+//!             .unwrap(),
+//!         bar_state.clone(),
+//!         // 4. Define the main content that is always visible.
+//!         move || {
+//!             button(
+//!                 ButtonArgsBuilder::default()
+//!                     .on_click(Arc::new({
+//!                         let bar_state = bar_state.clone();
+//!                         move || bar_state.write().open()
+//!                     }))
+//!                     .build()
+//!                     .unwrap(),
+//!                 state.read().ripple_state.clone(),
+//!                 || text(TextArgsBuilder::default().text("Open Side Bar".to_string()).build().unwrap())
+//!             );
+//!         },
+//!         // 5. Define the content of the side bar itself.
+//!         || {
+//!             text(TextArgsBuilder::default().text("This is the side bar!").build().unwrap());
+//!         }
+//!     );
+//! }
+//! ```
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -16,23 +92,36 @@ use crate::{
 
 const ANIM_TIME: Duration = Duration::from_millis(300);
 
-/// Defines the visual style of the side bar's scrim.
+/// Defines the visual style of the side bar and its scrim.
+///
+/// The scrim is the overlay that appears behind the side bar, covering the main content.
 #[derive(Default, Clone, Copy)]
 pub enum SideBarStyle {
     /// A translucent glass effect that blurs the content behind it.
+    /// This style may be more costly and is suitable when a blurred backdrop is desired.
     Glass,
-    /// A simple, semi-transparent dark overlay.
+    /// A simple, semi-transparent dark overlay. This is the default style.
     #[default]
     Material,
 }
 
 #[derive(Builder)]
 pub struct SideBarProviderArgs {
+    /// A callback that is invoked when the user requests to close the side bar.
+    ///
+    /// This can be triggered by clicking the scrim or pressing the `Escape` key.
+    /// The callback is expected to call [`SideBarProviderState::close()`].
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
+    /// The visual style used by the provider. See [`SideBarStyle`].
     #[builder(default)]
     pub style: SideBarStyle,
 }
 
+/// Manages the open/closed state of a [`side_bar_provider`].
+///
+/// This state object must be created by the application and passed to the
+/// [`side_bar_provider`]. It is used to control the visibility of the side bar
+/// programmatically. Wrap in `Arc<RwLock<...>>` for shared access from multiple UI parts.
 #[derive(Default)]
 pub struct SideBarProviderState {
     is_open: bool,
@@ -40,6 +129,11 @@ pub struct SideBarProviderState {
 }
 
 impl SideBarProviderState {
+    /// Initiates the animation to open the side bar.
+    ///
+    /// If the side bar is already open this has no effect. If it is currently
+    /// closing, the animation will reverse direction and start opening from the
+    /// current animated position.
     pub fn open(&mut self) {
         if !self.is_open {
             self.is_open = true;
@@ -54,6 +148,11 @@ impl SideBarProviderState {
         }
     }
 
+    /// Initiates the animation to close the side bar.
+    ///
+    /// If the side bar is already closed this has no effect. If it is currently
+    /// opening, the animation will reverse direction and start closing from the
+    /// current animated position.
     pub fn close(&mut self) {
         if self.is_open {
             self.is_open = false;
@@ -227,6 +326,22 @@ fn place_side_bar_if_present(
     input.place_child(side_bar_id, PxPosition::new(Px(x), Px(0)));
 }
 
+/// Renders a side bar UI group, managing its animation, scrim, keyboard handling and content.
+///
+/// This is the primary function to create a side bar. Call it inside a component that owns or
+/// has access to the application's shared state. The provider renders the main content first,
+/// then the scrim (overlay) and the side bar when the `state` indicates visibility.
+///
+/// # Arguments
+///
+/// - `args`: Configuration options including the `on_close_request` callback and visual `style`.
+///   See [`SideBarProviderArgs`].
+/// - `state`: Shared state controlling open/closed animation timing. See [`SideBarProviderState`].
+/// - `main_content`: Closure rendering the always-visible main UI (background for the side bar).
+/// - `side_bar_content`: Closure rendering the side bar's content.
+///
+/// The provider registers a keyboard handler that invokes the provided `on_close_request` when
+/// the `Escape` key is pressed. Clicking the scrim also triggers the same callback.
 #[tessera]
 pub fn side_bar_provider(
     args: SideBarProviderArgs,
