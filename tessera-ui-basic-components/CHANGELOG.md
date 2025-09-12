@@ -1,3 +1,36 @@
+## [v1.13.0] - 2025-09-12 +08:00
+
+### Changes
+
+- feat(basic-components,example)!: rework tabs to external state and add Tabs showcase
+- feat(basic-components,example)!: rework switch to external state and add Switch showcase
+- refactor(scrollbar): simplify width and height handling in render functions
+- feat(surface): add setter for width and height in SurfaceArgs
+- feat(spacer): add setter for width and height in SpacerArgs
+- feat(basic-components, example)!: make width/height non-optional DimensionValue and update examples
+- feat(basic-components, example)!: rework Glass Switch to external state; add showcase and navigation
+- refactor(basic-components)!: internalize text edit core; tidy rustdoc
+- chore(deps): bump lru from 0.16.0 to 0.16.1
+- feat(renderer, basic-components, example)!: propagate clip-aware drawing and clamp Fluid Glass sampling
+- feat(image, example)!: add Fluid Glass demo and switch Image data to Arc<ImageData> ([#49](https://github.com/tessera-ui/tessera/issues/49))
+- feat(dialog): enhance shadow properties for dialog content
+- fix(docs): align checkbox and checkmark doc tests with API changes
+- feat(dialog, example)!: integrate Dialog provider and add demo (#49)
+- refactor(checkbox)!: require explicit state; remove legacy args; add example (#49)
+- feat(example): complete column/row/boxed showcase planned in #49
+- fix(test): update examples to new Router API and clean up docs
+- refactor(example): rework(ing) demos to better showcase components and updated APIs
+- perf(text): add LRU cache to reuse TextData and reduce buffer rebuild cost
+- fix(scrollable, surface): enhance constraint merging and child measurement logic
+- feat(bottom_nav_bar): prevent unnecessary state updates on navigation item click
+- feat(text): add None option for aligment in TextData
+- build(deps): update glyphon-tessera-fork to version 0.9.4
+- feat(button, bottom_nav_bar): integrate shadow properties for enhanced visual feedback
+- feat(button): add shadow property to ButtonArgs with strip option
+- refactor(surface): update shadow property to strip option in SurfaceArgs
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.12.0...tessera-ui-basic-components-v1.13.0)
+
 ## [v1.12.0] - 2025-09-07 +08:00
 
 ### Changes
