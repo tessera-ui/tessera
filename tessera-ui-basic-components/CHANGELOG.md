@@ -1,3 +1,16 @@
+## [v1.13.1] - 2025-09-13 +08:00
+
+### Changes
+
+- refactor(input-handler): rename state_handler → input_handler across code and docs
+- docs(surface): make example tested
+- docs(tessera-ui-basic-components): add tabs component docs
+- docs(side_bar): add API docs, examples and doc comments for side_bar_provider
+- docs(glass_switch): update usage reference in documentation
+- docs(tessera-ui-basic-components): add README files and fix macros docs formatting
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.13.0...tessera-ui-basic-components-v1.13.1)
+
 ## [v1.13.0] - 2025-09-12 +08:00
 
 ### Changes
