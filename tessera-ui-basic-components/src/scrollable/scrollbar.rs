@@ -49,7 +49,7 @@ pub struct ScrollBarState {
 
 /// Calculate the target content position for a vertical scrollbar given a cursor Y.
 ///
-/// This extracts the logic previously embedded in the `state_handler` closure so the
+/// This extracts the logic previously embedded in the `input_handler` closure so the
 /// closure becomes smaller and easier to reason about during static analysis.
 /// - `cursor_y`: cursor Y within the scrollbar track (in Px).
 /// - `track_height`: visible track height (in Px).
@@ -315,10 +315,10 @@ fn is_on_track_h(cursor_pos: PxPosition, thickness: Px, track_width: Px) -> bool
         && cursor_pos.x <= track_width
 }
 
-/// Handle the state handler logic for the vertical scrollbar.
+/// Handle the input handler logic for the vertical scrollbar.
 /// Extracted from the inline closure to reduce function/closure complexity.
 fn check_and_handle_release(
-    input: &tessera_ui::StateHandlerInput,
+    input: &tessera_ui::InputHandlerInput,
     state: &Arc<RwLock<ScrollBarState>>,
 ) -> bool {
     if input.cursor_events.iter().any(|event| {
@@ -335,8 +335,8 @@ fn check_and_handle_release(
 }
 
 /// Return true if there is a left-press event in the input.
-/// Extracted to reduce duplication and simplify state handlers.
-fn is_pressed_left(input: &tessera_ui::StateHandlerInput) -> bool {
+/// Extracted to reduce duplication and simplify input handlers.
+fn is_pressed_left(input: &tessera_ui::InputHandlerInput) -> bool {
     input.cursor_events.iter().any(|event| {
         matches!(
             event.content,
@@ -347,7 +347,7 @@ fn is_pressed_left(input: &tessera_ui::StateHandlerInput) -> bool {
 
 /// Update dragging behavior for vertical axis.
 fn update_drag_vertical(
-    input: &tessera_ui::StateHandlerInput,
+    input: &tessera_ui::InputHandlerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarArgs,
     state: &Arc<RwLock<ScrollBarState>>,
@@ -380,7 +380,7 @@ fn handle_state_v(
     state: Arc<RwLock<ScrollBarState>>,
     track_height: Px,
     thumb_height: Px,
-    input: tessera_ui::StateHandlerInput,
+    input: tessera_ui::InputHandlerInput,
 ) {
     // Handle AutoHide behavior - hide scrollbar after inactivity
     handle_autohide_if_needed(&args, &state);
@@ -444,10 +444,10 @@ fn handle_state_v(
     }
 }
 
-/// Handle the state handler logic for the horizontal scrollbar.
+/// Handle the input handler logic for the horizontal scrollbar.
 /// Extracted from the inline closure to reduce function/closure complexity.
 fn update_drag_horizontal(
-    input: &tessera_ui::StateHandlerInput,
+    input: &tessera_ui::InputHandlerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarArgs,
     state: &Arc<RwLock<ScrollBarState>>,
@@ -467,7 +467,7 @@ fn handle_state_h(
     state: Arc<RwLock<ScrollBarState>>,
     track_width: Px,
     thumb_width: Px,
-    input: tessera_ui::StateHandlerInput,
+    input: tessera_ui::InputHandlerInput,
 ) {
     // Handle AutoHide behavior - hide scrollbar after inactivity
     handle_autohide_if_needed(&args, &state);
@@ -579,7 +579,7 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
         Ok(size)
     }));
 
-    state_handler(Box::new(move |input| {
+    input_handler(Box::new(move |input| {
         handle_state_v(
             args.clone(),
             state.clone(),
@@ -638,7 +638,7 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
         Ok(size)
     }));
 
-    state_handler(Box::new(move |input| {
+    input_handler(Box::new(move |input| {
         handle_state_h(args.clone(), state.clone(), track_width, thumb_width, input);
     }));
 }

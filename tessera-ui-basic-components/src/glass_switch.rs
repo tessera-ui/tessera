@@ -137,7 +137,7 @@ fn is_cursor_inside(size: ComputedData, cursor_pos: Option<PxPosition>) -> bool 
 }
 
 /// Return true if there is a left-press event in the input.
-fn was_pressed_left(input: &tessera_ui::StateHandlerInput) -> bool {
+fn was_pressed_left(input: &tessera_ui::InputHandlerInput) -> bool {
     input.cursor_events.iter().any(|e| {
         matches!(
             e.content,
@@ -149,7 +149,7 @@ fn was_pressed_left(input: &tessera_ui::StateHandlerInput) -> bool {
 fn handle_input_events(
     state: Arc<RwLock<GlassSwitchState>>,
     on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
-    input: &mut tessera_ui::StateHandlerInput,
+    input: &mut tessera_ui::InputHandlerInput,
 ) {
     let Some(on_toggle) = on_toggle else {
         // No callback provided, do nothing (act disabled)
@@ -268,7 +268,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: Arc<RwLock<GlassSwi
 
     let state_clone = state.clone();
     let on_toggle = args.on_toggle.clone();
-    state_handler(Box::new(move |mut input| {
+    input_handler(Box::new(move |mut input| {
         handle_input_events(state_clone.clone(), on_toggle.clone(), &mut input);
     }));
 

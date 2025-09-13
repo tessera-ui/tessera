@@ -31,9 +31,9 @@ pub struct ComponentNode {
     /// None means using default measure policy which places children at the top-left corner
     /// of the parent node, with no offset.
     pub measure_fn: Option<Box<MeasureFn>>,
-    /// Describes the state handler for the component.
+    /// Describes the input handler for the component.
     /// This is used to handle state changes.
-    pub state_handler_fn: Option<Box<StateHandlerFn>>,
+    pub input_handler_fn: Option<Box<InputHandlerFn>>,
 }
 
 /// Contains metadata of the component node.
@@ -233,22 +233,22 @@ impl<'a> MeasureInput<'a> {
     }
 }
 
-/// A `StateHandlerFn` is a function that handles state changes for a component.
+/// A `InputHandlerFn` is a function that handles state changes for a component.
 ///
 /// The rule of execution order is:
 ///
-/// 1. Children's state handlers are executed earlier than parent's.
-/// 2. Newer components' state handlers are executed earlier than older ones.
+/// 1. Children's input handlers are executed earlier than parent's.
+/// 2. Newer components' input handlers are executed earlier than older ones.
 ///
 /// Acutally, rule 2 includes rule 1, because a newer component is always a child of an older component :)
-pub type StateHandlerFn = dyn Fn(StateHandlerInput) + Send + Sync;
+pub type InputHandlerFn = dyn Fn(InputHandlerInput) + Send + Sync;
 
-/// Input for the state handler function (`StateHandlerFn`).
+/// Input for the input handler function (`InputHandlerFn`).
 ///
 /// Note that you can modify the `cursor_events` and `keyboard_events` vectors
 /// for exmaple block some keyboard events or cursor events to prevent them from propagating
 /// to parent components and older brother components.
-pub struct StateHandlerInput<'a> {
+pub struct InputHandlerInput<'a> {
     /// The size of the component node, computed during the measure stage.
     pub computed_data: ComputedData,
     /// The position of the cursor, if available.
@@ -273,7 +273,7 @@ pub struct StateHandlerInput<'a> {
     pub clipboard: &'a mut Clipboard,
 }
 
-impl StateHandlerInput<'_> {
+impl InputHandlerInput<'_> {
     /// Blocks the cursor to other components.
     pub fn block_cursor(&mut self) {
         // Block the cursor by setting its position to None.

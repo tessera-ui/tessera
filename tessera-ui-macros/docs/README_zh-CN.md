@@ -14,7 +14,7 @@
 ## 特性
 
 - **组件集成**: 自动将函数注册为 Tessera 组件树中的组件
-- **运行时注入**: 在组件函数内提供对 `measure` 和 `state_handler` 函数的访问
+- **运行时注入**: 在组件函数内提供对 `measure` 和 `input_handler` 函数的访问
 - **简洁的语法**: 以最少的样板代码实现声明式组件定义
 - **树管理**: 自动处理组件树节点的创建和清理
 
@@ -30,7 +30,7 @@ fn my_component() {
     // 你的组件逻辑在这里
     // 宏自动提供对以下内容的访问：
     // - measure: 用于自定义布局逻辑
-    // - state_handler: 用于处理用户交互
+    // - input_handler: 用于处理用户交互
 }
 ```
 
@@ -47,7 +47,7 @@ fn button_component(label: String, on_click: Arc<dyn Fn()>) {
 }
 ```
 
-### 使用 Measure 和 State Handler
+### 使用 Measure 和 Input Handler
 
 ```rust
 use tessera_macros::tessera;
@@ -66,7 +66,7 @@ fn custom_component() {
     }));
 
     // 处理用户交互
-    state_handler(Box::new(|_| {
+    input_handler(Box::new(|_| {
         // 处理点击、按键等事件
     }));
 }
@@ -78,7 +78,7 @@ fn custom_component() {
 
 1. **组件注册**: 将函数以其名称添加到组件树中
 2. **运行时访问**: 注入代码以访问 Tessera 运行时
-3. **函数注入**: 在组件作用域内提供 `measure` 和 `state_handler` 函数
+3. **函数注入**: 在组件作用域内提供 `measure` 和 `input_handler` 函数
 4. **树管理**: 处理从组件树中推入和弹出节点
 5. **错误安全**: 包装原始函数体，以防止提前返回破坏组件树
 
@@ -98,9 +98,9 @@ fn my_component() {
     // 组件树注册
     TesseraRuntime::write().component_tree.add_node(ComponentNode { ... });
 
-    // 注入 measure 和 state_handler 函数
+    // 注入 measure 和 input_handler 函数
     let measure = |fun: Box<MeasureFn>| { /* ... */ };
-    let state_handler = |fun: Box<StateHandlerFn>| { /* ... */ };
+    let input_handler = |fun: Box<InputHandlerFn>| { /* ... */ };
 
     // 安全地执行原始函数体
     let result = {

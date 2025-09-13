@@ -17,8 +17,8 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasureInput,
-    MeasurementError, Px, PxPosition, StateHandlerInput, focus_state::Focus, tessera,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, InputHandlerInput,
+    MeasureInput, MeasurementError, Px, PxPosition, focus_state::Focus, tessera,
     winit::window::CursorIcon,
 };
 
@@ -107,7 +107,7 @@ fn cursor_progress(cursor_pos: Option<PxPosition>, width_f: f32) -> Option<f32> 
 }
 
 fn handle_slider_state(
-    input: &mut StateHandlerInput,
+    input: &mut InputHandlerInput,
     state: &Arc<RwLock<SliderState>>,
     args: &SliderArgs,
 ) {
@@ -134,7 +134,7 @@ fn handle_slider_state(
 }
 
 fn handle_cursor_events(
-    input: &mut StateHandlerInput,
+    input: &mut InputHandlerInput,
     state: &mut SliderState,
     new_value: &mut Option<f32>,
     width_f: f32,
@@ -157,7 +157,7 @@ fn handle_cursor_events(
 }
 
 fn update_value_on_drag(
-    input: &StateHandlerInput,
+    input: &InputHandlerInput,
     state: &SliderState,
     new_value: &mut Option<f32>,
     width_f: f32,
@@ -308,7 +308,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<RwLock<SliderState>>) {
 
     let cloned_args = args.clone();
     let state_clone = state.clone();
-    state_handler(Box::new(move |mut input| {
+    input_handler(Box::new(move |mut input| {
         handle_slider_state(&mut input, &state_clone, &cloned_args);
     }));
 

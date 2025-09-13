@@ -205,7 +205,7 @@
 - feat(px): correct Px::abs behavior and add positive()/negative()
 - feat(px): add mul_f32 and div_f32 methods
 - feat(cursor): impl PartialEq for cursor event types
-- refactor(component_tree): remove unused node_id from StateHandlerInput
+- refactor(component_tree): remove unused node_id from InputHandlerInput
 - feat(dp): add ZERO constant
 - feat(constraint): impl From<Px> and From<Dp> for DimensionValue
 - feat(px): add Mul and Div implementations

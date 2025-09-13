@@ -179,7 +179,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: Arc<CheckboxState>) {
 
     // If a state is provided, set up an updater to advance the animation each frame
     let checkmark_state = state.checkmark.clone();
-    state_handler(Box::new(move |_input| {
+    input_handler(Box::new(move |_input| {
         checkmark_state.write().update_progress();
     }));
 

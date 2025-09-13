@@ -90,7 +90,7 @@ pub struct GlassSliderArgs {
 }
 
 /// Helper: check if a cursor position is inside a measured component area.
-/// Extracted to reduce duplication and keep the state handler concise.
+/// Extracted to reduce duplication and keep the input handler concise.
 fn cursor_within_component(cursor_pos: Option<PxPosition>, computed: &ComputedData) -> bool {
     if let Some(pos) = cursor_pos {
         let within_x = pos.x.0 >= 0 && pos.x.0 < computed.width.0;
@@ -121,7 +121,7 @@ fn compute_progress_width(total_width: Px, value: f32, border_padding_px: f32) -
 /// Returns the new value (0.0..1.0) if a change should be emitted.
 fn process_cursor_events(
     state: &mut GlassSliderState,
-    input: &tessera_ui::StateHandlerInput,
+    input: &tessera_ui::InputHandlerInput,
     width_f: f32,
 ) -> Option<f32> {
     let mut new_value: Option<f32> = None;
@@ -256,7 +256,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<RwLock<GlassSli
     let on_change = args.on_change.clone();
     let disabled = args.disabled;
 
-    state_handler(Box::new(move |input| {
+    input_handler(Box::new(move |input| {
         if disabled {
             return;
         }

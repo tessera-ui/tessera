@@ -182,7 +182,7 @@ fn is_cursor_in_component(size: ComputedData, pos_option: Option<tessera_ui::PxP
 fn handle_input_events_switch(
     state: &Arc<RwLock<SwitchState>>,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
-    input: &mut tessera_ui::StateHandlerInput,
+    input: &mut tessera_ui::InputHandlerInput,
 ) {
     let Some(on_toggle) = on_toggle else {
         return; // No-op if no on_toggle is provided (disabled state)
@@ -263,7 +263,7 @@ pub fn switch(args: impl Into<SwitchArgs>, state: Arc<RwLock<SwitchState>>) {
     let on_toggle = args.on_toggle.clone();
     let progress = state.read().progress;
 
-    state_handler(Box::new(move |mut input| {
+    input_handler(Box::new(move |mut input| {
         // Delegate input handling to the extracted helper.
         handle_input_events_switch(&state, &on_toggle, &mut input);
     }));

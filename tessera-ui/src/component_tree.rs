@@ -17,7 +17,7 @@ use crate::{
 pub use constraint::{Constraint, DimensionValue};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
-    ImeRequest, MeasureFn, MeasureInput, MeasurementError, StateHandlerFn, StateHandlerInput,
+    ImeRequest, InputHandlerFn, InputHandlerInput, MeasureFn, MeasureInput, MeasurementError,
     WindowRequests, measure_node, measure_nodes, place_node,
 };
 
@@ -184,9 +184,9 @@ impl ComponentTree {
             commands.len()
         );
 
-        let state_handler_timer = Instant::now();
+        let input_handler_timer = Instant::now();
         let mut window_requests = WindowRequests::default();
-        debug!("Start executing state handlers...");
+        debug!("Start executing input handlers...");
         for node_id in root_node
             .reverse_traverse(&self.tree)
             .filter_map(|edge| match edge {
@@ -194,10 +194,10 @@ impl ComponentTree {
                 indextree::NodeEdge::End(_) => None,
             })
         {
-            let Some(state_handler) = self
+            let Some(input_handler) = self
                 .tree
                 .get(node_id)
-                .and_then(|n| n.get().state_handler_fn.as_ref())
+                .and_then(|n| n.get().input_handler_fn.as_ref())
             else {
                 continue;
             };
@@ -218,7 +218,7 @@ impl ComponentTree {
 
             if let Some(node_computed_data) = computed_data_option {
                 // Check if computed_data exists
-                let input = StateHandlerInput {
+                let input = InputHandlerInput {
                     computed_data: node_computed_data,
                     cursor_position_rel: current_cursor_position,
                     cursor_position_abs: &mut cursor_position,
@@ -229,8 +229,8 @@ impl ComponentTree {
                     requests: &mut window_requests,
                     clipboard,
                 };
-                state_handler(input);
-                // if state_handler set ime request, it's position must be None, and we set it here
+                input_handler(input);
+                // if input_handler set ime request, it's position must be None, and we set it here
                 if let Some(ref mut ime_request) = window_requests.ime_request
                     && ime_request.position.is_none()
                 {
@@ -243,13 +243,13 @@ impl ComponentTree {
                 }
             } else {
                 warn!(
-                    "Computed data not found for node {node_id:?} during state handler execution."
+                    "Computed data not found for node {node_id:?} during input handler execution."
                 );
             }
         }
         debug!(
-            "State handlers executed in {:?}",
-            state_handler_timer.elapsed()
+            "Input Handlers executed in {:?}",
+            input_handler_timer.elapsed()
         );
         (commands, window_requests)
     }

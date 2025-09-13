@@ -118,7 +118,7 @@ In summary:
 <p align="center" style="color: gray;"><em>Using custom shaders instead of a built-in brush allows us to easily achieve advanced glass effects like this. This example can be found in `example/fluid_glass_showcase.rs`.</em></p>
 
 - **Decentralized Component Design**: Thanks to the pluggable rendering pipeline, `tessera` itself does not include any built-in components. While `tessera_basic_components` provides a set of common components, you are free to mix and match or create your own component libraries.
-- **Explicit State Management**: Components are stateless. State is passed in explicitly as parameters (usually in the form of `Arc<Lock<State>>` due to the highly parallel design), and interaction logic is handled within the `state_handler` closure, making data flow clear and controllable.
+- **Explicit State Management**: Components are stateless. State is passed in explicitly as parameters (usually in the form of `Arc<Lock<State>>` due to the highly parallel design), and interaction logic is handled within the `input_handler` closure, making data flow clear and controllable.
 - **Parallelized By Design**: The framework utilizes parallel processing in its core. For example, the size measurement of the component tree uses Rayon for parallel computation to improve the performance of complex UIs.
 
 ## A Glance
@@ -186,9 +186,9 @@ fn counter_app(#[state] app_state: AppState) {
 ## Core Concepts
 
 1. **Component Model**
-   `Tessera` components are regular Rust functions annotated with the `#[tessera]` macro. This macro integrates the component function into the framework's component tree. Inside the function body, you can call `measure` to customize layout logic, measure and place child component functions to build the UI hierarchy, and call `state_handler` to handle user interactions.
+   `Tessera` components are regular Rust functions annotated with the `#[tessera]` macro. This macro integrates the component function into the framework's component tree. Inside the function body, you can call `measure` to customize layout logic, measure and place child component functions to build the UI hierarchy, and call `input_handler` to handle user interactions.
 
-   `measure` and `state_handler` are automatically injected into the function context by the `tessera` macro and do not need to be imported.
+   `measure` and `input_handler` are automatically injected into the function context by the `tessera` macro and do not need to be imported.
 
 2. **Layout & Measurement**
    The UI layout is determined during the "measurement" phase. Each component can provide a `measure` closure, in which you can:
@@ -199,7 +199,7 @@ fn counter_app(#[state] app_state: AppState) {
      If no `measure` closure is provided, the framework defaults to stacking all child components at `(0, 0)` and setting the container size to the minimum size that envelops all children.
 
 3. **State Management**
-   `Tessera` promotes an explicit state management pattern. Components are stateless; they receive shared state via parameters (usually `Arc<T>`). All state changes and event responses are handled within the `state_handler` closure, which makes the data flow unidirectional and predictable.
+   `Tessera` promotes an explicit state management pattern. Components are stateless; they receive shared state via parameters (usually `Arc<T>`). All state changes and event responses are handled within the `input_handler` closure, which makes the data flow unidirectional and predictable.
 
 ## Getting Started
 

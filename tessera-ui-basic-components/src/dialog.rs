@@ -264,9 +264,9 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
     }
 }
 
-fn make_keyboard_state_handler(
+fn make_keyboard_input_handler(
     on_close: Arc<dyn Fn() + Send + Sync>,
-) -> Box<dyn for<'a> Fn(tessera_ui::StateHandlerInput<'a>) + Send + Sync + 'static> {
+) -> Box<dyn for<'a> Fn(tessera_ui::InputHandlerInput<'a>) + Send + Sync + 'static> {
     Box::new(move |input| {
         input.keyboard_events.drain(..).for_each(|event| {
             if event.state == winit::event::ElementState::Pressed
@@ -390,9 +390,9 @@ pub fn dialog_provider(
         // 2a. Scrim (delegated)
         render_scrim(&args, is_open, progress);
 
-        // 2b. State Handler for intercepting keyboard events (delegated)
-        let handler = make_keyboard_state_handler(args.on_close_request.clone());
-        state_handler(handler);
+        // 2b. Input Handler for intercepting keyboard events (delegated)
+        let handler = make_keyboard_input_handler(args.on_close_request.clone());
+        input_handler(handler);
 
         // 2c. Dialog Content
         // The user-defined dialog content is rendered on top of everything.

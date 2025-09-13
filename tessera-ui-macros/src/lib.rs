@@ -12,14 +12,14 @@
 //! #[tessera]
 //! fn my_component() {
 //!     // Component logic here
-//!     // The macro provides access to `measure`, `state_handler` and `on_minimize` functions
+//!     // The macro provides access to `measure`, `input_handler` and `on_minimize` functions
 //! }
 //! ```
 //!
 //! The `#[tessera]` macro automatically:
 //!
 //! - Registers the function as a component in the Tessera component tree
-//! - Injects `measure`, `state_handler` and `on_minimize` functions into the component scope
+//! - Injects `measure`, `input_handler` and `on_minimize` functions into the component scope
 //! - Handles component tree management (adding/removing nodes)
 //! - Provides error safety by wrapping the function body
 
@@ -49,7 +49,7 @@ fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_ma
                     ComponentNode {
                         fn_name: stringify!(#fn_name).to_string(),
                         measure_fn: None,
-                        state_handler_fn: None,
+                        input_handler_fn: None,
                     }
                 )
             });
@@ -75,18 +75,18 @@ fn measure_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     }
 }
 
-/// Helper: tokens to inject `state_handler`
-fn state_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
+/// Helper: tokens to inject `input_handler`
+fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
-        let state_handler = {
-            use #crate_path::{StateHandlerFn, TesseraRuntime};
-            |fun: Box<StateHandlerFn>| {
+        let input_handler = {
+            use #crate_path::{InputHandlerFn, TesseraRuntime};
+            |fun: Box<InputHandlerFn>| {
                 TesseraRuntime::with_mut(|runtime| {
                     runtime
                         .component_tree
                         .current_node_mut()
                         .unwrap()
-                        .state_handler_fn = Some(fun)
+                        .input_handler_fn = Some(fun)
                 });
             }
         };
@@ -136,7 +136,7 @@ fn cleanup_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
 /// 1. Registers a new component node (push) into the global `ComponentTree`
 /// 2. Injects helper closures:
 ///    * `measure(Box<MeasureFn>)` – supply layout measuring logic
-///    * `state_handler(Box<StateHandlerFn>)` – supply per‑frame interaction / event handling
+///    * `input_handler(Box<InputHandlerFn>)` – supply per‑frame interaction / event handling
 ///    * `on_minimize(Box<dyn Fn(bool) + Send + Sync>)` – window minimize life‑cycle hook
 ///    * `on_close(Box<dyn Fn() + Send + Sync>)` – window close life‑cycle hook
 /// 3. Executes the original user code inside an inner closure to prevent early `return`
@@ -162,7 +162,7 @@ fn cleanup_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
 ///     }));
 ///
 ///     // Optional interaction handling
-///     state_handler(Box::new(|input| {
+///     input_handler(Box::new(|input| {
 ///         // Inspect input.cursor_events / keyboard_events ...
 ///         let _ = input.cursor_events.len();
 ///     }));
@@ -207,7 +207,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Prepare token fragments using helpers to keep function small and readable
     let register_tokens = register_node_tokens(&crate_path, fn_name);
     let measure_tokens = measure_inject_tokens(&crate_path);
-    let state_tokens = state_handler_inject_tokens(&crate_path);
+    let state_tokens = input_handler_inject_tokens(&crate_path);
     let on_minimize_tokens = on_minimize_inject_tokens(&crate_path);
     let on_close_tokens = on_close_inject_tokens(&crate_path);
     let cleanup = cleanup_tokens(&crate_path);

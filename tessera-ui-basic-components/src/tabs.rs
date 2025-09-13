@@ -16,7 +16,7 @@
 //! - The active tab indicator animates between tabs using an easing function.
 //! - Clicking a tab updates the shared [`TabsState`] (via [`TabsState::set_active_tab`] ) and
 //!   triggers the indicator/content animation.
-//! - The component registers a `state_handler` to advance the animation while a transition is in progress.
+//! - The component registers a `input_handler` to advance the animation while a transition is in progress.
 //!
 //! # Example
 //!
@@ -341,7 +341,7 @@ where
     tabs_content_container(scroll_offset, content_closures);
 
     let state_clone = state.clone();
-    state_handler(Box::new(move |_| {
+    input_handler(Box::new(move |_| {
         let last_switch_time = state_clone.read().last_switch_time;
         if let Some(last_switch_time) = last_switch_time {
             let elapsed = last_switch_time.elapsed();

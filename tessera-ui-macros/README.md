@@ -14,7 +14,7 @@ The `#[tessera]` macro transforms regular Rust functions into Tessera UI compone
 ## Features
 
 - **Component Integration**: Automatically registers functions as components in the Tessera component tree
-- **Runtime Injection**: Provides access to `measure` and `state_handler` functions within component functions
+- **Runtime Injection**: Provides access to `measure` and `input_handler` functions within component functions
 - **Clean Syntax**: Enables declarative component definition with minimal boilerplate
 - **Tree Management**: Handles component tree node creation and cleanup automatically
 
@@ -30,7 +30,7 @@ fn my_component() {
     // Your component logic here
     // The macro automatically provides access to:
     // - measure: for custom layout logic
-    // - state_handler: for handling user interactions
+    // - input_handler: for handling user interactions
 }
 ```
 
@@ -47,7 +47,7 @@ fn button_component(label: String, on_click: Arc<dyn Fn()>) {
 }
 ```
 
-### Using Measure and State Handler
+### Using Measure and Input Handler
 
 ```rust
 use tessera_macros::tessera;
@@ -66,7 +66,7 @@ fn custom_component() {
     }));
 
     // Handle user interactions
-    state_handler(Box::new(|_| {
+    input_handler(Box::new(|_| {
         // Handle events like clicks, key presses, etc.
     }));
 }
@@ -78,7 +78,7 @@ The `#[tessera]` macro performs the following transformations:
 
 1. **Component Registration**: Adds the function to the component tree with its name
 2. **Runtime Access**: Injects code to access the Tessera runtime
-3. **Function Injection**: Provides `measure` and `state_handler` functions in the component scope
+3. **Function Injection**: Provides `measure` and `input_handler` functions in the component scope
 4. **Tree Management**: Handles pushing and popping nodes from the component tree
 5. **Error Safety**: Wraps the original function body to prevent early returns from breaking the component tree
 
@@ -98,9 +98,9 @@ fn my_component() {
     // Component tree registration
     TesseraRuntime::write().component_tree.add_node(ComponentNode { ... });
     
-    // Inject measure and state_handler functions
+    // Inject measure and input_handler functions
     let measure = |fun: Box<MeasureFn>| { /* ... */ };
-    let state_handler = |fun: Box<StateHandlerFn>| { /* ... */ };
+    let input_handler = |fun: Box<InputHandlerFn>| { /* ... */ };
     
     // Execute original function body safely
     let result = {

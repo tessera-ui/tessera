@@ -291,8 +291,8 @@ fn snapshot_state(state: &Arc<RwLock<SideBarProviderState>>) -> (bool, Option<In
 /// Create the keyboard handler closure used to close the sheet on Escape.
 fn make_keyboard_closure(
     on_close: Arc<dyn Fn() + Send + Sync>,
-) -> Box<dyn Fn(tessera_ui::StateHandlerInput<'_>) + Send + Sync> {
-    Box::new(move |input: tessera_ui::StateHandlerInput<'_>| {
+) -> Box<dyn Fn(tessera_ui::InputHandlerInput<'_>) + Send + Sync> {
+    Box::new(move |input: tessera_ui::InputHandlerInput<'_>| {
         for event in input.keyboard_events.drain(..) {
             if event.state == winit::event::ElementState::Pressed
                 && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
@@ -369,7 +369,7 @@ pub fn side_bar_provider(
 
     // Register keyboard handler (close on Escape).
     let keyboard_closure = make_keyboard_closure(on_close_for_keyboard);
-    state_handler(keyboard_closure);
+    input_handler(keyboard_closure);
 
     // Render side bar content with computed alpha.
     side_bar_content_wrapper(args.style, side_bar_content);

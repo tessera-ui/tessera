@@ -31,10 +31,10 @@ This document defines how You should assist in the Tessera project to ensure cod
 - Components are stateless Rust functions annotated with `#[tessera]`. All state must be passed via parameters (e.g., `Arc<Mutex<T>>` or atomic types).
 - Inside the component function:
   - `measure`: Custom layout and measurement logic (optional)
-  - `state_handler`: Event and interaction handling (optional)
+  - `input_handler`: Event and interaction handling (optional)
   - All child component closures must be executed to build the complete component tree
 
-**Automatic Injection**: `measure` and `state_handler` are injected by the macro and do not require manual import.
+**Automatic Injection**: `measure` and `input_handler` are injected by the macro and do not require manual import.
 
 ### Component Tree & Node Metadata
 
@@ -73,7 +73,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 ## 🎯 Event & State Management
 
 - Components are stateless; all state is passed via parameters (prefer `Arc<Mutex<T>>` or atomic types).
-- Event handling is done via the `state_handler` closure, which receives `StateHandlerInput` containing:
+- Event handling is done via the `input_handler` closure, which receives `InputHandlerInput` containing:
   - `node_id`, `computed_data`, `cursor_position`
   - `cursor_events`, `keyboard_events`, `ime_events`
 - Mouse, keyboard, and IME events are processed via event queues and must be consumed promptly.

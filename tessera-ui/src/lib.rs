@@ -36,14 +36,14 @@
 //! **Essential functions and types:**
 //! - [`measure_node`] - Measure child component sizes with constraints
 //! - [`place_node`] - Position child components in the layout
-//! - [`StateHandlerFn`] - Handle user interactions and state changes
+//! - [`InputHandlerFn`] - Handle user interactions and state changes
 //! - [`Constraint`], [`DimensionValue`] - Layout constraint system
 //! - [`ComputedData`] - Return computed size and layout information
 //!
 //! **Key concepts:**
 //! - Understanding the measurement and placement phase
 //! - Creating custom layout algorithms
-//! - Managing component state through explicit state handlers
+//! - Managing component state through explicit input handlers
 //! - Working with the constraint-based layout system
 //!
 //! ```
@@ -58,7 +58,7 @@
 //! #        Ok(ComputedData::ZERO) // Make doc tests happy
 //!     }));
 //!
-//!     state_handler(Box::new(|input| {
+//!     input_handler(Box::new(|input| {
 //!         // Handle user interactions here
 //!     }));
 //! }
@@ -98,7 +98,7 @@
 //! - [`ComponentTree`] - Component tree management
 //! - [`ComponentNode`] - Individual component node representation
 //! - [`ComputedData`] - Layout computation results
-//! - [`StateHandlerFn`] - State management and event handling
+//! - [`InputHandlerFn`] - State management and event handling
 //!
 //! ### Event Handling
 //!
@@ -156,9 +156,9 @@ pub use crate::{
     color::Color,
     component_tree::{
         ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
-        ComponentTree, ComputedData, Constraint, DimensionValue, ImeRequest, MeasureFn,
-        MeasureInput, MeasurementError, StateHandlerFn, StateHandlerInput, measure_node,
-        measure_nodes, place_node,
+        ComponentTree, ComputedData, Constraint, DimensionValue, ImeRequest, InputHandlerFn,
+        InputHandlerInput, MeasureFn, MeasureInput, MeasurementError, measure_node, measure_nodes,
+        place_node,
     },
     cursor::{CursorEvent, CursorEventContent, PressKeyEventType, ScrollEventConent},
     dp::Dp,

@@ -371,7 +371,7 @@ fn compute_surface_size(
 ///   - Measures (optional) single child (if present) with padding removed from constraints
 ///   - Computes final size using `width` / `height` (Wrap / Fill / Fixed) merging parent constraints
 ///   - Pushes a shape draw command sized to computed width/height
-/// * Interaction (`state_handler`) phase (only when `on_click` is `Some`):
+/// * Interaction (`input_handler`) phase (only when `on_click` is `Some`):
 ///   - Tracks cursor containment
 ///   - Sets hover state on provided `RippleState`
 ///   - Starts ripple animation on mouse press
@@ -495,7 +495,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
     if args.on_click.is_some() {
         let args_for_handler = args.clone();
         let state_for_handler = ripple_state;
-        state_handler(Box::new(move |mut input| {
+        input_handler(Box::new(move |mut input| {
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
@@ -555,7 +555,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
             }
         }));
     } else {
-        state_handler(Box::new(move |mut input| {
+        input_handler(Box::new(move |mut input| {
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
