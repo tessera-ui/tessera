@@ -3041,7 +3041,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-ui-macros"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "heck",
  "proc-macro2",

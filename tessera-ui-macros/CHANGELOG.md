@@ -1,3 +1,12 @@
+## [v0.4.1] - 2025-09-13 +08:00
+
+### Changes
+
+- refactor(input-handler): rename state_handler → input_handler across code and docs
+- docs(tessera-ui-basic-components): add README files and fix macros docs formatting
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.4.0...tessera-ui-macros-v0.4.1)
+
 ## [v0.4.0] - 2025-09-12 +08:00
 
 ### Changes
