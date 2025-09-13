@@ -297,9 +297,9 @@ fn measure_slider(
 /// This example demonstrates how to create a stateful slider and respond to value changes by updating your own state.
 ///
 /// # See Also
+///
 /// - [`SliderArgs`]
 /// - [`SliderState`]
-/// Helper: check if a cursor position is inside a measured component area.
 #[tessera]
 pub fn slider(args: impl Into<SliderArgs>, state: Arc<RwLock<SliderState>>) {
     let args: SliderArgs = args.into();
