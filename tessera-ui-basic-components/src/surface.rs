@@ -387,7 +387,8 @@ fn compute_surface_size(
 /// Effective minimum size = child size + `padding * 2` in each axis (if child exists).
 ///
 /// # Example
-/// ```rust,ignore
+///
+/// ```
 /// use std::sync::Arc;
 /// use tessera_ui::{Dp, tessera, Color};
 /// use tessera_ui_basic_components::{
