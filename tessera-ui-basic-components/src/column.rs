@@ -7,14 +7,15 @@
 //! Children are added declaratively within a `scope` closure, which provides methods to add children with or without weights.
 //!
 //! # Example
-//! ```rust,ignore
+//!
+//! ```
 //! use tessera_ui_basic_components::column::{column, ColumnArgs};
 //! use tessera_ui_basic_components::text::text;
-//! use tessera_ui_basic_components::spacer::spacer;
+//! use tessera_ui_basic_components::spacer::{spacer, SpacerArgs};
 //!
 //! column(ColumnArgs::default(), |scope| {
 //!     scope.child(|| text("First item".to_string()));
-//!     scope.child_weighted(|| spacer(), 1.0); // This spacer will be flexible
+//!     scope.child_weighted(|| spacer(SpacerArgs::default()), 1.0); // This spacer will be flexible
 //!     scope.child(|| text("Last item".to_string()));
 //! });
 //! ```
