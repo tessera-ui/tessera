@@ -1,4 +1,4 @@
-use tessera_ui::{DimensionValue, Dp, Renderer};
+use tessera_ui::{Color, DimensionValue, Dp, Renderer};
 use tessera_ui_basic_components::{
     image::{ImageArgsBuilder, ImageSource, image, load_image_from_source},
     surface::{SurfaceArgsBuilder, surface},
@@ -21,6 +21,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(25.0))
+                    .width(DimensionValue::FILLED)
+                    .height(DimensionValue::FILLED)
+                    .style(Color::WHITE.into())
                     .build()
                     .unwrap(),
                 None,
@@ -28,8 +31,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     image(
                         ImageArgsBuilder::default()
                             .data(image_data)
-                            .width(DimensionValue::Fixed(Dp(200.0).into()))
-                            .height(DimensionValue::Fixed(Dp(200.0).into()))
                             .build()
                             .unwrap(),
                     )
