@@ -102,7 +102,7 @@ impl From<ImageData> for ImageArgs {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use std::sync::Arc;
 /// use tessera_ui_basic_components::{
 ///     image::{image, load_image_from_source, ImageArgsBuilder, ImageSource, ImageData},
