@@ -377,7 +377,8 @@ impl WgpuApp {
     }
 
     /// Resize the surface if needed.
-    pub(crate) fn resize_if_needed(&mut self) {
+    pub(crate) fn resize_if_needed(&mut self) -> bool {
+        let result = self.size_changed;
         if self.size_changed {
             self.config.width = self.size.width;
             self.config.height = self.size.height;
@@ -385,6 +386,7 @@ impl WgpuApp {
             self.surface.configure(&self.gpu, &self.config);
             self.size_changed = false;
         }
+        result
     }
 
     // Helper does ping-pong copy and optional compute; returns an owned TextureView to avoid

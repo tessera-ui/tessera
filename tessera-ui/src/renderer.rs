@@ -569,6 +569,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
 // Helper struct to group render-frame arguments and reduce parameter count.
 // Kept private to this module.
 struct RenderFrameArgs<'a> {
+    pub resized: bool,
     pub cursor_state: &'a mut CursorState,
     pub keyboard_state: &'a mut KeyboardState,
     pub ime_state: &'a mut ImeState,
@@ -753,7 +754,7 @@ Fps: {:.2}
 
         // --- Dirty Rectangle Logic ---
         let mut dirty = false;
-        if new_commands.len() != previous_commands.len() {
+        if args.resized || new_commands.len() != previous_commands.len() {
             dirty = true;
         } else {
             for (new_cmd_tuple, old_cmd_tuple) in new_commands.iter().zip(previous_commands.iter())
@@ -967,8 +968,9 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             None => return,
         };
 
-        app.resize_if_needed();
+        let resized = app.resize_if_needed();
         let mut args = RenderFrameArgs {
+            resized,
             cursor_state: &mut self.cursor_state,
             keyboard_state: &mut self.keyboard_state,
             ime_state: &mut self.ime_state,
