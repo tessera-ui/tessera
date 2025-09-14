@@ -12,6 +12,7 @@
 //! # Examples
 //!
 //! Basic usage:
+//!
 //! ```
 //! use tessera_ui_basic_components::text::{text, TextArgs};
 //! text("Hello, Tessera!");
