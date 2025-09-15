@@ -1,3 +1,17 @@
+## [v1.14.0] - 2025-09-15 +08:00
+
+### Changes
+
+- fix(text-editor): add default implementation for TextEditorArgs to fix doc test
+- feat(text-editor): add on_change callback and safe action handling
+- feat(checkbox): make CheckboxState fields private and add constructor
+- docs(image): update example to use `no_run` for better clarity
+- docs(column): update example to include SpacerArgs for clarity
+- docs(text): add spacing for example section
+- docs(slider): update example documentation
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.13.1...tessera-ui-basic-components-v1.14.0)
+
 ## [v1.13.1] - 2025-09-13 +08:00
 
 ### Changes
