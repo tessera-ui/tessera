@@ -129,6 +129,12 @@ pub struct TextEditorArgs {
     pub selection_color: Option<Color>,
 }
 
+impl Default for TextEditorArgs {
+    fn default() -> Self {
+        TextEditorArgsBuilder::default().build().unwrap()
+    }
+}
+
 /// A text editor component with two-layer architecture:
 /// - surface layer: provides visual container, minimum size, and click area
 /// - Core layer: handles text rendering and editing logic
