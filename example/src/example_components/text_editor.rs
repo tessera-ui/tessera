@@ -88,6 +88,7 @@ fn test_content(state: Arc<TextEditorShowcaseState>) {
                     TextEditorArgsBuilder::default()
                         .width(DimensionValue::FILLED)
                         .height(Dp(200.0))
+                        .on_change(Arc::new(move |new_value| new_value))
                         .build()
                         .unwrap(),
                     state.editor_state.clone(),

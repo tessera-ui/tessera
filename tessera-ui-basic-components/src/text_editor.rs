@@ -77,7 +77,7 @@ pub use crate::text_edit_core::TextEditorState;
 ///     .build()
 ///     .unwrap();
 /// ```
-#[derive(Debug, Default, Builder, Clone)]
+#[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TextEditorArgs {
     /// Width constraint for the text editor. Defaults to `Wrap`.
@@ -86,6 +86,11 @@ pub struct TextEditorArgs {
     /// Height constraint for the text editor. Defaults to `Wrap`.
     #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub height: DimensionValue,
+    /// Called when the text content changes. The closure receives the new text content and returns the updated content.
+    ///
+    /// For default, it is a no-op that returns an empty string. Which means the text editor will not accept any input.
+    #[builder(default = "Arc::new(|_| { String::new() })")]
+    pub on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
     /// Minimum width in density-independent pixels. Defaults to 120dp if not specified.
     #[builder(default = "None")]
     pub min_width: Option<Dp>,
@@ -184,6 +189,7 @@ pub struct TextEditorArgs {
 #[tessera]
 pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditorState>>) {
     let editor_args: TextEditorArgs = args.into();
+    let on_change = editor_args.on_change.clone();
 
     // Update the state with the selection color from args
     if let Some(selection_color) = editor_args.selection_color {
@@ -418,10 +424,11 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                 if !all_actions.is_empty() {
                     let mut state = state_for_handler.write();
                     for action in all_actions {
-                        state.editor_mut().action(&mut write_font_system(), action);
+                        handle_action(&mut state, action, on_change.clone());
                     }
                 }
             }
+
             // Block all keyboard events to prevent propagation
             input.keyboard_events.clear();
 
@@ -434,32 +441,24 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                         // Clear preedit string if it exists
                         if let Some(preedit_text) = state.preedit_string.take() {
                             for _ in 0..preedit_text.chars().count() {
-                                state
-                                    .editor_mut()
-                                    .action(&mut write_font_system(), glyphon::Action::Backspace);
+                                handle_action(&mut state, Action::Backspace, on_change.clone());
                             }
                         }
                         // Insert the committed text
                         for c in text.chars() {
-                            state
-                                .editor_mut()
-                                .action(&mut write_font_system(), glyphon::Action::Insert(c));
+                            handle_action(&mut state, Action::Insert(c), on_change.clone());
                         }
                     }
                     winit::event::Ime::Preedit(text, _cursor_offset) => {
                         // Remove the old preedit text if it exists
                         if let Some(old_preedit) = state.preedit_string.take() {
                             for _ in 0..old_preedit.chars().count() {
-                                state
-                                    .editor_mut()
-                                    .action(&mut write_font_system(), glyphon::Action::Backspace);
+                                handle_action(&mut state, Action::Backspace, on_change.clone());
                             }
                         }
                         // Insert the new preedit text
                         for c in text.chars() {
-                            state
-                                .editor_mut()
-                                .action(&mut write_font_system(), glyphon::Action::Insert(c));
+                            handle_action(&mut state, Action::Insert(c), on_change.clone());
                         }
                         state.preedit_string = Some(text.to_string());
                     }
@@ -471,6 +470,43 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
             input.requests.ime_request = Some(ImeRequest::new(size.into()));
         }
     }));
+}
+
+fn handle_action(
+    state: &mut TextEditorState,
+    action: Action,
+    on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
+) {
+    // Clone a temporary editor and apply action, waiting for on_change to confirm
+    let mut new_editor = state.editor().clone();
+
+    // Make sure new editor own a isolated buffer
+    let mut new_buffer = None;
+    match new_editor.buffer_ref_mut() {
+        glyphon::cosmic_text::BufferRef::Owned(_) => { /* Already owned */ }
+        glyphon::cosmic_text::BufferRef::Borrowed(buffer) => {
+            new_buffer = Some(buffer.clone());
+        }
+        glyphon::cosmic_text::BufferRef::Arc(buffer) => {
+            new_buffer = Some((**buffer).clone());
+        }
+    }
+    if let Some(buffer) = new_buffer {
+        *new_editor.buffer_ref_mut() = glyphon::cosmic_text::BufferRef::Owned(buffer);
+    }
+
+    new_editor.action(&mut write_font_system(), action);
+    let content_after_action = get_editor_content(&new_editor);
+
+    state.editor_mut().action(&mut write_font_system(), action);
+    let new_content = on_change(content_after_action);
+
+    // Update editor content
+    state.editor_mut().set_text_reactive(
+        &new_content,
+        &mut write_font_system(),
+        &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
+    );
 }
 
 /// Create surface arguments based on editor configuration and state
@@ -768,4 +804,14 @@ impl TextEditorArgs {
         self.selection_color = Some(color);
         self
     }
+}
+
+fn get_editor_content(editor: &glyphon::Editor) -> String {
+    editor.with_buffer(|buffer| {
+        buffer
+            .lines
+            .iter()
+            .map(|line| line.text().to_string() + line.ending().as_str())
+            .collect::<String>()
+    })
 }
