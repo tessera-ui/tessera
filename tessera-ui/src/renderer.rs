@@ -194,7 +194,7 @@ pub mod reorder;
 use std::{any::TypeId, sync::Arc, time::Instant};
 
 use tessera_ui_macros::tessera;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, error, instrument, warn};
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
@@ -724,7 +724,9 @@ Fps: {:.2}
 
         debug!("Rendering draw commands...");
         // Forward commands to WgpuApp::render which accepts the same iterator type
-        args.app.render(commands).unwrap();
+        args.app.render(commands).unwrap_or_else(|e| {
+            error!("Render error: {e}");
+        });
         let render_cost = render_timer.elapsed();
         debug!("Rendered to surface in {render_cost:?}");
         render_cost
