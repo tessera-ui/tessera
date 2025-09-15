@@ -35,8 +35,17 @@ use crate::{
 
 #[derive(Clone, Default)]
 pub struct CheckboxState {
-    pub ripple: Arc<RippleState>,
-    pub checkmark: Arc<RwLock<CheckmarkState>>,
+    ripple: Arc<RippleState>,
+    checkmark: Arc<RwLock<CheckmarkState>>,
+}
+
+impl CheckboxState {
+    pub fn new(initial_state: bool) -> Self {
+        Self {
+            ripple: Default::default(),
+            checkmark: Arc::new(RwLock::new(CheckmarkState::new(initial_state))),
+        }
+    }
 }
 
 /// Arguments for the `checkbox` component.
@@ -167,10 +176,7 @@ impl CheckmarkState {
 /// );
 ///
 /// // Create a checkbox that is initially checked.
-/// let checked_state = Arc::new(CheckboxState {
-///     checkmark: Arc::new(RwLock::new(CheckmarkState::new(true))),
-///     ..Default::default()
-/// });
+/// let checked_state = Arc::new(CheckboxState::new(true));
 /// checkbox(CheckboxArgs::default(), checked_state);
 /// ```
 #[tessera]
