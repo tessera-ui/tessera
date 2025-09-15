@@ -1,3 +1,12 @@
+## [v1.13.2] - 2025-09-15 +08:00
+
+### Changes
+
+- fix(renderer): improve error handling during rendering process
+- fix(renderer): ensure full redraw on surface resize
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.13.1...tessera-ui-v1.13.2)
+
 ## [v1.13.1] - 2025-09-13 +08:00
 
 ### Changes
