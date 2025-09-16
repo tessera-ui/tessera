@@ -187,6 +187,7 @@ impl ComponentTree {
         let input_handler_timer = Instant::now();
         let mut window_requests = WindowRequests::default();
         debug!("Start executing input handlers...");
+
         for node_id in root_node
             .reverse_traverse(&self.tree)
             .filter_map(|edge| match edge {
@@ -194,6 +195,8 @@ impl ComponentTree {
                 indextree::NodeEdge::End(_) => None,
             })
         {
+            let metadata = self.metadatas.get(&node_id).unwrap();
+
             let Some(input_handler) = self
                 .tree
                 .get(node_id)
@@ -202,27 +205,30 @@ impl ComponentTree {
                 continue;
             };
 
-            // Compute the relative cursor position for the current node
-            let current_cursor_position = cursor_position.map(|pos| {
-                // Get the absolute position of the current node
-                let abs_pos = self
-                    .metadatas
-                    .get(&node_id)
-                    .and_then(|m| m.abs_position)
-                    .unwrap();
-                // Calculate the relative position
-                pos - abs_pos
-            });
-            // Get the computed_data for the current node
-            let computed_data_option = self.metadatas.get(&node_id).and_then(|m| m.computed_data);
+            let abs_pos = metadata.abs_position.unwrap();
 
-            if let Some(node_computed_data) = computed_data_option {
-                // Check if computed_data exists
+            let mut cursor_position_ref = &mut cursor_position;
+            let mut dummy_cursor_position = None;
+            let mut cursor_events_ref = &mut cursor_events;
+            let mut empty_dummy_cursor_events = Vec::new();
+            if let Some(cursor_pos) = *cursor_position_ref
+                && let Some(clip_rect) = metadata.event_clip_rect
+            {
+                // check if the cursor is inside the clip rect
+                if !clip_rect.contains(cursor_pos) {
+                    // If not, set cursor relative inputs to None
+                    cursor_position_ref = &mut dummy_cursor_position;
+                    cursor_events_ref = &mut empty_dummy_cursor_events;
+                }
+            }
+            let current_cursor_position = cursor_position_ref.map(|pos| pos - abs_pos);
+
+            if let Some(node_computed_data) = metadata.computed_data {
                 let input = InputHandlerInput {
                     computed_data: node_computed_data,
                     cursor_position_rel: current_cursor_position,
-                    cursor_position_abs: &mut cursor_position,
-                    cursor_events: &mut cursor_events,
+                    cursor_position_abs: cursor_position_ref,
+                    cursor_events: cursor_events_ref,
                     keyboard_events: &mut keyboard_events,
                     ime_events: &mut ime_events,
                     key_modifiers: modifiers,
@@ -234,19 +240,16 @@ impl ComponentTree {
                 if let Some(ref mut ime_request) = window_requests.ime_request
                     && ime_request.position.is_none()
                 {
-                    ime_request.position = Some(
-                        self.metadatas
-                            .get(&node_id)
-                            .and_then(|m| m.abs_position)
-                            .unwrap(),
-                    )
+                    ime_request.position = Some(abs_pos);
                 }
             } else {
                 warn!(
-                    "Computed data not found for node {node_id:?} during input handler execution."
+                    "Computed data not found for node {:?} during input handler execution.",
+                    node_id
                 );
             }
         }
+
         debug!(
             "Input Handlers executed in {:?}",
             input_handler_timer.elapsed()
@@ -268,7 +271,6 @@ fn compute_draw_commands_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
-    // New params: screen width and height
     screen_width: i32,
     screen_height: i32,
 ) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
@@ -280,6 +282,7 @@ fn compute_draw_commands_parallel(
         metadatas,
         screen_width,
         screen_height,
+        None,
     )
 }
 
@@ -292,6 +295,7 @@ fn compute_draw_commands_inner_parallel(
     metadatas: &ComponentNodeMetaDatas,
     screen_width: i32,
     screen_height: i32,
+    clip_rect: Option<PxRect>,
 ) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
     let mut local_commands = Vec::new();
 
@@ -313,16 +317,33 @@ fn compute_draw_commands_inner_parallel(
         })
         .unwrap_or_default();
 
+    let node_rect = PxRect {
+        x: self_pos.x,
+        y: self_pos.y,
+        width: size.width,
+        height: size.height,
+    };
+
+    let mut clip_rect = clip_rect;
+    if let Some(clip_rect) = clip_rect {
+        metadata.event_clip_rect = Some(clip_rect);
+    }
+
     let clips_children = metadata.clips_children;
     // Add Clip command if the node clips its children
     if clips_children {
+        let new_clip_rect = if let Some(existing_clip) = clip_rect {
+            existing_clip
+                .intersection(&node_rect)
+                .unwrap_or(PxRect::ZERO)
+        } else {
+            node_rect
+        };
+
+        clip_rect = Some(new_clip_rect);
+
         local_commands.push((
-            Command::ClipPush(PxRect {
-                x: self_pos.x,
-                y: self_pos.y,
-                width: size.width,
-                height: size.height,
-            }),
+            Command::ClipPush(new_clip_rect),
             TypeId::of::<Command>(),
             size,
             self_pos,
@@ -335,12 +356,6 @@ fn compute_draw_commands_inner_parallel(
         y: Px(0),
         width: Px(screen_width),
         height: Px(screen_height),
-    };
-    let node_rect = PxRect {
-        x: Px(self_pos.x.0),
-        y: Px(self_pos.y.0),
-        width: Px(size.width.0),
-        height: Px(size.height.0),
     };
 
     // Only drain commands if the node is visible.
@@ -367,6 +382,7 @@ fn compute_draw_commands_inner_parallel(
                 metadatas,
                 screen_width,
                 screen_height,
+                clip_rect,
             )
         })
         .collect();

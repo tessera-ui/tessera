@@ -49,6 +49,9 @@ pub struct ComponentNodeMetaData {
     /// This will be computed during drawing command's generation.
     /// None if the node is not drawn yet.
     pub abs_position: Option<PxPosition>,
+    /// The effective clipping rectangle for this node, considering all its ancestors.
+    /// This is calculated once per frame before event handling.
+    pub event_clip_rect: Option<crate::PxRect>,
     /// Commands associated with this node.
     ///
     /// This stores both draw and compute commands in a unified vector using the
@@ -67,6 +70,7 @@ impl ComponentNodeMetaData {
             computed_data: None,
             rel_position: None,
             abs_position: None,
+            event_clip_rect: None,
             commands: Vec::new(),
             clips_children: false,
         }

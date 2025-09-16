@@ -926,6 +926,22 @@ impl PxRect {
             None
         }
     }
+
+    /// Check if a point is inside the rectangle.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - The point to check
+    ///
+    /// # Returns
+    ///
+    /// An bool shows that whether the point is inside rectangle.
+    pub fn contains(&self, point: PxPosition) -> bool {
+        point.x.0 >= self.x.0
+            && point.x.0 < self.x.0 + self.width.0
+            && point.y.0 >= self.y.0
+            && point.y.0 < self.y.0 + self.height.0
+    }
 }
 
 impl From<[Px; 2]> for PxSize {
