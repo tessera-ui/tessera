@@ -74,25 +74,6 @@ The roadmap is now organized by crate:
   - ~~bottom nav bar~~
   - ~~side bar~~
 
-## Comparison with `egui`
-
-Tessera and `egui` are both excellent immediate-mode UI frameworks in the Rust ecosystem, but they are designed with different philosophies and target different use cases.
-
-| Feature                    | Tessera                                                                                                                                                                      | `egui`                                                                                                                |
-| :------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
-| **Core Philosophy**        | Performance, flexibility, and ultimate extensibility. Aims to give developers full control over the rendering pipeline.                                                      | Simplicity, ease of use, and rapid development. Aims to be the easiest way to create a GUI in Rust.                   |
-| **Rendering Architecture** | **Pluggable Shader Engine**. Does not provide built-in drawing primitives. Developers have full control by writing custom WGPU shaders.                                      | **Built-in Painter API**. Provides a high-level API (`painter.rect`, `painter.circle`) abstracting rendering details. |
-| **Visual Customization**   | **Extremely High**. Perfect for complex, custom visual styles like hyper-realistic glassmorphism, custom lighting, and particle effects.                                     | **Limited**. Customization is constrained by the built-in drawing primitives and styling options.                     |
-| **Layout System**          | **Constraint-based**. A powerful and flexible system (`Fixed`, `Wrap`, `Fill`) inspired by modern UI frameworks like Jetpack Compose.                                        | **Simple & Sequential**. Based on vertical and horizontal layouts, intuitive for standard UIs.                        |
-| **State Management**       | **Explicit & Stateless**. Components are stateless functions, and state is passed explicitly, often via `Arc<Mutex<T>>`.                                                     | **Implicit/Explicit Hybrid**. Manages some UI state internally (e.g., window position) via IDs.                       |
-| **Learning Curve**         | **Moderate**. Requires understanding of GPU concepts and the WGPU pipeline to unlock Tessera's full potential, but using the component library directly is intuitive enough. | **Very Gentle**. Can be learned in a matter of hours.                                                                 |
-| **Best For**               | Visually ambitious applications, game UIs, creative coding, and projects requiring custom GPU-accelerated computations.                                                      | Developer tools, debug overlays, data-heavy internal applications, and rapid prototyping.                             |
-
-In summary:
-
-- **Choose `egui`** if your priority is to build a functional UI quickly and easily, without needing deep visual customization.
-- **Choose Tessera** if you need maximum performance and creative freedom to build a visually stunning and highly customized user experience, and you are willing to work closer to the GPU.
-
 ## Core Features
 
 - **Declarative Component Model**: Define and compose components using simple functions with the `#[tessera]` macro, resulting in clean and intuitive code.
