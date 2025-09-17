@@ -41,8 +41,6 @@
 
 Tessera is a declarative, immediate-mode UI framework for Rust. With a functional approach at its core, it aims to provide ultimate performance, flexibility, and extensibility.
 
-The project is currently in its early stages of development. Feel free to explore the latest progress through the [example code](example).
-
 ## Roadmap
 
 The roadmap is now organized by crate:
@@ -203,7 +201,7 @@ fn counter_app(#[state] app_state: AppState) {
 
 ## Getting Started
 
-`tessera` is currently in early development, and there is no stable way to create a project yet. The following uses the `example` crate as a showcase project that runs on Windows, Linux, macOS, and Android.
+Currently we don't provide a scaffolding tool to create new projects (planned for the future). The following uses the `example` crate as a showcase project that runs on Windows, Linux, macOS, and Android.
 
 ### Running the Example on Windows / Linux
 

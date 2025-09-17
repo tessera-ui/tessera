@@ -201,7 +201,7 @@ fn counter_app(#[state] app_state: AppState) {
 
 ## 入门
 
-`tessera` 目前处于早期开发阶段，尚无稳定的方法来创建项目。以下使用 `example` crate 作为一个展示项目，可在 Windows、Linux、macOS 和 Android 上运行。
+目前，我们没有提供脚手架工具来创建新项目（计划在未来提供）。以下使用 `example` crate 作为一个展示项目，可在 Windows、Linux、macOS 和 Android 上运行。
 
 ### 在 Windows / Linux 上运行示例
 
