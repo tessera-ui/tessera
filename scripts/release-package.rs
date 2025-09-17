@@ -308,7 +308,11 @@ fn main() -> Result<()> {
         release_package(package_name, bump, cli.execute, &mut workspace)?;
     }
 
-    println!("\n✅ All packages released successfully!");
+    if cli.execute {
+        println!("\n✅ All packages released successfully!");
+    } else {
+        println!("\n✅ Dry run completed successfully.");
+    }
 
     Ok(())
 }
