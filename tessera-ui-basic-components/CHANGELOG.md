@@ -1,3 +1,12 @@
+## [v1.15.0] - 2025-09-17 +08:00
+
+### Changes
+
+- feat(shape_def): change RoundedRectangle corner radii to Dp
+- feat(side-bar): add blur effect to side bar content wrapper
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v1.14.0...tessera-ui-basic-components-v1.15.0)
+
 ## [v1.14.0] - 2025-09-15 +08:00
 
 ### Changes
