@@ -1,3 +1,12 @@
+## [v2.0.0] - 2025-09-17 +08:00
+
+### Changes
+
+- feat(shape_def): change RoundedRectangle corner radii to Dp
+- feat(tessera-ui): add event clipping and clip propagation for input handling and draw commands
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.13.2...tessera-ui-v2.0.0)
+
 ## [v1.13.2] - 2025-09-15 +08:00
 
 ### Changes
