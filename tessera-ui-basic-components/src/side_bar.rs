@@ -417,6 +417,7 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                         min: None,
                         max: None,
                     })
+                    .blur_radius(10.0)
                     .padding(Dp(16.0))
                     .block_input(true)
                     .build()
