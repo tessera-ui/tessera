@@ -246,7 +246,13 @@ impl FluidGlassPipeline {
                 bottom_right,
                 bottom_left,
                 ..
-            } => [top_left, top_right, bottom_right, bottom_left].into(),
+            } => [
+                top_left.to_pixels_f32(),
+                top_right.to_pixels_f32(),
+                bottom_right.to_pixels_f32(),
+                bottom_left.to_pixels_f32(),
+            ]
+            .into(),
             crate::shape_def::Shape::Ellipse => Vec4::ZERO,
             crate::shape_def::Shape::HorizontalCapsule => {
                 let radius = size.height.to_f32() / 2.0;

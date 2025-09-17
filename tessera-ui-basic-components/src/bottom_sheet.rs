@@ -266,10 +266,10 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
             .blur_radius(blur_radius)
             .border(None)
             .shape(Shape::RoundedRectangle {
-                top_left: 0.0,
-                top_right: 0.0,
-                bottom_right: 0.0,
-                bottom_left: 0.0,
+                top_left: Dp(0.0),
+                top_right: Dp(0.0),
+                bottom_right: Dp(0.0),
+                bottom_left: Dp(0.0),
                 g2_k_value: 3.0,
             })
             .noise_amount(0.0)
@@ -367,10 +367,10 @@ fn render_content(
             fluid_glass(
                 FluidGlassArgsBuilder::default()
                     .shape(Shape::RoundedRectangle {
-                        top_left: 50.0,
-                        top_right: 50.0,
-                        bottom_right: 0.0,
-                        bottom_left: 0.0,
+                        top_left: Dp(50.0),
+                        top_right: Dp(50.0),
+                        bottom_right: Dp(0.0),
+                        bottom_left: Dp(0.0),
                         g2_k_value: 3.0,
                     })
                     .tint_color(Color::new(0.6, 0.8, 1.0, 0.3)) // Give it a slight blue tint
@@ -393,10 +393,10 @@ fn render_content(
                 SurfaceArgsBuilder::default()
                     .style(Color::new(0.2, 0.2, 0.2, 1.0).into())
                     .shape(Shape::RoundedRectangle {
-                        top_left: 25.0,
-                        top_right: 25.0,
-                        bottom_right: 0.0,
-                        bottom_left: 0.0,
+                        top_left: Dp(25.0),
+                        top_right: Dp(25.0),
+                        bottom_right: Dp(0.0),
+                        bottom_left: Dp(0.0),
                         g2_k_value: 3.0,
                     })
                     .width(DimensionValue::Fill {

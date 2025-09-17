@@ -143,8 +143,8 @@ impl Dp {
     /// ```
     /// use tessera_ui::Dp;
     ///
-    /// const BUTTON_HEIGHT: Dp = Dp::new(48.0);
-    /// let padding = Dp::new(16.0);
+    /// const BUTTON_HEIGHT: Dp = Dp(48.0);
+    /// let padding = Dp(16.0);
     /// ```
     pub const fn new(value: f64) -> Self {
         Dp(value)
@@ -373,7 +373,7 @@ impl From<f64> for Dp {
     /// set_padding(8.0.into());
     /// ```
     fn from(value: f64) -> Self {
-        Dp::new(value)
+        Dp(value)
     }
 }
 

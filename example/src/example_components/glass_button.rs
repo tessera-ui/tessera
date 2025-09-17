@@ -130,7 +130,7 @@ fn test_content(state: Arc<GlassButtonShowcaseState>) {
                                 GlassButtonArgsBuilder::default()
                                     .tint_color(Color::new(0.2, 0.5, 0.8, 0.1))
                                     .on_click(on_click)
-                                    .shape(Shape::rounded_rectangle(25.0))
+                                    .shape(Shape::rounded_rectangle(Dp(25.0)))
                                     .build()
                                     .unwrap(),
                                 state_clone.ripple_state.clone(),

@@ -184,7 +184,7 @@ fn render_track(args: &SliderArgs) {
             .height(DimensionValue::Fixed(args.track_height.to_px()))
             .style(args.inactive_track_color.into())
             .shape({
-                let radius = args.track_height.to_px().to_f32() / 2.0;
+                let radius = Dp(args.track_height.0 / 2.0);
                 Shape::RoundedRectangle {
                     top_left: radius,
                     top_right: radius,
@@ -213,7 +213,7 @@ fn render_progress_fill(args: &SliderArgs) {
             })
             .style(args.active_track_color.into())
             .shape({
-                let radius = args.track_height.to_px().to_f32() / 2.0;
+                let radius = Dp(args.track_height.0 / 2.0);
                 Shape::RoundedRectangle {
                     top_left: radius,
                     top_right: radius,

@@ -44,7 +44,7 @@
 //! let offset_position = position.offset(Px::new(10), Px::new(-5));
 //!
 //! // Convert between Dp and Px
-//! let dp_value = Dp::new(16.0);
+//! let dp_value = Dp(16.0);
 //! let px_value = Px::from_dp(dp_value);
 //! ```
 
@@ -148,7 +148,7 @@ impl Px {
     /// use tessera_ui::px::Px;
     /// use tessera_ui::dp::Dp;
     ///
-    /// let dp_value = Dp::new(16.0);
+    /// let dp_value = Dp(16.0);
     /// let px_value = Px::from_dp(dp_value);
     /// ```
     pub fn from_dp(dp: Dp) -> Self {

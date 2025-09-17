@@ -46,7 +46,7 @@ pub struct GlassButtonArgs {
     #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
     pub tint_color: Color,
     #[builder(
-        default = "Shape::RoundedRectangle { top_left: 25.0, top_right: 25.0, bottom_right: 25.0, bottom_left: 25.0, g2_k_value: 3.0 }"
+        default = "Shape::RoundedRectangle { top_left: Dp(25.0), top_right: Dp(25.0), bottom_right: Dp(25.0), bottom_left: Dp(25.0), g2_k_value: 3.0 }"
     )]
     pub shape: Shape,
     #[builder(default = "0.0")]

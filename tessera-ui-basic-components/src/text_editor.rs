@@ -108,10 +108,10 @@ pub struct TextEditorArgs {
     pub border_color: Option<Color>,
     /// The shape of the text editor container.
     #[builder(default = "Shape::RoundedRectangle {
-                            top_left: 4.0,
-                            top_right: 4.0,
-                            bottom_right: 4.0,
-                            bottom_left: 4.0,
+                            top_left: Dp(4.0),
+                            top_right: Dp(4.0),
+                            bottom_right: Dp(4.0),
+                            bottom_left: Dp(4.0),
                             g2_k_value: 3.0,
                         }")]
     pub shape: Shape,
@@ -592,10 +592,10 @@ impl TextEditorArgs {
             .border_width(Dp(1.0))
             .border_color(Some(Color::new(0.7, 0.7, 0.7, 1.0)))
             .shape(Shape::RoundedRectangle {
-                top_left: 4.0,
-                top_right: 4.0,
-                bottom_right: 4.0,
-                bottom_left: 4.0,
+                top_left: Dp(0.0),
+                top_right: Dp(0.0),
+                bottom_right: Dp(0.0),
+                bottom_left: Dp(0.0),
                 g2_k_value: 3.0,
             })
             .build()
@@ -631,10 +631,10 @@ impl TextEditorArgs {
             .min_width(Some(Dp(120.0)))
             .background_color(Some(Color::WHITE))
             .shape(Shape::RoundedRectangle {
-                top_left: 0.0,
-                top_right: 0.0,
-                bottom_right: 0.0,
-                bottom_left: 0.0,
+                top_left: Dp(0.0),
+                top_right: Dp(0.0),
+                bottom_right: Dp(0.0),
+                bottom_left: Dp(0.0),
                 g2_k_value: 3.0,
             })
             .build()
@@ -745,10 +745,12 @@ impl TextEditorArgs {
     /// Sets the shape of the editor container.
     ///
     /// # Example
+    ///
     /// ```
+    /// use tessera_ui::Dp;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui_basic_components::shape_def::Shape;
-    /// let args = TextEditorArgs::simple().with_shape(Shape::RoundedRectangle { top_left: 8.0, top_right: 8.0, bottom_right: 8.0, bottom_left: 8.0, g2_k_value: 3.0 });
+    /// let args = TextEditorArgs::simple().with_shape(Shape::RoundedRectangle { top_left: Dp(8.0), top_right: Dp(8.0), bottom_right: Dp(8.0), bottom_left: Dp(8.0), g2_k_value: 3.0 });
     /// ```
     pub fn with_shape(mut self, shape: Shape) -> Self {
         self.shape = shape;

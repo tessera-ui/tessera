@@ -227,10 +227,10 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                     .blur_radius(blur_radius)
                     .border(None)
                     .shape(Shape::RoundedRectangle {
-                        top_left: 0.0,
-                        top_right: 0.0,
-                        bottom_right: 0.0,
-                        bottom_left: 0.0,
+                        top_left: Dp(0.0),
+                        top_right: Dp(0.0),
+                        bottom_right: Dp(0.0),
+                        bottom_left: Dp(0.0),
                         g2_k_value: 3.0,
                     })
                     .noise_amount(0.0)
@@ -300,10 +300,10 @@ fn dialog_content_wrapper(
                             .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
                             .blur_radius(5.0 * alpha)
                             .shape(Shape::RoundedRectangle {
-                                top_left: 25.0,
-                                top_right: 25.0,
-                                bottom_right: 25.0,
-                                bottom_left: 25.0,
+                                top_left: Dp(25.0),
+                                top_right: Dp(25.0),
+                                bottom_right: Dp(25.0),
+                                bottom_left: Dp(25.0),
                                 g2_k_value: 3.0,
                             })
                             .refraction_amount(32.0 * alpha)
@@ -324,10 +324,10 @@ fn dialog_content_wrapper(
                                 ..Default::default()
                             })
                             .shape(Shape::RoundedRectangle {
-                                top_left: 25.0,
-                                top_right: 25.0,
-                                bottom_right: 25.0,
-                                bottom_left: 25.0,
+                                top_left: Dp(25.0),
+                                top_right: Dp(25.0),
+                                bottom_right: Dp(25.0),
+                                bottom_left: Dp(25.0),
                                 g2_k_value: 3.0,
                             })
                             .padding(Dp(16.0))

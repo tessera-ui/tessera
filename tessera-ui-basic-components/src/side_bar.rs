@@ -235,10 +235,10 @@ fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) 
             .blur_radius(blur_radius)
             .border(None)
             .shape(Shape::RoundedRectangle {
-                top_left: 0.0,
-                top_right: 0.0,
-                bottom_right: 0.0,
-                bottom_left: 0.0,
+                top_left: Dp(0.0),
+                top_right: Dp(0.0),
+                bottom_right: Dp(0.0),
+                bottom_left: Dp(0.0),
                 g2_k_value: 3.0,
             })
             .noise_amount(0.0)
@@ -405,10 +405,10 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
             fluid_glass(
                 FluidGlassArgsBuilder::default()
                     .shape(Shape::RoundedRectangle {
-                        top_left: 0.0,
-                        top_right: 25.0,
-                        bottom_right: 25.0,
-                        bottom_left: 0.0,
+                        top_left: Dp(0.0),
+                        top_right: Dp(25.0),
+                        bottom_right: Dp(25.0),
+                        bottom_left: Dp(0.0),
                         g2_k_value: 3.0,
                     })
                     .tint_color(Color::new(0.6, 0.8, 1.0, 0.3))
@@ -437,10 +437,10 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                     })
                     .padding(Dp(16.0))
                     .shape(Shape::RoundedRectangle {
-                        top_left: 0.0,
-                        top_right: 25.0,
-                        bottom_right: 25.0,
-                        bottom_left: 0.0,
+                        top_left: Dp(0.0),
+                        top_right: Dp(25.0),
+                        bottom_right: Dp(25.0),
+                        bottom_left: Dp(0.0),
                         g2_k_value: 3.0,
                     })
                     .block_input(true)

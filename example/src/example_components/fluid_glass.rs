@@ -29,9 +29,9 @@ struct FluidGlassShowcaseState {
     example_glass_state: Arc<RwLock<ExampleGlassState>>,
 }
 
-struct ConerRadius(f32);
+struct CornerRadius(f32);
 
-impl Display for ConerRadius {
+impl Display for CornerRadius {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:.2}", self.0)
     }
@@ -42,7 +42,7 @@ struct ExampleGlassState {
     width: ConfigSliderState<Dp>,
     height: ConfigSliderState<Dp>,
     border_width: ConfigSliderState<Dp>,
-    coner_radius: ConfigSliderState<ConerRadius>,
+    corner_radius: ConfigSliderState<CornerRadius>,
     refraction_amount: ConfigSliderState<f32>,
     refraction_height: ConfigSliderState<f32>,
     background_image_data: Arc<ImageData>,
@@ -67,7 +67,7 @@ impl Display for ExampleGlassState {
         writeln!(f, "Width: {}", self.width.value)?;
         writeln!(f, "Height: {}", self.height.value)?;
         writeln!(f, "Border Width: {}", self.border_width.value)?;
-        writeln!(f, "Coner Radius: {}", self.coner_radius.value)?;
+        writeln!(f, "Corner Radius: {}", self.corner_radius.value)?;
         writeln!(
             f,
             "Refraction Strength: {:.2}",
@@ -90,7 +90,7 @@ impl Default for ExampleGlassState {
             width: ConfigSliderState::new(Dp(100.0)),
             height: ConfigSliderState::new(Dp(100.0)),
             border_width: ConfigSliderState::new(Dp(1.0)),
-            coner_radius: ConfigSliderState::new(ConerRadius(25.0)),
+            corner_radius: ConfigSliderState::new(CornerRadius(25.0)),
             refraction_amount: ConfigSliderState::new(32.0),
             refraction_height: ConfigSliderState::new(24.0),
             background_image_data: image_data,
@@ -149,7 +149,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
         move |scope| {
             scope.child(move || {
                 let state = state.read();
-                let coner_radius = state.coner_radius.value.0;
+                let corner_radius = Dp(state.corner_radius.value.0 as f64);
                 let width = state.width.value;
                 let height = state.height.value;
                 let border_width = state.border_width.value;
@@ -191,10 +191,10 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                                                 .height(DimensionValue::from(height))
                                                 .tint_color(Color::new(0.2, 0.5, 0.8, 0.1))
                                                 .shape(Shape::RoundedRectangle {
-                                                    top_left: coner_radius,
-                                                    top_right: coner_radius,
-                                                    bottom_left: coner_radius,
-                                                    bottom_right: coner_radius,
+                                                    top_left: corner_radius,
+                                                    top_right: corner_radius,
+                                                    bottom_left: corner_radius,
+                                                    bottom_right: corner_radius,
                                                     g2_k_value: 3.0,
                                                 })
                                                 .border(GlassBorder {
@@ -298,15 +298,15 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
             let state = state_for_glass.clone();
             scope.child(move || {
                 glass_config_slider(
-                    "Coner Radius",
-                    state.read().coner_radius.value.0 / 100.0,
+                    "Corner Radius",
+                    state.read().corner_radius.value.0 / 100.0,
                     {
                         let state = state.clone();
                         Arc::new(move |value| {
-                            state.write().coner_radius.value = ConerRadius(value * 100.0);
+                            state.write().corner_radius.value = CornerRadius(value * 100.0);
                         })
                     },
-                    state.read().coner_radius.slider_state.clone(),
+                    state.read().corner_radius.slider_state.clone(),
                 );
             });
 

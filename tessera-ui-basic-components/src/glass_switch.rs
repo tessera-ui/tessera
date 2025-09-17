@@ -225,7 +225,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: Arc<RwLock<GlassSwi
     let height_px = args.height.to_px();
     let thumb_dp = Dp(args.height.0 - (args.thumb_padding.0 * 2.0));
     let thumb_px = thumb_dp.to_px();
-    let track_radius = height_px.to_f32() / 2.0;
+    let track_radius_dp = Dp(args.height.0 / 2.0);
 
     // Track tint color interpolation based on progress
     let progress = state.read().progress;
@@ -238,10 +238,10 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: Arc<RwLock<GlassSwi
         .tint_color(track_color)
         .shape({
             Shape::RoundedRectangle {
-                top_left: track_radius,
-                top_right: track_radius,
-                bottom_right: track_radius,
-                bottom_left: track_radius,
+                top_left: track_radius_dp,
+                top_right: track_radius_dp,
+                bottom_right: track_radius_dp,
+                bottom_left: track_radius_dp,
                 g2_k_value: 2.0, // Capsule shape
             }
         })

@@ -452,7 +452,7 @@ fn component_card(
             .width(DimensionValue::FILLED)
             .padding(Dp(25.0))
             .on_click(on_click)
-            .shape(Shape::rounded_rectangle(25.0))
+            .shape(Shape::rounded_rectangle(Dp(25.0)))
             .shadow(ShadowProps::default())
             .build()
             .unwrap(),

@@ -66,7 +66,7 @@ pub struct ProgressArgs {
 /// ```
 pub fn progress(args: impl Into<ProgressArgs>) {
     let args: ProgressArgs = args.into();
-    let radius = args.height.to_px().to_f32() / 2.0;
+    let radius_dp = Dp(args.height.0 / 2.0);
 
     // Child 1: The background track. It's drawn first.
     surface(
@@ -74,10 +74,10 @@ pub fn progress(args: impl Into<ProgressArgs>) {
             .style(args.track_color.into())
             .shape({
                 Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
+                    top_left: radius_dp,
+                    top_right: radius_dp,
+                    bottom_right: radius_dp,
+                    bottom_left: radius_dp,
                     g2_k_value: 2.0,
                 }
             })
@@ -101,10 +101,10 @@ pub fn progress(args: impl Into<ProgressArgs>) {
             .style(args.progress_color.into())
             .shape({
                 Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
+                    top_left: radius_dp,
+                    top_right: radius_dp,
+                    bottom_right: radius_dp,
+                    bottom_left: radius_dp,
                     g2_k_value: 2.0,
                 }
             })

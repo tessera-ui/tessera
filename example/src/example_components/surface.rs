@@ -21,9 +21,9 @@ struct SurfaceShowcaseState {
     example_surface_state: Arc<RwLock<ExampleSurfaceState>>,
 }
 
-struct ConerRadius(f32);
+struct CornerRadius(f32);
 
-impl Display for ConerRadius {
+impl Display for CornerRadius {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:.2}", self.0)
     }
@@ -34,7 +34,7 @@ struct ExampleSurfaceState {
     width: ConfigSliderState<Dp>,
     height: ConfigSliderState<Dp>,
     border_width: ConfigSliderState<Dp>,
-    coner_radius: ConfigSliderState<ConerRadius>,
+    corner_radius: ConfigSliderState<CornerRadius>,
 }
 
 struct ConfigSliderState<T: Display> {
@@ -56,7 +56,7 @@ impl Display for ExampleSurfaceState {
         writeln!(f, "Width: {}", self.width.value)?;
         writeln!(f, "Height: {}", self.height.value)?;
         writeln!(f, "Border Width: {}", self.border_width.value)?;
-        writeln!(f, "Coner Radius: {}", self.coner_radius.value)?;
+        writeln!(f, "Corner Radius: {}", self.corner_radius.value)?;
         Ok(())
     }
 }
@@ -68,7 +68,7 @@ impl Default for ExampleSurfaceState {
             width: ConfigSliderState::new(Dp(100.0)),
             height: ConfigSliderState::new(Dp(100.0)),
             border_width: ConfigSliderState::new(Dp(0.0)),
-            coner_radius: ConfigSliderState::new(ConerRadius(25.0)),
+            corner_radius: ConfigSliderState::new(CornerRadius(25.0)),
         }
     }
 }
@@ -124,7 +124,7 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
             let state = state_for_surface.clone();
             scope.child(move || {
                 let state = state.read();
-                let coner_radius = state.coner_radius.value.0;
+                let corner_radius = Dp(state.corner_radius.value.0 as f64);
                 let width = state.width.value;
                 let height = state.height.value;
                 let border_width = state.border_width.value;
@@ -156,10 +156,10 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                                     .width(DimensionValue::from(width))
                                     .height(DimensionValue::from(height))
                                     .shape(Shape::RoundedRectangle {
-                                        top_left: coner_radius,
-                                        top_right: coner_radius,
-                                        bottom_left: coner_radius,
-                                        bottom_right: coner_radius,
+                                        top_left: corner_radius,
+                                        top_right: corner_radius,
+                                        bottom_left: corner_radius,
+                                        bottom_right: corner_radius,
                                         g2_k_value: 3.0,
                                     })
                                     .style(style)
@@ -256,15 +256,15 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
             let state = state_for_surface.clone();
             scope.child(move || {
                 surface_config_slider(
-                    "Coner Radius",
-                    state.read().coner_radius.value.0 / 100.0,
+                    "Corner Radius",
+                    state.read().corner_radius.value.0 / 100.0,
                     {
                         let state = state.clone();
                         Arc::new(move |value| {
-                            state.write().coner_radius.value = ConerRadius(value * 100.0);
+                            state.write().corner_radius.value = CornerRadius(value * 100.0);
                         })
                     },
-                    state.read().coner_radius.slider_state.clone(),
+                    state.read().corner_radius.slider_state.clone(),
                 );
             });
 

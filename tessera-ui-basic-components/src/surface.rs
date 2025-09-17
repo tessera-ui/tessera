@@ -279,7 +279,12 @@ fn build_shape_command(
             bottom_left,
             g2_k_value,
         } => {
-            let corner_radii = [top_left, top_right, bottom_right, bottom_left];
+            let corner_radii = [
+                top_left.to_pixels_f32(),
+                top_right.to_pixels_f32(),
+                bottom_right.to_pixels_f32(),
+                bottom_left.to_pixels_f32(),
+            ];
             build_rounded_rectangle_command(
                 args,
                 style,

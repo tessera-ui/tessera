@@ -130,7 +130,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
 
                                     scope.child(move || {
                                         let button_args = ButtonArgsBuilder::default()
-                                            .shape(Shape::rounded_rectangle(12.0))
+                                            .shape(Shape::rounded_rectangle(Dp(12.0)))
                                             .color(Color::new(0.2, 0.8, 0.2, 1.0))
                                             .hover_color(Some(Color::new(0.3, 0.9, 0.3, 1.0)))
                                             .on_click(Arc::new(|| {

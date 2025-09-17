@@ -51,10 +51,10 @@ fn render_material_display(app_state: Arc<AppState>) {
         SurfaceArgsBuilder::default()
             .padding(Dp(10.0))
             .shape(Shape::RoundedRectangle {
-                top_left: 25.0,
-                top_right: 25.0,
-                bottom_right: 25.0,
-                bottom_left: 25.0,
+                top_left: Dp(25.0),
+                top_right: Dp(25.0),
+                bottom_right: Dp(25.0),
+                bottom_left: Dp(25.0),
                 g2_k_value: 3.0,
             })
             .style(Color::GREY.into())

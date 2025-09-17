@@ -197,7 +197,6 @@ fn process_cursor_events(
 #[tessera]
 pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<RwLock<GlassSliderState>>) {
     let args: GlassSliderArgs = args.into();
-    let track_radius = args.track_height.to_px().to_f32() / 2.0;
     let border_padding_px = args.track_border_width.to_px().to_f32() * 2.0;
 
     // External track (background) with border - capsule shape
@@ -208,11 +207,12 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<RwLock<GlassSli
             .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
             .shape({
+                let track_radius_dp = Dp(args.track_height.0 / 2.0);
                 Shape::RoundedRectangle {
-                    top_left: track_radius,
-                    top_right: track_radius,
-                    bottom_right: track_radius,
-                    bottom_left: track_radius,
+                    top_left: track_radius_dp,
+                    top_right: track_radius_dp,
+                    bottom_right: track_radius_dp,
+                    bottom_left: track_radius_dp,
                     g2_k_value: 2.0, // Capsule shape
                 }
             })
@@ -235,12 +235,13 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<RwLock<GlassSli
                     })
                     .tint_color(args.progress_tint_color)
                     .shape({
-                        let radius = effective_height / 2.0;
+                        let effective_height_dp = Dp::from_pixels_f32(effective_height);
+                        let radius_dp = Dp(effective_height_dp.0 / 2.0);
                         Shape::RoundedRectangle {
-                            top_left: radius,
-                            top_right: radius,
-                            bottom_right: radius,
-                            bottom_left: radius,
+                            top_left: radius_dp,
+                            top_right: radius_dp,
+                            bottom_right: radius_dp,
+                            bottom_left: radius_dp,
                             g2_k_value: 2.0, // Capsule shape
                         }
                     })

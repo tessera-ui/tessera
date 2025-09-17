@@ -228,6 +228,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 /// # Example
 ///
 /// ```
+/// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::switch::{SwitchArgs, switch, SwitchState};
 /// use std::sync::Arc;
 /// use parking_lot::RwLock;
@@ -238,8 +239,8 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 ///     on_toggle: Some(Arc::new(|checked| {
 ///         println!("Switch toggled: {}", checked);
 ///     })),
-///     width: tessera_ui::Dp(60.0),
-///     height: tessera_ui::Dp(36.0),
+///     width: Dp(60.0),
+///     height: Dp(36.0),
 ///     ..Default::default()
 /// }, state.clone());
 /// ```

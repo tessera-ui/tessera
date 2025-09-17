@@ -3,6 +3,8 @@
 //! This module provides a flexible way to define very basic components' shape, including
 //! [`crate::surface::surface`], [`crate::fluid_glass::fluid_glass`].
 
+use tessera_ui::dp::Dp;
+
 /// Shape definitions for UI components
 ///
 /// `Shape` is used by multiple components (`surface`, `fluid_glass`, sliders, progress, buttons)
@@ -24,14 +26,15 @@
 /// # Example
 ///
 /// ```
+/// use tessera_ui::dp::Dp;
 /// use tessera_ui_basic_components::shape_def::Shape;
 ///
 /// // Explicit rounded rectangle
 /// let rr = Shape::RoundedRectangle {
-///     top_left: 8.0,
-///     top_right: 8.0,
-///     bottom_right: 8.0,
-///     bottom_left: 8.0,
+///     top_left: Dp(8.0),
+///     top_right: Dp(8.0),
+///     bottom_right: Dp(8.0),
+///     bottom_left: Dp(8.0),
 ///     g2_k_value: 3.0,
 /// };
 ///
@@ -47,10 +50,10 @@ pub enum Shape {
     /// Rounded rectangle with independent corner radii and a curvature factor:
     /// * `g2_k_value` controls the transition curve (G2 continuity parameter).
     RoundedRectangle {
-        top_left: f32,
-        top_right: f32,
-        bottom_right: f32,
-        bottom_left: f32,
+        top_left: Dp,
+        top_right: Dp,
+        bottom_right: Dp,
+        bottom_left: Dp,
         g2_k_value: f32,
     },
     /// Ellipse fitting the component bounds.
@@ -69,16 +72,17 @@ impl Default for Shape {
     /// # Example
     ///
     /// ```
+    /// use tessera_ui::dp::Dp;
     /// use tessera_ui_basic_components::shape_def::Shape;
     /// let default_shape = Shape::default();
-    /// assert_eq!(default_shape, Shape::RoundedRectangle { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0, g2_k_value: 3.0 });
+    /// assert_eq!(default_shape, Shape::RoundedRectangle { top_left: Dp(0.0), top_right: Dp(0.0), bottom_right: Dp(0.0), bottom_left: Dp(0.0), g2_k_value: 3.0 });
     /// ```
     fn default() -> Self {
         Shape::RoundedRectangle {
-            top_left: 0.0,
-            top_right: 0.0,
-            bottom_right: 0.0,
-            bottom_left: 0.0,
+            top_left: Dp(0.0),
+            top_right: Dp(0.0),
+            bottom_right: Dp(0.0),
+            bottom_left: Dp(0.0),
             g2_k_value: 3.0,
         }
     }
@@ -87,10 +91,10 @@ impl Default for Shape {
 impl Shape {
     /// A pure rectangle shape with no rounded corners.
     pub const RECTANGLE: Self = Shape::RoundedRectangle {
-        top_left: 0.0,
-        top_right: 0.0,
-        bottom_right: 0.0,
-        bottom_left: 0.0,
+        top_left: Dp(0.0),
+        top_right: Dp(0.0),
+        bottom_right: Dp(0.0),
+        bottom_left: Dp(0.0),
         g2_k_value: 3.0,
     };
 
@@ -99,11 +103,12 @@ impl Shape {
     /// # Example
     ///
     /// ```
+    /// use tessera_ui::dp::Dp;
     /// use tessera_ui_basic_components::shape_def::Shape;
-    /// let shape = Shape::rounded_rectangle(8.0);
-    /// assert_eq!(shape, Shape::RoundedRectangle { top_left: 8.0, top_right: 8.0, bottom_right: 8.0, bottom_left: 8.0, g2_k_value: 3.0 });
+    /// let shape = Shape::rounded_rectangle(Dp(8.0));
+    /// assert_eq!(shape, Shape::RoundedRectangle { top_left: Dp(8.0), top_right: Dp(8.0), bottom_right: Dp(8.0), bottom_left: Dp(8.0), g2_k_value: 3.0 });
     /// ```
-    pub const fn rounded_rectangle(radius: f32) -> Self {
+    pub const fn rounded_rectangle(radius: Dp) -> Self {
         Shape::RoundedRectangle {
             top_left: radius,
             top_right: radius,

@@ -47,8 +47,8 @@ pub struct GlassProgressArgs {
 }
 
 /// Produce a capsule-shaped RoundedRectangle shape for the given height (px).
-fn capsule_shape_for_height(height_px: f32) -> Shape {
-    let radius = height_px / 2.0;
+fn capsule_shape_for_height(height: Dp) -> Shape {
+    let radius = Dp(height.0 / 2.0);
     Shape::RoundedRectangle {
         top_left: radius,
         top_right: radius,
@@ -82,7 +82,7 @@ fn render_track_and_fill(args: GlassProgressArgs) {
             .height(DimensionValue::Fixed(args.height.to_px()))
             .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
-            .shape(capsule_shape_for_height(args.height.to_px().to_f32()))
+            .shape(capsule_shape_for_height(args.height))
             .border(GlassBorder::new(args.track_border_width.into()))
             .padding(args.track_border_width)
             .build()
@@ -99,7 +99,9 @@ fn render_track_and_fill(args: GlassProgressArgs) {
                             max: None,
                         })
                         .tint_color(args.progress_tint_color)
-                        .shape(capsule_shape_for_height(effective_height))
+                        .shape(capsule_shape_for_height(Dp::from_pixels_f32(
+                            effective_height,
+                        )))
                         .refraction_amount(0.0)
                         .build()
                         .unwrap(),
