@@ -264,7 +264,7 @@ Tessera adopts a multi-crate workspace structure:
 
 ## Contributing
 
-Read the [Contributing Guide](CONTRIBUTING.md) for details on how to contribute to the project.
+Read the [Contributing Guide](https://github.com/tessera-ui/tessera/blob/main/CONTRIBUTING.md) for details on how to contribute to the project.
 
 ## Acknowledgements
 

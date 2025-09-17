@@ -264,7 +264,7 @@ Tessera 采用多 crate 的工作区结构：
 
 ## 贡献
 
-请阅读 [贡献指南](docs/CONTRIBUTING_zh-CN.md) 了解如何为项目做出贡献。
+请阅读 [贡献指南](https://github.com/tessera-ui/tessera/blob/main/docs/CONTRIBUTING_zh-CN.md) 了解如何为项目做出贡献。
 
 ## 致谢
 
