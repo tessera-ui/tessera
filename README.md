@@ -67,139 +67,65 @@ Tessera is a declarative, immediate-mode UI framework for Rust. With a functiona
 - **Explicit State Management**: Components are stateless. State is passed in explicitly as parameters (usually in the form of `Arc<Lock<State>>` due to the highly parallel design), and interaction logic is handled within the `input_handler` closure, making data flow clear and controllable.
 - **Parallelized By Design**: The framework utilizes parallel processing in its core. For example, the size measurement of the component tree uses Rayon for parallel computation to improve the performance of complex UIs.
 
-## A Glance
+## Preview
 
-Here is a simple counter application using `tessera_basic_components` that demonstrates the basic usage of `Tessera`.
+An excerpt from `example\examples\alignment_showcase.rs`:
 
 ```rust
-/// Main counter application component
+/// Create a small colored box
 #[tessera]
-#[shard]
-fn counter_app(#[state] app_state: AppState) {
-    let button_state_clone = app_state.button_state.clone();
-    let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
-    let app_state_clone = app_state.clone();
-
+fn small_box(text_content: &str, color: Color) {
     surface(
         SurfaceArgs {
-            color: Color::WHITE,
-            padding: Dp(25.0),
+            style: color.into(),
+            shape: Shape::RoundedRectangle {
+                top_left: Dp(25.0),
+                top_right: Dp(25.0),
+                bottom_right: Dp(25.0),
+                bottom_left: Dp(25.0),
+                g2_k_value: 3.0,
+            },
+            padding: Dp(8.0),
+            width: DimensionValue::Fixed(Px(40)),
+            height: DimensionValue::Fixed(Px(40)),
             ..Default::default()
         },
         None,
         move || {
-            row(
-                RowArgsBuilder::default()
-                    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
+            text(
+                TextArgsBuilder::default()
+                    .text(text_content.to_string())
+                    .color(Color::WHITE)
+                    .size(Dp(12.0))
                     .build()
                     .unwrap(),
-                |scope| {
-                    scope.child(move || {
-                        button(
-                            ButtonArgsBuilder::default()
-                                .on_click(Arc::new(move || {
-                                    app_state_clone
-                                        .click_count
-                                        .fetch_add(1, atomic::Ordering::Relaxed);
-                                }))
-                                .build()
-                                .unwrap(),
-                            button_state_clone,
-                            move || text("click me!"),
-                        )
-                    });
-                    scope.child(move || {
-                        text(
-                            TextArgsBuilder::default()
-                                .text(format!("Count: {click_count}"))
-                                .build()
-                                .unwrap(),
-                        )
-                    });
-                },
-            );
+            )
         },
     );
 }
 ```
 
-<p align="center">
-    <img alt="counter component example" src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/counter.png"/>
-</p>
-<p align="center" style="color: gray;"><em>This example can be found in `example/counter.rs`</em></p>
+Here is a showcase video of the [`example`](https://github.com/tessera-ui/tessera/tree/main/example):
 
-## Core Concepts
+<video src="https://github.com/user-attachments/assets/74c93bd0-0b9b-474d-8237-ad451ca73eb8"></video>
 
-1. **Component Model**
-   `Tessera` components are regular Rust functions annotated with the `#[tessera]` macro. This macro integrates the component function into the framework's component tree. Inside the function body, you can call `measure` to customize layout logic, measure and place child component functions to build the UI hierarchy, and call `input_handler` to handle user interactions.
+## Related Documentation
 
-   `measure` and `input_handler` are automatically injected into the function context by the `tessera` macro and do not need to be imported.
+- [Tessera UI Website](https://tessera-ui.github.io/)
 
-2. **Layout & Measurement**
-   The UI layout is determined during the "measurement" phase. Each component can provide a `measure` closure, in which you can:
+  This is the official website and main documentation for the framework, containing the quick start guide, API documentation, and tutorials.
 
-   - Measure the size of child components (with constraints).
-   - Use `place_node` to determine the position of child components.
-   - Return the final size of the current component (`ComputedData`).
-     If no `measure` closure is provided, the framework defaults to stacking all child components at `(0, 0)` and setting the container size to the minimum size that envelops all children.
+- [docs.rs `tessera_ui`](https://docs.rs/tessera-ui/)
 
-3. **State Management**
-   `Tessera` promotes an explicit state management pattern. Components are stateless; they receive shared state via parameters (usually `Arc<T>`). All state changes and event responses are handled within the `input_handler` closure, which makes the data flow unidirectional and predictable.
+  The API documentation for the `tessera_ui` crate. This is the core crate of the framework.
+
+- [docs.rs `tessera_ui_basic_components`](https://docs.rs/tessera-ui-basic-components/)
+
+  The API documentation for the `tessera_ui_basic_components` crate. This is a separate crate that provides the official set of basic components.
 
 ## Getting Started
 
-Currently we don't provide a scaffolding tool to create new projects (planned for the future). The following uses the `example` crate as a showcase project that runs on Windows, Linux, macOS, and Android.
-
-### Running the Example on Windows / Linux
-
-Make sure you have Rust installed: <https://rustup.rs/>
-
-```bash
-# Enter the example directory
-cd example
-# Run
-cargo run
-```
-
-### Running the Example on Android
-
-1. **Install xbuild**
-
-   ```bash
-   cargo install xbuild
-   ```
-
-2. **Run the example**
-
-   ```bash
-   # Find your device ID
-   x devices
-   # Assuming device ID is adb:823c4f8b and architecture is arm64
-   x run -p example --arch arm64 --device adb:823c4f8b
-   ```
-
-## Getting started with Nix
-
-### Running the Example on Desktop with Nix
-
-```bash
-nix develop           # to enter the desktop shell
-cargo run -p example  # to build and run the example
-```
-
-### Running the Example on Android with Nix
-
-```bash
-# Enter the Android shell (includes all android tools and setup)
-nix develop
-
-# Find your device ID
-x devices
-
-# Assuming device ID is adb:823c4f8b and architecture is arm64
-x run -p example --arch arm64 --device adb:823c4f8b
-```
+Please refer to the [Quick Start Guide](https://tessera-ui.github.io/guide/getting-started.html) to create your first application with `Tessera`.
 
 ## Workspace Structure
 

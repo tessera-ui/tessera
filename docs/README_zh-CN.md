@@ -69,139 +69,65 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
 - **显式的状态管理**：组件是无状态的。状态作为参数显式传入（由于高度并行的设计，通常以 `Arc<Lock<State>>` 的形式），交互逻辑在 `input_handler` 闭包中处理，使数据流清晰可控。
 - **并行化设计**：该框架在其核心部分利用了并行处理。例如，组件树的尺寸测量使用 Rayon 进行并行计算，以提高复杂 UI 的性能。
 
-## 快速一览
+## 预览
 
-下面是一个使用 `tessera_basic_components` 的简单计数器应用，展示了 `Tessera` 的基本用法。
+下面为来自 example/examples/alignment_showcase.rs 的示例片段）：
 
 ```rust
-/// 计数器应用主组件
+/// Create a small colored box
 #[tessera]
-#[shard]
-fn counter_app(#[state] app_state: AppState) {
-    let button_state_clone = app_state.button_state.clone();
-    let click_count = app_state.click_count.load(atomic::Ordering::Relaxed);
-    let app_state_clone = app_state.clone();
-
+fn small_box(text_content: &str, color: Color) {
     surface(
         SurfaceArgs {
-            color: Color::WHITE,
-            padding: Dp(25.0),
+            style: color.into(),
+            shape: Shape::RoundedRectangle {
+                top_left: Dp(25.0),
+                top_right: Dp(25.0),
+                bottom_right: Dp(25.0),
+                bottom_left: Dp(25.0),
+                g2_k_value: 3.0,
+            },
+            padding: Dp(8.0),
+            width: DimensionValue::Fixed(Px(40)),
+            height: DimensionValue::Fixed(Px(40)),
             ..Default::default()
         },
         None,
         move || {
-            row(
-                RowArgsBuilder::default()
-                    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
+            text(
+                TextArgsBuilder::default()
+                    .text(text_content.to_string())
+                    .color(Color::WHITE)
+                    .size(Dp(12.0))
                     .build()
                     .unwrap(),
-                |scope| {
-                    scope.child(move || {
-                        button(
-                            ButtonArgsBuilder::default()
-                                .on_click(Arc::new(move || {
-                                    app_state_clone
-                                        .click_count
-                                        .fetch_add(1, atomic::Ordering::Relaxed);
-                                }))
-                                .build()
-                                .unwrap(),
-                            button_state_clone,
-                            move || text("click me!"),
-                        )
-                    });
-                    scope.child(move || {
-                        text(
-                            TextArgsBuilder::default()
-                                .text(format!("Count: {click_count}"))
-                                .build()
-                                .unwrap(),
-                        )
-                    });
-                },
-            );
+            )
         },
     );
 }
 ```
 
-<p align="center">
-    <img alt="counter component example" src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/counter.png"/>
-</p>
-<p align="center" style="color: gray;"><em>此示例可在 `example/counter.rs` 中找到</em></p>
+下面是[`example`](https://github.com/tessera-ui/tessera/tree/main/example/)的演示视频：
 
-## 核心概念
+<video src="https://github.com/user-attachments/assets/74c93bd0-0b9b-474d-8237-ad451ca73eb8"></video>
 
-1. **组件模型**
-   `Tessera` 组件是使用 `#[tessera]` 宏注解的普通 Rust 函数。该宏将组件函数集成到框架的组件树中。在函数体内，您可以调用 `measure` 来自定义布局逻辑，测量和放置子组件函数来构建 UI 层次结构，并调用 `input_handler` 来处理用户交互。
+## 相关文档
 
-   `measure` 和 `input_handler` 由 `tessera` 宏自动注入到函数上下文中，无需导入。
+- [Tessera UI 官网](https://tessera-ui.github.io/)
 
-2. **布局与测量**
-   UI 布局在“测量”阶段确定。每个组件都可以提供一个 `measure` 闭包，在其中您可以：
+  这是框架的官网兼主要文档网站，包含快速开始指南、API 文档和教程。
 
-   - 测量子组件的尺寸（带约束）。
-   - 使用 `place_node` 来确定子组件的位置。
-   - 返回当前组件的最终尺寸（`ComputedData`）。
-     如果未提供 `measure` 闭包，框架默认将所有子组件堆叠在 `(0, 0)` 位置，并将容器尺寸设置为足以包裹所有子组件的最小尺寸。
+- [docs.rs `tessera_ui`](https://docs.rs/tessera-ui/)
 
-3. **状态管理**
-   `Tessera` 提倡显式的状态管理模式。组件是无状态的；它们通过参数接收共享状态（通常是 `Arc<T>`）。所有状态更改和事件响应都在 `input_handler` 闭包内处理，这使得数据流是单向且可预测的。
+  `tessera_ui` crate 的 API 文档。这是本框架的核心 crate。
 
-## 入门
+- [docs.rs `tessera_ui_basic_components`](https://docs.rs/tessera-ui-basic-components/)
 
-目前，我们没有提供脚手架工具来创建新项目（计划在未来提供）。以下使用 `example` crate 作为一个展示项目，可在 Windows、Linux、macOS 和 Android 上运行。
+  `tessera_ui_basic_components` crate 的 API 文档。这是一个独立的 crate，提供了官方的基本组件集。
 
-### 在 Windows / Linux 上运行示例
+## 开始使用
 
-请确保已安装 Rust：https://rustup.rs/
-
-```bash
-# 进入 example 目录
-cd example
-# 运行
-cargo run
-```
-
-### 在 Android 上运行示例
-
-1. **安装 xbuild**
-
-   ```bash
-   cargo install xbuild
-   ```
-
-2. **运行示例**
-
-   ```bash
-   # 查找您的设备 ID
-   x devices
-   # 假设设备 ID 为 adb:823c4f8b，架构为 arm64
-   x run -p example --arch arm64 --device adb:823c4f8b
-   ```
-
-## 通过 Nix 开始
-
-### 使用 Nix 在桌面环境运行示例
-
-```bash
-nix develop           # 进入桌面环境 nix shell
-cargo run -p example  # 构建并运行示例
-```
-
-### 使用 Nix 在 Android 上运行示例
-
-```bash
-# 进入 Android shell（包括所有 android 工具和设置）
-nix develop
-
-# 查找您的设备 ID
-x devices
-
-# 假设设备 ID 为 adb:823c4f8b，架构为 arm64
-x run -p example --arch arm64 --device adb:823c4f8b
-```
+请参考 [快速开始指南](https://tessera-ui.github.io/zhHans/guide/getting-started.html) 以使用 `Tessera` 创建您的第一个应用程序。
 
 ## 工作区结构
 
