@@ -1013,9 +1013,8 @@ fn apply_clip_to_batch_rect(
         if let Some(final_rect) = current_rect.intersection(clipped_rect) {
             *current_batch_draw_rect = Some(final_rect);
             return (Some(*clipped_rect), true);
-        } else {
-            return (Some(*clipped_rect), false);
         }
+        return (Some(*clipped_rect), false);
     }
     (None, true)
 }
