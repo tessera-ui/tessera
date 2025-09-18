@@ -301,10 +301,10 @@ impl CursorState {
             }
 
             // Compute scroll delta and emit event if meaningful.
-            let scroll_dx = inertia.velocity_x * delta_time;
-            let scroll_dy = inertia.velocity_y * delta_time;
-            if scroll_dx.abs() > 0.01 || scroll_dy.abs() > 0.01 {
-                self.push_scroll_event(now, scroll_dx, scroll_dy);
+            let scroll_delta_x = inertia.velocity_x * delta_time;
+            let scroll_delta_y = inertia.velocity_y * delta_time;
+            if scroll_delta_x.abs() > 0.01 || scroll_delta_y.abs() > 0.01 {
+                self.push_scroll_event(now, scroll_delta_x, scroll_delta_y);
             }
 
             // Apply exponential decay to velocities.
