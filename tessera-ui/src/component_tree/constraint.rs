@@ -200,7 +200,7 @@ impl Default for DimensionValue {
     /// without any constraints, which is the most flexible and commonly used
     /// sizing behavior.
     fn default() -> Self {
-        DimensionValue::Wrap {
+        Self::Wrap {
             min: None,
             max: None,
         }
@@ -245,7 +245,7 @@ impl DimensionValue {
     /// let wrap_unbounded = Self::Wrap { min: None, max: None };
     /// assert_eq!(wrap_unbounded.get_max(), None);
     /// ```
-    pub fn get_max(&self) -> Option<Px> {
+    pub const fn get_max(&self) -> Option<Px> {
         match self {
             Self::Fixed(value) => Some(*value),
             Self::Wrap { max, .. } => *max,
