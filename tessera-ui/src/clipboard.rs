@@ -99,6 +99,7 @@ impl Clipboard {
     ///
     /// let clipboard = Clipboard::new();
     /// ```
+    #[must_use]
     pub fn new() -> Self {
         Self {
             manager: arboard::Clipboard::new().expect("Failed to create clipboard"),
