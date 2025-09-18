@@ -35,7 +35,7 @@ fn android_main(android_app: AndroidApp) {
 fn main() {}
 
 #[cfg(not(target_os = "android"))]
-pub fn desktop_main() -> Result<(), Box<dyn std::error::Error>> {
+pub fn desktop_main() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .or_else(|_| tracing_subscriber::EnvFilter::try_new("off,tessera_ui=info"))
         .unwrap();
@@ -49,5 +49,4 @@ pub fn desktop_main() -> Result<(), Box<dyn std::error::Error>> {
         tessera_ui_basic_components::pipelines::register_pipelines(app);
     })
     .unwrap_or_else(|e| error!("App failed to run: {e}"));
-    Ok(())
 }

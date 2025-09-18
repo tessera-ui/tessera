@@ -1,4 +1,4 @@
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     #[cfg(not(target_os = "android"))]
     {
         example::desktop_main()
