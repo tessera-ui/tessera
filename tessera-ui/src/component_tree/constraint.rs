@@ -236,13 +236,13 @@ impl DimensionValue {
     /// ```
     /// # use tessera_ui::Px;
     /// # use tessera_ui::DimensionValue;
-    /// let fixed = Self::Fixed(Px(100));
+    /// let fixed = DimensionValue::Fixed(Px(100));
     /// assert_eq!(fixed.get_max(), Some(Px(100)));
     ///
-    /// let wrap_bounded = Self::Wrap { min: Some(Px(50)), max: Some(Px(200)) };
+    /// let wrap_bounded = DimensionValue::Wrap { min: Some(Px(50)), max: Some(Px(200)) };
     /// assert_eq!(wrap_bounded.get_max(), Some(Px(200)));
     ///
-    /// let wrap_unbounded = Self::Wrap { min: None, max: None };
+    /// let wrap_unbounded = DimensionValue::Wrap { min: None, max: None };
     /// assert_eq!(wrap_unbounded.get_max(), None);
     /// ```
     pub const fn get_max(&self) -> Option<Px> {
@@ -264,16 +264,17 @@ impl DimensionValue {
     /// - For `Wrap` and `Fill`: Returns the `min` value if specified, otherwise `None`
     ///
     /// # Example
+    ///
     /// ```
     /// # use tessera_ui::Px;
     /// # use tessera_ui::DimensionValue;
-    /// let fixed = Self::Fixed(Px(100));
+    /// let fixed = DimensionValue::Fixed(Px(100));
     /// assert_eq!(fixed.get_min(), Some(Px(100)));
     ///
-    /// let fill_bounded = Self::Fill { min: Some(Px(50)), max: Some(Px(200)) };
+    /// let fill_bounded = DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(200)) };
     /// assert_eq!(fill_bounded.get_min(), Some(Px(50)));
     ///
-    /// let fill_unbounded = Self::Fill { min: None, max: None };
+    /// let fill_unbounded = DimensionValue::Fill { min: None, max: None };
     /// assert_eq!(fill_unbounded.get_min(), None);
     /// ```
     pub fn get_min(&self) -> Option<Px> {
