@@ -168,7 +168,7 @@ fn handle_input_events(
     }
 
     // Handle press events: toggle state and call callback
-    let pressed = was_pressed_left(&*input);
+    let pressed = was_pressed_left(input);
 
     if pressed && is_cursor_in {
         // If internal state exists, toggle it and use the toggled value.
