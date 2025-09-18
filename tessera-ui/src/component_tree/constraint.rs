@@ -209,16 +209,16 @@ impl Default for DimensionValue {
 
 impl DimensionValue {
     /// Zero-sized dimension, equivalent to `Fixed(Px(0))`.
-    pub const ZERO: Self = DimensionValue::Fixed(Px(0));
+    pub const ZERO: Self = Self::Fixed(Px(0));
 
     /// Fill with no constraints.
-    pub const FILLED: Self = DimensionValue::Fill {
+    pub const FILLED: Self = Self::Fill {
         min: None,
         max: None,
     };
 
     /// Wrap with no constraints.
-    pub const WRAP: Self = DimensionValue::Wrap {
+    pub const WRAP: Self = Self::Wrap {
         min: None,
         max: None,
     };
@@ -236,20 +236,20 @@ impl DimensionValue {
     /// ```
     /// # use tessera_ui::Px;
     /// # use tessera_ui::DimensionValue;
-    /// let fixed = DimensionValue::Fixed(Px(100));
+    /// let fixed = Self::Fixed(Px(100));
     /// assert_eq!(fixed.get_max(), Some(Px(100)));
     ///
-    /// let wrap_bounded = DimensionValue::Wrap { min: Some(Px(50)), max: Some(Px(200)) };
+    /// let wrap_bounded = Self::Wrap { min: Some(Px(50)), max: Some(Px(200)) };
     /// assert_eq!(wrap_bounded.get_max(), Some(Px(200)));
     ///
-    /// let wrap_unbounded = DimensionValue::Wrap { min: None, max: None };
+    /// let wrap_unbounded = Self::Wrap { min: None, max: None };
     /// assert_eq!(wrap_unbounded.get_max(), None);
     /// ```
     pub fn get_max(&self) -> Option<Px> {
         match self {
-            DimensionValue::Fixed(value) => Some(*value),
-            DimensionValue::Wrap { max, .. } => *max,
-            DimensionValue::Fill { max, .. } => *max,
+            Self::Fixed(value) => Some(*value),
+            Self::Wrap { max, .. } => *max,
+            Self::Fill { max, .. } => *max,
         }
     }
 
@@ -267,20 +267,20 @@ impl DimensionValue {
     /// ```
     /// # use tessera_ui::Px;
     /// # use tessera_ui::DimensionValue;
-    /// let fixed = DimensionValue::Fixed(Px(100));
+    /// let fixed = Self::Fixed(Px(100));
     /// assert_eq!(fixed.get_min(), Some(Px(100)));
     ///
-    /// let fill_bounded = DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(200)) };
+    /// let fill_bounded = Self::Fill { min: Some(Px(50)), max: Some(Px(200)) };
     /// assert_eq!(fill_bounded.get_min(), Some(Px(50)));
     ///
-    /// let fill_unbounded = DimensionValue::Fill { min: None, max: None };
+    /// let fill_unbounded = Self::Fill { min: None, max: None };
     /// assert_eq!(fill_unbounded.get_min(), None);
     /// ```
     pub fn get_min(&self) -> Option<Px> {
         match self {
-            DimensionValue::Fixed(value) => Some(*value),
-            DimensionValue::Wrap { min, .. } => *min,
-            DimensionValue::Fill { min, .. } => *min,
+            Self::Fixed(value) => Some(*value),
+            Self::Wrap { min, .. } => *min,
+            Self::Fill { min, .. } => *min,
         }
     }
 }
@@ -288,14 +288,14 @@ impl DimensionValue {
 impl From<Px> for DimensionValue {
     /// Converts a `Px` value to a `DimensionValue::Fixed`.
     fn from(value: Px) -> Self {
-        DimensionValue::Fixed(value)
+        Self::Fixed(value)
     }
 }
 
 impl From<Dp> for DimensionValue {
     /// Converts a `Dp` value to a `DimensionValue::Fixed`.
     fn from(value: Dp) -> Self {
-        DimensionValue::Fixed(value.into())
+        Self::Fixed(value.into())
     }
 }
 
@@ -304,12 +304,12 @@ impl Sub<Px> for DimensionValue {
 
     fn sub(self, rhs: Px) -> Self::Output {
         match self {
-            DimensionValue::Fixed(px) => DimensionValue::Fixed(px - rhs),
-            DimensionValue::Wrap { min, max } => DimensionValue::Wrap {
+            Self::Fixed(px) => Self::Fixed(px - rhs),
+            Self::Wrap { min, max } => Self::Wrap {
                 min,
                 max: max.map(|m| m - rhs),
             },
-            DimensionValue::Fill { min, max } => DimensionValue::Fill {
+            Self::Fill { min, max } => Self::Fill {
                 min,
                 max: max.map(|m| m - rhs),
             },
@@ -322,12 +322,12 @@ impl std::ops::Add<Px> for DimensionValue {
 
     fn add(self, rhs: Px) -> Self::Output {
         match self {
-            DimensionValue::Fixed(px) => DimensionValue::Fixed(px + rhs),
-            DimensionValue::Wrap { min, max } => DimensionValue::Wrap {
+            Self::Fixed(px) => Self::Fixed(px + rhs),
+            Self::Wrap { min, max } => Self::Wrap {
                 min,
                 max: max.map(|m| m + rhs),
             },
-            DimensionValue::Fill { min, max } => DimensionValue::Fill {
+            Self::Fill { min, max } => Self::Fill {
                 min,
                 max: max.map(|m| m + rhs),
             },
@@ -338,13 +338,13 @@ impl std::ops::Add<Px> for DimensionValue {
 impl std::ops::AddAssign<Px> for DimensionValue {
     fn add_assign(&mut self, rhs: Px) {
         match self {
-            DimensionValue::Fixed(px) => *px = *px + rhs,
-            DimensionValue::Wrap { max, .. } => {
+            Self::Fixed(px) => *px = *px + rhs,
+            Self::Wrap { max, .. } => {
                 if let Some(m) = max {
                     *m = *m + rhs;
                 }
             }
-            DimensionValue::Fill { max, .. } => {
+            Self::Fill { max, .. } => {
                 if let Some(m) = max {
                     *m = *m + rhs;
                 }
@@ -356,13 +356,13 @@ impl std::ops::AddAssign<Px> for DimensionValue {
 impl std::ops::SubAssign<Px> for DimensionValue {
     fn sub_assign(&mut self, rhs: Px) {
         match self {
-            DimensionValue::Fixed(px) => *px = *px - rhs,
-            DimensionValue::Wrap { max, .. } => {
+            Self::Fixed(px) => *px = *px - rhs,
+            Self::Wrap { max, .. } => {
                 if let Some(m) = max {
                     *m = *m - rhs;
                 }
             }
-            DimensionValue::Fill { max, .. } => {
+            Self::Fill { max, .. } => {
                 if let Some(m) = max {
                     *m = *m - rhs;
                 }
