@@ -64,16 +64,6 @@ impl<T: Any> AsAny for T {
 /// This enum enables the rendering system to process both graphics and compute
 /// commands in a unified pipeline, with proper barrier handling for multi-pass
 /// rendering scenarios.
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// // Creating a draw command
-/// let draw_cmd = Command::Draw(Box::new(ShapeCommand::Rect { /* ... */ }));
-///
-/// // Creating a compute command
-/// let compute_cmd = Command::Compute(Box::new(BlurCommand { /* ... */ }));
-/// ```
 pub enum Command {
     /// A graphics rendering command processed by draw pipelines
     Draw(Box<dyn DrawCommand>),
@@ -90,13 +80,13 @@ impl Command {
     ///
     /// Commands that need to sample from previously rendered content
     /// should return a barrier requirement to ensure proper synchronization.
+    #[must_use]
     pub fn barrier(&self) -> Option<BarrierRequirement> {
         match self {
-            Command::Draw(command) => command.barrier(),
+            Self::Draw(command) => command.barrier(),
             // Currently, compute can only be used for after effects,
-            Command::Compute(command) => Some(command.barrier()),
-            Command::ClipPush(_) => None, // Clipping commands do not require barriers
-            Command::ClipPop => None,     // Clipping commands do not require barriers
+            Self::Compute(command) => Some(command.barrier()),
+            Self::ClipPush(_) | Self::ClipPop => None, // Clipping commands do not require barriers
         }
     }
 }
@@ -104,10 +94,10 @@ impl Command {
 impl Clone for Command {
     fn clone(&self) -> Self {
         match self {
-            Command::Draw(cmd) => Command::Draw(cmd.clone_box()),
-            Command::Compute(cmd) => Command::Compute(cmd.clone_box()),
-            Command::ClipPush(rect) => Command::ClipPush(*rect),
-            Command::ClipPop => Command::ClipPop,
+            Self::Draw(cmd) => Self::Draw(cmd.clone_box()),
+            Self::Compute(cmd) => Self::Compute(cmd.clone_box()),
+            Self::ClipPush(rect) => Self::ClipPush(*rect),
+            Self::ClipPop => Self::ClipPop,
         }
     }
 }
@@ -115,13 +105,13 @@ impl Clone for Command {
 /// Automatic conversion from boxed draw commands to unified commands
 impl From<Box<dyn DrawCommand>> for Command {
     fn from(val: Box<dyn DrawCommand>) -> Self {
-        Command::Draw(val)
+        Self::Draw(val)
     }
 }
 
 /// Automatic conversion from boxed compute commands to unified commands
 impl From<Box<dyn ComputeCommand>> for Command {
     fn from(val: Box<dyn ComputeCommand>) -> Self {
-        Command::Compute(val)
+        Self::Compute(val)
     }
 }
