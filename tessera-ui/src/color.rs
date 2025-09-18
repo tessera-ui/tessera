@@ -83,44 +83,44 @@ impl Color {
     ///
     /// This color is completely invisible and is often used as a default
     /// or for creating transparent backgrounds.
-    pub const TRANSPARENT: Color = Color::new(0.0, 0.0, 0.0, 0.0);
+    pub const TRANSPARENT: Self = Self::new(0.0, 0.0, 0.0, 0.0);
 
     /// Pure black color (0, 0, 0, 1).
     ///
     /// Represents the absence of all light, fully opaque.
-    pub const BLACK: Color = Color::new(0.0, 0.0, 0.0, 1.0);
+    pub const BLACK: Self = Self::new(0.0, 0.0, 0.0, 1.0);
 
     /// Pure white color (1, 1, 1, 1).
     ///
     /// Represents the presence of all light at full intensity, fully opaque.
-    pub const WHITE: Color = Color::new(1.0, 1.0, 1.0, 1.0);
+    pub const WHITE: Self = Self::new(1.0, 1.0, 1.0, 1.0);
 
     /// Pure red color (1, 0, 0, 1).
     ///
     /// Full intensity red with no green or blue components, fully opaque.
-    pub const RED: Color = Color::new(1.0, 0.0, 0.0, 1.0);
+    pub const RED: Self = Self::new(1.0, 0.0, 0.0, 1.0);
 
     /// Pure green color (0, 1, 0, 1).
     ///
     /// Full intensity green with no red or blue components, fully opaque.
-    pub const GREEN: Color = Color::new(0.0, 1.0, 0.0, 1.0);
+    pub const GREEN: Self = Self::new(0.0, 1.0, 0.0, 1.0);
 
     /// Pure blue color (0, 0, 1, 1).
     ///
     /// Full intensity blue with no red or green components, fully opaque.
-    pub const BLUE: Color = Color::new(0.0, 0.0, 1.0, 1.0);
+    pub const BLUE: Self = Self::new(0.0, 0.0, 1.0, 1.0);
 
     /// Gray color (0.12, 0.12, 0.12, 1).
-    pub const GRAY: Color = Color::new(0.12, 0.12, 0.12, 1.0);
+    pub const GRAY: Self = Self::new(0.12, 0.12, 0.12, 1.0);
 
-    /// Alias for [Color::GRAY].
-    pub const GREY: Color = Color::GRAY;
+    /// Alias for [`Color::GRAY`].
+    pub const GREY: Self = Self::GRAY;
 
     /// Teal color (0, 0.5, 0.5, 1).
-    pub const TEAL: Color = Color::new(0.0, 0.5, 0.5, 1.0);
+    pub const TEAL: Self = Self::new(0.0, 0.5, 0.5, 1.0);
 
     /// Orange color (1, 0.5, 0, 1).
-    pub const ORANGE: Color = Color::new(1.0, 0.5, 0.0, 1.0);
+    pub const ORANGE: Self = Self::new(1.0, 0.5, 0.0, 1.0);
 
     /// Creates a new `Color` from four `f32` values (red, green, blue, alpha).
     ///
@@ -141,6 +141,7 @@ impl Color {
     /// let custom_color = Color::new(0.3, 0.7, 0.2, 0.8);
     /// ```
     #[inline]
+    #[must_use]
     pub const fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }
     }
@@ -164,6 +165,7 @@ impl Color {
     /// let orange = Color::from_rgb(1.0, 0.5, 0.0);
     /// ```
     #[inline]
+    #[must_use]
     pub const fn from_rgb(r: f32, g: f32, b: f32) -> Self {
         Self { r, g, b, a: 1.0 }
     }
@@ -190,6 +192,7 @@ impl Color {
     /// let custom_color = Color::from_rgba_u8(76, 178, 51, 204);
     /// ```
     #[inline]
+    #[must_use]
     pub const fn from_rgba_u8(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self {
             r: r as f32 / 255.0,
@@ -220,6 +223,7 @@ impl Color {
     /// let dark_green = Color::from_rgb_u8(0, 100, 0);
     /// ```
     #[inline]
+    #[must_use]
     pub const fn from_rgb_u8(r: u8, g: u8, b: u8) -> Self {
         Self::from_rgba_u8(r, g, b, 255)
     }
@@ -243,6 +247,7 @@ impl Color {
     /// assert_eq!(array, [0.5, 0.3, 0.8, 1.0]);
     /// ```
     #[inline]
+    #[must_use]
     pub const fn to_array(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
@@ -264,6 +269,7 @@ impl Color {
     /// assert_eq!(semi_transparent_color.a, 0.5);
     /// ```
     #[inline]
+    #[must_use]
     pub const fn with_alpha(self, alpha: f32) -> Self {
         Self {
             r: self.r,
@@ -295,13 +301,14 @@ impl Color {
     /// assert_eq!(interpolated, Color::new(0.5, 0.0, 0.5, 1.0)); // Purple
     /// ```
     #[inline]
+    #[must_use]
     pub fn lerp(&self, other: &Self, t: f32) -> Self {
         let t = t.clamp(0.0, 1.0);
         Self {
-            r: self.r + (other.r - self.r) * t,
-            g: self.g + (other.g - self.g) * t,
-            b: self.b + (other.b - self.b) * t,
-            a: self.a + (other.a - self.a) * t,
+            r: (other.r - self.r).mul_add(t, self.r),
+            g: (other.g - self.g).mul_add(t, self.g),
+            b: (other.b - self.b).mul_add(t, self.b),
+            a: (other.a - self.a).mul_add(t, self.a),
         }
     }
 }
