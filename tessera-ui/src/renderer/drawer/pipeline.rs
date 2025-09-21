@@ -232,6 +232,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
     /// * `gpu_queue` - The WGPU queue for submitting commands
     /// * `config` - Current surface configuration
     /// * `render_pass` - The active render pass
+    /// * `scene_texture_view` - View of the current scene texture for background sampling
     ///
     /// # Default Implementation
     ///
@@ -246,62 +247,35 @@ pub trait DrawablePipeline<T: DrawCommand> {
     ) {
     }
 
-    /// Renders a single draw command.
+    /// Renders a batch of draw commands.
     ///
     /// This is the core method where the actual rendering happens. It's called
-    /// once for each draw command of type `T` that needs to be rendered.
+    /// once for a batch of draw commands of type `T` that need to be rendered.
     ///
     /// # Parameters
     ///
-    /// * `gpu` - The WGPU device for creating resources
-    /// * `gpu_queue` - The WGPU queue for submitting commands and updating buffers
-    /// * `config` - Current surface configuration containing format and size information
-    /// * `render_pass` - The active render pass to record draw commands into
-    /// * `command` - The specific draw command to render
-    /// * `size` - The size of the rendering area in pixels
-    /// * `start_pos` - The top-left position where rendering should begin
-    /// * `scene_texture_view` - View of the current scene texture for background sampling
+    /// * `gpu` - The WGPU device for creating resources.
+    /// * `gpu_queue` - The WGPU queue for submitting commands and updating buffers.
+    /// * `config` - Current surface configuration containing format and size information.
+    /// * `render_pass` - The active render pass to record draw commands into.
+    /// * `commands` - A slice of tuples, each containing the command, its size, and its position.
+    /// * `scene_texture_view` - View of the current scene texture for background sampling.
+    /// * `clip_rect` - An optional rectangle to clip the drawing area.
     ///
     /// # Implementation Guidelines
     ///
-    /// - Update any per-command uniforms or push constants
-    /// - Set the appropriate render pipeline
-    /// - Bind necessary resources (textures, buffers, bind groups)
-    /// - Issue draw calls (typically `draw()`, `draw_indexed()`, or `draw_indirect()`)
-    /// - Avoid expensive operations like buffer creation; prefer reusing resources
+    /// - Iterate over the `commands` slice to process each command.
+    /// - Update buffers (e.g., instance buffers, storage buffers) with data from the command batch.
+    /// - Set the appropriate render pipeline.
+    /// - Bind necessary resources (textures, buffers, bind groups).
+    /// - Issue one or more draw calls (e.g., an instanced draw call) to render the entire batch.
+    /// - If `clip_rect` is `Some`, use `render_pass.set_scissor_rect()` to clip rendering.
+    /// - Avoid expensive operations like buffer creation; prefer reusing and updating existing resources.
     ///
     /// # Scene Texture Usage
     ///
     /// The `scene_texture_view` provides access to the current rendered scene,
-    /// enabling effects that sample from the background. This is commonly used for:
-    ///
-    /// - Blur and post-processing effects
-    /// - Glass and transparency effects
-    /// - Distortion and refraction
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// fn draw(&mut self, gpu: &wgpu::Device, gpu_queue: &wgpu::Queue,
-    ///         config: &wgpu::SurfaceConfiguration, render_pass: &mut wgpu::RenderPass<'_>,
-    ///         command: &MyCommand, size: PxSize, start_pos: PxPosition,
-    ///         scene_texture_view: &wgpu::TextureView) {
-    ///     // Update uniforms with command-specific data
-    ///     let uniforms = MyUniforms {
-    ///         color: command.color,
-    ///         position: [start_pos.x as f32, start_pos.y as f32],
-    ///         size: [size.width as f32, size.height as f32],
-    ///     };
-    ///     gpu_queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
-    ///     
-    ///     // Set pipeline and resources
-    ///     render_pass.set_pipeline(&self.render_pipeline);
-    ///     render_pass.set_bind_group(0, &self.bind_group, &[]);
-    ///     
-    ///     // Draw a quad (two triangles)
-    ///     render_pass.draw(0..6, 0..1);
-    /// }
-    /// ```
+    /// enabling effects that sample from the background.
     fn draw(
         &mut self,
         gpu: &wgpu::Device,
@@ -328,6 +302,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
     /// * `gpu_queue` - The WGPU queue for submitting commands
     /// * `config` - Current surface configuration
     /// * `render_pass` - The active render pass
+    /// * `scene_texture_view` - View of the current scene texture for background sampling
     ///
     /// # Default Implementation
     ///
