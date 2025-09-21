@@ -6,7 +6,7 @@ use wgpu::{ImageSubresourceRange, TextureFormat};
 use winit::window::Window;
 
 use crate::{
-    ComputeCommand, DrawCommand, Px, PxPosition,
+    ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, Px, PxPosition,
     compute::resource::ComputeResourceManager,
     dp::SCALE_FACTOR,
     px::{PxRect, PxSize},
@@ -180,6 +180,7 @@ impl WgpuApp {
             (None, None)
         }
     }
+
     pub(crate) async fn new(window: Arc<Window>, sample_count: u32) -> Self {
         // Looking for gpus
         let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -262,6 +263,28 @@ impl WgpuApp {
             compute_commands: Vec::new(),
             resource_manager: Arc::new(RwLock::new(ComputeResourceManager::new())),
         }
+    }
+
+    /// Registers a new drawable pipeline for a specific command type.
+    ///
+    /// This method takes ownership of the pipeline and wraps it in a type-erased container that can be stored alongside other pipelines of different types.
+    pub fn register_draw_pipeline<T, P>(&mut self, pipeline: P)
+    where
+        T: DrawCommand + 'static,
+        P: DrawablePipeline<T> + 'static,
+    {
+        self.drawer.pipeline_registry.register(pipeline);
+    }
+
+    /// Registers a new compute pipeline for a specific command type.
+    ///
+    /// This method takes ownership of the pipeline and wraps it in a type-erased container that can be stored alongside other pipelines of different types.
+    pub fn register_compute_pipeline<T, P>(&mut self, pipeline: P)
+    where
+        T: ComputeCommand + 'static,
+        P: ComputablePipeline<T> + 'static,
+    {
+        self.compute_pipeline_registry.register(pipeline);
     }
 
     fn create_pass_target(

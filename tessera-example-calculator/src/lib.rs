@@ -61,7 +61,7 @@ fn android_main(android_app: AndroidApp) {
                 &app.config,
                 app.sample_count,
             );
-            app.drawer.pipeline_registry.register(background_pipeline);
+            app.register_draw_pipeline(background_pipeline);
         },
         android_app.clone(),
     )
@@ -92,7 +92,7 @@ pub fn desktop_main() -> anyhow::Result<()> {
                 &app.config,
                 app.sample_count,
             );
-            app.drawer.pipeline_registry.register(background_pipeline);
+            app.register_draw_pipeline(background_pipeline);
         },
         TesseraConfig {
             window_title: "Calculator".to_string(),

@@ -16,31 +16,31 @@ pub use text::{TextCommand, TextConstraint, TextData, read_font_system, write_fo
 pub fn register_pipelines(app: &mut tessera_ui::renderer::WgpuApp) {
     // Register shape pipeline
     let shape_pipeline = shape::ShapePipeline::new(&app.gpu, &app.config, app.sample_count);
-    app.drawer.pipeline_registry.register(shape_pipeline);
+    app.register_draw_pipeline(shape_pipeline);
     // Register checkmark pipeline
     let checkmark_pipeline =
         checkmark::CheckmarkPipeline::new(&app.gpu, &app.config, app.sample_count);
-    app.drawer.pipeline_registry.register(checkmark_pipeline);
+    app.register_draw_pipeline(checkmark_pipeline);
     // Register text pipeline
     let text_pipeline =
         text::GlyphonTextRender::new(&app.gpu, &app.queue, &app.config, app.sample_count);
-    app.drawer.pipeline_registry.register(text_pipeline);
+    app.register_draw_pipeline(text_pipeline);
     // Register fluid glass pipeline
     let fluid_glass_pipeline =
         fluid_glass::FluidGlassPipeline::new(&app.gpu, &app.config, app.sample_count);
-    app.drawer.pipeline_registry.register(fluid_glass_pipeline);
+    app.register_draw_pipeline(fluid_glass_pipeline);
     // Register image pipeline
     let image_pipeline = image::ImagePipeline::new(&app.gpu, &app.config, app.sample_count);
-    app.drawer.pipeline_registry.register(image_pipeline);
+    app.register_draw_pipeline(image_pipeline);
     // Register blur pipeline
     let blur_pipeline = blur::pipeline::BlurPipeline::new(&app.gpu);
-    app.compute_pipeline_registry.register(blur_pipeline);
+    app.register_compute_pipeline(blur_pipeline);
 
     // Register mean pipeline
     let mean_pipeline = mean::MeanPipeline::new(&app.gpu);
-    app.compute_pipeline_registry.register(mean_pipeline);
+    app.register_compute_pipeline(mean_pipeline);
 
     // Register contrast pipeline
     let contrast_pipeline = contrast::ContrastPipeline::new(&app.gpu);
-    app.compute_pipeline_registry.register(contrast_pipeline);
+    app.register_compute_pipeline(contrast_pipeline);
 }
