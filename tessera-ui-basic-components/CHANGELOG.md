@@ -1,3 +1,13 @@
+## [v2.1.0] - 2025-09-22 +08:00
+
+### Changes
+
+- feat(renderer): add register_draw_pipeline/register_compute_pipeline and update call sites
+- chore(deps): bump glam from 0.30.5 to 0.30.6
+- refactor(tessera-ui-basic-components): simplify was_pressed_left invocation
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.0.0...tessera-ui-basic-components-v2.1.0)
+
 ## [v2.0.0] - 2025-09-17 +08:00
 
 ### Changes
