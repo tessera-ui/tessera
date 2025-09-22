@@ -1,3 +1,21 @@
+## [v2.1.0] - 2025-09-22 +08:00
+
+### Changes
+
+- fix(renderer): correctly handle lost/outdated surface errors
+- feat(renderer): add register_draw_pipeline/register_compute_pipeline and update call sites
+- docs(tessera-ui): update DrawablePipeline.draw docs to describe batch rendering and scene_texture_view
+- docs(component_tree): update doc examples in constraint.rs to use explicit DimensionValue:: variants
+- refactor(constraint): use `Self::` for `Wrap` variant in default implementation and change `get_max` to a const function
+- refactor(clipboard): add #[must_use] attribute to Clipboard::new() method
+- refactor(app): simplify return logic in apply_clip_to_batch_rect function
+- refactor(cursor): rename scroll variables for clarity in inertia handling
+- refactor(color): replace `Color::` with `Self::` for color constants and add #[must_use] to relevant methods
+- refactor(component_tree): replace [`DimensionValue::`](tessera-ui/src/component_tree/constraint.rs:1) with [`Self::`](tessera-ui/src/component_tree/constraint.rs:1) and update doc examples
+- refactor(command): simplify enum variant usage and remove examples
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.0.0...tessera-ui-v2.1.0)
+
 ## [v2.0.0] - 2025-09-17 +08:00
 
 ### Changes
