@@ -365,37 +365,44 @@ impl WgpuApp {
         self.size
     }
 
-    pub(crate) fn resize_pass_targets_if_needed(&mut self) {
-        if self.size_changed {
-            self.pass_a.texture.destroy();
-            self.pass_b.texture.destroy();
-            self.compute_target_a.texture.destroy();
-            self.compute_target_b.texture.destroy();
+    pub(crate) fn resize_surface(&mut self) {
+        if self.size.width > 0 && self.size.height > 0 {
+            self.config.width = self.size.width;
+            self.config.height = self.size.height;
+            self.surface.configure(&self.gpu, &self.config);
+            self.rebuild_pass_targets();
+        }
+    }
 
-            self.pass_a = Self::create_pass_target(&self.gpu, &self.config, "A");
-            self.pass_b = Self::create_pass_target(&self.gpu, &self.config, "B");
-            self.compute_target_a = Self::create_compute_pass_target(
-                &self.gpu,
-                &self.config,
-                TextureFormat::Rgba8Unorm,
-                "Compute A",
-            );
-            self.compute_target_b = Self::create_compute_pass_target(
-                &self.gpu,
-                &self.config,
-                TextureFormat::Rgba8Unorm,
-                "Compute B",
-            );
+    pub(crate) fn rebuild_pass_targets(&mut self) {
+        self.pass_a.texture.destroy();
+        self.pass_b.texture.destroy();
+        self.compute_target_a.texture.destroy();
+        self.compute_target_b.texture.destroy();
 
-            if self.sample_count > 1 {
-                if let Some(t) = self.msaa_texture.take() {
-                    t.destroy();
-                }
-                let (msaa_texture, msaa_view) =
-                    Self::make_msaa_resources(&self.gpu, self.sample_count, &self.config);
-                self.msaa_texture = msaa_texture;
-                self.msaa_view = msaa_view;
+        self.pass_a = Self::create_pass_target(&self.gpu, &self.config, "A");
+        self.pass_b = Self::create_pass_target(&self.gpu, &self.config, "B");
+        self.compute_target_a = Self::create_compute_pass_target(
+            &self.gpu,
+            &self.config,
+            TextureFormat::Rgba8Unorm,
+            "Compute A",
+        );
+        self.compute_target_b = Self::create_compute_pass_target(
+            &self.gpu,
+            &self.config,
+            TextureFormat::Rgba8Unorm,
+            "Compute B",
+        );
+
+        if self.sample_count > 1 {
+            if let Some(t) = self.msaa_texture.take() {
+                t.destroy();
             }
+            let (msaa_texture, msaa_view) =
+                Self::make_msaa_resources(&self.gpu, self.sample_count, &self.config);
+            self.msaa_texture = msaa_texture;
+            self.msaa_view = msaa_view;
         }
     }
 
@@ -403,10 +410,7 @@ impl WgpuApp {
     pub(crate) fn resize_if_needed(&mut self) -> bool {
         let result = self.size_changed;
         if self.size_changed {
-            self.config.width = self.size.width;
-            self.config.height = self.size.height;
-            self.resize_pass_targets_if_needed();
-            self.surface.configure(&self.gpu, &self.config);
+            self.resize_surface();
             self.size_changed = false;
         }
         result

@@ -723,10 +723,22 @@ Fps: {:.2}
         }
 
         debug!("Rendering draw commands...");
-        // Forward commands to WgpuApp::render which accepts the same iterator type
-        args.app.render(commands).unwrap_or_else(|e| {
-            error!("Render error: {e}");
-        });
+        if let Err(e) = args.app.render(commands) {
+            match e {
+                wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost => {
+                    debug!("Surface outdated/lost, resizing...");
+                    args.app.resize_surface();
+                }
+                wgpu::SurfaceError::Timeout => warn!("Surface timeout. Frame will be dropped."),
+                wgpu::SurfaceError::OutOfMemory => {
+                    error!("Surface out of memory. Panicking.");
+                    panic!("Surface out of memory");
+                }
+                _ => {
+                    error!("Surface error: {e}. Attempting to continue.");
+                }
+            }
+        }
         let render_cost = render_timer.elapsed();
         debug!("Rendered to surface in {render_cost:?}");
         render_cost
