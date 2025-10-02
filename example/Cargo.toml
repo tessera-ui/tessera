@@ -21,7 +21,7 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
 parking_lot = { version = "0.12.4", features = ["deadlock_detection"] }
 winit = "0.30.12"
-wgpu = "26.0.1"
+wgpu = "27.0.0"
 bytemuck = { version = "1.23.2", features = ["derive"] }
 image = "0.25.8"
 dashmap = "6.1.0"

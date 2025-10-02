@@ -18,7 +18,7 @@ bytemuck = { version = "1.23.2", features = ["derive"] }
 tracing = "0.1.41"
 parking_lot = "0.12.3"
 pollster = "0.4.0"
-wgpu = "26.0.1"
+wgpu = "27.0.0"
 indextree = "4.7.4"
 rayon = "1.11.0"
 dashmap = "6.1.0"
