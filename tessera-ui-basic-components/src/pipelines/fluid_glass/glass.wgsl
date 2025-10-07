@@ -196,7 +196,7 @@ fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<
             normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
         }
 
-        let refracted_distance = circle_map(1.0 - (-sd / instance.refraction_height)) * instance.refraction_amount;
+        let refracted_distance = circle_map(1.0 - (-sd / instance.refraction_height)) * -instance.refraction_amount;
         let refracted_direction = normalize(normal + instance.eccentric_factor * normalize(centered_coord));
 
         // Attenuate only when the refracted sample would exceed clip rect
