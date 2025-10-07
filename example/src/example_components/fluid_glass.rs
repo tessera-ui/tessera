@@ -18,10 +18,10 @@ use tessera_ui_basic_components::{
     text::{TextArgsBuilder, text},
 };
 
-const IMAGE_PATH: &str = concat!(
+const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/examples/assets/scarlet_ut.jpg",
-);
+    "/examples/assets/grid_background.png",
+));
 
 #[derive(Default)]
 struct FluidGlassShowcaseState {
@@ -81,8 +81,8 @@ impl Display for ExampleGlassState {
 impl Default for ExampleGlassState {
     fn default() -> Self {
         let image_data = Arc::new(
-            load_image_from_source(&ImageSource::Path(IMAGE_PATH.to_string()))
-                .expect("Failed to load image"),
+            load_image_from_source(&ImageSource::Bytes(Arc::from(IMAGE_BYTES)))
+                .expect("Failed to load image from embedded bytes"),
         );
 
         Self {
