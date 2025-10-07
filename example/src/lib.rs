@@ -19,9 +19,8 @@ fn android_main(android_app: AndroidApp) {
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    let app_state = Arc::new(AppState::new());
     Renderer::run(
-        || app(app_state.clone()),
+        app,
         |app| {
             tessera_ui_basic_components::pipelines::register_pipelines(app);
         },
