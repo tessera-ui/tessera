@@ -189,7 +189,6 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                                             FluidGlassArgsBuilder::default()
                                                 .width(DimensionValue::from(width))
                                                 .height(DimensionValue::from(height))
-                                                .tint_color(Color::new(0.2, 0.5, 0.8, 0.1))
                                                 .shape(Shape::RoundedRectangle {
                                                     top_left: corner_radius,
                                                     top_right: corner_radius,
