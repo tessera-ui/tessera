@@ -17,7 +17,7 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 glyphon = { package = "glyphon-tessera-fork", version = "0.9.5" }
 tracing = "0.1.41"
-parking_lot = "0.12.4"
+parking_lot = "0.12.5"
 tessera-ui = { path = "../tessera-ui" }
 unicode-segmentation = "1.12.0"
 encase = { version = "0.11.2", features = ["glam"] }
