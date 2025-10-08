@@ -14,7 +14,7 @@ default = ["shard"]
 shard = ["tessera-ui-shard"]
 
 [dependencies]
-bytemuck = { version = "1.23.2", features = ["derive"] }
+bytemuck = { version = "1.24.0", features = ["derive"] }
 tracing = "0.1.41"
 parking_lot = "0.12.5"
 pollster = "0.4.0"
