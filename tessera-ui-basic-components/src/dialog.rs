@@ -158,6 +158,9 @@ pub struct DialogProviderArgs {
     /// Callback function triggered when a close request is made, for example by
     /// clicking the scrim or pressing the `ESC` key.
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
+    /// Padding around the dialog content.
+    #[builder(default = "Dp(16.0)")]
+    pub padding: Dp,
     /// The visual style of the dialog's scrim.
     #[builder(default)]
     pub style: DialogStyle,
@@ -283,6 +286,7 @@ fn make_keyboard_input_handler(
 fn dialog_content_wrapper(
     style: DialogStyle,
     alpha: f32,
+    padding: Dp,
     content: impl FnOnce() + Send + Sync + 'static,
 ) {
     boxed(
@@ -308,7 +312,7 @@ fn dialog_content_wrapper(
                             })
                             .refraction_amount(32.0 * alpha)
                             .block_input(true)
-                            .padding(Dp(16.0))
+                            .padding(padding)
                             .build()
                             .unwrap(),
                         None,
@@ -330,7 +334,7 @@ fn dialog_content_wrapper(
                                 bottom_left: Dp(25.0),
                                 g2_k_value: 3.0,
                             })
-                            .padding(Dp(16.0))
+                            .padding(padding)
                             .block_input(true)
                             .build()
                             .unwrap(),
@@ -396,7 +400,7 @@ pub fn dialog_provider(
 
         // 2c. Dialog Content
         // The user-defined dialog content is rendered on top of everything.
-        dialog_content_wrapper(args.style, content_alpha, move || {
+        dialog_content_wrapper(args.style, content_alpha, args.padding, move || {
             dialog_content(content_alpha);
         });
     }
