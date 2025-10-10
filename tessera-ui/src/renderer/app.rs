@@ -35,6 +35,7 @@ struct RenderCurrentPassParams<'a> {
     is_first_pass: &'a mut bool,
     encoder: &'a mut wgpu::CommandEncoder,
     write_target: &'a PassTarget,
+    final_view: Option<&'a wgpu::TextureView>,
     commands_in_pass: &'a mut Vec<DrawOrClip>,
     scene_texture_view: &'a wgpu::TextureView,
     drawer: &'a mut Drawer,
@@ -88,16 +89,16 @@ pub struct WgpuApp {
     /// compute pipelines
     pub compute_pipeline_registry: ComputePipelineRegistry,
 
-    // --- New ping-pong rendering resources ---
+    // ping-pong rendering resources
     pass_a: PassTarget,
     pass_b: PassTarget,
 
-    // --- MSAA resources ---
+    // MSAA resources
     pub sample_count: u32,
     msaa_texture: Option<wgpu::Texture>,
     msaa_view: Option<wgpu::TextureView>,
 
-    // --- Compute resources ---
+    // Compute resources
     compute_target_a: PassTarget,
     compute_target_b: PassTarget,
     compute_commands: Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
@@ -517,6 +518,10 @@ impl WgpuApp {
         let mut barrier_draw_rects_in_pass: Vec<PxRect> = Vec::new();
         let mut clip_stack: Vec<PxRect> = Vec::new();
 
+        let output_view = output_frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
         for (command, command_type_id, size, start_pos) in commands {
             let need_new_pass = commands_in_pass
                 .iter()
@@ -582,6 +587,7 @@ impl WgpuApp {
                     is_first_pass: &mut is_first_pass,
                     encoder: &mut encoder,
                     write_target,
+                    final_view: None,
                     commands_in_pass: &mut commands_in_pass,
                     scene_texture_view: &scene_texture_view,
                     drawer: &mut self.drawer,
@@ -665,6 +671,7 @@ impl WgpuApp {
                 is_first_pass: &mut is_first_pass,
                 encoder: &mut encoder,
                 write_target,
+                final_view: Some(&output_view),
                 commands_in_pass: &mut commands_in_pass,
                 scene_texture_view: &scene_texture_view,
                 drawer: &mut self.drawer,
@@ -682,39 +689,9 @@ impl WgpuApp {
             .pipeline_registry
             .end_all_frames(&self.gpu, &self.queue, &self.config);
 
-        // Final copy to surface
-        encoder.copy_texture_to_texture(
-            write_target.texture.as_image_copy(),
-            output_frame.texture.as_image_copy(),
-            texture_size,
-        );
-
         self.queue.submit(Some(encoder.finish()));
         output_frame.present();
 
-        Ok(())
-    }
-
-    pub(crate) fn render_dummy(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let output_frame = self.surface.get_current_texture()?;
-        let mut encoder = self
-            .gpu
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder(Dummy)"),
-            });
-
-        encoder.copy_texture_to_texture(
-            self.pass_b.texture.as_image_copy(),
-            output_frame.texture.as_image_copy(),
-            wgpu::Extent3d {
-                width: self.config.width,
-                height: self.config.height,
-                depth_or_array_layers: 1,
-            },
-        );
-
-        self.queue.submit(Some(encoder.finish()));
-        output_frame.present();
         Ok(())
     }
 
@@ -857,10 +834,12 @@ fn extract_draw_rect(
 }
 
 fn render_current_pass(params: RenderCurrentPassParams<'_>) {
+    let destination_view = params.final_view.unwrap_or(&params.write_target.view);
+
     let (view, resolve_target) = if let Some(msaa_view) = params.msaa_view {
-        (msaa_view, Some(&params.write_target.view))
+        (msaa_view, Some(destination_view))
     } else {
-        (&params.write_target.view, None)
+        (destination_view, None)
     };
 
     let load_ops = if *params.is_first_pass {

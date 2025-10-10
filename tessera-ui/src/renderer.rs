@@ -191,7 +191,7 @@ pub mod compute;
 pub mod drawer;
 pub mod reorder;
 
-use std::{any::TypeId, sync::Arc, time::Instant};
+use std::{any::TypeId, sync::Arc, time::Instant, thread};
 
 use tessera_ui_macros::tessera;
 use tracing::{debug, error, instrument, warn};
@@ -803,8 +803,7 @@ Fps: {:.2}
             // Log frame statistics
             Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
         } else {
-            // Perform a dummy render
-            let _ = args.app.render_dummy();
+            thread::sleep(std::time::Duration::from_millis(4)); // Sleep briefly to avoid busy-waiting
         }
 
         // Clear the component tree (free for next frame)
