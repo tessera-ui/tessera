@@ -15,10 +15,10 @@ use tessera_ui_basic_components::{
     text::text,
 };
 
-const IMAGE_PATH: &str = concat!(
+const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/examples/assets/scarlet_ut.jpg",
-);
+    "/examples/assets/grid_background.png",
+));
 
 #[derive(Clone)]
 struct GlassButtonShowcaseState {
@@ -31,8 +31,8 @@ struct GlassButtonShowcaseState {
 impl Default for GlassButtonShowcaseState {
     fn default() -> Self {
         let image_data = Arc::new(
-            load_image_from_source(&ImageSource::Path(IMAGE_PATH.to_string()))
-                .expect("Failed to load image"),
+            load_image_from_source(&ImageSource::Bytes(Arc::from(IMAGE_BYTES)))
+                .expect("Failed to load image from embedded bytes"),
         );
 
         Self {
