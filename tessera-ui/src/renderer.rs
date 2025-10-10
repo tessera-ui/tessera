@@ -829,10 +829,12 @@ Fps: {:.2}
         }
 
         if let Some(ime_request) = window_requests.ime_request {
+            #[cfg(not(target_os = "android"))]
             args.app.window.set_ime_allowed(true);
             #[cfg(target_os = "android")]
             {
                 if !*args.android_ime_opened {
+                    args.app.window.set_ime_allowed(true);
                     show_soft_input(true, args.event_loop.android_app());
                     *args.android_ime_opened = true;
                 }
@@ -842,10 +844,12 @@ Fps: {:.2}
                 ime_request.size,
             );
         } else {
+            #[cfg(not(target_os = "android"))]
             args.app.window.set_ime_allowed(false);
             #[cfg(target_os = "android")]
             {
                 if *args.android_ime_opened {
+                    args.app.window.set_ime_allowed(false);
                     hide_soft_input(args.event_loop.android_app());
                     *args.android_ime_opened = false;
                 }
