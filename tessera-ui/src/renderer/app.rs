@@ -103,6 +103,11 @@ pub struct WgpuApp {
     compute_target_b: PassTarget,
     compute_commands: Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
     pub resource_manager: Arc<RwLock<ComputeResourceManager>>,
+
+    // Blit resources for partial copies
+    blit_pipeline: wgpu::RenderPipeline,
+    blit_bind_group_layout: wgpu::BindGroupLayout,
+    blit_sampler: wgpu::Sampler,
 }
 
 impl WgpuApp {
@@ -244,6 +249,60 @@ impl WgpuApp {
             .set(RwLock::new(scale_factor))
             .expect("Failed to set scale factor");
 
+        // Create blit pipeline resources
+        let blit_shader = gpu.create_shader_module(wgpu::include_wgsl!("shaders/blit.wgsl"));
+        let blit_sampler = gpu.create_sampler(&wgpu::SamplerDescriptor::default());
+        let blit_bind_group_layout =
+            gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Blit Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
+        let blit_pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Blit Pipeline Layout"),
+            bind_group_layouts: &[&blit_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let blit_pipeline = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Blit Pipeline"),
+            layout: Some(&blit_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &blit_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &blit_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(config.format.into())],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
         Self {
             window,
             gpu,
@@ -263,6 +322,9 @@ impl WgpuApp {
             compute_target_b,
             compute_commands: Vec::new(),
             resource_manager: Arc::new(RwLock::new(ComputeResourceManager::new())),
+            blit_pipeline,
+            blit_bind_group_layout,
+            blit_sampler,
         }
     }
 
@@ -424,19 +486,59 @@ impl WgpuApp {
         read_target: &mut PassTarget,
         write_target: &mut PassTarget,
         compute_resources: ComputeResources<'_>,
+        copy_rect: PxRect,
+        blit_bind_group_layout: &wgpu::BindGroupLayout,
+        blit_sampler: &wgpu::Sampler,
+        blit_pipeline: &wgpu::RenderPipeline,
     ) -> wgpu::TextureView {
-        // Swap read/write targets and copy previous pass into the new write target
         std::mem::swap(read_target, write_target);
-        let texture_size = wgpu::Extent3d {
-            width: context.config.width,
-            height: context.config.height,
-            depth_or_array_layers: 1,
-        };
-        context.encoder.copy_texture_to_texture(
-            read_target.texture.as_image_copy(),
-            write_target.texture.as_image_copy(),
-            texture_size,
+
+        let blit_bind_group = context.gpu.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: blit_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&read_target.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(blit_sampler),
+                },
+            ],
+            label: Some("Blit Bind Group"),
+        });
+
+        let mut rpass = context
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Blit Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &write_target.view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                ..Default::default()
+            });
+
+        rpass.set_pipeline(blit_pipeline);
+        rpass.set_bind_group(0, &blit_bind_group, &[]);
+        // Set a scissor rect to ensure we only write to the required region.
+        rpass.set_scissor_rect(
+            copy_rect.x.0.max(0) as u32,
+            copy_rect.y.0.max(0) as u32,
+            copy_rect.width.0.max(0) as u32,
+            copy_rect.height.0.max(0) as u32,
         );
+        // Draw a single triangle that covers the whole screen. The scissor rect clips it.
+        rpass.draw(0..3, 0..1);
+
+        drop(rpass); // End the blit pass
+
         // Apply compute commands if any, reusing existing do_compute implementation
         if !compute_resources.compute_commands.is_empty() {
             let compute_commands_taken = std::mem::take(compute_resources.compute_commands);
@@ -493,7 +595,6 @@ impl WgpuApp {
             depth_or_array_layers: 1,
         };
 
-        // Initialization
         let (read_target, write_target) = (&mut self.pass_a, &mut self.pass_b);
 
         // Clear any existing compute commands
@@ -511,8 +612,6 @@ impl WgpuApp {
             .pipeline_registry
             .begin_all_frames(&self.gpu, &self.queue, &self.config);
 
-        // Main command processing loop with barrier handling
-        // Use an owned TextureView here to avoid holding mutable borrows across helper calls.
         let mut scene_texture_view = read_target.view.clone();
         let mut commands_in_pass: Vec<DrawOrClip> = Vec::new();
         let mut barrier_draw_rects_in_pass: Vec<PxRect> = Vec::new();
@@ -530,22 +629,17 @@ impl WgpuApp {
                     DrawOrClip::Draw(cmd) => Some(cmd),
                     DrawOrClip::Clip(_) => None,
                 })
-                .map(|cmd| {
-                    match (cmd.command.barrier(), command.barrier()) {
-                        (None, Some(_)) => true, // If the last command has no barrier but the next one does, we need a new pass
-                        (Some(_), Some(barrier)) => {
-                            // If both have barriers, we need to check if they are orthogonal
-                            // First extract the last barrier's draw rect
-                            let last_draw_rect =
-                                extract_draw_rect(Some(barrier), size, start_pos, texture_size);
-                            // Then check if the last draw rect is orthogonal to all existing draw rects in this pass
-                            !barrier_draw_rects_in_pass
-                                .iter()
-                                .all(|dr| dr.is_orthogonal(&last_draw_rect)) // We don't need a new pass if the last command's barrier is orthogonal to all existing draw rects
-                        }
-                        (Some(_), None) => false, // If the last command has a barrier but the next one does not, we can continue in the same pass
-                        (None, None) => false, // If both have no barriers, we can continue in the same pass
+                .map(|cmd| match (cmd.command.barrier(), command.barrier()) {
+                    (None, Some(_)) => true,
+                    (Some(_), Some(barrier)) => {
+                        let last_draw_rect =
+                            extract_draw_rect(Some(barrier), size, start_pos, texture_size);
+                        !barrier_draw_rects_in_pass
+                            .iter()
+                            .all(|dr| dr.is_orthogonal(&last_draw_rect))
                     }
+                    (Some(_), None) => false,
+                    (None, None) => false,
                 })
                 .unwrap_or(false);
 
@@ -560,7 +654,11 @@ impl WgpuApp {
                     .map(|cmd| cmd.command.barrier().is_some())
                     .unwrap_or(false)
                 {
-                    // Perform a ping-pong operation (extracted helper)
+                    let mut combined_rect = barrier_draw_rects_in_pass[0];
+                    for rect in barrier_draw_rects_in_pass.iter().skip(1) {
+                        combined_rect = combined_rect.union(rect);
+                    }
+
                     let final_view_after_compute = Self::handle_ping_pong_and_compute(
                         WgpuContext {
                             encoder: &mut encoder,
@@ -577,11 +675,14 @@ impl WgpuApp {
                             compute_target_a: &self.compute_target_a,
                             compute_target_b: &self.compute_target_b,
                         },
+                        combined_rect,
+                        &self.blit_bind_group_layout,
+                        &self.blit_sampler,
+                        &self.blit_pipeline,
                     );
                     scene_texture_view = final_view_after_compute;
                 }
 
-                // Render the current pass before starting a new one
                 render_current_pass(RenderCurrentPassParams {
                     msaa_view: &self.msaa_view,
                     is_first_pass: &mut is_first_pass,
@@ -644,7 +745,11 @@ impl WgpuApp {
                 .map(|cmd| cmd.command.barrier().is_some())
                 .unwrap_or(false)
             {
-                // Perform a ping-pong operation (extracted helper)
+                let mut combined_rect = barrier_draw_rects_in_pass[0];
+                for rect in barrier_draw_rects_in_pass.iter().skip(1) {
+                    combined_rect = combined_rect.union(rect);
+                }
+
                 let final_view_after_compute = Self::handle_ping_pong_and_compute(
                     WgpuContext {
                         encoder: &mut encoder,
@@ -661,6 +766,10 @@ impl WgpuApp {
                         compute_target_a: &self.compute_target_a,
                         compute_target_b: &self.compute_target_b,
                     },
+                    combined_rect,
+                    &self.blit_bind_group_layout,
+                    &self.blit_sampler,
+                    &self.blit_pipeline,
                 );
                 scene_texture_view = final_view_after_compute;
             }
