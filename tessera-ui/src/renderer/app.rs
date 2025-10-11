@@ -29,7 +29,6 @@ struct RenderCurrentPassParams<'a> {
     is_first_pass: &'a mut bool,
     encoder: &'a mut wgpu::CommandEncoder,
     write_target: &'a wgpu::TextureView,
-    final_view: Option<&'a wgpu::TextureView>,
     commands_in_pass: &'a mut Vec<DrawOrClip>,
     scene_texture_view: &'a wgpu::TextureView,
     drawer: &'a mut Drawer,
@@ -83,9 +82,8 @@ pub struct WgpuApp {
     /// compute pipelines
     pub compute_pipeline_registry: ComputePipelineRegistry,
 
-    // ping-pong rendering resources
-    pass_a: wgpu::TextureView,
-    pass_b: wgpu::TextureView,
+    // Offscreen rendering resources
+    offscreen_texture: wgpu::TextureView,
 
     // MSAA resources
     pub sample_count: u32,
@@ -212,7 +210,7 @@ impl WgpuApp {
         };
         info!("Using present mode: {present_mode:?}");
         let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             format: caps.formats[0],
             width: size.width,
             height: size.height,
@@ -226,9 +224,8 @@ impl WgpuApp {
         // Create MSAA Target
         let (msaa_texture, msaa_view) = Self::make_msaa_resources(&gpu, sample_count, &config);
 
-        // Create Pass Targets (A and B and Compute)
-        let pass_a = Self::create_pass_target(&gpu, &config, "A");
-        let pass_b = Self::create_pass_target(&gpu, &config, "B");
+        // Create Pass Targets (Offscreen and Compute)
+        let offscreen_texture = Self::create_pass_target(&gpu, &config, "Offscreen");
         let compute_target_a =
             Self::create_compute_pass_target(&gpu, &config, TextureFormat::Rgba8Unorm, "Compute A");
         let compute_target_b =
@@ -306,8 +303,7 @@ impl WgpuApp {
             size,
             size_changed: false,
             drawer,
-            pass_a,
-            pass_b,
+            offscreen_texture,
             compute_pipeline_registry: ComputePipelineRegistry::new(),
             sample_count,
             msaa_texture,
@@ -430,13 +426,11 @@ impl WgpuApp {
     }
 
     pub(crate) fn rebuild_pass_targets(&mut self) {
-        self.pass_a.texture().destroy();
-        self.pass_b.texture().destroy();
+        self.offscreen_texture.texture().destroy();
         self.compute_target_a.texture().destroy();
         self.compute_target_b.texture().destroy();
 
-        self.pass_a = Self::create_pass_target(&self.gpu, &self.config, "A");
-        self.pass_b = Self::create_pass_target(&self.gpu, &self.config, "B");
+        self.offscreen_texture = Self::create_pass_target(&self.gpu, &self.config, "Offscreen");
         self.compute_target_a = Self::create_compute_pass_target(
             &self.gpu,
             &self.config,
@@ -471,26 +465,24 @@ impl WgpuApp {
         result
     }
 
-    // Helper does ping-pong copy and optional compute; returns an owned TextureView to avoid
+    // Helper does offscreen copy and optional compute; returns an owned TextureView to avoid
     // holding mutable borrows on pass targets across the caller scope.
-    fn handle_ping_pong_and_compute(
+    fn handle_offscreen_and_compute(
         context: WgpuContext<'_>,
-        read_target: &mut wgpu::TextureView,
-        write_target: &mut wgpu::TextureView,
+        offscreen_texture: &mut wgpu::TextureView,
+        output_texture: &mut wgpu::TextureView,
         compute_resources: ComputeResources<'_>,
         copy_rect: PxRect,
         blit_bind_group_layout: &wgpu::BindGroupLayout,
         blit_sampler: &wgpu::Sampler,
         blit_pipeline: &wgpu::RenderPipeline,
     ) -> wgpu::TextureView {
-        std::mem::swap(read_target, write_target);
-
         let blit_bind_group = context.gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: blit_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(read_target),
+                    resource: wgpu::BindingResource::TextureView(output_texture),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -505,7 +497,7 @@ impl WgpuApp {
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Blit Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: write_target,
+                    view: offscreen_texture,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -542,20 +534,20 @@ impl WgpuApp {
                 queue: context.queue,
                 config: context.config,
                 resource_manager: compute_resources.resource_manager,
-                scene_view: read_target,
+                scene_view: offscreen_texture,
                 target_a: compute_resources.compute_target_a,
                 target_b: compute_resources.compute_target_b,
             })
         } else {
             // Return an owned clone so caller does not keep a borrow on read_target
-            read_target.clone()
+            offscreen_texture.clone()
         }
     }
 
     /// Render the surface using the unified command system.
     ///
     /// This method processes a stream of commands (both draw and compute) and renders
-    /// them to the surface using a multi-pass rendering approach with ping-pong buffers.
+    /// them to the surface using a multi-pass rendering approach with offscreen texture.
     /// Commands that require barriers will trigger texture copies between passes.
     ///
     /// # Arguments
@@ -563,6 +555,7 @@ impl WgpuApp {
     ///   the rendering operations to perform.
     ///
     /// # Returns
+    ///
     /// * `Ok(())` if rendering succeeds
     /// * `Err(wgpu::SurfaceError)` if there are issues with the surface
     pub(crate) fn render(
@@ -587,8 +580,6 @@ impl WgpuApp {
             depth_or_array_layers: 1,
         };
 
-        let (read_target, write_target) = (&mut self.pass_a, &mut self.pass_b);
-
         // Clear any existing compute commands
         if !self.compute_commands.is_empty() {
             // This is a warning to developers that not all compute commands were used in the last frame.
@@ -604,12 +595,12 @@ impl WgpuApp {
             .pipeline_registry
             .begin_all_frames(&self.gpu, &self.queue, &self.config);
 
-        let mut scene_texture_view = read_target.clone();
+        let mut scene_texture_view = self.offscreen_texture.clone();
         let mut commands_in_pass: Vec<DrawOrClip> = Vec::new();
         let mut barrier_draw_rects_in_pass: Vec<PxRect> = Vec::new();
         let mut clip_stack: Vec<PxRect> = Vec::new();
 
-        let output_view = output_frame
+        let mut output_view = output_frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -636,7 +627,7 @@ impl WgpuApp {
                 .unwrap_or(false);
 
             if need_new_pass {
-                // A ping-pong operation is needed if the first command in the pass has a barrier
+                // A offscreen copy operation is needed if the first command in the pass has a barrier
                 if commands_in_pass
                     .iter()
                     .find_map(|command| match &command {
@@ -651,15 +642,15 @@ impl WgpuApp {
                         combined_rect = combined_rect.union(rect);
                     }
 
-                    let final_view_after_compute = Self::handle_ping_pong_and_compute(
+                    let final_view_after_compute = Self::handle_offscreen_and_compute(
                         WgpuContext {
                             encoder: &mut encoder,
                             gpu: &self.gpu,
                             queue: &self.queue,
                             config: &self.config,
                         },
-                        read_target,
-                        write_target,
+                        &mut self.offscreen_texture,
+                        &mut output_view,
                         ComputeResources {
                             compute_commands: &mut self.compute_commands,
                             compute_pipeline_registry: &mut self.compute_pipeline_registry,
@@ -679,8 +670,7 @@ impl WgpuApp {
                     msaa_view: &self.msaa_view,
                     is_first_pass: &mut is_first_pass,
                     encoder: &mut encoder,
-                    write_target,
-                    final_view: None,
+                    write_target: &output_view,
                     commands_in_pass: &mut commands_in_pass,
                     scene_texture_view: &scene_texture_view,
                     drawer: &mut self.drawer,
@@ -742,15 +732,15 @@ impl WgpuApp {
                     combined_rect = combined_rect.union(rect);
                 }
 
-                let final_view_after_compute = Self::handle_ping_pong_and_compute(
+                let final_view_after_compute = Self::handle_offscreen_and_compute(
                     WgpuContext {
                         encoder: &mut encoder,
                         gpu: &self.gpu,
                         queue: &self.queue,
                         config: &self.config,
                     },
-                    read_target,
-                    write_target,
+                    &mut self.offscreen_texture,
+                    &mut output_view,
                     ComputeResources {
                         compute_commands: &mut self.compute_commands,
                         compute_pipeline_registry: &mut self.compute_pipeline_registry,
@@ -771,8 +761,7 @@ impl WgpuApp {
                 msaa_view: &self.msaa_view,
                 is_first_pass: &mut is_first_pass,
                 encoder: &mut encoder,
-                write_target,
-                final_view: Some(&output_view),
+                write_target: &output_view,
                 commands_in_pass: &mut commands_in_pass,
                 scene_texture_view: &scene_texture_view,
                 drawer: &mut self.drawer,
@@ -935,12 +924,10 @@ fn extract_draw_rect(
 }
 
 fn render_current_pass(params: RenderCurrentPassParams<'_>) {
-    let destination_view = params.final_view.unwrap_or(params.write_target);
-
     let (view, resolve_target) = if let Some(msaa_view) = params.msaa_view {
-        (msaa_view, Some(destination_view))
+        (msaa_view, Some(params.write_target))
     } else {
-        (destination_view, None)
+        (params.write_target, None)
     };
 
     let load_ops = if *params.is_first_pass {
