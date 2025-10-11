@@ -111,14 +111,15 @@ pub enum Alignment {
 }
 
 impl Default for Alignment {
-    /// Returns [`Alignment::Center`] as the default value.
+    /// Returns [`Alignment::TopStart`] as the default value.
     ///
     /// # Example
-    /// ```rust,ignore
-    /// use tessera_ui_basic_components::Alignment;
-    /// assert_eq!(Alignment::default(), Alignment::Center);
+    ///
+    /// ```
+    /// use tessera_ui_basic_components::alignment::Alignment;
+    /// assert_eq!(Alignment::default(), Alignment::TopStart);
     /// ```
     fn default() -> Self {
-        Self::Center
+        Self::TopStart
     }
 }
