@@ -140,6 +140,7 @@ impl WgpuApp {
                 label: None,
                 memory_hints: wgpu::MemoryHints::Performance,
                 trace: wgpu::Trace::Off,
+                experimental_features: wgpu::ExperimentalFeatures::default(),
             })
             .await
         {

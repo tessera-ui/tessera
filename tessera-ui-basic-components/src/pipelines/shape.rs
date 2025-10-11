@@ -61,7 +61,7 @@ pub struct ShapeUniforms {
 #[derive(ShaderType)]
 struct ShapeInstances {
     length: ArrayLength,
-    #[size(runtime)]
+    #[shader(size(runtime))]
     instances: Vec<ShapeUniforms>,
 }
 

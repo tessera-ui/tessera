@@ -15,11 +15,11 @@ image = { version = "0.25", default-features = false, features = [
     "png",
     "jpeg",
 ] }
-glyphon = { package = "glyphon-tessera-fork", version = "0.9.5" }
+glyphon = { package = "glyphon-tessera-fork", version = "0.9.6" }
 tracing = "0.1.41"
 parking_lot = "0.12.5"
 tessera-ui = { path = "../tessera-ui" }
 unicode-segmentation = "1.12.0"
-encase = { version = "0.11.2", features = ["glam"] }
-glam = "0.30.7"
+encase = "0.12.0"
+glam = { version = "0.30.8", features = ["encase"] }
 lru = "0.16.1"
