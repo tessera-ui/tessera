@@ -15,12 +15,6 @@ use crate::{
 
 use super::{compute::ComputePipelineRegistry, drawer::Drawer};
 
-// Render pass resources for ping-pong operation
-struct PassTarget {
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-}
-
 // WGPU context for ping-pong operations
 struct WgpuContext<'a> {
     encoder: &'a mut wgpu::CommandEncoder,
@@ -34,7 +28,7 @@ struct RenderCurrentPassParams<'a> {
     msaa_view: &'a Option<wgpu::TextureView>,
     is_first_pass: &'a mut bool,
     encoder: &'a mut wgpu::CommandEncoder,
-    write_target: &'a PassTarget,
+    write_target: &'a wgpu::TextureView,
     final_view: Option<&'a wgpu::TextureView>,
     commands_in_pass: &'a mut Vec<DrawOrClip>,
     scene_texture_view: &'a wgpu::TextureView,
@@ -55,8 +49,8 @@ struct DoComputeParams<'a> {
     config: &'a wgpu::SurfaceConfiguration,
     resource_manager: &'a mut ComputeResourceManager,
     scene_view: &'a wgpu::TextureView,
-    target_a: &'a PassTarget,
-    target_b: &'a PassTarget,
+    target_a: &'a wgpu::TextureView,
+    target_b: &'a wgpu::TextureView,
 }
 
 // Compute resources for ping-pong operations
@@ -64,8 +58,8 @@ struct ComputeResources<'a> {
     compute_commands: &'a mut Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
     compute_pipeline_registry: &'a mut ComputePipelineRegistry,
     resource_manager: &'a mut ComputeResourceManager,
-    compute_target_a: &'a PassTarget,
-    compute_target_b: &'a PassTarget,
+    compute_target_a: &'a wgpu::TextureView,
+    compute_target_b: &'a wgpu::TextureView,
 }
 
 pub struct WgpuApp {
@@ -90,8 +84,8 @@ pub struct WgpuApp {
     pub compute_pipeline_registry: ComputePipelineRegistry,
 
     // ping-pong rendering resources
-    pass_a: PassTarget,
-    pass_b: PassTarget,
+    pass_a: wgpu::TextureView,
+    pass_b: wgpu::TextureView,
 
     // MSAA resources
     pub sample_count: u32,
@@ -99,8 +93,8 @@ pub struct WgpuApp {
     msaa_view: Option<wgpu::TextureView>,
 
     // Compute resources
-    compute_target_a: PassTarget,
-    compute_target_b: PassTarget,
+    compute_target_a: wgpu::TextureView,
+    compute_target_b: wgpu::TextureView,
     compute_commands: Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
     pub resource_manager: Arc<RwLock<ComputeResourceManager>>,
 
@@ -111,7 +105,6 @@ pub struct WgpuApp {
 }
 
 impl WgpuApp {
-    /// Create a new WGPU app, as the root of Tessera
     // Small helper functions extracted from `new` to reduce its complexity.
     //
     // These helpers keep behavior unchanged but make `new` shorter and easier to analyze.
@@ -187,6 +180,7 @@ impl WgpuApp {
         }
     }
 
+    /// Create a new WGPU app, as the root of Tessera
     pub(crate) async fn new(window: Arc<Window>, sample_count: u32) -> Self {
         // Looking for gpus
         let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -229,10 +223,10 @@ impl WgpuApp {
         };
         surface.configure(&gpu, &config);
 
-        // --- Create MSAA Target ---
+        // Create MSAA Target
         let (msaa_texture, msaa_view) = Self::make_msaa_resources(&gpu, sample_count, &config);
 
-        // --- Create Pass Targets (A and B and Compute) ---
+        // Create Pass Targets (A and B and Compute)
         let pass_a = Self::create_pass_target(&gpu, &config, "A");
         let pass_b = Self::create_pass_target(&gpu, &config, "B");
         let compute_target_a =
@@ -354,7 +348,7 @@ impl WgpuApp {
         gpu: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
         label_suffix: &str,
-    ) -> PassTarget {
+    ) -> wgpu::TextureView {
         let label = format!("Pass {label_suffix} Texture");
         let texture_descriptor = wgpu::TextureDescriptor {
             label: Some(&label),
@@ -375,8 +369,7 @@ impl WgpuApp {
             view_formats: &[],
         };
         let texture = gpu.create_texture(&texture_descriptor);
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        PassTarget { texture, view }
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
     fn create_compute_pass_target(
@@ -384,7 +377,7 @@ impl WgpuApp {
         config: &wgpu::SurfaceConfiguration,
         format: TextureFormat,
         label_suffix: &str,
-    ) -> PassTarget {
+    ) -> wgpu::TextureView {
         let label = format!("Compute {label_suffix} Texture");
         let texture_descriptor = wgpu::TextureDescriptor {
             label: Some(&label),
@@ -405,8 +398,7 @@ impl WgpuApp {
             view_formats: &[],
         };
         let texture = gpu.create_texture(&texture_descriptor);
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        PassTarget { texture, view }
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
     pub fn register_pipelines(&mut self, register_fn: impl FnOnce(&mut Self)) {
@@ -438,10 +430,10 @@ impl WgpuApp {
     }
 
     pub(crate) fn rebuild_pass_targets(&mut self) {
-        self.pass_a.texture.destroy();
-        self.pass_b.texture.destroy();
-        self.compute_target_a.texture.destroy();
-        self.compute_target_b.texture.destroy();
+        self.pass_a.texture().destroy();
+        self.pass_b.texture().destroy();
+        self.compute_target_a.texture().destroy();
+        self.compute_target_b.texture().destroy();
 
         self.pass_a = Self::create_pass_target(&self.gpu, &self.config, "A");
         self.pass_b = Self::create_pass_target(&self.gpu, &self.config, "B");
@@ -483,8 +475,8 @@ impl WgpuApp {
     // holding mutable borrows on pass targets across the caller scope.
     fn handle_ping_pong_and_compute(
         context: WgpuContext<'_>,
-        read_target: &mut PassTarget,
-        write_target: &mut PassTarget,
+        read_target: &mut wgpu::TextureView,
+        write_target: &mut wgpu::TextureView,
         compute_resources: ComputeResources<'_>,
         copy_rect: PxRect,
         blit_bind_group_layout: &wgpu::BindGroupLayout,
@@ -498,7 +490,7 @@ impl WgpuApp {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&read_target.view),
+                    resource: wgpu::BindingResource::TextureView(read_target),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -513,7 +505,7 @@ impl WgpuApp {
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Blit Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &write_target.view,
+                    view: write_target,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -550,13 +542,13 @@ impl WgpuApp {
                 queue: context.queue,
                 config: context.config,
                 resource_manager: compute_resources.resource_manager,
-                scene_view: &read_target.view,
+                scene_view: read_target,
                 target_a: compute_resources.compute_target_a,
                 target_b: compute_resources.compute_target_b,
             })
         } else {
             // Return an owned clone so caller does not keep a borrow on read_target
-            read_target.view.clone()
+            read_target.clone()
         }
     }
 
@@ -612,7 +604,7 @@ impl WgpuApp {
             .pipeline_registry
             .begin_all_frames(&self.gpu, &self.queue, &self.config);
 
-        let mut scene_texture_view = read_target.view.clone();
+        let mut scene_texture_view = read_target.clone();
         let mut commands_in_pass: Vec<DrawOrClip> = Vec::new();
         let mut barrier_draw_rects_in_pass: Vec<PxRect> = Vec::new();
         let mut clip_stack: Vec<PxRect> = Vec::new();
@@ -815,7 +807,7 @@ impl WgpuApp {
         for (command, size, start_pos) in params.commands {
             // Ensure the write target is cleared before use
             params.encoder.clear_texture(
-                &write_target.texture,
+                write_target.texture(),
                 &ImageSubresourceRange {
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: 0,
@@ -852,13 +844,13 @@ impl WgpuApp {
                     params.resource_manager,
                     area,
                     &read_view,
-                    &write_target.view,
+                    write_target,
                 );
             } // cpass is dropped here, ending the pass
 
             // The result of this pass is now in write_target.
             // For the next iteration, this will be our read source.
-            read_view = write_target.view.clone();
+            read_view = write_target.clone();
             // Swap targets for the next iteration
             std::mem::swap(&mut write_target, &mut read_target);
         }
@@ -943,7 +935,7 @@ fn extract_draw_rect(
 }
 
 fn render_current_pass(params: RenderCurrentPassParams<'_>) {
-    let destination_view = params.final_view.unwrap_or(&params.write_target.view);
+    let destination_view = params.final_view.unwrap_or(params.write_target);
 
     let (view, resolve_target) = if let Some(msaa_view) = params.msaa_view {
         (msaa_view, Some(destination_view))
