@@ -1132,7 +1132,7 @@ fn apply_clip_to_batch_rect(
 fn can_merge_into_batch(last_command_type_id: &Option<TypeId>, next_type_id: TypeId) -> bool {
     match last_command_type_id {
         Some(l) => *l == next_type_id,
-        None => false,
+        None => true,
     }
 }
 
