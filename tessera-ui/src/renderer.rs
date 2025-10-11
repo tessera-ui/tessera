@@ -191,7 +191,7 @@ pub mod compute;
 pub mod drawer;
 pub mod reorder;
 
-use std::{any::TypeId, sync::Arc, time::Instant, thread};
+use std::{any::TypeId, sync::Arc, thread, time::Instant};
 
 use tessera_ui_macros::tessera;
 use tracing::{debug, error, instrument, warn};
