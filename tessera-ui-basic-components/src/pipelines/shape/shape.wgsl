@@ -13,7 +13,6 @@ struct ShapeUniforms {
 };
 
 struct ShapeInstances {
-    length: u32,
     instances: array<ShapeUniforms>,
 };
 

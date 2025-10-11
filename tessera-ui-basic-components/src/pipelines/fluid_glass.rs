@@ -1,4 +1,4 @@
-use encase::{ArrayLength, ShaderType, StorageBuffer};
+use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{PxPosition, PxSize, px::PxRect, renderer::DrawablePipeline, wgpu};
 
@@ -36,7 +36,6 @@ struct GlassUniforms {
 
 #[derive(ShaderType)]
 struct GlassInstances {
-    length: ArrayLength,
     #[shader(size(runtime))]
     instances: Vec<GlassUniforms>,
 }
@@ -342,7 +341,6 @@ impl FluidGlassPipeline {
     ) -> Result<wgpu::Buffer, ()> {
         // Serialize uniforms first so we can determine exact buffer size (avoids magic numbers).
         let uniforms = GlassInstances {
-            length: ArrayLength,
             instances: instances.to_vec(),
         };
 

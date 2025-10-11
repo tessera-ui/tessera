@@ -18,7 +18,7 @@
 
 mod command;
 
-use encase::{ArrayLength, ShaderSize, ShaderType, StorageBuffer};
+use encase::{ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxPosition, PxSize,
@@ -60,7 +60,6 @@ pub struct ShapeUniforms {
 
 #[derive(ShaderType)]
 struct ShapeInstances {
-    length: ArrayLength,
     #[shader(size(runtime))]
     instances: Vec<ShapeUniforms>,
 }
@@ -208,10 +207,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             mapped_at_creation: false,
         });
 
-        let uniforms = ShapeInstances {
-            length: Default::default(),
-            instances,
-        };
+        let uniforms = ShapeInstances { instances };
         let instance_count = uniforms.instances.len();
 
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
