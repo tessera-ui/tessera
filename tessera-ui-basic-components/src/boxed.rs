@@ -36,6 +36,7 @@ impl Default for BoxedArgs {
 /// A scope for declaratively adding children to a `boxed` component.
 pub struct BoxedScope<'a> {
     child_closures: &'a mut Vec<Box<dyn FnOnce() + Send + Sync>>,
+    child_alignments: &'a mut Vec<Option<Alignment>>,
 }
 
 impl<'a> BoxedScope<'a> {
@@ -45,6 +46,16 @@ impl<'a> BoxedScope<'a> {
         F: FnOnce() + Send + Sync + 'static,
     {
         self.child_closures.push(Box::new(child_closure));
+        self.child_alignments.push(None);
+    }
+
+    /// Adds a child component with a custom alignment overriding the container default.
+    pub fn child_with_alignment<F>(&mut self, alignment: Alignment, child_closure: F)
+    where
+        F: FnOnce() + Send + Sync + 'static,
+    {
+        self.child_closures.push(Box::new(child_closure));
+        self.child_alignments.push(Some(alignment));
     }
 }
 
@@ -116,19 +127,22 @@ where
     F: FnOnce(&mut BoxedScope),
 {
     let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
+    let mut child_alignments: Vec<Option<Alignment>> = Vec::new();
 
     {
         let mut scope = BoxedScope {
             child_closures: &mut child_closures,
+            child_alignments: &mut child_alignments,
         };
         scope_config(&mut scope);
     }
 
     let n = child_closures.len();
+    let child_alignments = child_alignments;
 
     // Measurement closure: measure all present children and compute container size.
     measure(Box::new(move |input| {
-        assert_eq!(
+        debug_assert_eq!(
             input.children_ids.len(),
             n,
             "Mismatch between children defined in scope and runtime children count"
@@ -166,8 +180,9 @@ where
         for (i, child_size_opt) in children_sizes.iter().enumerate() {
             if let Some(child_size) = child_size_opt {
                 let child_id = input.children_ids[i];
+                let child_alignment = child_alignments[i].unwrap_or(args.alignment);
                 let (x, y) = compute_child_offset(
-                    args.alignment,
+                    child_alignment,
                     final_width,
                     final_height,
                     child_size.width,
