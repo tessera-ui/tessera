@@ -25,4 +25,4 @@ tessera-ui = { path = "../tessera-ui" }
 tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-clap = { version = "4.5.48", features = ["derive"] }
+clap = { version = "4.5.49", features = ["derive"] }
