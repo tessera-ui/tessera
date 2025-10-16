@@ -22,4 +22,4 @@ tessera-ui = { path = "../tessera-ui" }
 unicode-segmentation = "1.12.0"
 encase = "0.12.0"
 glam = { version = "0.30.8", features = ["encase"] }
-lru = "0.16.1"
+lru = "0.16.2"
