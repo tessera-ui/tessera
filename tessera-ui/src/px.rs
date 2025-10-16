@@ -802,6 +802,16 @@ impl PxRect {
         }
     }
 
+    /// Creates a new rectangle from a position and size.
+    pub fn from_position_size(position: PxPosition, size: PxSize) -> Self {
+        Self {
+            x: position.x,
+            y: position.y,
+            width: size.width,
+            height: size.height,
+        }
+    }
+
     /// Checks if this rectangle is orthogonal (non-overlapping) with another rectangle.
     ///
     /// Two rectangles are orthogonal if they do not overlap in either the x or y axis.

@@ -24,14 +24,19 @@ use tessera_ui::{
     PxPosition, PxSize,
     px::PxRect,
     renderer::DrawablePipeline,
-    wgpu::{self, include_wgsl},
+    wgpu::{self, include_wgsl, util::DeviceExt},
 };
 
 use self::command::rect_to_uniforms;
 
 pub use command::{RippleProps, ShadowProps, ShapeCommand};
 
-// --- Uniforms ---
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 2],
+}
+
 /// Uniforms for shape rendering pipeline.
 ///
 /// # Fields
@@ -79,6 +84,8 @@ pub const MAX_CONCURRENT_SHAPES: wgpu::BufferAddress = 1024;
 pub struct ShapePipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
+    quad_vertex_buffer: wgpu::Buffer,
+    quad_index_buffer: wgpu::Buffer,
 }
 
 impl ShapePipeline {
@@ -111,7 +118,11 @@ impl ShapePipeline {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[],
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x2],
+                }],
                 compilation_options: Default::default(),
             },
             primitive: wgpu::PrimitiveState {
@@ -143,9 +154,40 @@ impl ShapePipeline {
             cache: None,
         });
 
+        // Create a vertex buffer for a unit quad.
+        let quad_vertices = [
+            Vertex {
+                position: [0.0, 0.0],
+            }, // Top-left
+            Vertex {
+                position: [1.0, 0.0],
+            }, // Top-right
+            Vertex {
+                position: [1.0, 1.0],
+            }, // Bottom-right
+            Vertex {
+                position: [0.0, 1.0],
+            }, // Bottom-left
+        ];
+        let quad_vertex_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Shape Quad Vertex Buffer"),
+            contents: bytemuck::cast_slice(&quad_vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        // Create an index buffer for a unit quad.
+        let quad_indices: [u16; 6] = [0, 2, 1, 0, 3, 2]; // CCW for backface culling
+        let quad_index_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Shape Quad Index Buffer"),
+            contents: bytemuck::cast_slice(&quad_indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
         Self {
             pipeline,
             bind_group_layout,
+            quad_vertex_buffer,
+            quad_index_buffer,
         }
     }
 }
@@ -189,13 +231,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             return;
         }
 
-        let mut instances = build_instances(commands, config);
-
-        if instances.len() > MAX_CONCURRENT_SHAPES as usize {
-            // Truncate if too many instances; splitting into multiple draw calls could be an improvement.
-            instances.truncate(MAX_CONCURRENT_SHAPES as usize);
-        }
-
+        let instances = build_instances(commands, config);
         if instances.is_empty() {
             return;
         }
@@ -208,7 +244,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         });
 
         let uniforms = ShapeInstances { instances };
-        let instance_count = uniforms.instances.len();
+        let instance_count = uniforms.instances.len() as u32;
 
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
         buffer_content.write(&uniforms).unwrap();
@@ -225,6 +261,8 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &bind_group, &[]);
-        render_pass.draw(0..6, 0..instance_count as u32);
+        render_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..6, 0, 0..instance_count);
     }
 }

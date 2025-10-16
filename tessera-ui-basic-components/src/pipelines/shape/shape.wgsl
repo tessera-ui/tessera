@@ -19,6 +19,11 @@ struct ShapeInstances {
 @group(0) @binding(0)
 var<storage, read> uniforms: ShapeInstances;
 
+struct VertexInput {
+    @location(0) position: vec2f,
+    @builtin(instance_index) instance_index: u32,
+};
+
 struct VertexOutput {
     @builtin(position) clip_position: vec4f,
     @location(0) local_pos: vec2f, // Local UV [0, 1]
@@ -26,43 +31,31 @@ struct VertexOutput {
 };
 
 @vertex
-fn vs_main(
-    @builtin(vertex_index) vertex_index: u32,
-    @builtin(instance_index) instance_index: u32
-) -> VertexOutput {
-    let instance = uniforms.instances[instance_index];
-    
-    let global_pos_pixels = instance.position.xy;
-    let size_pixels = instance.position.zw;
+fn vs_main(in: VertexInput) -> VertexOutput {
+    let instance = uniforms.instances[in.instance_index];
     let screen_dimensions = instance.screen_size;
 
-    let rect_uv_min = global_pos_pixels / screen_dimensions;
-    let rect_uv_max = (global_pos_pixels + size_pixels) / screen_dimensions;
+    // `in.position` is the unit quad vertex (0,0 to 1,1).
+    // `instance.position` is the rect (x, y, width, height) in pixels.
+    let instance_pos = instance.position.xy;
+    let instance_size = instance.position.zw;
 
-    let local_uvs = array<vec2<f32>, 4>(
-        vec2(0.0, 0.0), // Top-left
-        vec2(0.0, 1.0), // Bottom-left
-        vec2(1.0, 1.0), // Bottom-right
-        vec2(1.0, 0.0)  // Top-right
-    );
+    // Calculate the vertex's final pixel position.
+    let pixel_pos = instance_pos + in.position * instance_size;
 
-    let indices = array<u32, 6>(0, 1, 2, 0, 2, 3);
-    let local_uv = local_uvs[indices[vertex_index]];
-
-    let global_uv = rect_uv_min + local_uv * (rect_uv_max - rect_uv_min);
-
+    // Convert final pixel position to NDC for the rasterizer.
     let clip_pos = vec2<f32>(
-        global_uv.x * 2.0 - 1.0,
-        -(global_uv.y * 2.0 - 1.0)
+        (pixel_pos.x / screen_dimensions.x) * 2.0 - 1.0,
+        (pixel_pos.y / screen_dimensions.y) * -2.0 + 1.0
     );
 
     var out: VertexOutput;
     out.clip_position = vec4<f32>(clip_pos, 0.0, 1.0);
-    out.local_pos = local_uv - 0.5; // Center the local coordinates around 0
-    out.instance_index = instance_index;
+    // The local UV is simply the incoming unit quad vertex position.
+    out.local_pos = in.position - 0.5; // Center around 0 for SDF
+    out.instance_index = in.instance_index;
     return out;
 }
-
 // p: point to sample (in object space, centered at 0,0)
 // b: half-size of the box
 // r: corner radii (tl, tr, br, bl) -> (x, y, z, w)
