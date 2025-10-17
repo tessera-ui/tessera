@@ -165,8 +165,8 @@ impl Ord for PriorityNode {
         // 3. The original index is used as a final tie-breaker for stability.
         self.category
             .cmp(&other.category)
-            .then_with(|| self.batch_potential.cmp(&other.batch_potential).reverse())
-            .then_with(|| self.original_index.cmp(&other.original_index).reverse())
+            .then_with(|| self.batch_potential.cmp(&other.batch_potential))
+            .then_with(|| self.original_index.cmp(&other.original_index))
     }
 }
 
