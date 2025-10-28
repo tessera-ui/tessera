@@ -21,5 +21,5 @@ parking_lot = "0.12.5"
 tessera-ui = { path = "../tessera-ui" }
 unicode-segmentation = "1.12.0"
 encase = "0.12.0"
-glam = { version = "0.30.8", features = ["encase"] }
+glam = { version = "0.30.9", features = ["encase"] }
 lru = "0.16.2"
