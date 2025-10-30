@@ -40,6 +40,17 @@ impl BarrierRequirement {
         bottom: Px::ZERO,
         left: Px::ZERO,
     };
+
+    /// Creates a `PaddedLocal` barrier requirement with uniform padding on all sides.
+    #[must_use]
+    pub const fn uniform_padding_local(padding: Px) -> Self {
+        Self::PaddedLocal {
+            top: padding,
+            right: padding,
+            bottom: padding,
+            left: padding,
+        }
+    }
 }
 
 /// Trait providing type erasure capabilities for command objects.

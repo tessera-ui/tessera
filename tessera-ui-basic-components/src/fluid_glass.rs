@@ -159,7 +159,7 @@ pub struct FluidGlassCommand {
 
 impl DrawCommand for FluidGlassCommand {
     fn barrier(&self) -> Option<BarrierRequirement> {
-        Some(BarrierRequirement::ZERO_PADDING_LOCAL)
+        Some(BarrierRequirement::uniform_padding_local(Px(10)))
     }
 }
 
