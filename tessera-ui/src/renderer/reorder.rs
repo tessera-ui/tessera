@@ -165,8 +165,8 @@ impl Ord for PriorityNode {
         // 3. The original index is used as a final tie-breaker for stability.
         self.category
             .cmp(&other.category)
-            .then_with(|| self.batch_potential.cmp(&other.batch_potential))
-            .then_with(|| self.original_index.cmp(&other.original_index))
+            .then_with(|| other.batch_potential.cmp(&self.batch_potential))
+            .then_with(|| other.original_index.cmp(&self.original_index))
     }
 }
 
@@ -339,9 +339,6 @@ mod tests {
     };
     use std::any::TypeId;
     use std::fmt::Debug;
-
-    // --- Mock Commands ---
-    // Mocks to simulate different command types for testing reordering logic.
 
     #[derive(Debug, PartialEq, Clone)]
     struct MockDrawCommand {
@@ -561,6 +558,358 @@ mod tests {
         let reordered = reorder_instructions(commands);
         let reordered_positions = get_positions(&reordered);
         assert_eq!(reordered_positions, original_positions);
+    }
+
+    #[test]
+    fn test_clip_state_change_acts_as_fence() {
+        let clip_rect = PxRect::new(Px(0), Px(0), Px(50), Px(50));
+        let clip_size = PxSize::new(Px(50), Px(50));
+        let commands = vec![
+            (
+                Command::ClipPush(clip_rect),
+                TypeId::of::<Command>(),
+                clip_size,
+                PxPosition::new(Px(0), Px(0)),
+            ),
+            create_cmd(
+                PxPosition::new(Px(5), Px(5)),
+                Some(BarrierRequirement::Global),
+                false,
+            ),
+            (
+                Command::ClipPop,
+                TypeId::of::<Command>(),
+                clip_size,
+                PxPosition::new(Px(0), Px(0)),
+            ),
+            create_cmd2(
+                PxPosition::new(Px(60), Px(60)),
+                Some(BarrierRequirement::Global),
+                false,
+            ),
+        ];
+        let original_positions = get_positions(&commands);
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+        assert_eq!(reordered_positions, original_positions);
+    }
+
+    #[test]
+    fn test_padded_local_overlap_prevents_reorder() {
+        let commands = vec![
+            create_cmd(
+                PxPosition::new(Px(100), Px(100)),
+                Some(BarrierRequirement::PaddedLocal {
+                    top: Px(30),
+                    right: Px(30),
+                    bottom: Px(30),
+                    left: Px(30),
+                }),
+                false,
+            ),
+            create_cmd(
+                PxPosition::new(Px(70), Px(70)),
+                Some(BarrierRequirement::Global),
+                false,
+            ),
+        ];
+        let original_positions = get_positions(&commands);
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+        assert_eq!(reordered_positions, original_positions);
+    }
+
+    #[test]
+    fn test_mixed_categories_with_state_fences() {
+        let clip_rect = PxRect::new(Px(0), Px(0), Px(400), Px(400));
+        let clip_size = PxSize::new(Px(400), Px(400));
+        let commands = vec![
+            (
+                Command::ClipPush(clip_rect),
+                TypeId::of::<Command>(),
+                clip_size,
+                PxPosition::ZERO,
+            ),
+            create_cmd(
+                PxPosition::new(Px(10), Px(10)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(10),
+                    Px(10),
+                    Px(20),
+                    Px(20),
+                ))),
+                false,
+            ),
+            create_cmd2(PxPosition::new(Px(220), Px(20)), None, false),
+            create_cmd(
+                PxPosition::new(Px(150), Px(150)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(150),
+                    Px(150),
+                    Px(30),
+                    Px(30),
+                ))),
+                true,
+            ),
+            create_cmd2(
+                PxPosition::new(Px(155), Px(155)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(150),
+                    Px(150),
+                    Px(30),
+                    Px(30),
+                ))),
+                false,
+            ),
+            create_cmd(PxPosition::new(Px(260), Px(30)), None, false),
+            create_cmd2(
+                PxPosition::new(Px(300), Px(60)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(300),
+                    Px(60),
+                    Px(25),
+                    Px(25),
+                ))),
+                true,
+            ),
+            (
+                Command::ClipPop,
+                TypeId::of::<Command>(),
+                clip_size,
+                PxPosition::ZERO,
+            ),
+        ];
+
+        let reordered = reorder_instructions(commands.clone());
+        let reordered_positions = get_positions(&reordered);
+        let expected_positions = vec![
+            PxPosition::ZERO,
+            PxPosition::new(Px(150), Px(150)),
+            PxPosition::new(Px(300), Px(60)),
+            PxPosition::new(Px(10), Px(10)),
+            PxPosition::new(Px(155), Px(155)),
+            PxPosition::new(Px(220), Px(20)),
+            PxPosition::new(Px(260), Px(30)),
+            PxPosition::ZERO,
+        ];
+        assert_eq!(reordered_positions, expected_positions);
+    }
+
+    #[test]
+    fn test_randomized_sequences_preserve_dependencies() {
+        struct Lcg(u64);
+        impl Lcg {
+            fn new(seed: u64) -> Self {
+                Self(seed)
+            }
+            fn next_u32(&mut self) -> u32 {
+                // ANSI C LCG constants
+                self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1);
+                (self.0 >> 32) as u32
+            }
+            fn next_range(&mut self, upper: u32) -> u32 {
+                if upper == 0 {
+                    0
+                } else {
+                    self.next_u32() % upper
+                }
+            }
+            fn next_bool(&mut self) -> bool {
+                self.next_u32() & 1 == 1
+            }
+        }
+
+        fn random_barrier(rng: &mut Lcg, allow_none: bool) -> Option<BarrierRequirement> {
+            let roll = rng.next_range(if allow_none { 4 } else { 3 });
+            match roll {
+                0 if allow_none => None,
+                0 | 3 => Some(BarrierRequirement::Global),
+                1 => {
+                    let top = Px(rng.next_range(20) as i32);
+                    let right = Px(rng.next_range(20) as i32);
+                    let bottom = Px(rng.next_range(20) as i32);
+                    let left = Px(rng.next_range(20) as i32);
+                    Some(BarrierRequirement::PaddedLocal {
+                        top,
+                        right,
+                        bottom,
+                        left,
+                    })
+                }
+                _ => {
+                    let x = Px(rng.next_range(240) as i32);
+                    let y = Px(rng.next_range(240) as i32);
+                    let width = Px(10 + rng.next_range(80) as i32);
+                    let height = Px(10 + rng.next_range(80) as i32);
+                    Some(BarrierRequirement::Absolute(PxRect::new(
+                        x, y, width, height,
+                    )))
+                }
+            }
+        }
+
+        fn random_commands(seed: u64) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
+            let mut rng = Lcg::new(seed);
+            let mut commands = Vec::new();
+            let len = 5 + rng.next_range(6) as usize; // 5..10 commands before balancing clip stack
+            let mut clip_depth = 0usize;
+
+            for _ in 0..len {
+                match rng.next_range(6) {
+                    0 => {
+                        // Continuation draw of type 1
+                        let pos = PxPosition::new(
+                            Px(rng.next_range(256) as i32),
+                            Px(rng.next_range(256) as i32),
+                        );
+                        commands.push(create_cmd(pos, None, false));
+                    }
+                    1 => {
+                        // Continuation draw of type 2 (different TypeId)
+                        let pos = PxPosition::new(
+                            Px(rng.next_range(256) as i32),
+                            Px(rng.next_range(256) as i32),
+                        );
+                        commands.push(create_cmd2(pos, None, false));
+                    }
+                    2 => {
+                        // Barrier draw
+                        let pos = PxPosition::new(
+                            Px(rng.next_range(256) as i32),
+                            Px(rng.next_range(256) as i32),
+                        );
+                        let command = if rng.next_bool() {
+                            create_cmd(pos, random_barrier(&mut rng, false), false)
+                        } else {
+                            create_cmd2(pos, random_barrier(&mut rng, false), false)
+                        };
+                        commands.push(command);
+                    }
+                    3 => {
+                        // Compute command
+                        let pos = PxPosition::new(
+                            Px(rng.next_range(256) as i32),
+                            Px(rng.next_range(256) as i32),
+                        );
+                        let command = if rng.next_bool() {
+                            create_cmd(pos, random_barrier(&mut rng, false), true)
+                        } else {
+                            create_cmd2(pos, random_barrier(&mut rng, false), true)
+                        };
+                        commands.push(command);
+                    }
+                    4 => {
+                        // Clip push
+                        let width = Px(50 + rng.next_range(150) as i32);
+                        let height = Px(50 + rng.next_range(150) as i32);
+                        let rect = PxRect::new(
+                            Px(rng.next_range(200) as i32),
+                            Px(rng.next_range(200) as i32),
+                            width,
+                            height,
+                        );
+                        let size = PxSize::new(width, height);
+                        commands.push((
+                            Command::ClipPush(rect),
+                            TypeId::of::<Command>(),
+                            size,
+                            PxPosition::new(rect.x, rect.y),
+                        ));
+                        clip_depth += 1;
+                    }
+                    _ => {
+                        // Clip pop if possible, otherwise fallback to draw
+                        if clip_depth > 0 {
+                            clip_depth -= 1;
+                            commands.push((
+                                Command::ClipPop,
+                                TypeId::of::<Command>(),
+                                PxSize::new(Px(0), Px(0)),
+                                PxPosition::new(Px(0), Px(0)),
+                            ));
+                        } else {
+                            let pos = PxPosition::new(
+                                Px(rng.next_range(256) as i32),
+                                Px(rng.next_range(256) as i32),
+                            );
+                            commands.push(create_cmd(pos, None, false));
+                        }
+                    }
+                }
+            }
+
+            while clip_depth > 0 {
+                clip_depth -= 1;
+                commands.push((
+                    Command::ClipPop,
+                    TypeId::of::<Command>(),
+                    PxSize::new(Px(0), Px(0)),
+                    PxPosition::new(Px(0), Px(0)),
+                ));
+            }
+
+            commands
+        }
+
+        for seed in 0..50 {
+            let commands = random_commands(seed);
+            let reordered = reorder_instructions(commands.clone());
+
+            // Rebuild instruction metadata to validate ordering properties.
+            let instructions: Vec<InstructionInfo> = commands
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(i, cmd)| InstructionInfo::new(cmd, i))
+                .collect();
+
+            let mut potentials = HashMap::new();
+            for info in &instructions {
+                *potentials.entry((info.category, info.type_id)).or_insert(0) += 1;
+            }
+
+            let graph = build_dependency_graph(&instructions);
+            let sorted_indices = priority_topological_sort(&graph, &instructions, &potentials);
+            let expected: Vec<_> = sorted_indices
+                .iter()
+                .map(|idx| commands[idx.index()].clone())
+                .collect();
+
+            assert_eq!(reordered.len(), expected.len());
+            for (idx, (expected_item, reordered_item)) in
+                expected.iter().zip(&reordered).enumerate()
+            {
+                assert_eq!(
+                    expected_item.1, reordered_item.1,
+                    "TypeId mismatch at position {idx} for seed {seed}"
+                );
+                assert_eq!(
+                    expected_item.2, reordered_item.2,
+                    "Size mismatch at position {idx} for seed {seed}"
+                );
+                assert_eq!(
+                    expected_item.3, reordered_item.3,
+                    "Position mismatch at position {idx} for seed {seed}"
+                );
+            }
+
+            // Validate the ordering is a legal topological sort.
+            let mut position_by_original = vec![0usize; instructions.len()];
+            for (order, node_idx) in sorted_indices.iter().enumerate() {
+                position_by_original[node_idx.index()] = order;
+            }
+
+            for edge in graph.raw_edges() {
+                let src = edge.source().index();
+                let dst = edge.target().index();
+                assert!(
+                    position_by_original[src] < position_by_original[dst],
+                    "edge {:?}->{:?} violated for seed {seed}",
+                    src,
+                    dst
+                );
+            }
+        }
     }
 
     #[test]
