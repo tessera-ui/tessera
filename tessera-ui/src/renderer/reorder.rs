@@ -236,9 +236,32 @@ fn priority_topological_sort(
     }
 
     let mut sorted_list = Vec::with_capacity(instructions.len());
-    while let Some(priority_node) = ready_queue.pop() {
+    let mut last_type_id: Option<TypeId> = None;
+    while !ready_queue.is_empty() {
+        let highest_category = ready_queue.peek().map(|node| node.category);
+
+        let mut selected: Option<PriorityNode> = None;
+        if let (Some(last_type), Some(high_cat)) = (last_type_id, highest_category) {
+            let mut deferred = Vec::new();
+            while let Some(node) = ready_queue.pop() {
+                if node.category == high_cat && node.type_id == last_type {
+                    selected = Some(node);
+                    break;
+                }
+                deferred.push(node);
+            }
+            for node in deferred {
+                ready_queue.push(node);
+            }
+        }
+
+        let priority_node = selected.unwrap_or_else(|| ready_queue.pop().unwrap());
         let u = priority_node.node_index;
         sorted_list.push(u);
+        match priority_node.category {
+            InstructionCategory::StateChange => last_type_id = None,
+            _ => last_type_id = Some(priority_node.type_id),
+        }
 
         for v in graph.neighbors(u) {
             in_degree[v.index()] -= 1;
@@ -910,6 +933,34 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_batches_cards_across_orthogonal_gap() {
+        let card1 = create_cmd(PxPosition::new(Px(0), Px(0)), None, false);
+        let text1 = create_cmd2(
+            PxPosition::new(Px(0), Px(0)),
+            None, // overlaps card1
+            false,
+        );
+        let card2 = create_cmd(PxPosition::new(Px(200), Px(0)), None, false);
+        let text2 = create_cmd2(
+            PxPosition::new(Px(200), Px(0)),
+            None, // overlaps card2
+            false,
+        );
+
+        let commands = vec![card1, text1, card2, text2];
+
+        let reordered = reorder_instructions(commands);
+        let reordered_positions = get_positions(&reordered);
+        let expected_positions = vec![
+            PxPosition::new(Px(0), Px(0)),
+            PxPosition::new(Px(200), Px(0)),
+            PxPosition::new(Px(0), Px(0)),
+            PxPosition::new(Px(200), Px(0)),
+        ];
+        assert_eq!(reordered_positions, expected_positions);
     }
 
     #[test]
