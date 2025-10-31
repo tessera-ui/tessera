@@ -273,10 +273,10 @@ pub struct TesseraConfig {
 }
 
 impl Default for TesseraConfig {
-    /// Creates a default configuration with 4x MSAA and "Tessera" as the window title.
+    /// Creates a default configuration without MSAA and "Tessera" as the window title.
     fn default() -> Self {
         Self {
-            sample_count: 4,
+            sample_count: 1,
             window_title: "Tessera".to_string(),
         }
     }
