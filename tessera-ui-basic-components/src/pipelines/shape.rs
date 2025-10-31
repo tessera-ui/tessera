@@ -18,10 +18,11 @@
 
 mod command;
 
-use std::{collections::HashMap, hash::Hash, sync::Arc};
+use std::{num::NonZeroUsize, sync::Arc};
 
 use encase::{ShaderSize, ShaderType, StorageBuffer, UniformBuffer};
 use glam::{Vec2, Vec4};
+use lru::LruCache;
 use tessera_ui::{
     Color, Px, PxPosition, PxSize,
     px::PxRect,
@@ -71,8 +72,9 @@ struct ShapeInstances {
     instances: Vec<ShapeUniforms>,
 }
 
-// Define MAX_CONCURRENT_SHAPES, can be adjusted later
 pub const MAX_CONCURRENT_SHAPES: wgpu::BufferAddress = 1024;
+const SHAPE_CACHE_CAPACITY: usize = 100;
+const SHAPE_CACHE_AREA_THRESHOLD: u64 = 50_000;
 
 /// Pipeline for rendering vector shapes in UI components.
 ///
@@ -93,7 +95,7 @@ pub struct ShapePipeline {
     cache_texture_bind_group_layout: wgpu::BindGroupLayout,
     cache_uniform_bind_group_layout: wgpu::BindGroupLayout,
     cached_pipeline: wgpu::RenderPipeline,
-    cache: HashMap<ShapeCacheKey, Arc<ShapeCacheEntry>>,
+    cache: LruCache<ShapeCacheKey, Arc<ShapeCacheEntry>>,
     render_format: wgpu::TextureFormat,
 }
 
@@ -303,7 +305,9 @@ impl ShapePipeline {
             cache_texture_bind_group_layout,
             cache_uniform_bind_group_layout,
             cached_pipeline,
-            cache: HashMap::new(),
+            cache: LruCache::new(
+                NonZeroUsize::new(SHAPE_CACHE_CAPACITY).expect("shape cache capacity must be > 0"),
+            ),
             render_format: config.format,
         }
     }
@@ -321,7 +325,7 @@ impl ShapePipeline {
         }
 
         let entry = Arc::new(self.build_cache_entry(gpu, gpu_queue, command, size));
-        self.cache.insert(key, entry.clone());
+        _ = self.cache.put(key, entry.clone());
         Some(entry)
     }
 
@@ -660,7 +664,7 @@ impl ShapeCacheKey {
             return None;
         }
 
-        if (width as u64) * (height as u64) < 200_000 {
+        if (width as u64) * (height as u64) < SHAPE_CACHE_AREA_THRESHOLD {
             return None;
         }
 
