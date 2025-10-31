@@ -343,10 +343,10 @@ fn try_build_simple_rect_command(
     if args.on_click.is_some() {
         return None;
     }
-    if let Some(state) = ripple_state {
-        if state.get_animation_progress().is_some() {
-            return None;
-        }
+    if let Some(state) = ripple_state
+        && state.get_animation_progress().is_some()
+    {
+        return None;
     }
 
     let color = match style {
