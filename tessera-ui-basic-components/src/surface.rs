@@ -22,7 +22,7 @@ use tessera_ui::{
 
 use crate::{
     padding_utils::remove_padding_from_dimension,
-    pipelines::{RippleProps, ShadowProps, ShapeCommand},
+    pipelines::{RippleProps, ShadowProps, ShapeCommand, SimpleRectCommand},
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
     shape_def::Shape,
@@ -332,6 +332,53 @@ fn make_surface_drawable(
     build_shape_command(args, style, ripple_props, size)
 }
 
+fn try_build_simple_rect_command(
+    args: &SurfaceArgs,
+    style: &SurfaceStyle,
+    ripple_state: Option<&Arc<RippleState>>,
+) -> Option<SimpleRectCommand> {
+    if args.shadow.is_some() {
+        return None;
+    }
+    if args.on_click.is_some() {
+        return None;
+    }
+    if let Some(state) = ripple_state {
+        if state.get_animation_progress().is_some() {
+            return None;
+        }
+    }
+
+    let color = match style {
+        SurfaceStyle::Filled { color } => *color,
+        _ => return None,
+    };
+
+    match args.shape {
+        Shape::RoundedRectangle {
+            top_left,
+            top_right,
+            bottom_right,
+            bottom_left,
+            ..
+        } => {
+            let radii = [
+                top_left.to_pixels_f32(),
+                top_right.to_pixels_f32(),
+                bottom_right.to_pixels_f32(),
+                bottom_left.to_pixels_f32(),
+            ];
+            let zero_eps = 0.0001;
+            if radii.iter().all(|r| r.abs() <= zero_eps) {
+                Some(SimpleRectCommand { color })
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 fn compute_surface_size(
     effective_surface_constraint: Constraint,
     child_measurement: ComputedData,
@@ -485,14 +532,22 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         let (width, height) =
             compute_surface_size(effective_surface_constraint, child_measurement, padding_px);
 
-        let drawable = make_surface_drawable(
+        if let Some(simple) = try_build_simple_rect_command(
             &args_measure_clone,
             effective_style,
             ripple_state_for_measure.as_ref(),
-            PxSize::new(width, height),
-        );
+        ) {
+            input.metadata_mut().push_draw_command(simple);
+        } else {
+            let drawable = make_surface_drawable(
+                &args_measure_clone,
+                effective_style,
+                ripple_state_for_measure.as_ref(),
+                PxSize::new(width, height),
+            );
 
-        input.metadata_mut().push_draw_command(drawable);
+            input.metadata_mut().push_draw_command(drawable);
+        }
 
         Ok(ComputedData { width, height })
     }));

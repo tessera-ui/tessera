@@ -5,15 +5,20 @@ pub(crate) mod fluid_glass;
 pub mod mean;
 mod pos_misc;
 pub mod shape;
+pub mod simple_rect;
 pub mod text;
 
 pub mod image;
 
 pub use checkmark::{CheckmarkCommand, CheckmarkPipeline};
 pub use shape::{RippleProps, ShadowProps, ShapeCommand};
+pub use simple_rect::{SimpleRectCommand, SimpleRectPipeline};
 pub use text::{TextCommand, TextConstraint, TextData, read_font_system, write_font_system};
 
 pub fn register_pipelines(app: &mut tessera_ui::renderer::WgpuApp) {
+    let simple_rect_pipeline =
+        simple_rect::SimpleRectPipeline::new(&app.gpu, &app.config, app.sample_count);
+    app.register_draw_pipeline(simple_rect_pipeline);
     // Register shape pipeline
     let shape_pipeline = shape::ShapePipeline::new(&app.gpu, &app.config, app.sample_count);
     app.register_draw_pipeline(shape_pipeline);
