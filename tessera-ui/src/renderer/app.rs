@@ -237,9 +237,7 @@ impl WgpuApp {
         // Set scale factor for dp conversion
         let scale_factor = window.scale_factor();
         info!("Window scale factor: {scale_factor}");
-        SCALE_FACTOR
-            .set(RwLock::new(scale_factor))
-            .expect("Failed to set scale factor");
+        let _ = SCALE_FACTOR.set(RwLock::new(scale_factor));
 
         // Create blit pipeline resources
         let blit_shader = gpu.create_shader_module(wgpu::include_wgsl!("shaders/blit.wgsl"));

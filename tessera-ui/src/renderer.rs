@@ -1052,6 +1052,15 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         wgpu_app.register_pipelines(register_pipelines_fn);
 
         self.app = Some(wgpu_app);
+
+        #[cfg(target_os = "android")]
+        {
+            self.clipboard = Clipboard::new(event_loop.android_app().clone());
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            self.clipboard = Clipboard::new();
+        }
     }
 
     /// Called when the application is suspended.
@@ -1073,7 +1082,28 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
     /// - **Android**: Called when app goes to background
     /// - **iOS**: Called during app lifecycle transitions
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
-        todo!("Handle suspend event");
+        debug!("Suspending renderer; tearing down WGPU resources.");
+
+        if let Some(app) = self.app.take() {
+            app.resource_manager.write().clear();
+        }
+
+        self.previous_commands.clear();
+        self.cursor_state = CursorState::default();
+        self.keyboard_state = KeyboardState::default();
+        self.ime_state = ImeState::default();
+
+        #[cfg(target_os = "android")]
+        {
+            self.android_ime_opened = false;
+        }
+
+        TesseraRuntime::with_mut(|runtime| {
+            runtime.component_tree.clear();
+            runtime.cursor_icon_request = None;
+            runtime.window_minimized = false;
+            runtime.window_size = [0, 0];
+        });
     }
 
     /// Handles window-specific events from the windowing system.
