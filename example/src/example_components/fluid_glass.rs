@@ -398,7 +398,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
             scope.child(move || {
                 glass_config_slider(
                     "Blur Radius",
-                    state.read().blur_radius.value / 50.0,
+                    state.read().blur_radius.value / 100.0,
                     {
                         let state = state.clone();
                         Arc::new(move |value| {
