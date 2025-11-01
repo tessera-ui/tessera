@@ -45,6 +45,7 @@ struct ExampleGlassState {
     corner_radius: ConfigSliderState<CornerRadius>,
     refraction_amount: ConfigSliderState<f32>,
     refraction_height: ConfigSliderState<f32>,
+    blur_radius: ConfigSliderState<f32>,
     background_image_data: Arc<ImageData>,
 }
 
@@ -93,6 +94,7 @@ impl Default for ExampleGlassState {
             corner_radius: ConfigSliderState::new(CornerRadius(25.0)),
             refraction_amount: ConfigSliderState::new(32.0),
             refraction_height: ConfigSliderState::new(24.0),
+            blur_radius: ConfigSliderState::new(0.0),
             background_image_data: image_data,
         }
     }
@@ -157,6 +159,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                 let ripple_state = state.ripple_state.clone();
                 let refraction_amount = state.refraction_amount.value;
                 let refraction_height = state.refraction_height.value;
+                let blur_radius = state.blur_radius.value;
 
                 row(
                     RowArgsBuilder::default()
@@ -189,6 +192,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                                             FluidGlassArgsBuilder::default()
                                                 .width(DimensionValue::from(width))
                                                 .height(DimensionValue::from(height))
+                                                .blur_radius(blur_radius)
                                                 .shape(Shape::RoundedRectangle {
                                                     top_left: corner_radius,
                                                     top_right: corner_radius,
@@ -378,6 +382,30 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                         })
                     },
                     state.read().refraction_height.slider_state.clone(),
+                );
+            });
+
+            scope.child(|| {
+                spacer(
+                    SpacerArgsBuilder::default()
+                        .height(DimensionValue::from(Dp(32.0)))
+                        .build()
+                        .unwrap(),
+                )
+            });
+
+            let state = state_for_glass.clone();
+            scope.child(move || {
+                glass_config_slider(
+                    "Blur Radius",
+                    state.read().blur_radius.value / 50.0,
+                    {
+                        let state = state.clone();
+                        Arc::new(move |value| {
+                            state.write().blur_radius.value = value * 100.0;
+                        })
+                    },
+                    state.read().blur_radius.slider_state.clone(),
                 );
             });
         },

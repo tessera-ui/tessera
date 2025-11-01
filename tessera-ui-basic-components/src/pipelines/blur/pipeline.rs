@@ -101,7 +101,7 @@ impl ComputablePipeline<BlurCommand> for BlurPipeline {
         &mut self,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
+        _config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
         command: &BlurCommand,
         _resource_manager: &mut tessera_ui::ComputeResourceManager,
@@ -118,6 +118,10 @@ impl ComputablePipeline<BlurCommand> for BlurPipeline {
             area_width: target_area.width.0 as u32,
             area_height: target_area.height.0 as u32,
         };
+
+        if uniforms.area_width == 0 || uniforms.area_height == 0 {
+            return;
+        }
         let mut buffer = UniformBuffer::new(Vec::new());
         buffer.write(&uniforms).unwrap();
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -147,6 +151,11 @@ impl ComputablePipeline<BlurCommand> for BlurPipeline {
 
         compute_pass.set_pipeline(&self.pipeline);
         compute_pass.set_bind_group(0, &bind_group, &[]);
-        compute_pass.dispatch_workgroups(config.width.div_ceil(8), config.height.div_ceil(8), 1);
+        let workgroups_x = uniforms.area_width.div_ceil(8);
+        let workgroups_y = uniforms.area_height.div_ceil(8);
+        if workgroups_x == 0 || workgroups_y == 0 {
+            return;
+        }
+        compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
     }
 }
