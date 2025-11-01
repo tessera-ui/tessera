@@ -85,6 +85,10 @@ struct TouchPointState {
     /// Contains tuples of (timestamp, velocity_x, velocity_y) for the last 100ms
     /// of touch movement, used to calculate average velocity for inertial scrolling.
     velocity_history: VecDeque<(Instant, f32, f32)>,
+    /// Tracks whether this touch gesture generated a scroll event.
+    ///
+    /// When set, the gesture should be treated as a drag/scroll rather than a tap.
+    generated_scroll_event: bool,
 }
 
 /// Represents an active inertial scrolling session.
@@ -226,13 +230,16 @@ impl CursorState {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use tessera_ui::cursor::{CursorState, CursorEvent, CursorEventContent, PressKeyEventType};
+    /// use tessera_ui::cursor::{
+    ///     CursorState, CursorEvent, CursorEventContent, GestureState, PressKeyEventType,
+    /// };
     /// use std::time::Instant;
     ///
     /// let mut cursor_state = CursorState::default();
     /// let event = CursorEvent {
     ///     timestamp: Instant::now(),
     ///     content: CursorEventContent::Pressed(PressKeyEventType::Left),
+    ///     gesture_state: GestureState::TapCandidate,
     /// };
     /// cursor_state.push_event(event);
     /// ```
@@ -330,6 +337,7 @@ impl CursorState {
                 delta_x: dx,
                 delta_y: dy,
             }),
+            gesture_state: GestureState::Dragged,
         });
     }
 
@@ -491,12 +499,14 @@ impl CursorState {
                 last_position: position,
                 last_update_time: now,
                 velocity_history: VecDeque::new(),
+                generated_scroll_event: false,
             },
         );
         self.update_position(position);
         let press_event = CursorEvent {
             timestamp: now,
             content: CursorEventContent::Pressed(PressKeyEventType::Left),
+            gesture_state: GestureState::TapCandidate,
         };
         self.push_event(press_event);
     }
@@ -565,6 +575,7 @@ impl CursorState {
 
                 touch_state.last_position = current_position;
                 touch_state.last_update_time = now;
+                touch_state.generated_scroll_event = true;
 
                 // Return a scroll event for immediate feedback.
                 return Some(CursorEvent {
@@ -573,6 +584,7 @@ impl CursorState {
                         delta_x, // Direct scroll delta for touch move
                         delta_y,
                     }),
+                    gesture_state: GestureState::Dragged,
                 });
             }
         }
@@ -608,8 +620,10 @@ impl CursorState {
     /// ```
     pub fn handle_touch_end(&mut self, touch_id: u64) {
         let now = Instant::now();
+        let mut was_drag = false;
 
         if let Some(touch_state) = self.touch_points.get(&touch_id) {
+            was_drag |= touch_state.generated_scroll_event;
             if self.touch_scroll_config.enabled {
                 if let Some((avg_vx, avg_vy)) = Self::compute_average_velocity(touch_state) {
                     let velocity_magnitude = (avg_vx * avg_vx + avg_vy * avg_vy).sqrt();
@@ -632,10 +646,19 @@ impl CursorState {
             self.active_inertia = None; // No touch state present
         }
 
+        if self.active_inertia.is_some() {
+            was_drag = true;
+        }
+
         self.touch_points.remove(&touch_id);
         let release_event = CursorEvent {
             timestamp: now,
             content: CursorEventContent::Released(PressKeyEventType::Left),
+            gesture_state: if was_drag {
+                GestureState::Dragged
+            } else {
+                GestureState::TapCandidate
+            },
         };
         self.push_event(release_event);
 
@@ -676,6 +699,11 @@ pub struct CursorEvent {
     pub timestamp: Instant,
     /// The specific type and data of this cursor event.
     pub content: CursorEventContent,
+    /// Classification of the gesture associated with this event.
+    ///
+    /// Events originating from touch scrolling will mark this as [`GestureState::Dragged`],
+    /// allowing downstream components to distinguish tap candidates from scroll gestures.
+    pub gesture_state: GestureState,
 }
 
 /// Contains scroll movement data for scroll events.
@@ -743,6 +771,21 @@ pub enum CursorEventContent {
     Released(PressKeyEventType),
     /// A scroll action occurred (mouse wheel, touch drag, or inertial scroll).
     Scroll(ScrollEventConent),
+}
+
+/// Describes the high-level gesture classification of a cursor event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GestureState {
+    /// Indicates the event is part of a potential tap/click interaction.
+    TapCandidate,
+    /// Indicates the event happened during a drag/scroll gesture.
+    Dragged,
+}
+
+impl Default for GestureState {
+    fn default() -> Self {
+        Self::TapCandidate
+    }
 }
 
 impl CursorEventContent {

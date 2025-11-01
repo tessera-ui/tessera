@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px,
-    PxPosition, PxSize, tessera, winit::window::CursorIcon,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
+    PressKeyEventType, Px, PxPosition, PxSize, tessera, winit::window::CursorIcon,
 };
 
 use crate::{
@@ -585,6 +585,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 let release_events: Vec<_> = input
                     .cursor_events
                     .iter()
+                    .filter(|event| event.gesture_state == GestureState::TapCandidate)
                     .filter(|event| {
                         matches!(
                             event.content,

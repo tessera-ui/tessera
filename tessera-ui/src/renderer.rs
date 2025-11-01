@@ -206,7 +206,7 @@ use winit::{
 use crate::{
     Clipboard, ImeState, PxPosition,
     component_tree::WindowRequests,
-    cursor::{CursorEvent, CursorEventContent, CursorState},
+    cursor::{CursorEvent, CursorEventContent, CursorState, GestureState},
     dp::SCALE_FACTOR,
     keyboard_state::KeyboardState,
     px::PxSize,
@@ -929,6 +929,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let event = CursorEvent {
             timestamp: Instant::now(),
             content: event_content,
+            gesture_state: GestureState::TapCandidate,
         };
         self.cursor_state.push_event(event);
         debug!("Mouse input: {state:?} button {button:?}");
@@ -939,6 +940,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let event = CursorEvent {
             timestamp: Instant::now(),
             content: event_content,
+            gesture_state: GestureState::Dragged,
         };
         self.cursor_state.push_event(event);
         debug!("Mouse scroll: {delta:?}");

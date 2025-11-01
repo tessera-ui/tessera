@@ -160,7 +160,7 @@ pub use crate::{
         InputHandlerInput, MeasureFn, MeasureInput, MeasurementError, measure_node, measure_nodes,
         place_node,
     },
-    cursor::{CursorEvent, CursorEventContent, PressKeyEventType, ScrollEventConent},
+    cursor::{CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent},
     dp::Dp,
     focus_state::Focus,
     px::{Px, PxPosition, PxRect, PxSize},

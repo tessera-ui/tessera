@@ -12,7 +12,8 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     BarrierRequirement, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    PressKeyEventType, Px, PxPosition, renderer::DrawCommand, tessera, winit::window::CursorIcon,
+    GestureState, PressKeyEventType, Px, PxPosition, renderer::DrawCommand, tessera,
+    winit::window::CursorIcon,
 };
 
 use crate::{
@@ -181,10 +182,11 @@ fn handle_click_state(
         input.requests.cursor_icon = CursorIcon::Pointer;
 
         if let Some(_event) = input.cursor_events.iter().find(|e| {
-            matches!(
-                e.content,
-                CursorEventContent::Released(PressKeyEventType::Left)
-            )
+            e.gesture_state == GestureState::TapCandidate
+                && matches!(
+                    e.content,
+                    CursorEventContent::Released(PressKeyEventType::Left)
+                )
         }) {
             if let Some(ripple_state) = &ripple_state
                 && let Some(pos) = input.cursor_position_rel
