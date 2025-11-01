@@ -175,9 +175,27 @@
 
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{PxRect, compute::resource::ComputeResourceManager, renderer::command::AsAny};
+use crate::{
+    PxPosition, PxRect, PxSize, compute::resource::ComputeResourceManager, renderer::command::AsAny,
+};
 
 use super::command::ComputeCommand;
+
+/// Type-erased metadata describing a compute command within a batch.
+pub struct ErasedComputeBatchItem<'a> {
+    pub command: &'a dyn ComputeCommand,
+    pub size: PxSize,
+    pub position: PxPosition,
+    pub target_area: PxRect,
+}
+
+/// Strongly typed metadata describing a compute command within a batch.
+pub struct ComputeBatchItem<'a, C: ComputeCommand> {
+    pub command: &'a C,
+    pub size: PxSize,
+    pub position: PxPosition,
+    pub target_area: PxRect,
+}
 
 /// Core trait for implementing GPU compute pipelines.
 ///
@@ -208,28 +226,32 @@ use super::command::ComputeCommand;
 ///
 /// ```rust,ignore
 /// impl ComputablePipeline<MyCommand> for MyPipeline {
-///     fn dispatch(&mut self, device, queue, config, compute_pass, command,
+///     fn dispatch(&mut self, device, queue, config, compute_pass, items,
 ///                 resource_manager, input_view, output_view) {
-///         // 1. Create or retrieve uniform buffer
-///         let uniforms = create_uniforms_from_command(command);
-///         let uniform_buffer = device.create_buffer_init(...);
-///         
-///         // 2. Create bind group with textures and uniforms
-///         let bind_group = device.create_bind_group(...);
-///         
-///         // 3. Set pipeline and dispatch
-///         compute_pass.set_pipeline(&self.compute_pipeline);
-///         compute_pass.set_bind_group(0, &bind_group, &[]);
-///         compute_pass.dispatch_workgroups(workgroup_x, workgroup_y, 1);
+///         for item in items {
+///             // 1. Create or retrieve uniform buffer
+///             let uniforms = create_uniforms_from_command(item.command);
+///             let uniform_buffer = device.create_buffer_init(...);
+///
+///             // 2. Create bind group with textures and uniforms
+///             let bind_group = device.create_bind_group(...);
+///
+///             // 3. Set pipeline and dispatch
+///             compute_pass.set_pipeline(&self.compute_pipeline);
+///             compute_pass.set_bind_group(0, &bind_group, &[]);
+///             compute_pass.dispatch_workgroups(workgroup_x, workgroup_y, 1);
+///         }
 ///     }
 /// }
 /// ```
 pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     /// Dispatches the compute command within an active compute pass.
     ///
-    /// This method is called once for each compute command that needs to be processed.
-    /// It should set up the necessary GPU resources, bind them to the compute pipeline,
-    /// and dispatch the appropriate number of workgroups to process the input texture.
+    /// This method receives one or more compute commands of the same type. Implementations
+    /// may choose to process the batch collectively (e.g., by packing data into a single
+    /// dispatch) or sequentially iterate over the items. It should set up the necessary GPU
+    /// resources, bind them to the compute pipeline, and dispatch the appropriate number of
+    /// workgroups to process the input texture.
     ///
     /// # Parameters
     ///
@@ -237,7 +259,7 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     /// * `queue` - The WGPU queue for submitting commands and updating buffers
     /// * `config` - Current surface configuration containing dimensions and format info
     /// * `compute_pass` - The active compute pass to record commands into
-    /// * `command` - The specific compute command containing operation parameters
+    /// * `items` - Slice of compute commands with associated metadata describing their target areas
     /// * `resource_manager` - Manager for reusing GPU buffers across operations
     /// * `input_view` - View of the input texture (result from previous pass)
     /// * `output_view` - View of the output texture (target for this operation)
@@ -288,9 +310,8 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
-        command: &C,
+        items: &[ComputeBatchItem<'_, C>],
         resource_manager: &mut ComputeResourceManager,
-        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     );
@@ -317,9 +338,8 @@ pub(crate) trait ErasedComputablePipeline: Send + Sync {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
-        command: &dyn ComputeCommand,
+        items: &[ErasedComputeBatchItem<'_>],
         resource_manager: &mut ComputeResourceManager,
-        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     );
@@ -340,25 +360,38 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
-        command: &dyn ComputeCommand,
+        items: &[ErasedComputeBatchItem<'_>],
         resource_manager: &mut ComputeResourceManager,
-        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
-        if let Some(command) = AsAny::as_any(command).downcast_ref::<C>() {
-            self.pipeline.dispatch(
-                device,
-                queue,
-                config,
-                compute_pass,
-                command,
-                resource_manager,
-                target_area,
-                input_view,
-                output_view,
-            );
+        if items.is_empty() {
+            return;
         }
+
+        let mut typed_items: Vec<ComputeBatchItem<'_, C>> = Vec::with_capacity(items.len());
+        for item in items {
+            let command = AsAny::as_any(item.command)
+                .downcast_ref::<C>()
+                .expect("Compute batch contained command of unexpected type");
+            typed_items.push(ComputeBatchItem {
+                command,
+                size: item.size,
+                position: item.position,
+                target_area: item.target_area,
+            });
+        }
+
+        self.pipeline.dispatch(
+            device,
+            queue,
+            config,
+            compute_pass,
+            &typed_items,
+            resource_manager,
+            input_view,
+            output_view,
+        );
     }
 }
 
@@ -468,36 +501,38 @@ impl ComputePipelineRegistry {
         self.pipelines.insert(TypeId::of::<C>(), erased_pipeline);
     }
 
-    /// Dispatches a command to its corresponding registered pipeline.
+    /// Dispatches one or more commands to their corresponding registered pipeline.
     pub(crate) fn dispatch_erased(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
-        command: &dyn ComputeCommand,
+        items: &[ErasedComputeBatchItem<'_>],
         resource_manager: &mut ComputeResourceManager,
-        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
-        let command_type_id = AsAny::as_any(command).type_id();
+        if items.is_empty() {
+            return;
+        }
+
+        let command_type_id = AsAny::as_any(items[0].command).type_id();
         if let Some(pipeline) = self.pipelines.get_mut(&command_type_id) {
             pipeline.dispatch_erased(
                 device,
                 queue,
                 config,
                 compute_pass,
-                command,
+                items,
                 resource_manager,
-                target_area,
                 input_view,
                 output_view,
             );
         } else {
             panic!(
                 "No pipeline found for command {:?}",
-                std::any::type_name_of_val(command)
+                std::any::type_name_of_val(items[0].command)
             );
         }
     }

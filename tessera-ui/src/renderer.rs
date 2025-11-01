@@ -216,7 +216,9 @@ use crate::{
 
 pub use app::WgpuApp;
 pub use command::{BarrierRequirement, Command};
-pub use compute::{ComputablePipeline, ComputePipelineRegistry};
+pub use compute::{
+    ComputablePipeline, ComputeBatchItem, ComputePipelineRegistry, ErasedComputeBatchItem,
+};
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
 
 #[cfg(target_os = "android")]

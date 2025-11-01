@@ -1,8 +1,8 @@
 use tessera_ui::{
-    BarrierRequirement, PxRect,
+    BarrierRequirement,
     compute::{ComputeResourceRef, resource::ComputeResourceManager},
-    renderer::compute::{ComputablePipeline, command::ComputeCommand},
-    wgpu::{self, util::DeviceExt},
+    renderer::compute::{ComputablePipeline, ComputeBatchItem, command::ComputeCommand},
+    wgpu,
 };
 
 // --- Command ---
@@ -150,34 +150,41 @@ impl ContrastPipeline {
 }
 
 impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
-    /// Dispatches the contrast adjustment compute shader.
-    /// - `target_area`: The area of the output texture to be affected (PxRect).
+    /// Dispatches one or more contrast adjustment compute commands.
     fn dispatch(
         &mut self,
         device: &wgpu::Device,
-        _queue: &wgpu::Queue,
+        queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
-        command: &ContrastCommand,
+        items: &[ComputeBatchItem<'_, ContrastCommand>],
         resource_manager: &mut ComputeResourceManager,
-        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
-        if let Some(mean_buffer) = resource_manager.get(&command.mean_result_handle) {
+        for item in items {
+            let Some(mean_buffer) = resource_manager.get(&item.command.mean_result_handle) else {
+                continue;
+            };
+
+            let target_area = item.target_area;
             let uniforms = Uniforms {
-                contrast: command.contrast,
+                contrast: item.command.contrast,
                 area_x: target_area.x.0 as u32,
                 area_y: target_area.y.0 as u32,
                 area_width: target_area.width.0 as u32,
                 area_height: target_area.height.0 as u32,
             };
 
-            let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            let uniform_array = [uniforms];
+            let uniform_bytes = bytemuck::cast_slice(&uniform_array);
+            let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Contrast Uniform Buffer"),
-                contents: bytemuck::cast_slice(&[uniforms]),
-                usage: wgpu::BufferUsages::UNIFORM,
+                size: uniform_bytes.len() as u64,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
             });
+            queue.write_buffer(&uniform_buffer, 0, uniform_bytes);
 
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &self.bind_group_layout,

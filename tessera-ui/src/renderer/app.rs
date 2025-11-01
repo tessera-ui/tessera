@@ -10,10 +10,13 @@ use crate::{
     compute::resource::ComputeResourceManager,
     dp::SCALE_FACTOR,
     px::{PxRect, PxSize},
-    renderer::command::{BarrierRequirement, Command},
+    renderer::command::{AsAny, BarrierRequirement, Command},
 };
 
-use super::{compute::ComputePipelineRegistry, drawer::Drawer};
+use super::{
+    compute::{ComputePipelineRegistry, ErasedComputeBatchItem},
+    drawer::Drawer,
+};
 
 // WGPU context for ping-pong operations
 struct WgpuContext<'a> {
@@ -792,8 +795,64 @@ impl WgpuApp {
         let mut read_view = params.scene_view.clone();
         let (mut write_target, mut read_target) = (params.target_a, params.target_b);
 
-        for (command, size, start_pos) in params.commands {
-            // Ensure the write target is cleared before use
+        let texture_size = wgpu::Extent3d {
+            width: params.config.width,
+            height: params.config.height,
+            depth_or_array_layers: 1,
+        };
+
+        let mut index = 0;
+        while index < params.commands.len() {
+            let (command, size, start_pos) = &params.commands[index];
+            let type_id = AsAny::as_any(&**command).type_id();
+
+            let mut batch_items: Vec<ErasedComputeBatchItem<'_>> = Vec::new();
+            let mut batch_areas: Vec<PxRect> = Vec::new();
+            let mut cursor = index;
+
+            while cursor < params.commands.len() {
+                let (candidate_command, candidate_size, candidate_pos) = &params.commands[cursor];
+                if AsAny::as_any(&**candidate_command).type_id() != type_id {
+                    break;
+                }
+
+                let area = extract_draw_rect(
+                    Some(candidate_command.barrier()),
+                    *candidate_size,
+                    *candidate_pos,
+                    texture_size,
+                );
+
+                if batch_areas
+                    .iter()
+                    .any(|existing| rects_overlap(*existing, area))
+                {
+                    break;
+                }
+
+                batch_areas.push(area);
+                batch_items.push(ErasedComputeBatchItem {
+                    command: &**candidate_command,
+                    size: *candidate_size,
+                    position: *candidate_pos,
+                    target_area: area,
+                });
+                cursor += 1;
+            }
+
+            if batch_items.is_empty() {
+                let area =
+                    extract_draw_rect(Some(command.barrier()), *size, *start_pos, texture_size);
+                batch_items.push(ErasedComputeBatchItem {
+                    command: &**command,
+                    size: *size,
+                    position: *start_pos,
+                    target_area: area,
+                });
+                batch_areas.push(area);
+                cursor = index + 1;
+            }
+
             params.encoder.clear_texture(
                 write_target.texture(),
                 &ImageSubresourceRange {
@@ -805,7 +864,6 @@ impl WgpuApp {
                 },
             );
 
-            // Create and dispatch the compute pass
             {
                 let mut cpass = params
                     .encoder
@@ -814,39 +872,41 @@ impl WgpuApp {
                         timestamp_writes: None,
                     });
 
-                // Get the area of the compute command (reuse extract_draw_rect to avoid duplication)
-                let texture_size = wgpu::Extent3d {
-                    width: params.config.width,
-                    height: params.config.height,
-                    depth_or_array_layers: 1,
-                };
-                let area =
-                    extract_draw_rect(Some(command.barrier()), size, start_pos, texture_size);
-
                 params.compute_pipeline_registry.dispatch_erased(
                     params.gpu,
                     params.queue,
                     params.config,
                     &mut cpass,
-                    &*command,
+                    &batch_items,
                     params.resource_manager,
-                    area,
                     &read_view,
                     write_target,
                 );
-            } // cpass is dropped here, ending the pass
+            }
 
-            // The result of this pass is now in write_target.
-            // For the next iteration, this will be our read source.
             read_view = write_target.clone();
-            // Swap targets for the next iteration
             std::mem::swap(&mut write_target, &mut read_target);
+            index = cursor;
         }
 
         // After the loop, the final result is in the `read_view`,
         // because we swapped one last time at the end of the loop.
         read_view
     }
+}
+
+fn rects_overlap(a: PxRect, b: PxRect) -> bool {
+    let a_left = a.x.0;
+    let a_top = a.y.0;
+    let a_right = a_left + a.width.0;
+    let a_bottom = a_top + a.height.0;
+
+    let b_left = b.x.0;
+    let b_top = b.y.0;
+    let b_right = b_left + b.width.0;
+    let b_bottom = b_top + b.height.0;
+
+    !(a_right <= b_left || b_right <= a_left || a_bottom <= b_top || b_bottom <= a_top)
 }
 
 fn compute_padded_rect(

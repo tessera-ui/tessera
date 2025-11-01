@@ -1,8 +1,7 @@
 use encase::{ShaderType, UniformBuffer};
 use tessera_ui::{
-    PxRect,
-    renderer::compute::ComputablePipeline,
-    wgpu::{self, util::DeviceExt},
+    renderer::compute::{ComputablePipeline, ComputeBatchItem},
+    wgpu,
 };
 
 use super::command::BlurCommand;
@@ -95,67 +94,72 @@ impl BlurPipeline {
 }
 
 impl ComputablePipeline<BlurCommand> for BlurPipeline {
-    /// Dispatches the blur compute shader.
-    /// - `target_area`: The area of the output texture to be affected (PxRect).
+    /// Dispatches one or more blur compute commands within the active pass.
     fn dispatch(
         &mut self,
         device: &wgpu::Device,
-        _queue: &wgpu::Queue,
+        queue: &wgpu::Queue,
         _config: &wgpu::SurfaceConfiguration,
         compute_pass: &mut wgpu::ComputePass<'_>,
-        command: &BlurCommand,
+        items: &[ComputeBatchItem<'_, BlurCommand>],
         _resource_manager: &mut tessera_ui::ComputeResourceManager,
-        target_area: PxRect,
         input_view: &wgpu::TextureView,
         output_view: &wgpu::TextureView,
     ) {
-        let uniforms = BlurUniforms {
-            radius: command.radius,
-            direction_x: command.direction.0,
-            direction_y: command.direction.1,
-            area_x: target_area.x.0 as u32,
-            area_y: target_area.y.0 as u32,
-            area_width: target_area.width.0 as u32,
-            area_height: target_area.height.0 as u32,
-        };
+        for item in items {
+            let target_area = item.target_area;
+            let uniforms = BlurUniforms {
+                radius: item.command.radius,
+                direction_x: item.command.direction.0,
+                direction_y: item.command.direction.1,
+                area_x: target_area.x.0 as u32,
+                area_y: target_area.y.0 as u32,
+                area_width: target_area.width.0 as u32,
+                area_height: target_area.height.0 as u32,
+            };
 
-        if uniforms.area_width == 0 || uniforms.area_height == 0 {
-            return;
+            if uniforms.area_width == 0 || uniforms.area_height == 0 {
+                continue;
+            }
+
+            let mut buffer = UniformBuffer::new(Vec::new());
+            buffer.write(&uniforms).unwrap();
+            let uniform_bytes = buffer.into_inner();
+            let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Blur Uniform Buffer"),
+                size: uniform_bytes.len() as u64,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            queue.write_buffer(&uniform_buffer, 0, &uniform_bytes);
+
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(input_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(output_view),
+                    },
+                ],
+                label: Some("blur_bind_group"),
+            });
+
+            compute_pass.set_pipeline(&self.pipeline);
+            compute_pass.set_bind_group(0, &bind_group, &[]);
+            let workgroups_x = uniforms.area_width.div_ceil(8);
+            let workgroups_y = uniforms.area_height.div_ceil(8);
+            if workgroups_x == 0 || workgroups_y == 0 {
+                continue;
+            }
+            compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
         }
-        let mut buffer = UniformBuffer::new(Vec::new());
-        buffer.write(&uniforms).unwrap();
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Blur Uniform Buffer"),
-            contents: &buffer.into_inner(),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(input_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(output_view),
-                },
-            ],
-            label: Some("blur_bind_group"),
-        });
-
-        compute_pass.set_pipeline(&self.pipeline);
-        compute_pass.set_bind_group(0, &bind_group, &[]);
-        let workgroups_x = uniforms.area_width.div_ceil(8);
-        let workgroups_y = uniforms.area_height.div_ceil(8);
-        if workgroups_x == 0 || workgroups_y == 0 {
-            return;
-        }
-        compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
     }
 }

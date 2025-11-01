@@ -1003,6 +1003,81 @@ mod tests {
     }
 
     #[test]
+    fn test_compute_commands_of_same_type_stay_contiguous() {
+        let commands = vec![
+            create_cmd(
+                PxPosition::new(Px(0), Px(0)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(0),
+                    Px(0),
+                    Px(30),
+                    Px(30),
+                ))),
+                true,
+            ),
+            create_cmd2(PxPosition::new(Px(150), Px(0)), None, false),
+            create_cmd2(
+                PxPosition::new(Px(60), Px(0)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(60),
+                    Px(0),
+                    Px(30),
+                    Px(30),
+                ))),
+                true,
+            ),
+            create_cmd(
+                PxPosition::new(Px(120), Px(0)),
+                Some(BarrierRequirement::Absolute(PxRect::new(
+                    Px(120),
+                    Px(0),
+                    Px(30),
+                    Px(30),
+                ))),
+                true,
+            ),
+        ];
+
+        let reordered = reorder_instructions(commands);
+
+        let mut compute_type_sequence = Vec::new();
+        let mut saw_non_compute = false;
+        for (command, type_id, _, _) in &reordered {
+            match command {
+                Command::Compute(_) => {
+                    assert!(
+                        !saw_non_compute,
+                        "Compute command appeared after non-compute commands"
+                    );
+                    compute_type_sequence.push(*type_id);
+                }
+                _ => saw_non_compute = true,
+            }
+        }
+
+        assert!(
+            compute_type_sequence.len() >= 2,
+            "Expected multiple compute commands to verify grouping"
+        );
+
+        let mut type_positions: std::collections::HashMap<TypeId, Vec<usize>> =
+            std::collections::HashMap::new();
+        for (idx, ty) in compute_type_sequence.iter().enumerate() {
+            type_positions.entry(*ty).or_default().push(idx);
+        }
+
+        for positions in type_positions.values() {
+            let first = positions[0];
+            let last = *positions.last().unwrap();
+            assert_eq!(
+                last - first + 1,
+                positions.len(),
+                "Compute type span is not contiguous"
+            );
+        }
+    }
+
+    #[test]
     fn test_complex_reordering_with_dependencies() {
         let commands = vec![
             // 0: Compute. Must run first.

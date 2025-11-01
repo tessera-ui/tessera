@@ -774,18 +774,13 @@ pub enum CursorEventContent {
 }
 
 /// Describes the high-level gesture classification of a cursor event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GestureState {
     /// Indicates the event is part of a potential tap/click interaction.
+    #[default]
     TapCandidate,
     /// Indicates the event happened during a drag/scroll gesture.
     Dragged,
-}
-
-impl Default for GestureState {
-    fn default() -> Self {
-        Self::TapCandidate
-    }
 }
 
 impl CursorEventContent {
