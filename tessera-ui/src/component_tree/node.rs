@@ -105,10 +105,7 @@ impl ComponentNodeMetaData {
     ///
     /// # Example
     /// ```rust,ignore
-    /// metadata.push_compute_command(BlurCommand {
-    ///     radius: 5.0,
-    ///     sigma: 2.0,
-    /// });
+    /// metadata.push_compute_command(DualBlurCommand::horizontal_then_vertical(5.0, Px::new(16)));
     /// ```
     pub fn push_compute_command<C: ComputeCommand + 'static>(&mut self, command: C) {
         let command = Box::new(command);

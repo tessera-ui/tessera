@@ -18,7 +18,7 @@ use tessera_ui::{
 
 use crate::{
     padding_utils::remove_padding_from_dimension,
-    pipelines::{blur::command::BlurCommand, contrast::ContrastCommand, mean::MeanCommand},
+    pipelines::{blur::command::DualBlurCommand, contrast::ContrastCommand, mean::MeanCommand},
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
     shape_def::Shape,
@@ -305,22 +305,14 @@ pub fn fluid_glass(
         };
 
         if args.blur_radius > 0.0 {
-            let blur_command = BlurCommand {
-                radius: args.blur_radius,
-                direction: (1.0, 0.0), // Horizontal
-                padding: Px(args.refraction_height as i32),
-            };
-            let blur_command2 = BlurCommand {
-                radius: args.blur_radius,
-                direction: (0.0, 1.0), // Vertical
-                padding: Px(args.refraction_height as i32),
-            };
+            let blur_command = DualBlurCommand::horizontal_then_vertical(args.blur_radius);
             let mut metadata = input.metadata_mut();
             metadata.push_compute_command(blur_command);
-            metadata.push_compute_command(blur_command2);
         }
 
-        if let Some(contrast_value) = args.contrast {
+        if let Some(contrast_value) = args.contrast
+            && contrast_value != 1.0
+        {
             let mean_command =
                 MeanCommand::new(input.gpu, &mut input.compute_resource_manager.write());
             let contrast_command =

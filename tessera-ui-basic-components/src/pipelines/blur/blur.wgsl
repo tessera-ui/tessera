@@ -12,58 +12,37 @@ struct Uniforms {
 @group(0) @binding(1) var source_texture: texture_2d<f32>;
 @group(0) @binding(2) var dest_texture: texture_storage_2d<rgba8unorm, write>;
 
-// Quality knob: larger values blur at lower resolution; set to 1u to disable downscaling.
-const DOWNSCALE_FACTOR: u32 = 2u;
-
 fn gaussian_blur(coord: vec2<u32>, direction: vec2<f32>, texture_size: vec2<u32>) -> vec4<f32> {
+    let base_radius = max(uniforms.radius, 0.0);
+    let radius = i32(ceil(base_radius));
+    let clamped_radius = clamp(radius, 0, 15);
+
+    if clamped_radius == 0 {
+        return textureLoad(source_texture, coord, 0);
+    }
+
+    let sigma = max(base_radius / 3.0, 0.1);
+    let two_sigma_squared = 2.0 * sigma * sigma;
+
     var total = vec4<f32>(0.0);
     var total_weight = 0.0;
 
-    let scale = max(DOWNSCALE_FACTOR, 1u);
-    let scale_vec = vec2<u32>(scale, scale);
-    let scale_i = vec2<i32>(i32(scale), i32(scale));
-    let half_scale = vec2<i32>(i32(scale) / 2, i32(scale) / 2);
-    let down_coord = vec2<i32>(coord / scale_vec);
-    let scale_f = f32(scale);
-
-    let base_radius = uniforms.radius;
-    // Decide sample count in the downscaled space.
-    let down_radius = base_radius / scale_f;
-    let radius = i32(ceil(down_radius));
-
-    let clamped_radius = clamp(radius, 1, 15); // Minimum radius of 1 to avoid division by zero
-    let sigma = max(base_radius / 3.0, 0.5); // Minimum sigma to avoid division by zero
-    let two_sigma_squared = 2.0 * sigma * sigma;
-
-    let down_texture_size = max(
-        vec2<u32>(1u, 1u),
-        (texture_size + scale_vec - vec2<u32>(1u, 1u)) / scale_vec,
-    );
-    let down_texture_size_i = vec2<i32>(down_texture_size);
-    let texture_size_i = vec2<i32>(texture_size);
     let dir = vec2<i32>(i32(round(direction.x)), i32(round(direction.y)));
+    let coord_i = vec2<i32>(coord);
+    let texture_size_i = vec2<i32>(texture_size);
 
     for (var i = -clamped_radius; i <= clamped_radius; i = i + 1) {
-        let sample_down = down_coord + dir * i;
-        let sample_down_clamped = clamp(
-            sample_down,
-            vec2<i32>(0, 0),
-            down_texture_size_i - vec2<i32>(1, 1),
-        );
-
-        let sample_full = sample_down_clamped * scale_i + half_scale;
-        let sample_full_clamped = clamp(
-            sample_full,
+        let sample_coord = coord_i + dir * i;
+        let sample_clamped = clamp(
+            sample_coord,
             vec2<i32>(0, 0),
             texture_size_i - vec2<i32>(1, 1),
         );
 
-        // Calculate Gaussian weight
-        let distance = f32(i) * scale_f;
-        let distance_squared = distance * distance;
-        let weight = exp(-distance_squared / two_sigma_squared);
+        let distance = f32(i);
+        let weight = exp(-(distance * distance) / two_sigma_squared);
 
-        let sample_color = textureLoad(source_texture, vec2<u32>(sample_full_clamped), 0);
+        let sample_color = textureLoad(source_texture, vec2<u32>(sample_clamped), 0);
         total = total + sample_color * weight;
         total_weight = total_weight + weight;
     }

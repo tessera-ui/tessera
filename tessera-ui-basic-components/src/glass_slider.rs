@@ -77,7 +77,7 @@ pub struct GlassSliderArgs {
     pub progress_tint_color: Color,
 
     /// Glass blur radius for all components.
-    #[builder(default = "8.0")]
+    #[builder(default = "0.0")]
     pub blur_radius: f32,
 
     /// Border width for the track.

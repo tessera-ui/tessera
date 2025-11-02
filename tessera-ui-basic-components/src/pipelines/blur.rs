@@ -5,10 +5,10 @@
 //! # Example
 //!
 //! ```
-//! use tessera_ui_basic_components::pipelines::blur::command::BlurCommand;
+//! use tessera_ui_basic_components::pipelines::blur::command::DualBlurCommand;
 //! use tessera_ui_basic_components::pipelines::blur::pipeline::BlurPipeline;
 //!
-//! // Create and use BlurPipeline and BlurCommand in your rendering logic.
+//! // Create and use BlurPipeline and DualBlurCommand in your rendering logic.
 //! ```
 
 pub mod command;

@@ -552,6 +552,30 @@ mod tests {
     }
 
     #[test]
+    fn compute_draw_pairs_remain_grouped_with_local_barrier() {
+        let padding = BarrierRequirement::uniform_padding_local(Px::new(10));
+
+        let commands = vec![
+            create_cmd(PxPosition::new(Px(0), Px(0)), Some(padding), true),
+            create_cmd(PxPosition::new(Px(0), Px(0)), Some(padding), false),
+            create_cmd(PxPosition::new(Px(200), Px(0)), Some(padding), true),
+            create_cmd(PxPosition::new(Px(200), Px(0)), Some(padding), false),
+        ];
+
+        let reordered = reorder_instructions(commands);
+        let kinds: Vec<&'static str> = reordered
+            .iter()
+            .map(|(cmd, _, _, _)| match cmd {
+                Command::Compute(_) => "C",
+                Command::Draw(_) => "D",
+                _ => panic!("unexpected command variant"),
+            })
+            .collect();
+
+        assert_eq!(kinds, vec!["C", "C", "D", "D"]);
+    }
+
+    #[test]
     fn test_overlapping_draw_preserves_order() {
         let commands = vec![
             create_cmd(PxPosition::new(Px(0), Px(0)), None, false), // 0
