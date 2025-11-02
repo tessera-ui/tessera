@@ -2,7 +2,7 @@ use std::{any::TypeId, mem, sync::Arc};
 
 use parking_lot::RwLock;
 use tracing::{error, info, warn};
-use wgpu::{ImageSubresourceRange, TextureFormat};
+use wgpu::TextureFormat;
 use winit::window::Window;
 
 use crate::{
@@ -53,6 +53,9 @@ struct DoComputeParams<'a> {
     scene_view: &'a wgpu::TextureView,
     target_a: &'a wgpu::TextureView,
     target_b: &'a wgpu::TextureView,
+    blit_bind_group_layout: &'a wgpu::BindGroupLayout,
+    blit_sampler: &'a wgpu::Sampler,
+    compute_blit_pipeline: &'a wgpu::RenderPipeline,
 }
 
 // Compute resources for ping-pong operations
@@ -103,6 +106,7 @@ pub struct WgpuApp {
     blit_pipeline: wgpu::RenderPipeline,
     blit_bind_group_layout: wgpu::BindGroupLayout,
     blit_sampler: wgpu::Sampler,
+    compute_blit_pipeline: wgpu::RenderPipeline,
 }
 
 impl WgpuApp {
@@ -296,6 +300,28 @@ impl WgpuApp {
             cache: None,
         });
 
+        let compute_blit_pipeline = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Compute Copy Pipeline"),
+            layout: Some(&blit_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &blit_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &blit_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(TextureFormat::Rgba8Unorm.into())],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
         Self {
             window,
             gpu,
@@ -317,6 +343,7 @@ impl WgpuApp {
             blit_pipeline,
             blit_bind_group_layout,
             blit_sampler,
+            compute_blit_pipeline,
         }
     }
 
@@ -478,6 +505,7 @@ impl WgpuApp {
         blit_bind_group_layout: &wgpu::BindGroupLayout,
         blit_sampler: &wgpu::Sampler,
         blit_pipeline: &wgpu::RenderPipeline,
+        compute_blit_pipeline: &wgpu::RenderPipeline,
     ) -> wgpu::TextureView {
         let blit_bind_group = context.gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: blit_bind_group_layout,
@@ -539,6 +567,9 @@ impl WgpuApp {
                 scene_view: offscreen_texture,
                 target_a: compute_resources.compute_target_a,
                 target_b: compute_resources.compute_target_b,
+                blit_bind_group_layout,
+                blit_sampler,
+                compute_blit_pipeline,
             })
         } else {
             // Return an owned clone so caller does not keep a borrow on read_target
@@ -664,6 +695,7 @@ impl WgpuApp {
                         &self.blit_bind_group_layout,
                         &self.blit_sampler,
                         &self.blit_pipeline,
+                        &self.compute_blit_pipeline,
                     );
                     scene_texture_view = final_view_after_compute;
                 }
@@ -754,6 +786,7 @@ impl WgpuApp {
                     &self.blit_bind_group_layout,
                     &self.blit_sampler,
                     &self.blit_pipeline,
+                    &self.compute_blit_pipeline,
                 );
                 scene_texture_view = final_view_after_compute;
             }
@@ -792,14 +825,25 @@ impl WgpuApp {
             return params.scene_view.clone();
         }
 
-        let mut read_view = params.scene_view.clone();
-        let (mut write_target, mut read_target) = (params.target_a, params.target_b);
-
         let texture_size = wgpu::Extent3d {
             width: params.config.width,
             height: params.config.height,
             depth_or_array_layers: 1,
         };
+
+        Self::blit_to_view(
+            params.encoder,
+            params.gpu,
+            params.scene_view,
+            params.target_a,
+            params.blit_bind_group_layout,
+            params.blit_sampler,
+            params.compute_blit_pipeline,
+        );
+
+        let mut read_view = params.target_a.clone();
+        let mut write_target = params.target_b;
+        let mut read_target = params.target_a;
 
         let mut index = 0;
         while index < params.commands.len() {
@@ -853,15 +897,10 @@ impl WgpuApp {
                 cursor = index + 1;
             }
 
-            params.encoder.clear_texture(
-                write_target.texture(),
-                &ImageSubresourceRange {
-                    aspect: wgpu::TextureAspect::All,
-                    base_mip_level: 0,
-                    mip_level_count: None,
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                },
+            params.encoder.copy_texture_to_texture(
+                read_view.texture().as_image_copy(),
+                write_target.texture().as_image_copy(),
+                texture_size,
             );
 
             {
@@ -892,6 +931,50 @@ impl WgpuApp {
         // After the loop, the final result is in the `read_view`,
         // because we swapped one last time at the end of the loop.
         read_view
+    }
+
+    fn blit_to_view(
+        encoder: &mut wgpu::CommandEncoder,
+        device: &wgpu::Device,
+        source: &wgpu::TextureView,
+        target: &wgpu::TextureView,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        sampler: &wgpu::Sampler,
+        pipeline: &wgpu::RenderPipeline,
+    ) {
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(source),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
+            ],
+            label: Some("Compute Copy Bind Group"),
+        });
+
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Compute Copy Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            ..Default::default()
+        });
+
+        rpass.set_pipeline(pipeline);
+        rpass.set_bind_group(0, &bind_group, &[]);
+        rpass.draw(0..3, 0..1);
     }
 }
 

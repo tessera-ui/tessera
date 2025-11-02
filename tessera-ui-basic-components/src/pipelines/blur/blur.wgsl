@@ -85,13 +85,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         && coord.y >= uniforms.area_y
         && coord.y < uniforms.area_y + uniforms.area_height;
 
-    if inside_area {
-        let texture_size = vec2<u32>(textureDimensions(source_texture));
-        let direction = vec2<f32>(uniforms.direction_x, uniforms.direction_y);
-        let blurred_color = gaussian_blur(coord, direction, texture_size);
-        textureStore(dest_texture, coord, blurred_color);
-    } else {
-        let color = textureLoad(source_texture, coord, 0);
-        textureStore(dest_texture, coord, color);
+    if !inside_area {
+        return;
     }
+
+    let texture_size = vec2<u32>(textureDimensions(source_texture));
+    let direction = vec2<f32>(uniforms.direction_x, uniforms.direction_y);
+    let blurred_color = gaussian_blur(coord, direction, texture_size);
+    textureStore(dest_texture, coord, blurred_color);
 }
