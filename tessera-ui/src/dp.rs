@@ -37,7 +37,11 @@
 //! convert between them using the provided methods, with the conversion automatically
 //! applying the current scale factor.
 
-use std::{fmt::Display, sync::OnceLock};
+use std::{
+    fmt::Display,
+    ops::{Div, Mul},
+    sync::OnceLock,
+};
 
 use parking_lot::RwLock;
 
@@ -407,5 +411,37 @@ impl From<Px> for Dp {
     /// * [`from_pixels_f64`](Self::from_pixels_f64) - For direct pixel-to-dp conversion
     fn from(px: Px) -> Self {
         Dp::from_pixels_f64(px.to_dp().0)
+    }
+}
+
+impl Mul<f32> for Dp {
+    type Output = Dp;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        Dp(self.0 * (rhs as f64))
+    }
+}
+
+impl Div<f32> for Dp {
+    type Output = Dp;
+
+    fn div(self, rhs: f32) -> Self::Output {
+        Dp(self.0 / (rhs as f64))
+    }
+}
+
+impl Mul<f64> for Dp {
+    type Output = Dp;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Dp(self.0 * rhs)
+    }
+}
+
+impl Div<f64> for Dp {
+    type Output = Dp;
+
+    fn div(self, rhs: f64) -> Self::Output {
+        Dp(self.0 / rhs)
     }
 }
