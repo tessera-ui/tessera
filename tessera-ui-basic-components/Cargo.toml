@@ -11,7 +11,7 @@ description = "Basic components for tessera-ui"
 bytemuck = "1.24.0"
 derive_builder = "0.20.2"
 earcutr = "0.5.0"
-image = { version = "0.25", default-features = false, features = [
+image = { version = "0.25.8", default-features = false, features = [
     "png",
     "jpeg",
 ] }
@@ -21,5 +21,5 @@ parking_lot = "0.12.5"
 tessera-ui = { path = "../tessera-ui" }
 unicode-segmentation = "1.12.0"
 encase = "0.12.0"
-glam = { version = "0.30.8", features = ["encase"] }
+glam = { version = "0.30.9", features = ["encase"] }
 lru = "0.16.2"
