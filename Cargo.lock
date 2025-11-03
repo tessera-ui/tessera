@@ -3031,7 +3031,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-ui-basic-components"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "bytemuck",
  "derive_builder",

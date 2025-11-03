@@ -1,3 +1,36 @@
+## [v2.2.0] - 2025-11-03 +08:00
+
+### Changes
+
+- fix(ui): align shape cache alpha handling
+- feat: Batch cached shape draws
+- build(deps): update deps
+- perf(blur): restructure pipeline around dual pass
+- feat(compute): copy scene before blur dispatch
+- feat(blur): add downscaled sampling option
+- fix(blur): restore fallback copy outside target area
+- feat(renderer/compute): batch compute dispatch support
+- perf: Adjust worker thread scope to reduce blur overhead
+- feat: Optimize mobile touch
+- style: format code
+- perf(shape): adjust cache
+- perf(basic-components): cache large rects and use simple rect pipeline
+- fix(fluid_glass): Fix abnormal black edge refraction
+- perf: Replace full-screen SDF and GPU vertex generation in shape pipeline with local SDF and draw_indexed instanced rendering
+- chore(deps): bump lru from 0.16.1 to 0.16.2
+- feat(boxed): Support specifying independent alignment for child components
+- feat(alignment): change alignment default value to TopStart and fix test cases
+- fix(fluid_glass): Fix vertex data inconsistency issue introduced by f1b057c2153a7d8e218f6dc05cbfcc128b128fa8
+- build(deps): update dependencies
+- feat(dialog): add configurable padding parameter
+- Merge pull request #63 from tessera-ui/dependabot/cargo/bytemuck-1.24.0
+- chore(deps): bump parking_lot from 0.12.4 to 0.12.5
+- chore(deps): bump bytemuck from 1.23.2 to 1.24.0
+- fix(fluid_glass): wrong refraction
+- chore(deps): bump glam from 0.30.6 to 0.30.7
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.1.0...tessera-ui-basic-components-v2.2.0)
+
 ## [v2.1.0] - 2025-09-22 +08:00
 
 ### Changes
