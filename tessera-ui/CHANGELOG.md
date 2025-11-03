@@ -1,3 +1,39 @@
+## [v2.2.0] - 2025-11-03 +08:00
+
+### Changes
+
+- feat: Refine touch inertia sampling
+- build(deps): update deps
+- perf(blur): restructure pipeline around dual pass
+- feat(dp): support mul/div float values
+- feat(compute): copy scene before blur dispatch
+- feat(renderer/compute): batch compute dispatch support
+- feat: Optimize mobile touch
+- fix(android): App freezes when returning from background
+- perf(renderer): disable MSAA by default
+- perf(renderer/reorder): bias scheduling toward contiguous batches
+- test(reorder): enhance test cases
+- fix(fluid_glass): Fix abnormal black edge refraction
+- perf(renderer/reorder): Prioritize processing instruction batches with larger quantities
+- perf: Replace full-screen SDF and GPU vertex generation in shape pipeline with local SDF and draw_indexed instanced rendering
+- chore(deps): bump libc from 0.2.176 to 0.2.177
+- build(deps): update dependencies
+- refactor(renderer): Refactor ping-pong rendering
+- fix(renderer): allow merging into batch when no previous command type is present
+- refactor(renderer): remove insignificant PassTarget wrapper
+- perf(renderer): avoid full texture copy during ping-pong rendering by using blit shader to sample specified range to target texture, reducing overhead
+- style: make formater happy
+- fix(ime): avoid redundant ime state toggles
+- perf(renderer): avoid useless texture copy
+- Merge pull request #63 from tessera-ui/dependabot/cargo/bytemuck-1.24.0
+- chore(deps): bump parking_lot from 0.12.4 to 0.12.5
+- chore(deps): bump bytemuck from 1.23.2 to 1.24.0
+- chore(deps): bump petgraph from 0.8.2 to 0.8.3
+- chore(deps): bump windows from 0.62.0 to 0.62.2
+- chore(deps): bump libc from 0.2.175 to 0.2.176
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.1.0...tessera-ui-v2.2.0)
+
 ## [v2.1.0] - 2025-09-22 +08:00
 
 ### Changes
