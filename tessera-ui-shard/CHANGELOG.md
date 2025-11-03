@@ -1,3 +1,12 @@
+## [v0.4.1] - 2025-11-03 +08:00
+
+### Changes
+
+- chore(deps): bump tokio from 1.47.1 to 1.48.0
+- chore(deps): bump parking_lot from 0.12.4 to 0.12.5
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-shard-v0.4.0...tessera-ui-shard-v0.4.1)
+
 ## [v0.4.0] - 2025-09-12 +08:00
 
 ### Changes
