@@ -313,5 +313,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         }
     }
 
+    final_color = vec4f(final_color.rgb * final_color.a, final_color.a);
     return final_color;
 }
