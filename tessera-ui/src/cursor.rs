@@ -40,7 +40,7 @@
 
 use std::{
     collections::{HashMap, VecDeque},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use crate::PxPosition;
@@ -71,7 +71,7 @@ const INERTIA_MOMENTUM_FACTOR: f32 = 1.0;
 /// let touch_state = TouchPointState {
 ///     last_position: PxPosition::new(100.0, 200.0),
 ///     last_update_time: Instant::now(),
-///     velocity_history: VecDeque::new(),
+///     velocity_tracker: VelocityTracker::new(Instant::now()),
 /// };
 /// ```
 #[derive(Debug, Clone)]
@@ -80,16 +80,23 @@ struct TouchPointState {
     last_position: PxPosition,
     /// Timestamp of the last position update.
     last_update_time: Instant,
-    /// Rolling history of velocity samples for momentum calculation.
-    ///
-    /// Contains tuples of (timestamp, velocity_x, velocity_y) for the last 100ms
-    /// of touch movement, used to calculate average velocity for inertial scrolling.
-    velocity_history: VecDeque<(Instant, f32, f32)>,
+    /// Tracks recent velocity samples and temporal metadata for momentum calculation.
+    velocity_tracker: VelocityTracker,
     /// Tracks whether this touch gesture generated a scroll event.
     ///
     /// When set, the gesture should be treated as a drag/scroll rather than a tap.
     generated_scroll_event: bool,
 }
+
+/// Maintains a short window of velocity samples for inertia calculations.
+#[derive(Debug, Clone)]
+struct VelocityTracker {
+    samples: VecDeque<(Instant, f32, f32)>,
+    last_sample_time: Instant,
+}
+
+const VELOCITY_SAMPLE_WINDOW: Duration = Duration::from_millis(90);
+const VELOCITY_IDLE_CUTOFF: Duration = Duration::from_millis(65);
 
 /// Represents an active inertial scrolling session.
 ///
@@ -341,33 +348,6 @@ impl CursorState {
         });
     }
 
-    // Helper: record a velocity sample and prune old samples (~100ms window).
-    fn record_velocity_sample(touch_state: &mut TouchPointState, now: Instant, vx: f32, vy: f32) {
-        touch_state.velocity_history.push_back((now, vx, vy));
-        while let Some(&(sample_time, _, _)) = touch_state.velocity_history.front() {
-            if now.duration_since(sample_time).as_millis() > 100 {
-                touch_state.velocity_history.pop_front();
-            } else {
-                break;
-            }
-        }
-    }
-
-    // Helper: compute average velocity from recent samples.
-    fn compute_average_velocity(touch_state: &TouchPointState) -> Option<(f32, f32)> {
-        if touch_state.velocity_history.is_empty() {
-            return None;
-        }
-        let mut sum_x = 0.0f32;
-        let mut sum_y = 0.0f32;
-        let count = touch_state.velocity_history.len() as f32;
-        for &(_, vx, vy) in &touch_state.velocity_history {
-            sum_x += vx;
-            sum_y += vy;
-        }
-        Some((sum_x / count, sum_y / count))
-    }
-
     /// Retrieves and clears all pending cursor events.
     ///
     /// This method processes any active inertial scrolling, then returns all queued
@@ -498,7 +478,7 @@ impl CursorState {
             TouchPointState {
                 last_position: position,
                 last_update_time: now,
-                velocity_history: VecDeque::new(),
+                velocity_tracker: VelocityTracker::new(now),
                 generated_scroll_event: false,
             },
         );
@@ -557,24 +537,25 @@ impl CursorState {
             let delta_x = (current_position.x - touch_state.last_position.x).to_f32();
             let delta_y = (current_position.y - touch_state.last_position.y).to_f32();
             let move_distance = (delta_x * delta_x + delta_y * delta_y).sqrt();
+            let time_delta = now
+                .duration_since(touch_state.last_update_time)
+                .as_secs_f32();
+
+            touch_state.last_position = current_position;
+            touch_state.last_update_time = now;
 
             if move_distance >= self.touch_scroll_config.min_move_threshold {
                 // Stop any active inertia when user actively moves the touch.
                 self.active_inertia = None;
 
-                let time_delta = now
-                    .duration_since(touch_state.last_update_time)
-                    .as_secs_f32();
-
                 if time_delta > 0.0 {
                     let velocity_x = delta_x / time_delta;
                     let velocity_y = delta_y / time_delta;
-                    // Record and prune velocity samples via helper.
-                    Self::record_velocity_sample(touch_state, now, velocity_x, velocity_y);
+                    touch_state
+                        .velocity_tracker
+                        .push(now, velocity_x, velocity_y);
                 }
 
-                touch_state.last_position = current_position;
-                touch_state.last_update_time = now;
                 touch_state.generated_scroll_event = true;
 
                 // Return a scroll event for immediate feedback.
@@ -622,10 +603,10 @@ impl CursorState {
         let now = Instant::now();
         let mut was_drag = false;
 
-        if let Some(touch_state) = self.touch_points.get(&touch_id) {
+        if let Some(touch_state) = self.touch_points.get_mut(&touch_id) {
             was_drag |= touch_state.generated_scroll_event;
             if self.touch_scroll_config.enabled {
-                if let Some((avg_vx, avg_vy)) = Self::compute_average_velocity(touch_state) {
+                if let Some((avg_vx, avg_vy)) = touch_state.velocity_tracker.resolve(now) {
                     let velocity_magnitude = (avg_vx * avg_vx + avg_vy * avg_vy).sqrt();
                     if velocity_magnitude > INERTIA_MIN_VELOCITY_THRESHOLD_FOR_START {
                         self.active_inertia = Some(ActiveInertia {
@@ -664,6 +645,78 @@ impl CursorState {
 
         if self.touch_points.is_empty() && self.active_inertia.is_none() {
             self.clear_position_on_next_frame = true;
+        }
+    }
+}
+
+impl VelocityTracker {
+    fn new(now: Instant) -> Self {
+        Self {
+            samples: VecDeque::new(),
+            last_sample_time: now,
+        }
+    }
+
+    fn push(&mut self, now: Instant, vx: f32, vy: f32) {
+        self.samples.push_back((now, vx, vy));
+        self.last_sample_time = now;
+        self.prune(now);
+    }
+
+    fn resolve(&mut self, now: Instant) -> Option<(f32, f32)> {
+        self.prune(now);
+
+        if self.samples.is_empty() {
+            return None;
+        }
+
+        let idle_time = now.duration_since(self.last_sample_time);
+        if idle_time >= VELOCITY_IDLE_CUTOFF {
+            self.samples.clear();
+            return None;
+        }
+
+        let mut weighted_sum_x = 0.0f32;
+        let mut weighted_sum_y = 0.0f32;
+        let mut total_weight = 0.0f32;
+        let window_secs = VELOCITY_SAMPLE_WINDOW.as_secs_f32().max(f32::EPSILON);
+
+        for &(timestamp, vx, vy) in &self.samples {
+            let age_secs = now
+                .duration_since(timestamp)
+                .as_secs_f32()
+                .clamp(0.0, window_secs);
+            let weight = (window_secs - age_secs).max(0.0);
+            if weight > 0.0 {
+                weighted_sum_x += vx * weight;
+                weighted_sum_y += vy * weight;
+                total_weight += weight;
+            }
+        }
+
+        if total_weight <= f32::EPSILON {
+            self.samples.clear();
+            return None;
+        }
+
+        let mut avg_x = weighted_sum_x / total_weight;
+        let mut avg_y = weighted_sum_y / total_weight;
+
+        let damping = 1.0 - idle_time.as_secs_f32() / VELOCITY_IDLE_CUTOFF.as_secs_f32();
+        let damping = damping.clamp(0.0, 1.0);
+        avg_x *= damping;
+        avg_y *= damping;
+
+        Some((avg_x, avg_y))
+    }
+
+    fn prune(&mut self, now: Instant) {
+        while let Some(&(timestamp, _, _)) = self.samples.front() {
+            if now.duration_since(timestamp) > VELOCITY_SAMPLE_WINDOW {
+                self.samples.pop_front();
+            } else {
+                break;
+            }
         }
     }
 }
