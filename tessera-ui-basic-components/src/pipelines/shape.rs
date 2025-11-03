@@ -20,7 +20,7 @@ mod command;
 
 use std::{num::NonZeroUsize, sync::Arc};
 
-use encase::{ShaderSize, ShaderType, StorageBuffer, UniformBuffer};
+use encase::{ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use lru::LruCache;
 use tessera_ui::{
@@ -33,6 +33,9 @@ use tessera_ui::{
 use self::command::rect_to_uniforms;
 
 pub use command::{RippleProps, ShadowProps, ShapeCommand};
+
+pub const MAX_CONCURRENT_SHAPES: wgpu::BufferAddress = 1024;
+const SHAPE_CACHE_CAPACITY: usize = 100;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -72,10 +75,6 @@ struct ShapeInstances {
     instances: Vec<ShapeUniforms>,
 }
 
-pub const MAX_CONCURRENT_SHAPES: wgpu::BufferAddress = 1024;
-const SHAPE_CACHE_CAPACITY: usize = 100;
-const SHAPE_CACHE_AREA_THRESHOLD: u64 = 50_000;
-
 /// Pipeline for rendering vector shapes in UI components.
 ///
 /// # Example
@@ -93,7 +92,7 @@ pub struct ShapePipeline {
     sample_count: u32,
     cache_sampler: wgpu::Sampler,
     cache_texture_bind_group_layout: wgpu::BindGroupLayout,
-    cache_uniform_bind_group_layout: wgpu::BindGroupLayout,
+    cache_transform_bind_group_layout: wgpu::BindGroupLayout,
     cached_pipeline: wgpu::RenderPipeline,
     cache: LruCache<ShapeCacheKey, Arc<ShapeCacheEntry>>,
     render_format: wgpu::TextureFormat,
@@ -228,14 +227,14 @@ impl ShapePipeline {
                 ],
             });
 
-        let cache_uniform_bind_group_layout =
+        let cache_transform_bind_group_layout =
             gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Shape Cache Uniform Layout"),
+                label: Some("Shape Cache Transform Layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
@@ -248,7 +247,7 @@ impl ShapePipeline {
             label: Some("Shape Cached Pipeline Layout"),
             bind_group_layouts: &[
                 &cache_texture_bind_group_layout,
-                &cache_uniform_bind_group_layout,
+                &cache_transform_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -303,7 +302,7 @@ impl ShapePipeline {
             sample_count,
             cache_sampler,
             cache_texture_bind_group_layout,
-            cache_uniform_bind_group_layout,
+            cache_transform_bind_group_layout,
             cached_pipeline,
             cache: LruCache::new(
                 NonZeroUsize::new(SHAPE_CACHE_CAPACITY).expect("shape cache capacity must be > 0"),
@@ -477,7 +476,7 @@ impl ShapePipeline {
         ShapeCacheEntry {
             _texture: cache_texture,
             _view: cache_view,
-            bind_group: texture_bind_group,
+            texture_bind_group,
         }
     }
 
@@ -528,53 +527,73 @@ impl ShapePipeline {
         render_pass.draw_indexed(0..6, 0, 0..uniforms.instances.len() as u32);
     }
 
-    fn draw_cached_command(
+    fn draw_cached_run(
         &self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         entry: Arc<ShapeCacheEntry>,
-        position: PxPosition,
-        size: PxSize,
+        instances: &[(PxPosition, PxSize)],
     ) {
-        let transform = CachedRectUniform {
-            position: Vec4::new(
-                position.x.raw() as f32,
-                position.y.raw() as f32,
-                size.width.raw() as f32,
-                size.height.raw() as f32,
-            ),
-            screen_size: Vec2::new(config.width as f32, config.height as f32),
-        };
+        if instances.is_empty() {
+            return;
+        }
 
-        let mut uniform_content = UniformBuffer::new(Vec::<u8>::new());
-        uniform_content.write(&transform).unwrap();
-        let bytes = uniform_content.into_inner();
+        let rects: Vec<CachedRectUniform> = instances
+            .iter()
+            .map(|(position, size)| CachedRectUniform {
+                position: Vec4::new(
+                    position.x.raw() as f32,
+                    position.y.raw() as f32,
+                    size.width.raw() as f32,
+                    size.height.raw() as f32,
+                ),
+                screen_size: Vec2::new(config.width as f32, config.height as f32),
+                padding: Vec2::ZERO,
+            })
+            .collect();
 
-        let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Shape Cache Uniform Buffer"),
-            size: bytes.len() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        let rect_instances = CachedRectInstances { rects };
+        let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
+        buffer_content.write(&rect_instances).unwrap();
+
+        let instance_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Shape Cache Instance Buffer"),
+            size: buffer_content.as_ref().len() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        gpu_queue.write_buffer(&uniform_buffer, 0, &bytes);
+        gpu_queue.write_buffer(&instance_buffer, 0, buffer_content.as_ref());
 
-        let uniform_bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.cache_uniform_bind_group_layout,
+        let transform_bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.cache_transform_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
+                resource: instance_buffer.as_entire_binding(),
             }],
-            label: Some("shape_cache_uniform_bind_group"),
+            label: Some("shape_cache_transform_bind_group"),
         });
 
         render_pass.set_pipeline(&self.cached_pipeline);
         render_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.set_bind_group(0, &entry.bind_group, &[]);
-        render_pass.set_bind_group(1, &uniform_bind_group, &[]);
-        render_pass.draw_indexed(0..6, 0, 0..1);
+        render_pass.set_bind_group(0, &entry.texture_bind_group, &[]);
+        render_pass.set_bind_group(1, &transform_bind_group, &[]);
+        render_pass.draw_indexed(0..6, 0, 0..instances.len() as u32);
+    }
+
+    fn flush_cached_run(
+        &mut self,
+        gpu: &wgpu::Device,
+        gpu_queue: &wgpu::Queue,
+        config: &wgpu::SurfaceConfiguration,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        pending: &mut Option<(Arc<ShapeCacheEntry>, Vec<(PxPosition, PxSize)>)>,
+    ) {
+        if let Some((entry, instances)) = pending.take() {
+            self.draw_cached_run(gpu, gpu_queue, config, render_pass, entry, &instances);
+        }
     }
 }
 
@@ -607,6 +626,12 @@ enum ShapeCacheVariant {
     Rect,
     OutlinedRect,
     FilledOutlinedRect,
+    Ellipse,
+    OutlinedEllipse,
+    FilledOutlinedEllipse,
+    RippleRect,
+    RippleOutlinedRect,
+    RippleFilledOutlinedRect,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -614,6 +639,14 @@ struct ShadowKey {
     color: [u32; 4],
     offset: [u32; 2],
     smoothness: u32,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct RippleKey {
+    center: [u32; 2],
+    radius: u32,
+    alpha: u32,
+    color: [u32; 4],
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -625,6 +658,7 @@ struct ShapeCacheKey {
     g2_k_value: u32,
     border_width: u32,
     shadow: Option<ShadowKey>,
+    ripple: Option<RippleKey>,
     width: u32,
     height: u32,
 }
@@ -632,7 +666,7 @@ struct ShapeCacheKey {
 struct ShapeCacheEntry {
     _texture: wgpu::Texture,
     _view: wgpu::TextureView,
-    bind_group: wgpu::BindGroup,
+    texture_bind_group: wgpu::BindGroup,
 }
 
 #[repr(C)]
@@ -640,6 +674,13 @@ struct ShapeCacheEntry {
 struct CachedRectUniform {
     position: Vec4,
     screen_size: Vec2,
+    padding: Vec2,
+}
+
+#[derive(ShaderType)]
+struct CachedRectInstances {
+    #[shader(size(runtime))]
+    rects: Vec<CachedRectUniform>,
 }
 
 fn f32_to_bits(value: f32) -> u32 {
@@ -656,15 +697,20 @@ fn color_to_bits(color: Color) -> [u32; 4] {
     ]
 }
 
+fn ripple_to_key(ripple: &RippleProps) -> RippleKey {
+    RippleKey {
+        center: [f32_to_bits(ripple.center[0]), f32_to_bits(ripple.center[1])],
+        radius: f32_to_bits(ripple.radius),
+        alpha: f32_to_bits(ripple.alpha),
+        color: color_to_bits(ripple.color),
+    }
+}
+
 impl ShapeCacheKey {
     fn from_command(command: &ShapeCommand, size: PxSize) -> Option<Self> {
         let width = size.width.positive();
         let height = size.height.positive();
         if width == 0 || height == 0 {
-            return None;
-        }
-
-        if (width as u64) * (height as u64) < SHAPE_CACHE_AREA_THRESHOLD {
             return None;
         }
 
@@ -686,6 +732,7 @@ impl ShapeCacheKey {
                     offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
                     smoothness: f32_to_bits(shadow.smoothness),
                 }),
+                ripple: None,
                 width,
                 height,
             }),
@@ -707,6 +754,7 @@ impl ShapeCacheKey {
                     offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
                     smoothness: f32_to_bits(shadow.smoothness),
                 }),
+                ripple: None,
                 width,
                 height,
             }),
@@ -729,6 +777,133 @@ impl ShapeCacheKey {
                     offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
                     smoothness: f32_to_bits(shadow.smoothness),
                 }),
+                ripple: None,
+                width,
+                height,
+            }),
+            ShapeCommand::Ellipse { color, shadow } => Some(Self {
+                variant: ShapeCacheVariant::Ellipse,
+                primary_color: color_to_bits(*color),
+                border_color: None,
+                corner_radii: [f32_to_bits(-1.0_f32); 4],
+                g2_k_value: f32_to_bits(0.0),
+                border_width: 0,
+                shadow: shadow.as_ref().map(|shadow| ShadowKey {
+                    color: color_to_bits(shadow.color),
+                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
+                    smoothness: f32_to_bits(shadow.smoothness),
+                }),
+                ripple: None,
+                width,
+                height,
+            }),
+            ShapeCommand::OutlinedEllipse {
+                color,
+                shadow,
+                border_width,
+            } => Some(Self {
+                variant: ShapeCacheVariant::OutlinedEllipse,
+                primary_color: color_to_bits(*color),
+                border_color: None,
+                corner_radii: [f32_to_bits(-1.0_f32); 4],
+                g2_k_value: f32_to_bits(0.0),
+                border_width: f32_to_bits(*border_width),
+                shadow: shadow.as_ref().map(|shadow| ShadowKey {
+                    color: color_to_bits(shadow.color),
+                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
+                    smoothness: f32_to_bits(shadow.smoothness),
+                }),
+                ripple: None,
+                width,
+                height,
+            }),
+            ShapeCommand::FilledOutlinedEllipse {
+                color,
+                border_color,
+                shadow,
+                border_width,
+            } => Some(Self {
+                variant: ShapeCacheVariant::FilledOutlinedEllipse,
+                primary_color: color_to_bits(*color),
+                border_color: Some(color_to_bits(*border_color)),
+                corner_radii: [f32_to_bits(-1.0_f32); 4],
+                g2_k_value: f32_to_bits(0.0),
+                border_width: f32_to_bits(*border_width),
+                shadow: shadow.as_ref().map(|shadow| ShadowKey {
+                    color: color_to_bits(shadow.color),
+                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
+                    smoothness: f32_to_bits(shadow.smoothness),
+                }),
+                ripple: None,
+                width,
+                height,
+            }),
+            ShapeCommand::RippleRect {
+                color,
+                corner_radii,
+                g2_k_value,
+                shadow,
+                ripple,
+            } if ripple.alpha.abs() <= f32::EPSILON => Some(Self {
+                variant: ShapeCacheVariant::RippleRect,
+                primary_color: color_to_bits(*color),
+                border_color: None,
+                corner_radii: corner_radii.map(f32_to_bits),
+                g2_k_value: f32_to_bits(*g2_k_value),
+                border_width: 0,
+                shadow: shadow.as_ref().map(|shadow| ShadowKey {
+                    color: color_to_bits(shadow.color),
+                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
+                    smoothness: f32_to_bits(shadow.smoothness),
+                }),
+                ripple: Some(ripple_to_key(ripple)),
+                width,
+                height,
+            }),
+            ShapeCommand::RippleOutlinedRect {
+                color,
+                corner_radii,
+                g2_k_value,
+                shadow,
+                border_width,
+                ripple,
+            } if ripple.alpha.abs() <= f32::EPSILON => Some(Self {
+                variant: ShapeCacheVariant::RippleOutlinedRect,
+                primary_color: color_to_bits(*color),
+                border_color: None,
+                corner_radii: corner_radii.map(f32_to_bits),
+                g2_k_value: f32_to_bits(*g2_k_value),
+                border_width: f32_to_bits(*border_width),
+                shadow: shadow.as_ref().map(|shadow| ShadowKey {
+                    color: color_to_bits(shadow.color),
+                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
+                    smoothness: f32_to_bits(shadow.smoothness),
+                }),
+                ripple: Some(ripple_to_key(ripple)),
+                width,
+                height,
+            }),
+            ShapeCommand::RippleFilledOutlinedRect {
+                color,
+                border_color,
+                corner_radii,
+                g2_k_value,
+                shadow,
+                border_width,
+                ripple,
+            } if ripple.alpha.abs() <= f32::EPSILON => Some(Self {
+                variant: ShapeCacheVariant::RippleFilledOutlinedRect,
+                primary_color: color_to_bits(*color),
+                border_color: Some(color_to_bits(*border_color)),
+                corner_radii: corner_radii.map(f32_to_bits),
+                g2_k_value: f32_to_bits(*g2_k_value),
+                border_width: f32_to_bits(*border_width),
+                shadow: shadow.as_ref().map(|shadow| ShadowKey {
+                    color: color_to_bits(shadow.color),
+                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
+                    smoothness: f32_to_bits(shadow.smoothness),
+                }),
+                ripple: Some(ripple_to_key(ripple)),
                 width,
                 height,
             }),
@@ -759,6 +934,8 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         }
 
         let mut pending_uncached: Vec<usize> = Vec::new();
+        let mut pending_cached_run: Option<(Arc<ShapeCacheEntry>, Vec<(PxPosition, PxSize)>)> =
+            None;
 
         for (idx, ((_, size, position), cache_entry)) in
             commands.iter().zip(cache_entries.iter()).enumerate()
@@ -776,19 +953,35 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                     pending_uncached.clear();
                 }
 
-                self.draw_cached_command(
-                    gpu,
-                    gpu_queue,
-                    config,
-                    render_pass,
-                    entry.clone(),
-                    *position,
-                    *size,
-                );
+                if let Some((current_entry, transforms)) = pending_cached_run.as_mut() {
+                    if Arc::ptr_eq(current_entry, entry) {
+                        transforms.push((*position, *size));
+                    } else {
+                        let mut instances = std::mem::take(transforms);
+                        let previous_entry = current_entry.clone();
+                        self.draw_cached_run(
+                            gpu,
+                            gpu_queue,
+                            config,
+                            render_pass,
+                            previous_entry,
+                            &instances,
+                        );
+                        instances.clear();
+                        instances.push((*position, *size));
+                        *current_entry = entry.clone();
+                        *transforms = instances;
+                    }
+                } else {
+                    pending_cached_run = Some((entry.clone(), vec![(*position, *size)]));
+                }
             } else {
+                self.flush_cached_run(gpu, gpu_queue, config, render_pass, &mut pending_cached_run);
                 pending_uncached.push(idx);
             }
         }
+
+        self.flush_cached_run(gpu, gpu_queue, config, render_pass, &mut pending_cached_run);
 
         if !pending_uncached.is_empty() {
             self.draw_uncached_batch(
