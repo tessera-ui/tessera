@@ -60,6 +60,9 @@ const INERTIA_MIN_VELOCITY_THRESHOLD_FOR_START: f32 = 50.0;
 /// Multiplier applied to initial inertial velocity (typically 1.0 for natural feel).
 const INERTIA_MOMENTUM_FACTOR: f32 = 1.0;
 
+/// Maximum inertial velocity to keep flicks controllable (pixels per second).
+const MAX_INERTIA_VELOCITY: f32 = 6000.0;
+
 /// Tracks the state of a single touch point for gesture recognition and velocity calculation.
 ///
 /// This struct maintains the necessary information to track touch movement, calculate
@@ -120,6 +123,25 @@ struct ActiveInertia {
     velocity_y: f32,
     /// Timestamp of the last inertia calculation update.
     last_tick_time: Instant,
+}
+
+fn clamp_inertia_velocity(vx: f32, vy: f32) -> (f32, f32) {
+    if !vx.is_finite() || !vy.is_finite() {
+        return (0.0, 0.0);
+    }
+
+    let magnitude_sq = vx * vx + vy * vy;
+    if !magnitude_sq.is_finite() {
+        return (0.0, 0.0);
+    }
+
+    let magnitude = magnitude_sq.sqrt();
+    if magnitude > MAX_INERTIA_VELOCITY && MAX_INERTIA_VELOCITY > 0.0 {
+        let scale = MAX_INERTIA_VELOCITY / magnitude;
+        return (vx * scale, vy * scale);
+    }
+
+    (vx, vy)
 }
 
 /// Configuration settings for touch scrolling behavior.
@@ -609,9 +631,13 @@ impl CursorState {
                 if let Some((avg_vx, avg_vy)) = touch_state.velocity_tracker.resolve(now) {
                     let velocity_magnitude = (avg_vx * avg_vx + avg_vy * avg_vy).sqrt();
                     if velocity_magnitude > INERTIA_MIN_VELOCITY_THRESHOLD_FOR_START {
+                        let (inertia_vx, inertia_vy) = clamp_inertia_velocity(
+                            avg_vx * INERTIA_MOMENTUM_FACTOR,
+                            avg_vy * INERTIA_MOMENTUM_FACTOR,
+                        );
                         self.active_inertia = Some(ActiveInertia {
-                            velocity_x: avg_vx * INERTIA_MOMENTUM_FACTOR,
-                            velocity_y: avg_vy * INERTIA_MOMENTUM_FACTOR,
+                            velocity_x: inertia_vx,
+                            velocity_y: inertia_vy,
                             last_tick_time: now,
                         });
                     } else {
@@ -658,6 +684,7 @@ impl VelocityTracker {
     }
 
     fn push(&mut self, now: Instant, vx: f32, vy: f32) {
+        let (vx, vy) = clamp_inertia_velocity(vx, vy);
         self.samples.push_back((now, vx, vy));
         self.last_sample_time = now;
         self.prune(now);
@@ -699,13 +726,12 @@ impl VelocityTracker {
             return None;
         }
 
-        let mut avg_x = weighted_sum_x / total_weight;
-        let mut avg_y = weighted_sum_y / total_weight;
+        let avg_x = weighted_sum_x / total_weight;
+        let avg_y = weighted_sum_y / total_weight;
 
         let damping = 1.0 - idle_time.as_secs_f32() / VELOCITY_IDLE_CUTOFF.as_secs_f32();
         let damping = damping.clamp(0.0, 1.0);
-        avg_x *= damping;
-        avg_y *= damping;
+        let (avg_x, avg_y) = clamp_inertia_velocity(avg_x * damping, avg_y * damping);
 
         Some((avg_x, avg_y))
     }
