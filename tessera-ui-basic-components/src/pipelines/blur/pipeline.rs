@@ -44,6 +44,7 @@ pub struct BlurPipeline {
     downsample_bind_group_layout: wgpu::BindGroupLayout,
     blur_bind_group_layout: wgpu::BindGroupLayout,
     upsample_bind_group_layout: wgpu::BindGroupLayout,
+    downsample_sampler: wgpu::Sampler,
 }
 
 impl BlurPipeline {
@@ -59,6 +60,17 @@ impl BlurPipeline {
         let upsample_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Blur Upsample Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("upsample.wgsl").into()),
+        });
+
+        let downsample_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Blur Downsample Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
         });
 
         let downsample_bind_group_layout =
@@ -95,6 +107,13 @@ impl BlurPipeline {
                             format: wgpu::TextureFormat::Rgba8Unorm,
                             view_dimension: wgpu::TextureViewDimension::D2,
                         },
+                        count: None,
+                    },
+                    // 3: Linear sampler for hardware filtering
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
@@ -177,6 +196,13 @@ impl BlurPipeline {
                         },
                         count: None,
                     },
+                    // 3: Linear sampler for filtering
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
                 ],
                 label: Some("blur_upsample_bind_group_layout"),
             });
@@ -232,6 +258,7 @@ impl BlurPipeline {
             downsample_bind_group_layout,
             blur_bind_group_layout,
             upsample_bind_group_layout,
+            downsample_sampler,
         }
     }
 
@@ -338,6 +365,10 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                         binding: 2,
                         resource: wgpu::BindingResource::TextureView(&downsample_view),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::Sampler(&self.downsample_sampler),
+                    },
                 ],
                 label: Some("blur_downsample_bind_group"),
             });
@@ -427,6 +458,10 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                     wgpu::BindGroupEntry {
                         binding: 2,
                         resource: wgpu::BindingResource::TextureView(output_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::Sampler(&self.downsample_sampler),
                     },
                 ],
                 label: Some("blur_upsample_bind_group"),
