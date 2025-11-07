@@ -25,6 +25,7 @@ struct GlassUniforms {
     ripple_alpha: f32,
     ripple_strength: f32,
     border_width: f32,
+    sdf_cache_enabled: f32,
     screen_size: vec2<f32>, // Screen dimensions
     light_source: vec2<f32>, // Light source position in world coordinates
     light_scale: f32, // Light intensity scale factor
@@ -37,6 +38,8 @@ struct GlassInstances {
 @group(0) @binding(0) var<storage, read> uniforms: GlassInstances;
 @group(0) @binding(1) var t_diffuse: texture_2d<f32>;
 @group(0) @binding(2) var s_diffuse: sampler;
+@group(0) @binding(3) var sdf_texture: texture_2d<f32>;
+@group(0) @binding(4) var sdf_sampler: sampler;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -184,6 +187,24 @@ fn shape_normal(instance: GlassUniforms, coord: vec2<f32>, half_size: vec2<f32>,
     return grad_sd_g2_rounded_box(coord, half_size, instance.corner_radii, k);
 }
 
+fn evaluate_shape(
+    instance: GlassUniforms,
+    coord: vec2<f32>,
+    half_size: vec2<f32>,
+    k: f32
+) -> vec3<f32> {
+    if instance.sdf_cache_enabled > 0.5 {
+        let uv = clamp((coord + half_size) / (half_size * 2.0), vec2<f32>(0.0), vec2<f32>(1.0));
+        let sample = textureSampleLevel(sdf_texture, sdf_sampler, uv, 0.0);
+        let normal = normalize(sample.yz);
+        return vec3<f32>(sample.x, normal);
+    }
+
+    let sd = shape_sd(instance, coord, half_size, k);
+    let normal = shape_normal(instance, coord, half_size, k);
+    return vec3<f32>(sd, normal);
+}
+
 fn to_linear_srgb(srgb: vec3<f32>) -> vec3<f32> {
     let cutoff = vec3<f32>(0.04045);
     let lower = srgb / vec3<f32>(12.92);
@@ -224,13 +245,13 @@ fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<
     let min_uv = instance.clip_rect_uv.xy;
     let max_uv = instance.clip_rect_uv.zw;
 
-    var sd: f32;
-    sd = shape_sd(instance, centered_coord, half_size, k);
+    let shape_eval = evaluate_shape(instance, centered_coord, half_size, k);
+    let sd = shape_eval.x;
 
     // Compute refracted coord with edge fade near clip rect to reduce stretching
     var refracted_coord = local_coord;
     if sd < 0.0 && -sd < instance.refraction_height {
-        let normal = shape_normal(instance, centered_coord, half_size, k);
+        let normal = shape_eval.yz;
 
         let refracted_distance = circle_map(1.0 - (-sd / instance.refraction_height)) * -instance.refraction_amount;
         let refracted_direction = normalize(normal + instance.eccentric_factor * normalize(centered_coord));
@@ -264,13 +285,13 @@ fn dispersion_color_on_refracted(instance: GlassUniforms, local_coord: vec2<f32>
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
 
-    var sd: f32;
-    sd = shape_sd(instance, centered_coord, half_size, k);
+    let shape_eval = evaluate_shape(instance, centered_coord, half_size, k);
+    let sd = shape_eval.x;
 
     let base_refracted = refraction_color(instance, local_coord, size, k);
 
     if sd < 0.0 && -sd < instance.dispersion_height && instance.dispersion_height > 0.0 {
-        let normal = shape_normal(instance, centered_coord, half_size, k);
+        let normal = shape_eval.yz;
         let tangent = normal_to_tangent(normal);
 
         let dispersion_fraction = 1.0 - (-sd / instance.dispersion_height);
@@ -332,8 +353,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let centered_coord = local_coord - half_size;
     let k = instance.g2_k_value;
 
-    var sd: f32;
-    sd = shape_sd(instance, centered_coord, half_size, k);
+    let shape_eval = evaluate_shape(instance, centered_coord, half_size, k);
+    let sd = shape_eval.x;
 
     var base_color: vec4<f32>;
     if instance.dispersion_height > 0.0 {
@@ -388,7 +409,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // Only compute highlight within the border region.
         if border_mask > 0.0 {
             // 2. Compute highlight normal (same logic as AGSL, using new function).
-            let normal = shape_normal(instance, centered_coord, half_size, k);
+            let normal = shape_eval.yz;
 
             // 3. Compute highlight distribution.
             let highlight_dir = normalize(vec2<f32>(cos(radians(136.0)), sin(radians(136.0)))); // Light direction at 136 degrees.
