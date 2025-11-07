@@ -113,6 +113,12 @@ fn sdf_ellipse(p: vec2<f32>, r: vec2<f32>) -> f32 {
     return (length(p / r) - 1.0) * min(r.x, r.y);
 }
 
+fn sdf_axis_aligned_box(p: vec2<f32>, half_size: vec2<f32>) -> f32 {
+    let dist = abs(p) - half_size;
+    let outside = max(dist, vec2<f32>(0.0, 0.0));
+    return length(outside) + min(max(dist.x, dist.y), 0.0);
+}
+
 fn grad_sd_g2_rounded_box(coord: vec2<f32>, half_size: vec2<f32>, r: vec4<f32>, k: f32) -> vec2<f32> {
     let top_radii = select(r.x, r.y, coord.x > 0.0);
     let bottom_radii = select(r.w, r.z, coord.x > 0.0);
@@ -137,6 +143,45 @@ fn grad_sd_g2_rounded_box(coord: vec2<f32>, half_size: vec2<f32>, r: vec4<f32>, 
 
 fn grad_sd_ellipse(coord: vec2<f32>, r: vec2<f32>) -> vec2<f32> {
     return normalize(coord / (r * r));
+}
+
+fn signed_one(value: f32) -> f32 {
+    return select(-1.0, 1.0, value >= 0.0);
+}
+
+fn grad_sd_axis_aligned_box(coord: vec2<f32>, half_size: vec2<f32>) -> vec2<f32> {
+    let dist = abs(coord) - half_size;
+    if dist.x > 0.0 || dist.y > 0.0 {
+        let outside = max(dist, vec2<f32>(0.0, 0.0));
+        return sign(coord) * normalize(outside);
+    }
+
+    let dist_to_edge = half_size - abs(coord);
+    if dist_to_edge.x < dist_to_edge.y {
+        return vec2<f32>(signed_one(coord.x), 0.0);
+    } else {
+        return vec2<f32>(0.0, signed_one(coord.y));
+    }
+}
+
+fn shape_sd(instance: GlassUniforms, coord: vec2<f32>, half_size: vec2<f32>, k: f32) -> f32 {
+    if instance.shape_type == 1.0 {
+        return sdf_ellipse(coord, half_size);
+    }
+    if instance.shape_type == 2.0 {
+        return sdf_axis_aligned_box(coord, half_size);
+    }
+    return sdf_g2_rounded_box(coord, half_size, instance.corner_radii, k);
+}
+
+fn shape_normal(instance: GlassUniforms, coord: vec2<f32>, half_size: vec2<f32>, k: f32) -> vec2<f32> {
+    if instance.shape_type == 1.0 {
+        return grad_sd_ellipse(coord, half_size);
+    }
+    if instance.shape_type == 2.0 {
+        return grad_sd_axis_aligned_box(coord, half_size);
+    }
+    return grad_sd_g2_rounded_box(coord, half_size, instance.corner_radii, k);
 }
 
 fn to_linear_srgb(srgb: vec3<f32>) -> vec3<f32> {
@@ -180,21 +225,12 @@ fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<
     let max_uv = instance.clip_rect_uv.zw;
 
     var sd: f32;
-    if instance.shape_type == 1.0 {
-        sd = sdf_ellipse(centered_coord, half_size);
-    } else {
-        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
-    }
+    sd = shape_sd(instance, centered_coord, half_size, k);
 
     // Compute refracted coord with edge fade near clip rect to reduce stretching
     var refracted_coord = local_coord;
     if sd < 0.0 && -sd < instance.refraction_height {
-        var normal: vec2<f32>;
-        if instance.shape_type == 1.0 {
-            normal = grad_sd_ellipse(centered_coord, half_size);
-        } else {
-            normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
-        }
+        let normal = shape_normal(instance, centered_coord, half_size, k);
 
         let refracted_distance = circle_map(1.0 - (-sd / instance.refraction_height)) * -instance.refraction_amount;
         let refracted_direction = normalize(normal + instance.eccentric_factor * normalize(centered_coord));
@@ -229,21 +265,12 @@ fn dispersion_color_on_refracted(instance: GlassUniforms, local_coord: vec2<f32>
     let centered_coord = local_coord - half_size;
 
     var sd: f32;
-    if instance.shape_type == 1.0 {
-        sd = sdf_ellipse(centered_coord, half_size);
-    } else {
-        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
-    }
+    sd = shape_sd(instance, centered_coord, half_size, k);
 
     let base_refracted = refraction_color(instance, local_coord, size, k);
 
     if sd < 0.0 && -sd < instance.dispersion_height && instance.dispersion_height > 0.0 {
-        var normal: vec2<f32>;
-        if instance.shape_type == 1.0 {
-            normal = grad_sd_ellipse(centered_coord, half_size);
-        } else {
-            normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
-        }
+        let normal = shape_normal(instance, centered_coord, half_size, k);
         let tangent = normal_to_tangent(normal);
 
         let dispersion_fraction = 1.0 - (-sd / instance.dispersion_height);
@@ -306,11 +333,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let k = instance.g2_k_value;
 
     var sd: f32;
-    if instance.shape_type == 1.0 {
-        sd = sdf_ellipse(centered_coord, half_size);
-    } else {
-        sd = sdf_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
-    }
+    sd = shape_sd(instance, centered_coord, half_size, k);
 
     var base_color: vec4<f32>;
     if instance.dispersion_height > 0.0 {
@@ -365,12 +388,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // Only compute highlight within the border region.
         if border_mask > 0.0 {
             // 2. Compute highlight normal (same logic as AGSL, using new function).
-            var normal: vec2<f32>;
-            if instance.shape_type == 1.0 {
-                normal = grad_sd_ellipse(centered_coord, half_size);
-            } else {
-                normal = grad_sd_g2_rounded_box(centered_coord, half_size, instance.corner_radii, k);
-            }
+            let normal = shape_normal(instance, centered_coord, half_size, k);
 
             // 3. Compute highlight distribution.
             let highlight_dir = normalize(vec2<f32>(cos(radians(136.0)), sin(radians(136.0)))); // Light direction at 136 degrees.

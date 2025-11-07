@@ -262,11 +262,20 @@ impl FluidGlassPipeline {
             }
         };
 
+        let is_axis_aligned_rect =
+            matches!(args.shape, crate::shape_def::Shape::RoundedRectangle { .. })
+                && corner_radii == Vec4::ZERO;
+
         let shape_type = match args.shape {
             crate::shape_def::Shape::RoundedRectangle { .. } => 0.0,
             crate::shape_def::Shape::Ellipse => 1.0,
             crate::shape_def::Shape::HorizontalCapsule => 0.0,
             crate::shape_def::Shape::VerticalCapsule => 0.0,
+        };
+        let shape_type = if is_axis_aligned_rect {
+            2.0
+        } else {
+            shape_type
         };
 
         let g2_k_value = match args.shape {
