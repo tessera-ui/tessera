@@ -339,9 +339,10 @@ fn dispersion_color_on_refracted(instance: GlassUniforms, local_coord: vec2<f32>
 }
 
 fn blend_overlay(base: vec3<f32>, blend: vec3<f32>) -> vec3<f32> {
-    let a = base * 2.0;
-    let b = (vec3<f32>(1.0) - (vec3<f32>(1.0) - base) * 2.0) * (blend - 0.5) + base;
-    return select(b, a, blend < vec3<f32>(0.5));
+    // Multiply mode darkens when base is dark, screen mode lightens when base is bright.
+    let multiply = 2.0 * base * blend;
+    let screen = 1.0 - 2.0 * (1.0 - base) * (1.0 - blend);
+    return select(screen, multiply, base < vec3<f32>(0.5));
 }
 
 @fragment
