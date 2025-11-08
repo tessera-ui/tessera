@@ -1,3 +1,11 @@
+## [v2.3.0] - 2025-11-08 +08:00
+
+### Changes
+
+- feat: add speed limit for inertial scrolling
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.2.0...tessera-ui-v2.3.0)
+
 ## [v2.2.0] - 2025-11-03 +08:00
 
 ### Changes
