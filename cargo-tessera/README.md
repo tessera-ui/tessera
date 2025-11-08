@@ -37,6 +37,25 @@ Cross-compile for a specific target:
 cargo tessera build --release --target x86_64-pc-windows-msvc
 ```
 
+### Build for Android (experimental)
+
+Install [`xbuild`](https://github.com/rust-mobile/xbuild) (`cargo install xbuild --features vendored`) and add Tessera metadata to your `Cargo.toml`:
+
+```toml
+[package.metadata.tessera.android]
+package = "com.example.myapp"
+arch = "arm64"
+format = "apk"
+```
+
+Then run:
+
+```bash
+cargo tessera build --platform android
+```
+
+Use `--android-arch`, `--android-package`, or `--android-format` to override metadata, and pass `--android-skip-doctor` if you want to skip `x doctor`.
+
 ## Commands
 
 - `cargo tessera new <name>` - Create a new Tessera project

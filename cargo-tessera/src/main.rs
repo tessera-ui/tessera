@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod commands;
+use commands::build::{AndroidFormat, BuildOptions, BuildPlatform};
 
 #[derive(Parser)]
 #[command(name = "cargo-tessera")]
@@ -49,6 +50,21 @@ enum TesseraCommands {
         /// Target platform
         #[arg(short, long)]
         target: Option<String>,
+        /// Select build platform (native or android)
+        #[arg(long, value_enum, default_value_t = BuildPlatform::Native)]
+        platform: BuildPlatform,
+        /// Override Android CPU architecture (e.g. arm64, armeabi-v7a)
+        #[arg(long = "android-arch")]
+        android_arch: Option<String>,
+        /// Override Android package/binary name passed to xbuild (-p)
+        #[arg(long = "android-package")]
+        android_package: Option<String>,
+        /// Override Android artifact format (apk or aab)
+        #[arg(long = "android-format", value_enum)]
+        android_format: Option<AndroidFormat>,
+        /// Skip running `x doctor` before Android builds
+        #[arg(long = "android-skip-doctor")]
+        android_skip_doctor: bool,
     },
 }
 
@@ -71,8 +87,25 @@ fn main() -> Result<()> {
             TesseraCommands::Dev { verbose } => {
                 commands::dev::execute(verbose)?;
             }
-            TesseraCommands::Build { release, target } => {
-                commands::build::execute(release, target.as_deref())?;
+            TesseraCommands::Build {
+                release,
+                target,
+                platform,
+                android_arch,
+                android_package,
+                android_format,
+                android_skip_doctor,
+            } => {
+                let opts = BuildOptions {
+                    release,
+                    target,
+                    platform,
+                    android_arch,
+                    android_package,
+                    android_format,
+                    android_skip_doctor,
+                };
+                commands::build::execute(opts)?;
             }
         },
     }
