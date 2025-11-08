@@ -1,3 +1,15 @@
+## [v2.3.0] - 2025-11-08 +08:00
+
+### Changes
+
+- perf(cache): add heat tracking to prevent caching transient shapes
+- feat(fluid_glass): enhance blend_overlay function with multiply and screen modes
+- perf(fluid_glass): cache sdf generation
+- perf(fluid_glass): short-circuit plain rectangles
+- perf(blur): leverage hardware filtering for scale passes
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.2.0...tessera-ui-basic-components-v2.3.0)
+
 ## [v2.2.0] - 2025-11-03 +08:00
 
 ### Changes
