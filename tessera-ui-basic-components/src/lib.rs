@@ -70,6 +70,7 @@ pub mod glass_progress;
 pub mod glass_slider;
 pub mod glass_switch;
 pub mod image;
+pub mod image_vector;
 pub mod pipelines;
 pub mod pos_misc;
 pub mod progress;

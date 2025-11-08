@@ -9,8 +9,10 @@ pub mod simple_rect;
 pub mod text;
 
 pub mod image;
+pub mod image_vector;
 
 pub use checkmark::{CheckmarkCommand, CheckmarkPipeline};
+pub use image_vector::{ImageVectorCommand, ImageVectorPipeline};
 pub use shape::{RippleProps, ShadowProps, ShapeCommand};
 pub use simple_rect::{SimpleRectCommand, SimpleRectPipeline};
 pub use text::{TextCommand, TextConstraint, TextData, read_font_system, write_font_system};
@@ -37,6 +39,10 @@ pub fn register_pipelines(app: &mut tessera_ui::renderer::WgpuApp) {
     // Register image pipeline
     let image_pipeline = image::ImagePipeline::new(&app.gpu, &app.config, app.sample_count);
     app.register_draw_pipeline(image_pipeline);
+    // Register image vector pipeline
+    let image_vector_pipeline =
+        image_vector::ImageVectorPipeline::new(&app.gpu, &app.config, app.sample_count);
+    app.register_draw_pipeline(image_vector_pipeline);
     // Register blur pipeline
     let blur_pipeline = blur::pipeline::BlurPipeline::new(&app.gpu);
     app.register_compute_pipeline(blur_pipeline);

@@ -4,6 +4,10 @@ use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
+    image_vector::{
+        ImageVectorArgsBuilder, ImageVectorData, ImageVectorSource, image_vector,
+        load_image_vector_from_source,
+    },
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
@@ -14,10 +18,13 @@ const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/examples/assets/scarlet_ut.jpg",
 ));
+const VECTOR_BYTES: &[u8] =
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/logo.svg"));
 
 pub struct ImageShowcaseState {
     scrollable_state: Arc<ScrollableState>,
     image_data: Arc<ImageData>,
+    image_vector_data: Arc<ImageVectorData>,
 }
 
 impl Default for ImageShowcaseState {
@@ -27,9 +34,15 @@ impl Default for ImageShowcaseState {
                 .expect("Failed to load image from embedded bytes"),
         );
 
+        let image_vector_data = Arc::new(
+            load_image_vector_from_source(&ImageVectorSource::Bytes(Arc::from(VECTOR_BYTES)))
+                .expect("Failed to load SVG from embedded bytes"),
+        );
+
         Self {
             scrollable_state: Arc::new(ScrollableState::default()),
             image_data,
+            image_vector_data,
         }
     }
 }
@@ -86,11 +99,46 @@ fn test_content(state: Arc<ImageShowcaseState>) {
             });
 
             scope.child(move || {
-                image(
-                    ImageArgsBuilder::default()
-                        .data(state.image_data.clone())
+                column(
+                    ColumnArgsBuilder::default()
+                        .width(DimensionValue::FILLED)
                         .build()
                         .unwrap(),
+                    |column_scope| {
+                        column_scope.child(|| text("Raster image"));
+                        column_scope.child(|| {
+                            spacer(Dp(8.0));
+                        });
+                        let raster = state.image_data.clone();
+                        column_scope.child(move || {
+                            image(
+                                ImageArgsBuilder::default()
+                                    .data(raster.clone())
+                                    .build()
+                                    .unwrap(),
+                            )
+                        });
+
+                        column_scope.child(|| {
+                            spacer(Dp(24.0));
+                        });
+
+                        column_scope.child(|| text("Vector image"));
+                        column_scope.child(|| {
+                            spacer(Dp(8.0));
+                        });
+                        let vector = state.image_vector_data.clone();
+                        column_scope.child(move || {
+                            image_vector(
+                                ImageVectorArgsBuilder::default()
+                                    .data(vector.clone())
+                                    .width(DimensionValue::Fixed(Dp(160.0).into()))
+                                    .height(DimensionValue::Fixed(Dp(160.0).into()))
+                                    .build()
+                                    .unwrap(),
+                            )
+                        });
+                    },
                 )
             });
         },
