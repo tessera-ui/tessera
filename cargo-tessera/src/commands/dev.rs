@@ -107,7 +107,8 @@ pub fn execute(verbose: bool) -> Result<()> {
                             } else {
                                 println!("\n{}", "✅ App exited normally.".green());
                             }
-                            println!("{}", "Waiting for file changes to restart...".dimmed());
+                            println!("{}", "Stopping dev server...".dimmed());
+                            break;
                         }
                         Ok(None) => {
                             child = Some(running_child);
