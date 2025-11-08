@@ -75,9 +75,7 @@ pub fn execute(name: &str, template: &str) -> Result<()> {
         "✅".green(),
         name.bright_green()
     );
-    println!("\n{}", "Next steps:".bright_yellow());
-    println!("  cd {}", name);
-    println!("  cargo tessera dev");
+    print_project_summary(name, template);
 
     Ok(())
 }
@@ -171,4 +169,49 @@ fn apply_template_vars(content: &str, vars: &HashMap<&str, &str>) -> String {
         result = result.replace(&format!("{{{{{}}}}}", key), value);
     }
     result
+}
+
+fn print_project_summary(name: &str, template: &str) {
+    let title_plain = " Project Ready ";
+    let title_styled = format!(" {}", "PROJECT READY".bold());
+
+    let rows: Vec<(String, String)> = vec![
+        (
+            format!(" Name     : {}", name),
+            format!(" Name     : {}", name.bright_green()),
+        ),
+        (
+            format!(" Template : {}", template),
+            format!(" Template : {}", template.cyan()),
+        ),
+        (
+            format!(" Next     : cd {}", name),
+            format!(" Next     : cd {}", name.bright_yellow()),
+        ),
+        (
+            format!("            cargo tessera dev"),
+            format!("            cargo tessera dev"),
+        ),
+    ];
+
+    let mut width = title_plain.chars().count();
+    for (plain, _) in &rows {
+        width = width.max(plain.chars().count());
+    }
+
+    let horizontal = "─".repeat(width + 2);
+    println!("\n┌{}┐", horizontal);
+    println!(
+        "│ {}{} │",
+        title_styled,
+        " ".repeat(width - title_plain.chars().count())
+    );
+    println!("├{}┤", horizontal);
+
+    for (plain, styled) in &rows {
+        let padding = " ".repeat(width.saturating_sub(plain.chars().count()));
+        println!("│ {}{} │", styled, padding);
+    }
+
+    println!("└{}┘", horizontal);
 }
