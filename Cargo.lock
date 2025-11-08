@@ -1060,7 +1060,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wgpu",
- "winit",
 ]
 
 [[package]]
