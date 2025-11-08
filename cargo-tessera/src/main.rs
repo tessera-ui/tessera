@@ -1,8 +1,8 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 mod commands;
-use commands::build::{AndroidFormat, BuildOptions, BuildPlatform};
+use commands::android::{self, AndroidFormat};
 
 #[derive(Parser)]
 #[command(name = "cargo-tessera")]
@@ -42,27 +42,60 @@ enum TesseraCommands {
         #[arg(short, long)]
         verbose: bool,
     },
-    /// Build the project for release
+    /// Build the project for release (native targets)
     Build {
         /// Build in release mode
         #[arg(short, long)]
         release: bool,
-        /// Target platform
+        /// Target triple (passed to cargo build)
         #[arg(short, long)]
         target: Option<String>,
-        /// Select build platform (native or android)
-        #[arg(long, value_enum, default_value_t = BuildPlatform::Native)]
-        platform: BuildPlatform,
-        /// Override Android CPU architecture (e.g. arm64, armeabi-v7a)
-        #[arg(long = "android-arch")]
-        android_arch: Option<String>,
-        /// Override Android package/binary name passed to xbuild (-p)
-        #[arg(long = "android-package")]
-        android_package: Option<String>,
-        /// Override Android artifact format (apk or aab)
-        #[arg(long = "android-format", value_enum)]
-        android_format: Option<AndroidFormat>,
     },
+    /// Android-specific helpers (build/dev)
+    Android {
+        #[command(subcommand)]
+        command: AndroidCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum AndroidCommands {
+    /// Build Android artifacts using xbuild
+    Build(AndroidBuildArgs),
+    /// Run/install the app on an Android device via xbuild
+    Dev(AndroidDevArgs),
+}
+
+#[derive(Args)]
+struct AndroidBuildArgs {
+    /// Build in release mode
+    #[arg(long)]
+    release: bool,
+    /// Override CPU architecture (default from metadata or arm64)
+    #[arg(long = "arch")]
+    arch: Option<String>,
+    /// Override package/binary name (-p)
+    #[arg(long = "package")]
+    package: Option<String>,
+    /// Override artifact format (apk or aab)
+    #[arg(long = "format", value_enum)]
+    format: Option<AndroidFormat>,
+}
+
+#[derive(Args)]
+struct AndroidDevArgs {
+    /// Run in release mode
+    #[arg(long)]
+    release: bool,
+    /// Override CPU architecture
+    #[arg(long = "arch")]
+    arch: Option<String>,
+    /// Override package/binary name (-p)
+    #[arg(long = "package")]
+    package: Option<String>,
+    /// Device id used by `x run --device`
+    #[arg(long = "device")]
+    device: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -84,24 +117,27 @@ fn main() -> Result<()> {
             TesseraCommands::Dev { verbose } => {
                 commands::dev::execute(verbose)?;
             }
-            TesseraCommands::Build {
-                release,
-                target,
-                platform,
-                android_arch,
-                android_package,
-                android_format,
-            } => {
-                let opts = BuildOptions {
-                    release,
-                    target,
-                    platform,
-                    android_arch,
-                    android_package,
-                    android_format,
-                };
-                commands::build::execute(opts)?;
+            TesseraCommands::Build { release, target } => {
+                commands::build::execute(release, target.as_deref())?;
             }
+            TesseraCommands::Android { command } => match command {
+                AndroidCommands::Build(build_args) => {
+                    android::build(android::BuildOptions {
+                        release: build_args.release,
+                        arch: build_args.arch.clone(),
+                        package: build_args.package.clone(),
+                        format: build_args.format,
+                    })?;
+                }
+                AndroidCommands::Dev(dev_args) => {
+                    android::dev(android::DevOptions {
+                        release: dev_args.release,
+                        arch: dev_args.arch.clone(),
+                        package: dev_args.package.clone(),
+                        device: dev_args.device.clone(),
+                    })?;
+                }
+            },
         },
     }
 

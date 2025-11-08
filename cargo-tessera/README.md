@@ -48,19 +48,24 @@ arch = "arm64"
 format = "apk"
 ```
 
-Then run:
+Android helpers live under the dedicated subcommand:
 
 ```bash
-cargo tessera build --platform android
+# Build APK/AAB via xbuild
+cargo tessera android build --release --format apk
+
+# Run the app on a device/emulator (set --device if multiple devices are connected)
+cargo tessera android dev --device adb:1234
 ```
 
-Use `--android-arch`, `--android-package`, or `--android-format` to override metadata. If the build fails, install `xbuild` or run `x doctor` for diagnostics.
+Use `--arch`, `--package`, or `--format` to override metadata; if the build fails, install `xbuild` or run `x doctor` for diagnostics.
 
 ## Commands
 
 - `cargo tessera new <name>` - Create a new Tessera project
 - `cargo tessera dev` - Start development server with built-in hot reload
-- `cargo tessera build` - Build the project
+- `cargo tessera build` - Build desktop targets
+- `cargo tessera android <subcommand>` - Android helpers (`build`, `dev`)
 
 ## License
 
