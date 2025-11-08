@@ -54,7 +54,7 @@ Then run:
 cargo tessera build --platform android
 ```
 
-Use `--android-arch`, `--android-package`, or `--android-format` to override metadata, and pass `--android-skip-doctor` if you want to skip `x doctor`.
+Use `--android-arch`, `--android-package`, or `--android-format` to override metadata. If the build fails, install `xbuild` or run `x doctor` for diagnostics.
 
 ## Commands
 

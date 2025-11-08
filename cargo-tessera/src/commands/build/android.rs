@@ -1,7 +1,4 @@
-use std::{
-    fs, io,
-    process::{Command, ExitStatus, Stdio},
-};
+use std::{fs, io, process::Command};
 
 use anyhow::{Context, Result, anyhow, bail};
 use owo_colors::colored::*;
@@ -19,8 +16,6 @@ pub fn execute(opts: BuildOptions) -> Result<()> {
     if opts.target.is_some() {
         bail!("`--target` is not supported for Android builds. Use `--android-arch` instead.");
     }
-
-    ensure_x_available()?;
 
     let manifest = Manifest::load()?;
     let manifest_package = manifest.package_name();
@@ -54,8 +49,6 @@ package.metadata.tessera.android.package in Cargo.toml"
         })
         .unwrap_or(AndroidFormat::Apk);
 
-    let skip_doctor = opts.android_skip_doctor || manifest_cfg.skip_doctor.unwrap_or(false);
-
     println!(
         "{}",
         format!(
@@ -66,12 +59,6 @@ package.metadata.tessera.android.package in Cargo.toml"
         )
         .bright_cyan()
     );
-
-    if skip_doctor {
-        println!("{}", "Skipping `x doctor` (requested)".dimmed());
-    } else {
-        run_x_doctor()?;
-    }
 
     run_x_build(&package, &arch, format, opts.release)?;
 
@@ -86,39 +73,6 @@ package.metadata.tessera.android.package in Cargo.toml"
         "{}",
         "Tip: use `x build -h` for more Android packaging flags.".dimmed()
     );
-
-    Ok(())
-}
-
-fn ensure_x_available() -> Result<()> {
-    match Command::new("x")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-    {
-        Ok(_) => Ok(()),
-        Err(err) if err.kind() == io::ErrorKind::NotFound => bail!(
-            "`x` (xbuild) was not found. Install it with `cargo install xbuild --features vendored` \
-or open `nix develop .#android`."
-        ),
-        Err(err) => Err(err.into()),
-    }
-}
-
-fn run_x_doctor() -> Result<()> {
-    println!(
-        "{}",
-        "Running `x doctor` to validate Android toolchain...".dimmed()
-    );
-    let status = Command::new("x")
-        .arg("doctor")
-        .status()
-        .context("Failed to run `x doctor`")?;
-
-    if !status.success() {
-        bail!("`x doctor` reported issues. Resolve them or pass --android-skip-doctor.");
-    }
 
     Ok(())
 }
@@ -139,18 +93,20 @@ fn run_x_build(package: &str, arch: &str, format: AndroidFormat, release: bool) 
         cmd.arg("--release");
     }
 
-    let status = cmd.status().context("Failed to run `x build`")?;
-    ensure_success(status, "`x build` failed")?;
-    Ok(())
-}
+    let status = match cmd.status() {
+        Ok(status) => status,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => bail!(
+            "`x` (xbuild) was not found. Install it with `cargo install xbuild --features vendored` or open `nix develop .#android`."
+        ),
+        Err(err) => return Err(err).context("Failed to run `x build`"),
+    };
 
-fn ensure_success(status: ExitStatus, message: &str) -> Result<()> {
     if status.success() {
         Ok(())
     } else if let Some(code) = status.code() {
-        bail!("{message} (exit code {code})");
+        bail!("`x build` failed (exit code {code}). Run `x doctor` for diagnostics.");
     } else {
-        bail!("{message}");
+        bail!("`x build` terminated unexpectedly. Run `x doctor` for diagnostics.");
     }
 }
 
@@ -199,5 +155,4 @@ struct AndroidConfig {
     package: Option<String>,
     arch: Option<String>,
     format: Option<String>,
-    skip_doctor: Option<bool>,
 }

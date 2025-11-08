@@ -62,9 +62,6 @@ enum TesseraCommands {
         /// Override Android artifact format (apk or aab)
         #[arg(long = "android-format", value_enum)]
         android_format: Option<AndroidFormat>,
-        /// Skip running `x doctor` before Android builds
-        #[arg(long = "android-skip-doctor")]
-        android_skip_doctor: bool,
     },
 }
 
@@ -94,7 +91,6 @@ fn main() -> Result<()> {
                 android_arch,
                 android_package,
                 android_format,
-                android_skip_doctor,
             } => {
                 let opts = BuildOptions {
                     release,
@@ -103,7 +99,6 @@ fn main() -> Result<()> {
                     android_arch,
                     android_package,
                     android_format,
-                    android_skip_doctor,
                 };
                 commands::build::execute(opts)?;
             }

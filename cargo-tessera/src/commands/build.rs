@@ -43,7 +43,6 @@ pub struct BuildOptions {
     pub android_arch: Option<String>,
     pub android_package: Option<String>,
     pub android_format: Option<AndroidFormat>,
-    pub android_skip_doctor: bool,
 }
 
 pub fn execute(opts: BuildOptions) -> Result<()> {
