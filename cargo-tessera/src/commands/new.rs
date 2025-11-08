@@ -5,57 +5,64 @@ use comfy_table::{
     Attribute, Cell, ContentArrangement, Table, modifiers::UTF8_ROUND_CORNERS as RoundCorners,
     presets::UTF8_FULL,
 };
-use dialoguer::{Input, Select};
 use include_dir::{Dir, include_dir};
+use inquire::{
+    Select as ChoicePrompt, Text,
+    error::CustomUserError,
+    ui::{Attributes, Color, ErrorMessageRenderConfig, RenderConfig, StyleSheet, Styled},
+    validator::Validation,
+};
 use owo_colors::colored::*;
 
 static TEMPLATES: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates");
 
 /// Prompt for project name interactively with validation
 pub fn prompt_project_name() -> Result<String> {
-    loop {
-        let name: String = Input::new().with_prompt("Project name").interact_text()?;
+    let validator = |input: &str| -> Result<Validation, CustomUserError> {
+        let trimmed = input.trim();
 
-        // Validate project name
-        if name.is_empty() {
-            println!("{}", "❌ Project name cannot be empty".red());
-            continue;
+        if trimmed.is_empty() {
+            return Ok(Validation::Invalid(
+                "Project name cannot be empty".to_string().into(),
+            ));
         }
 
-        // Check if name contains invalid characters
-        // Valid Rust/Cargo package names: lowercase letters, numbers, hyphens, underscores
-        if !name
+        if !trimmed
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
         {
-            println!(
-                "{}",
-                "❌ Project name must contain only lowercase letters, numbers, hyphens, and underscores"
-                    .red()
-            );
-            continue;
+            return Ok(Validation::Invalid(
+                "Only lowercase letters, digits, '-' and '_' are allowed".into(),
+            ));
         }
 
-        // Check if starts with a letter
-        if !name.chars().next().unwrap().is_ascii_lowercase() {
-            println!(
-                "{}",
-                "❌ Project name must start with a lowercase letter".red()
-            );
-            continue;
+        if !trimmed
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase())
+        {
+            return Ok(Validation::Invalid(
+                "Project name must start with a lowercase letter".into(),
+            ));
         }
 
-        // Check if directory already exists
-        if Path::new(&name).exists() {
-            println!(
-                "{}",
-                format!("❌ Directory '{}' already exists", name).red()
-            );
-            continue;
+        if Path::new(trimmed).exists() {
+            return Ok(Validation::Invalid(
+                format!("Directory '{trimmed}' already exists").into(),
+            ));
         }
 
-        return Ok(name);
-    }
+        Ok(Validation::Valid)
+    };
+
+    let name = Text::new("Project name")
+        .with_render_config(prompt_theme())
+        .with_help_message("lowercase, numbers, '-' or '_', must start with a letter")
+        .with_placeholder("my-tessera-app")
+        .with_validator(validator)
+        .prompt()?;
+
+    Ok(name.trim().to_string())
 }
 
 pub fn execute(name: &str, template: &str) -> Result<()> {
@@ -86,9 +93,9 @@ pub fn execute(name: &str, template: &str) -> Result<()> {
 
 /// Select template interactively if not specified
 pub fn select_template_interactive() -> Result<String> {
-    let templates: Vec<&str> = TEMPLATES
+    let templates: Vec<String> = TEMPLATES
         .dirs()
-        .map(|d| d.path().file_name().unwrap().to_str().unwrap())
+        .map(|d| d.path().file_name().unwrap().to_str().unwrap().to_string())
         .collect();
 
     if templates.is_empty() {
@@ -96,16 +103,15 @@ pub fn select_template_interactive() -> Result<String> {
     }
 
     if templates.len() == 1 {
-        return Ok(templates[0].to_string());
+        return Ok(templates[0].clone());
     }
 
-    let selection = Select::new()
-        .with_prompt("Select a template")
-        .items(&templates)
-        .default(0)
-        .interact()?;
+    let selection = ChoicePrompt::new("Select a template", templates.clone())
+        .with_render_config(prompt_theme())
+        .with_help_message("Use ↑ ↓ to navigate, Enter to confirm")
+        .prompt()?;
 
-    Ok(templates[selection].to_string())
+    Ok(selection)
 }
 
 fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
@@ -173,6 +179,32 @@ fn apply_template_vars(content: &str, vars: &HashMap<&str, &str>) -> String {
         result = result.replace(&format!("{{{{{}}}}}", key), value);
     }
     result
+}
+
+fn prompt_theme() -> RenderConfig<'static> {
+    let accent = Color::LightCyan;
+    let mut config = RenderConfig::default_colored()
+        .with_prompt_prefix(Styled::new("❯").with_fg(accent))
+        .with_answered_prompt_prefix(Styled::new("✔").with_fg(Color::LightGreen))
+        .with_canceled_prompt_indicator(Styled::new("✖ cancelled").with_fg(Color::LightRed))
+        .with_highlighted_option_prefix(Styled::new("›").with_fg(accent))
+        .with_scroll_up_prefix(Styled::new("↑").with_fg(Color::DarkGrey))
+        .with_scroll_down_prefix(Styled::new("↓").with_fg(Color::DarkGrey))
+        .with_selected_checkbox(Styled::new("◉").with_fg(accent))
+        .with_unselected_checkbox(Styled::new("○").with_fg(Color::DarkGrey))
+        .with_error_message(
+            ErrorMessageRenderConfig::default_colored()
+                .with_prefix(Styled::new("⚠").with_fg(Color::LightRed)),
+        );
+
+    config.prompt = StyleSheet::new()
+        .with_fg(Color::White)
+        .with_attr(Attributes::BOLD);
+    config.answer = StyleSheet::new().with_fg(accent);
+    config.placeholder = StyleSheet::new().with_fg(Color::DarkGrey);
+    config.help_message = StyleSheet::new().with_fg(Color::DarkGrey);
+    config.text_input = StyleSheet::new().with_fg(Color::White);
+    config
 }
 
 fn print_project_summary(name: &str, template: &str) {
