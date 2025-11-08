@@ -30,14 +30,22 @@ use tessera_ui_basic_components::{
 };
 
 use crate::example_components::{
-    button::ButtonShowcaseDestination, checkbox::CheckboxShowcaseDestination,
-    fluid_glass::FluidGlassShowcaseDestination, glass_button::GlassButtonShowcaseDestination,
-    glass_progress::GlassProgressShowcaseDestination, glass_slider::GlassSliderShowcaseDestination,
-    glass_switch::GlassSwitchShowcaseDestination, image::ImageShowcaseDestination,
-    layouts::LayoutsShowcaseDestination, progress::ProgressShowcaseDestination,
-    slider::SliderShowcaseDestination, spacer::SpacerShowcaseDestination,
-    surface::SurfaceShowcaseDestination, switch::SwitchShowcaseDestination,
-    tabs::TabsShowcaseDestination, text::TextShowcaseDestination,
+    button::ButtonShowcaseDestination,
+    checkbox::CheckboxShowcaseDestination,
+    fluid_glass::FluidGlassShowcaseDestination,
+    glass_button::GlassButtonShowcaseDestination,
+    glass_progress::GlassProgressShowcaseDestination,
+    glass_slider::GlassSliderShowcaseDestination,
+    glass_switch::GlassSwitchShowcaseDestination,
+    image::{ImageShowcaseDestination, ImageVectorShowcaseDestination},
+    layouts::LayoutsShowcaseDestination,
+    progress::ProgressShowcaseDestination,
+    slider::SliderShowcaseDestination,
+    spacer::SpacerShowcaseDestination,
+    surface::SurfaceShowcaseDestination,
+    switch::SwitchShowcaseDestination,
+    tabs::TabsShowcaseDestination,
+    text::TextShowcaseDestination,
     text_editor::TextEditorShowcaseDestination,
 };
 
@@ -259,6 +267,15 @@ fn home(
                 router.push(ImageShowcaseDestination {});
             });
         }),
+        ComponentExampleDesc::new(
+            "Image Vector",
+            "A component to display scalable vector images.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(ImageVectorShowcaseDestination {});
+                });
+            },
+        ),
         ComponentExampleDesc::new(
             "Glass Switch",
             "A switch with a frosted glass effect.",
