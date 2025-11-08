@@ -23,7 +23,7 @@ cd my-app
 cargo tessera dev
 ```
 
-`cargo tessera dev` 会持续监听 `src/`、`Cargo.toml` 以及（若存在）`build.rs`，保存后立即重新编译并运行。加上 `--verbose` 可查看底层 `cargo` 命令。
+`cargo tessera dev` 会持续监听 `src/`、`Cargo.toml` 以及（若存在）`build.rs`，保存后立即重建并重启应用。加上 `--verbose` 可查看底层 `cargo` 命令。
 
 ### 构建发布版本
 
@@ -56,9 +56,9 @@ cargo tessera android dev --device adb:1234
 ## 命令速览
 
 - `cargo tessera new <name>`：创建 Tessera 项目
-- `cargo tessera dev`：启动桌面热重载开发
+- `cargo tessera dev`：启动桌面自动重建 / 重启开发
 - `cargo tessera build`：桌面构建（支持 `--release` / `--target`）
-- `cargo tessera android <build|dev>`：Android 构建与热重载
+- `cargo tessera android <build|dev>`：Android 构建与运行辅助
 
 ## 许可证
 

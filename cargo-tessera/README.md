@@ -22,9 +22,7 @@ cd my-app
 ```bash
 cargo tessera dev
 ```
-
-Hot reload is built in—`cargo tessera dev` watches `src/`, `Cargo.toml`, and (if
-present) `build.rs`. Pass `--verbose` to see the underlying `cargo` commands.
+`cargo tessera dev` watches `src/`, `Cargo.toml`, and (if present) `build.rs`, then rebuilds and restarts the app whenever changes are saved. Pass `--verbose` to see the underlying `cargo` commands.
 
 ### Build for release
 
@@ -61,7 +59,7 @@ cargo tessera android dev --device adb:1234
 ## Commands
 
 - `cargo tessera new <name>` - Create a new Tessera project
-- `cargo tessera dev` - Start development server with built-in hot reload
+- `cargo tessera dev` - Start development server with automatic rebuild/restart
 - `cargo tessera build` - Build desktop targets
 - `cargo tessera android <subcommand>` - Android helpers (`build`, `dev`)
 

@@ -37,7 +37,7 @@ enum TesseraCommands {
         #[arg(short, long)]
         template: Option<String>,
     },
-    /// Start development server with hot reload
+    /// Start development server with auto rebuild/restart
     Dev {
         /// Enable verbose output
         #[arg(short, long)]

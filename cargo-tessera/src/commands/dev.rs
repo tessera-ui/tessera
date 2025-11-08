@@ -12,7 +12,7 @@ use owo_colors::colored::*;
 pub fn execute(verbose: bool) -> Result<()> {
     println!(
         "{}",
-        "Starting development server with hot reload...".bright_cyan()
+        "Starting development server (auto rebuild/restart)...".bright_cyan()
     );
     println!("{}", "Watching for file changes...".dimmed());
 
