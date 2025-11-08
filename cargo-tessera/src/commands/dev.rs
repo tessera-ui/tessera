@@ -12,7 +12,7 @@ use owo_colors::colored::*;
 pub fn execute(verbose: bool) -> Result<()> {
     println!(
         "{}",
-        "🚀 Starting development server with hot reload...".bright_cyan()
+        "Starting development server with hot reload...".bright_cyan()
     );
     println!("{}", "Watching for file changes...".dimmed());
 
@@ -49,7 +49,7 @@ pub fn execute(verbose: bool) -> Result<()> {
                 let _ = c.wait();
             }
 
-            println!("\n{}", "🔨 Rebuilding...".bright_yellow());
+            println!("\n{}", "Rebuilding project...".bright_yellow());
 
             // Build first
             let build_status = Command::new("cargo")
@@ -61,10 +61,10 @@ pub fn execute(verbose: bool) -> Result<()> {
                 .status()?;
 
             if !build_status.success() {
-                println!("{}", "❌ Build failed, waiting for changes...".red());
+                println!("{}", "Build failed, waiting for changes...".red());
                 should_rebuild = false;
             } else {
-                println!("{}", "✅ Build successful, starting app...".green());
+                println!("{}", "Build succeeded, launching app...".green());
 
                 // Run the app
                 let mut run_cmd = Command::new("cargo");
@@ -78,10 +78,10 @@ pub fn execute(verbose: bool) -> Result<()> {
                     Ok(c) => {
                         child = Some(c);
                         should_rebuild = false;
-                        println!("{}", "👀 Watching for changes... (Ctrl+C to stop)".cyan());
+                        println!("{}", "Watching for changes... (Ctrl+C to stop)".cyan());
                     }
                     Err(e) => {
-                        println!("{} Failed to start app: {}", "❌".red(), e);
+                        println!("{} Failed to start app: {}", "Error".red(), e);
                         should_rebuild = false;
                     }
                 }
@@ -91,7 +91,7 @@ pub fn execute(verbose: bool) -> Result<()> {
         // Wait for file changes
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(_) => {
-                println!("\n{}", "📝 File changed, restarting...".bright_cyan());
+                println!("\n{}", "Change detected, restarting...".bright_cyan());
                 should_rebuild = true;
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -101,11 +101,14 @@ pub fn execute(verbose: bool) -> Result<()> {
                             if !status.success() {
                                 println!(
                                     "\n{}",
-                                    format!("❌ App crashed with exit code: {:?}", status.code())
-                                        .red()
+                                    format!(
+                                        "Application crashed with exit code: {:?}",
+                                        status.code()
+                                    )
+                                    .red()
                                 );
                             } else {
-                                println!("\n{}", "✅ App exited normally.".green());
+                                println!("\n{}", "Application exited normally.".green());
                             }
                             println!("{}", "Stopping dev server...".dimmed());
                             break;

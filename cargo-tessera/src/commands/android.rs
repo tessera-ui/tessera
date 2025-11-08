@@ -82,7 +82,7 @@ package.metadata.tessera.android.package in Cargo.toml"
     println!(
         "{}",
         format!(
-            "🤖 Building Android artifact ({}, {}, release: {})",
+            "Building Android artifact ({}, {}, release: {})",
             package,
             arch,
             if opts.release { "yes" } else { "no" }
@@ -92,7 +92,7 @@ package.metadata.tessera.android.package in Cargo.toml"
 
     run_x_command("build", &package, Some(&arch), opts.release, format, None)?;
 
-    println!("\n{} Android build completed!", "✅".green());
+    println!("\n{} Android build completed!", "Android build complete".green());
     println!("Package: {}", package.bright_green());
     println!(
         "Format : {} ({})",
@@ -133,7 +133,7 @@ package.metadata.tessera.android.package in Cargo.toml"
     println!(
         "{}",
         format!(
-            "📱 Running Tessera app on Android ({}, arch: {}, release: {})",
+            "Running Tessera app on Android ({}, arch: {}, release: {})",
             package,
             arch,
             if opts.release { "yes" } else { "no" }
@@ -152,7 +152,7 @@ package.metadata.tessera.android.package in Cargo.toml"
 
     println!(
         "{}",
-        "✅ App launched via `x run`. Use Ctrl+C to stop or rerun the command after code changes."
+        "Application launched via `x run`. Use Ctrl+C to stop or rerun after code changes."
             .green()
     );
 

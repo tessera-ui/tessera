@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail};
 use owo_colors::colored::*;
 
 pub fn execute(release: bool, target: Option<&str>) -> Result<()> {
-    println!("{}", "🔨 Building project...".bright_cyan());
+    println!("{}", "Building project...".bright_cyan());
 
     let mut cmd = Command::new("cargo");
     cmd.arg("build");
@@ -25,7 +25,7 @@ pub fn execute(release: bool, target: Option<&str>) -> Result<()> {
         bail!("Build failed");
     }
 
-    println!("\n{} Build completed successfully!", "✅".green());
+    println!("\n{} Build completed successfully!", "Build complete".green());
 
     if release {
         let binary_path = if let Some(target) = target {

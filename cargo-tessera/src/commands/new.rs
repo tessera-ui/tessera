@@ -66,7 +66,7 @@ pub fn prompt_project_name() -> Result<String> {
 }
 
 pub fn execute(name: &str, template: &str) -> Result<()> {
-    println!("{}", "🎨 Creating new Tessera project...".bright_cyan());
+    println!("{}", "Creating new Tessera project...".bright_cyan());
 
     let project_dir = Path::new(name);
 
@@ -83,7 +83,7 @@ pub fn execute(name: &str, template: &str) -> Result<()> {
 
     println!(
         "\n{} Project '{}' created successfully!",
-        "✅".green(),
+        "Success".green(),
         name.bright_green()
     );
     print_project_summary(name, template);
@@ -187,9 +187,9 @@ fn apply_template_vars(content: &str, vars: &HashMap<&str, String>) -> String {
 fn prompt_theme() -> RenderConfig<'static> {
     let accent = Color::LightCyan;
     let mut config = RenderConfig::default_colored()
-        .with_prompt_prefix(Styled::new("❯").with_fg(accent))
-        .with_answered_prompt_prefix(Styled::new("✔").with_fg(Color::LightGreen))
-        .with_canceled_prompt_indicator(Styled::new("✖ cancelled").with_fg(Color::LightRed))
+        .with_prompt_prefix(Styled::new(">").with_fg(accent))
+        .with_answered_prompt_prefix(Styled::new("ok").with_fg(Color::LightGreen))
+        .with_canceled_prompt_indicator(Styled::new("cancelled").with_fg(Color::LightRed))
         .with_highlighted_option_prefix(Styled::new("›").with_fg(accent))
         .with_scroll_up_prefix(Styled::new("↑").with_fg(Color::DarkGrey))
         .with_scroll_down_prefix(Styled::new("↓").with_fg(Color::DarkGrey))
@@ -218,7 +218,7 @@ fn print_project_summary(name: &str, template: &str) {
         .set_width(60)
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![
-            Cell::new("✨ Field").add_attribute(Attribute::Bold),
+            Cell::new("Field").add_attribute(Attribute::Bold),
             Cell::new("Details").add_attribute(Attribute::Bold),
         ]);
 

@@ -22,6 +22,7 @@ cd my-app
 ```bash
 cargo tessera dev
 ```
+
 Hot reload is built in—`cargo tessera dev` watches `src/`, `Cargo.toml`, and (if
 present) `build.rs`. Pass `--verbose` to see the underlying `cargo` commands.
 
