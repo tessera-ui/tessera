@@ -1,3 +1,13 @@
+## [v0.2.1] - 2025-11-08 +08:00
+
+### Changes
+
+- docs(cargo-tessera/dev): clarify rebuild behavior
+- docs: sync android instructions across languages
+- docs(cargo-tessera): add zh translation
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/cargo-tessera-v0.2.0...cargo-tessera-v0.2.1)
+
 ## [v0.2.0] - 2025-11-08 +08:00
 
 ### Changes
