@@ -1,3 +1,11 @@
+## [v0.4.3] - 2025-11-08 +08:00
+
+### Changes
+
+- chore(deps): bump quote from 1.0.41 to 1.0.42
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.4.2...tessera-ui-macros-v0.4.3)
+
 ## [v0.4.2] - 2025-11-03 +08:00
 
 ### Changes
