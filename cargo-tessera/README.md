@@ -40,13 +40,10 @@ cargo tessera build --release --target x86_64-pc-windows-msvc
 
 ### Build for Android (experimental)
 
-Install [`xbuild`](https://github.com/rust-mobile/xbuild) (`cargo install xbuild --features vendored`) and add Tessera metadata to your `Cargo.toml`:
+Install [`xbuild`](https://github.com/rust-mobile/xbuild):
 
-```toml
-[package.metadata.tessera.android]
-package = "com.example.myapp"
-arch = "arm64"
-format = "apk"
+```bash
+cargo install xbuild
 ```
 
 Android helpers live under the dedicated subcommand:
@@ -59,7 +56,7 @@ cargo tessera android build --release --format apk
 cargo tessera android dev --device adb:1234
 ```
 
-Use `--arch`, `--package`, or `--format` to override metadata. When running `cargo tessera android dev`, always pass `--device <adb_serial>` (list devices via `x devices`). If a build fails, install `xbuild` or run `x doctor` for diagnostics.
+`cargo tessera android dev` requires `--device <adb_serial>` (list devices with `x devices`). If a build or run fails, reinstall `xbuild` or run `x doctor` for diagnostics.
 
 ## Commands
 

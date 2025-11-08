@@ -39,14 +39,7 @@ cargo tessera build --release --target x86_64-pc-windows-msvc
 
 ### Android 构建（实验性）
 
-先安装 [`xbuild`](https://github.com/rust-mobile/xbuild)（`cargo install xbuild --features vendored`），并在项目 `Cargo.toml` 中加入：
-
-```toml
-[package.metadata.tessera.android]
-package = "com.example.myapp"
-arch = "arm64"
-format = "apk"
-```
+先安装 [`xbuild`](https://github.com/rust-mobile/xbuild)（`cargo install xbuild`）。
 
 Android 相关命令位于独立子命令下：
 
@@ -58,15 +51,15 @@ cargo tessera android build --release --format apk
 cargo tessera android dev --device adb:1234
 ```
 
-`--arch`、`--package`、`--format` 可覆盖元数据。如果 `x build` / `x run` 失败，请安装 `xbuild` 或执行 `x doctor` 进行排查。
+如果 `x build` / `x run` 失败，尝试执行 `x doctor` 进行排查。
 
 ## 命令速览
 
 - `cargo tessera new <name>`：创建 Tessera 项目
 - `cargo tessera dev`：启动桌面热重载开发
 - `cargo tessera build`：桌面构建（支持 `--release` / `--target`）
-- `cargo tessera android <build|dev>`：Android 构建与运行辅助
+- `cargo tessera android <build|dev>`：Android 构建与热重载
 
 ## 许可证
 
-可选择 [MIT](../../LICENSE) 或 [Apache-2.0](../../LICENSE)。
+Tessera 采用 [MIT 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE) 或 [Apache 2.0 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE)双重许可。
