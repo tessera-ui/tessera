@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use anyhow::{Context, Result};
-use colored::*;
+use owo_colors::colored::*;
 
 pub fn execute(release: bool, target: Option<&str>) -> Result<()> {
     println!("{}", "🔨 Building project...".bright_cyan());

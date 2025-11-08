@@ -6,8 +6,8 @@ use std::{
 };
 
 use anyhow::Result;
-use colored::*;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
+use owo_colors::colored::*;
 
 pub fn execute(verbose: bool) -> Result<()> {
     println!(

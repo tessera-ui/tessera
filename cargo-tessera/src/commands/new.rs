@@ -1,9 +1,13 @@
 use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::{Context, Result};
-use colored::*;
+use comfy_table::{
+    Attribute, Cell, ContentArrangement, Table, modifiers::UTF8_ROUND_CORNERS as RoundCorners,
+    presets::UTF8_FULL,
+};
 use dialoguer::{Input, Select};
 use include_dir::{Dir, include_dir};
+use owo_colors::colored::*;
 
 static TEMPLATES: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates");
 
@@ -172,46 +176,29 @@ fn apply_template_vars(content: &str, vars: &HashMap<&str, &str>) -> String {
 }
 
 fn print_project_summary(name: &str, template: &str) {
-    let title_plain = " Project Ready ";
-    let title_styled = format!(" {}", "PROJECT READY".bold());
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(RoundCorners)
+        .set_width(60)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![
+            Cell::new("✨ Field").add_attribute(Attribute::Bold),
+            Cell::new("Details").add_attribute(Attribute::Bold),
+        ]);
 
-    let rows: Vec<(String, String)> = vec![
-        (
-            format!(" Name     : {}", name),
-            format!(" Name     : {}", name.bright_green()),
-        ),
-        (
-            format!(" Template : {}", template),
-            format!(" Template : {}", template.cyan()),
-        ),
-        (
-            format!(" Next     : cd {}", name),
-            format!(" Next     : cd {}", name.bright_yellow()),
-        ),
-        (
-            format!("            cargo tessera dev"),
-            format!("            cargo tessera dev"),
-        ),
-    ];
+    table.add_row(vec![
+        Cell::new("Name"),
+        Cell::new(format!("{}", name.bright_green())),
+    ]);
 
-    let mut width = title_plain.chars().count();
-    for (plain, _) in &rows {
-        width = width.max(plain.chars().count());
-    }
+    table.add_row(vec![
+        Cell::new("Template"),
+        Cell::new(format!("{}", template.cyan())),
+    ]);
 
-    let horizontal = "─".repeat(width + 2);
-    println!("\n┌{}┐", horizontal);
-    println!(
-        "│ {}{} │",
-        title_styled,
-        " ".repeat(width - title_plain.chars().count())
-    );
-    println!("├{}┤", horizontal);
+    let next_steps = format!("cd {}\ncargo tessera dev", name);
+    table.add_row(vec![Cell::new("Next"), Cell::new(next_steps)]);
 
-    for (plain, styled) in &rows {
-        let padding = " ".repeat(width.saturating_sub(plain.chars().count()));
-        println!("│ {}{} │", styled, padding);
-    }
-
-    println!("└{}┘", horizontal);
+    println!("\n{table}");
 }
