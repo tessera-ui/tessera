@@ -1,12 +1,13 @@
 # {{project_name}}
 
-An advanced Tessera UI application with multiple interactive components.
+A minimal Tessera UI starter that renders a full-screen surface with a
+`Hello World` label so you can focus on wiring real components.
 
 ## Features
 
-- Counter with increment/decrement buttons
-- Text input with real-time display
-- Styled with custom colors and spacing
+- Preconfigured Tessera renderer with basic component pipelines
+- `src/main.rs` scaffolded with the Tessera macro
+- Ready-to-edit `Cargo.toml` with tracing defaults
 
 ## Running
 
