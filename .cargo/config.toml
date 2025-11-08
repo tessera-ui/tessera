@@ -1,0 +1,2 @@
+[alias]
+tessera = "run --package cargo-tessera tessera"

@@ -1,0 +1,10 @@
+[package]
+name = "{{project_name}}"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tessera-ui = "2"
+tessera-ui-basic-components = "2"
+tracing = "*"
+tracing-subscriber = { version = "*", features = ["fmt", "env-filter"] }

@@ -61,6 +61,7 @@ const PUBLISHABLE_PACKAGES: &[&str] = &[
     "tessera-ui-basic-components",
     "tessera-ui-macros",
     "tessera-ui-shard",
+    "cargo-tessera",
 ];
 
 fn release_package(
