@@ -139,9 +139,13 @@ fn copy_dir(dir: &Dir, dest: &Path, vars: &HashMap<&str, String>) -> Result<()> 
     fs::create_dir_all(dest).context(format!("Failed to create {}", dest.display()))?;
 
     for file in dir.files() {
-        let filename = file.path().file_name().ok_or_else(|| {
-            anyhow::anyhow!("Invalid file path in template: {}", file.path().display())
-        })?;
+        let filename = file
+            .path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!("Invalid file path in template: {}", file.path().display())
+            })?;
 
         let content = file.contents_utf8().ok_or_else(|| {
             anyhow::anyhow!(
@@ -151,7 +155,11 @@ fn copy_dir(dir: &Dir, dest: &Path, vars: &HashMap<&str, String>) -> Result<()> 
         })?;
 
         let processed_content = apply_template_vars(content, vars);
-        let output_path = dest.join(filename);
+        let output_name = filename
+            .strip_suffix(".template")
+            .unwrap_or(filename)
+            .to_string();
+        let output_path = dest.join(output_name);
 
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)?;
