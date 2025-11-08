@@ -28,14 +28,10 @@ pub fn execute(verbose: bool) -> Result<()> {
         }
     })?;
 
-    for dir in ["src", "assets", "shaders"] {
-        let path = Path::new(dir);
-        if path.is_dir() {
-            watcher.watch(path, RecursiveMode::Recursive)?;
-        }
-    }
+    let src_path = Path::new("src");
+    watcher.watch(src_path, RecursiveMode::Recursive)?;
 
-    for file in ["Cargo.toml", "build.rs", "tessera.toml"] {
+    for file in ["Cargo.toml", "build.rs"] {
         let path = Path::new(file);
         if path.exists() {
             watcher.watch(path, RecursiveMode::NonRecursive)?;

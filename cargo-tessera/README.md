@@ -22,12 +22,8 @@ cd my-app
 ```bash
 cargo tessera dev
 ```
-
-For hot reload support, install `cargo-watch`:
-
-```bash
-cargo install cargo-watch
-```
+Hot reload is built in—`cargo tessera dev` watches `src/`, `Cargo.toml`, and (if
+present) `build.rs`. Pass `--verbose` to see the underlying `cargo` commands.
 
 ### Build for release
 
