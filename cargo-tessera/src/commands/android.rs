@@ -98,9 +98,8 @@ package.metadata.tessera.android.package in Cargo.toml"
     );
     println!("Package: {}", package.bright_green());
     println!(
-        "Format : {} ({})",
-        format.as_str().bright_yellow(),
-        "produced by x build"
+        "Format : {} (produced by x build)",
+        format.as_str().bright_yellow()
     );
     println!(
         "{}",

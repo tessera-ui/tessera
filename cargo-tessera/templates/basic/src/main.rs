@@ -1,6 +1,9 @@
 #[cfg(not(target_os = "android"))]
 fn main() {
-    {{project_name_snake}}::desktop_main();
+    {
+        { project_name_snake }
+    }
+    ::desktop_main();
 }
 
 #[cfg(target_os = "android")]

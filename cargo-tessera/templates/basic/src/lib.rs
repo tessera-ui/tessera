@@ -1,6 +1,6 @@
 use tessera_ui::{DimensionValue, Renderer, tessera};
 use tessera_ui_basic_components::{
-    surface::{surface, SurfaceArgs},
+    surface::{SurfaceArgs, surface},
     text::text,
 };
 use tracing::error;

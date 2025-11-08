@@ -1,8 +1,9 @@
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 
-mod commands;
 use commands::android::{self, AndroidFormat};
+
+mod commands;
 
 #[derive(Parser)]
 #[command(name = "cargo-tessera")]

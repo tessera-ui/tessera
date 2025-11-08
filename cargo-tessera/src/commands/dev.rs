@@ -18,13 +18,13 @@ pub fn execute(verbose: bool) -> Result<()> {
 
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
-        if let Ok(event) = res {
-            if matches!(
+        if let Ok(event) = res
+            && matches!(
                 event.kind,
                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
-            ) {
-                let _ = tx.send(());
-            }
+            )
+        {
+            let _ = tx.send(());
         }
     })?;
 
