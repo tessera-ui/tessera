@@ -1,4 +1,4 @@
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};
 
 use encase::{ShaderType, StorageBuffer, UniformBuffer};
 use glam::{Vec2, Vec4};
@@ -10,6 +10,10 @@ use crate::fluid_glass::FluidGlassCommand;
 // Define MAX_CONCURRENT_SHAPES, can be adjusted later
 pub const MAX_CONCURRENT_GLASSES: usize = 256;
 const FLUID_GLASS_SDF_CACHE_CAPACITY: usize = 64;
+/// Minimum number of frames an SDF must be requested before being cached.
+const SDF_CACHE_HEAT_THRESHOLD: u32 = 3;
+/// Number of frames to keep SDF heat tracking data before cleanup.
+const SDF_HEAT_TRACKING_WINDOW: u32 = 10;
 
 #[derive(ShaderType)]
 struct SdfUniforms {
@@ -228,6 +232,15 @@ struct GlassInstances {
     instances: Vec<GlassUniforms>,
 }
 
+/// Tracks how frequently an SDF is requested to decide if it should be cached.
+#[derive(Debug, Clone)]
+struct SdfHeatTracker {
+    /// Number of frames this SDF has been requested
+    hit_count: u32,
+    /// Frame number when last seen
+    last_seen_frame: u32,
+}
+
 // --- Pipeline Definition ---
 
 pub(crate) struct FluidGlassPipeline {
@@ -237,6 +250,10 @@ pub(crate) struct FluidGlassPipeline {
     sdf_sampler: wgpu::Sampler,
     sdf_generator: FluidGlassSdfGenerator,
     sdf_cache: LruCache<FluidGlassSdfCacheKey, Arc<FluidGlassSdfCacheEntry>>,
+    /// Tracks SDF usage frequency to avoid caching transient SDFs
+    sdf_heat_tracker: HashMap<FluidGlassSdfCacheKey, SdfHeatTracker>,
+    /// Current frame number for heat tracking
+    current_frame: u32,
     dummy_sdf_view: wgpu::TextureView,
 }
 
@@ -283,6 +300,8 @@ impl FluidGlassPipeline {
             sdf_sampler,
             sdf_generator,
             sdf_cache,
+            sdf_heat_tracker: HashMap::new(),
+            current_frame: 0,
             dummy_sdf_view,
         }
     }
@@ -414,6 +433,13 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         scene_texture_view: &wgpu::TextureView,
         clip_rect: Option<PxRect>,
     ) {
+        // Advance frame counter and cleanup old SDF heat tracking data
+        self.current_frame = self.current_frame.wrapping_add(1);
+        self.sdf_heat_tracker.retain(|_, tracker| {
+            // Remove entries not seen in the last SDF_HEAT_TRACKING_WINDOW frames
+            self.current_frame.saturating_sub(tracker.last_seen_frame) < SDF_HEAT_TRACKING_WINDOW
+        });
+
         let instances = self.build_instances(commands, config, clip_rect, gpu, queue);
         if instances.is_empty() {
             return;
@@ -615,22 +641,44 @@ impl FluidGlassPipeline {
 
         let key = FluidGlassSdfCacheKey::new(shape_type, corner_radii, g2_k_value, width, height);
 
+        // Check if already cached
         if let Some(entry) = self.sdf_cache.get(&key) {
             return Some(entry.clone());
         }
 
-        let entry = Arc::new(self.sdf_generator.generate(
-            gpu,
-            queue,
-            width,
-            height,
-            corner_radii,
-            shape_type,
-            g2_k_value,
-        ));
+        // Update heat tracking
+        let tracker = self
+            .sdf_heat_tracker
+            .entry(key.clone())
+            .or_insert(SdfHeatTracker {
+                hit_count: 0,
+                last_seen_frame: self.current_frame,
+            });
 
-        _ = self.sdf_cache.put(key, entry.clone());
-        Some(entry)
+        // Update tracker
+        if tracker.last_seen_frame != self.current_frame {
+            tracker.hit_count += 1;
+            tracker.last_seen_frame = self.current_frame;
+        }
+
+        // Only cache if SDF has been requested frequently enough
+        if tracker.hit_count >= SDF_CACHE_HEAT_THRESHOLD {
+            let entry = Arc::new(self.sdf_generator.generate(
+                gpu,
+                queue,
+                width,
+                height,
+                corner_radii,
+                shape_type,
+                g2_k_value,
+            ));
+
+            _ = self.sdf_cache.put(key, entry.clone());
+            Some(entry)
+        } else {
+            // SDF is not hot enough yet, don't cache
+            None
+        }
     }
 
     /// Create GPU buffer and upload the instance data. Returns the created buffer or an error.

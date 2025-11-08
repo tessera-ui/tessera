@@ -18,7 +18,7 @@
 
 mod command;
 
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};
 
 use encase::{ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
@@ -36,6 +36,11 @@ pub use command::{RippleProps, ShadowProps, ShapeCommand};
 
 pub const MAX_CONCURRENT_SHAPES: wgpu::BufferAddress = 1024;
 const SHAPE_CACHE_CAPACITY: usize = 100;
+/// Minimum number of frames a shape must appear before being cached.
+/// This prevents caching transient shapes (e.g., resize animations).
+const CACHE_HEAT_THRESHOLD: u32 = 3;
+/// Number of frames to keep heat tracking data before cleanup.
+const HEAT_TRACKING_WINDOW: u32 = 10;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -75,6 +80,15 @@ struct ShapeInstances {
     instances: Vec<ShapeUniforms>,
 }
 
+/// Tracks how frequently a shape appears to decide if it should be cached.
+#[derive(Debug, Clone)]
+struct ShapeHeatTracker {
+    /// Number of frames this shape has appeared
+    hit_count: u32,
+    /// Frame number when last seen
+    last_seen_frame: u32,
+}
+
 /// Pipeline for rendering vector shapes in UI components.
 ///
 /// # Example
@@ -95,6 +109,10 @@ pub struct ShapePipeline {
     cache_transform_bind_group_layout: wgpu::BindGroupLayout,
     cached_pipeline: wgpu::RenderPipeline,
     cache: LruCache<ShapeCacheKey, Arc<ShapeCacheEntry>>,
+    /// Tracks shape usage frequency to avoid caching transient shapes
+    heat_tracker: HashMap<ShapeCacheKey, ShapeHeatTracker>,
+    /// Current frame number for heat tracking
+    current_frame: u32,
     render_format: wgpu::TextureFormat,
 }
 
@@ -307,6 +325,8 @@ impl ShapePipeline {
             cache: LruCache::new(
                 NonZeroUsize::new(SHAPE_CACHE_CAPACITY).expect("shape cache capacity must be > 0"),
             ),
+            heat_tracker: HashMap::new(),
+            current_frame: 0,
             render_format: config.format,
         }
     }
@@ -319,13 +339,36 @@ impl ShapePipeline {
         size: PxSize,
     ) -> Option<Arc<ShapeCacheEntry>> {
         let key = ShapeCacheKey::from_command(command, size)?;
+
+        // Check if already cached
         if let Some(entry) = self.cache.get(&key) {
             return Some(entry.clone());
         }
 
-        let entry = Arc::new(self.build_cache_entry(gpu, gpu_queue, command, size));
-        _ = self.cache.put(key, entry.clone());
-        Some(entry)
+        // Update heat tracking
+        let tracker = self
+            .heat_tracker
+            .entry(key.clone())
+            .or_insert(ShapeHeatTracker {
+                hit_count: 0,
+                last_seen_frame: self.current_frame,
+            });
+
+        // Update tracker
+        if tracker.last_seen_frame != self.current_frame {
+            tracker.hit_count += 1;
+            tracker.last_seen_frame = self.current_frame;
+        }
+
+        // Only cache if shape has appeared frequently enough
+        if tracker.hit_count >= CACHE_HEAT_THRESHOLD {
+            let entry = Arc::new(self.build_cache_entry(gpu, gpu_queue, command, size));
+            _ = self.cache.put(key, entry.clone());
+            Some(entry)
+        } else {
+            // Shape is not hot enough yet, don't cache
+            None
+        }
     }
 
     fn build_cache_entry(
@@ -926,6 +969,13 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         if commands.is_empty() {
             return;
         }
+
+        // Advance frame counter and cleanup old heat tracking data
+        self.current_frame = self.current_frame.wrapping_add(1);
+        self.heat_tracker.retain(|_, tracker| {
+            // Remove entries not seen in the last HEAT_TRACKING_WINDOW frames
+            self.current_frame.saturating_sub(tracker.last_seen_frame) < HEAT_TRACKING_WINDOW
+        });
 
         let mut cache_entries = Vec::with_capacity(commands.len());
         for (command, size, _) in commands.iter() {
