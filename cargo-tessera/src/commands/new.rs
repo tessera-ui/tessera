@@ -121,39 +121,44 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
     let mut vars = HashMap::new();
     vars.insert("project_name", project_name);
 
-    // Process all files in template
-    for entry in template_dir.files() {
-        // Get the filename without the template directory prefix
-        let filename = entry.path().file_name().ok_or_else(|| {
-            anyhow::anyhow!("Invalid file path in template: {}", entry.path().display())
+    copy_dir(template_dir, project_dir, &vars)
+}
+
+fn copy_dir(dir: &Dir, dest: &Path, vars: &HashMap<&str, &str>) -> Result<()> {
+    fs::create_dir_all(dest).context(format!("Failed to create {}", dest.display()))?;
+
+    for file in dir.files() {
+        let filename = file.path().file_name().ok_or_else(|| {
+            anyhow::anyhow!("Invalid file path in template: {}", file.path().display())
         })?;
 
-        let content = entry.contents_utf8().ok_or_else(|| {
+        let content = file.contents_utf8().ok_or_else(|| {
             anyhow::anyhow!(
                 "Template file '{}' is not valid UTF-8",
-                entry.path().display()
+                file.path().display()
             )
         })?;
 
-        // Apply variable substitution
-        let processed_content = apply_template_vars(content, &vars);
+        let processed_content = apply_template_vars(content, vars);
+        let output_path = dest.join(filename);
 
-        // Determine output path
-        let output_path = if filename == "main.rs" {
-            // main.rs goes to src/main.rs
-            project_dir.join("src").join("main.rs")
-        } else {
-            project_dir.join(filename)
-        };
-
-        // Create parent directory if needed
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)?;
         }
 
-        // Write file
         fs::write(&output_path, processed_content)
             .context(format!("Failed to write {}", output_path.display()))?;
+    }
+
+    for subdir in dir.dirs() {
+        let dirname = subdir.path().file_name().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Invalid directory path in template: {}",
+                subdir.path().display()
+            )
+        })?;
+
+        copy_dir(subdir, &dest.join(dirname), vars)?;
     }
 
     Ok(())

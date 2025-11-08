@@ -1,7 +1,7 @@
 use tessera_ui::{Color, Dp, Renderer, tessera};
 use tessera_ui_basic_components::{
-    surface::{SurfaceArgs, surface},
-    text::{TextArgsBuilder, text},
+    surface::{surface, SurfaceArgs},
+    text::{text, TextArgsBuilder},
 };
 
 #[tessera]
