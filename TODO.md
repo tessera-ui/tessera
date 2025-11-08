@@ -8,6 +8,7 @@
   - [ ] icon_button (glass variant)
 - [ ] Documentation of pluggable graphics rendering pipelines
 - [ ] CLI tool (`cargo-tessera`):
-  - [ ] Project scaffolding (`cargo tessera new`)
-  - [ ] Development server (`cargo tessera dev`)
-  - [ ] Build automation (`cargo tessera build`)
+  - [x] Project scaffolding (`cargo tessera new`)
+  - [x] Development server (`cargo tessera dev`)
+  - [x] Build automation (`cargo tessera build`)
+  - [ ] Documentation of cargo-tessera commands
