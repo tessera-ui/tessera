@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Result;
 use colored::*;
-use notify::{Event, RecursiveMode, Watcher};
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 
 pub fn execute(verbose: bool) -> Result<()> {
     println!(
@@ -19,23 +19,27 @@ pub fn execute(verbose: bool) -> Result<()> {
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
         if let Ok(event) = res {
-            // Only trigger on write/create events for Rust files
-            if (event.kind.is_modify() || event.kind.is_create())
-                && event.paths.iter().any(|p| {
-                    p.extension()
-                        .is_some_and(|ext| ext == "rs" || ext == "toml")
-                })
-            {
+            if matches!(
+                event.kind,
+                EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
+            ) {
                 let _ = tx.send(());
             }
         }
     })?;
 
-    // Watch src directory, Cargo.toml and build.rs (if exists)
-    watcher.watch(Path::new("src"), RecursiveMode::Recursive)?;
-    watcher.watch(Path::new("Cargo.toml"), RecursiveMode::NonRecursive)?;
-    if Path::new("build.rs").exists() {
-        watcher.watch(Path::new("build.rs"), RecursiveMode::NonRecursive)?;
+    for dir in ["src", "assets", "shaders"] {
+        let path = Path::new(dir);
+        if path.is_dir() {
+            watcher.watch(path, RecursiveMode::Recursive)?;
+        }
+    }
+
+    for file in ["Cargo.toml", "build.rs", "tessera.toml"] {
+        let path = Path::new(file);
+        if path.exists() {
+            watcher.watch(path, RecursiveMode::NonRecursive)?;
+        }
     }
 
     let mut child: Option<Child> = None;
@@ -95,21 +99,27 @@ pub fn execute(verbose: bool) -> Result<()> {
                 should_rebuild = true;
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                // Check if child process is still running
-                if let Some(ref mut c) = child
-                    && let Ok(Some(status)) = c.try_wait()
-                {
-                    // Process exited - stop dev mode
-                    if !status.success() {
-                        println!(
-                            "\n{}",
-                            format!("❌ App crashed with exit code: {:?}", status.code()).red()
-                        );
-                    } else {
-                        println!("\n{}", "✅ App exited normally.".green());
+                if let Some(mut running_child) = child.take() {
+                    match running_child.try_wait() {
+                        Ok(Some(status)) => {
+                            if !status.success() {
+                                println!(
+                                    "\n{}",
+                                    format!("❌ App crashed with exit code: {:?}", status.code())
+                                        .red()
+                                );
+                            } else {
+                                println!("\n{}", "✅ App exited normally.".green());
+                            }
+                            println!("{}", "Waiting for file changes to restart...".dimmed());
+                        }
+                        Ok(None) => {
+                            child = Some(running_child);
+                        }
+                        Err(err) => {
+                            println!("{} Failed to check app status: {}", "⚠️".yellow(), err);
+                        }
                     }
-                    println!("{}", "Stopping dev server...".dimmed());
-                    break;
                 }
             }
             Err(_) => break,
