@@ -90,9 +90,12 @@ package.metadata.tessera.android.package in Cargo.toml"
         .bright_cyan()
     );
 
-    run_x_command("build", &package, Some(&arch), opts.release, format, None)?;
+    run_x_build(&package, &arch, opts.release, format)?;
 
-    println!("\n{} Android build completed!", "Android build complete".green());
+    println!(
+        "\n{} Android build completed!",
+        "Android build complete".green()
+    );
     println!("Package: {}", package.bright_green());
     println!(
         "Format : {} ({})",
@@ -141,34 +144,23 @@ package.metadata.tessera.android.package in Cargo.toml"
         .bright_cyan()
     );
 
-    run_x_command(
-        "run",
-        &package,
-        Some(&arch),
-        opts.release,
-        AndroidFormat::Apk,
-        opts.device.as_deref(),
-    )?;
+    let device = opts.device.as_deref().ok_or_else(|| {
+        anyhow!("`cargo tessera android dev` requires --device <adb_serial|emulator>. Use `x devices` to list available targets.")
+    })?;
+
+    run_x_run(&package, &arch, opts.release, device)?;
 
     println!(
         "{}",
-        "Application launched via `x run`. Use Ctrl+C to stop or rerun after code changes."
-            .green()
+        "Application launched via `x run`. Use Ctrl+C to stop or rerun after code changes.".green()
     );
 
     Ok(())
 }
 
-fn run_x_command(
-    subcommand: &str,
-    package: &str,
-    arch: Option<&str>,
-    release: bool,
-    format: AndroidFormat,
-    device: Option<&str>,
-) -> Result<()> {
+fn run_x_build(package: &str, arch: &str, release: bool, format: AndroidFormat) -> Result<()> {
     let mut cmd = Command::new("x");
-    cmd.arg(subcommand)
+    cmd.arg("build")
         .arg("-p")
         .arg(package)
         .arg("--platform")
@@ -176,13 +168,7 @@ fn run_x_command(
         .arg("--format")
         .arg(format.as_str());
 
-    if let Some(arch) = arch {
-        cmd.arg("--arch").arg(arch);
-    }
-
-    if let Some(device) = device {
-        cmd.arg("--device").arg(device);
-    }
+    cmd.arg("--arch").arg(arch);
 
     if release {
         cmd.arg("--release");
@@ -193,15 +179,46 @@ fn run_x_command(
         Err(err) if err.kind() == io::ErrorKind::NotFound => bail!(
             "`x` (xbuild) was not found. Install it with `cargo install xbuild --features vendored` or open `nix develop .#android`."
         ),
-        Err(err) => return Err(err).context(format!("Failed to run `x {subcommand}`")),
+        Err(err) => return Err(err).context("Failed to run `x build`"),
     };
 
     if status.success() {
         Ok(())
     } else if let Some(code) = status.code() {
-        bail!("`x {subcommand}` failed (exit code {code}). Run `x doctor` for diagnostics.");
+        bail!("`x build` failed (exit code {code}). Run `x doctor` for diagnostics.");
     } else {
-        bail!("`x {subcommand}` terminated unexpectedly. Run `x doctor` for diagnostics.");
+        bail!("`x build` terminated unexpectedly. Run `x doctor` for diagnostics.");
+    }
+}
+
+fn run_x_run(package: &str, arch: &str, release: bool, device: &str) -> Result<()> {
+    let mut cmd = Command::new("x");
+    cmd.arg("run")
+        .arg("-p")
+        .arg(package)
+        .arg("--arch")
+        .arg(arch)
+        .arg("--device")
+        .arg(device);
+
+    if release {
+        cmd.arg("--release");
+    }
+
+    let status = match cmd.status() {
+        Ok(status) => status,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => bail!(
+            "`x` (xbuild) was not found. Install it with `cargo install xbuild --features vendored` or open `nix develop .#android`."
+        ),
+        Err(err) => return Err(err).context("Failed to run `x run`"),
+    };
+
+    if status.success() {
+        Ok(())
+    } else if let Some(code) = status.code() {
+        bail!("`x run` failed (exit code {code}). Run `x doctor` for diagnostics.");
+    } else {
+        bail!("`x run` terminated unexpectedly. Run `x doctor` for diagnostics.");
     }
 }
 

@@ -59,7 +59,7 @@ cargo tessera android build --release --format apk
 cargo tessera android dev --device adb:1234
 ```
 
-Use `--arch`, `--package`, or `--format` to override metadata; if the build fails, install `xbuild` or run `x doctor` for diagnostics.
+Use `--arch`, `--package`, or `--format` to override metadata. When running `cargo tessera android dev`, always pass `--device <adb_serial>` (list devices via `x devices`). If a build fails, install `xbuild` or run `x doctor` for diagnostics.
 
 ## Commands
 

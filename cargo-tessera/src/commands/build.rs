@@ -25,7 +25,10 @@ pub fn execute(release: bool, target: Option<&str>) -> Result<()> {
         bail!("Build failed");
     }
 
-    println!("\n{} Build completed successfully!", "Build complete".green());
+    println!(
+        "\n{} Build completed successfully!",
+        "Build complete".green()
+    );
 
     if release {
         let binary_path = if let Some(target) = target {
