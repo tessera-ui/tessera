@@ -1,27 +1,9 @@
-use tessera_ui::{DimensionValue, Renderer, tessera};
-use tessera_ui_basic_components::{
-    surface::{surface, SurfaceArgs},
-    text::text,
-};
-
-#[tessera]
-fn app() {
-    surface(
-        SurfaceArgs {
-            width: DimensionValue::FILLED,
-            height: DimensionValue::FILLED,
-            ..Default::default()
-        },
-        None,
-        || {
-            text("Hello World!");
-        },
-    );
+#[cfg(not(target_os = "android"))]
+fn main() {
+    {{project_name_snake}}::desktop_main();
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    Renderer::run(app, |app| {
-        tessera_ui_basic_components::pipelines::register_pipelines(app);
-    })?;
-    Ok(())
+#[cfg(target_os = "android")]
+fn main() {
+    // Android uses `android_main` defined in src/lib.rs
 }

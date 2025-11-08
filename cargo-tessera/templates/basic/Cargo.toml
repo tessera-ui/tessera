@@ -3,6 +3,15 @@ name = "{{project_name}}"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+name = "{{project_name_snake}}"
+path = "src/lib.rs"
+
+[[bin]]
+name = "{{project_name_snake}}"
+path = "src/main.rs"
+
 [dependencies]
 tessera-ui = "2"
 tessera-ui-basic-components = "2"

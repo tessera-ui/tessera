@@ -123,16 +123,19 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
     let project_name = project_dir
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("tessera-app");
+        .unwrap_or("tessera-app")
+        .to_string();
+    let project_name_snake = project_name.replace('-', "_");
 
     // Template variables for substitution
-    let mut vars = HashMap::new();
+    let mut vars: HashMap<&str, String> = HashMap::new();
     vars.insert("project_name", project_name);
+    vars.insert("project_name_snake", project_name_snake);
 
     copy_dir(template_dir, project_dir, &vars)
 }
 
-fn copy_dir(dir: &Dir, dest: &Path, vars: &HashMap<&str, &str>) -> Result<()> {
+fn copy_dir(dir: &Dir, dest: &Path, vars: &HashMap<&str, String>) -> Result<()> {
     fs::create_dir_all(dest).context(format!("Failed to create {}", dest.display()))?;
 
     for file in dir.files() {
@@ -173,7 +176,7 @@ fn copy_dir(dir: &Dir, dest: &Path, vars: &HashMap<&str, &str>) -> Result<()> {
 }
 
 /// Simple template variable substitution
-fn apply_template_vars(content: &str, vars: &HashMap<&str, &str>) -> String {
+fn apply_template_vars(content: &str, vars: &HashMap<&str, String>) -> String {
     let mut result = content.to_string();
     for (key, value) in vars {
         result = result.replace(&format!("{{{{{}}}}}", key), value);
