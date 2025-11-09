@@ -3,7 +3,7 @@
 - [ ] Better IME support on Android
 - [ ] Performance improvement
 - [ ] New components:
-  - [ ] image_vector
+  - [x] image_vector
   - [ ] icon
   - [ ] icon_button (glass variant)
 - [ ] Documentation of pluggable graphics rendering pipelines
