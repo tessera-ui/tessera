@@ -69,6 +69,7 @@ pub mod glass_button;
 pub mod glass_progress;
 pub mod glass_slider;
 pub mod glass_switch;
+pub mod icon;
 pub mod image;
 pub mod image_vector;
 pub mod pipelines;

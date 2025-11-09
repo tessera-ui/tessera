@@ -37,7 +37,7 @@ use crate::example_components::{
     glass_progress::GlassProgressShowcaseDestination,
     glass_slider::GlassSliderShowcaseDestination,
     glass_switch::GlassSwitchShowcaseDestination,
-    image::{ImageShowcaseDestination, ImageVectorShowcaseDestination},
+    image::{IconShowcaseDestination, ImageShowcaseDestination},
     layouts::LayoutsShowcaseDestination,
     progress::ProgressShowcaseDestination,
     slider::SliderShowcaseDestination,
@@ -268,11 +268,11 @@ fn home(
             });
         }),
         ComponentExampleDesc::new(
-            "Image Vector",
-            "A component to display scalable vector images.",
+            "Icon",
+            "A component to display vector icons.",
             || {
                 Router::with_mut(|router| {
-                    router.push(ImageVectorShowcaseDestination {});
+                    router.push(IconShowcaseDestination {});
                 });
             },
         ),

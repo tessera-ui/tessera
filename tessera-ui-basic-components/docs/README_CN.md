@@ -30,6 +30,7 @@
 - `glass_progress`: 玻璃风格进度条
 - `text`: 文本显示，支持系统字体和彩色emoji
 - `image`: 图片显示(支持 AVIF, BMP, DDS, EXR, FF, GIF, HDR, ICO, JPEG, PNG, PNM, QOI, TGA, TIFF, WebP)
+- `icon`: 复用向量/栅格管线的图标封装，提供统一的尺寸和可选的 tint
 - `checkbox`: 复选框
 - `tabs`: 选项卡组件
 - `text_editor`: 多行文本编辑器

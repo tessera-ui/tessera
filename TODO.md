@@ -4,8 +4,8 @@
 - [ ] Performance improvement
 - [ ] New components:
   - [x] image_vector
-  - [ ] icon
-  - [ ] icon_button (glass variant)
+  - [x] icon
+  - [ ] icon_button (and it's glass variant)
 - [ ] Documentation of pluggable graphics rendering pipelines
 - [x] CLI tool (`cargo-tessera`):
   - [x] Project scaffolding (`cargo tessera new`)

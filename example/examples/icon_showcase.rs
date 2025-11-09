@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use tessera_ui::{Color, DimensionValue, Dp, Renderer};
 use tessera_ui_basic_components::{
-    image_vector::{
-        ImageVectorArgsBuilder, ImageVectorSource, image_vector, load_image_vector_from_source,
-    },
+    icon::{IconArgsBuilder, icon},
+    image_vector::{ImageVectorSource, load_image_vector_from_source},
     surface::{SurfaceArgsBuilder, surface},
 };
 
@@ -29,11 +28,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap(),
                 None,
                 move || {
-                    image_vector(
-                        ImageVectorArgsBuilder::default()
-                            .data(vector_data.clone())
-                            .width(DimensionValue::Fixed(Dp(200.0).into()))
-                            .height(DimensionValue::Fixed(Dp(200.0).into()))
+                    icon(
+                        IconArgsBuilder::default()
+                            .content(vector_data.clone())
+                            .size(Dp(200.0))
                             .build()
                             .unwrap(),
                     );

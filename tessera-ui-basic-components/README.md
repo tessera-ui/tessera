@@ -30,6 +30,8 @@
 - `glass_progress`: glass-style progress bar
 - `text`: text display, supports system fonts and colored emoji
 - `image`: image display (supports AVIF, BMP, DDS, EXR, GIF, HDR, ICO, JPEG, PNG, PNM, QOI, TGA, TIFF, WebP)
+- `image_vector`: vector image display (SVG support)
+- `icon`: semantic wrapper over vector/raster icons with consistent sizing & tint helpers
 - `checkbox`: checkbox
 - `tabs`: tab component
 - `text_editor`: multi-line text editor

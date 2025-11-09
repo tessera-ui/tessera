@@ -3,11 +3,9 @@ use std::sync::Arc;
 use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
+    icon::{IconArgsBuilder, icon},
     image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
-    image_vector::{
-        ImageVectorArgsBuilder, ImageVectorData, ImageVectorSource, image_vector,
-        load_image_vector_from_source,
-    },
+    image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
@@ -127,17 +125,16 @@ fn test_content(state: Arc<ImageShowcaseState>) {
                             spacer(Dp(24.0));
                         });
 
-                        column_scope.child(|| text("Vector image"));
+                        column_scope.child(|| text("Icon (vector source)"));
                         column_scope.child(|| {
                             spacer(Dp(8.0));
                         });
                         let vector = state.image_vector_data.clone();
                         column_scope.child(move || {
-                            image_vector(
-                                ImageVectorArgsBuilder::default()
-                                    .data(vector.clone())
-                                    .width(DimensionValue::Fixed(Dp(160.0).into()))
-                                    .height(DimensionValue::Fixed(Dp(160.0).into()))
+                            icon(
+                                IconArgsBuilder::default()
+                                    .content(vector.clone())
+                                    .size(Dp(160.0))
                                     .build()
                                     .unwrap(),
                             )
@@ -151,7 +148,7 @@ fn test_content(state: Arc<ImageShowcaseState>) {
 
 #[tessera]
 #[shard]
-pub fn image_vector_showcase(#[state] state: ImageShowcaseState) {
+pub fn icon_showcase(#[state] state: ImageShowcaseState) {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -183,15 +180,14 @@ pub fn image_vector_showcase(#[state] state: ImageShowcaseState) {
                                     .build()
                                     .unwrap(),
                                 |scope| {
-                                    scope.child(|| text("Image Vector Showcase"));
+                                    scope.child(|| text("Icon Showcase"));
                                     scope.child(|| spacer(Dp(10.0)));
                                     let vector = state.image_vector_data.clone();
                                     scope.child(move || {
-                                        image_vector(
-                                            ImageVectorArgsBuilder::default()
-                                                .data(vector.clone())
-                                                .width(DimensionValue::Fixed(Dp(200.0).into()))
-                                                .height(DimensionValue::Fixed(Dp(200.0).into()))
+                                        icon(
+                                            IconArgsBuilder::default()
+                                                .content(vector.clone())
+                                                .size(Dp(100.0))
                                                 .build()
                                                 .unwrap(),
                                         )
