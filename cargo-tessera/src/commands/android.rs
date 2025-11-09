@@ -1,9 +1,11 @@
-use std::{fs, io, process::Command};
+use std::{fs, io, path::PathBuf, process::Command};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::ValueEnum;
 use owo_colors::colored::*;
 use serde::Deserialize;
+
+use super::find_package_dir;
 
 const DEFAULT_ARCH: &str = "arm64";
 
@@ -47,7 +49,19 @@ pub struct DevOptions {
 }
 
 pub fn build(opts: BuildOptions) -> Result<()> {
-    let manifest = Manifest::load()?;
+    // If package is specified, try to find its Cargo.toml first
+    let package_dir = if let Some(pkg) = &opts.package {
+        find_package_dir(pkg).ok()
+    } else {
+        None
+    };
+
+    let manifest = if let Some(dir) = &package_dir {
+        Manifest::load_from(dir)?
+    } else {
+        Manifest::load()?
+    };
+
     let manifest_package = manifest.package_name();
     let manifest_cfg = manifest.android().unwrap_or_default();
 
@@ -110,7 +124,19 @@ package.metadata.tessera.android.package in Cargo.toml"
 }
 
 pub fn dev(opts: DevOptions) -> Result<()> {
-    let manifest = Manifest::load()?;
+    // If package is specified, try to find its Cargo.toml first
+    let package_dir = if let Some(pkg) = &opts.package {
+        find_package_dir(pkg).ok()
+    } else {
+        None
+    };
+
+    let manifest = if let Some(dir) = &package_dir {
+        Manifest::load_from(dir)?
+    } else {
+        Manifest::load()?
+    };
+
     let manifest_package = manifest.package_name();
     let manifest_cfg = manifest.android().unwrap_or_default();
 
@@ -229,6 +255,13 @@ struct Manifest {
 impl Manifest {
     fn load() -> Result<Self> {
         let contents = fs::read_to_string("Cargo.toml").context("Failed to read Cargo.toml")?;
+        toml::from_str(&contents).context("Failed to parse Cargo.toml")
+    }
+
+    fn load_from(dir: &PathBuf) -> Result<Self> {
+        let cargo_path = dir.join("Cargo.toml");
+        let contents = fs::read_to_string(&cargo_path)
+            .with_context(|| format!("Failed to read Cargo.toml from {}", dir.display()))?;
         toml::from_str(&contents).context("Failed to parse Cargo.toml")
     }
 

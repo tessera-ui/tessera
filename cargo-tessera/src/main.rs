@@ -42,6 +42,9 @@ enum TesseraCommands {
         /// Enable verbose output
         #[arg(short, long)]
         verbose: bool,
+        /// Specify package to run
+        #[arg(short, long)]
+        package: Option<String>,
     },
     /// Build the project for release (native targets)
     Build {
@@ -51,6 +54,9 @@ enum TesseraCommands {
         /// Target triple (passed to cargo build)
         #[arg(short, long)]
         target: Option<String>,
+        /// Specify package to build
+        #[arg(short, long)]
+        package: Option<String>,
     },
     /// Android-specific helpers (build/dev)
     Android {
@@ -70,32 +76,32 @@ enum AndroidCommands {
 #[derive(Args)]
 struct AndroidBuildArgs {
     /// Build in release mode
-    #[arg(long)]
+    #[arg(long, short)]
     release: bool,
     /// Override CPU architecture (default from metadata or arm64)
-    #[arg(long = "arch")]
+    #[arg(long)]
     arch: Option<String>,
     /// Override package/binary name (-p)
-    #[arg(long = "package")]
+    #[arg(long, short)]
     package: Option<String>,
     /// Override artifact format (apk or aab)
-    #[arg(long = "format", value_enum)]
+    #[arg(long, short, value_enum)]
     format: Option<AndroidFormat>,
 }
 
 #[derive(Args)]
 struct AndroidDevArgs {
     /// Run in release mode
-    #[arg(long)]
+    #[arg(long, short)]
     release: bool,
     /// Override CPU architecture
-    #[arg(long = "arch")]
+    #[arg(long)]
     arch: Option<String>,
     /// Override package/binary name (-p)
-    #[arg(long = "package")]
+    #[arg(long, short)]
     package: Option<String>,
     /// Device id used by `x run --device`
-    #[arg(long = "device")]
+    #[arg(long, short)]
     device: Option<String>,
 }
 
@@ -115,11 +121,15 @@ fn main() -> Result<()> {
                 };
                 commands::new::execute(&name, &template)?;
             }
-            TesseraCommands::Dev { verbose } => {
-                commands::dev::execute(verbose)?;
+            TesseraCommands::Dev { verbose, package } => {
+                commands::dev::execute(verbose, package.as_deref())?;
             }
-            TesseraCommands::Build { release, target } => {
-                commands::build::execute(release, target.as_deref())?;
+            TesseraCommands::Build {
+                release,
+                target,
+                package,
+            } => {
+                commands::build::execute(release, target.as_deref(), package.as_deref())?;
             }
             TesseraCommands::Android { command } => match command {
                 AndroidCommands::Build(build_args) => {

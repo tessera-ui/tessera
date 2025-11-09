@@ -3,7 +3,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use owo_colors::colored::*;
 
-pub fn execute(release: bool, target: Option<&str>) -> Result<()> {
+pub fn execute(release: bool, target: Option<&str>, package: Option<&str>) -> Result<()> {
     println!("{}", "Building project...".bright_cyan());
 
     let mut cmd = Command::new("cargo");
@@ -17,6 +17,11 @@ pub fn execute(release: bool, target: Option<&str>) -> Result<()> {
     if let Some(target) = target {
         cmd.arg("--target").arg(target);
         println!("Target platform: {}", target.bright_yellow());
+    }
+
+    if let Some(package) = package {
+        cmd.arg("-p").arg(package);
+        println!("Package: {}", package.bright_yellow());
     }
 
     let status = cmd.status().context("Failed to run cargo build")?;
