@@ -1,3 +1,14 @@
+## [v2.4.0] - 2025-11-09 +08:00
+
+### Changes
+
+- feat: add icon button wrappers and showcases
+- feat: add icon component and update related examples and documentation
+- fix(image_vector): use premultiplied output + premultiplied blending to avoid SVG rendering whitening
+- feat: add image vector component
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.3.0...tessera-ui-basic-components-v2.4.0)
+
 ## [v2.3.0] - 2025-11-08 +08:00
 
 ### Changes
