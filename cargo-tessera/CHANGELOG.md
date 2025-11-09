@@ -1,3 +1,11 @@
+## [v0.3.0] - 2025-11-09 +08:00
+
+### Changes
+
+- feat(cargo-tessera): add workspace package selection support
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/cargo-tessera-v0.2.1...cargo-tessera-v0.3.0)
+
 ## [v0.2.1] - 2025-11-08 +08:00
 
 ### Changes
