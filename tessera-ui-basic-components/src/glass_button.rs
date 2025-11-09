@@ -59,7 +59,7 @@ pub struct GlassButtonArgs {
     pub refraction_height: f32,
     #[builder(default = "32.0")]
     pub refraction_amount: f32,
-    #[builder(default = "0.02")]
+    #[builder(default = "0.0")]
     pub noise_amount: f32,
     #[builder(default = "1.0")]
     pub noise_scale: f32,

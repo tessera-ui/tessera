@@ -6,24 +6,61 @@ use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgsBuilder, column},
+    icon::{IconArgsBuilder, IconContent},
+    icon_button::{IconButtonArgsBuilder, icon_button},
+    image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Default, Clone)]
+const ICON_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../assets/emoji_u1f416.svg"
+));
+
+#[derive(Clone)]
 struct ButtonShowcaseState {
     scrollable_state: Arc<ScrollableState>,
     button1_ripple: Arc<RippleState>,
     button2_ripple: Arc<RippleState>,
     button3_ripple: Arc<RippleState>,
+    icon_button_ripple: Arc<RippleState>,
     counter: Arc<Mutex<i32>>,
+    icon_data: Arc<ImageVectorData>,
+}
+
+impl ButtonShowcaseState {
+    fn new() -> Self {
+        let icon_data = Arc::new(
+            load_image_vector_from_source(&ImageVectorSource::Bytes(Arc::from(ICON_BYTES)))
+                .expect("Failed to load icon SVG"),
+        );
+
+        Self {
+            scrollable_state: Default::default(),
+            button1_ripple: Default::default(),
+            button2_ripple: Default::default(),
+            button3_ripple: Default::default(),
+            icon_button_ripple: Default::default(),
+            counter: Default::default(),
+            icon_data,
+        }
+    }
+}
+
+impl Default for ButtonShowcaseState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[tessera]
 #[shard]
-pub fn button_showcase(#[state] state: ButtonShowcaseState) {
+pub fn button_showcase(
+    #[state(default_with = "ButtonShowcaseState::new")] state: ButtonShowcaseState,
+) {
     let scrollable_state = state.scrollable_state.clone();
     surface(
         SurfaceArgsBuilder::default()
@@ -128,6 +165,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                         )
                                     });
 
+                                    let state_clone = state.clone();
                                     scope.child(move || {
                                         let button_args = ButtonArgsBuilder::default()
                                             .shape(Shape::rounded_rectangle(Dp(12.0)))
@@ -140,15 +178,68 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                             .build()
                                             .unwrap();
 
-                                        button(button_args, state.button3_ripple.clone(), || {
-                                            text(
-                                                TextArgsBuilder::default()
-                                                    .text("Styled")
-                                                    .color(Color::WHITE)
+                                        button(
+                                            button_args,
+                                            state_clone.button3_ripple.clone(),
+                                            || {
+                                                text(
+                                                    TextArgsBuilder::default()
+                                                        .text("Styled")
+                                                        .color(Color::WHITE)
+                                                        .build()
+                                                        .unwrap(),
+                                                );
+                                            },
+                                        );
+                                    });
+
+                                    scope.child(|| {
+                                        text(
+                                            TextArgsBuilder::default()
+                                                .text("Icon Button")
+                                                .size(Dp(16.0))
+                                                .build()
+                                                .unwrap(),
+                                        )
+                                    });
+
+                                    let state_clone = state.clone();
+                                    scope.child(move || {
+                                        let on_click_counter = state_clone.counter.clone();
+                                        let icon = IconArgsBuilder::default()
+                                            .content(IconContent::from(
+                                                state_clone.icon_data.clone(),
+                                            ))
+                                            .size(Dp(24.0))
+                                            .build()
+                                            .unwrap();
+
+                                        let button_args = IconButtonArgsBuilder::default()
+                                            .button(
+                                                ButtonArgsBuilder::default()
+                                                    .shape(Shape::Ellipse)
+                                                    .color(Color::from_rgb(0.95, 0.95, 0.98))
+                                                    .hover_color(Some(Color::from_rgb(
+                                                        0.9, 0.9, 1.0,
+                                                    )))
+                                                    .on_click(Arc::new(move || {
+                                                        let mut count =
+                                                            on_click_counter.lock().unwrap();
+                                                        *count += 1;
+                                                        println!("Icon button clicked!");
+                                                    }))
+                                                    .padding(Dp(12.0))
                                                     .build()
                                                     .unwrap(),
-                                            );
-                                        });
+                                            )
+                                            .icon(icon)
+                                            .build()
+                                            .unwrap();
+
+                                        icon_button(
+                                            button_args,
+                                            state_clone.icon_button_ripple.clone(),
+                                        );
                                     });
                                 },
                             )

@@ -267,15 +267,11 @@ fn home(
                 router.push(ImageShowcaseDestination {});
             });
         }),
-        ComponentExampleDesc::new(
-            "Icon",
-            "A component to display vector icons.",
-            || {
-                Router::with_mut(|router| {
-                    router.push(IconShowcaseDestination {});
-                });
-            },
-        ),
+        ComponentExampleDesc::new("Icon", "A component to display vector icons.", || {
+            Router::with_mut(|router| {
+                router.push(IconShowcaseDestination {});
+            });
+        }),
         ComponentExampleDesc::new(
             "Glass Switch",
             "A switch with a frosted glass effect.",
