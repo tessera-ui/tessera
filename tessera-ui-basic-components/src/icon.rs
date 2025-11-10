@@ -1,9 +1,5 @@
 //! Icon primitives built on top of the raster (`image`) and vector (`image_vector`) components.
 //!
-//! The goal of this module is to provide a tiny semantic layer for “icons” that shows up
-//! throughout the design docs and TODO list. It keeps the loading/rendering responsibilities
-//! inside the existing image pipelines while giving downstream code a single ergonomic API:
-//!
 //! - Pick a source (`IconContent`) once (usually an SVG converted into [`ImageVectorData`]).
 //! - Decide how large the icon should be, defaulting to 24dp – the same default used by most
 //!   UI kits. Override width/height explicitly when icons participate in more complex layouts.

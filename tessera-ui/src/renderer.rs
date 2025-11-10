@@ -1148,14 +1148,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler<AccessKi
     /// This method should handle cleanup and state preservation when the application
     /// is being suspended (e.g., on mobile platforms when the app goes to background).
     ///
-    /// ## Current Status
-    ///
-    /// This method is currently not fully implemented (`todo!`). In a complete
-    /// implementation, it should:
-    /// - Save application state
-    /// - Release GPU resources if necessary
-    /// - Prepare for potential termination
-    ///
     /// ## Platform Considerations
     ///
     /// - **Desktop**: Rarely called, mainly during shutdown
