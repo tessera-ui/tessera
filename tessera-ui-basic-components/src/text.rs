@@ -31,7 +31,7 @@
 //! text(args);
 //! ```
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, DimensionValue, Dp, Px, tessera};
+use tessera_ui::{Color, ComputedData, DimensionValue, Dp, Px, accesskit::Role, tessera};
 
 use crate::pipelines::{TextCommand, TextConstraint, TextData};
 
@@ -157,6 +157,12 @@ pub struct TextArgs {
     /// ```
     #[builder(default, setter(strip_option))]
     pub line_height: Option<Dp>,
+    /// Optional label announced by assistive technologies. Defaults to the text content.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional description announced by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
 }
 
 /// Converts a [`String`] into [`TextArgs`] using the builder pattern.
@@ -213,6 +219,25 @@ impl From<&str> for TextArgs {
 #[tessera]
 pub fn text(args: impl Into<TextArgs>) {
     let text_args: TextArgs = args.into();
+    let accessibility_label = text_args.accessibility_label.clone();
+    let accessibility_description = text_args.accessibility_description.clone();
+    let text_for_accessibility = text_args.text.clone();
+
+    input_handler(Box::new(move |input| {
+        let mut builder = input.accessibility().role(Role::Label);
+
+        if let Some(label) = accessibility_label.as_ref() {
+            builder = builder.label(label.clone());
+        } else if !text_for_accessibility.is_empty() {
+            builder = builder.label(text_for_accessibility.clone());
+        }
+
+        if let Some(description) = accessibility_description.as_ref() {
+            builder = builder.description(description.clone());
+        }
+
+        builder.commit();
+    }));
     measure(Box::new(move |input| {
         let max_width: Option<Px> = match input.parent_constraint.width {
             DimensionValue::Fixed(w) => Some(w),

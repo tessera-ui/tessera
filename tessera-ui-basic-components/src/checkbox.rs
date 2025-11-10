@@ -22,7 +22,11 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, tessera};
+use tessera_ui::{
+    Color, DimensionValue, Dp,
+    accesskit::{Action, Role, Toggled},
+    tessera,
+};
 
 use crate::{
     RippleState,
@@ -80,6 +84,12 @@ pub struct CheckboxArgs {
 
     #[builder(default)]
     pub hover_color: Option<Color>,
+    /// Optional accessibility label read by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional accessibility description read by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
 }
 
 impl Default for CheckboxArgs {
@@ -198,6 +208,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: Arc<CheckboxState>) {
             on_toggle(state.checkmark.read().checked);
         })
     };
+    let on_click_for_surface = on_click.clone();
 
     let ripple_state = state.ripple.clone();
 
@@ -215,7 +226,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: Arc<CheckboxState>) {
             )
             .hover_style(args.hover_color.map(|c| c.into()))
             .shape(args.shape)
-            .on_click(on_click)
+            .on_click(on_click_for_surface)
             .build()
             .unwrap(),
         Some(ripple_state),
@@ -258,4 +269,40 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: Arc<CheckboxState>) {
             }
         },
     );
+
+    let accessibility_label = args.accessibility_label.clone();
+    let accessibility_description = args.accessibility_description.clone();
+    let accessibility_state = state.clone();
+    let on_click_for_accessibility = on_click.clone();
+    input_handler(Box::new(move |input| {
+        let checked = accessibility_state.checkmark.read().checked;
+        let mut builder = input.accessibility().role(Role::CheckBox);
+
+        if let Some(label) = accessibility_label.as_ref() {
+            builder = builder.label(label.clone());
+        }
+        if let Some(description) = accessibility_description.as_ref() {
+            builder = builder.description(description.clone());
+        }
+
+        builder = builder
+            .focusable()
+            .action(Action::Click)
+            .toggled(if checked {
+                Toggled::True
+            } else {
+                Toggled::False
+            });
+
+        builder.commit();
+
+        input.set_accessibility_action_handler({
+            let on_click = on_click_for_accessibility.clone();
+            move |action| {
+                if action == Action::Click {
+                    on_click();
+                }
+            }
+        });
+    }));
 }

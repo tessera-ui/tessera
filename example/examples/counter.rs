@@ -68,6 +68,10 @@ fn counter_app(#[state] app_state: AppState) {
                     scope.child(move || {
                         button(
                             ButtonArgsBuilder::default()
+                                .accessibility_label("Increase counter")
+                                .accessibility_description(
+                                    "Increments the count and navigates after six presses.",
+                                )
                                 .on_click(Arc::new(move || {
                                     // Increment the click count
                                     app_state_clone // Use the cloned app_state
@@ -132,6 +136,10 @@ fn counter_app2(#[state] app_state: AppState) {
                         button(
                             ButtonArgsBuilder::default()
                                 .color(Color::RED) // Set button color to red
+                                .accessibility_label("Increase counter on red button")
+                                .accessibility_description(
+                                    "Adds one to the count and returns after six presses.",
+                                )
                                 .on_click(Arc::new(move || {
                                     // Increment the click count
                                     app_state_clone // Use the cloned app_state

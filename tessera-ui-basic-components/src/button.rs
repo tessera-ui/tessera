@@ -23,7 +23,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera_ui::{Color, DimensionValue, Dp, tessera};
+use tessera_ui::{Color, DimensionValue, Dp, accesskit::Role, tessera};
 
 use crate::{
     pipelines::ShadowProps,
@@ -71,6 +71,12 @@ pub struct ButtonArgs {
     /// Shadow of the button. If None, no shadow is applied.
     #[builder(default, setter(strip_option))]
     pub shadow: Option<ShadowProps>,
+    /// Optional label announced by assistive technologies (e.g., screen readers).
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional longer description or hint for assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
 }
 
 impl Default for ButtonArgs {
@@ -180,6 +186,14 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         builder = builder.on_click(on_click);
     }
 
+    if let Some(label) = args.accessibility_label.clone() {
+        builder = builder.accessibility_label(label);
+    }
+
+    if let Some(description) = args.accessibility_description.clone() {
+        builder = builder.accessibility_description(description);
+    }
+
     builder
         .style(style)
         .hover_style(hover_style)
@@ -188,6 +202,8 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         .ripple_color(args.ripple_color)
         .width(args.width)
         .height(args.height)
+        .accessibility_role(Role::Button)
+        .accessibility_focusable(true)
         .build()
         .unwrap()
 }

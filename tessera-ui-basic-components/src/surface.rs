@@ -17,7 +17,10 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
-    PressKeyEventType, Px, PxPosition, PxSize, tessera, winit::window::CursorIcon,
+    InputHandlerInput, PressKeyEventType, Px, PxPosition, PxSize,
+    accesskit::{Action, Role},
+    tessera,
+    winit::window::CursorIcon,
 };
 
 use crate::{
@@ -105,6 +108,18 @@ pub struct SurfaceArgs {
     /// after (optionally) handling its own click logic.
     #[builder(default = "false")]
     pub block_input: bool,
+    /// Optional explicit accessibility role. Defaults to `Role::Button` when interactive.
+    #[builder(default, setter(strip_option))]
+    pub accessibility_role: Option<Role>,
+    /// Optional label read by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional description read by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
+    /// Whether this surface should be focusable even when not interactive.
+    #[builder(default)]
+    pub accessibility_focusable: bool,
 }
 
 impl Default for SurfaceArgs {
@@ -556,6 +571,12 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         let args_for_handler = args.clone();
         let state_for_handler = ripple_state;
         input_handler(Box::new(move |mut input| {
+            apply_surface_accessibility(
+                &mut input,
+                &args_for_handler,
+                true,
+                args_for_handler.on_click.clone(),
+            );
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
@@ -617,6 +638,7 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         }));
     } else {
         input_handler(Box::new(move |mut input| {
+            apply_surface_accessibility(&mut input, &args_for_handler, false, None);
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
@@ -626,5 +648,52 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
                 input.block_all();
             }
         }));
+    }
+}
+
+fn apply_surface_accessibility(
+    input: &mut InputHandlerInput<'_>,
+    args: &SurfaceArgs,
+    interactive: bool,
+    on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+) {
+    let has_metadata = args.accessibility_role.is_some()
+        || args.accessibility_label.is_some()
+        || args.accessibility_description.is_some()
+        || args.accessibility_focusable
+        || interactive;
+
+    if !has_metadata {
+        return;
+    }
+
+    let mut builder = input.accessibility();
+
+    let role = args
+        .accessibility_role
+        .or_else(|| interactive.then_some(Role::Button));
+    if let Some(role) = role {
+        builder = builder.role(role);
+    }
+    if let Some(label) = args.accessibility_label.as_ref() {
+        builder = builder.label(label.clone());
+    }
+    if let Some(description) = args.accessibility_description.as_ref() {
+        builder = builder.description(description.clone());
+    }
+    if args.accessibility_focusable || interactive {
+        builder = builder.focusable();
+    }
+    if interactive {
+        builder = builder.action(Action::Click);
+    }
+    builder.commit();
+
+    if interactive && let Some(on_click) = on_click {
+        input.set_accessibility_action_handler(move |action| {
+            if action == Action::Click {
+                on_click();
+            }
+        });
     }
 }

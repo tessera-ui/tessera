@@ -25,7 +25,10 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
-    PxPosition, tessera, winit::window::CursorIcon,
+    PxPosition,
+    accesskit::{Action, Role, Toggled},
+    tessera,
+    winit::window::CursorIcon,
 };
 
 use crate::{
@@ -153,6 +156,12 @@ pub struct SwitchArgs {
 
     #[builder(default = "Dp(3.0)")]
     pub thumb_padding: Dp,
+    /// Optional accessibility label read by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional accessibility description.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
 }
 
 impl Default for SwitchArgs {
@@ -184,27 +193,76 @@ fn handle_input_events_switch(
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
     input: &mut tessera_ui::InputHandlerInput,
 ) {
-    let Some(on_toggle) = on_toggle else {
-        return; // No-op if no on_toggle is provided (disabled state)
-    };
-
     update_progress_from_state(state);
 
     let size = input.computed_data;
     let is_cursor_in = is_cursor_in_component(size, input.cursor_position_rel);
 
-    if is_cursor_in {
+    if is_cursor_in && on_toggle.is_some() {
         input.requests.cursor_icon = CursorIcon::Pointer;
     }
 
     for e in input.cursor_events.iter() {
-        if let CursorEventContent::Pressed(PressKeyEventType::Left) = &e.content
-            && is_cursor_in
+        if matches!(
+            e.content,
+            CursorEventContent::Pressed(PressKeyEventType::Left)
+        ) && is_cursor_in
         {
-            state.write().toggle();
-            let new_state = state.read().checked;
-            on_toggle(new_state);
+            toggle_switch_state(state, on_toggle);
         }
+    }
+}
+
+fn toggle_switch_state(
+    state: &Arc<RwLock<SwitchState>>,
+    on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
+) -> bool {
+    let Some(on_toggle) = on_toggle else {
+        return false;
+    };
+
+    state.write().toggle();
+    let checked = state.read().checked;
+    on_toggle(checked);
+    true
+}
+
+fn apply_switch_accessibility(
+    input: &mut tessera_ui::InputHandlerInput<'_>,
+    state: &Arc<RwLock<SwitchState>>,
+    on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
+    label: Option<&String>,
+    description: Option<&String>,
+) {
+    let checked = state.read().checked;
+    let mut builder = input.accessibility().role(Role::Switch);
+
+    if let Some(label) = label {
+        builder = builder.label(label.clone());
+    }
+    if let Some(description) = description {
+        builder = builder.description(description.clone());
+    }
+
+    builder = builder
+        .focusable()
+        .action(Action::Click)
+        .toggled(if checked {
+            Toggled::True
+        } else {
+            Toggled::False
+        });
+
+    builder.commit();
+
+    if on_toggle.is_some() {
+        let state = state.clone();
+        let on_toggle = on_toggle.clone();
+        input.set_accessibility_action_handler(move |action| {
+            if action == Action::Click {
+                toggle_switch_state(&state, &on_toggle);
+            }
+        });
     }
 }
 
@@ -262,11 +320,22 @@ pub fn switch(args: impl Into<SwitchArgs>, state: Arc<RwLock<SwitchState>>) {
     );
 
     let on_toggle = args.on_toggle.clone();
+    let accessibility_on_toggle = on_toggle.clone();
+    let accessibility_label = args.accessibility_label.clone();
+    let accessibility_description = args.accessibility_description.clone();
     let progress = state.read().progress;
 
+    let state_for_handler = state.clone();
     input_handler(Box::new(move |mut input| {
         // Delegate input handling to the extracted helper.
-        handle_input_events_switch(&state, &on_toggle, &mut input);
+        handle_input_events_switch(&state_for_handler, &on_toggle, &mut input);
+        apply_switch_accessibility(
+            &mut input,
+            &state_for_handler,
+            &accessibility_on_toggle,
+            accessibility_label.as_ref(),
+            accessibility_description.as_ref(),
+        );
     }));
 
     measure(Box::new(move |input| {

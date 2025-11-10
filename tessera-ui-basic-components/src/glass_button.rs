@@ -69,6 +69,15 @@ pub struct GlassButtonArgs {
     pub contrast: Option<f32>,
     #[builder(default, setter(strip_option))]
     pub border: Option<GlassBorder>,
+    /// Optional label announced by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional longer description for assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
+    /// Whether the button should remain focusable even when no click handler is provided.
+    #[builder(default)]
+    pub accessibility_focusable: bool,
 }
 
 /// Convenience constructors for common glass button styles
@@ -198,6 +207,18 @@ pub fn glass_button(
 
     if let Some(border) = args.border {
         glass_args = glass_args.border(border);
+    }
+
+    if let Some(label) = args.accessibility_label {
+        glass_args = glass_args.accessibility_label(label);
+    }
+
+    if let Some(description) = args.accessibility_description {
+        glass_args = glass_args.accessibility_description(description);
+    }
+
+    if args.accessibility_focusable {
+        glass_args = glass_args.accessibility_focusable(true);
     }
 
     let glass_args = glass_args.build().unwrap();

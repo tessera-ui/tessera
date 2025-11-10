@@ -17,7 +17,10 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
-    PxPosition, tessera, winit::window::CursorIcon,
+    PxPosition,
+    accesskit::{Action, Role, Toggled},
+    tessera,
+    winit::window::CursorIcon,
 };
 
 use crate::{
@@ -100,6 +103,12 @@ pub struct GlassSwitchArgs {
     /// Padding around the thumb
     #[builder(default = "Dp(3.0)")]
     pub thumb_padding: Dp,
+    /// Optional accessibility label read by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional accessibility description.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
 }
 
 impl Default for GlassSwitchArgs {
@@ -151,11 +160,7 @@ fn handle_input_events(
     on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
     input: &mut tessera_ui::InputHandlerInput,
 ) {
-    let Some(on_toggle) = on_toggle else {
-        // No callback provided, do nothing (act disabled)
-        return;
-    };
-
+    let interactive = on_toggle.is_some();
     // Update progress first
     update_progress_from_state(state.clone());
 
@@ -163,7 +168,7 @@ fn handle_input_events(
     let size = input.computed_data;
     let is_cursor_in = is_cursor_inside(size, input.cursor_position_rel);
 
-    if is_cursor_in {
+    if is_cursor_in && interactive {
         input.requests.cursor_icon = CursorIcon::Pointer;
     }
 
@@ -171,9 +176,58 @@ fn handle_input_events(
     let pressed = was_pressed_left(input);
 
     if pressed && is_cursor_in {
-        // If internal state exists, toggle it and use the toggled value.
-        state.write().toggle();
-        on_toggle(state.read().checked);
+        toggle_glass_switch_state(&state, &on_toggle);
+    }
+}
+
+fn toggle_glass_switch_state(
+    state: &Arc<RwLock<GlassSwitchState>>,
+    on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
+) -> bool {
+    let Some(on_toggle) = on_toggle else {
+        return false;
+    };
+    state.write().toggle();
+    let checked = state.read().checked;
+    on_toggle(checked);
+    true
+}
+
+fn apply_glass_switch_accessibility(
+    input: &mut tessera_ui::InputHandlerInput<'_>,
+    state: &Arc<RwLock<GlassSwitchState>>,
+    on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
+    label: Option<&String>,
+    description: Option<&String>,
+) {
+    let checked = state.read().checked;
+    let mut builder = input.accessibility().role(Role::Switch);
+
+    if let Some(label) = label {
+        builder = builder.label(label.clone());
+    }
+    if let Some(description) = description {
+        builder = builder.description(description.clone());
+    }
+
+    builder = builder
+        .focusable()
+        .action(Action::Click)
+        .toggled(if checked {
+            Toggled::True
+        } else {
+            Toggled::False
+        });
+    builder.commit();
+
+    if on_toggle.is_some() {
+        let state = state.clone();
+        let on_toggle = on_toggle.clone();
+        input.set_accessibility_action_handler(move |action| {
+            if action == Action::Click {
+                toggle_glass_switch_state(&state, &on_toggle);
+            }
+        });
     }
 }
 #[tessera]
@@ -266,10 +320,20 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: Arc<RwLock<GlassSwi
     }
     fluid_glass(thumb_builder.build().unwrap(), None, || {});
 
-    let state_clone = state.clone();
+    let state_for_handler = state.clone();
     let on_toggle = args.on_toggle.clone();
+    let accessibility_on_toggle = on_toggle.clone();
+    let accessibility_label = args.accessibility_label.clone();
+    let accessibility_description = args.accessibility_description.clone();
     input_handler(Box::new(move |mut input| {
-        handle_input_events(state_clone.clone(), on_toggle.clone(), &mut input);
+        handle_input_events(state_for_handler.clone(), on_toggle.clone(), &mut input);
+        apply_glass_switch_accessibility(
+            &mut input,
+            &state_for_handler,
+            &accessibility_on_toggle,
+            accessibility_label.as_ref(),
+            accessibility_description.as_ref(),
+        );
     }));
 
     // Measurement and placement

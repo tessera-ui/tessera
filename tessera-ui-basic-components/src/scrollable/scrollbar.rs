@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, Constraint, CursorEventContent, Dp, PressKeyEventType, Px, PxPosition, tessera,
+    Color, Constraint, CursorEventContent, Dp, PressKeyEventType, Px, PxPosition,
+    accesskit::{Action, Role},
+    tessera,
 };
 
 use crate::{
@@ -10,6 +12,12 @@ use crate::{
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
+
+#[derive(Clone, Copy)]
+enum ScrollOrientation {
+    Vertical,
+    Horizontal,
+}
 
 #[derive(Clone, Debug)]
 pub struct ScrollBarArgs {
@@ -334,6 +342,76 @@ fn check_and_handle_release(
     }
 }
 
+fn apply_scrollbar_accessibility(
+    input: &mut tessera_ui::InputHandlerInput<'_>,
+    args: &ScrollBarArgs,
+    state: &Arc<RwLock<ScrollBarState>>,
+    orientation: ScrollOrientation,
+) {
+    let mut builder = input.accessibility().role(Role::ScrollBar);
+    let label = match orientation {
+        ScrollOrientation::Vertical => "Vertical scrollbar",
+        ScrollOrientation::Horizontal => "Horizontal scrollbar",
+    };
+    builder = builder.label(label.to_string());
+
+    let progress = compute_thumb_progress(args.offset, args.total).clamp(0.0, 1.0);
+    builder = builder
+        .numeric_value(progress as f64)
+        .numeric_range(0.0, 1.0)
+        .focusable()
+        .action(Action::Increment)
+        .action(Action::Decrement);
+
+    builder.commit();
+
+    let args_clone = args.clone();
+    let state_clone = state.clone();
+    input.set_accessibility_action_handler(move |action| match action {
+        Action::Increment => {
+            scroll_accessibility_step(&args_clone, &state_clone, orientation, true)
+        }
+        Action::Decrement => {
+            scroll_accessibility_step(&args_clone, &state_clone, orientation, false)
+        }
+        _ => {}
+    });
+}
+
+fn scroll_accessibility_step(
+    args: &ScrollBarArgs,
+    state: &Arc<RwLock<ScrollBarState>>,
+    orientation: ScrollOrientation,
+    increment: bool,
+) {
+    let step_amount = (args.visible.to_f32() * 0.1).max(1.0);
+    let step_px = Px::from_f32(step_amount);
+    let delta = match orientation {
+        ScrollOrientation::Vertical => {
+            let dy = if increment { -step_px } else { step_px };
+            PxPosition::new(Px::ZERO, dy)
+        }
+        ScrollOrientation::Horizontal => {
+            let dx = if increment { -step_px } else { step_px };
+            PxPosition::new(dx, Px::ZERO)
+        }
+    };
+
+    {
+        let mut scroll_state = args.state.write();
+        let new_target = scroll_state
+            .target_position
+            .saturating_offset(delta.x, delta.y);
+        scroll_state.set_target_position(new_target);
+    }
+
+    if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
+        let mut scroll_state = state.write();
+        scroll_state.last_scroll_activity = Some(std::time::Instant::now());
+        scroll_state.should_be_visible = true;
+    }
+}
+
 /// Return true if there is a left-press event in the input.
 /// Extracted to reduce duplication and simplify input handlers.
 fn is_pressed_left(input: &tessera_ui::InputHandlerInput) -> bool {
@@ -376,14 +454,14 @@ fn update_hover_state(is_on_thumb: bool, state: &Arc<RwLock<ScrollBarState>>) {
 }
 
 fn handle_state_v(
-    args: ScrollBarArgs,
-    state: Arc<RwLock<ScrollBarState>>,
+    args: &ScrollBarArgs,
+    state: &Arc<RwLock<ScrollBarState>>,
     track_height: Px,
     thumb_height: Px,
-    input: tessera_ui::InputHandlerInput,
+    input: &mut tessera_ui::InputHandlerInput<'_>,
 ) {
     // Handle AutoHide behavior - hide scrollbar after inactivity
-    handle_autohide_if_needed(&args, &state);
+    handle_autohide_if_needed(args, state);
 
     // Capture current target position once to avoid locking inside helper on every call.
     let fallback_pos = args.state.read().target_position;
@@ -400,12 +478,12 @@ fn handle_state_v(
 
     if state.read().is_dragging {
         // If mouse released, stop dragging (extracted helper reduces branching complexity).
-        if check_and_handle_release(&input, &state) {
+        if check_and_handle_release(input, state) {
             return;
         }
 
         // Update dragging position or stop if cursor left.
-        update_drag_vertical(&input, &calculate_target_pos, &args, &state);
+        update_drag_vertical(input, &calculate_target_pos, args, state);
     } else {
         // Not dragging, check for interactions to start dragging or jump
         let Some(cursor_pos) = input.cursor_position_rel else {
@@ -422,10 +500,10 @@ fn handle_state_v(
         );
 
         // Update hover state (extracted).
-        update_hover_state(is_on_thumb, &state);
+        update_hover_state(is_on_thumb, state);
 
         // Check for left mouse button press
-        if !is_pressed_left(&input) {
+        if !is_pressed_left(input) {
             return; // No press, do nothing
         }
 
@@ -463,14 +541,14 @@ fn update_drag_horizontal(
 }
 
 fn handle_state_h(
-    args: ScrollBarArgs,
-    state: Arc<RwLock<ScrollBarState>>,
+    args: &ScrollBarArgs,
+    state: &Arc<RwLock<ScrollBarState>>,
     track_width: Px,
     thumb_width: Px,
-    input: tessera_ui::InputHandlerInput,
+    input: &mut tessera_ui::InputHandlerInput<'_>,
 ) {
     // Handle AutoHide behavior - hide scrollbar after inactivity
-    handle_autohide_if_needed(&args, &state);
+    handle_autohide_if_needed(args, state);
 
     // Capture current target position once to avoid locking inside helper on every call.
     let fallback_pos = args.state.read().target_position;
@@ -487,12 +565,12 @@ fn handle_state_h(
 
     if state.read().is_dragging {
         // If mouse released, stop dragging (extracted helper).
-        if check_and_handle_release(&input, &state) {
+        if check_and_handle_release(input, state) {
             return;
         }
 
         // Update dragging position or stop if cursor left.
-        update_drag_horizontal(&input, &calculate_target_pos, &args, &state);
+        update_drag_horizontal(input, &calculate_target_pos, args, state);
     } else {
         // Not dragging, check for interactions to start dragging or jump
         let Some(cursor_pos) = input.cursor_position_rel else {
@@ -509,7 +587,7 @@ fn handle_state_h(
         );
 
         // Update hover state (re-use helper).
-        update_hover_state(is_on_thumb, &state);
+        update_hover_state(is_on_thumb, state);
 
         if is_on_thumb {
             // Start dragging
@@ -518,7 +596,7 @@ fn handle_state_h(
         }
 
         // Check for left mouse button press
-        if !is_pressed_left(&input) {
+        if !is_pressed_left(input) {
             return; // No press, do nothing
         }
 
@@ -579,13 +657,21 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
         Ok(size)
     }));
 
-    input_handler(Box::new(move |input| {
+    let args_for_handler = args.clone();
+    let state_for_handler = state.clone();
+    input_handler(Box::new(move |mut input| {
         handle_state_v(
-            args.clone(),
-            state.clone(),
+            &args_for_handler,
+            &state_for_handler,
             track_height,
             thumb_height,
-            input,
+            &mut input,
+        );
+        apply_scrollbar_accessibility(
+            &mut input,
+            &args_for_handler,
+            &state_for_handler,
+            ScrollOrientation::Vertical,
         );
     }));
 }
@@ -638,7 +724,21 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
         Ok(size)
     }));
 
-    input_handler(Box::new(move |input| {
-        handle_state_h(args.clone(), state.clone(), track_width, thumb_width, input);
+    let args_for_handler = args.clone();
+    let state_for_handler = state.clone();
+    input_handler(Box::new(move |mut input| {
+        handle_state_h(
+            &args_for_handler,
+            &state_for_handler,
+            track_width,
+            thumb_width,
+            &mut input,
+        );
+        apply_scrollbar_accessibility(
+            &mut input,
+            &args_for_handler,
+            &state_for_handler,
+            ScrollOrientation::Horizontal,
+        );
     }));
 }

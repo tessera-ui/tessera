@@ -12,7 +12,10 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     BarrierRequirement, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    GestureState, PressKeyEventType, Px, PxPosition, renderer::DrawCommand, tessera,
+    GestureState, PressKeyEventType, Px, PxPosition,
+    accesskit::{Action, Role},
+    renderer::DrawCommand,
+    tessera,
     winit::window::CursorIcon,
 };
 
@@ -112,6 +115,18 @@ pub struct FluidGlassArgs {
     /// When `true`, the surface will consume all input events, preventing interaction with underlying components.
     #[builder(default = "false")]
     pub block_input: bool,
+    /// Optional accessibility role override; defaults to `Role::Button` when interactive.
+    #[builder(default, setter(strip_option))]
+    pub accessibility_role: Option<Role>,
+    /// Optional label announced by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional description announced by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
+    /// Whether the surface should be focusable even when not interactive.
+    #[builder(default)]
+    pub accessibility_focusable: bool,
 }
 
 impl PartialEq for FluidGlassArgs {
@@ -218,6 +233,54 @@ fn handle_block_input(input: &mut tessera_ui::InputHandlerInput) {
     if is_cursor_in {
         // Consume all input events to prevent interaction with underlying components
         input.block_all();
+    }
+}
+
+fn apply_fluid_glass_accessibility(
+    input: &mut tessera_ui::InputHandlerInput<'_>,
+    args: &FluidGlassArgs,
+    on_click: &Option<Arc<dyn Fn() + Send + Sync>>,
+) {
+    let interactive = on_click.is_some();
+    let has_metadata = interactive
+        || args.accessibility_role.is_some()
+        || args.accessibility_label.is_some()
+        || args.accessibility_description.is_some()
+        || args.accessibility_focusable;
+
+    if !has_metadata {
+        return;
+    }
+
+    let mut builder = input.accessibility();
+
+    let role = args
+        .accessibility_role
+        .or_else(|| interactive.then_some(Role::Button));
+    if let Some(role) = role {
+        builder = builder.role(role);
+    }
+    if let Some(label) = args.accessibility_label.as_ref() {
+        builder = builder.label(label.clone());
+    }
+    if let Some(description) = args.accessibility_description.as_ref() {
+        builder = builder.description(description.clone());
+    }
+    if args.accessibility_focusable || interactive {
+        builder = builder.focusable();
+    }
+    if interactive {
+        builder = builder.action(Action::Click);
+    }
+
+    builder.commit();
+
+    if interactive && let Some(on_click) = on_click.clone() {
+        input.set_accessibility_action_handler(move |action| {
+            if action == Action::Click {
+                on_click();
+            }
+        });
     }
 }
 
@@ -377,4 +440,14 @@ pub fn fluid_glass(
             handle_block_input(&mut input);
         }));
     }
+
+    let accessibility_args = args.clone();
+    let on_click_for_accessibility = args.on_click.clone();
+    input_handler(Box::new(move |mut input| {
+        apply_fluid_glass_accessibility(
+            &mut input,
+            &accessibility_args,
+            &on_click_for_accessibility,
+        );
+    }));
 }

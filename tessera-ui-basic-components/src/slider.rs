@@ -18,7 +18,10 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, InputHandlerInput,
-    MeasureInput, MeasurementError, Px, PxPosition, focus_state::Focus, tessera,
+    MeasureInput, MeasurementError, Px, PxPosition,
+    accesskit::{Action, Role},
+    focus_state::Focus,
+    tessera,
     winit::window::CursorIcon,
 };
 
@@ -87,6 +90,12 @@ pub struct SliderArgs {
     /// Disable interaction.
     #[builder(default = "false")]
     pub disabled: bool,
+    /// Optional accessibility label read by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional accessibility description.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
 }
 
 /// Helper: check if a cursor position is within the bounds of a component.
@@ -175,6 +184,57 @@ fn notify_on_change(new_value: Option<f32>, args: &SliderArgs) {
     {
         (args.on_change)(v);
     }
+}
+
+fn apply_slider_accessibility(
+    input: &mut InputHandlerInput<'_>,
+    args: &SliderArgs,
+    current_value: f32,
+    on_change: &Arc<dyn Fn(f32) + Send + Sync>,
+) {
+    let mut builder = input.accessibility().role(Role::Slider);
+
+    if let Some(label) = args.accessibility_label.as_ref() {
+        builder = builder.label(label.clone());
+    }
+    if let Some(description) = args.accessibility_description.as_ref() {
+        builder = builder.description(description.clone());
+    }
+
+    builder = builder
+        .numeric_value(current_value as f64)
+        .numeric_range(0.0, 1.0);
+
+    if args.disabled {
+        builder = builder.disabled();
+    } else {
+        builder = builder
+            .focusable()
+            .action(Action::Increment)
+            .action(Action::Decrement);
+    }
+
+    builder.commit();
+
+    if args.disabled {
+        return;
+    }
+
+    let value_for_handler = current_value;
+    let on_change = on_change.clone();
+    input.set_accessibility_action_handler(move |action| {
+        let new_value = match action {
+            Action::Increment => Some((value_for_handler + ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
+            Action::Decrement => Some((value_for_handler - ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
+            _ => None,
+        };
+
+        if let Some(new_value) = new_value
+            && (new_value - value_for_handler).abs() > f32::EPSILON
+        {
+            on_change(new_value);
+        }
+    });
 }
 
 fn render_track(args: &SliderArgs) {
@@ -310,8 +370,15 @@ pub fn slider(args: impl Into<SliderArgs>, state: Arc<RwLock<SliderState>>) {
     let state_clone = state.clone();
     input_handler(Box::new(move |mut input| {
         handle_slider_state(&mut input, &state_clone, &cloned_args);
+        apply_slider_accessibility(
+            &mut input,
+            &cloned_args,
+            cloned_args.value,
+            &cloned_args.on_change,
+        );
     }));
 
     let cloned_args = args.clone();
     measure(Box::new(move |input| measure_slider(input, &cloned_args)));
 }
+const ACCESSIBILITY_STEP: f32 = 0.05;

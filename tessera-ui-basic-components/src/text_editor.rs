@@ -19,10 +19,11 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use glyphon::{Action, Edit};
+use glyphon::{Action as GlyphonAction, Edit};
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, tessera, winit,
+    Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, accesskit::Role,
+    tessera, winit,
 };
 
 use crate::{
@@ -127,6 +128,12 @@ pub struct TextEditorArgs {
     /// Color for text selection highlight (RGBA). Defaults to light blue with transparency.
     #[builder(default = "Some(Color::new(0.5, 0.7, 1.0, 0.4))")]
     pub selection_color: Option<Color>,
+    /// Optional label announced by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional description announced by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
 }
 
 impl Default for TextEditorArgs {
@@ -218,8 +225,9 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
 
     // Event handling at the outermost layer - can access full surface area
 
+    let args_for_handler = editor_args.clone();
     let state_for_handler = state.clone();
-    input_handler(Box::new(move |input| {
+    input_handler(Box::new(move |mut input| {
         let size = input.computed_data; // This is the full surface size
         let cursor_pos_option = input.cursor_position_rel;
         let is_cursor_in_editor = cursor_pos_option
@@ -259,8 +267,8 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                 // Handle cursor positioning for clicks
                 if let Some(cursor_pos) = cursor_pos_option {
                     // Calculate the relative position within the text area
-                    let padding_px: Px = editor_args.padding.into();
-                    let border_width_px = Px(editor_args.border_width.to_pixels_u32() as i32); // Assuming border_width is integer pixels
+                    let padding_px: Px = args_for_handler.padding.into();
+                    let border_width_px = Px(args_for_handler.border_width.to_pixels_u32() as i32); // Assuming border_width is integer pixels
 
                     let text_relative_x_px = cursor_pos.x - padding_px - border_width_px;
                     let text_relative_y_px = cursor_pos.y - padding_px - border_width_px;
@@ -279,7 +287,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                                 // Single click: position cursor
                                 state_for_handler.write().editor_mut().action(
                                     &mut write_font_system(),
-                                    Action::Click {
+                                    GlyphonAction::Click {
                                         x: text_relative_pos.x.0,
                                         y: text_relative_pos.y.0,
                                     },
@@ -289,7 +297,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                                 // Double click: select word
                                 state_for_handler.write().editor_mut().action(
                                     &mut write_font_system(),
-                                    Action::DoubleClick {
+                                    GlyphonAction::DoubleClick {
                                         x: text_relative_pos.x.0,
                                         y: text_relative_pos.y.0,
                                     },
@@ -299,7 +307,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                                 // Triple click: select line
                                 state_for_handler.write().editor_mut().action(
                                     &mut write_font_system(),
-                                    Action::TripleClick {
+                                    GlyphonAction::TripleClick {
                                         x: text_relative_pos.x.0,
                                         y: text_relative_pos.y.0,
                                     },
@@ -318,8 +326,8 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
             if state_for_handler.read().is_dragging()
                 && let Some(cursor_pos) = cursor_pos_option
             {
-                let padding_px: Px = editor_args.padding.into();
-                let border_width_px = Px(editor_args.border_width.to_pixels_u32() as i32);
+                let padding_px: Px = args_for_handler.padding.into();
+                let border_width_px = Px(args_for_handler.border_width.to_pixels_u32() as i32);
 
                 let text_relative_x_px = cursor_pos.x - padding_px - border_width_px;
                 let text_relative_y_px = cursor_pos.y - padding_px - border_width_px;
@@ -332,7 +340,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                         // Extend selection by dragging
                         state_for_handler.write().editor_mut().action(
                             &mut write_font_system(),
-                            Action::Drag {
+                            GlyphonAction::Drag {
                                 x: current_pos_px.x.0,
                                 y: current_pos_px.y.0,
                             },
@@ -367,7 +375,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                     let scroll = -scroll_event.delta_y;
 
                     // Scroll up for positive, down for negative
-                    let action = glyphon::Action::Scroll { pixels: scroll };
+                    let action = GlyphonAction::Scroll { pixels: scroll };
                     state_for_handler
                         .write()
                         .editor_mut()
@@ -409,7 +417,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                 // Move cursor to the end, which extends the selection (use BufferEnd for full document)
                 editor.action(
                     &mut write_font_system(),
-                    glyphon::Action::Motion(glyphon::cosmic_text::Motion::BufferEnd),
+                    GlyphonAction::Motion(glyphon::cosmic_text::Motion::BufferEnd),
                 );
             } else {
                 // Original logic for other keys
@@ -447,24 +455,32 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
                         // Clear preedit string if it exists
                         if let Some(preedit_text) = state.preedit_string.take() {
                             for _ in 0..preedit_text.chars().count() {
-                                handle_action(&mut state, Action::Backspace, on_change.clone());
+                                handle_action(
+                                    &mut state,
+                                    GlyphonAction::Backspace,
+                                    on_change.clone(),
+                                );
                             }
                         }
                         // Insert the committed text
                         for c in text.chars() {
-                            handle_action(&mut state, Action::Insert(c), on_change.clone());
+                            handle_action(&mut state, GlyphonAction::Insert(c), on_change.clone());
                         }
                     }
                     winit::event::Ime::Preedit(text, _cursor_offset) => {
                         // Remove the old preedit text if it exists
                         if let Some(old_preedit) = state.preedit_string.take() {
                             for _ in 0..old_preedit.chars().count() {
-                                handle_action(&mut state, Action::Backspace, on_change.clone());
+                                handle_action(
+                                    &mut state,
+                                    GlyphonAction::Backspace,
+                                    on_change.clone(),
+                                );
                             }
                         }
                         // Insert the new preedit text
                         for c in text.chars() {
-                            handle_action(&mut state, Action::Insert(c), on_change.clone());
+                            handle_action(&mut state, GlyphonAction::Insert(c), on_change.clone());
                         }
                         state.preedit_string = Some(text.to_string());
                     }
@@ -475,12 +491,14 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditor
             // Request IME window
             input.requests.ime_request = Some(ImeRequest::new(size.into()));
         }
+
+        apply_text_editor_accessibility(&mut input, &args_for_handler, &state_for_handler);
     }));
 }
 
 fn handle_action(
     state: &mut TextEditorState,
-    action: Action,
+    action: GlyphonAction,
     on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
 ) {
     // Clone a temporary editor and apply action, waiting for on_change to confirm
@@ -822,4 +840,30 @@ fn get_editor_content(editor: &glyphon::Editor) -> String {
             .map(|line| line.text().to_string() + line.ending().as_str())
             .collect::<String>()
     })
+}
+
+fn apply_text_editor_accessibility(
+    input: &mut tessera_ui::InputHandlerInput<'_>,
+    args: &TextEditorArgs,
+    state: &Arc<RwLock<TextEditorState>>,
+) {
+    let mut builder = input.accessibility().role(Role::MultilineTextInput);
+
+    if let Some(label) = args.accessibility_label.as_ref() {
+        builder = builder.label(label.clone());
+    }
+
+    if let Some(description) = args.accessibility_description.as_ref() {
+        builder = builder.description(description.clone());
+    }
+
+    let current_text = {
+        let guard = state.read();
+        get_editor_content(guard.editor())
+    };
+    if !current_text.is_empty() {
+        builder = builder.value(current_text);
+    }
+
+    builder.focusable().commit();
 }

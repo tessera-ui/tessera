@@ -17,13 +17,18 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
-    focus_state::Focus, tessera, winit::window::CursorIcon,
+    accesskit::{Action, Role},
+    focus_state::Focus,
+    tessera,
+    winit::window::CursorIcon,
 };
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
     shape_def::Shape,
 };
+
+const ACCESSIBILITY_STEP: f32 = 0.05;
 
 /// State for the `glass_slider` component.
 pub struct GlassSliderState {
@@ -87,6 +92,12 @@ pub struct GlassSliderArgs {
     /// Disable interaction.
     #[builder(default = "false")]
     pub disabled: bool,
+    /// Optional accessibility label read by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional accessibility description.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
 }
 
 /// Helper: check if a cursor position is inside a measured component area.
@@ -255,32 +266,35 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<RwLock<GlassSli
     );
 
     let on_change = args.on_change.clone();
-    let disabled = args.disabled;
+    let args_for_handler = args.clone();
+    let state_for_handler = state.clone();
+    input_handler(Box::new(move |mut input| {
+        if !args_for_handler.disabled {
+            let is_in_component =
+                cursor_within_component(input.cursor_position_rel, &input.computed_data);
 
-    input_handler(Box::new(move |input| {
-        if disabled {
-            return;
+            if is_in_component {
+                input.requests.cursor_icon = CursorIcon::Pointer;
+            }
+
+            if is_in_component || state_for_handler.read().is_dragging {
+                let width_f = input.computed_data.width.0 as f32;
+
+                if let Some(v) =
+                    process_cursor_events(&mut state_for_handler.write(), &input, width_f)
+                    && (v - args_for_handler.value).abs() > f32::EPSILON
+                {
+                    on_change(v);
+                }
+            }
         }
 
-        let is_in_component =
-            cursor_within_component(input.cursor_position_rel, &input.computed_data);
-
-        // Set cursor to pointer when hovering over the slider
-        if is_in_component {
-            input.requests.cursor_icon = CursorIcon::Pointer;
-        }
-
-        if !is_in_component && !state.read().is_dragging {
-            return;
-        }
-
-        let width_f = input.computed_data.width.0 as f32;
-
-        if let Some(v) = process_cursor_events(&mut state.write(), &input, width_f)
-            && (v - args.value).abs() > f32::EPSILON
-        {
-            on_change(v);
-        }
+        apply_glass_slider_accessibility(
+            &mut input,
+            &args_for_handler,
+            args_for_handler.value,
+            &args_for_handler.on_change,
+        );
     }));
 
     measure(Box::new(move |input| {
@@ -302,4 +316,55 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<RwLock<GlassSli
             height: self_height,
         })
     }));
+}
+
+fn apply_glass_slider_accessibility(
+    input: &mut tessera_ui::InputHandlerInput<'_>,
+    args: &GlassSliderArgs,
+    current_value: f32,
+    on_change: &Arc<dyn Fn(f32) + Send + Sync>,
+) {
+    let mut builder = input.accessibility().role(Role::Slider);
+
+    if let Some(label) = args.accessibility_label.as_ref() {
+        builder = builder.label(label.clone());
+    }
+    if let Some(description) = args.accessibility_description.as_ref() {
+        builder = builder.description(description.clone());
+    }
+
+    builder = builder
+        .numeric_value(current_value as f64)
+        .numeric_range(0.0, 1.0);
+
+    if args.disabled {
+        builder = builder.disabled();
+    } else {
+        builder = builder
+            .action(Action::Increment)
+            .action(Action::Decrement)
+            .focusable();
+    }
+
+    builder.commit();
+
+    if args.disabled {
+        return;
+    }
+
+    let value_for_handler = current_value;
+    let on_change = on_change.clone();
+    input.set_accessibility_action_handler(move |action| {
+        let new_value = match action {
+            Action::Increment => Some((value_for_handler + ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
+            Action::Decrement => Some((value_for_handler - ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
+            _ => None,
+        };
+
+        if let Some(new_value) = new_value
+            && (new_value - value_for_handler).abs() > f32::EPSILON
+        {
+            on_change(new_value);
+        }
+    });
 }
