@@ -426,7 +426,13 @@ pub fn fluid_glass(
         let on_click_arc = on_click.clone();
         let args_for_handler = args.clone();
         input_handler(Box::new(move |mut input: tessera_ui::InputHandlerInput| {
-            // Delegate to extracted helper to reduce closure complexity.
+            // Apply accessibility first
+            apply_fluid_glass_accessibility(
+                &mut input,
+                &args_for_handler,
+                &args_for_handler.on_click,
+            );
+            // Then handle click state (which includes block_input logic)
             handle_click_state(
                 &args_for_handler,
                 ripple_state.clone(),
@@ -435,19 +441,18 @@ pub fn fluid_glass(
             );
         }));
     } else if args.block_input {
+        let args_for_handler = args.clone();
         input_handler(Box::new(move |mut input: tessera_ui::InputHandlerInput| {
-            // Delegate to extracted helper for input blocking behavior.
+            // Apply accessibility first
+            apply_fluid_glass_accessibility(&mut input, &args_for_handler, &None);
+            // Then handle input blocking behavior
             handle_block_input(&mut input);
         }));
+    } else {
+        // Only accessibility metadata, no interaction
+        let args_for_handler = args.clone();
+        input_handler(Box::new(move |mut input: tessera_ui::InputHandlerInput| {
+            apply_fluid_glass_accessibility(&mut input, &args_for_handler, &None);
+        }));
     }
-
-    let accessibility_args = args.clone();
-    let on_click_for_accessibility = args.on_click.clone();
-    input_handler(Box::new(move |mut input| {
-        apply_fluid_glass_accessibility(
-            &mut input,
-            &accessibility_args,
-            &on_click_for_accessibility,
-        );
-    }));
 }

@@ -571,12 +571,15 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         let args_for_handler = args.clone();
         let state_for_handler = ripple_state;
         input_handler(Box::new(move |mut input| {
+            // Apply accessibility metadata first
             apply_surface_accessibility(
                 &mut input,
                 &args_for_handler,
                 true,
                 args_for_handler.on_click.clone(),
             );
+
+            // Then handle interactive behavior
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
@@ -638,7 +641,10 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child:
         }));
     } else {
         input_handler(Box::new(move |mut input| {
+            // Apply accessibility metadata first
             apply_surface_accessibility(&mut input, &args_for_handler, false, None);
+
+            // Then handle input blocking if needed
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
