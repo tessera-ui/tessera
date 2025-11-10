@@ -111,6 +111,20 @@ impl ComponentTree {
         self.node_queue.pop();
     }
 
+    /// Get a reference to the underlying tree structure.
+    ///
+    /// This is used for accessibility tree building and other introspection needs.
+    pub(crate) fn tree(&self) -> &indextree::Arena<ComponentNode> {
+        &self.tree
+    }
+
+    /// Get a reference to the node metadatas.
+    ///
+    /// This is used for accessibility tree building and other introspection needs.
+    pub(crate) fn metadatas(&self) -> &ComponentNodeMetaDatas {
+        &self.metadatas
+    }
+
     /// Compute the ComponentTree into a list of rendering commands
     ///
     /// This method processes the component tree through three main phases:
@@ -234,6 +248,8 @@ impl ComponentTree {
                     key_modifiers: modifiers,
                     requests: &mut window_requests,
                     clipboard,
+                    current_node_id: node_id,
+                    metadatas: &self.metadatas,
                 };
                 input_handler(input);
                 // if input_handler set ime request, it's position must be None, and we set it here

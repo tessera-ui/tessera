@@ -78,7 +78,7 @@ struct UseItemInfo {
     sort_key: String,
     span: Span,
     tree: UseTree,
-    is_pub: bool,
+    visibility: Visibility,
     attrs: Vec<syn::Attribute>,
 }
 
@@ -87,7 +87,7 @@ struct UseItemInfo {
 struct Import {
     attrs: String,
     category: ImportCategory,
-    is_pub: bool,
+    visibility: String,
     path: String,
 }
 
@@ -102,7 +102,7 @@ impl Ord for Import {
         self.attrs
             .cmp(&other.attrs)
             .then_with(|| self.category.cmp(&other.category))
-            .then_with(|| self.is_pub.cmp(&other.is_pub))
+            .then_with(|| self.visibility.cmp(&other.visibility))
             .then_with(|| self.path.cmp(&other.path))
     }
 }
@@ -366,14 +366,18 @@ fn format_imports_from_collected(imports: Vec<Import>) -> String {
         imports
             .iter()
             .map(|import| {
-                let keyword = if import.is_pub { "pub use" } else { "use" };
+                let keyword = if import.visibility.is_empty() {
+                    "use".to_string()
+                } else {
+                    format!("{} use", import.visibility)
+                };
                 format!("{}\n{} {};", attrs, keyword, import.path)
             })
             .join("\n")
     }
 
     // Merge a group of imports that share the same root into `root::{...}` forms.
-    fn merge_path_groups(group: impl IntoIterator<Item = Import>, is_pub: bool) -> String {
+    fn merge_path_groups(group: impl IntoIterator<Item = Import>, visibility: &str) -> String {
         let mut path_groups: BTreeMap<String, UseNode> = BTreeMap::new();
         for import in group {
             let path_parts: Vec<_> = import.path.split("::").map(String::from).collect();
@@ -385,7 +389,11 @@ fn format_imports_from_collected(imports: Vec<Import>) -> String {
         path_groups
             .into_iter()
             .map(|(root, node)| {
-                let keyword = if is_pub { "pub use" } else { "use" };
+                let keyword = if visibility.is_empty() {
+                    "use".to_string()
+                } else {
+                    format!("{} use", visibility)
+                };
                 if node.is_terminal && node.children.is_empty() {
                     format!("{} {};", keyword, root)
                 } else {
@@ -399,10 +407,10 @@ fn format_imports_from_collected(imports: Vec<Import>) -> String {
     fn format_without_attrs(imports: Vec<Import>) -> String {
         imports
             .into_iter()
-            .group_by(|import| (import.category, import.is_pub))
+            .group_by(|import| (import.category, import.visibility.clone()))
             .into_iter()
-            .sorted_by_key(|(key, _)| *key)
-            .map(|((_category, is_pub), group)| merge_path_groups(group, is_pub))
+            .sorted_by_key(|(key, _)| key.clone())
+            .map(|((_category, visibility), group)| merge_path_groups(group, &visibility))
             .join("\n\n")
     }
 
@@ -452,6 +460,18 @@ fn prefix_to_string(prefix: &Vec<&syn::Ident>) -> String {
     prefix.iter().map(|s| s.to_string()).join("::")
 }
 
+/// Format a visibility modifier into a string representation.
+/// - `Visibility::Public` -> "pub"
+/// - `Visibility::Restricted` -> "pub(crate)", "pub(super)", etc.
+/// - `Visibility::Inherited` -> "" (empty string for private)
+fn format_visibility(vis: &Visibility) -> String {
+    match vis {
+        Visibility::Public(_) => "pub".to_string(),
+        Visibility::Restricted(r) => quote!(#r).to_string(),
+        Visibility::Inherited => String::new(),
+    }
+}
+
 /// Format a slice of attributes into the string representation used by the
 /// import formatting pipeline.
 ///
@@ -485,7 +505,7 @@ fn collect_imports(ast: &File, local_mods: &HashSet<String>) -> Result<Vec<Impor
     let mut imports = Vec::new();
     for item in &ast.items {
         if let Item::Use(use_item) = item {
-            let is_pub = matches!(use_item.vis, Visibility::Public(_));
+            let visibility = format_visibility(&use_item.vis);
             let attrs = format_attrs(&use_item.attrs);
 
             if use_item.attrs.is_empty() {
@@ -493,7 +513,7 @@ fn collect_imports(ast: &File, local_mods: &HashSet<String>) -> Result<Vec<Impor
                     let category = classify_path(&path_idents, local_mods);
                     imports.push(Import {
                         attrs: attrs.clone(),
-                        is_pub,
+                        visibility: visibility.clone(),
                         category,
                         path: path_str,
                     });
@@ -502,7 +522,7 @@ fn collect_imports(ast: &File, local_mods: &HashSet<String>) -> Result<Vec<Impor
                 let category = classify_path(&get_path_idents(&use_item.tree), local_mods);
                 imports.push(Import {
                     attrs,
-                    is_pub,
+                    visibility,
                     category,
                     path: format_use_tree(&use_item.tree),
                 });
@@ -625,7 +645,7 @@ fn intra_group_out_of_order(prev: &UseItemInfo, curr: &UseItemInfo) -> bool {
     curr.attrs.is_empty()
         && prev.attrs.is_empty()
         && curr.category == prev.category
-        && curr.is_pub == prev.is_pub
+        && format_visibility(&curr.visibility) == format_visibility(&prev.visibility)
         && curr.sort_key < prev.sort_key
 }
 
@@ -701,7 +721,7 @@ fn build_use_item_info(
         sort_key,
         span: use_item.span(),
         tree: use_item.tree.clone(),
-        is_pub: matches!(use_item.vis, Visibility::Public(_)),
+        visibility: use_item.vis.clone(),
         attrs: use_item.attrs.clone(),
     })
 }
@@ -785,7 +805,9 @@ fn check_blank_lines(items: &[UseItemInfo]) -> Result<()> {
             let prev_end_line = prev.span.end().line;
             let curr_start_line = curr.span.start().line;
 
-            if curr.category != prev.category || curr.is_pub != prev.is_pub {
+            if curr.category != prev.category
+                || format_visibility(&curr.visibility) != format_visibility(&prev.visibility)
+            {
                 if curr_start_line != prev_end_line + 2 {
                     bail!(
                         "Line {}: A blank line is required between groups. Incorrect spacing between `{}` and `{}`.",

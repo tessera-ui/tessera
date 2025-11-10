@@ -128,6 +128,7 @@
 //! - Minimal allocations in hot paths
 //! - Optimized component tree traversal
 
+pub mod accessibility;
 pub mod clipboard;
 pub mod color;
 mod component_tree;
@@ -146,12 +147,14 @@ mod thread_utils;
 #[cfg(feature = "shard")]
 pub mod router;
 
+pub use accesskit;
 pub use indextree::{Arena, NodeId};
 pub use tessera_ui_macros::tessera;
 pub use wgpu;
 pub use winit;
 
 pub use crate::{
+    accessibility::{AccessibilityActionHandler, AccessibilityId, AccessibilityNode},
     clipboard::Clipboard,
     color::Color,
     component_tree::{

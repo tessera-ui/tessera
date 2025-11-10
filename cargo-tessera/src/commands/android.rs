@@ -1,4 +1,4 @@
-use std::{fs, io, path::PathBuf, process::Command};
+use std::{fs, io, path::Path, process::Command};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::ValueEnum;
@@ -258,7 +258,7 @@ impl Manifest {
         toml::from_str(&contents).context("Failed to parse Cargo.toml")
     }
 
-    fn load_from(dir: &PathBuf) -> Result<Self> {
+    fn load_from(dir: &Path) -> Result<Self> {
         let cargo_path = dir.join("Cargo.toml");
         let contents = fs::read_to_string(&cargo_path)
             .with_context(|| format!("Failed to read Cargo.toml from {}", dir.display()))?;

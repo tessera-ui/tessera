@@ -15,12 +15,123 @@ use winit::window::CursorIcon;
 
 use crate::{
     Clipboard, ComputeCommand, ComputeResourceManager, DrawCommand, Px,
+    accessibility::{AccessibilityActionHandler, AccessibilityNode},
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
     renderer::Command,
 };
 
 use super::constraint::{Constraint, DimensionValue};
+
+/// A guard that manages accessibility node building and automatically
+/// commits the result to the metadata when dropped.
+pub struct AccessibilityBuilderGuard<'a> {
+    node_id: NodeId,
+    metadatas: &'a ComponentNodeMetaDatas,
+    node: AccessibilityNode,
+}
+
+impl<'a> AccessibilityBuilderGuard<'a> {
+    /// Sets the role of this node.
+    pub fn role(mut self, role: accesskit::Role) -> Self {
+        self.node.role = Some(role);
+        self
+    }
+
+    /// Sets the label of this node.
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.node.label = Some(label.into());
+        self
+    }
+
+    /// Sets the description of this node.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.node.description = Some(description.into());
+        self
+    }
+
+    /// Sets the value of this node.
+    pub fn value(mut self, value: impl Into<String>) -> Self {
+        self.node.value = Some(value.into());
+        self
+    }
+
+    /// Sets the numeric value of this node.
+    pub fn numeric_value(mut self, value: f64) -> Self {
+        self.node.numeric_value = Some(value);
+        self
+    }
+
+    /// Sets the numeric range of this node.
+    pub fn numeric_range(mut self, min: f64, max: f64) -> Self {
+        self.node.min_numeric_value = Some(min);
+        self.node.max_numeric_value = Some(max);
+        self
+    }
+
+    /// Marks this node as focusable.
+    pub fn focusable(mut self) -> Self {
+        self.node.focusable = true;
+        self
+    }
+
+    /// Marks this node as focused.
+    pub fn focused(mut self) -> Self {
+        self.node.focused = true;
+        self
+    }
+
+    /// Sets the toggled state of this node.
+    pub fn toggled(mut self, toggled: accesskit::Toggled) -> Self {
+        self.node.toggled = Some(toggled);
+        self
+    }
+
+    /// Marks this node as disabled.
+    pub fn disabled(mut self) -> Self {
+        self.node.disabled = true;
+        self
+    }
+
+    /// Marks this node as hidden from accessibility.
+    pub fn hidden(mut self) -> Self {
+        self.node.hidden = true;
+        self
+    }
+
+    /// Adds an action that this node supports.
+    pub fn action(mut self, action: accesskit::Action) -> Self {
+        self.node.actions.push(action);
+        self
+    }
+
+    /// Adds multiple actions that this node supports.
+    pub fn actions(mut self, actions: impl IntoIterator<Item = accesskit::Action>) -> Self {
+        self.node.actions.extend(actions);
+        self
+    }
+
+    /// Sets a custom accessibility key for stable ID generation.
+    pub fn key(mut self, key: impl Into<String>) -> Self {
+        self.node.key = Some(key.into());
+        self
+    }
+
+    /// Explicitly commits the accessibility information.
+    pub fn commit(self) {
+        // The Drop impl will handle the actual commit
+        drop(self);
+    }
+}
+
+impl Drop for AccessibilityBuilderGuard<'_> {
+    fn drop(&mut self) {
+        // Copy the accessibility data to metadata
+        if let Some(mut metadata) = self.metadatas.get_mut(&self.node_id) {
+            metadata.accessibility = Some(self.node.clone());
+        }
+    }
+}
 
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component.
@@ -61,6 +172,10 @@ pub struct ComponentNodeMetaData {
     pub(crate) commands: Vec<(Command, TypeId)>,
     /// Whether this node clips its children.
     pub clips_children: bool,
+    /// Accessibility information for this node.
+    pub accessibility: Option<AccessibilityNode>,
+    /// Handler for accessibility actions on this node.
+    pub accessibility_action_handler: Option<AccessibilityActionHandler>,
 }
 
 impl ComponentNodeMetaData {
@@ -73,6 +188,8 @@ impl ComponentNodeMetaData {
             event_clip_rect: None,
             commands: Vec::new(),
             clips_children: false,
+            accessibility: None,
+            accessibility_action_handler: None,
         }
     }
 
@@ -272,6 +389,10 @@ pub struct InputHandlerInput<'a> {
     pub requests: &'a mut WindowRequests,
     /// Clipboard
     pub clipboard: &'a mut Clipboard,
+    /// The current node ID (for accessibility setup)
+    pub(crate) current_node_id: indextree::NodeId,
+    /// Reference to component metadatas (for accessibility setup)
+    pub(crate) metadatas: &'a ComponentNodeMetaDatas,
 }
 
 impl InputHandlerInput<'_> {
@@ -300,6 +421,73 @@ impl InputHandlerInput<'_> {
         self.block_cursor();
         self.block_keyboard();
         self.block_ime();
+    }
+
+    /// Provides a fluent API for setting accessibility information for the current component.
+    ///
+    /// This method returns a builder that allows you to set various accessibility properties
+    /// like role, label, actions, and state. The accessibility information is automatically
+    /// committed when the builder is dropped or when `.commit()` is called explicitly.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use accesskit::{Action, Role};
+    /// use tessera_ui::tessera;
+    ///
+    /// #[tessera]
+    /// fn accessible_button() {
+    ///     input_handler(Box::new(|input| {
+    ///         input.accessibility()
+    ///             .role(Role::Button)
+    ///             .label("Click me")
+    ///             .focusable()
+    ///             .action(Action::Click);
+    ///         
+    ///         // Handle clicks...
+    ///     }));
+    /// }
+    /// ```
+    ///
+    /// Note: The builder should be committed with `.commit()` or allowed to drop,
+    /// which will automatically store the accessibility information in the metadata.
+    pub fn accessibility(&self) -> AccessibilityBuilderGuard<'_> {
+        AccessibilityBuilderGuard {
+            node_id: self.current_node_id,
+            metadatas: self.metadatas,
+            node: AccessibilityNode::new(),
+        }
+    }
+
+    /// Sets an action handler for accessibility actions.
+    ///
+    /// This handler will be called when assistive technologies request actions
+    /// like clicking, focusing, or changing values.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use accesskit::Action;
+    /// use tessera_ui::tessera;
+    ///
+    /// #[tessera]
+    /// fn interactive_button() {
+    ///     input_handler(Box::new(|input| {
+    ///         input.set_accessibility_action_handler(|action| {
+    ///             if action == Action::Click {
+    ///                 // Handle click from assistive technology
+    ///             }
+    ///         });
+    ///     }));
+    /// }
+    /// ```
+    pub fn set_accessibility_action_handler(
+        &self,
+        handler: impl Fn(accesskit::Action) + Send + Sync + 'static,
+    ) {
+        if let Some(mut metadata) = self.metadatas.get_mut(&self.current_node_id) {
+            metadata.accessibility_action_handler = Some(Box::new(handler));
+        }
     }
 }
 

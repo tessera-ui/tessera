@@ -1,6 +1,6 @@
 //! Root routing entry utilities.
 //!
-//! This module re‑exports [`push`] and [`pop`] for manipulating the navigation stack
+//! This module re-exports [`Router`] which provides `push()` and `pop()` methods for manipulating the navigation stack,
 //! and provides the [`router_root`] component which drives per‑frame execution of
 //! the current (top) destination.
 //!

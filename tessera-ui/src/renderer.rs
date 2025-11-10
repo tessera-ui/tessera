@@ -193,6 +193,7 @@ pub mod reorder;
 
 use std::{any::TypeId, sync::Arc, thread, time::Instant};
 
+use accesskit_winit::{Adapter as AccessKitAdapter, Event as AccessKitEvent};
 use tessera_ui_macros::tessera;
 use tracing::{debug, error, instrument, warn};
 use winit::{
@@ -334,6 +335,10 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     clipboard: Clipboard,
     /// Commands from the previous frame, for dirty rectangle optimization
     previous_commands: Vec<(Command, TypeId, PxSize, PxPosition)>,
+    /// AccessKit adapter for accessibility support
+    accessibility_adapter: Option<AccessKitAdapter>,
+    /// Event loop proxy for sending accessibility events
+    event_loop_proxy: Option<winit::event_loop::EventLoopProxy<AccessKitEvent>>,
     #[cfg(target_os = "android")]
     /// Android-specific state tracking whether the soft keyboard is currently open
     android_ime_opened: bool,
@@ -425,7 +430,10 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         register_pipelines_fn: R,
         config: TesseraConfig,
     ) -> Result<(), EventLoopError> {
-        let event_loop = EventLoop::new().unwrap();
+        let event_loop = EventLoop::<AccessKitEvent>::with_user_event()
+            .build()
+            .unwrap();
+        let event_loop_proxy = event_loop.create_proxy();
         let app = None;
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
@@ -441,6 +449,8 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             config,
             clipboard,
             previous_commands: Vec::new(),
+            accessibility_adapter: None,
+            event_loop_proxy: Some(event_loop_proxy),
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -542,10 +552,11 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         android_app: AndroidApp,
         config: TesseraConfig,
     ) -> Result<(), EventLoopError> {
-        let event_loop = EventLoop::builder()
+        let event_loop = EventLoop::<AccessKitEvent>::with_user_event()
             .with_android_app(android_app.clone())
             .build()
             .unwrap();
+        let event_loop_proxy = event_loop.create_proxy();
         let app = None;
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
@@ -562,6 +573,8 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             config,
             clipboard,
             previous_commands: Vec::new(),
+            accessibility_adapter: None,
+            event_loop_proxy: Some(event_loop_proxy),
         };
         thread_utils::set_thread_name("Tessera Renderer");
         event_loop.run_app(&mut renderer)
@@ -1011,7 +1024,9 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
 /// This implementation handles the application lifecycle events from winit, including
 /// window creation, suspension/resumption, and various window events. It bridges the
 /// gap between winit's event system and Tessera's component-based UI framework.
-impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Renderer<F, R> {
+impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler<AccessKitEvent>
+    for Renderer<F, R>
+{
     /// Called when the application is resumed or started.
     ///
     /// This method is responsible for:
@@ -1043,14 +1058,27 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
             return;
         }
 
-        // Create a new window
+        // Create a new window (initially hidden for AccessKit initialization)
         let window_attributes = Window::default_attributes()
             .with_title(&self.config.window_title)
-            .with_transparent(true);
+            .with_transparent(true)
+            .with_visible(false); // Hide initially for AccessKit
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+
+        // Initialize AccessKit adapter BEFORE showing the window
+        if let Some(proxy) = self.event_loop_proxy.clone() {
+            self.accessibility_adapter = Some(AccessKitAdapter::with_event_loop_proxy(
+                event_loop, &window, proxy,
+            ));
+        }
+
+        // Now show the window after AccessKit is initialized
+        window.set_visible(true);
+
         let register_pipelines_fn = self.register_pipelines_fn.clone();
 
-        let mut wgpu_app = pollster::block_on(WgpuApp::new(window, self.config.sample_count));
+        let mut wgpu_app =
+            pollster::block_on(WgpuApp::new(window.clone(), self.config.sample_count));
 
         // Register pipelines
         wgpu_app.register_pipelines(register_pipelines_fn);
@@ -1091,6 +1119,9 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         if let Some(app) = self.app.take() {
             app.resource_manager.write().clear();
         }
+
+        // Clean up AccessKit adapter
+        self.accessibility_adapter = None;
 
         self.previous_commands.clear();
         self.cursor_state = CursorState::default();
@@ -1157,6 +1188,11 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
         // Defer borrowing `app` into specific event handlers to avoid overlapping mutable borrows.
         // Handlers will obtain a mutable reference to `self.app` as needed.
 
+        // Forward event to AccessKit adapter
+        if let (Some(adapter), Some(app)) = (&mut self.accessibility_adapter, &self.app) {
+            adapter.process_event(&app.window, &event);
+        }
+
         // Handle window events
         match event {
             WindowEvent::CloseRequested => {
@@ -1212,6 +1248,65 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler for Rend
                 self.handle_redraw_requested();
             }
             _ => (),
+        }
+    }
+
+    /// Handles user events sent through the event loop proxy.
+    ///
+    /// This method is called when accessibility events are sent from AccessKit.
+    /// It processes:
+    /// - `InitialTreeRequested`: Builds and returns the initial accessibility tree
+    /// - `ActionRequested`: Dispatches accessibility actions to appropriate components
+    /// - `AccessibilityDeactivated`: Cleans up when accessibility is turned off
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AccessKitEvent) {
+        use accesskit_winit::WindowEvent as AccessKitWindowEvent;
+
+        if let Some(adapter) = &mut self.accessibility_adapter {
+            match event.window_event {
+                AccessKitWindowEvent::InitialTreeRequested => {
+                    debug!("AccessKit initial tree requested");
+
+                    // Build accessibility tree from component metadata
+                    TesseraRuntime::with(|runtime| {
+                        let tree = runtime.component_tree.tree();
+                        let metadatas = runtime.component_tree.metadatas();
+
+                        // Get root node (index 1 in indextree's 1-based indexing)
+                        if let Some(root_node_id) =
+                            tree.get_node_id_at(std::num::NonZero::new(1).unwrap())
+                        {
+                            // Build the tree update
+                            if let Some(tree_update) = crate::accessibility::build_tree_update(
+                                tree,
+                                metadatas,
+                                root_node_id,
+                            ) {
+                                adapter.update_if_active(|| tree_update);
+                            } else {
+                                debug!("No accessibility nodes found in component tree");
+                            }
+                        }
+                    });
+                }
+                AccessKitWindowEvent::ActionRequested(action_request) => {
+                    debug!("AccessKit action requested: {:?}", action_request);
+
+                    // Dispatch action to the appropriate component handler
+                    let handled = TesseraRuntime::with(|runtime| {
+                        let tree = runtime.component_tree.tree();
+                        let metadatas = runtime.component_tree.metadatas();
+
+                        crate::accessibility::dispatch_action(tree, metadatas, action_request)
+                    });
+
+                    if !handled {
+                        debug!("Action was not handled by any component");
+                    }
+                }
+                AccessKitWindowEvent::AccessibilityDeactivated => {
+                    debug!("AccessKit deactivated");
+                }
+            }
         }
     }
 }
