@@ -193,6 +193,7 @@ pub mod reorder;
 
 use std::{any::TypeId, sync::Arc, thread, time::Instant};
 
+use accesskit::{self, TreeUpdate};
 use accesskit_winit::{Adapter as AccessKitAdapter, Event as AccessKitEvent};
 use tessera_ui_macros::tessera;
 use tracing::{debug, error, instrument, warn};
@@ -764,7 +765,9 @@ Fps: {:.2}
         entry_point: &F,
         args: &mut RenderFrameArgs<'_>,
         previous_commands: &mut Vec<(Command, TypeId, PxSize, PxPosition)>,
-    ) {
+        accessibility_enabled: bool,
+        window_label: &str,
+    ) -> Option<TreeUpdate> {
         // notify the windowing system before rendering
         // this will help winit to properly schedule and make assumptions about its internal state
         args.app.window.pre_present_notify();
@@ -820,6 +823,13 @@ Fps: {:.2}
         } else {
             thread::sleep(std::time::Duration::from_millis(4)); // Sleep briefly to avoid busy-waiting
         }
+
+        // Prepare accessibility tree update before clearing the component tree if needed
+        let accessibility_update = if accessibility_enabled {
+            Self::build_accessibility_update(window_label)
+        } else {
+            None
+        };
 
         // Clear the component tree (free for next frame)
         TesseraRuntime::with_mut(|rt| rt.component_tree.clear());
@@ -880,6 +890,8 @@ Fps: {:.2}
         // Currently we render every frame, but with dirty checking, this could be conditional.
         // For now, we still request a redraw to keep the event loop spinning for animations.
         args.app.window.request_redraw();
+
+        accessibility_update
     }
 }
 
@@ -931,6 +943,32 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         // This also set the position to None
         self.cursor_state.clear();
         debug!("Cursor left the window");
+    }
+
+    fn push_accessibility_update(&mut self, tree_update: TreeUpdate) {
+        if let Some(adapter) = self.accessibility_adapter.as_mut() {
+            adapter.update_if_active(|| tree_update);
+        }
+    }
+
+    fn send_accessibility_update(&mut self) {
+        if let Some(tree_update) = Self::build_accessibility_update(&self.config.window_title) {
+            self.push_accessibility_update(tree_update);
+        }
+    }
+
+    fn build_accessibility_update(window_label: &str) -> Option<TreeUpdate> {
+        TesseraRuntime::with(|runtime| {
+            let tree = runtime.component_tree.tree();
+            let metadatas = runtime.component_tree.metadatas();
+            let root_node_id = tree.get_node_id_at(std::num::NonZero::new(1).unwrap())?;
+            crate::accessibility::build_tree_update(
+                tree,
+                metadatas,
+                root_node_id,
+                Some(window_label),
+            )
+        })
     }
 
     fn handle_mouse_input(
@@ -1015,7 +1053,17 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             event_loop,
             clipboard: &mut self.clipboard,
         };
-        Self::execute_render_frame(&self.entry_point, &mut args, &mut self.previous_commands);
+        let accessibility_update = Self::execute_render_frame(
+            &self.entry_point,
+            &mut args,
+            &mut self.previous_commands,
+            self.accessibility_adapter.is_some(),
+            &self.config.window_title,
+        );
+
+        if let Some(tree_update) = accessibility_update {
+            self.push_accessibility_update(tree_update);
+        }
     }
 }
 
@@ -1261,51 +1309,34 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler<AccessKi
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AccessKitEvent) {
         use accesskit_winit::WindowEvent as AccessKitWindowEvent;
 
-        if let Some(adapter) = &mut self.accessibility_adapter {
-            match event.window_event {
-                AccessKitWindowEvent::InitialTreeRequested => {
-                    debug!("AccessKit initial tree requested");
+        if self.accessibility_adapter.is_none() {
+            return;
+        }
 
-                    // Build accessibility tree from component metadata
-                    TesseraRuntime::with(|runtime| {
-                        let tree = runtime.component_tree.tree();
-                        let metadatas = runtime.component_tree.metadatas();
+        match event.window_event {
+            AccessKitWindowEvent::InitialTreeRequested => {
+                self.send_accessibility_update();
+            }
+            AccessKitWindowEvent::ActionRequested(action_request) => {
+                println!(
+                    "[tessera-ui][accessibility] Action requested: {:?}",
+                    action_request
+                );
 
-                        // Get root node (index 1 in indextree's 1-based indexing)
-                        if let Some(root_node_id) =
-                            tree.get_node_id_at(std::num::NonZero::new(1).unwrap())
-                        {
-                            // Build the tree update
-                            if let Some(tree_update) = crate::accessibility::build_tree_update(
-                                tree,
-                                metadatas,
-                                root_node_id,
-                            ) {
-                                adapter.update_if_active(|| tree_update);
-                            } else {
-                                debug!("No accessibility nodes found in component tree");
-                            }
-                        }
-                    });
+                // Dispatch action to the appropriate component handler
+                let handled = TesseraRuntime::with(|runtime| {
+                    let tree = runtime.component_tree.tree();
+                    let metadatas = runtime.component_tree.metadatas();
+
+                    crate::accessibility::dispatch_action(tree, metadatas, action_request)
+                });
+
+                if !handled {
+                    debug!("Action was not handled by any component");
                 }
-                AccessKitWindowEvent::ActionRequested(action_request) => {
-                    debug!("AccessKit action requested: {:?}", action_request);
-
-                    // Dispatch action to the appropriate component handler
-                    let handled = TesseraRuntime::with(|runtime| {
-                        let tree = runtime.component_tree.tree();
-                        let metadatas = runtime.component_tree.metadatas();
-
-                        crate::accessibility::dispatch_action(tree, metadatas, action_request)
-                    });
-
-                    if !handled {
-                        debug!("Action was not handled by any component");
-                    }
-                }
-                AccessKitWindowEvent::AccessibilityDeactivated => {
-                    debug!("AccessKit deactivated");
-                }
+            }
+            AccessKitWindowEvent::AccessibilityDeactivated => {
+                debug!("AccessKit deactivated");
             }
         }
     }

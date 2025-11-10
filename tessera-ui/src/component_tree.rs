@@ -209,8 +209,6 @@ impl ComponentTree {
                 indextree::NodeEdge::End(_) => None,
             })
         {
-            let metadata = self.metadatas.get(&node_id).unwrap();
-
             let Some(input_handler) = self
                 .tree
                 .get(node_id)
@@ -219,15 +217,17 @@ impl ComponentTree {
                 continue;
             };
 
+            let metadata = self.metadatas.get(&node_id).unwrap();
             let abs_pos = metadata.abs_position.unwrap();
+            let event_clip_rect = metadata.event_clip_rect;
+            let node_computed_data = metadata.computed_data;
+            drop(metadata); // release DashMap guard so handlers can mutate metadata if needed
 
             let mut cursor_position_ref = &mut cursor_position;
             let mut dummy_cursor_position = None;
             let mut cursor_events_ref = &mut cursor_events;
             let mut empty_dummy_cursor_events = Vec::new();
-            if let Some(cursor_pos) = *cursor_position_ref
-                && let Some(clip_rect) = metadata.event_clip_rect
-            {
+            if let (Some(cursor_pos), Some(clip_rect)) = (*cursor_position_ref, event_clip_rect) {
                 // check if the cursor is inside the clip rect
                 if !clip_rect.contains(cursor_pos) {
                     // If not, set cursor relative inputs to None
@@ -237,7 +237,7 @@ impl ComponentTree {
             }
             let current_cursor_position = cursor_position_ref.map(|pos| pos - abs_pos);
 
-            if let Some(node_computed_data) = metadata.computed_data {
+            if let Some(node_computed_data) = node_computed_data {
                 let input = InputHandlerInput {
                     computed_data: node_computed_data,
                     cursor_position_rel: current_cursor_position,

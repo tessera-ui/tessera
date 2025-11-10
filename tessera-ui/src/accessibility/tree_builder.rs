@@ -2,12 +2,13 @@
 //!
 //! This module contains the logic to build AccessKit TreeUpdates from Tessera's component tree.
 
-use accesskit::{Node, NodeId as AccessKitNodeId, Tree, TreeUpdate};
+use accesskit::{Node, NodeId as AccessKitNodeId, Rect, Tree, TreeUpdate};
 use indextree::NodeId as ComponentNodeId;
 
 use crate::{
     accessibility::AccessibilityId,
-    component_tree::{ComponentNodeMetaDatas, ComponentNodeTree},
+    component_tree::{ComponentNodeMetaDatas, ComponentNodeTree, ComputedData},
+    px::PxPosition,
 };
 
 /// Builds an AccessKit TreeUpdate from the component tree.
@@ -23,6 +24,7 @@ use crate::{
 /// * `tree` - The component tree structure (indextree::Arena)
 /// * `metadatas` - Component metadata including accessibility information
 /// * `root_node_id` - The root node of the component tree
+/// * `root_label` - Optional label used when synthesizing a root window node
 ///
 /// # Returns
 ///
@@ -31,6 +33,7 @@ pub fn build_tree_update(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
     root_node_id: ComponentNodeId,
+    root_label: Option<&str>,
 ) -> Option<TreeUpdate> {
     let mut nodes = Vec::new();
     let mut focus = None;
@@ -39,10 +42,18 @@ pub fn build_tree_update(
     let root_accesskit_id = AccessibilityId::from_component_node_id(root_node_id);
 
     // Traverse the tree and collect accessibility nodes
-    traverse_and_collect(tree, metadatas, root_node_id, &mut nodes, &mut focus)?;
+    let has_nodes = traverse_and_collect(
+        tree,
+        metadatas,
+        root_node_id,
+        &mut nodes,
+        &mut focus,
+        true,
+        root_label,
+    );
 
-    // If no nodes were collected, don't create an update
-    if nodes.is_empty() {
+    // If no nodes were collected anywhere in the tree, don't create an update
+    if !has_nodes || nodes.is_empty() {
         return None;
     }
 
@@ -58,37 +69,65 @@ pub fn build_tree_update(
 
 /// Recursively traverses the component tree and collects accessibility nodes.
 ///
-/// Returns `Some(())` if at least one accessibility node was found, `None` otherwise.
+/// Returns `true` if this subtree produced at least one accessibility node (real or synthesized),
+/// `false` otherwise.
 fn traverse_and_collect(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
     node_id: ComponentNodeId,
     nodes: &mut Vec<(AccessKitNodeId, Node)>,
     focus: &mut Option<AccessKitNodeId>,
-) -> Option<()> {
+    is_root: bool,
+    root_label: Option<&str>,
+) -> bool {
     // Get metadata for this node
-    let metadata = metadatas.get(&node_id)?;
+    let metadata = match metadatas.get(&node_id) {
+        Some(metadata) => metadata,
+        None => return false,
+    };
+
+    let accessibility_node = metadata.accessibility.clone();
+    let abs_position = metadata.abs_position;
+    let computed_data = metadata.computed_data;
+    drop(metadata);
+
+    let mut has_accessible_descendants = false;
+
+    // Collect children with accessibility info
+    let mut accessible_children = Vec::new();
+    for child_id in node_id.children(tree) {
+        // Recursively process child
+        let child_has_accessibility =
+            traverse_and_collect(tree, metadatas, child_id, nodes, focus, false, root_label);
+
+        has_accessible_descendants |= child_has_accessibility;
+
+        if child_has_accessibility {
+            let child_accesskit_id = AccessibilityId::from_component_node_id(child_id);
+            accessible_children.push(child_accesskit_id.to_accesskit_id());
+        }
+    }
 
     // Check if this node has accessibility information
-    if let Some(accessibility_node) = &metadata.accessibility {
+    if let Some(accessibility_node) = accessibility_node {
         let accesskit_id = AccessibilityId::from_component_node_id(node_id);
 
         // Build AccessKit Node
         let mut node = Node::new(accessibility_node.role.unwrap_or(accesskit::Role::Unknown));
 
         // Set label
-        if let Some(label) = &accessibility_node.label {
-            node.set_label(label.clone());
+        if let Some(label) = accessibility_node.label {
+            node.set_label(label);
         }
 
         // Set description
-        if let Some(description) = &accessibility_node.description {
-            node.set_description(description.clone());
+        if let Some(description) = accessibility_node.description {
+            node.set_description(description);
         }
 
         // Set value
-        if let Some(value) = &accessibility_node.value {
-            node.set_value(value.clone());
+        if let Some(value) = accessibility_node.value {
+            node.set_value(value);
         }
 
         // Set numeric value
@@ -122,23 +161,8 @@ fn traverse_and_collect(
         }
 
         // Add actions
-        for action in &accessibility_node.actions {
-            node.add_action(*action);
-        }
-
-        // Collect children with accessibility info
-        let mut accessible_children = Vec::new();
-        for child_id in node_id.children(tree) {
-            // Recursively process child
-            traverse_and_collect(tree, metadatas, child_id, nodes, focus);
-
-            // Check if child has accessibility info
-            if let Some(child_metadata) = metadatas.get(&child_id)
-                && child_metadata.accessibility.is_some()
-            {
-                let child_accesskit_id = AccessibilityId::from_component_node_id(child_id);
-                accessible_children.push(child_accesskit_id.to_accesskit_id());
-            }
+        for action in accessibility_node.actions {
+            node.add_action(action);
         }
 
         // Set children if any
@@ -146,18 +170,54 @@ fn traverse_and_collect(
             node.set_children(accessible_children);
         }
 
+        if let Some(bounds) = rect_from_geometry(abs_position, computed_data) {
+            node.set_bounds(bounds);
+        }
+
         // Add to collection
         nodes.push((accesskit_id.to_accesskit_id(), node));
 
-        Some(())
-    } else {
-        // No accessibility info on this node, but traverse children anyway
-        for child_id in node_id.children(tree) {
-            traverse_and_collect(tree, metadatas, child_id, nodes, focus);
+        true
+    } else if is_root || has_accessible_descendants {
+        let accesskit_id = AccessibilityId::from_component_node_id(node_id);
+        let mut node = if is_root {
+            let mut root_node = Node::new(accesskit::Role::Window);
+            if let Some(label) = root_label {
+                root_node.set_label(label.to_string());
+            }
+            root_node
+        } else {
+            Node::new(accesskit::Role::GenericContainer)
+        };
+
+        if !accessible_children.is_empty() {
+            node.set_children(accessible_children);
         }
 
-        None
+        if let Some(bounds) = rect_from_geometry(abs_position, computed_data) {
+            node.set_bounds(bounds);
+        }
+
+        nodes.push((accesskit_id.to_accesskit_id(), node));
+        true
+    } else {
+        false
     }
+}
+
+fn rect_from_geometry(
+    abs_position: Option<PxPosition>,
+    computed_data: Option<ComputedData>,
+) -> Option<Rect> {
+    let position = abs_position?;
+    let size = computed_data?;
+
+    let x0 = position.x.0 as f64;
+    let y0 = position.y.0 as f64;
+    let x1 = x0 + size.width.0 as f64;
+    let y1 = y0 + size.height.0 as f64;
+
+    Some(Rect { x0, y0, x1, y1 })
 }
 
 /// Dispatches an accessibility action to the appropriate component handler.
