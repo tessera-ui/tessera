@@ -53,6 +53,19 @@ impl DualBlurCommand {
 
 impl ComputeCommand for DualBlurCommand {
     fn barrier(&self) -> BarrierRequirement {
-        BarrierRequirement::uniform_padding_local(Px(10))
+        // Calculate maximum radius from both passes to determine required padding
+        // The barrier padding must be at least as large as the blur radius to ensure
+        // all pixels needed for the blur are available in the captured background
+        let max_radius = self
+            .passes
+            .iter()
+            .map(|pass| pass.radius)
+            .fold(0.0f32, f32::max);
+
+        // Add extra padding to account for downscaling (DOWNSCALE_FACTOR = 2)
+        // and ensure sufficient sampling area at edges
+        let padding = (max_radius * 1.5).ceil() as i32;
+
+        BarrierRequirement::uniform_padding_local(Px(padding))
     }
 }

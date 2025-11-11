@@ -7,6 +7,87 @@ use tessera_ui::{
 use super::command::DualBlurCommand;
 
 const DOWNSCALE_FACTOR: u32 = 2;
+const MAX_SAMPLES: usize = 16;
+
+/// Compute optimized Gaussian blur weights and offsets using hardware bilinear interpolation.
+/// This reduces the number of texture samples by leveraging the GPU's built-in linear filtering.
+///
+/// Returns (weights, offsets, sample_count) where:
+/// - weights[0] is the center weight
+/// - weights[i] (i > 0) is the weight for both +offset[i] and -offset[i]
+/// - offsets[i] is the pixel offset from center
+/// - sample_count is the actual number of samples needed
+fn compute_optimized_blur_params(radius: f32) -> (Vec<f32>, Vec<f32>, u32) {
+    if radius <= 0.0 {
+        return (vec![1.0], vec![0.0], 1);
+    }
+
+    // Standard deviation: radius / 3 gives a good Gaussian falloff
+    let sigma = (radius / 3.0).max(0.1);
+    let two_sigma_sq = 2.0 * sigma * sigma;
+
+    // Compute discrete Gaussian weights for integer pixel offsets
+    let int_radius = radius.ceil() as i32;
+
+    // Compute raw Gaussian weights (not normalized yet)
+    let mut raw_weights = vec![0.0f32; (int_radius + 1) as usize];
+    for i in 0..=int_radius {
+        let x = i as f32;
+        raw_weights[i as usize] = (-x * x / two_sigma_sq).exp();
+    }
+
+    // Now apply bilinear optimization by combining adjacent samples
+    let mut weights = Vec::with_capacity(MAX_SAMPLES);
+    let mut offsets = Vec::with_capacity(MAX_SAMPLES);
+
+    // Center sample (index 0, not duplicated in shader)
+    weights.push(raw_weights[0]);
+    offsets.push(0.0);
+
+    // Combine pairs of adjacent samples using bilinear interpolation
+    // For each pair (i, i+1), compute the optimal sampling position
+    let mut i = 1;
+    while i <= int_radius && weights.len() < MAX_SAMPLES {
+        let w1 = raw_weights[i as usize];
+        let w2 = if i < int_radius {
+            raw_weights[(i + 1) as usize]
+        } else {
+            0.0
+        };
+
+        let combined_weight = w1 + w2;
+        if combined_weight > 1e-6 {
+            // Optimal offset for bilinear sampling to combine w1 at i and w2 at i+1
+            let offset = if w2 > 1e-6 {
+                (i as f32 * w1 + (i + 1) as f32 * w2) / combined_weight
+            } else {
+                i as f32
+            };
+
+            weights.push(combined_weight);
+            offsets.push(offset);
+
+            // Skip next position since we combined it
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+
+    // Normalize weights so that center + 2 * sum(side_weights) = 1.0
+    // (factor of 2 because shader samples both +offset and -offset for each side weight)
+    let total_weight: f32 = weights[0] + 2.0 * weights[1..].iter().sum::<f32>();
+    for w in &mut weights {
+        *w /= total_weight;
+    }
+
+    // Pad to MAX_SAMPLES
+    let sample_count = weights.len();
+    weights.resize(MAX_SAMPLES, 0.0);
+    offsets.resize(MAX_SAMPLES, 0.0);
+
+    (weights, offsets, sample_count as u32)
+}
 
 #[derive(ShaderType)]
 struct BlurUniforms {
@@ -17,6 +98,13 @@ struct BlurUniforms {
     area_y: u32,
     area_width: u32,
     area_height: u32,
+    sample_count: u32,
+}
+
+#[derive(ShaderType)]
+struct WeightsAndOffsets {
+    weights: [glam::Vec4; 16],
+    offsets: [glam::Vec4; 16],
 }
 
 #[derive(ShaderType)]
@@ -153,6 +241,24 @@ impl BlurPipeline {
                             access: wgpu::StorageTextureAccess::WriteOnly,
                             format: wgpu::TextureFormat::Rgba8Unorm,
                             view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                    // 3: Linear sampler for hardware bilinear filtering
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    // 4: Pre-computed weights and offsets
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
                         },
                         count: None,
                     },
@@ -386,6 +492,11 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
             let mut write_view = blur_view.clone();
             for pass in &item.command.passes {
                 let effective_radius = (pass.radius / scale as f32).max(0.0);
+
+                // Compute optimized blur parameters
+                let (weights, offsets, sample_count) =
+                    compute_optimized_blur_params(effective_radius);
+
                 let blur_uniforms = BlurUniforms {
                     radius: effective_radius,
                     direction_x: pass.direction.0,
@@ -394,6 +505,7 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                     area_y: 0,
                     area_width: down_width,
                     area_height: down_height,
+                    sample_count,
                 };
                 let blur_uniform_buffer = Self::create_uniform_buffer(
                     device,
@@ -401,6 +513,19 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                     "Blur Pass Uniform Buffer",
                     &blur_uniforms,
                 );
+
+                // Create weights and offsets buffer (padded to vec4 for alignment)
+                let weights_and_offsets = WeightsAndOffsets {
+                    weights: std::array::from_fn(|i| glam::Vec4::new(weights[i], 0.0, 0.0, 0.0)),
+                    offsets: std::array::from_fn(|i| glam::Vec4::new(offsets[i], 0.0, 0.0, 0.0)),
+                };
+                let weights_buffer = Self::create_uniform_buffer(
+                    device,
+                    queue,
+                    "Blur Weights and Offsets Buffer",
+                    &weights_and_offsets,
+                );
+
                 let blur_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                     layout: &self.blur_bind_group_layout,
                     entries: &[
@@ -415,6 +540,14 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                         wgpu::BindGroupEntry {
                             binding: 2,
                             resource: wgpu::BindingResource::TextureView(&write_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::Sampler(&self.downsample_sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: weights_buffer.as_entire_binding(),
                         },
                     ],
                     label: Some("blur_directional_bind_group"),
