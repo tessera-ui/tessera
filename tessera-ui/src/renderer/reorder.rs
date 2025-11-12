@@ -58,19 +58,7 @@ impl InstructionInfo {
                         width: Px(i32::MAX),
                         height: Px(i32::MAX),
                     },
-                    BarrierRequirement::PaddedLocal { collision, .. } => {
-                        // For collision detection, use the collision padding
-                        let padded_x = (position.x - collision.left).max(Px(0));
-                        let padded_y = (position.y - collision.top).max(Px(0));
-                        let padded_width = size.width + collision.left + collision.right;
-                        let padded_height = size.height + collision.top + collision.bottom;
-                        PxRect {
-                            x: padded_x,
-                            y: padded_y,
-                            width: padded_width,
-                            height: padded_height,
-                        }
-                    }
+                    BarrierRequirement::PaddedLocal(_) => component_dependency_rect(position, size),
                     BarrierRequirement::Absolute(rect) => rect,
                 };
                 (InstructionCategory::Compute, rect)
@@ -90,18 +78,8 @@ impl InstructionInfo {
                         width: Px(i32::MAX),
                         height: Px(i32::MAX),
                     },
-                    Some(BarrierRequirement::PaddedLocal { collision, .. }) => {
-                        // For collision detection, use the collision padding
-                        let padded_x = (position.x - collision.left).max(Px(0));
-                        let padded_y = (position.y - collision.top).max(Px(0));
-                        let padded_width = size.width + collision.left + collision.right;
-                        let padded_height = size.height + collision.top + collision.bottom;
-                        PxRect {
-                            x: padded_x,
-                            y: padded_y,
-                            width: padded_width,
-                            height: padded_height,
-                        }
+                    Some(BarrierRequirement::PaddedLocal(_)) => {
+                        component_dependency_rect(position, size)
                     }
                     Some(BarrierRequirement::Absolute(rect)) => rect,
                     None => PxRect {
@@ -134,6 +112,15 @@ impl InstructionInfo {
             category,
             rect,
         }
+    }
+}
+
+fn component_dependency_rect(position: PxPosition, size: PxSize) -> PxRect {
+    PxRect {
+        x: position.x.max(Px::ZERO),
+        y: position.y.max(Px::ZERO),
+        width: size.width,
+        height: size.height,
     }
 }
 
@@ -460,6 +447,78 @@ mod tests {
     }
 
     // --- Test Cases ---
+
+    #[test]
+    fn compute_and_draw_pairs_should_remain_adjacent() {
+        let blur_barrier = BarrierRequirement::uniform_padding_local(Px::new(75));
+        let glass_barrier = BarrierRequirement::uniform_padding_local(Px::new(10));
+
+        let positions = [0, 170, 340, 510, 680];
+        let size = PxSize::new(Px::new(740), Px::new(146));
+
+        let mut commands: Vec<(Command, TypeId, PxSize, PxPosition)> = Vec::new();
+        for y in positions {
+            let pos = PxPosition::new(Px::new(24), Px::new(y));
+
+            commands.push((
+                Command::Compute(Box::new(MockComputeCommand {
+                    barrier_req: blur_barrier,
+                })),
+                TypeId::of::<MockComputeCommand>(),
+                size,
+                pos,
+            ));
+
+            commands.push((
+                Command::Draw(Box::new(MockDrawCommand {
+                    barrier_req: Some(glass_barrier),
+                })),
+                TypeId::of::<MockDrawCommand>(),
+                size,
+                pos,
+            ));
+        }
+
+        let reordered = reorder_instructions(commands);
+
+        let mut index = 0;
+        while index < reordered.len() {
+            match &reordered[index].0 {
+                Command::Compute(_) => {
+                    let pos = reordered[index].3;
+                    assert!(
+                        index + 1 < reordered.len(),
+                        "compute command at {:?} is last",
+                        pos
+                    );
+                    match &reordered[index + 1].0 {
+                        Command::Draw(_) => {
+                            assert_eq!(
+                                reordered[index + 1].3,
+                                pos,
+                                "draw following compute should share the same position",
+                            );
+                        }
+                        Command::Compute(_) => {
+                            panic!(
+                                "unexpected second compute command immediately after another compute"
+                            );
+                        }
+                        Command::ClipPush(_) | Command::ClipPop => {
+                            panic!("unexpected clip command between compute and draw");
+                        }
+                    }
+                    index += 2;
+                }
+                Command::Draw(_) => {
+                    index += 1;
+                }
+                Command::ClipPush(_) | Command::ClipPop => {
+                    index += 1;
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_empty_instructions() {
@@ -1143,51 +1202,35 @@ mod tests {
     }
 
     #[test]
-    fn test_blur_batching_with_collision_box_optimization() {
-        // Test the new PaddedLocal with separate sampling and collision padding
+    fn test_blur_batching_with_large_sampling_padding() {
         // Scenario: 5 orthogonal glass components with 50px blur radius
-        // Each has 75px sampling padding but 0px collision padding
+        // Each has 75px sampling padding and relies on component bounds for collisions
         // They should be able to batch together despite large sampling areas
 
         let blur_commands = vec![
             create_cmd(
                 PxPosition::new(Px(0), Px(0)),
-                Some(BarrierRequirement::uniform_padding_local_with_collision(
-                    Px(75), // Large sampling padding for blur
-                    Px(0),  // Zero collision padding for tight batching
-                )),
+                Some(BarrierRequirement::uniform_padding_local(Px(75))),
                 true, // Compute command
             ),
             create_cmd(
                 PxPosition::new(Px(200), Px(0)),
-                Some(BarrierRequirement::uniform_padding_local_with_collision(
-                    Px(75),
-                    Px(0),
-                )),
+                Some(BarrierRequirement::uniform_padding_local(Px(75))),
                 true,
             ),
             create_cmd(
                 PxPosition::new(Px(400), Px(0)),
-                Some(BarrierRequirement::uniform_padding_local_with_collision(
-                    Px(75),
-                    Px(0),
-                )),
+                Some(BarrierRequirement::uniform_padding_local(Px(75))),
                 true,
             ),
             create_cmd(
                 PxPosition::new(Px(600), Px(0)),
-                Some(BarrierRequirement::uniform_padding_local_with_collision(
-                    Px(75),
-                    Px(0),
-                )),
+                Some(BarrierRequirement::uniform_padding_local(Px(75))),
                 true,
             ),
             create_cmd(
                 PxPosition::new(Px(800), Px(0)),
-                Some(BarrierRequirement::uniform_padding_local_with_collision(
-                    Px(75),
-                    Px(0),
-                )),
+                Some(BarrierRequirement::uniform_padding_local(Px(75))),
                 true,
             ),
         ];
@@ -1207,12 +1250,12 @@ mod tests {
 
         assert_eq!(kinds, vec!["C", "C", "C", "C", "C"]);
 
-        // Verify they are orthogonal based on collision boxes (not sampling boxes)
+        // Verify they are orthogonal based on component bounds (not sampling boxes)
         let positions = get_positions(&reordered);
         assert_eq!(positions.len(), 5);
 
         // Each component is at x=0,200,400,600,800 with size 10x10
-        // Collision boxes are 10x10 (no padding), so they don't overlap
+        // Component bounds are 10x10 (no padding), so they don't overlap
         // Sampling boxes would be 85x85 (10 + 75*2) centered on each position,
         // which would overlap, but that shouldn't prevent batching
     }

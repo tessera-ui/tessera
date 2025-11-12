@@ -44,7 +44,7 @@ struct RenderCurrentPassParams<'a> {
 // Parameters for do_compute function
 struct DoComputeParams<'a> {
     encoder: &'a mut wgpu::CommandEncoder,
-    commands: Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
+    commands: Vec<PendingComputeCommand>,
     compute_pipeline_registry: &'a mut ComputePipelineRegistry,
     gpu: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
@@ -60,11 +60,18 @@ struct DoComputeParams<'a> {
 
 // Compute resources for ping-pong operations
 struct ComputeResources<'a> {
-    compute_commands: &'a mut Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
     compute_pipeline_registry: &'a mut ComputePipelineRegistry,
     resource_manager: &'a mut ComputeResourceManager,
     compute_target_a: &'a wgpu::TextureView,
     compute_target_b: &'a wgpu::TextureView,
+}
+
+struct PendingComputeCommand {
+    command: Box<dyn ComputeCommand>,
+    size: PxSize,
+    start_pos: PxPosition,
+    target_rect: PxRect,
+    sampling_rect: PxRect,
 }
 
 pub struct WgpuApp {
@@ -99,7 +106,7 @@ pub struct WgpuApp {
     // Compute resources
     compute_target_a: wgpu::TextureView,
     compute_target_b: wgpu::TextureView,
-    compute_commands: Vec<(Box<dyn ComputeCommand>, PxSize, PxPosition)>,
+    compute_commands: Vec<PendingComputeCommand>,
     pub resource_manager: Arc<RwLock<ComputeResourceManager>>,
 
     // Blit resources for partial copies
@@ -500,6 +507,7 @@ impl WgpuApp {
         context: WgpuContext<'_>,
         offscreen_texture: &mut wgpu::TextureView,
         output_texture: &mut wgpu::TextureView,
+        compute_commands: Vec<PendingComputeCommand>,
         compute_resources: ComputeResources<'_>,
         copy_rect: PxRect,
         blit_bind_group_layout: &wgpu::BindGroupLayout,
@@ -554,11 +562,10 @@ impl WgpuApp {
         drop(rpass); // End the blit pass
 
         // Apply compute commands if any, reusing existing do_compute implementation
-        if !compute_resources.compute_commands.is_empty() {
-            let compute_commands_taken = std::mem::take(compute_resources.compute_commands);
+        if !compute_commands.is_empty() {
             Self::do_compute(DoComputeParams {
                 encoder: context.encoder,
-                commands: compute_commands_taken,
+                commands: compute_commands,
                 compute_pipeline_registry: compute_resources.compute_pipeline_registry,
                 gpu: context.gpu,
                 queue: context.queue,
@@ -630,7 +637,7 @@ impl WgpuApp {
 
         let mut scene_texture_view = self.offscreen_texture.clone();
         let mut commands_in_pass: Vec<DrawOrClip> = Vec::new();
-        let mut barrier_draw_rects_in_pass: Vec<PxRect> = Vec::new();
+        let mut sampling_rects_in_pass: Vec<PxRect> = Vec::new();
         let mut clip_stack: Vec<PxRect> = Vec::new();
 
         let mut output_view = output_frame
@@ -649,8 +656,8 @@ impl WgpuApp {
                     (None, Some(_)) => true,
                     (Some(_), Some(barrier)) => {
                         let last_draw_rect =
-                            extract_draw_rect(Some(barrier), size, start_pos, texture_size);
-                        !barrier_draw_rects_in_pass
+                            extract_sampling_rect(Some(barrier), size, start_pos, texture_size);
+                        !sampling_rects_in_pass
                             .iter()
                             .all(|dr| dr.is_orthogonal(&last_draw_rect))
                     }
@@ -660,44 +667,54 @@ impl WgpuApp {
                 .unwrap_or(false);
 
             if need_new_pass {
-                // A offscreen copy operation is needed if the first command in the pass has a barrier
-                if commands_in_pass
+                let draw_target_rects: Vec<PxRect> = commands_in_pass
                     .iter()
-                    .find_map(|command| match &command {
-                        DrawOrClip::Draw(cmd) => Some(cmd),
-                        DrawOrClip::Clip(_) => None,
+                    .filter_map(|command| match command {
+                        DrawOrClip::Draw(cmd) if cmd.command.barrier().is_some() => {
+                            Some(cmd.draw_rect)
+                        }
+                        _ => None,
                     })
-                    .map(|cmd| cmd.command.barrier().is_some())
-                    .unwrap_or(false)
-                {
-                    let mut combined_rect = barrier_draw_rects_in_pass[0];
-                    for rect in barrier_draw_rects_in_pass.iter().skip(1) {
-                        combined_rect = combined_rect.union(rect);
+                    .collect();
+
+                if !draw_target_rects.is_empty() {
+                    let compute_to_run = self.take_compute_commands_for_rects(&draw_target_rects);
+
+                    let mut copy_rects: Vec<PxRect> = sampling_rects_in_pass.clone();
+                    for pending in &compute_to_run {
+                        copy_rects.push(pending.sampling_rect);
                     }
 
-                    let final_view_after_compute = Self::handle_offscreen_and_compute(
-                        WgpuContext {
-                            encoder: &mut encoder,
-                            gpu: &self.gpu,
-                            queue: &self.queue,
-                            config: &self.config,
-                        },
-                        &mut self.offscreen_texture,
-                        &mut output_view,
-                        ComputeResources {
-                            compute_commands: &mut self.compute_commands,
-                            compute_pipeline_registry: &mut self.compute_pipeline_registry,
-                            resource_manager: &mut self.resource_manager.write(),
-                            compute_target_a: &self.compute_target_a,
-                            compute_target_b: &self.compute_target_b,
-                        },
-                        combined_rect,
-                        &self.blit_bind_group_layout,
-                        &self.blit_sampler,
-                        &self.blit_pipeline,
-                        &self.compute_blit_pipeline,
-                    );
-                    scene_texture_view = final_view_after_compute;
+                    if !copy_rects.is_empty() {
+                        let mut combined_rect = copy_rects[0];
+                        for rect in copy_rects.iter().skip(1) {
+                            combined_rect = combined_rect.union(rect);
+                        }
+
+                        let final_view_after_compute = Self::handle_offscreen_and_compute(
+                            WgpuContext {
+                                encoder: &mut encoder,
+                                gpu: &self.gpu,
+                                queue: &self.queue,
+                                config: &self.config,
+                            },
+                            &mut self.offscreen_texture,
+                            &mut output_view,
+                            compute_to_run,
+                            ComputeResources {
+                                compute_pipeline_registry: &mut self.compute_pipeline_registry,
+                                resource_manager: &mut self.resource_manager.write(),
+                                compute_target_a: &self.compute_target_a,
+                                compute_target_b: &self.compute_target_b,
+                            },
+                            combined_rect,
+                            &self.blit_bind_group_layout,
+                            &self.blit_sampler,
+                            &self.blit_pipeline,
+                            &self.compute_blit_pipeline,
+                        );
+                        scene_texture_view = final_view_after_compute;
+                    }
                 }
 
                 render_current_pass(RenderCurrentPassParams {
@@ -714,17 +731,18 @@ impl WgpuApp {
                     clip_stack: &mut clip_stack,
                 });
                 commands_in_pass.clear();
-                barrier_draw_rects_in_pass.clear();
+                sampling_rects_in_pass.clear();
             }
 
             match command {
                 Command::Draw(cmd) => {
-                    // Extract the draw rectangle based on the command's barrier, size and position
-                    let draw_rect = extract_draw_rect(cmd.barrier(), size, start_pos, texture_size);
-                    // If the command has a barrier, we need to track the draw rect for orthogonality checks
-                    if cmd.barrier().is_some() {
-                        barrier_draw_rects_in_pass.push(draw_rect);
+                    // Compute sampling area for copy and target rect for drawing
+                    if let Some(barrier) = cmd.barrier() {
+                        let sampling_rect =
+                            extract_sampling_rect(Some(barrier), size, start_pos, texture_size);
+                        sampling_rects_in_pass.push(sampling_rect);
                     }
+                    let draw_rect = extract_target_rect(size, start_pos, texture_size);
                     // Add the command to the current pass
                     commands_in_pass.push(DrawOrClip::Draw(DrawCommandWithMetadata {
                         command: cmd,
@@ -735,8 +753,18 @@ impl WgpuApp {
                     }));
                 }
                 Command::Compute(cmd) => {
-                    // Add the compute command to the current pass
-                    self.compute_commands.push((cmd, size, start_pos));
+                    let barrier = cmd.barrier();
+                    let sampling_rect =
+                        extract_sampling_rect(Some(barrier), size, start_pos, texture_size);
+                    let target_rect = extract_target_rect(size, start_pos, texture_size);
+                    // Add the compute command to the pending list
+                    self.compute_commands.push(PendingComputeCommand {
+                        command: cmd,
+                        size,
+                        start_pos,
+                        target_rect,
+                        sampling_rect,
+                    });
                 }
                 Command::ClipPush(rect) => {
                     // Push it into command stack
@@ -751,44 +779,52 @@ impl WgpuApp {
 
         // After processing all commands, we need to render the last pass if there are any commands left
         if !commands_in_pass.is_empty() {
-            // A ping-pong operation is needed if the first command in the pass has a barrier
-            if commands_in_pass
+            let draw_target_rects: Vec<PxRect> = commands_in_pass
                 .iter()
-                .find_map(|command| match &command {
-                    DrawOrClip::Draw(cmd) => Some(cmd),
-                    DrawOrClip::Clip(_) => None,
+                .filter_map(|command| match command {
+                    DrawOrClip::Draw(cmd) if cmd.command.barrier().is_some() => Some(cmd.draw_rect),
+                    _ => None,
                 })
-                .map(|cmd| cmd.command.barrier().is_some())
-                .unwrap_or(false)
-            {
-                let mut combined_rect = barrier_draw_rects_in_pass[0];
-                for rect in barrier_draw_rects_in_pass.iter().skip(1) {
-                    combined_rect = combined_rect.union(rect);
+                .collect();
+
+            if !draw_target_rects.is_empty() {
+                let compute_to_run = self.take_compute_commands_for_rects(&draw_target_rects);
+
+                let mut copy_rects: Vec<PxRect> = sampling_rects_in_pass.clone();
+                for pending in &compute_to_run {
+                    copy_rects.push(pending.sampling_rect);
                 }
 
-                let final_view_after_compute = Self::handle_offscreen_and_compute(
-                    WgpuContext {
-                        encoder: &mut encoder,
-                        gpu: &self.gpu,
-                        queue: &self.queue,
-                        config: &self.config,
-                    },
-                    &mut self.offscreen_texture,
-                    &mut output_view,
-                    ComputeResources {
-                        compute_commands: &mut self.compute_commands,
-                        compute_pipeline_registry: &mut self.compute_pipeline_registry,
-                        resource_manager: &mut self.resource_manager.write(),
-                        compute_target_a: &self.compute_target_a,
-                        compute_target_b: &self.compute_target_b,
-                    },
-                    combined_rect,
-                    &self.blit_bind_group_layout,
-                    &self.blit_sampler,
-                    &self.blit_pipeline,
-                    &self.compute_blit_pipeline,
-                );
-                scene_texture_view = final_view_after_compute;
+                if !copy_rects.is_empty() {
+                    let mut combined_rect = copy_rects[0];
+                    for rect in copy_rects.iter().skip(1) {
+                        combined_rect = combined_rect.union(rect);
+                    }
+
+                    let final_view_after_compute = Self::handle_offscreen_and_compute(
+                        WgpuContext {
+                            encoder: &mut encoder,
+                            gpu: &self.gpu,
+                            queue: &self.queue,
+                            config: &self.config,
+                        },
+                        &mut self.offscreen_texture,
+                        &mut output_view,
+                        compute_to_run,
+                        ComputeResources {
+                            compute_pipeline_registry: &mut self.compute_pipeline_registry,
+                            resource_manager: &mut self.resource_manager.write(),
+                            compute_target_a: &self.compute_target_a,
+                            compute_target_b: &self.compute_target_b,
+                        },
+                        combined_rect,
+                        &self.blit_bind_group_layout,
+                        &self.blit_sampler,
+                        &self.blit_pipeline,
+                        &self.compute_blit_pipeline,
+                    );
+                    scene_texture_view = final_view_after_compute;
+                }
             }
 
             // Render the current pass before starting a new one
@@ -806,7 +842,15 @@ impl WgpuApp {
                 clip_stack: &mut clip_stack,
             });
             commands_in_pass.clear();
-            barrier_draw_rects_in_pass.clear();
+            sampling_rects_in_pass.clear();
+        }
+
+        if !self.compute_commands.is_empty() {
+            warn!(
+                "{} compute command(s) were not matched with draw commands in this frame",
+                self.compute_commands.len()
+            );
+            self.compute_commands.clear();
         }
 
         // Frame-level end for all pipelines
@@ -818,6 +862,29 @@ impl WgpuApp {
         output_frame.present();
 
         Ok(())
+    }
+
+    fn take_compute_commands_for_rects(
+        &mut self,
+        target_rects: &[PxRect],
+    ) -> Vec<PendingComputeCommand> {
+        if target_rects.is_empty() {
+            return Vec::new();
+        }
+
+        let mut taken = Vec::new();
+        let mut remaining = Vec::with_capacity(self.compute_commands.len());
+
+        for pending in self.compute_commands.drain(..) {
+            if target_rects.iter().any(|rect| rect == &pending.target_rect) {
+                taken.push(pending);
+            } else {
+                remaining.push(pending);
+            }
+        }
+
+        self.compute_commands = remaining;
+        taken
     }
 
     fn do_compute(params: DoComputeParams<'_>) -> wgpu::TextureView {
@@ -845,55 +912,49 @@ impl WgpuApp {
         let mut write_target = params.target_b;
         let mut read_target = params.target_a;
 
+        let commands = &params.commands;
         let mut index = 0;
-        while index < params.commands.len() {
-            let (command, size, start_pos) = &params.commands[index];
-            let type_id = AsAny::as_any(&**command).type_id();
+        while index < commands.len() {
+            let command = &commands[index];
+            let type_id = AsAny::as_any(&*command.command).type_id();
 
             let mut batch_items: Vec<ErasedComputeBatchItem<'_>> = Vec::new();
-            let mut batch_areas: Vec<PxRect> = Vec::new();
+            let mut batch_sampling_rects: Vec<PxRect> = Vec::new();
             let mut cursor = index;
 
-            while cursor < params.commands.len() {
-                let (candidate_command, candidate_size, candidate_pos) = &params.commands[cursor];
-                if AsAny::as_any(&**candidate_command).type_id() != type_id {
+            while cursor < commands.len() {
+                let candidate = &commands[cursor];
+                if AsAny::as_any(&*candidate.command).type_id() != type_id {
                     break;
                 }
 
-                let area = extract_draw_rect(
-                    Some(candidate_command.barrier()),
-                    *candidate_size,
-                    *candidate_pos,
-                    texture_size,
-                );
+                let sampling_area = candidate.sampling_rect;
 
-                if batch_areas
+                if batch_sampling_rects
                     .iter()
-                    .any(|existing| rects_overlap(*existing, area))
+                    .any(|existing| rects_overlap(*existing, sampling_area))
                 {
                     break;
                 }
 
-                batch_areas.push(area);
+                batch_sampling_rects.push(sampling_area);
                 batch_items.push(ErasedComputeBatchItem {
-                    command: &**candidate_command,
-                    size: *candidate_size,
-                    position: *candidate_pos,
-                    target_area: area,
+                    command: &*candidate.command,
+                    size: candidate.size,
+                    position: candidate.start_pos,
+                    target_area: candidate.target_rect,
                 });
                 cursor += 1;
             }
 
             if batch_items.is_empty() {
-                let area =
-                    extract_draw_rect(Some(command.barrier()), *size, *start_pos, texture_size);
+                batch_sampling_rects.push(command.sampling_rect);
                 batch_items.push(ErasedComputeBatchItem {
-                    command: &**command,
-                    size: *size,
-                    position: *start_pos,
-                    target_area: area,
+                    command: &*command.command,
+                    size: command.size,
+                    position: command.start_pos,
+                    target_area: command.target_rect,
                 });
-                batch_areas.push(area);
                 cursor = index + 1;
             }
 
@@ -1030,7 +1091,7 @@ fn clamp_rect_to_texture(mut rect: PxRect, texture_size: wgpu::Extent3d) -> PxRe
     rect
 }
 
-fn extract_draw_rect(
+fn extract_sampling_rect(
     barrier: Option<BarrierRequirement>,
     size: PxSize,
     start_pos: PxPosition,
@@ -1043,7 +1104,7 @@ fn extract_draw_rect(
             width: Px(texture_size.width as i32),
             height: Px(texture_size.height as i32),
         },
-        Some(BarrierRequirement::PaddedLocal { sampling, .. }) => {
+        Some(BarrierRequirement::PaddedLocal(sampling)) => {
             // For actual rendering/compute, use the sampling padding
             compute_padded_rect(
                 size,
@@ -1056,18 +1117,24 @@ fn extract_draw_rect(
             )
         }
         Some(BarrierRequirement::Absolute(rect)) => clamp_rect_to_texture(rect, texture_size),
-        None => {
-            let x = start_pos.x.positive().min(texture_size.width);
-            let y = start_pos.y.positive().min(texture_size.height);
-            let width = size.width.positive().min(texture_size.width - x);
-            let height = size.height.positive().min(texture_size.height - y);
-            PxRect {
-                x: Px::from(x),
-                y: Px::from(y),
-                width: Px::from(width),
-                height: Px::from(height),
-            }
-        }
+        None => extract_target_rect(size, start_pos, texture_size),
+    }
+}
+
+fn extract_target_rect(
+    size: PxSize,
+    start_pos: PxPosition,
+    texture_size: wgpu::Extent3d,
+) -> PxRect {
+    let x = start_pos.x.positive().min(texture_size.width);
+    let y = start_pos.y.positive().min(texture_size.height);
+    let width = size.width.positive().min(texture_size.width - x);
+    let height = size.height.positive().min(texture_size.height - y);
+    PxRect {
+        x: Px::from(x),
+        y: Px::from(y),
+        width: Px::from(width),
+        height: Px::from(height),
     }
 }
 

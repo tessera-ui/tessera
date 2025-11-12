@@ -21,36 +21,36 @@ pub enum BarrierRequirement {
     /// The command needs to sample from a region relative to its own bounding box.
     ///
     /// - Sampling padding: The region from which pixels are read (e.g., blur needs to read
-    ///   pixels outside the target area). This determines the actual texture region captured.
-    /// - Collision padding: The region used for overlap detection and batching decisions.
-    ///   This can be smaller than sampling padding to allow better batching.
+    ///   pixels outside the target area). This determines the texture region captured before
+    ///   the command executes, while the write target remains the component's measured size.
     ///
-    /// For simple cases without special batching needs, set both paddings to the same value.
+    /// For most cases without special batching requirements, set a uniform padding value.
     /// For effects like blur that need large sampling areas but have small target areas,
-    /// use large sampling padding but small (often zero) collision padding to allow batching
-    /// of orthogonal components.
+    /// use large sampling padding so enough source pixels are available while batching still
+    /// relies on the component's bounds.
     ///
     /// # Examples
     ///
-    /// Simple case (both paddings same):
+    /// Simple case (uniform sampling padding):
+    ///
     /// ```
-    /// PaddedLocal {
-    ///     sampling: { top: Px(10), right: Px(10), bottom: Px(10), left: Px(10) },
-    ///     collision: { top: Px(10), right: Px(10), bottom: Px(10), left: Px(10) },
-    /// }
+    /// use tessera_ui::renderer::command::{BarrierRequirement, PaddingRect};
+    /// use tessera_ui::Px;
+    ///
+    /// let req = BarrierRequirement::PaddedLocal(PaddingRect::uniform(Px(10)));
+    /// let _ = req;
     /// ```
     ///
-    /// Blur optimization (large sampling, zero collision):
+    /// Blur optimization (large sampling area):
+    ///
     /// ```
-    /// PaddedLocal {
-    ///     sampling: { top: Px(75), right: Px(75), bottom: Px(75), left: Px(75) },
-    ///     collision: { top: Px(0), right: Px(0), bottom: Px(0), left: Px(0) },
-    /// }
+    /// use tessera_ui::renderer::command::{BarrierRequirement, PaddingRect};
+    /// use tessera_ui::Px;
+    ///
+    /// let req = BarrierRequirement::PaddedLocal(PaddingRect::uniform(Px(75)));
+    /// let _ = req;
     /// ```
-    PaddedLocal {
-        sampling: PaddingRect,
-        collision: PaddingRect,
-    },
+    PaddedLocal(PaddingRect),
 
     /// The command needs to sample from a specific, absolute region of the screen.
     Absolute(PxRect),
@@ -86,39 +86,12 @@ impl PaddingRect {
 }
 
 impl BarrierRequirement {
-    pub const ZERO_PADDING_LOCAL: Self = Self::PaddedLocal {
-        sampling: PaddingRect::ZERO,
-        collision: PaddingRect::ZERO,
-    };
+    pub const ZERO_PADDING_LOCAL: Self = Self::PaddedLocal(PaddingRect::ZERO);
 
-    /// Creates a `PaddedLocal` barrier requirement with uniform padding on all sides.
-    /// Both sampling and collision use the same padding.
+    /// Creates a `PaddedLocal` barrier requirement with uniform sampling padding on all sides.
     #[must_use]
     pub const fn uniform_padding_local(padding: Px) -> Self {
-        Self::PaddedLocal {
-            sampling: PaddingRect::uniform(padding),
-            collision: PaddingRect::uniform(padding),
-        }
-    }
-
-    /// Creates a `PaddedLocal` barrier requirement with separate sampling and collision padding.
-    ///
-    /// Use this for effects that need a large sampling area (like blur) but where
-    /// batching should be based on a smaller collision area (like the component itself).
-    ///
-    /// # Arguments
-    ///
-    /// * `sampling_padding` - Padding for the sampling region (e.g., blur radius * 1.5)
-    /// * `collision_padding` - Padding for collision detection (often 0 for tight batching)
-    #[must_use]
-    pub const fn uniform_padding_local_with_collision(
-        sampling_padding: Px,
-        collision_padding: Px,
-    ) -> Self {
-        Self::PaddedLocal {
-            sampling: PaddingRect::uniform(sampling_padding),
-            collision: PaddingRect::uniform(collision_padding),
-        }
+        Self::PaddedLocal(PaddingRect::uniform(padding))
     }
 }
 

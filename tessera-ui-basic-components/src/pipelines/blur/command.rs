@@ -66,14 +66,9 @@ impl ComputeCommand for DualBlurCommand {
         // and ensure sufficient sampling area at edges
         let sampling_padding = (max_radius * 1.5).ceil() as i32;
 
-        // Use separate collision box for batching optimization:
-        // - sampling_padding: The actual padding needed for the blur effect
-        // - collision_padding: Zero padding for collision detection, allowing
-        //   orthogonal blur components to be batched together even if their
-        //   sampling regions would overlap
-        //
-        // This optimization allows multiple non-overlapping glass/blur components
-        // to be batched in a single compute pass, avoiding expensive texture copies.
-        BarrierRequirement::uniform_padding_local_with_collision(Px(sampling_padding), Px::ZERO)
+        // The sampling padding is the actual padding needed for the blur effect.
+        // The renderer still relies on the component bounds for dependency checks,
+        // so orthogonal blur components can batch even if their sampling regions overlap.
+        BarrierRequirement::uniform_padding_local(Px(sampling_padding))
     }
 }
