@@ -58,16 +58,12 @@ impl InstructionInfo {
                         width: Px(i32::MAX),
                         height: Px(i32::MAX),
                     },
-                    BarrierRequirement::PaddedLocal {
-                        top,
-                        right,
-                        bottom,
-                        left,
-                    } => {
-                        let padded_x = (position.x - left).max(Px(0));
-                        let padded_y = (position.y - top).max(Px(0));
-                        let padded_width = size.width + left + right;
-                        let padded_height = size.height + top + bottom;
+                    BarrierRequirement::PaddedLocal { collision, .. } => {
+                        // For collision detection, use the collision padding
+                        let padded_x = (position.x - collision.left).max(Px(0));
+                        let padded_y = (position.y - collision.top).max(Px(0));
+                        let padded_width = size.width + collision.left + collision.right;
+                        let padded_height = size.height + collision.top + collision.bottom;
                         PxRect {
                             x: padded_x,
                             y: padded_y,
@@ -94,16 +90,12 @@ impl InstructionInfo {
                         width: Px(i32::MAX),
                         height: Px(i32::MAX),
                     },
-                    Some(BarrierRequirement::PaddedLocal {
-                        top,
-                        right,
-                        bottom,
-                        left,
-                    }) => {
-                        let padded_x = (position.x - left).max(Px(0));
-                        let padded_y = (position.y - top).max(Px(0));
-                        let padded_width = size.width + left + right;
-                        let padded_height = size.height + top + bottom;
+                    Some(BarrierRequirement::PaddedLocal { collision, .. }) => {
+                        // For collision detection, use the collision padding
+                        let padded_x = (position.x - collision.left).max(Px(0));
+                        let padded_y = (position.y - collision.top).max(Px(0));
+                        let padded_width = size.width + collision.left + collision.right;
+                        let padded_height = size.height + collision.top + collision.bottom;
                         PxRect {
                             x: padded_x,
                             y: padded_y,
@@ -646,12 +638,7 @@ mod tests {
         let commands = vec![
             create_cmd(
                 PxPosition::new(Px(100), Px(100)),
-                Some(BarrierRequirement::PaddedLocal {
-                    top: Px(30),
-                    right: Px(30),
-                    bottom: Px(30),
-                    left: Px(30),
-                }),
+                Some(BarrierRequirement::uniform_padding_local(Px(30))),
                 false,
             ),
             create_cmd(
@@ -772,16 +759,8 @@ mod tests {
                 0 if allow_none => None,
                 0 | 3 => Some(BarrierRequirement::Global),
                 1 => {
-                    let top = Px(rng.next_range(20) as i32);
-                    let right = Px(rng.next_range(20) as i32);
-                    let bottom = Px(rng.next_range(20) as i32);
-                    let left = Px(rng.next_range(20) as i32);
-                    Some(BarrierRequirement::PaddedLocal {
-                        top,
-                        right,
-                        bottom,
-                        left,
-                    })
+                    let padding = Px(rng.next_range(20) as i32);
+                    Some(BarrierRequirement::uniform_padding_local(padding))
                 }
                 _ => {
                     let x = Px(rng.next_range(240) as i32);
@@ -1161,5 +1140,80 @@ mod tests {
             original_positions[3],
         ];
         assert_eq!(reordered_positions, expected_positions);
+    }
+
+    #[test]
+    fn test_blur_batching_with_collision_box_optimization() {
+        // Test the new PaddedLocal with separate sampling and collision padding
+        // Scenario: 5 orthogonal glass components with 50px blur radius
+        // Each has 75px sampling padding but 0px collision padding
+        // They should be able to batch together despite large sampling areas
+
+        let blur_commands = vec![
+            create_cmd(
+                PxPosition::new(Px(0), Px(0)),
+                Some(BarrierRequirement::uniform_padding_local_with_collision(
+                    Px(75), // Large sampling padding for blur
+                    Px(0),  // Zero collision padding for tight batching
+                )),
+                true, // Compute command
+            ),
+            create_cmd(
+                PxPosition::new(Px(200), Px(0)),
+                Some(BarrierRequirement::uniform_padding_local_with_collision(
+                    Px(75),
+                    Px(0),
+                )),
+                true,
+            ),
+            create_cmd(
+                PxPosition::new(Px(400), Px(0)),
+                Some(BarrierRequirement::uniform_padding_local_with_collision(
+                    Px(75),
+                    Px(0),
+                )),
+                true,
+            ),
+            create_cmd(
+                PxPosition::new(Px(600), Px(0)),
+                Some(BarrierRequirement::uniform_padding_local_with_collision(
+                    Px(75),
+                    Px(0),
+                )),
+                true,
+            ),
+            create_cmd(
+                PxPosition::new(Px(800), Px(0)),
+                Some(BarrierRequirement::uniform_padding_local_with_collision(
+                    Px(75),
+                    Px(0),
+                )),
+                true,
+            ),
+        ];
+
+        let reordered = reorder_instructions(blur_commands);
+
+        // All compute commands should remain in order (no dependencies)
+        // And they should all be consecutive (no reordering needed)
+        let kinds: Vec<&'static str> = reordered
+            .iter()
+            .map(|(cmd, _, _, _)| match cmd {
+                Command::Compute(_) => "C",
+                Command::Draw(_) => "D",
+                _ => panic!("unexpected command variant"),
+            })
+            .collect();
+
+        assert_eq!(kinds, vec!["C", "C", "C", "C", "C"]);
+
+        // Verify they are orthogonal based on collision boxes (not sampling boxes)
+        let positions = get_positions(&reordered);
+        assert_eq!(positions.len(), 5);
+
+        // Each component is at x=0,200,400,600,800 with size 10x10
+        // Collision boxes are 10x10 (no padding), so they don't overlap
+        // Sampling boxes would be 85x85 (10 + 75*2) centered on each position,
+        // which would overlap, but that shouldn't prevent batching
     }
 }

@@ -1043,12 +1043,18 @@ fn extract_draw_rect(
             width: Px(texture_size.width as i32),
             height: Px(texture_size.height as i32),
         },
-        Some(BarrierRequirement::PaddedLocal {
-            top,
-            right,
-            bottom,
-            left,
-        }) => compute_padded_rect(size, start_pos, top, right, bottom, left, texture_size),
+        Some(BarrierRequirement::PaddedLocal { sampling, .. }) => {
+            // For actual rendering/compute, use the sampling padding
+            compute_padded_rect(
+                size,
+                start_pos,
+                sampling.top,
+                sampling.right,
+                sampling.bottom,
+                sampling.left,
+                texture_size,
+            )
+        }
         Some(BarrierRequirement::Absolute(rect)) => clamp_rect_to_texture(rect, texture_size),
         None => {
             let x = start_pos.x.positive().min(texture_size.width);
