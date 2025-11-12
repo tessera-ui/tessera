@@ -44,8 +44,8 @@ struct ExampleGlassState {
     border_width: ConfigSliderState<Dp>,
     corner_radius: ConfigSliderState<CornerRadius>,
     refraction_amount: ConfigSliderState<f32>,
-    refraction_height: ConfigSliderState<f32>,
-    blur_radius: ConfigSliderState<f32>,
+    refraction_height: ConfigSliderState<Dp>,
+    blur_radius: ConfigSliderState<Dp>,
     background_image_data: Arc<ImageData>,
 }
 
@@ -93,8 +93,8 @@ impl Default for ExampleGlassState {
             border_width: ConfigSliderState::new(Dp(1.0)),
             corner_radius: ConfigSliderState::new(CornerRadius(25.0)),
             refraction_amount: ConfigSliderState::new(32.0),
-            refraction_height: ConfigSliderState::new(24.0),
-            blur_radius: ConfigSliderState::new(0.0),
+            refraction_height: ConfigSliderState::new(Dp(24.0)),
+            blur_radius: ConfigSliderState::new(Dp(0.0)),
             background_image_data: image_data,
         }
     }
@@ -374,11 +374,11 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
             scope.child(move || {
                 glass_config_slider(
                     "Refraction Height",
-                    state.read().refraction_height.value / 50.0,
+                    state.read().refraction_height.value.0 as f32 / 50.0,
                     {
                         let state = state.clone();
                         Arc::new(move |value| {
-                            state.write().refraction_height.value = value * 50.0;
+                            state.write().refraction_height.value = Dp(f64::from(value * 50.0));
                         })
                     },
                     state.read().refraction_height.slider_state.clone(),
@@ -398,11 +398,11 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
             scope.child(move || {
                 glass_config_slider(
                     "Blur Radius",
-                    state.read().blur_radius.value / 100.0,
+                    state.read().blur_radius.value.0 as f32 / 100.0,
                     {
                         let state = state.clone();
                         Arc::new(move |value| {
-                            state.write().blur_radius.value = value * 100.0;
+                            state.write().blur_radius.value = Dp(f64::from(value * 100.0));
                         })
                     },
                     state.read().blur_radius.slider_state.clone(),

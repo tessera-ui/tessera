@@ -56,17 +56,17 @@ pub struct FluidGlassArgs {
     )]
     pub shape: Shape,
     /// The radius for the background blur effect. A value of `0.0` disables the blur.
-    #[builder(default = "0.0")]
-    pub blur_radius: f32,
+    #[builder(default = "Dp(0.0)")]
+    pub blur_radius: Dp,
     /// The height of the chromatic dispersion effect.
-    #[builder(default = "25.0")]
-    pub dispersion_height: f32,
+    #[builder(default = "Dp(25.0)")]
+    pub dispersion_height: Dp,
     /// Multiplier for the chromatic aberration, enhancing the color separation effect.
     #[builder(default = "1.0")]
     pub chroma_multiplier: f32,
     /// The height of the refraction effect, simulating light bending through the glass.
-    #[builder(default = "24.0")]
-    pub refraction_height: f32,
+    #[builder(default = "Dp(24.0)")]
+    pub refraction_height: Dp,
     /// The amount of refraction to apply.
     #[builder(default = "32.0")]
     pub refraction_amount: f32,
@@ -367,8 +367,9 @@ pub fn fluid_glass(
             }
         };
 
-        if args.blur_radius > 0.0 {
-            let blur_command = DualBlurCommand::horizontal_then_vertical(args.blur_radius);
+        if args.blur_radius > Dp(0.0) {
+            let blur_command =
+                DualBlurCommand::horizontal_then_vertical(args.blur_radius.to_pixels_f32());
             let mut metadata = input.metadata_mut();
             metadata.push_compute_command(blur_command);
         }

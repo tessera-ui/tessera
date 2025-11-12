@@ -49,14 +49,14 @@ pub struct GlassButtonArgs {
         default = "Shape::RoundedRectangle { top_left: Dp(25.0), top_right: Dp(25.0), bottom_right: Dp(25.0), bottom_left: Dp(25.0), g2_k_value: 3.0 }"
     )]
     pub shape: Shape,
-    #[builder(default = "0.0")]
-    pub blur_radius: f32,
-    #[builder(default = "25.0")]
-    pub dispersion_height: f32,
+    #[builder(default = "Dp(0.0)")]
+    pub blur_radius: Dp,
+    #[builder(default = "Dp(25.0)")]
+    pub dispersion_height: Dp,
     #[builder(default = "1.2")]
     pub chroma_multiplier: f32,
-    #[builder(default = "24.0")]
-    pub refraction_height: f32,
+    #[builder(default = "Dp(24.0)")]
+    pub refraction_height: Dp,
     #[builder(default = "32.0")]
     pub refraction_amount: f32,
     #[builder(default = "0.0")]

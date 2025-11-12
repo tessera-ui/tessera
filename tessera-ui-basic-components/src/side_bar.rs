@@ -229,10 +229,10 @@ fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) 
                 min: None,
                 max: None,
             })
-            .dispersion_height(0.0)
-            .refraction_height(0.0)
+            .dispersion_height(Dp(0.0))
+            .refraction_height(Dp(0.0))
             .block_input(true)
-            .blur_radius(blur_radius)
+            .blur_radius(Dp(blur_radius as f64))
             .border(None)
             .shape(Shape::RoundedRectangle {
                 top_left: Dp(0.0),
@@ -417,7 +417,7 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                         min: None,
                         max: None,
                     })
-                    .blur_radius(10.0)
+                    .blur_radius(Dp(10.0))
                     .padding(Dp(16.0))
                     .block_input(true)
                     .build()

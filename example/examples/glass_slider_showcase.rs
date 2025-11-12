@@ -66,7 +66,7 @@ fn app(state: Arc<AppState>) {
                                         .on_change(on_change_clone)
                                         .track_tint_color(Color::new(0.3, 0.3, 0.3, 0.15))
                                         .progress_tint_color(Color::new(0.2, 0.7, 1.0, 0.25))
-                                        .blur_radius(8.0)
+                                        .blur_radius(Dp(8.0))
                                         .build()
                                         .unwrap(),
                                     state_clone.slider_state.clone(),

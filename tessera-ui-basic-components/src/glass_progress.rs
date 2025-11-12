@@ -38,8 +38,8 @@ pub struct GlassProgressArgs {
     pub progress_tint_color: Color,
 
     /// Glass blur radius for all components.
-    #[builder(default = "8.0")]
-    pub blur_radius: f32,
+    #[builder(default = "Dp(8.0)")]
+    pub blur_radius: Dp,
 
     /// Border width for the track.
     #[builder(default = "Dp(1.0)")]

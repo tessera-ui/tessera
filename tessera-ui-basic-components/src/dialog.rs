@@ -224,10 +224,10 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                         min: None,
                         max: None,
                     })
-                    .dispersion_height(0.0)
-                    .refraction_height(0.0)
+                    .dispersion_height(Dp(0.0))
+                    .refraction_height(Dp(0.0))
                     .block_input(true)
-                    .blur_radius(blur_radius)
+                    .blur_radius(Dp(blur_radius as f64))
                     .border(None)
                     .shape(Shape::RoundedRectangle {
                         top_left: Dp(0.0),
@@ -302,7 +302,7 @@ fn dialog_content_wrapper(
                     fluid_glass(
                         FluidGlassArgsBuilder::default()
                             .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
-                            .blur_radius(5.0 * alpha)
+                            .blur_radius(Dp(5.0 * alpha as f64))
                             .shape(Shape::RoundedRectangle {
                                 top_left: Dp(25.0),
                                 top_right: Dp(25.0),

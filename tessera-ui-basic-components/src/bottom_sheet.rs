@@ -260,10 +260,10 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
                 min: None,
                 max: None,
             })
-            .dispersion_height(0.0)
-            .refraction_height(0.0)
+            .dispersion_height(Dp(0.0))
+            .refraction_height(Dp(0.0))
             .block_input(true)
-            .blur_radius(blur_radius)
+            .blur_radius(Dp(blur_radius as f64))
             .border(None)
             .shape(Shape::RoundedRectangle {
                 top_left: Dp(0.0),
@@ -380,7 +380,7 @@ fn render_content(
                     })
                     .refraction_amount(25.0)
                     .padding(Dp(20.0))
-                    .blur_radius(10.0)
+                    .blur_radius(Dp(10.0))
                     .block_input(true)
                     .build()
                     .unwrap(),
