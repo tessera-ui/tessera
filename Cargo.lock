@@ -3892,6 +3892,7 @@ dependencies = [
  "petgraph 0.8.3",
  "pollster",
  "rayon",
+ "smallvec",
  "tessera-ui-macros",
  "tessera-ui-shard",
  "tracing",

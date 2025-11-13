@@ -10,6 +10,7 @@ use dashmap::DashMap;
 use indextree::NodeId;
 use parking_lot::RwLock;
 use rayon::prelude::*;
+use smallvec::SmallVec;
 use tracing::debug;
 use winit::window::CursorIcon;
 
@@ -169,7 +170,7 @@ pub struct ComponentNodeMetaData {
     /// new `Command` enum. Commands are collected during the measure phase and
     /// executed during rendering. The order of commands in this vector determines
     /// their execution order.
-    pub(crate) commands: Vec<(Command, TypeId)>,
+    pub(crate) commands: SmallVec<[(Command, TypeId); 4]>,
     /// Whether this node clips its children.
     pub clips_children: bool,
     /// Accessibility information for this node.
@@ -186,7 +187,7 @@ impl ComponentNodeMetaData {
             rel_position: None,
             abs_position: None,
             event_clip_rect: None,
-            commands: Vec::new(),
+            commands: SmallVec::new(),
             clips_children: false,
             accessibility: None,
             accessibility_action_handler: None,

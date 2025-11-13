@@ -1,6 +1,7 @@
 use std::{any::TypeId, mem, sync::Arc};
 
 use parking_lot::RwLock;
+use smallvec::SmallVec;
 use tracing::{error, info, warn};
 use wgpu::TextureFormat;
 use winit::window::Window;
@@ -32,13 +33,13 @@ struct RenderCurrentPassParams<'a> {
     is_first_pass: &'a mut bool,
     encoder: &'a mut wgpu::CommandEncoder,
     write_target: &'a wgpu::TextureView,
-    commands_in_pass: &'a mut Vec<DrawOrClip>,
+    commands_in_pass: &'a mut SmallVec<[DrawOrClip; 32]>,
     scene_texture_view: &'a wgpu::TextureView,
     drawer: &'a mut Drawer,
     gpu: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
-    clip_stack: &'a mut Vec<PxRect>,
+    clip_stack: &'a mut SmallVec<[PxRect; 16]>,
 }
 
 // Parameters for do_compute function
@@ -636,9 +637,9 @@ impl WgpuApp {
             .begin_all_frames(&self.gpu, &self.queue, &self.config);
 
         let mut scene_texture_view = self.offscreen_texture.clone();
-        let mut commands_in_pass: Vec<DrawOrClip> = Vec::new();
-        let mut sampling_rects_in_pass: Vec<PxRect> = Vec::new();
-        let mut clip_stack: Vec<PxRect> = Vec::new();
+        let mut commands_in_pass: SmallVec<[DrawOrClip; 32]> = SmallVec::new();
+        let mut sampling_rects_in_pass: SmallVec<[PxRect; 16]> = SmallVec::new();
+        let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
 
         let mut output_view = output_frame
             .texture
@@ -667,20 +668,18 @@ impl WgpuApp {
                 .unwrap_or(false);
 
             if need_new_pass {
-                let draw_target_rects: Vec<PxRect> = commands_in_pass
-                    .iter()
-                    .filter_map(|command| match command {
-                        DrawOrClip::Draw(cmd) if cmd.command.barrier().is_some() => {
-                            Some(cmd.draw_rect)
-                        }
-                        _ => None,
-                    })
-                    .collect();
+                let mut draw_target_rects: SmallVec<[PxRect; 8]> = SmallVec::new();
+                for rect in commands_in_pass.iter().filter_map(|command| match command {
+                    DrawOrClip::Draw(cmd) if cmd.command.barrier().is_some() => Some(cmd.draw_rect),
+                    _ => None,
+                }) {
+                    draw_target_rects.push(rect);
+                }
 
                 if !draw_target_rects.is_empty() {
                     let compute_to_run = self.take_compute_commands_for_rects(&draw_target_rects);
 
-                    let mut copy_rects: Vec<PxRect> = sampling_rects_in_pass.clone();
+                    let mut copy_rects = sampling_rects_in_pass.clone();
                     for pending in &compute_to_run {
                         copy_rects.push(pending.sampling_rect);
                     }
@@ -779,18 +778,18 @@ impl WgpuApp {
 
         // After processing all commands, we need to render the last pass if there are any commands left
         if !commands_in_pass.is_empty() {
-            let draw_target_rects: Vec<PxRect> = commands_in_pass
-                .iter()
-                .filter_map(|command| match command {
-                    DrawOrClip::Draw(cmd) if cmd.command.barrier().is_some() => Some(cmd.draw_rect),
-                    _ => None,
-                })
-                .collect();
+            let mut draw_target_rects: SmallVec<[PxRect; 8]> = SmallVec::new();
+            for rect in commands_in_pass.iter().filter_map(|command| match command {
+                DrawOrClip::Draw(cmd) if cmd.command.barrier().is_some() => Some(cmd.draw_rect),
+                _ => None,
+            }) {
+                draw_target_rects.push(rect);
+            }
 
             if !draw_target_rects.is_empty() {
                 let compute_to_run = self.take_compute_commands_for_rects(&draw_target_rects);
 
-                let mut copy_rects: Vec<PxRect> = sampling_rects_in_pass.clone();
+                let mut copy_rects = sampling_rects_in_pass.clone();
                 for pending in &compute_to_run {
                     copy_rects.push(pending.sampling_rect);
                 }
@@ -918,8 +917,8 @@ impl WgpuApp {
             let command = &commands[index];
             let type_id = AsAny::as_any(&*command.command).type_id();
 
-            let mut batch_items: Vec<ErasedComputeBatchItem<'_>> = Vec::new();
-            let mut batch_sampling_rects: Vec<PxRect> = Vec::new();
+            let mut batch_items: SmallVec<[ErasedComputeBatchItem<'_>; 8]> = SmallVec::new();
+            let mut batch_sampling_rects: SmallVec<[PxRect; 8]> = SmallVec::new();
             let mut cursor = index;
 
             while cursor < commands.len() {
@@ -1223,7 +1222,7 @@ fn render_current_pass(params: RenderCurrentPassParams<'_>) {
                 params.config,
                 &mut buffer,
                 params.scene_texture_view,
-                params.clip_stack,
+                params.clip_stack.as_slice(),
                 &mut current_batch_draw_rect,
             );
         }
@@ -1244,7 +1243,7 @@ fn render_current_pass(params: RenderCurrentPassParams<'_>) {
             params.config,
             &mut buffer,
             params.scene_texture_view,
-            params.clip_stack,
+            params.clip_stack.as_slice(),
             &mut current_batch_draw_rect,
         );
     }
@@ -1266,7 +1265,7 @@ fn submit_buffered_commands(
     config: &wgpu::SurfaceConfiguration,
     buffer: &mut Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)>,
     scene_texture_view: &wgpu::TextureView,
-    clip_stack: &mut [PxRect],
+    clip_stack: &[PxRect],
     current_batch_draw_rect: &mut Option<PxRect>,
 ) {
     // Take the buffered commands and convert to the transient representation expected by drawer.submit
