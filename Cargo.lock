@@ -3917,6 +3917,7 @@ dependencies = [
  "lyon_path",
  "lyon_tessellation",
  "parking_lot",
+ "smallvec",
  "tessera-ui",
  "thiserror 2.0.17",
  "tracing",

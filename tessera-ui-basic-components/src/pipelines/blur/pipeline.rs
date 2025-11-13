@@ -407,10 +407,10 @@ impl BlurPipeline {
 
     fn acquire_texture(&mut self, device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
         let key = Self::texture_key(width, height);
-        if let Some(bucket) = self.texture_pool.get_mut(&key) {
-            if let Some(texture) = bucket.pop() {
-                return texture;
-            }
+        if let Some(bucket) = self.texture_pool.get_mut(&key)
+            && let Some(texture) = bucket.pop()
+        {
+            return texture;
         }
 
         device.create_texture(&wgpu::TextureDescriptor {
