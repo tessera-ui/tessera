@@ -404,9 +404,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // sd is the distance to the shape edge, negative inside, positive outside.
         // This expression creates a "band" region where sd is between 0 and -border_width.
         let border_width_aa = fwidth(sd); // Add anti-aliasing for the border
-        let outer = smoothstep(0.0 + border_width_aa, -border_width_aa, sd);
-        let inner = smoothstep(-instance.border_width + border_width_aa, -instance.border_width - border_width_aa, sd);
-        let border_mask = outer - inner;
+        if instance.border_width <= border_width_aa {
+            final_color.a = shape_alpha;
+            return final_color;
+        }
+
+        let outer = 1.0 - smoothstep(-border_width_aa, border_width_aa, sd);
+        let inner = 1.0 - smoothstep(-instance.border_width - border_width_aa, -instance.border_width + border_width_aa, sd);
+        let border_mask = clamp(outer - inner, 0.0, 1.0);
         // Only compute highlight within the border region.
         if border_mask > 0.0 {
             // 2. Compute highlight normal (same logic as AGSL, using new function).

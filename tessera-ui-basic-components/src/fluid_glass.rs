@@ -107,7 +107,7 @@ pub struct FluidGlassArgs {
     #[builder(default, setter(strip_option, into = false))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
 
-    #[builder(default = "Some(GlassBorder { width: Dp(1.0).into() })")]
+    #[builder(default = "Some(GlassBorder { width: Dp(1.35).into() })")]
     pub border: Option<GlassBorder>,
 
     /// Whether to block input events on the glass surface.
