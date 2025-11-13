@@ -11,7 +11,7 @@ use owo_colors::colored::*;
 
 use super::find_package_dir;
 
-pub fn execute(verbose: bool, package: Option<&str>) -> Result<()> {
+pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()> {
     println!(
         "{}",
         "Starting development server (auto rebuild/restart)...".bright_cyan()
@@ -75,6 +75,9 @@ pub fn execute(verbose: bool, package: Option<&str>) -> Result<()> {
             // Build first
             let mut build_cmd = Command::new("cargo");
             build_cmd.arg("build");
+            if release {
+                build_cmd.arg("--release");
+            }
             if verbose {
                 build_cmd.arg("-v");
             }

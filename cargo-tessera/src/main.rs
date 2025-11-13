@@ -45,6 +45,9 @@ enum TesseraCommands {
         /// Specify package to run
         #[arg(short, long)]
         package: Option<String>,
+        /// Enable release mode
+        #[arg(short, long)]
+        release: bool,
     },
     /// Build the project for release (native targets)
     Build {
@@ -121,8 +124,12 @@ fn main() -> Result<()> {
                 };
                 commands::new::execute(&name, &template)?;
             }
-            TesseraCommands::Dev { verbose, package } => {
-                commands::dev::execute(verbose, package.as_deref())?;
+            TesseraCommands::Dev {
+                verbose,
+                package,
+                release,
+            } => {
+                commands::dev::execute(verbose, package.as_deref(), release)?;
             }
             TesseraCommands::Build {
                 release,
