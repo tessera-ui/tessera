@@ -62,7 +62,7 @@ pub struct FluidGlassArgs {
     #[builder(default = "Dp(25.0)")]
     pub dispersion_height: Dp,
     /// Multiplier for the chromatic aberration, enhancing the color separation effect.
-    #[builder(default = "1.0")]
+    #[builder(default = "1.1")]
     pub chroma_multiplier: f32,
     /// The height of the refraction effect, simulating light bending through the glass.
     #[builder(default = "Dp(24.0)")]
@@ -91,10 +91,9 @@ pub struct FluidGlassArgs {
     /// The optional height of the component, defined as a `DimensionValue`.
     #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub height: DimensionValue,
-
+    /// Padding inside the glass component.
     #[builder(default = "Dp(0.0)")]
     pub padding: Dp,
-
     // Ripple effect properties
     #[builder(default, setter(strip_option))]
     pub ripple_center: Option<[f32; 2]>,

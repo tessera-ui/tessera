@@ -53,7 +53,7 @@ pub struct GlassButtonArgs {
     pub blur_radius: Dp,
     #[builder(default = "Dp(25.0)")]
     pub dispersion_height: Dp,
-    #[builder(default = "1.2")]
+    #[builder(default = "1.1")]
     pub chroma_multiplier: f32,
     #[builder(default = "Dp(24.0)")]
     pub refraction_height: Dp,
