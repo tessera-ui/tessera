@@ -1,6 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZeroUsize};
 
 use encase::{ShaderType, UniformBuffer, internal::WriteInto};
+use lru::LruCache;
+use smallvec::SmallVec;
 use tessera_ui::{
     renderer::compute::{ComputablePipeline, ComputeBatchItem},
     wgpu,
@@ -10,6 +12,8 @@ use super::command::DualBlurCommand;
 
 const DOWNSCALE_FACTOR: u32 = 2;
 const MAX_SAMPLES: usize = 16;
+const WEIGHT_CACHE_CAPACITY: usize = 64;
+const WEIGHT_QUANTIZATION: f32 = 100.0;
 
 /// Compute optimized Gaussian blur weights and offsets using hardware bilinear interpolation.
 /// This reduces the number of texture samples by leveraging the GPU's built-in linear filtering.
@@ -19,9 +23,15 @@ const MAX_SAMPLES: usize = 16;
 /// - weights[i] (i > 0) is the weight for both +offset[i] and -offset[i]
 /// - offsets[i] is the pixel offset from center
 /// - sample_count is the actual number of samples needed
-fn compute_optimized_blur_params(radius: f32) -> (Vec<f32>, Vec<f32>, u32) {
+fn compute_optimized_blur_params(radius: f32) -> WeightCacheEntry {
     if radius <= 0.0 {
-        return (vec![1.0], vec![0.0], 1);
+        let mut weights = [0.0f32; MAX_SAMPLES];
+        weights[0] = 1.0;
+        return WeightCacheEntry {
+            weights,
+            offsets: [0.0f32; MAX_SAMPLES],
+            sample_count: 1,
+        };
     }
 
     // Standard deviation: radius / 3 gives a good Gaussian falloff
@@ -32,15 +42,16 @@ fn compute_optimized_blur_params(radius: f32) -> (Vec<f32>, Vec<f32>, u32) {
     let int_radius = radius.ceil() as i32;
 
     // Compute raw Gaussian weights (not normalized yet)
-    let mut raw_weights = vec![0.0f32; (int_radius + 1) as usize];
+    let mut raw_weights = SmallVec::<[f32; 64]>::with_capacity((int_radius + 1) as usize);
+    raw_weights.resize((int_radius + 1) as usize, 0.0);
     for i in 0..=int_radius {
         let x = i as f32;
         raw_weights[i as usize] = (-x * x / two_sigma_sq).exp();
     }
 
     // Now apply bilinear optimization by combining adjacent samples
-    let mut weights = Vec::with_capacity(MAX_SAMPLES);
-    let mut offsets = Vec::with_capacity(MAX_SAMPLES);
+    let mut weights = SmallVec::<[f32; MAX_SAMPLES]>::with_capacity(MAX_SAMPLES);
+    let mut offsets = SmallVec::<[f32; MAX_SAMPLES]>::with_capacity(MAX_SAMPLES);
 
     // Center sample (index 0, not duplicated in shader)
     weights.push(raw_weights[0]);
@@ -84,11 +95,27 @@ fn compute_optimized_blur_params(radius: f32) -> (Vec<f32>, Vec<f32>, u32) {
     }
 
     // Pad to MAX_SAMPLES
-    let sample_count = weights.len();
-    weights.resize(MAX_SAMPLES, 0.0);
-    offsets.resize(MAX_SAMPLES, 0.0);
+    let sample_count = weights.len() as u32;
 
-    (weights, offsets, sample_count as u32)
+    let mut weights_array = [0.0f32; MAX_SAMPLES];
+    let mut offsets_array = [0.0f32; MAX_SAMPLES];
+    for idx in 0..weights.len() {
+        weights_array[idx] = weights[idx];
+        offsets_array[idx] = offsets[idx];
+    }
+
+    WeightCacheEntry {
+        weights: weights_array,
+        offsets: offsets_array,
+        sample_count,
+    }
+}
+
+#[derive(Clone)]
+struct WeightCacheEntry {
+    weights: [f32; MAX_SAMPLES],
+    offsets: [f32; MAX_SAMPLES],
+    sample_count: u32,
 }
 
 #[derive(ShaderType)]
@@ -136,6 +163,7 @@ pub struct BlurPipeline {
     upsample_bind_group_layout: wgpu::BindGroupLayout,
     downsample_sampler: wgpu::Sampler,
     texture_pool: HashMap<(u32, u32), Vec<wgpu::Texture>>,
+    weight_cache: LruCache<u32, WeightCacheEntry>,
 }
 
 impl BlurPipeline {
@@ -369,6 +397,7 @@ impl BlurPipeline {
             upsample_bind_group_layout,
             downsample_sampler,
             texture_pool: HashMap::new(),
+            weight_cache: LruCache::new(NonZeroUsize::new(WEIGHT_CACHE_CAPACITY).unwrap()),
         }
     }
 
@@ -376,12 +405,7 @@ impl BlurPipeline {
         (width.max(1), height.max(1))
     }
 
-    fn acquire_texture(
-        &mut self,
-        device: &wgpu::Device,
-        width: u32,
-        height: u32,
-    ) -> wgpu::Texture {
+    fn acquire_texture(&mut self, device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
         let key = Self::texture_key(width, height);
         if let Some(bucket) = self.texture_pool.get_mut(&key) {
             if let Some(texture) = bucket.pop() {
@@ -408,6 +432,21 @@ impl BlurPipeline {
     fn release_texture(&mut self, texture: wgpu::Texture, width: u32, height: u32) {
         let key = Self::texture_key(width, height);
         self.texture_pool.entry(key).or_default().push(texture);
+    }
+
+    fn quantize_radius(radius: f32) -> u32 {
+        ((radius * WEIGHT_QUANTIZATION).round().max(0.0)) as u32
+    }
+
+    fn weights_for_radius(&mut self, radius: f32) -> WeightCacheEntry {
+        let key = Self::quantize_radius(radius);
+        if let Some(entry) = self.weight_cache.get(&key) {
+            return entry.clone();
+        }
+
+        let computed = compute_optimized_blur_params(radius);
+        self.weight_cache.put(key, computed.clone());
+        computed
     }
 
     fn create_uniform_buffer<T: ShaderType + WriteInto>(
@@ -462,11 +501,11 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 continue;
             }
 
-            let mut downsample_texture = self.acquire_texture(device, down_width, down_height);
+            let downsample_texture = self.acquire_texture(device, down_width, down_height);
             let downsample_view =
                 downsample_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            let mut blur_texture = self.acquire_texture(device, down_width, down_height);
+            let blur_texture = self.acquire_texture(device, down_width, down_height);
             let blur_view = blur_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
             // Downsample pass
@@ -522,9 +561,8 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
             for pass in &item.command.passes {
                 let effective_radius = (pass.radius / scale as f32).max(0.0);
 
-                // Compute optimized blur parameters
-                let (weights, offsets, sample_count) =
-                    compute_optimized_blur_params(effective_radius);
+                // Fetch cached optimized blur parameters
+                let weight_entry = self.weights_for_radius(effective_radius);
 
                 let blur_uniforms = BlurUniforms {
                     radius: effective_radius,
@@ -534,7 +572,7 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                     area_y: 0,
                     area_width: down_width,
                     area_height: down_height,
-                    sample_count,
+                    sample_count: weight_entry.sample_count,
                 };
                 let blur_uniform_buffer = Self::create_uniform_buffer(
                     device,
@@ -545,8 +583,12 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
 
                 // Create weights and offsets buffer (padded to vec4 for alignment)
                 let weights_and_offsets = WeightsAndOffsets {
-                    weights: std::array::from_fn(|i| glam::Vec4::new(weights[i], 0.0, 0.0, 0.0)),
-                    offsets: std::array::from_fn(|i| glam::Vec4::new(offsets[i], 0.0, 0.0, 0.0)),
+                    weights: std::array::from_fn(|i| {
+                        glam::Vec4::new(weight_entry.weights[i], 0.0, 0.0, 0.0)
+                    }),
+                    offsets: std::array::from_fn(|i| {
+                        glam::Vec4::new(weight_entry.offsets[i], 0.0, 0.0, 0.0)
+                    }),
                 };
                 let weights_buffer = Self::create_uniform_buffer(
                     device,
