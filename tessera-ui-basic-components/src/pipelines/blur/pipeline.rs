@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use encase::{ShaderType, UniformBuffer, internal::WriteInto};
 use tessera_ui::{
     renderer::compute::{ComputablePipeline, ComputeBatchItem},
@@ -133,6 +135,7 @@ pub struct BlurPipeline {
     blur_bind_group_layout: wgpu::BindGroupLayout,
     upsample_bind_group_layout: wgpu::BindGroupLayout,
     downsample_sampler: wgpu::Sampler,
+    texture_pool: HashMap<(u32, u32), Vec<wgpu::Texture>>,
 }
 
 impl BlurPipeline {
@@ -365,7 +368,46 @@ impl BlurPipeline {
             blur_bind_group_layout,
             upsample_bind_group_layout,
             downsample_sampler,
+            texture_pool: HashMap::new(),
         }
+    }
+
+    fn texture_key(width: u32, height: u32) -> (u32, u32) {
+        (width.max(1), height.max(1))
+    }
+
+    fn acquire_texture(
+        &mut self,
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+    ) -> wgpu::Texture {
+        let key = Self::texture_key(width, height);
+        if let Some(bucket) = self.texture_pool.get_mut(&key) {
+            if let Some(texture) = bucket.pop() {
+                return texture;
+            }
+        }
+
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Blur Intermediate Texture"),
+            size: wgpu::Extent3d {
+                width: key.0,
+                height: key.1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
+            view_formats: &[],
+        })
+    }
+
+    fn release_texture(&mut self, texture: wgpu::Texture, width: u32, height: u32) {
+        let key = Self::texture_key(width, height);
+        self.texture_pool.entry(key).or_default().push(texture);
     }
 
     fn create_uniform_buffer<T: ShaderType + WriteInto>(
@@ -420,26 +462,11 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 continue;
             }
 
-            let texture_descriptor = wgpu::TextureDescriptor {
-                label: Some("Blur Downscaled Texture"),
-                size: wgpu::Extent3d {
-                    width: down_width.max(1),
-                    height: down_height.max(1),
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
-                view_formats: &[],
-            };
-
-            let downsample_texture = device.create_texture(&texture_descriptor);
+            let mut downsample_texture = self.acquire_texture(device, down_width, down_height);
             let downsample_view =
                 downsample_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            let blur_texture = device.create_texture(&texture_descriptor);
+            let mut blur_texture = self.acquire_texture(device, down_width, down_height);
             let blur_view = blur_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
             // Downsample pass
@@ -483,6 +510,8 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
             let downsample_workgroups_x = down_width.div_ceil(8);
             let downsample_workgroups_y = down_height.div_ceil(8);
             if downsample_workgroups_x == 0 || downsample_workgroups_y == 0 {
+                self.release_texture(downsample_texture, down_width, down_height);
+                self.release_texture(blur_texture, down_width, down_height);
                 continue;
             }
             compute_pass.dispatch_workgroups(downsample_workgroups_x, downsample_workgroups_y, 1);
@@ -604,9 +633,14 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
             let upsample_workgroups_x = area_width.div_ceil(8);
             let upsample_workgroups_y = area_height.div_ceil(8);
             if upsample_workgroups_x == 0 || upsample_workgroups_y == 0 {
+                self.release_texture(downsample_texture, down_width, down_height);
+                self.release_texture(blur_texture, down_width, down_height);
                 continue;
             }
             compute_pass.dispatch_workgroups(upsample_workgroups_x, upsample_workgroups_y, 1);
+
+            self.release_texture(downsample_texture, down_width, down_height);
+            self.release_texture(blur_texture, down_width, down_height);
         }
     }
 }
