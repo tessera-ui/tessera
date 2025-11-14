@@ -8,9 +8,8 @@ use tessera_ui::{
     wgpu,
 };
 
-use super::command::DualBlurCommand;
+use super::command::{DualBlurCommand, downscale_factor_for_radius};
 
-const DOWNSCALE_FACTOR: u32 = 2;
 const MAX_SAMPLES: usize = 16;
 const WEIGHT_CACHE_CAPACITY: usize = 64;
 const WEIGHT_QUANTIZATION: f32 = 100.0;
@@ -493,7 +492,13 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 continue;
             }
 
-            let scale = DOWNSCALE_FACTOR.max(1);
+            let max_radius = item
+                .command
+                .passes
+                .iter()
+                .map(|pass| pass.radius)
+                .fold(0.0f32, f32::max);
+            let scale = downscale_factor_for_radius(max_radius).max(1);
             let down_width = area_width.div_ceil(scale);
             let down_height = area_height.div_ceil(scale);
 

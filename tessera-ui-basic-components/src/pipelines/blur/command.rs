@@ -35,6 +35,16 @@ pub struct DualBlurCommand {
     pub passes: [BlurCommand; 2],
 }
 
+pub fn downscale_factor_for_radius(radius: f32) -> u32 {
+    if radius <= 6.0 {
+        1
+    } else if radius <= 18.0 {
+        2
+    } else {
+        4
+    }
+}
+
 impl DualBlurCommand {
     pub fn new(passes: [BlurCommand; 2]) -> Self {
         Self { passes }
@@ -62,9 +72,10 @@ impl ComputeCommand for DualBlurCommand {
             .map(|pass| pass.radius)
             .fold(0.0f32, f32::max);
 
-        // Add extra padding to account for downscaling (DOWNSCALE_FACTOR = 2)
-        // and ensure sufficient sampling area at edges
-        let sampling_padding = (max_radius * 1.5).ceil() as i32;
+        let downscale = downscale_factor_for_radius(max_radius) as f32;
+        // When downsampling, each texel covers a larger source region, so extend
+        // the barrier padding proportionally to the chosen downscale factor.
+        let sampling_padding = (max_radius * downscale).ceil() as i32;
 
         // The sampling padding is the actual padding needed for the blur effect.
         // The renderer still relies on the component bounds for dependency checks,
