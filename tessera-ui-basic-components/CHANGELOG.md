@@ -1,3 +1,26 @@
+## [v2.5.0] - 2025-11-15 +08:00
+
+### Changes
+
+- fix: remove redundant srgb decode in atlas sample
+- feat(fluid_glass): Optimize dispersion effect and performance
+- feat(blur): add downscale factor calculation for blur radius
+- style: format codes
+- perf(blur): smallvec-backed weight generation
+- perf(blur): reuse intermediate textures
+- feat: add vector atlas pipeline
+- fix: stabilize fluid glass border highlight
+- fix: adjust chroma_multiplier default value for fluid_glass and glass_button components
+- feat: Use Dp for fluid_glass dimension parameters
+- fix(compute): fix scheduling bug in compute pipeline
+- perf(renderer): add separate sampling/collision padding for barrier batching
+- perf(blur): optimize gaussian blur sampling
+- refactor: clean up incomplete documentation comments
+- fix(a11y): merge accessibility handler into main input handler to preserve block_input behavior
+- feat(a11y): add comprehensive accessibility support to UI components
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.4.0...tessera-ui-basic-components-v2.5.0)
+
 ## [v2.4.0] - 2025-11-09 +08:00
 
 ### Changes
