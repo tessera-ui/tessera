@@ -1,3 +1,17 @@
+## [v2.4.0] - 2025-11-15 +08:00
+
+### Changes
+
+- perf(core): use smallvec for hot buffers
+- fix: remove wrong test
+- fix(compute): fix scheduling bug in compute pipeline
+- perf(renderer): add separate sampling/collision padding for barrier batching
+- refactor: clean up incomplete documentation comments
+- fix(accessibility): keep AccessKit tree in sync
+- feat(accessibility): integrate AccessKit for screen reader support
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.3.0...tessera-ui-v2.4.0)
+
 ## [v2.3.0] - 2025-11-08 +08:00
 
 ### Changes

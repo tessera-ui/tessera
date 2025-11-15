@@ -3876,7 +3876,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-ui"
-version = "2.3.0"
+version = "2.4.0"
 dependencies = [
  "accesskit",
  "accesskit_winit",
