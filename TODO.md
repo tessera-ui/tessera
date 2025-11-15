@@ -1,7 +1,7 @@
 # TODO List
 
 - [ ] Better IME support on Android
-- [ ] Performance improvement
+- [x] Performance improvement
 - [ ] New components:
   - [x] image_vector
   - [x] icon
