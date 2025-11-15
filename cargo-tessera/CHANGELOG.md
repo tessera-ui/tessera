@@ -1,3 +1,13 @@
+## [v0.4.0] - 2025-11-15 +08:00
+
+### Changes
+
+- feat(dev): add release mode option to development server command
+- chore(deps): bump indicatif from 0.18.2 to 0.18.3
+- feat(accessibility): integrate AccessKit for screen reader support
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/cargo-tessera-v0.3.0...cargo-tessera-v0.4.0)
+
 ## [v0.3.0] - 2025-11-09 +08:00
 
 ### Changes
