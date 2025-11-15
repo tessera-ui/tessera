@@ -1,3 +1,12 @@
+## [v2.5.1] - 2025-11-15 +08:00
+
+### Changes
+
+- Merge pull request #80 from tessera-ui/dependabot/cargo/lyon_geom-1.0.18
+- chore(deps): bump lyon_geom from 1.0.17 to 1.0.18
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.5.0...tessera-ui-basic-components-v2.5.1)
+
 ## [v2.5.0] - 2025-11-15 +08:00
 
 ### Changes
