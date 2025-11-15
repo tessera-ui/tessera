@@ -1,3 +1,11 @@
+## [v0.4.4] - 2025-11-15 +08:00
+
+### Changes
+
+- chore(deps): bump syn from 2.0.108 to 2.0.110
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.4.3...tessera-ui-macros-v0.4.4)
+
 ## [v0.4.3] - 2025-11-08 +08:00
 
 ### Changes
