@@ -1,3 +1,11 @@
+## [v0.4.1] - 2025-11-15 +08:00
+
+### Changes
+
+- fix(cargo-tessera): Add suffix to template's main.rs to avoid incorrect formatting
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/cargo-tessera-v0.4.0...cargo-tessera-v0.4.1)
+
 ## [v0.4.0] - 2025-11-15 +08:00
 
 ### Changes
