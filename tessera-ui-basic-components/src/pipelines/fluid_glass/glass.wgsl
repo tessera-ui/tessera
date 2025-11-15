@@ -35,6 +35,13 @@ struct GlassInstances {
     instances: array<GlassUniforms>,
 };
 
+struct RefractionResult {
+    color: vec4<f32>,
+    sample_uv: vec2<f32>,
+    refracted_vector: vec2<f32>,
+    px_to_uv_ratio: vec2<f32>,
+}
+
 @group(0) @binding(0) var<storage, read> uniforms: GlassInstances;
 @group(0) @binding(1) var t_diffuse: texture_2d<f32>;
 @group(0) @binding(2) var s_diffuse: sampler;
@@ -233,22 +240,32 @@ fn rand(co: vec2<f32>) -> f32 {
     return fract(sin(dot(co.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }
 
-fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<f32>, k: f32) -> vec4<f32> {
-    let half_size = size * 0.5;
-    let centered_coord = local_coord - half_size;
+fn sample_with_offset(
+    base_uv: vec2<f32>,
+    offset_uv: vec2<f32>,
+    min_uv: vec2<f32>,
+    max_uv: vec2<f32>
+) -> vec4<f32> {
+    let uv = clamp(base_uv + offset_uv, min_uv, max_uv);
+    return textureSample(t_diffuse, s_diffuse, uv);
+}
 
-    // Prepare UV mapping and clip bounds
+fn refraction_sample_with_eval(
+    instance: GlassUniforms,
+    local_coord: vec2<f32>,
+    centered_coord: vec2<f32>,
+    half_size: vec2<f32>,
+    k: f32,
+    shape_eval: vec3<f32>
+) -> RefractionResult {
     let rect_uv_start = instance.rect_uv_bounds.xy;
     let px_to_uv_ratio = (instance.rect_uv_bounds.zw - rect_uv_start) / instance.rect_size_px;
-    let base_uv = rect_uv_start + local_coord * px_to_uv_ratio;
-
     let min_uv = instance.clip_rect_uv.xy;
     let max_uv = instance.clip_rect_uv.zw;
+    let base_uv = rect_uv_start + local_coord * px_to_uv_ratio;
 
-    let shape_eval = evaluate_shape(instance, centered_coord, half_size, k);
     let sd = shape_eval.x;
 
-    // Compute refracted coord with edge fade near clip rect to reduce stretching
     var refracted_coord = local_coord;
     if sd < 0.0 && -sd < instance.refraction_height {
         let normal = shape_eval.yz;
@@ -256,86 +273,144 @@ fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<
         let refracted_distance = circle_map(1.0 - (-sd / instance.refraction_height)) * -instance.refraction_amount;
         let refracted_direction = normalize(normal + instance.eccentric_factor * normalize(centered_coord));
 
-        // Attenuate only when the refracted sample would exceed clip rect
         let uv_offset_dir = refracted_direction * px_to_uv_ratio;
         let uv_offset = uv_offset_dir * refracted_distance;
 
         let to_max = max_uv - base_uv;
         let to_min = base_uv - min_uv;
-        // choose distance towards the edge in the offset direction per-axis
         let avail = select(to_min, to_max, uv_offset >= vec2<f32>(0.0, 0.0));
 
         let overflow_vec = max(abs(uv_offset) - avail, vec2<f32>(0.0, 0.0));
         let overflow = max(overflow_vec.x, overflow_vec.y);
 
-        // soften over ~2 px in UV space
         let softness_uv = max(1e-6, 2.0 * max(px_to_uv_ratio.x, px_to_uv_ratio.y));
         let fade = clamp(1.0 - overflow / softness_uv, 0.0, 1.0);
 
         refracted_coord = local_coord + (refracted_distance * fade) * refracted_direction;
     }
 
-    // Final sample UV with clamp to the clip rect
     var sample_uv = rect_uv_start + refracted_coord * px_to_uv_ratio;
     sample_uv = clamp(sample_uv, min_uv, max_uv);
-    return textureSample(t_diffuse, s_diffuse, sample_uv);
+    let color = textureSample(t_diffuse, s_diffuse, sample_uv);
+
+    return RefractionResult(
+        color,
+        sample_uv,
+        refracted_coord - local_coord,
+        px_to_uv_ratio
+    );
 }
 
-fn dispersion_color_on_refracted(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<f32>, k: f32) -> vec4<f32> {
+fn refraction_color_with_eval(
+    instance: GlassUniforms,
+    local_coord: vec2<f32>,
+    centered_coord: vec2<f32>,
+    half_size: vec2<f32>,
+    k: f32,
+    shape_eval: vec3<f32>
+) -> vec4<f32> {
+    let result = refraction_sample_with_eval(
+        instance,
+        local_coord,
+        centered_coord,
+        half_size,
+        k,
+        shape_eval
+    );
+    return result.color;
+}
+
+fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<f32>, k: f32) -> vec4<f32> {
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
-
     let shape_eval = evaluate_shape(instance, centered_coord, half_size, k);
-    let sd = shape_eval.x;
+    let result = refraction_sample_with_eval(
+        instance,
+        local_coord,
+        centered_coord,
+        half_size,
+        k,
+        shape_eval
+    );
+    return result.color;
+}
 
-    let base_refracted = refraction_color(instance, local_coord, size, k);
+fn dispersion_color_on_refracted(
+    instance: GlassUniforms,
+    local_coord: vec2<f32>,
+    size: vec2<f32>,
+    k: f32,
+    base_shape_eval: vec3<f32>
+) -> vec4<f32> {
+    let half_size = size * 0.5;
+    let centered_coord = local_coord - half_size;
+    let sd = base_shape_eval.x;
+
+    let base_result = refraction_sample_with_eval(
+        instance,
+        local_coord,
+        centered_coord,
+        half_size,
+        k,
+        base_shape_eval
+    );
+    let base_refracted = base_result.color;
 
     if sd < 0.0 && -sd < instance.dispersion_height && instance.dispersion_height > 0.0 {
-        let normal = shape_eval.yz;
-        let tangent = normal_to_tangent(normal);
-
-        let dispersion_fraction = 1.0 - (-sd / instance.dispersion_height);
-        let dispersion_width = instance.dispersion_height * 2.0 * pow(circle_map(dispersion_fraction), 2.0);
-
-        if dispersion_width < 2.0 {
+        let chromatic_aberration = max(instance.chroma_multiplier - 1.0, 0.0);
+        if chromatic_aberration <= 0.0 {
             return base_refracted;
         }
 
-        let sample_count = 12;
-        var red_color = 0.0;
-        var green_color = 0.0;
-        var blue_color = 0.0;
-        var red_weight = 0.0;
-        var green_weight = 0.0;
-        var blue_weight = 0.0;
-
-        for (var i = 0; i < sample_count; i = i + 1) {
-            let t = f32(i) / f32(sample_count - 1);
-            let sample_coord = local_coord + tangent * (t - 0.5) * dispersion_width;
-            let refracted_c = refraction_color(instance, sample_coord, size, k);
-
-            if t >= 0.0 && t <= 0.5 {
-                blue_color += refracted_c.b;
-                blue_weight += 1.0;
-            }
-            if t >= 0.25 && t <= 0.75 {
-                green_color += refracted_c.g;
-                green_weight += 1.0;
-            }
-            if t >= 0.5 && t <= 1.0 {
-                red_color += refracted_c.r;
-                red_weight += 1.0;
-            }
+        let normalized_area = (centered_coord.x * centered_coord.y)
+            / max(half_size.x * half_size.y, 1e-6);
+        let dispersion_intensity = chromatic_aberration * normalized_area;
+        if abs(dispersion_intensity) <= 1e-4 {
+            return base_refracted;
         }
 
-        red_color = red_color / max(red_weight, 1.0);
-        green_color = green_color / max(green_weight, 1.0);
-        blue_color = blue_color / max(blue_weight, 1.0);
+        let min_uv = instance.clip_rect_uv.xy;
+        let max_uv = instance.clip_rect_uv.zw;
+        let dispersion_uv = base_result.refracted_vector * base_result.px_to_uv_ratio * dispersion_intensity;
 
-        return vec4<f32>(red_color, green_color, blue_color, base_refracted.a);
-    } else {
-        return base_refracted;
+        var color = vec4<f32>(0.0);
+
+        let red = sample_with_offset(base_result.sample_uv, dispersion_uv, min_uv, max_uv);
+        color.r += red.r / 3.5;
+        color.a += red.a / 7.0;
+
+        let orange = sample_with_offset(base_result.sample_uv, dispersion_uv * (2.0 / 3.0), min_uv, max_uv);
+        color.r += orange.r / 3.5;
+        color.g += orange.g / 7.0;
+        color.a += orange.a / 7.0;
+
+        let yellow = sample_with_offset(base_result.sample_uv, dispersion_uv * (1.0 / 3.0), min_uv, max_uv);
+        color.r += yellow.r / 3.5;
+        color.g += yellow.g / 3.5;
+        color.a += yellow.a / 7.0;
+
+        let green = sample_with_offset(base_result.sample_uv, vec2<f32>(0.0), min_uv, max_uv);
+        color.g += green.g / 3.5;
+        color.a += green.a / 7.0;
+
+        let cyan = sample_with_offset(base_result.sample_uv, -dispersion_uv * (1.0 / 3.0), min_uv, max_uv);
+        color.g += cyan.g / 3.5;
+        color.b += cyan.b / 3.0;
+        color.a += cyan.a / 7.0;
+
+        let blue = sample_with_offset(base_result.sample_uv, -dispersion_uv * (2.0 / 3.0), min_uv, max_uv);
+        color.b += blue.b / 3.0;
+        color.a += blue.a / 7.0;
+
+        let purple = sample_with_offset(base_result.sample_uv, -dispersion_uv, min_uv, max_uv);
+        color.r += purple.r / 7.0;
+        color.b += purple.b / 3.0;
+        color.a += purple.a / 7.0;
+
+        return color;
     }
+
+    return base_refracted;
 }
 
 fn blend_overlay(base: vec3<f32>, blend: vec3<f32>) -> vec3<f32> {
@@ -359,13 +434,21 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     var base_color: vec4<f32>;
     if instance.dispersion_height > 0.0 {
-        base_color = dispersion_color_on_refracted(instance, local_coord, instance.rect_size_px, k);
-    } else {
-        base_color = refraction_color(
+        base_color = dispersion_color_on_refracted(
             instance,
             local_coord,
             instance.rect_size_px,
-            k
+            k,
+            shape_eval
+        );
+    } else {
+        base_color = refraction_color_with_eval(
+            instance,
+            local_coord,
+            centered_coord,
+            half_size,
+            k,
+            shape_eval
         );
     }
 
