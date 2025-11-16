@@ -116,6 +116,31 @@ impl ScrollableState {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Returns the current child position relative to the scrollable container.
+    ///
+    /// This is primarily useful for components that need to implement custom
+    /// virtualization strategies (e.g. lazy lists) and must know the current
+    /// scroll offset. Values are clamped by the scroll logic, so consumers
+    /// can safely derive their offset from the returned position.
+    pub fn child_position(&self) -> PxPosition {
+        self.inner.read().child_position
+    }
+
+    /// Returns the currently visible viewport size of the scrollable container.
+    pub fn visible_size(&self) -> ComputedData {
+        self.inner.read().visible_size
+    }
+
+    /// Returns the measured size of the scrollable content.
+    pub fn child_size(&self) -> ComputedData {
+        self.inner.read().child_size
+    }
+
+    /// Overrides the child size used for scroll extent calculation.
+    pub fn override_child_size(&self, size: ComputedData) {
+        self.inner.write().override_child_size = Some(size);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -128,6 +153,8 @@ struct ScrollableStateInner {
     child_size: ComputedData,
     /// The visible area size
     visible_size: ComputedData,
+    /// Optional override for the child size used to clamp scroll extents.
+    override_child_size: Option<ComputedData>,
     /// Last frame time for delta time calculation
     last_frame_time: Option<Instant>,
 }
@@ -146,6 +173,7 @@ impl ScrollableStateInner {
             target_position: PxPosition::ZERO,
             child_size: ComputedData::ZERO,
             visible_size: ComputedData::ZERO,
+            override_child_size: None,
             last_frame_time: None,
         }
     }
@@ -549,12 +577,16 @@ fn scrollable_inner(
             // Measure the child with child constraint
             let child_node_id = input.children_ids[0]; // Scrollable should have exactly one child
             let child_measurement = input.measure_child(child_node_id, &child_constraint)?;
-            // Update the child position and size in the state
-            state.write().child_size = child_measurement;
-
-            // Update scroll position based on time and get current position for rendering
+            // Update the child position and size in the state. Allow components to override
+            // the scroll extent (used by virtualized lists) while maintaining the actual
+            // measured viewport size for layout.
             let current_child_position = {
                 let mut state_guard = state.write();
+                if let Some(override_size) = state_guard.override_child_size.take() {
+                    state_guard.child_size = override_size;
+                } else {
+                    state_guard.child_size = child_measurement;
+                }
                 state_guard.update_scroll_position(args.scroll_smoothing);
                 state_guard.child_position
             };
@@ -563,8 +595,15 @@ fn scrollable_inner(
             input.place_child(child_node_id, current_child_position);
 
             // Calculate the size of the scrollable area using helpers to reduce inline branching
-            let width = resolve_dimension(merged_constraint.width, child_measurement.width);
-            let height = resolve_dimension(merged_constraint.height, child_measurement.height);
+            let mut width = resolve_dimension(merged_constraint.width, child_measurement.width);
+            let mut height = resolve_dimension(merged_constraint.height, child_measurement.height);
+
+            if let Some(parent_max_width) = input.parent_constraint.width.get_max() {
+                width = width.min(parent_max_width);
+            }
+            if let Some(parent_max_height) = input.parent_constraint.height.get_max() {
+                height = height.min(parent_max_height);
+            }
 
             // Pack the size into ComputedData
             let computed_data = ComputedData { width, height };

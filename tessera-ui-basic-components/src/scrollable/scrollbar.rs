@@ -285,10 +285,15 @@ fn compute_thumb_progress(offset: Px, total: Px) -> f32 {
 /// zero or non-positive, fall back to using `visible` to avoid division by zero.
 fn compute_thumb_size(visible: Px, total: Px) -> Px {
     if total <= Px::ZERO {
-        visible
-    } else {
-        visible * visible / total
+        return visible.max(Px::ZERO);
     }
+    let visible_len = visible.to_f32().abs();
+    let total_len = total.to_f32().abs().max(1.0);
+    let thumb = (visible_len * visible_len) / total_len;
+
+    // Clamp the thumb size to ensure it's always visible and provides a reasonable drag target.
+    let min_thumb = (visible_len * 0.05).clamp(8.0, 32.0);
+    Px::saturating_from_f32(thumb.max(min_thumb))
 }
 
 /// Helper to check whether a cursor position overlaps the vertical thumb.
@@ -589,15 +594,14 @@ fn handle_state_h(
         // Update hover state (re-use helper).
         update_hover_state(is_on_thumb, state);
 
+        if !is_pressed_left(input) {
+            return;
+        }
+
         if is_on_thumb {
             // Start dragging
             state.write().is_dragging = true;
             return;
-        }
-
-        // Check for left mouse button press
-        if !is_pressed_left(input) {
-            return; // No press, do nothing
         }
 
         // Check if the press is on the track

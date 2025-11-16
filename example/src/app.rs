@@ -19,12 +19,12 @@ use tessera_ui_basic_components::{
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgs, column},
     dialog::{DialogProviderArgsBuilder, DialogProviderState, DialogStyle, dialog_provider},
+    lazy_list::{LazyColumnArgsBuilder, LazyListState, lazy_column},
     pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
     side_bar::{SideBarProviderArgsBuilder, SideBarProviderState, SideBarStyle, side_bar_provider},
-    spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -39,6 +39,7 @@ use crate::example_components::{
     glass_switch::GlassSwitchShowcaseDestination,
     image::{IconShowcaseDestination, ImageShowcaseDestination},
     layouts::LayoutsShowcaseDestination,
+    lazy_lists::LazyListsShowcaseDestination,
     progress::ProgressShowcaseDestination,
     slider::SliderShowcaseDestination,
     spacer::SpacerShowcaseDestination,
@@ -182,7 +183,7 @@ Side bars are bars at side, side at bars, bars side at, at side bars..."#,
 
 #[derive(Default)]
 struct HomeState {
-    scrollable_state: Arc<ScrollableState>,
+    lazy_list_state: Arc<LazyListState>,
     example_cards_ripple_state: DashMap<usize, Arc<RippleState>>,
 }
 
@@ -211,7 +212,7 @@ fn home(
     side_bar_state: Arc<RwLock<SideBarProviderState>>,
     dialog_state: Arc<RwLock<DialogProviderState>>,
 ) {
-    let examples = vec![
+    let examples = Arc::new(vec![
         ComponentExampleDesc::new(
             "Text Editor",
             "A basic component for multiline text input.",
@@ -352,6 +353,15 @@ fn home(
             },
         ),
         ComponentExampleDesc::new(
+            "Lazy Lists",
+            "Virtualized row/column components that only instantiate visible items.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(LazyListsShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
             "Text",
             "Basic text component, support colorful emoji",
             || {
@@ -383,7 +393,7 @@ fn home(
                 side_bar_state.write().open();
             },
         ),
-    ];
+    ]);
 
     surface(
         SurfaceArgsBuilder::default()
@@ -393,60 +403,40 @@ fn home(
             .build()
             .unwrap(),
         None,
-        {
-            let scrollable_state = home_state.scrollable_state.clone();
-            let home_state = home_state.clone();
-            move || {
-                scrollable(
-                    ScrollableArgsBuilder::default()
-                        .width(DimensionValue::FILLED)
-                        .build()
-                        .unwrap(),
-                    scrollable_state,
-                    move || {
-                        surface(
-                            SurfaceArgsBuilder::default()
-                                .width(DimensionValue::FILLED)
-                                .style(Color::WHITE.into())
-                                .padding(Dp(16.0))
-                                .build()
-                                .unwrap(),
-                            None,
-                            move || {
-                                column(ColumnArgs::default(), move |scope| {
-                                    let len = examples.len();
-                                    for (index, example) in examples.into_iter().enumerate() {
-                                        let on_click = example.on_click.clone();
-                                        let surface_ripple_state = home_state
-                                            .example_cards_ripple_state
-                                            .entry(index)
-                                            .or_insert_with(|| Arc::new(RippleState::default()))
-                                            .clone();
-                                        let title = example.title.clone();
-                                        let description = example.desription.clone();
-                                        scope.child(move || {
-                                            component_card(
-                                                &title,
-                                                &description,
-                                                surface_ripple_state,
-                                                on_click,
-                                            );
-                                        });
-                                        if index != len - 1 {
-                                            scope.child(|| {
-                                                spacer(SpacerArgs {
-                                                    height: DimensionValue::Fixed(Dp(16.0).into()),
-                                                    ..Default::default()
-                                                })
-                                            });
-                                        }
-                                    }
-                                });
-                            },
-                        );
-                    },
-                );
-            }
+        move || {
+            let state_clone = home_state.clone();
+            let examples_clone = examples.clone();
+
+            lazy_column(
+                LazyColumnArgsBuilder::default()
+                    .scrollable(
+                        ScrollableArgsBuilder::default()
+                            .width(DimensionValue::FILLED)
+                            .build()
+                            .unwrap(),
+                    )
+                    .item_spacing(Dp(16.0))
+                    .content_padding(Dp(8.0))
+                    .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                    .estimated_item_size(Dp(140.0))
+                    .content_padding(Dp(16.0))
+                    .build()
+                    .unwrap(),
+                home_state.lazy_list_state.clone(),
+                move |scope| {
+                    let ripple_map = state_clone.example_cards_ripple_state.clone();
+                    scope.items_from_iter(examples_clone.iter().cloned(), move |index, example| {
+                        let on_click = example.on_click.clone();
+                        let surface_ripple_state = ripple_map
+                            .entry(index)
+                            .or_insert_with(|| Arc::new(RippleState::default()))
+                            .clone();
+                        let title = example.title.clone();
+                        let description = example.desription.clone();
+                        component_card(&title, &description, surface_ripple_state, on_click);
+                    });
+                },
+            );
         },
     );
 }
