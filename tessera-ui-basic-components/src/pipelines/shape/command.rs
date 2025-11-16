@@ -1,7 +1,7 @@
 use glam::{Vec2, Vec4};
 use tessera_ui::{Color, DrawCommand, PxPosition, PxSize};
 
-use super::ShapeUniforms;
+use super::pipeline::ShapeUniforms;
 
 /// Represents a shape drawable
 #[derive(Debug, Clone, PartialEq)]

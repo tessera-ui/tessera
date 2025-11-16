@@ -1,6 +1,6 @@
 use tessera_ui::DrawCommand;
 
-use super::TextData;
+use super::pipeline::TextData;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextCommand {
