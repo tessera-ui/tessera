@@ -1,3 +1,13 @@
+## [v2.6.0] - 2025-11-17 +08:00
+
+### Changes
+
+- feat(tessera-ui-basic-components): Refactor docs and unify state management
+- feat: add lazy lists and integrate example
+- refactor: organize basic component pipelines
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.5.1...tessera-ui-basic-components-v2.6.0)
+
 ## [v2.5.1] - 2025-11-15 +08:00
 
 ### Changes
