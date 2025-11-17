@@ -1,3 +1,11 @@
+## [v0.4.2] - 2025-11-17 +08:00
+
+### Changes
+
+- fix(tessera-ui-shard): Correct router documentation
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-shard-v0.4.1...tessera-ui-shard-v0.4.2)
+
 ## [v0.4.1] - 2025-11-03 +08:00
 
 ### Changes
