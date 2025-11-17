@@ -1,3 +1,10 @@
+## [v2.4.1] - 2025-11-17 +08:00
+
+### Changes
+
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.4.0...tessera-ui-v2.4.1)
+
 ## [v2.4.0] - 2025-11-15 +08:00
 
 ### Changes
