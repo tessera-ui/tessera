@@ -26,7 +26,7 @@
 //!
 //! **Key concepts to understand:**
 //! - How to set up a [`Renderer`] and run your application
-//! - Using `tessera_basic_components` for common UI elements
+//! - Using [`tessera-ui-basic-components`](https://docs.rs/tessera-ui-basic-components/latest/tessera_ui_basic_components/) for common UI elements
 //! - Basic layout with `row`, `column`, and `surface` components
 //!
 //! ### 🟡 **Intermediate Users** - Custom Layout and Interaction
