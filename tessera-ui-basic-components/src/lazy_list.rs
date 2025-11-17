@@ -315,28 +315,10 @@ fn lazy_list_view(view_args: LazyListViewArgs, state: Arc<LazyListState>, slots:
         .axis
         .scroll_offset(state.scrollable_state().child_position());
     let padding_main = view_args.padding_main;
-    // The viewport span we use to decide which children to instantiate.
-    // Normally this comes from the current visible size of the scrollable
-    // container (from `ScrollableState`). However, during resize the
-    // `ScrollableState::visible_size()` can be stale for the ongoing
-    // measurement pass, which causes lazy lists to instantiate too few
-    // children and then not expand again when the viewport grows.
-    //
-    // To make the initial greedy build more resilient we choose the
-    // larger of (a) the current visible size and (b) a conservative
-    // estimate based on the estimated item size and the default
-    // viewport item count. This ensures that when the viewport grows we
-    // usually already have enough children mounted to recompute and grow
-    // back to the new viewport.
-    let current_visible = view_args
-        .axis
-        .visible_span(state.scrollable_state().visible_size());
-    let estimated_span = px_mul(
-        view_args.estimated_item_main + view_args.item_spacing,
-        DEFAULT_VIEWPORT_ITEMS * 2,
-    );
     let viewport_span = resolve_viewport_span(
-        current_visible.max(estimated_span),
+        view_args
+            .axis
+            .visible_span(state.scrollable_state().visible_size()),
         view_args.estimated_item_main,
         view_args.item_spacing,
     );
