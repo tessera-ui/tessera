@@ -22,7 +22,7 @@ tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
 parking_lot = { version = "0.12.5", features = ["deadlock_detection"] }
 wgpu = "27.0.1"
 bytemuck = { version = "1.24.0", features = ["derive"] }
-image = "0.25.8"
+image = "0.25.9"
 dashmap = "6.1.0"
 
 [target.'cfg(target_os = "android")'.dependencies]
