@@ -411,6 +411,7 @@ fn home(
                     .scrollable(
                         ScrollableArgsBuilder::default()
                             .width(DimensionValue::FILLED)
+                            .height(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
                     )
