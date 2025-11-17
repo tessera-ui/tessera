@@ -1,12 +1,8 @@
-//! This module provides a customizable linear progress bar component for visualizing task completion.
+//! A linear progress bar component.
 //!
-//! The `progress` component displays a horizontal bar with configurable width, height, colors, and shape,
-//! where the filled portion represents the current progress value (from 0.0 to 1.0).
-//! It is suitable for indicating the status of ongoing operations such as loading, uploading, or processing tasks
-//! in user interfaces.
+//! ## Usage
 //!
-//! Typical usage involves specifying the progress value and optional appearance parameters.
-//! The component is designed for integration into Tessera UI applications.
+//! Use to indicate the completion of a task or a specific value in a range.
 use derive_builder::Builder;
 use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, tessera};
 
@@ -40,22 +36,23 @@ pub struct ProgressArgs {
     pub track_color: Color,
 }
 
-#[tessera]
-/// Draws a linear progress indicator that visualizes the completion of a task.
+/// # progress
 ///
-/// The `progress` component consists of a track and a fill, where the fill
-/// represents the current progress value.
+/// Renders a linear progress indicator that visualizes a value from 0.0 to 1.0.
 ///
-/// # Arguments
+/// ## Usage
 ///
-/// * `value`: A float between `0.0` and `1.0` representing the current progress.
-///   Values outside this range will be clamped.
+/// Display the status of an ongoing operation, such as a download or a setup process.
 ///
-/// # Example
+/// ## Parameters
+///
+/// - `args` — configures the progress bar's value and appearance; see [`ProgressArgs`].
+///
+/// ## Examples
 ///
 /// ```
-/// # use tessera_ui_basic_components::progress::{progress, ProgressArgsBuilder};
-/// #
+/// use tessera_ui_basic_components::progress::{progress, ProgressArgsBuilder};
+///
 /// // Creates a progress bar that is 75% complete.
 /// progress(
 ///     ProgressArgsBuilder::default()
@@ -64,6 +61,7 @@ pub struct ProgressArgs {
 ///         .unwrap(),
 /// );
 /// ```
+#[tessera]
 pub fn progress(args: impl Into<ProgressArgs>) {
     let args: ProgressArgs = args.into();
     let radius_dp = Dp(args.height.0 / 2.0);

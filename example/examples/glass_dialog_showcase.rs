@@ -16,15 +16,17 @@ use tessera_ui_basic_components::{
 
 #[derive(Default)]
 struct AppState {
-    dialog_state: Arc<RwLock<DialogProviderState>>,
-    button_ripple: Arc<RippleState>,
-    close_button_ripple: Arc<RippleState>,
+    dialog_state: DialogProviderState,
+    button_ripple: RippleState,
+    close_button_ripple: RippleState,
 }
 
 #[tessera]
 fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
-    let state = app_state.clone();
-    let button_ripple = state.read().button_ripple.clone();
+    let (button_ripple, dialog_state) = {
+        let state = app_state.read();
+        (state.button_ripple.clone(), state.dialog_state.clone())
+    };
     row(
         RowArgsBuilder::default()
             .main_axis_alignment(MainAxisAlignment::Center)
@@ -40,12 +42,15 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
             .build()
             .unwrap(),
         |scope| {
-            scope.child(|| {
+            scope.child(move || {
                 glass_button(
                     GlassButtonArgsBuilder::default()
-                        .on_click(Arc::new(move || {
-                            state.write().dialog_state.write().open();
-                        }))
+                        .on_click({
+                            let dialog_state = dialog_state.clone();
+                            Arc::new(move || {
+                                dialog_state.open();
+                            })
+                        })
                         .tint_color(Color::WHITE.with_alpha(0.3))
                         .build()
                         .unwrap(),
@@ -66,10 +71,13 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
 
 #[tessera]
 fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
-    let state = app_state.clone();
-    let close_button_ripple = state.read().close_button_ripple.clone();
-
-    let close_state_for_button = state.clone();
+    let (close_button_ripple, dialog_state) = {
+        let state = app_state.read();
+        (
+            state.close_button_ripple.clone(),
+            state.dialog_state.clone(),
+        )
+    };
     let close_ripple_for_button = close_button_ripple.clone();
     column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
         scope.child(move || {
@@ -96,9 +104,10 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
             glass_button(
                 GlassButtonArgsBuilder::default()
                     .tint_color(Color::RED.with_alpha(content_alpha / 2.5))
-                    .on_click(Arc::new(move || {
-                        close_state_for_button.write().dialog_state.write().close();
-                    }))
+                    .on_click({
+                        let dialog_state = dialog_state.clone();
+                        Arc::new(move || dialog_state.close())
+                    })
                     .refraction_amount(32.0 * content_alpha)
                     .build()
                     .unwrap(),
@@ -122,8 +131,8 @@ fn dialog_provider_wrapper(
     app_state: Arc<RwLock<AppState>>,
     image_resource: &tessera_ui_basic_components::pipelines::image::ImageData,
 ) {
-    let state_for_provider = app_state.clone();
     let image_resource = image_resource.clone();
+    let dialog_state = app_state.read().dialog_state.clone();
     boxed(
         tessera_ui_basic_components::boxed::BoxedArgs {
             alignment: tessera_ui_basic_components::alignment::Alignment::Center,
@@ -148,13 +157,14 @@ fn dialog_provider_wrapper(
             scope.child(move || {
                 dialog_provider(
                     DialogProviderArgsBuilder::default()
-                        .on_close_request(Arc::new(move || {
-                            state_for_provider.write().dialog_state.write().close();
-                        }))
+                        .on_close_request({
+                            let dialog_state = dialog_state.clone();
+                            Arc::new(move || dialog_state.close())
+                        })
                         .style(DialogStyle::Glass)
                         .build()
                         .unwrap(),
-                    app_state.read().dialog_state.clone(),
+                    dialog_state.clone(),
                     {
                         let state = app_state.clone();
                         move || dialog_main_content(state.clone())

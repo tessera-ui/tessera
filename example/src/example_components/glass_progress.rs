@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
@@ -14,9 +13,9 @@ use tessera_ui_basic_components::{
 
 #[derive(Clone)]
 struct GlassProgressShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
+    scrollable_state: ScrollableState,
     progress: Arc<Mutex<f32>>,
-    slider_state: Arc<RwLock<SliderState>>,
+    slider_state: SliderState,
 }
 
 impl Default for GlassProgressShowcaseState {
@@ -24,7 +23,7 @@ impl Default for GlassProgressShowcaseState {
         Self {
             scrollable_state: Default::default(),
             progress: Arc::new(Mutex::new(0.5)),
-            slider_state: Default::default(),
+            slider_state: SliderState::new(),
         }
     }
 }

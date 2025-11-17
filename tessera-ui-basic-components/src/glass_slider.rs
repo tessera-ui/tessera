@@ -1,20 +1,12 @@
-//! Provides a glassmorphism-style slider component for selecting a value in modern UI applications.
+//! A slider component with a glassmorphic visual style.
 //!
-//! The `glass_slider` module implements a customizable, frosted glass effect slider with support for
-//! blurred backgrounds, tint colors, borders, and interactive state management. It enables users to
-//! select a continuous value between 0.0 and 1.0 by dragging a thumb along a track, and is suitable
-//! for dashboards, settings panels, or any interface requiring visually appealing value selection.
+//! ## Usage
 //!
-//! Typical usage involves integrating the slider into a component tree, passing state via `Arc<RwLock<GlassSliderState>>`,
-//! and customizing appearance through `GlassSliderArgs`. The component is designed to fit seamlessly into
-//! glassmorphism-themed user interfaces.
-//!
-//! See the module-level documentation and examples for details.
-
+//! Use to select a value from a continuous range.
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
     accesskit::{Action, Role},
@@ -31,25 +23,77 @@ use crate::{
 const ACCESSIBILITY_STEP: f32 = 0.05;
 
 /// State for the `glass_slider` component.
-pub struct GlassSliderState {
+pub(crate) struct GlassSliderStateInner {
     /// True if the user is currently dragging the slider.
     pub is_dragging: bool,
     /// The focus handler for the slider.
     pub focus: Focus,
 }
 
-impl Default for GlassSliderState {
+impl Default for GlassSliderStateInner {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl GlassSliderState {
+impl GlassSliderStateInner {
     pub fn new() -> Self {
         Self {
             is_dragging: false,
             focus: Focus::new(),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct GlassSliderState {
+    inner: Arc<RwLock<GlassSliderStateInner>>,
+}
+
+impl GlassSliderState {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(GlassSliderStateInner::new())),
+        }
+    }
+
+    pub(crate) fn read(&self) -> RwLockReadGuard<'_, GlassSliderStateInner> {
+        self.inner.read()
+    }
+
+    pub(crate) fn write(&self) -> RwLockWriteGuard<'_, GlassSliderStateInner> {
+        self.inner.write()
+    }
+
+    /// Returns whether the slider thumb is currently being dragged.
+    pub fn is_dragging(&self) -> bool {
+        self.inner.read().is_dragging
+    }
+
+    /// Sets the dragging state manually. This allows custom gesture handling.
+    pub fn set_dragging(&self, dragging: bool) {
+        self.inner.write().is_dragging = dragging;
+    }
+
+    /// Requests focus for this slider instance.
+    pub fn request_focus(&self) {
+        self.inner.write().focus.request_focus();
+    }
+
+    /// Clears focus from this slider.
+    pub fn clear_focus(&self) {
+        self.inner.write().focus.unfocus();
+    }
+
+    /// Returns `true` if the slider currently has focus.
+    pub fn is_focused(&self) -> bool {
+        self.inner.read().focus.is_focused()
+    }
+}
+
+impl Default for GlassSliderState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -131,7 +175,7 @@ fn compute_progress_width(total_width: Px, value: f32, border_padding_px: f32) -
 /// Process cursor events and update the slider state accordingly.
 /// Returns the new value (0.0..1.0) if a change should be emitted.
 fn process_cursor_events(
-    state: &mut GlassSliderState,
+    state: &GlassSliderState,
     input: &tessera_ui::InputHandlerInput,
     width_f: f32,
 ) -> Option<f32> {
@@ -140,20 +184,23 @@ fn process_cursor_events(
     for event in input.cursor_events.iter() {
         match &event.content {
             CursorEventContent::Pressed(_) => {
-                state.focus.request_focus();
-                state.is_dragging = true;
+                {
+                    let mut inner = state.write();
+                    inner.focus.request_focus();
+                    inner.is_dragging = true;
+                }
                 if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
                     new_value = Some(v);
                 }
             }
             CursorEventContent::Released(_) => {
-                state.is_dragging = false;
+                state.write().is_dragging = false;
             }
             _ => {}
         }
     }
 
-    if state.is_dragging
+    if state.read().is_dragging
         && let Some(v) = cursor_progress(input.cursor_position_rel, width_f)
     {
         new_value = Some(v);
@@ -162,51 +209,53 @@ fn process_cursor_events(
     new_value
 }
 
-/// Creates a slider component with a frosted glass effect.
+/// # glass_slider
 ///
-/// The `glass_slider` allows users to select a value from a continuous range (0.0 to 1.0)
-/// by dragging a handle along a track. It features a modern, semi-transparent
-/// "glassmorphism" aesthetic, with a blurred background and subtle highlights.
+/// Renders an interactive slider with a customizable glass effect.
 ///
-/// # Arguments
+/// ## Usage
 ///
-/// * `args` - An instance of `GlassSliderArgs` or `GlassSliderArgsBuilder` to configure the slider's appearance and behavior.
-///   - `value`: The current value of the slider, must be between 0.0 and 1.0.
-///   - `on_change`: A callback function that is triggered when the slider's value changes.
-///     It receives the new value as an `f32`.
-/// * `state` - An `Arc<RwLock<GlassSliderState>>` to manage the component's interactive state,
-///   such as dragging and focus.
+/// Allow users to select a value from a continuous range (0.0 to 1.0) by dragging a thumb.
 ///
-/// # Example
+/// ## Parameters
+///
+/// - `args` — configures the slider's value, appearance, and `on_change` callback; see [`GlassSliderArgs`].
+/// - `state` — a clonable [`GlassSliderState`] to manage interaction state like dragging and focus.
+///
+/// ## Examples
 ///
 /// ```
-/// use std::sync::Arc;
-/// use parking_lot::RwLock;
-/// use tessera_ui_basic_components::glass_slider::{glass_slider, GlassSliderArgsBuilder, GlassSliderState};
+/// use std::sync::{Arc, Mutex};
+/// use tessera_ui_basic_components::glass_slider::{
+///     glass_slider, GlassSliderArgsBuilder, GlassSliderState,
+/// };
 ///
-/// // In your application state
-/// let slider_value = Arc::new(RwLock::new(0.5));
-/// let slider_state = Arc::new(RwLock::new(GlassSliderState::new()));
+/// // In a real app, this would be part of your application's state.
+/// let slider_value = Arc::new(Mutex::new(0.5));
+/// let slider_state = GlassSliderState::new();
 ///
-/// // In your component function
-/// let on_change_callback = {
+/// let on_change = {
 ///     let slider_value = slider_value.clone();
 ///     Arc::new(move |new_value| {
-///         *slider_value.write() = new_value;
+///         *slider_value.lock().unwrap() = new_value;
 ///     })
 /// };
 ///
-/// glass_slider(
-///     GlassSliderArgsBuilder::default()
-///         .value(*slider_value.read())
-///         .on_change(on_change_callback)
-///         .build()
-///         .unwrap(),
-///     slider_state.clone(),
-/// );
+/// let args = GlassSliderArgsBuilder::default()
+///     .value(*slider_value.lock().unwrap())
+///     .on_change(on_change)
+///     .build()
+///     .unwrap();
+///
+/// // The component would be called in the UI like this:
+/// // glass_slider(args, slider_state);
+///
+/// // For the doctest, we can simulate the callback.
+/// (args.on_change)(0.75);
+/// assert_eq!(*slider_value.lock().unwrap(), 0.75);
 /// ```
 #[tessera]
-pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<RwLock<GlassSliderState>>) {
+pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
     let args: GlassSliderArgs = args.into();
     let border_padding_px = args.track_border_width.to_px().to_f32() * 2.0;
 
@@ -280,8 +329,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: Arc<RwLock<GlassSli
             if is_in_component || state_for_handler.read().is_dragging {
                 let width_f = input.computed_data.width.0 as f32;
 
-                if let Some(v) =
-                    process_cursor_events(&mut state_for_handler.write(), &input, width_f)
+                if let Some(v) = process_cursor_events(&state_for_handler, &input, width_f)
                     && (v - args_for_handler.value).abs() > f32::EPSILON
                 {
                     on_change(v);

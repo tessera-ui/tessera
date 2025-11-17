@@ -29,10 +29,10 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
 
 #[derive(Clone)]
 struct GlassButtonShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
+    scrollable_state: ScrollableState,
     counter: Arc<Mutex<i32>>,
-    ripple_state: Arc<RippleState>,
-    icon_ripple_state: Arc<RippleState>,
+    ripple_state: RippleState,
+    icon_ripple_state: RippleState,
     image_data: Arc<ImageData>,
     icon_data: Arc<ImageVectorData>,
 }
@@ -51,8 +51,8 @@ impl Default for GlassButtonShowcaseState {
         Self {
             scrollable_state: Default::default(),
             counter: Default::default(),
-            ripple_state: Default::default(),
-            icon_ripple_state: Default::default(),
+            ripple_state: RippleState::new(),
+            icon_ripple_state: RippleState::new(),
             image_data,
             icon_data,
         }

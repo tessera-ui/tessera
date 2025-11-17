@@ -217,7 +217,7 @@ impl TextEditorState {
     ///
     /// # Returns
     ///
-    /// The detected [`ClickType`].
+    /// The detected ClickType.
     pub fn handle_click(&mut self, position: PxPosition, timestamp: Instant) -> ClickType {
         const DOUBLE_CLICK_TIME_MS: u128 = 500; // 500ms for double click
         const CLICK_DISTANCE_THRESHOLD: Px = Px(5); // 5 pixels tolerance for position

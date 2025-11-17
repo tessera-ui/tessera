@@ -1,17 +1,8 @@
-//! Provides a flexible, customizable surface container component for UI elements.
+//! A flexible container component with styling and interaction options.
 //!
-//! This module defines the [`surface`] component and its configuration via [`SurfaceArgs`].
-//! The surface acts as a visual and interactive container, supporting background color,
-//! shape, shadow, border, padding, and optional ripple effects for user interaction.
+//! ## Usage
 //!
-//! Typical use cases include wrapping content to visually separate it from the background,
-//! providing elevation or emphasis, and enabling interactive feedback (e.g., ripple on click).
-//! It is commonly used as the foundational layer for buttons, dialogs, editors, and other
-//! interactive or visually distinct UI elements.
-//!
-//! The surface can be configured for both static and interactive scenarios, with support for
-//! hover and click callbacks, making it suitable for a wide range of UI composition needs.
-
+//! Use as a base for buttons, cards, or any styled and interactive region.
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -128,7 +119,7 @@ impl Default for SurfaceArgs {
     }
 }
 
-fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<&Arc<RippleState>>) -> RippleProps {
+fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<&RippleState>) -> RippleProps {
     if let Some(state) = ripple_state
         && let Some((progress, click_pos)) = state.get_animation_progress()
     {
@@ -340,7 +331,7 @@ fn build_shape_command(
 fn make_surface_drawable(
     args: &SurfaceArgs,
     style: &SurfaceStyle,
-    ripple_state: Option<&Arc<RippleState>>,
+    ripple_state: Option<&RippleState>,
     size: PxSize,
 ) -> ShapeCommand {
     let ripple_props = build_ripple_props(args, ripple_state);
@@ -350,7 +341,7 @@ fn make_surface_drawable(
 fn try_build_simple_rect_command(
     args: &SurfaceArgs,
     style: &SurfaceStyle,
-    ripple_state: Option<&Arc<RippleState>>,
+    ripple_state: Option<&RippleState>,
 ) -> Option<SimpleRectCommand> {
     if args.shadow.is_some() {
         return None;
@@ -429,58 +420,47 @@ fn compute_surface_size(
     (width, height)
 }
 
-/// Renders a styled rectangular (or elliptic / capsule) container and optionally
-/// provides interactive click + ripple feedback.
+/// # surface
 ///
-/// # Behavior
-/// * Child closure is executed first so that nested components are registered.
-/// * Layout (`measure`) phase:
-///   - Measures (optional) single child (if present) with padding removed from constraints
-///   - Computes final size using `width` / `height` (Wrap / Fill / Fixed) merging parent constraints
-///   - Pushes a shape draw command sized to computed width/height
-/// * Interaction (`input_handler`) phase (only when `on_click` is `Some`):
-///   - Tracks cursor containment
-///   - Sets hover state on provided `RippleState`
-///   - Starts ripple animation on mouse press
-///   - Invokes `on_click` on mouse release inside bounds
-///   - Optionally blocks further event propagation if `block_input` is true
-/// * Non‑interactive variant only blocks events if `block_input` and cursor inside.
+/// Renders a styled container for content with optional interaction.
 ///
-/// # Ripple
-/// Ripple requires a `RippleState` (pass in `Some(Arc<RippleState>)`). Without it, the surface
-/// still detects clicks but no animation is shown.
+/// ## Usage
 ///
-/// # Sizing
-/// Effective minimum size = child size + `padding * 2` in each axis (if child exists).
+/// Wrap content to provide a visual background, shape, and optional click handling with a ripple effect.
 ///
-/// # Example
+/// ## Parameters
+///
+/// - `args` — configures the surface's appearance, layout, and interaction; see [`SurfaceArgs`].
+/// - `ripple_state` — an optional, clonable [`RippleState`] to enable and manage the ripple animation on click.
+/// - `child` — a closure that renders the content inside the surface.
+///
+/// ## Examples
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui::{Dp, tessera, Color};
+/// use tessera_ui::{Dp, Color};
 /// use tessera_ui_basic_components::{
 ///     surface::{surface, SurfaceArgsBuilder},
 ///     ripple_state::RippleState,
+///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// #[tessera]
-/// fn example_box() {
-///     let ripple = Arc::new(RippleState::new());
-///     surface(
-///         SurfaceArgsBuilder::default()
-///             .padding(Dp(8.0))
-///             .on_click(Arc::new(|| println!("Surface clicked")))
-///             .build()
-///             .unwrap(),
-///         Some(ripple),
-///         || {
-///             // child content here
-///         },
-///     );
-/// }
+/// let ripple = RippleState::new();
+///
+/// surface(
+///     SurfaceArgsBuilder::default()
+///         .padding(Dp(16.0))
+///         .on_click(Arc::new(|| println!("Surface was clicked!")))
+///         .build()
+///         .unwrap(),
+///     Some(ripple),
+///     || {
+///         text(TextArgsBuilder::default().text("Click me".to_string()).build().unwrap());
+///     },
+/// );
 /// ```
 #[tessera]
-pub fn surface(args: SurfaceArgs, ripple_state: Option<Arc<RippleState>>, child: impl FnOnce()) {
+pub fn surface(args: SurfaceArgs, ripple_state: Option<RippleState>, child: impl FnOnce()) {
     (child)();
     let ripple_state_for_measure = ripple_state.clone();
     let args_measure_clone = args.clone();

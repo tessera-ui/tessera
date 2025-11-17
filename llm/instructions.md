@@ -118,4 +118,80 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 ---
 
+## Component Documentation Guidelines
+
+This project uses a strict, concise doc style for modules and component functions to
+improve readability and enable testable examples. Add the following to `llm/instructions.md`
+so all contributors follow the same conventions.
+
+### Module docs
+
+- Keep module docs to exactly two lines (short description + usage header).
+- Line 1: A brief description of what the module provides.
+- Line 2: "## Usage" followed by a one-line statement describing app-level usage
+  scenarios (e.g., alerts, confirmations, multi-step forms, or interactive controls).
+
+Example:
+
+```rust
+//! Modal dialog provider — show modal content above the main app UI.
+//!
+//! ## Usage
+//! 
+//! Show alerts, confirmations and multi-step forms that block the main UI while active.
+```
+
+### Component function docs
+
+- Use the following sections in order for each public component function:
+  1. `# <component_name>` — function header (title)
+  2. Single-line summary: What this component does **and** recommended use cases.
+  3. `## Usage` — a short one-line usage scenario (non-placement, app-level).
+  4. `## Parameters` — list each parameter and its role; if a parameter is an `Args` or
+     `State` structure, reference the type (e.g., `see [`DialogProviderArgs`]`) instead of
+     listing its fields.
+  5. `## Examples` — a runnable rustdoc example (no `no_run`, no `ignore`) that demonstrates
+     the key state logic (e.g., open/close a dialog or state toggle) and uses `assert!` to
+     verify expected behavior.
+
+Example:
+
+```rust
+/// # dialog_provider
+/// 
+/// Provide a modal dialog for alerts and confirmations.
+///
+/// ## Usage
+/// 
+/// Show modals (alerts/confirmations/wizards) that block user interaction.
+///
+/// ## Parameters
+/// 
+/// - `args` — see [`DialogProviderArgs`]
+/// - `state` — a clonable [`DialogProviderState`] used to open/close
+///
+/// ## Examples
+/// use tessera_ui_basic_components::dialog::DialogProviderState;
+/// let s = DialogProviderState::new();
+/// assert!(!s.is_open());
+/// s.open();
+/// assert!(s.is_open());
+/// s.close();
+/// assert!(!s.is_open());
+```
+
+### Verification and CI
+
+- Add `cargo test --doc` to the CI pipeline to ensure rustdoc examples compile and run.
+- Optionally add a lint script that checks: each `#[tessera] pub fn` has a doc-block
+  containing `## Parameters` and `## Examples` and that modules have 2-line headers.
+
+### Notes
+
+- Aim for brevity and clarity. Examples should be minimal but assert meaningful behavior.
+- Keep references to `Args` and `State` types to avoid duplicating configuration
+  documentation across multiple components.
+
+---
+
 If there are any changes to the architecture or conventions, this file and the main documentation must be updated accordingly to ensure consistency between documentation and code.

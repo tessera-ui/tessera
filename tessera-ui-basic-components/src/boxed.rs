@@ -1,12 +1,8 @@
-//! Provides the `Boxed` component for overlaying multiple child components in a single container.
+//! A container for stacking and aligning multiple children.
 //!
-//! The `Boxed` module enables stacking and aligning several UI elements on top of each other,
-//! making it ideal for building layered interfaces, overlays, decorations, or custom backgrounds.
-//! Children are positioned according to the specified [`Alignment`],
-//! and the container size adapts to the largest child or can be customized via [`DimensionValue`].
+//! ## Usage
 //!
-//! Typical use cases include tooltips, badges, composite controls, or any scenario where
-//! multiple widgets need to share the same space with flexible alignment.
+//! Use to create layered UIs, overlays, or composite controls.
 use derive_builder::Builder;
 use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node, tessera};
 
@@ -113,14 +109,37 @@ fn compute_child_offset(
     }
 }
 
-/// A component that overlays its children on top of each other.
+/// # boxed
 ///
-/// The `boxed` component acts as a container that stacks all its child components.
-/// The size of the container is determined by the dimensions of the largest child,
-/// and the alignment of the children within the container can be customized.
+/// A container that overlays its children, aligning them relative to each other.
 ///
-/// Children are added via the `scope` closure, which provides a `BoxedScope`
-/// to add children declaratively.
+/// ## Usage
+///
+/// Stack children on top of each other to create layered interfaces, such as a badge on an icon or text over an image.
+///
+/// ## Parameters
+///
+/// - `args` — configures the container's dimensions and default alignment; see [`BoxedArgs`].
+/// - `scope_config` — a closure that receives a [`BoxedScope`] for adding children.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui_basic_components::boxed::{boxed, BoxedArgs};
+/// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
+/// use tessera_ui_basic_components::alignment::Alignment;
+///
+/// boxed(BoxedArgs::default(), |scope| {
+///     // Add a child that will be in the background (rendered first).
+///     scope.child(|| {
+///         text(TextArgsBuilder::default().text("Background".to_string()).build().unwrap());
+///     });
+///     // Add another child aligned to the center, which will appear on top.
+///     scope.child_with_alignment(Alignment::Center, || {
+///         text(TextArgsBuilder::default().text("Foreground".to_string()).build().unwrap());
+///     });
+/// });
+/// ```
 #[tessera]
 pub fn boxed<F>(args: BoxedArgs, scope_config: F)
 where

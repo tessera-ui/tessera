@@ -1,25 +1,8 @@
-//! Provides a highly customizable and interactive button component for Tessera UI.
+//! An interactive button component.
 //!
-//! This module defines the [`button`] component and its configuration via [`ButtonArgs`].
-//! The button supports custom colors, shapes, padding, border, ripple effects, and hover states.
-//! It is designed to wrap arbitrary child content and handle user interactions such as clicks
-//! with visual feedback. Typical use cases include triggering actions, submitting forms, or
-//! serving as a core interactive element in user interfaces.
+//! ## Usage
 //!
-//! The API offers builder patterns and convenience constructors for common button styles
-//! (primary, secondary, success, danger), making it easy to create consistent and accessible
-//! buttons throughout your application.
-//!
-//! Example usage and customization patterns are provided in the [`button`] documentation.
-//!
-//! # Features
-//! - Customizable appearance: color, shape, border, padding, ripple, hover
-//! - Flexible sizing: explicit width/height or content-based
-//! - Event handling: on_click callback
-//! - Composable: can wrap any child component
-//! - Builder and fluent APIs for ergonomic usage
-//!
-//! See [`button`] and [`ButtonArgs`] for details.
+//! Use for triggering actions, submitting forms, or navigation.
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -88,59 +71,43 @@ impl Default for ButtonArgs {
     }
 }
 
-/// Creates an interactive button component that can wrap any custom child content.
+/// # button
 ///
-/// The `button` component provides a clickable surface with a ripple effect,
-/// customizable appearance, and event handling. It's built on top of the `surface`
-/// component and handles user interactions like clicks and hover states.
+/// Provides a clickable button with customizable style and ripple feedback.
 ///
-/// # Parameters
+/// ## Usage
 ///
-/// - `args`: An instance of `ButtonArgs` or `ButtonArgsBuilder` that defines the button's
-///   properties, such as color, shape, padding, and the `on_click` callback.
-/// - `ripple_state`: An `Arc<RippleState>` that manages the visual state of the ripple
-///   effect. This should be created and managed by the parent component to persist
-///   the ripple animation state across recompositions.
-/// - `child`: A closure that defines the content to be displayed inside the button.
-///   This can be any other component, such as `text`, `image`, or a combination of them.
+/// Use to trigger an action when the user clicks or taps.
 ///
-/// # Example
+/// ## Parameters
+///
+/// - `args` — configures the button's appearance and `on_click` handler; see [`ButtonArgs`].
+/// - `ripple_state` — a clonable [`RippleState`] to manage the ripple animation.
+/// - `child` — a closure that renders the button's content (e.g., text or an icon).
+///
+/// ## Examples
 ///
 /// ```
-/// # use std::sync::Arc;
-/// # use tessera_ui::{Color, Dp};
-/// # use tessera_ui_basic_components::{
-/// #     button::{button, ButtonArgsBuilder},
-/// #     ripple_state::RippleState,
-/// #     text::{text, TextArgsBuilder},
-/// # };
-/// #
-/// // 1. Create a ripple state to manage the effect.
-/// let ripple_state = Arc::new(RippleState::new());
+/// use std::sync::Arc;
+/// use tessera_ui::Color;
+/// use tessera_ui_basic_components::{
+///     button::{button, ButtonArgsBuilder},
+///     ripple_state::RippleState,
+///     text::{text, TextArgsBuilder},
+/// };
 ///
-/// // 2. Define the button's properties using the builder pattern.
+/// let ripple = RippleState::new();
 /// let args = ButtonArgsBuilder::default()
-///     .color(Color::new(0.2, 0.5, 0.8, 1.0)) // A nice blue
-///     .padding(Dp(12.0))
-///     .on_click(Arc::new(|| {
-///         println!("Button was clicked!");
-///     }))
+///     .on_click(Arc::new(|| {}))
 ///     .build()
 ///     .unwrap();
 ///
-/// // 3. Call the button component, passing the args, state, and a child content closure.
-/// button(args, ripple_state, || {
-///     text(
-///         TextArgsBuilder::default()
-///             .text("Click Me".to_string())
-///             .color(Color::WHITE)
-///             .build()
-///             .unwrap(),
-///     );
+/// button(args, ripple, || {
+///     text(TextArgsBuilder::default().text("Click Me".to_string()).build().unwrap());
 /// });
 /// ```
 #[tessera]
-pub fn button(args: impl Into<ButtonArgs>, ripple_state: Arc<RippleState>, child: impl FnOnce()) {
+pub fn button(args: impl Into<ButtonArgs>, ripple_state: RippleState, child: impl FnOnce()) {
     let button_args: ButtonArgs = args.into();
 
     // Create interactive surface for button

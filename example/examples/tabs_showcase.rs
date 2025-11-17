@@ -1,8 +1,5 @@
 //! Showcase for the Tabs component
 
-use std::sync::Arc;
-
-use parking_lot::RwLock;
 use tessera_ui::{
     Color, DimensionValue, Dp,
     renderer::{Renderer, TesseraConfig},
@@ -17,7 +14,7 @@ use tessera_ui_basic_components::{
 /// Shared application state
 #[derive(Default)]
 struct AppState {
-    tabs_state: Arc<RwLock<TabsState>>,
+    tabs_state: TabsState,
 }
 
 const NUM_TABS: usize = 5;

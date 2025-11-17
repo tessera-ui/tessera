@@ -27,18 +27,23 @@ enum ShowcaseStyle {
 
 #[derive(Default)]
 struct AppState {
-    bottom_sheet_state: Arc<RwLock<BottomSheetProviderState>>,
-    button_ripple: Arc<RippleState>,
-    close_button_ripple: Arc<RippleState>,
-    style_button_ripple: Arc<RippleState>,
+    bottom_sheet_state: BottomSheetProviderState,
+    button_ripple: RippleState,
+    close_button_ripple: RippleState,
+    style_button_ripple: RippleState,
     style: ShowcaseStyle,
 }
 
 #[tessera]
 fn bottom_sheet_main_content(app_state: Arc<RwLock<AppState>>) {
-    let state = app_state.clone();
-    let button_ripple = state.read().button_ripple.clone();
-    let style_button_ripple = state.read().style_button_ripple.clone();
+    let (button_ripple, style_button_ripple, sheet_state) = {
+        let state = app_state.read();
+        (
+            state.button_ripple.clone(),
+            state.style_button_ripple.clone(),
+            state.bottom_sheet_state.clone(),
+        )
+    };
 
     column(
         ColumnArgsBuilder::default()
@@ -58,9 +63,12 @@ fn bottom_sheet_main_content(app_state: Arc<RwLock<AppState>>) {
             scope.child(move || {
                 button(
                     ButtonArgsBuilder::default()
-                        .on_click(Arc::new(move || {
-                            state.write().bottom_sheet_state.write().open();
-                        }))
+                        .on_click({
+                            let sheet_state = sheet_state.clone();
+                            Arc::new(move || {
+                                sheet_state.open();
+                            })
+                        })
                         .build()
                         .unwrap(),
                     button_ripple,
@@ -117,8 +125,13 @@ fn bottom_sheet_main_content(app_state: Arc<RwLock<AppState>>) {
 
 #[tessera]
 fn bottom_sheet_content(app_state: Arc<RwLock<AppState>>) {
-    let state = app_state.clone();
-    let close_button_ripple = state.read().close_button_ripple.clone();
+    let (close_button_ripple, sheet_state) = {
+        let state = app_state.read();
+        (
+            state.close_button_ripple.clone(),
+            state.bottom_sheet_state.clone(),
+        )
+    };
     row(
         RowArgsBuilder::default()
             .main_axis_alignment(MainAxisAlignment::Center)
@@ -134,50 +147,48 @@ fn bottom_sheet_content(app_state: Arc<RwLock<AppState>>) {
             .build()
             .unwrap(),
         |scope| {
-            scope.child({
-                let state = app_state.clone();
-                move || {
-                    column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
-                        scope.child(move || {
-                            text(
-                                TextArgsBuilder::default()
-                                    .color(Color::BLACK)
-                                    .text("This is a Bottom Sheet".to_string())
-                                    .build()
-                                    .unwrap(),
-                            );
-                        });
-                        scope.child(|| {
-                            spacer(
-                                SpacerArgsBuilder::default()
-                                    .height(DimensionValue::Fixed(Px(10)))
-                                    .build()
-                                    .unwrap(),
-                            );
-                        });
-                        scope.child(move || {
-                            glass_button(
-                                GlassButtonArgsBuilder::default()
-                                    .tint_color(Color::new(0.2, 0.5, 0.8, 0.3))
-                                    .on_click(Arc::new(move || {
-                                        state.write().bottom_sheet_state.write().close();
-                                    }))
-                                    .build()
-                                    .unwrap(),
-                                close_button_ripple,
-                                move || {
-                                    text(
-                                        TextArgsBuilder::default()
-                                            .color(Color::BLACK)
-                                            .text("Close".to_string())
-                                            .build()
-                                            .unwrap(),
-                                    )
-                                },
-                            );
-                        });
+            scope.child(move || {
+                column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
+                    scope.child(move || {
+                        text(
+                            TextArgsBuilder::default()
+                                .color(Color::BLACK)
+                                .text("This is a Bottom Sheet".to_string())
+                                .build()
+                                .unwrap(),
+                        );
                     });
-                }
+                    scope.child(|| {
+                        spacer(
+                            SpacerArgsBuilder::default()
+                                .height(DimensionValue::Fixed(Px(10)))
+                                .build()
+                                .unwrap(),
+                        );
+                    });
+                    scope.child(move || {
+                        let sheet_state = sheet_state.clone();
+                        glass_button(
+                            GlassButtonArgsBuilder::default()
+                                .tint_color(Color::new(0.2, 0.5, 0.8, 0.3))
+                                .on_click(Arc::new(move || {
+                                    sheet_state.close();
+                                }))
+                                .build()
+                                .unwrap(),
+                            close_button_ripple,
+                            move || {
+                                text(
+                                    TextArgsBuilder::default()
+                                        .color(Color::BLACK)
+                                        .text("Close".to_string())
+                                        .build()
+                                        .unwrap(),
+                                )
+                            },
+                        );
+                    });
+                });
             });
         },
     );
@@ -185,10 +196,15 @@ fn bottom_sheet_content(app_state: Arc<RwLock<AppState>>) {
 
 #[tessera]
 fn bottom_sheet_provider_wrapper(app_state: Arc<RwLock<AppState>>) {
-    let state_for_provider = app_state.clone();
-    let style = match app_state.read().style {
-        ShowcaseStyle::Material => BottomSheetStyle::Material,
-        ShowcaseStyle::Glass => BottomSheetStyle::Glass,
+    let (style, sheet_state) = {
+        let state = app_state.read();
+        (
+            match state.style {
+                ShowcaseStyle::Material => BottomSheetStyle::Material,
+                ShowcaseStyle::Glass => BottomSheetStyle::Glass,
+            },
+            state.bottom_sheet_state.clone(),
+        )
     };
     surface(
         SurfaceArgsBuilder::default()
@@ -207,17 +223,16 @@ fn bottom_sheet_provider_wrapper(app_state: Arc<RwLock<AppState>>) {
         move || {
             bottom_sheet_provider(
                 BottomSheetProviderArgsBuilder::default()
-                    .on_close_request(Arc::new(move || {
-                        state_for_provider
-                            .write()
-                            .bottom_sheet_state
-                            .write()
-                            .close();
-                    }))
+                    .on_close_request({
+                        let sheet_state = sheet_state.clone();
+                        Arc::new(move || {
+                            sheet_state.close();
+                        })
+                    })
                     .style(style)
                     .build()
                     .unwrap(),
-                app_state.read().bottom_sheet_state.clone(),
+                sheet_state.clone(),
                 {
                     let state = app_state.clone();
                     move || bottom_sheet_main_content(state.clone())

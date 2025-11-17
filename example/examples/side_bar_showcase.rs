@@ -22,9 +22,9 @@ enum ShowcaseStyle {
 
 #[derive(Default)]
 struct AppState {
-    pub open_button_state: Arc<RippleState>,
-    pub style_button_state: Arc<RippleState>,
-    pub side_bar_state: Arc<RwLock<SideBarProviderState>>,
+    pub open_button_state: RippleState,
+    pub style_button_state: RippleState,
+    pub side_bar_state: SideBarProviderState,
     pub style: ShowcaseStyle,
 }
 
@@ -56,14 +56,14 @@ fn app(state: Arc<RwLock<AppState>>) {
             move || {
                 side_bar_provider(
                     SideBarProviderArgsBuilder::default()
-                        .on_close_request(Arc::new({
-                            let state = state.clone();
-                            move || state.write().side_bar_state.write().close()
-                        }))
+                        .on_close_request({
+                            let side_bar_state = side_bar_state.clone();
+                            Arc::new(move || side_bar_state.close())
+                        })
                         .style(side_bar_style)
                         .build()
                         .unwrap(),
-                    side_bar_state,
+                    side_bar_state.clone(),
                     {
                         let state = state.clone();
                         move || {
@@ -89,16 +89,10 @@ fn app(state: Arc<RwLock<AppState>>) {
                                                 state.read().open_button_state.clone();
                                             button(
                                                 ButtonArgsBuilder::default()
-                                                    .on_click(Arc::new({
-                                                        let state = state.clone();
-                                                        move || {
-                                                            state
-                                                                .write()
-                                                                .side_bar_state
-                                                                .write()
-                                                                .open()
-                                                        }
-                                                    }))
+                                                    .on_click({
+                                                        let side_bar_state = side_bar_state.clone();
+                                                        Arc::new(move || side_bar_state.open())
+                                                    })
                                                     .build()
                                                     .unwrap(),
                                                 open_button_state,

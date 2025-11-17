@@ -1,24 +1,8 @@
-//! Provides a flexible vertical layout component for arranging child widgets in a single column.
+//! A vertical layout component.
 //!
-//! This module defines the `column` component, which stacks its children vertically and offers fine-grained control
-//! over alignment, sizing, and flexible space distribution via weights. It is suitable for building user interfaces
-//! where elements need to be organized from top to bottom, such as forms, lists, or grouped controls.
+//! ## Usage
 //!
-//! Children are added declaratively within a `scope` closure, which provides methods to add children with or without weights.
-//!
-//! # Example
-//!
-//! ```
-//! use tessera_ui_basic_components::column::{column, ColumnArgs};
-//! use tessera_ui_basic_components::text::text;
-//! use tessera_ui_basic_components::spacer::{spacer, SpacerArgs};
-//!
-//! column(ColumnArgs::default(), |scope| {
-//!     scope.child(|| text("First item".to_string()));
-//!     scope.child_weighted(|| spacer(SpacerArgs::default()), 1.0); // This spacer will be flexible
-//!     scope.child(|| text("Last item".to_string()));
-//! });
-//! ```
+//! Use to stack children vertically.
 use derive_builder::Builder;
 use tessera_ui::{
     ComponentNodeMetaDatas, ComputedData, Constraint, DimensionValue, MeasureInput,
@@ -77,11 +61,32 @@ impl<'a> ColumnScope<'a> {
     }
 }
 
-/// A column component that arranges its children vertically.
+/// # column
 ///
-/// The `column` stacks its children from top to bottom and provides control over sizing,
-/// alignment and proportional space distribution via weights. Children are added via the
-/// `scope` closure, which provides a `ColumnScope` to add children declaratively.
+/// A layout component that arranges its children in a vertical column.
+///
+/// ## Usage
+///
+/// Stack components vertically, with options for alignment and flexible spacing.
+///
+/// ## Parameters
+///
+/// - `args` — configures the column's dimensions and alignment; see [`ColumnArgs`].
+/// - `scope_config` — a closure that receives a [`ColumnScope`] for adding children.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui_basic_components::column::{column, ColumnArgs};
+/// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
+/// use tessera_ui_basic_components::spacer::{spacer, SpacerArgs};
+///
+/// column(ColumnArgs::default(), |scope| {
+///     scope.child(|| text(TextArgsBuilder::default().text("First item".to_string()).build().unwrap()));
+///     scope.child_weighted(|| spacer(SpacerArgs::default()), 1.0); // This spacer will be flexible
+///     scope.child(|| text(TextArgsBuilder::default().text("Last item".to_string()).build().unwrap()));
+/// });
+/// ```
 #[tessera]
 pub fn column<F>(args: ColumnArgs, scope_config: F)
 where

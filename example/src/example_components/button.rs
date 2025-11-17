@@ -22,11 +22,11 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
 
 #[derive(Clone)]
 struct ButtonShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
-    button1_ripple: Arc<RippleState>,
-    button2_ripple: Arc<RippleState>,
-    button3_ripple: Arc<RippleState>,
-    icon_button_ripple: Arc<RippleState>,
+    scrollable_state: ScrollableState,
+    button1_ripple: RippleState,
+    button2_ripple: RippleState,
+    button3_ripple: RippleState,
+    icon_button_ripple: RippleState,
     counter: Arc<Mutex<i32>>,
     icon_data: Arc<ImageVectorData>,
 }
@@ -40,10 +40,10 @@ impl ButtonShowcaseState {
 
         Self {
             scrollable_state: Default::default(),
-            button1_ripple: Default::default(),
-            button2_ripple: Default::default(),
-            button3_ripple: Default::default(),
-            icon_button_ripple: Default::default(),
+            button1_ripple: RippleState::new(),
+            button2_ripple: RippleState::new(),
+            button3_ripple: RippleState::new(),
+            icon_button_ripple: RippleState::new(),
             counter: Default::default(),
             icon_data,
         }

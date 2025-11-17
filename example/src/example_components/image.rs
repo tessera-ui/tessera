@@ -22,8 +22,8 @@ const VECTOR_BYTES: &[u8] = include_bytes!(concat!(
 ));
 
 pub struct ImageShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
-    vector_scrollable_state: Arc<ScrollableState>,
+    scrollable_state: ScrollableState,
+    vector_scrollable_state: ScrollableState,
     image_data: Arc<ImageData>,
     image_vector_data: Arc<ImageVectorData>,
 }
@@ -41,8 +41,8 @@ impl Default for ImageShowcaseState {
         );
 
         Self {
-            scrollable_state: Arc::new(ScrollableState::default()),
-            vector_scrollable_state: Arc::new(ScrollableState::default()),
+            scrollable_state: ScrollableState::default(),
+            vector_scrollable_state: ScrollableState::default(),
             image_data,
             image_vector_data,
         }

@@ -30,14 +30,14 @@ struct AppState {
     /// Click counter
     click_count: AtomicU32,
     /// button ripple state
-    button_state: Arc<RippleState>,
+    button_state: RippleState,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             click_count: AtomicU32::new(0),
-            button_state: Arc::new(RippleState::new()),
+            button_state: RippleState::new(),
         }
     }
 }

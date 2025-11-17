@@ -1,87 +1,8 @@
-//! A bottom navigation bar for switching between primary application screens.
+//! Bottom navigation bar for switching between primary app screens.
 //!
-//! This module provides the [`bottom_nav_bar`] component, which creates a persistent,
-//! horizontal bar at the bottom of the UI. It is designed to work with a router to
-//! control which main screen or "shard" is currently visible.
+//! ## Usage
 //!
-//! # Key Components
-//!
-//! * **[`bottom_nav_bar`]**: The main function that renders the navigation bar.
-//! * **[`BottomNavBarState`]**: A state object that must be created to track the
-//!   currently selected navigation item.
-//! * **[`BottomNavBarScope`]**: A scope provided to the `bottom_nav_bar`'s closure
-//!   to add individual navigation items.
-//!
-//! # Usage
-//!
-//! The typical layout involves placing the `bottom_nav_bar` in a `column` below a
-//! `router_root` component. This ensures the navigation bar remains visible while the
-//! content above it changes.
-//!
-//! 1.  **Create State**: Create an `Arc<RwLock<BottomNavBarState>>` at a high level
-//!     in your application state.
-//! 2.  **Define Layout**: In your root component, create a `column`. Place a `router_root`
-//!     in the first (weighted) child slot and the `bottom_nav_bar` in the second.
-//! 3.  **Add Items**: Inside the `bottom_nav_bar` closure, use the provided scope's
-//!     [`child`](BottomNavBarScope::child) method to add each navigation destination.
-//!     - The first argument to `child` is a closure that renders the item's content (e.g., an icon or text).
-//!     - The second argument is an `on_click` closure where you perform the navigation,
-//!       typically by calling `tessera_ui::router::push` with the destination shard.
-//!
-//! # Example
-//!
-//! ```
-//! use std::sync::Arc;
-//! use parking_lot::RwLock;
-//! use tessera_ui::{tessera, router::{Router, router_root}};
-//! use tessera_ui_basic_components::{
-//!     bottom_nav_bar::{bottom_nav_bar, BottomNavBarState},
-//!     column::{ColumnArgsBuilder, column},
-//!     text::{text, TextArgsBuilder},
-//! };
-//!
-//! // Assume HomeScreenDestination and ProfileScreenDestination are defined shards.
-//! # use tessera_ui::shard;
-//! # #[tessera] #[shard] fn home_screen() {}
-//! # #[tessera] #[shard] fn profile_screen() {}
-//!
-//! #[tessera]
-//! fn app_root() {
-//!     let nav_bar_state = Arc::new(RwLock::new(BottomNavBarState::new(0)));
-//!
-//!     column(ColumnArgsBuilder::default().build().unwrap(), move |scope| {
-//!         // The router viewport takes up the remaining space.
-//!         scope.child_weighted(|| {
-//!             router_root(HomeScreenDestination {});
-//!         }, 1.0);
-//!
-//!         // The navigation bar is always visible at the bottom.
-//!         scope.child(move || {
-//!             bottom_nav_bar(nav_bar_state.clone(), |nav_scope| {
-//!                 // Add the "Home" item.
-//!                 nav_scope.child(
-//!                     || text(TextArgsBuilder::default().text("Home".to_string()).build().unwrap()),
-//!                     move || {
-//!                         Router::with_mut(|router| {
-//!                             router.reset_with(HomeScreenDestination {});
-//!                         });
-//!                     },
-//!                 );
-//!
-//!                 // Add the "Profile" item.
-//!                 nav_scope.child(
-//!                     || text(TextArgsBuilder::default().text("Profile".to_string()).build().unwrap()),
-//!                     move || {
-//!                         Router::with_mut(|router| {
-//!                             router.reset_with(ProfileScreenDestination {});
-//!                         });
-//!                     },
-//!                 );
-//!             });
-//!         });
-//!     });
-//! }
-//! ```
+//! Use for top-level navigation between a small number of primary application screens.
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -116,42 +37,34 @@ fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
     }
 }
 
-/// A horizontal bottom navigation bar that hosts multiple navigation items (children),
-/// each with its own click callback. The currently selected item is visually highlighted
-/// (pill style) and tracked inside a shared [`BottomNavBarState`].
+/// # bottom_nav_bar
 ///
-/// # State Handling
+/// Provides a bottom navigation bar for switching between primary app screens.
 ///
-/// * The `state: Arc<RwLock<BottomNavBarState>>` holds:
-///   - `selected`: index of the active item
-///   - A lazily created `RippleState` per item (for button ripple feedback)
-/// * The active item is rendered with a capsule shape & filled color; inactive items are
-///   rendered as transparent buttons.
+/// ## Usage
 ///
-/// # Building Children
+/// Use for top-level navigation between a small number of primary application screens.
 ///
-/// Children are registered via the provided closure `scope_config` which receives a
-/// mutable [`BottomNavBarScope`]. Each child is added with:
-/// `scope.child(content_closure, on_click_closure)`.
+/// ## Parameters
 ///
-/// `on_click_closure` is responsible for performing side effects (e.g. pushing a new route).
-/// The component automatically updates `selected` and triggers the ripple state before
-/// invoking the user `on_click`.
+/// - `state` — a clonable [`BottomNavBarState`] used to track the selected item.
+/// - `scope_config` — a closure that receives a [`BottomNavBarScope`] for adding navigation items.
 ///
-/// # Layout
+/// ## Examples
 ///
-/// Internally the bar is:
-/// * A full‑width `surface` (non‑interactive container)
-/// * A `row` whose children are spaced using `MainAxisAlignment::SpaceAround`
+/// ```
+/// use tessera_ui_basic_components::bottom_nav_bar::BottomNavBarState;
 ///
-/// # Notes
+/// // Create a new state, starting with the first item (index 0) selected.
+/// let state = BottomNavBarState::new(0);
+/// assert_eq!(state.selected(), 0);
 ///
-/// * Indices are assigned in the order children are added.
-/// * The bar itself does not do routing — supply routing logic inside each child's
-///   `on_click` closure.
-/// * Thread safety for `selected` & ripple states is provided by `RwLock`.
+/// // The default state also selects the first item.
+/// let default_state = BottomNavBarState::default();
+/// assert_eq!(default_state.selected(), 0);
+/// ```
 #[tessera]
-pub fn bottom_nav_bar<F>(state: Arc<RwLock<BottomNavBarState>>, scope_config: F)
+pub fn bottom_nav_bar<F>(state: BottomNavBarState, scope_config: F)
 where
     F: FnOnce(&mut BottomNavBarScope),
 {
@@ -164,10 +77,7 @@ where
         scope_config(&mut scope);
     }
 
-    let progress = {
-        let mut state = state.write();
-        state.animation_progress().unwrap_or(1.0)
-    };
+    let progress = state.animation_progress().unwrap_or(1.0);
 
     surface(
         SurfaceArgsBuilder::default()
@@ -190,11 +100,9 @@ where
                     {
                         let state_clone = state.clone();
                         row_scope.child(move || {
-                            let (selected, previous_selected) = {
-                                let s = state_clone.read();
-                                (s.selected(), s.previous_selected())
-                            };
-                            let ripple_state = state_clone.write().ripple_state(index);
+                            let selected = state_clone.selected();
+                            let previous_selected = state_clone.previous_selected();
+                            let ripple_state = state_clone.ripple_state(index);
 
                             let color;
                             let shadow_color;
@@ -216,7 +124,7 @@ where
                                 .shape(Shape::HorizontalCapsule)
                                 .on_click(Arc::new(move || {
                                     if index != selected {
-                                        state_clone.write().set_selected(index);
+                                        state_clone.set_selected(index);
                                         on_click.lock().take().unwrap()();
                                     }
                                 }))
@@ -243,39 +151,21 @@ where
 /// `selected` is the currently active item index. `ripple_states` lazily allocates a
 /// `RippleState` (shared for each item) on first access, enabling ripple animations
 /// on its associated button.
-pub struct BottomNavBarState {
+struct BottomNavBarStateInner {
     selected: usize,
     previous_selected: usize,
-    ripple_states: HashMap<usize, Arc<RippleState>>,
+    ripple_states: HashMap<usize, RippleState>,
     anim_start_time: Option<Instant>,
 }
 
-impl Default for BottomNavBarState {
-    fn default() -> Self {
-        Self::new(0)
-    }
-}
-
-impl BottomNavBarState {
-    /// Create a new state with an initial selected index.
-    pub fn new(selected: usize) -> Self {
+impl BottomNavBarStateInner {
+    fn new(selected: usize) -> Self {
         Self {
             selected,
             previous_selected: selected,
             ripple_states: HashMap::new(),
             anim_start_time: None,
         }
-    }
-
-    /// Returns the index of the currently selected navigation item.
-    pub fn selected(&self) -> usize {
-        self.selected
-    }
-
-    /// Returns the index of the previously selected navigation item.
-    /// This is useful for animations when transitioning between selected items.
-    pub fn previous_selected(&self) -> usize {
-        self.previous_selected
     }
 
     fn set_selected(&mut self, index: usize) {
@@ -302,11 +192,50 @@ impl BottomNavBarState {
         }
     }
 
-    fn ripple_state(&mut self, index: usize) -> Arc<RippleState> {
-        self.ripple_states
-            .entry(index)
-            .or_insert_with(|| Arc::new(RippleState::new()))
-            .clone()
+    fn ripple_state(&mut self, index: usize) -> RippleState {
+        self.ripple_states.entry(index).or_default().clone()
+    }
+}
+
+#[derive(Clone)]
+pub struct BottomNavBarState {
+    inner: Arc<RwLock<BottomNavBarStateInner>>,
+}
+
+impl BottomNavBarState {
+    /// Create a new state with an initial selected index.
+    pub fn new(selected: usize) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(BottomNavBarStateInner::new(selected))),
+        }
+    }
+
+    /// Returns the index of the currently selected navigation item.
+    pub fn selected(&self) -> usize {
+        self.inner.read().selected
+    }
+
+    /// Returns the index of the previously selected navigation item.
+    pub fn previous_selected(&self) -> usize {
+        self.inner.read().previous_selected
+    }
+
+    fn set_selected(&self, index: usize) {
+        self.inner.write().set_selected(index);
+    }
+
+    fn animation_progress(&self) -> Option<f32> {
+        self.inner.write().animation_progress()
+    }
+
+    fn ripple_state(&self, index: usize) -> RippleState {
+        self.inner.write().ripple_state(index)
+    }
+}
+
+impl Default for BottomNavBarState {
+    fn default() -> Self {
+        Self::new(0)
     }
 }
 

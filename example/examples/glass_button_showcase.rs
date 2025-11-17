@@ -13,7 +13,7 @@ use tessera_ui_basic_components::{
 };
 
 #[tessera]
-fn app(ripple_state: Arc<RippleState>, image_resource: &ImageData) {
+fn app(ripple_state: RippleState, image_resource: &ImageData) {
     let image_resource = image_resource.clone();
     surface(
         SurfaceArgsBuilder::default()
@@ -72,7 +72,7 @@ fn app(ripple_state: Arc<RippleState>, image_resource: &ImageData) {
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let ripple_state = Arc::new(RippleState::new());
+    let ripple_state = RippleState::new();
     let image_path = format!(
         "{}/examples/assets/scarlet_ut.jpg",
         env!("CARGO_MANIFEST_DIR")

@@ -1,20 +1,8 @@
-//! A customizable, animated checkbox UI component for Tessera UI.
+//! A customizable, animated checkbox component.
 //!
-//! This module provides a standard checkbox widget with support for animated checkmark transitions,
-//! external or internal state management, and flexible styling options. The checkbox can be used
-//! wherever a boolean selection is required, such as forms, settings panels, or interactive lists.
+//! ## Usage
 //!
-//! Features include:
-//! - Smooth checkmark animation on toggle
-//! - Optional external state for advanced control and animation
-//! - Customizable size, colors, shape, and hover effects
-//! - Callback for state changes to integrate with application logic
-//!
-//! Typical usage involves passing [`CheckboxArgs`] to the [`checkbox`] function, with optional
-//! state sharing for animation or controlled components.
-//!
-//! Suitable for both simple and complex UI scenarios requiring a responsive, visually appealing checkbox.
-
+//! Use in forms, settings, or lists to enable boolean selections.
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -39,14 +27,14 @@ use crate::{
 
 #[derive(Clone, Default)]
 pub struct CheckboxState {
-    ripple: Arc<RippleState>,
+    ripple: RippleState,
     checkmark: Arc<RwLock<CheckmarkState>>,
 }
 
 impl CheckboxState {
     pub fn new(initial_state: bool) -> Self {
         Self {
-            ripple: Default::default(),
+            ripple: RippleState::new(),
             checkmark: Arc::new(RwLock::new(CheckmarkState::new(initial_state))),
         }
     }
@@ -151,43 +139,43 @@ impl CheckmarkState {
     }
 }
 
-/// Renders a checkbox component.
+/// # checkbox
 ///
-/// The checkbox is a standard UI element that allows users to select or deselect an option.
-/// It visually represents its state, typically as a square box that is either empty or contains a checkmark.
-/// The component handles its own animation and state transitions.
+/// Renders an interactive checkbox with an animated checkmark.
 ///
-/// # Arguments
+/// ## Usage
 ///
-/// The component is configured by passing `CheckboxArgs` and a `CheckboxState`.
+/// Use to capture a boolean (true/false) choice from the user.
 ///
-/// * `on_toggle`: A callback function `Arc<dyn Fn(bool) + Send + Sync>` that is invoked when the user
-///   clicks the checkbox. It receives the new `checked` state as an argument, allowing the
-///   application state to be updated.
+/// ## Parameters
 ///
-/// # Example
+/// - `args` — configures the checkbox's appearance and `on_toggle` callback; see [`CheckboxArgs`].
+/// - `state` — a clonable [`CheckboxState`] that manages the checkmark and ripple animations.
+///
+/// ## Examples
 ///
 /// ```
-/// use std::sync::Arc;
-/// use parking_lot::RwLock;
-/// use tessera_ui_basic_components::checkbox::{checkbox, CheckboxArgs, CheckboxState, CheckmarkState};
+/// use std::sync::{Arc, Mutex};
+/// use tessera_ui_basic_components::checkbox::{checkbox, CheckboxArgs, CheckboxState};
 ///
-/// // Create a checkbox that is initially unchecked.
-/// let unchecked_state = Arc::new(CheckboxState::default());
-/// checkbox(
-///     CheckboxArgs {
-///         on_toggle: Arc::new(|new_state| {
-///             // In a real app, you would update your state here.
-///             println!("Checkbox toggled to: {}", new_state);
-///         }),
-///         ..Default::default()
-///     },
-///     unchecked_state,
-/// );
+/// let is_checked = Arc::new(Mutex::new(false));
 ///
-/// // Create a checkbox that is initially checked.
-/// let checked_state = Arc::new(CheckboxState::new(true));
-/// checkbox(CheckboxArgs::default(), checked_state);
+/// let on_toggle = {
+///     let is_checked = is_checked.clone();
+///     Arc::new(move |new_state| {
+///         *is_checked.lock().unwrap() = new_state;
+///     })
+/// };
+///
+/// let args = CheckboxArgs { on_toggle, ..Default::default() };
+///
+/// // In a real UI, the on_toggle callback would be fired on click.
+/// // For this test, we can simulate the callback being called.
+/// (args.on_toggle)(true);
+/// assert_eq!(*is_checked.lock().unwrap(), true);
+///
+/// (args.on_toggle)(false);
+/// assert_eq!(*is_checked.lock().unwrap(), false);
 /// ```
 #[tessera]
 pub fn checkbox(args: impl Into<CheckboxArgs>, state: Arc<CheckboxState>) {

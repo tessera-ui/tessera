@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use parking_lot::RwLock;
 use tessera_ui::{
     Color, DimensionValue, Dp,
     router::{Router, router_root},
@@ -52,10 +51,10 @@ use crate::example_components::{
 
 #[derive(Default)]
 struct AppState {
-    bottom_nav_bar_state: Arc<RwLock<BottomNavBarState>>,
-    bottom_sheet_state: Arc<RwLock<BottomSheetProviderState>>,
-    side_bar_state: Arc<RwLock<SideBarProviderState>>,
-    dialog_state: Arc<RwLock<DialogProviderState>>,
+    bottom_nav_bar_state: BottomNavBarState,
+    bottom_sheet_state: BottomSheetProviderState,
+    side_bar_state: SideBarProviderState,
+    dialog_state: DialogProviderState,
 }
 
 #[tessera]
@@ -67,7 +66,7 @@ pub fn app(#[state] app_state: AppState) {
     side_bar_provider(
         SideBarProviderArgsBuilder::default()
             .on_close_request(Arc::new(move || {
-                state_for_side_bar.side_bar_state.write().close();
+                state_for_side_bar.side_bar_state.close();
             }))
             .style(SideBarStyle::Glass)
             .build()
@@ -77,7 +76,7 @@ pub fn app(#[state] app_state: AppState) {
             bottom_sheet_provider(
                 BottomSheetProviderArgsBuilder::default()
                     .on_close_request(Arc::new(move || {
-                        state_for_bottom_sheet.bottom_sheet_state.write().close();
+                        state_for_bottom_sheet.bottom_sheet_state.close();
                     }))
                     .style(BottomSheetStyle::Glass)
                     .build()
@@ -88,7 +87,7 @@ pub fn app(#[state] app_state: AppState) {
                     dialog_provider(
                         DialogProviderArgsBuilder::default()
                             .on_close_request(Arc::new(move || {
-                                dialog_state.write().close();
+                                dialog_state.close();
                             }))
                             .style(DialogStyle::Glass)
                             .build()
@@ -184,7 +183,7 @@ Side bars are bars at side, side at bars, bars side at, at side bars..."#,
 #[derive(Default)]
 struct HomeState {
     lazy_list_state: Arc<LazyListState>,
-    example_cards_ripple_state: DashMap<usize, Arc<RippleState>>,
+    example_cards_ripple_state: DashMap<usize, RippleState>,
 }
 
 #[derive(Clone)]
@@ -208,9 +207,9 @@ impl ComponentExampleDesc {
 #[shard]
 fn home(
     #[state] home_state: HomeState,
-    bottom_sheet_state: Arc<RwLock<BottomSheetProviderState>>,
-    side_bar_state: Arc<RwLock<SideBarProviderState>>,
-    dialog_state: Arc<RwLock<DialogProviderState>>,
+    bottom_sheet_state: BottomSheetProviderState,
+    side_bar_state: SideBarProviderState,
+    dialog_state: DialogProviderState,
 ) {
     let examples = Arc::new(vec![
         ComponentExampleDesc::new(
@@ -322,7 +321,7 @@ fn home(
             "Dialog",
             "A modal window that appears on top of the main content.",
             move || {
-                dialog_state.write().open();
+                dialog_state.open();
             },
         ),
         ComponentExampleDesc::new(
@@ -383,14 +382,14 @@ fn home(
             "Bottom Sheet",
             "bottom sheet displays content sliding up from the bottom of the screen.",
             move || {
-                bottom_sheet_state.write().open();
+                bottom_sheet_state.open();
             },
         ),
         ComponentExampleDesc::new(
             "Side Bar",
             "side bar displays content sliding in from the left side of the screen.",
             move || {
-                side_bar_state.write().open();
+                side_bar_state.open();
             },
         ),
     ]);
@@ -429,7 +428,7 @@ fn home(
                         let on_click = example.on_click.clone();
                         let surface_ripple_state = ripple_map
                             .entry(index)
-                            .or_insert_with(|| Arc::new(RippleState::default()))
+                            .or_insert_with(RippleState::default)
                             .clone();
                         let title = example.title.clone();
                         let description = example.desription.clone();
@@ -445,7 +444,7 @@ fn home(
 fn component_card(
     title: &str,
     description: &str,
-    surface_ripple_state: Arc<RippleState>,
+    surface_ripple_state: RippleState,
     on_click: Arc<dyn Fn() + Send + Sync>,
 ) {
     let title = title.to_string();
@@ -488,7 +487,7 @@ fn component_card(
 
 #[derive(Default)]
 struct TopAppBarState {
-    back_button_ripple_state: Arc<RippleState>,
+    back_button_ripple_state: RippleState,
 }
 
 #[tessera]

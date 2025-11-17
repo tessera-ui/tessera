@@ -1,10 +1,8 @@
-//! Provides a glassmorphism-style progress bar component for visualizing task completion.
+//! A progress bar with a glassmorphic visual style.
 //!
-//! The `glass_progress` module implements a customizable, frosted glass effect progress bar,
-//! featuring a blurred background, tint colors, and borders. It is designed to display a
-//! progress value from 0.0 to 1.0, making it suitable for loading screens, dashboards, or
-//! any interface requiring a modern and visually appealing progress indicator.
-
+//! ## Usage
+//!
+//! Use to indicate the completion of a task or a specific value in a range.
 use derive_builder::Builder;
 use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, tessera};
 
@@ -113,24 +111,24 @@ fn render_track_and_fill(args: GlassProgressArgs) {
     );
 }
 
-/// Creates a progress bar component with a frosted glass effect.
+/// # glass_progress
 ///
-/// The `glass_progress` displays a value from a continuous range (0.0 to 1.0)
-/// with a modern, semi-transparent "glassmorphism" aesthetic, including a
-/// blurred background and subtle highlights.
+/// Renders a progress bar with a customizable glass effect.
 ///
-/// # Arguments
+/// ## Usage
 ///
-/// * `args` - An instance of `GlassProgressArgs` or `GlassProgressArgsBuilder`
-///   to configure the progress bar's appearance.
-///   - `value`: The current progress value, must be between 0.0 and 1.0.
+/// Display a value in a continuous range (0.0 to 1.0) with a modern, glass-like appearance.
 ///
-/// # Example
+/// ## Parameters
+///
+/// - `args` — configures the progress bar's value and appearance; see [`GlassProgressArgs`].
+///
+/// ## Examples
 ///
 /// ```
 /// use tessera_ui_basic_components::glass_progress::{glass_progress, GlassProgressArgsBuilder};
 ///
-/// // In your component function
+/// // Render a progress bar at 75% completion.
 /// glass_progress(
 ///     GlassProgressArgsBuilder::default()
 ///         .value(0.75)

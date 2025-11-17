@@ -1,93 +1,8 @@
-//! A modal dialog component for displaying critical information or actions.
+//! Modal dialog provider — show modal content above the main app UI.
 //!
-//! This module provides [`dialog_provider`], a component that renders content in a modal
-//! overlay. When active, the dialog sits on top of the primary UI, blocks interactions
-//! with the content behind it (via a "scrim"), and can be dismissed by user actions
-//! like pressing the `Escape` key or clicking the scrim.
+//! ## Usage
 //!
-//! # Key Components
-//!
-//! * **[`dialog_provider`]**: The main function that wraps your UI to provide dialog capabilities.
-//! * **[`DialogProviderState`]**: A state object you create and manage to control the
-//!   dialog's visibility using its [`open()`](DialogProviderState::open) and
-//!   [`close()`](DialogProviderState::close) methods.
-//! * **[`DialogProviderArgs`]**: Configuration for the provider, including the visual
-//!   [`style`](DialogStyle) of the scrim and the mandatory `on_close_request` callback.
-//! * **[`DialogStyle`]**: Defines the scrim's appearance, either `Material` (a simple dark
-//!   overlay) or `Glass` (a blurred, translucent effect).
-//!
-//! # Usage
-//!
-//! The `dialog_provider` acts as a wrapper around your main content. It takes the main
-//! content and the dialog content as separate closures.
-//!
-//! 1.  **Create State**: In your application's state, create an `Arc<RwLock<DialogProviderState>>`.
-//! 2.  **Wrap Content**: Call `dialog_provider` at a high level in your component tree.
-//! 3.  **Provide Content**: Pass two closures to `dialog_provider`:
-//!     - `main_content`: Renders the UI that is always visible.
-//!     - `dialog_content`: Renders the content of the dialog box itself. This closure
-//!       receives an `f32` alpha value for animating its appearance.
-//! 4.  **Control Visibility**: From an event handler (e.g., a button's `on_click`), call
-//!     `dialog_state.write().open()` to show the dialog.
-//! 5.  **Handle Closing**: The `on_close_request` callback you provide is responsible for
-//!     calling `dialog_state.write().close()` to dismiss the dialog.
-//!
-//! # Example
-//!
-//! ```
-//! use std::sync::Arc;
-//! use parking_lot::RwLock;
-//! use tessera_ui::{tessera, Renderer};
-//! use tessera_ui_basic_components::{
-//!     dialog::{dialog_provider, DialogProviderArgsBuilder, DialogProviderState},
-//!     button::{button, ButtonArgsBuilder},
-//!     ripple_state::RippleState,
-//!     text::{text, TextArgsBuilder},
-//! };
-//!
-//! // Define an application state.
-//! #[derive(Default)]
-//! struct AppState {
-//!     dialog_state: Arc<RwLock<DialogProviderState>>,
-//!     ripple_state: Arc<RippleState>,
-//! }
-//!
-//! #[tessera]
-//! fn app(state: Arc<RwLock<AppState>>) {
-//!     let dialog_state = state.read().dialog_state.clone();
-//!
-//!     // Use the dialog_provider.
-//!     dialog_provider(
-//!         DialogProviderArgsBuilder::default()
-//!             // Provide a callback to handle close requests.
-//!             .on_close_request(Arc::new({
-//!                 let dialog_state = dialog_state.clone();
-//!                 move || dialog_state.write().close()
-//!             }))
-//!             .build()
-//!             .unwrap(),
-//!         dialog_state.clone(),
-//!         // Define the main content.
-//!         move || {
-//!             button(
-//!                 ButtonArgsBuilder::default()
-//!                     .on_click(Arc::new({
-//!                         let dialog_state = dialog_state.clone();
-//!                         move || dialog_state.write().open()
-//!                     }))
-//!                     .build()
-//!                     .unwrap(),
-//!                 state.read().ripple_state.clone(),
-//!                 || text(TextArgsBuilder::default().text("Show Dialog".to_string()).build().unwrap())
-//!             );
-//!         },
-//!         // Define the dialog content.
-//!         |alpha| {
-//!             text(TextArgsBuilder::default().text("This is a dialog!".to_string()).build().unwrap());
-//!         }
-//!     );
-//! }
-//! ```
+//! Used to show modal dialogs such as alerts, confirmations, wizards and forms; dialogs block interaction with underlying content while active.
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -167,44 +82,70 @@ pub struct DialogProviderArgs {
 }
 
 #[derive(Default)]
-pub struct DialogProviderState {
+struct DialogProviderStateInner {
     is_open: bool,
     timer: Option<Instant>,
 }
 
+#[derive(Clone, Default)]
+pub struct DialogProviderState {
+    inner: Arc<RwLock<DialogProviderStateInner>>,
+}
+
 impl DialogProviderState {
-    /// Open the dialog
-    pub fn open(&mut self) {
-        if self.is_open {
-            // Already opened, no action needed
-        } else {
-            self.is_open = true; // Mark as open
+    /// Creates a new dialog provider state handle.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Opens the dialog, starting the animation if necessary.
+    pub fn open(&self) {
+        let mut inner = self.inner.write();
+        if !inner.is_open {
+            inner.is_open = true;
             let mut timer = Instant::now();
-            if let Some(old_timer) = self.timer {
+            if let Some(old_timer) = inner.timer {
                 let elapsed = old_timer.elapsed();
                 if elapsed < ANIM_TIME {
-                    // If we are still in the middle of an animation
-                    timer += ANIM_TIME - elapsed; // We need to 'catch up' the timer
+                    timer += ANIM_TIME - elapsed;
                 }
             }
-            self.timer = Some(timer);
+            inner.timer = Some(timer);
         }
     }
 
-    /// Close the dialog
-    pub fn close(&mut self) {
-        if self.is_open {
-            self.is_open = false; // Mark as closed
+    /// Closes the dialog, starting the closing animation if necessary.
+    pub fn close(&self) {
+        let mut inner = self.inner.write();
+        if inner.is_open {
+            inner.is_open = false;
             let mut timer = Instant::now();
-            if let Some(old_timer) = self.timer {
+            if let Some(old_timer) = inner.timer {
                 let elapsed = old_timer.elapsed();
                 if elapsed < ANIM_TIME {
-                    // If we are still in the middle of an animation
-                    timer += ANIM_TIME - elapsed; // We need to 'catch up' the timer
+                    timer += ANIM_TIME - elapsed;
                 }
             }
-            self.timer = Some(timer);
+            inner.timer = Some(timer);
         }
+    }
+
+    /// Returns whether the dialog is currently open.
+    pub fn is_open(&self) -> bool {
+        self.inner.read().is_open
+    }
+
+    /// Returns whether the dialog is mid-animation.
+    pub fn is_animating(&self) -> bool {
+        self.inner
+            .read()
+            .timer
+            .is_some_and(|t| t.elapsed() < ANIM_TIME)
+    }
+
+    fn snapshot(&self) -> (bool, Option<Instant>) {
+        let inner = self.inner.read();
+        (inner.is_open, inner.timer)
     }
 }
 
@@ -347,26 +288,36 @@ fn dialog_content_wrapper(
     );
 }
 
-/// A provider component that manages the rendering and event flow for a modal dialog.
+/// # dialog_provider
 ///
-/// This component should be used as one of the outermost layers of the application.
-/// It renders the main content, and when `is_open` is true, it overlays a modal
-/// dialog, intercepting all input events to create a modal experience.
+/// Provide a modal dialog at the top level of an application.
 ///
-/// The dialog can be closed by calling the `on_close_request` callback, which can be
-/// triggered by clicking the background scrim or pressing the `ESC` key.
+/// ## Usage
 ///
-/// # Arguments
+/// Show modal content for alerts, confirmation dialogs, multi-step forms, or onboarding steps that require blocking user interaction with the main UI.
 ///
-/// - `args` - The arguments for configuring the dialog provider. See [`DialogProviderArgs`].
-/// - `main_content` - A closure that renders the main content of the application,
-///   which is visible whether the dialog is open or closed.
-/// - `dialog_content` - A closure that renders the content of the dialog, which is
-///   only visible when `args.is_open` is `true`.
+/// ## Parameters
+///
+/// - `args` — configuration for dialog appearance and the `on_close_request` callback; see [`DialogProviderArgs`].
+/// - `state` — a clonable [`DialogProviderState`] handle; use `DialogProviderState::new()` to create one.
+/// - `main_content` — closure that renders the always-visible base UI.
+/// - `dialog_content` — closure that renders dialog content; receives a `f32` alpha for animation.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui_basic_components::dialog::DialogProviderState;
+/// let state = DialogProviderState::new();
+/// assert!(!state.is_open());
+/// state.open();
+/// assert!(state.is_open());
+/// state.close();
+/// assert!(!state.is_open());
+/// ```
 #[tessera]
 pub fn dialog_provider(
     args: DialogProviderArgs,
-    state: Arc<RwLock<DialogProviderState>>,
+    state: DialogProviderState,
     main_content: impl FnOnce(),
     dialog_content: impl FnOnce(f32) + Send + Sync + 'static,
 ) {
@@ -375,10 +326,7 @@ pub fn dialog_provider(
 
     // 2. If the dialog is open, render the modal overlay.
     // Sample state once to avoid repeated locks and improve readability.
-    let (is_open, timer_opt) = {
-        let guard = state.read();
-        (guard.is_open, guard.timer)
-    };
+    let (is_open, timer_opt) = state.snapshot();
 
     let is_animating = timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME);
 

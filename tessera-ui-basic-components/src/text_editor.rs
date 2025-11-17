@@ -1,21 +1,8 @@
-//! Multi-line text editor component for the Tessera UI framework.
+//! A multi-line text editor component.
 //!
-//! This module provides a robust, customizable multi-line text editor designed for integration into Tessera-based applications.
-//! It features a two-layer architecture: a surface layer for visual container and click area, and a core layer for text rendering and editing logic.
+//! ## Usage
 //!
-//! # Features
-//! - Unicode multi-line text editing
-//! - Full cursor and selection management (mouse, keyboard, drag, double/triple click)
-//! - IME/preedit support for CJK and complex input
-//! - Customizable appearance (background, border, shape, padding, selection color)
-//! - Focus management and event handling
-//! - Scroll support via mouse wheel or keyboard
-//!
-//! # Usage
-//! The editor state is managed externally via [`TextEditorState`] (typically wrapped in `Arc<RwLock<...>>`).
-//! The [`text_editor`] component can be configured using [`TextEditorArgs`] for layout and appearance customization.
-//!
-//! Typical use cases include form inputs, code editors, chat boxes, and any scenario requiring rich text input within a Tessera UI application.
+//! Use for text input fields, forms, or any place that requires editable text.
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -35,49 +22,9 @@ use crate::{
 };
 
 /// State structure for the text editor, managing text content, cursor, selection, and editing logic.
-///
-/// This is a re-export of [`TextEditorState`] from the core text editing module.
-/// It encapsulates all stateful aspects of the editor, including text buffer, cursor position, selection range,
-/// focus handling, and IME/preedit support. The state should be wrapped in `Arc<RwLock<...>>` for safe sharing between UI and event handlers.
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui_basic_components::text_editor::TextEditorState;
-/// use tessera_ui::Dp;
-/// let state = TextEditorState::new(Dp(14.0), None);
-/// ```
 pub use crate::text_edit_core::TextEditorState;
 
 /// Arguments for configuring the [`text_editor`] component.
-///
-/// `TextEditorArgs` provides flexible options for layout, appearance, and interaction of the text editor.
-/// All fields are optional and have sensible defaults. Use the builder pattern or convenience methods for construction.
-///
-/// # Fields
-///
-/// - `width`, `height`: Optional constraints for the editor's size (logical pixels or fill/wrap).
-/// - `min_width`, `min_height`: Minimum size in density-independent pixels (Dp).
-/// - `background_color`, `focus_background_color`: Editor background color (normal/focused).
-/// - `border_width`, `border_color`, `focus_border_color`: Border styling (width and color, normal/focused).
-/// - `shape`: Shape of the editor container (e.g., rounded rectangle).
-/// - `padding`: Inner padding (Dp).
-/// - `selection_color`: Highlight color for selected text.
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui_basic_components::text_editor::{TextEditorArgs, TextEditorArgsBuilder};
-/// use tessera_ui::{Dp, DimensionValue, Px, Color};
-///
-/// let args = TextEditorArgsBuilder::default()
-///     .width(DimensionValue::Fixed(Px(300)))
-///     .height(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) })
-///     .background_color(Some(Color::WHITE))
-///     .padding(Dp(8.0))
-///     .build()
-///     .unwrap();
-/// ```
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TextEditorArgs {
@@ -88,8 +35,6 @@ pub struct TextEditorArgs {
     #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub height: DimensionValue,
     /// Called when the text content changes. The closure receives the new text content and returns the updated content.
-    ///
-    /// For default, it is a no-op that returns an empty string. Which means the text editor will not accept any input.
     #[builder(default = "Arc::new(|_| { String::new() })")]
     pub on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
     /// Minimum width in density-independent pixels. Defaults to 120dp if not specified.
@@ -142,62 +87,45 @@ impl Default for TextEditorArgs {
     }
 }
 
-/// A text editor component with two-layer architecture:
-/// - surface layer: provides visual container, minimum size, and click area
-/// - Core layer: handles text rendering and editing logic
+/// # text_editor
 ///
-/// This design solves the issue where empty text editors had zero width and couldn't be clicked.
+/// Renders a multi-line, editable text field.
 ///
-/// # Example
+/// ## Usage
+///
+/// Create an interactive text editor for forms, note-taking, or other text input scenarios.
+///
+/// ## Parameters
+///
+/// - `args` — configures the editor's appearance and layout; see [`TextEditorArgs`].
+/// - `state` — an `Arc<RwLock<TextEditorState>>` to manage the editor's content, cursor, and selection.
+///
+/// ## Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::text_editor::{text_editor, TextEditorArgs, TextEditorArgsBuilder, TextEditorState};
-/// use tessera_ui::{Dp, DimensionValue, Px};
 /// use std::sync::Arc;
 /// use parking_lot::RwLock;
+/// use tessera_ui::Dp;
+/// use tessera_ui_basic_components::{
+///     text_editor::{text_editor, TextEditorArgsBuilder, TextEditorState},
+///     pipelines::write_font_system,
+/// };
 ///
-/// let args = TextEditorArgsBuilder::default()
-///     .width(DimensionValue::Fixed(Px(300)))
-///     .height(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) })
-///     .build()
-///     .unwrap();
+/// // In a real app, you would manage this state.
+/// let editor_state = Arc::new(RwLock::new(TextEditorState::new(Dp(14.0), None)));
+/// editor_state.write().editor_mut().set_text_reactive(
+///     "Initial text",
+///     &mut write_font_system(),
+///     &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
+/// );
 ///
-/// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(12.0), None)));
-/// // text_editor(args, state);
-/// ```
-/// Multi-line text editor component with full state management, cursor, selection, and IME support.
-///
-/// The `text_editor` component provides a robust, customizable multi-line text editing area.
-/// It supports keyboard and mouse input, selection, cursor movement, IME/preedit, and scroll handling.
-/// State is managed externally via [`TextEditorState`] (typically wrapped in `Arc<RwLock<...>>`).
-///
-/// # Features
-/// - Multi-line text editing with Unicode support
-/// - Full cursor and selection management (mouse, keyboard, drag, double/triple click)
-/// - IME/preedit support for CJK and complex input
-/// - Customizable appearance (background, border, shape, padding, selection color)
-/// - Focus management and event handling
-/// - Scroll via mouse wheel or keyboard
-///
-/// # Parameters
-/// - `args`: Editor configuration, see [`TextEditorArgs`].
-/// - `state`: Shared editor state, see [`TextEditorState`].
-///
-/// # Example
-/// ```
-/// use tessera_ui_basic_components::text_editor::{text_editor, TextEditorArgs, TextEditorArgsBuilder, TextEditorState};
-/// use tessera_ui::{Dp, DimensionValue, Px};
-/// use std::sync::Arc;
-/// use parking_lot::RwLock;
-///
-/// let args = TextEditorArgsBuilder::default()
-///     .width(DimensionValue::Fixed(Px(300)))
-///     .height(DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(500)) })
-///     .build()
-///     .unwrap();
-///
-/// let state = Arc::new(RwLock::new(TextEditorState::new(Dp(12.0), None)));
-/// text_editor(args, state);
+/// text_editor(
+///     TextEditorArgsBuilder::default()
+///         .padding(Dp(8.0))
+///         .build()
+///         .unwrap(),
+///     editor_state,
+/// );
 /// ```
 #[tessera]
 pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditorState>>) {

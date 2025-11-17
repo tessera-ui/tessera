@@ -13,7 +13,7 @@ use tessera_ui_basic_components::{
 
 #[derive(Clone)]
 struct TextEditorShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
+    scrollable_state: ScrollableState,
     editor_state: Arc<RwLock<TextEditorState>>,
 }
 

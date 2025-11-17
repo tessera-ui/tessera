@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
@@ -12,7 +10,7 @@ use tessera_ui_basic_components::{
 
 #[derive(Default, Clone)]
 pub struct SpacerShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
+    scrollable_state: ScrollableState,
 }
 
 #[tessera]

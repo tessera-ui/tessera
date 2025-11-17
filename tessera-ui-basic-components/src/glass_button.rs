@@ -1,12 +1,8 @@
-//! Provides an interactive button component with a glassmorphic (glass-like) background and ripple effect.
+//! An interactive button with a glassmorphic background.
 //!
-//! This module defines `glass_button`, a highly customizable button for modern UI applications.
-//! It combines advanced glass visual effects with interactive feedback, supporting primary, secondary,
-//! success, and danger styles. Typical use cases include visually distinctive action buttons in
-//! glassmorphic or layered interfaces, where both aesthetics and user feedback are important.
+//! ## Usage
 //!
-//! The component is suitable for dashboards, dialogs, toolbars, and any context requiring
-//! a visually appealing, interactive button with a translucent, layered look.
+//! Use for visually distinctive actions in layered or modern UIs.
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -123,22 +119,21 @@ impl GlassButtonArgs {
     }
 }
 
-/// An interactive button with a fluid, glass-like background and a ripple effect on click.
+/// # glass_button
 ///
-/// This component combines a `fluid_glass` background for advanced visual effects with a
-/// ripple animation to provide clear user feedback. It is highly customizable, allowing
-/// control over the glass appearance, layout, and interaction behavior.
+/// Renders an interactive button with a customizable glass effect and ripple animation.
 ///
-/// # Arguments
+/// ## Usage
 ///
-/// * `args` - A struct that provides detailed configuration for the button's appearance
-///   and behavior. See [`GlassButtonArgs`] for more details.
-/// * `ripple_state` - The state manager for the ripple animation. It should be created
-///   once and shared across recompositions.
-/// * `child` - A closure that defines the content displayed inside the button, such as text
-///   or an icon.
+/// Use as a primary action button where a modern, layered look is desired.
 ///
-/// # Example
+/// ## Parameters
+///
+/// - `args` — configures the button's glass appearance and `on_click` handler; see [`GlassButtonArgs`].
+/// - `ripple_state` — a clonable [`RippleState`] to manage the ripple animation.
+/// - `child` — a closure that renders the button's content (e.g., text or an icon).
+///
+/// ## Examples
 ///
 /// ```
 /// use std::sync::Arc;
@@ -146,28 +141,25 @@ impl GlassButtonArgs {
 /// use tessera_ui_basic_components::{
 ///     glass_button::{glass_button, GlassButtonArgs},
 ///     ripple_state::RippleState,
-///     text::text,
+///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// let ripple_state = Arc::new(RippleState::new());
+/// let ripple_state = RippleState::new();
+///
 /// glass_button(
 ///     GlassButtonArgs {
-///         on_click: Some(Arc::new(|| { /* Handle click */ })),
-///         tint_color: Color::new(0.3, 0.2, 0.5, 0.4),
+///         on_click: Some(Arc::new(|| println!("Button clicked!"))),
+///         tint_color: Color::new(0.2, 0.3, 0.8, 0.3),
 ///         ..Default::default()
 ///     },
 ///     ripple_state,
-///     || text("Click Me".to_string()),
+///     || text(TextArgsBuilder::default().text("Click Me".to_string()).build().unwrap()),
 /// );
 /// ```
-/// An interactive button with a fluid glass background and a ripple effect.
-///
-/// This component is a composite of `fluid_glass` for the visuals and a transparent
-/// `surface` for interaction handling and the ripple animation.
 #[tessera]
 pub fn glass_button(
     args: impl Into<GlassButtonArgs>,
-    ripple_state: Arc<RippleState>,
+    ripple_state: RippleState,
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
     let args: GlassButtonArgs = args.into();

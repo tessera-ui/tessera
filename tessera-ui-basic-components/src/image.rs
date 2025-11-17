@@ -1,13 +1,8 @@
-//! This module provides the `image` component and related utilities for rendering images in Tessera UI.
+//! A component for rendering raster images.
 //!
-//! It supports loading image data from file paths or raw bytes, decoding them into a format suitable for GPU rendering,
-//! and displaying them as part of the UI component tree. The main entry point is the [`image()`] component, which can be
-//! sized explicitly or use the intrinsic dimensions of the image. Image data should be loaded and decoded outside the
-//! main UI loop for optimal performance, using [`load_image_from_source`].
+//! ## Usage
 //!
-//! Typical use cases include displaying static images, icons, or dynamically loaded pictures in UI layouts.
-//! The module is designed to integrate seamlessly with Tessera's stateless component model and rendering pipeline.
-
+//! Use to display static or dynamically loaded images.
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -87,46 +82,34 @@ impl From<ImageData> for ImageArgs {
     }
 }
 
-/// A component that renders an image.
+/// # image
 ///
-/// The `image` component displays an image based on the provided [`ImageData`].
-/// It can be explicitly sized or automatically adjust to the intrinsic dimensions
-/// of the image. For optimal performance, image data should be loaded and decoded
-/// before being passed to this component, for example, by using the
-/// [`load_image_from_source`] function.
+/// Renders a raster image, fitting it to the available space or its intrinsic size.
 ///
-/// # Arguments
+/// ## Usage
 ///
-/// * `args` - The arguments for the image component, which can be an instance of
-///   [`ImageArgs`] or anything that converts into it (e.g., [`ImageData`]).
+/// Display a static asset or a dynamically loaded image from a file or memory.
 ///
-/// # Example
+/// ## Parameters
+///
+/// - `args` — configures the image data and layout; see [`ImageArgs`].
+///
+/// ## Examples
 ///
 /// ```no_run
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::{
-///     image::{image, load_image_from_source, ImageArgsBuilder, ImageSource, ImageData},
+/// use tessera_ui_basic_components::image::{
+///     image, load_image_from_source, ImageArgsBuilder, ImageSource,
 /// };
-/// use tessera_ui::{Dp, DimensionValue};
 ///
-/// // In a real application, you would load the image data once and store it.
-/// // The `include_bytes!` macro is used here to load file contents at compile time.
-/// // For dynamic loading from a file path, you could use `ImageSource::Path`.
-/// let image_bytes = Arc::new(*include_bytes!("../../example/examples/assets/scarlet_ut.jpg"));
+/// // In a real app, you might load image bytes from a file at runtime.
+/// // For this example, we include the bytes at compile time.
+/// let image_bytes = Arc::new(*include_bytes!("../../assets/counter.png"));
 /// let image_data = load_image_from_source(&ImageSource::Bytes(image_bytes))
 ///     .expect("Failed to load image");
 ///
-/// // Renders the image with its intrinsic size by passing `ImageData` directly.
-/// image(image_data.clone());
-///
-/// // Renders the image with a fixed width using `ImageArgs`.
-/// image(
-///     ImageArgsBuilder::default()
-///         .data(image_data)
-///         .width(DimensionValue::Fixed(Dp(100.0).into()))
-///         .build()
-///         .unwrap(),
-/// );
+/// // Render the image using its loaded data.
+/// image(image_data);
 /// ```
 #[tessera]
 pub fn image(args: impl Into<ImageArgs>) {

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, Renderer, tessera};
 use tessera_ui_basic_components::{
     alignment::Alignment,
@@ -10,7 +9,7 @@ use tessera_ui_basic_components::{
 };
 
 #[tessera]
-fn app(switch_state: Arc<RwLock<GlassSwitchState>>) {
+fn app(switch_state: GlassSwitchState) {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fill {
@@ -63,7 +62,7 @@ fn app(switch_state: Arc<RwLock<GlassSwitchState>>) {
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let switch_state = Arc::new(RwLock::new(GlassSwitchState::new(false)));
+    let switch_state = GlassSwitchState::new(false);
     Renderer::run(
         {
             let switch_state = switch_state.clone();

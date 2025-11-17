@@ -37,13 +37,13 @@
 //! };
 //!
 //! // Button example
-//! let ripple_state = Arc::new(RippleState::new());
+//! let ripple_state = RippleState::new();
 //! button(
 //!     ButtonArgs {
 //!         on_click: Some(Arc::new(|| { /* Handle click */ })),
 //!         ..Default::default()
 //!     },
-//!     ripple_state,
+//!     ripple_state.clone(),
 //!     || text("Click me".to_string()),
 //! );
 //!

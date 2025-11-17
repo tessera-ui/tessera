@@ -1,43 +1,8 @@
-//! A tabs component that provides a horizontal tab bar with animated indicator and paged content.
+//! A component for creating a tab-based layout.
 //!
-//! The `tabs` component renders a row of tab titles and a content area. It manages an internal
-//! animated indicator that transitions between active tabs and scrolls the content area to match
-//! the selected tab. State (see [`TabsState`]) is provided by the application to control the
-//! currently active tab and animation progress.
+//! ## Usage
 //!
-//! # Key Components
-//!
-//! * **[`tabs`]**: The main component function. Call it inside a component to render a tab group.
-//! * **[`TabsState`]**: Holds active tab index, animation progress and per-tab ripple states.
-//! * **[`TabsArgs`]**: Configuration for the tabs layout and indicator color.
-//!
-//! # Behavior
-//!
-//! - The active tab indicator animates between tabs using an easing function.
-//! - Clicking a tab updates the shared [`TabsState`] (via [`TabsState::set_active_tab`] ) and
-//!   triggers the indicator/content animation.
-//! - The component registers a `input_handler` to advance the animation while a transition is in progress.
-//!
-//! # Example
-//!
-//! ```
-//! use std::sync::Arc;
-//! use parking_lot::RwLock;
-//! use tessera_ui_basic_components::tabs::{tabs, TabsArgsBuilder, TabsState};
-//!
-//! // Shared state for the tabs (start on tab 0)
-//! let tabs_state = Arc::new(RwLock::new(TabsState::new(0)));
-//!
-//! // Render a simple tab group with two tabs (titles and contents are closures)
-//! tabs(
-//!     TabsArgsBuilder::default().build().unwrap(),
-//!     tabs_state.clone(),
-//!     |scope| {
-//!         scope.child(|| { /* title 0 */ }, || { /* content 0 */ });
-//!         scope.child(|| { /* title 1 */ }, || { /* content 1 */ });
-//!     },
-//! );
-//! ```
+//! Use to organize content into separate pages that can be switched between.
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -82,11 +47,11 @@ fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
 
 /// Holds the mutable state used by the [`tabs`] component.
 ///
-/// Create and share this value across UI parts with `Arc<RwLock<TabsState>>`. The state tracks the
+/// Clone this handle to share it across UI parts. The state tracks the
 /// active tab index, previous index, animation progress and cached values used to animate the
 /// indicator and content scrolling. The component mutates parts of this state when a tab is
 /// switched; callers may also read the active tab via [`TabsState::active_tab`].
-pub struct TabsState {
+struct TabsStateInner {
     active_tab: usize,
     prev_active_tab: usize,
     progress: f32,
@@ -97,18 +62,11 @@ pub struct TabsState {
     indicator_to_x: Px,
     content_scroll_offset: Px,
     target_content_scroll_offset: Px,
-    ripple_states: HashMap<usize, Arc<RippleState>>,
+    ripple_states: HashMap<usize, RippleState>,
 }
 
-impl Default for TabsState {
-    fn default() -> Self {
-        Self::new(0)
-    }
-}
-
-impl TabsState {
-    /// Create a new state with the specified initial active tab.
-    pub fn new(initial_tab: usize) -> Self {
+impl TabsStateInner {
+    fn new(initial_tab: usize) -> Self {
         Self {
             active_tab: initial_tab,
             prev_active_tab: initial_tab,
@@ -129,7 +87,7 @@ impl TabsState {
     /// If the requested index equals the current active tab this is a no-op.
     /// Otherwise the method updates cached indicator/content positions and resets the animation
     /// progress so the component will animate to the new active tab.
-    pub fn set_active_tab(&mut self, index: usize) {
+    fn set_active_tab(&mut self, index: usize) {
         if self.active_tab != index {
             self.prev_active_tab = self.active_tab;
             self.active_tab = index;
@@ -148,21 +106,92 @@ impl TabsState {
         }
     }
 
+    fn ripple_state(&mut self, index: usize) -> RippleState {
+        self.ripple_states.entry(index).or_default().clone()
+    }
+}
+
+#[derive(Clone)]
+pub struct TabsState {
+    inner: Arc<RwLock<TabsStateInner>>,
+}
+
+impl TabsState {
+    /// Create a new state with the specified initial active tab.
+    pub fn new(initial_tab: usize) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(TabsStateInner::new(initial_tab))),
+        }
+    }
+
+    pub fn set_active_tab(&self, index: usize) {
+        self.inner.write().set_active_tab(index);
+    }
+
     /// Returns the currently active tab index.
     pub fn active_tab(&self) -> usize {
-        self.active_tab
+        self.inner.read().active_tab
     }
 
     /// Returns the previously active tab index (useful during animated transitions).
     pub fn prev_active_tab(&self) -> usize {
-        self.prev_active_tab
+        self.inner.read().prev_active_tab
+    }
+
+    pub fn last_switch_time(&self) -> Option<Instant> {
+        self.inner.read().last_switch_time
+    }
+
+    pub fn set_progress(&self, progress: f32) {
+        self.inner.write().progress = progress;
+    }
+
+    pub fn progress(&self) -> f32 {
+        self.inner.read().progress
+    }
+
+    pub fn content_offsets(&self) -> (Px, Px) {
+        let inner = self.inner.read();
+        (
+            inner.content_scroll_offset,
+            inner.target_content_scroll_offset,
+        )
+    }
+
+    pub fn update_content_offsets(&self, current: Px, target: Px) {
+        let mut inner = self.inner.write();
+        inner.content_scroll_offset = current;
+        inner.target_content_scroll_offset = target;
+    }
+
+    pub fn set_indicator_targets(&self, width: Px, x: Px) {
+        let mut inner = self.inner.write();
+        inner.indicator_to_width = width;
+        inner.indicator_to_x = x;
+    }
+
+    pub fn indicator_metrics(&self) -> (Px, Px, Px, Px) {
+        let inner = self.inner.read();
+        (
+            inner.indicator_from_width,
+            inner.indicator_to_width,
+            inner.indicator_from_x,
+            inner.indicator_to_x,
+        )
+    }
+
+    pub fn ripple_state(&self, index: usize) -> RippleState {
+        self.inner.write().ripple_state(index)
+    }
+}
+
+impl Default for TabsState {
+    fn default() -> Self {
+        Self::new(0)
     }
 }
 
 /// Configuration arguments for the [`tabs`] component.
-///
-/// * `indicator_color` - Color used to draw the active tab indicator.
-/// * `width`/`height` - Preferred size behavior for the tabs component.
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TabsArgs {
@@ -241,20 +270,48 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
     ));
 }
 
-/// Renders a tabs control with a row of titles and a paged content area.
+/// # tabs
 ///
-/// # Arguments
+/// Renders a set of tabs with corresponding content pages.
 ///
-/// - `args`: Configuration for indicator color and preferred sizing. See [`TabsArgs`].
-/// - `state`: Shared state (typically `Arc<RwLock<TabsState>>`) used to read and update the active tab
-///   and animation progress.
-/// - `scope_config`: A closure that receives a [`TabsScope`] which should be used to register each
-///   tab via `scope.child(title_closure, content_closure)`.
+/// ## Usage
 ///
-/// The function renders the title buttons (using `button(...)`) and a content container that pages
-/// horizontally between tab contents. Clicking a title will call [`TabsState::set_active_tab`].
+/// Display a row of tab titles and a content area that switches between different views.
+///
+/// ## Parameters
+///
+/// - `args` — configures the tabs' layout and indicator color; see [`TabsArgs`].
+/// - `state` — a clonable [`TabsState`] to manage the active tab and animation.
+/// - `scope_config` — a closure that receives a [`TabsScope`] for defining each tab's title and content.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui_basic_components::{
+///     tabs::{tabs, TabsArgsBuilder, TabsState},
+///     text::{text, TextArgsBuilder},
+/// };
+///
+/// // In a real app, you would manage this state.
+/// let tabs_state = TabsState::new(0);
+///
+/// tabs(
+///     TabsArgsBuilder::default().build().unwrap(),
+///     tabs_state,
+///     |scope| {
+///         scope.child(
+///             || text(TextArgsBuilder::default().text("Tab 1".to_string()).build().unwrap()),
+///             || text(TextArgsBuilder::default().text("Content for Tab 1").build().unwrap())
+///         );
+///         scope.child(
+///             || text(TextArgsBuilder::default().text("Tab 2".to_string()).build().unwrap()),
+///             || text(TextArgsBuilder::default().text("Content for Tab 2").build().unwrap())
+///         );
+///     },
+/// );
+/// ```
 #[tessera]
-pub fn tabs<F>(args: TabsArgs, state: Arc<RwLock<TabsState>>, scope_config: F)
+pub fn tabs<F>(args: TabsArgs, state: TabsState, scope_config: F)
 where
     F: FnOnce(&mut TabsScope),
 {
@@ -263,7 +320,7 @@ where
     scope_config(&mut scope);
 
     let num_tabs = tabs.len();
-    let active_tab = state.read().active_tab.min(num_tabs.saturating_sub(1));
+    let active_tab = state.active_tab().min(num_tabs.saturating_sub(1));
 
     let (title_closures, content_closures): (Vec<_>, Vec<_>) =
         tabs.into_iter().map(|def| (def.title, def.content)).unzip();
@@ -286,12 +343,7 @@ where
         } else {
             Color::TRANSPARENT
         };
-        let ripple_state = state
-            .write()
-            .ripple_states
-            .entry(index)
-            .or_insert_with(|| Arc::new(RippleState::new()))
-            .clone();
+        let ripple_state = state.ripple_state(index);
         let state_clone = state.clone();
 
         let shape = if index == 0 {
@@ -317,9 +369,12 @@ where
         button(
             ButtonArgsBuilder::default()
                 .color(color)
-                .on_click(Arc::new(move || {
-                    state_clone.write().set_active_tab(index);
-                }))
+                .on_click({
+                    let state_clone = state_clone.clone();
+                    Arc::new(move || {
+                        state_clone.set_active_tab(index);
+                    })
+                })
                 .width(DimensionValue::FILLED)
                 .shape(shape)
                 .build()
@@ -330,11 +385,10 @@ where
     }
 
     let scroll_offset = {
-        let eased_progress = animation::easing(state.read().progress);
-        let offset = state.read().content_scroll_offset.0 as f32
-            + (state.read().target_content_scroll_offset.0 - state.read().content_scroll_offset.0)
-                as f32
-                * eased_progress;
+        let eased_progress = animation::easing(state.progress());
+        let (content_offset, target_offset) = state.content_offsets();
+        let offset =
+            content_offset.0 as f32 + (target_offset.0 - content_offset.0) as f32 * eased_progress;
         Px(offset as i32)
     };
 
@@ -342,11 +396,10 @@ where
 
     let state_clone = state.clone();
     input_handler(Box::new(move |_| {
-        let last_switch_time = state_clone.read().last_switch_time;
-        if let Some(last_switch_time) = last_switch_time {
+        if let Some(last_switch_time) = state_clone.last_switch_time() {
             let elapsed = last_switch_time.elapsed();
             let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
-            state_clone.write().progress = fraction;
+            state_clone.set_progress(fraction);
         }
     }));
 
@@ -411,10 +464,9 @@ where
 
             let final_width = titles_total_width;
             let target_offset = -Px(active_tab as i32 * final_width.0);
-            let target_content_scroll_offset = state.read().target_content_scroll_offset;
+            let (_, target_content_scroll_offset) = state.content_offsets();
             if target_content_scroll_offset != target_offset {
-                state.write().content_scroll_offset = target_content_scroll_offset;
-                state.write().target_content_scroll_offset = target_offset;
+                state.update_content_offsets(target_content_scroll_offset, target_offset);
             }
 
             let (indicator_width, indicator_x) = {
@@ -425,17 +477,14 @@ where
                     .map(|s| s.width)
                     .fold(Px(0), |acc, w| acc + w);
 
-                state.write().indicator_to_width = active_title_width;
-                state.write().indicator_to_x = active_title_x;
+                state.set_indicator_targets(active_title_width, active_title_x);
 
-                let eased_progress = animation::easing(state.read().progress);
-                let width = Px((state.read().indicator_from_width.0 as f32
-                    + (state.read().indicator_to_width.0 - state.read().indicator_from_width.0)
-                        as f32
-                        * eased_progress) as i32);
-                let x = Px((state.read().indicator_from_x.0 as f32
-                    + (state.read().indicator_to_x.0 - state.read().indicator_from_x.0) as f32
-                        * eased_progress) as i32);
+                let (from_width, to_width, from_x, to_x) = state.indicator_metrics();
+                let eased_progress = animation::easing(state.progress());
+                let width = Px((from_width.0 as f32
+                    + (to_width.0 - from_width.0) as f32 * eased_progress)
+                    as i32);
+                let x = Px((from_x.0 as f32 + (to_x.0 - from_x.0) as f32 * eased_progress) as i32);
                 (width, x)
             };
 

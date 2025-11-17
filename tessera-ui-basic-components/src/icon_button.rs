@@ -1,11 +1,8 @@
-//! Icon-aware button helpers built by composing `button`, `glass_button`, and `icon`.
+//! An interactive button that displays an icon.
 //!
-//! These components wrap the lower-level primitives so consumers can render a tappable icon
-//! (regular or glass-style) with a single call, while still exposing the underlying
-//! configuration via `ButtonArgs` / `GlassButtonArgs` and `IconArgs`.
-
-use std::sync::Arc;
-
+//! ## Usage
+//!
+//! Use for compact actions where an icon is sufficient to convey the meaning.
 use derive_builder::Builder;
 use tessera_ui::tessera;
 
@@ -56,9 +53,53 @@ impl GlassIconButtonArgsBuilder {
     }
 }
 
-/// A convenience wrapper that renders an [`icon`] inside a regular [`button`].
+/// # icon_button
+///
+/// Renders a standard button with an icon as its content.
+///
+/// ## Usage
+///
+/// Use for common actions like "edit", "delete", or "settings" in a toolbar or list item.
+///
+/// ## Parameters
+///
+/// - `args` — configures the underlying button and the icon; see [`IconButtonArgs`].
+/// - `ripple_state` — a clonable [`RippleState`] to manage the ripple animation.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use std::sync::Arc;
+/// use tessera_ui_basic_components::{
+///     icon_button::{icon_button, IconButtonArgsBuilder},
+///     button::ButtonArgsBuilder,
+///     icon::IconArgsBuilder,
+///     image_vector::{ImageVectorSource, load_image_vector_from_source},
+///     ripple_state::RippleState,
+/// };
+///
+/// let ripple_state = RippleState::new();
+/// let svg_path = "../assets/emoji_u1f416.svg";
+/// let vector_data = load_image_vector_from_source(
+///     &ImageVectorSource::Path(svg_path.to_string())
+/// ).unwrap();
+///
+/// icon_button(
+///     IconButtonArgsBuilder::default()
+///         .button(
+///             ButtonArgsBuilder::default()
+///                 .on_click(Arc::new(|| {}))
+///                 .build()
+///                 .unwrap()
+///         )
+///         .icon(IconArgsBuilder::default().content(vector_data.clone()).build().unwrap())
+///         .build()
+///         .unwrap(),
+///     ripple_state,
+/// );
+/// ```
 #[tessera]
-pub fn icon_button(args: impl Into<IconButtonArgs>, ripple_state: Arc<RippleState>) {
+pub fn icon_button(args: impl Into<IconButtonArgs>, ripple_state: RippleState) {
     let args: IconButtonArgs = args.into();
     let icon_args = args.icon.clone();
 
@@ -67,9 +108,53 @@ pub fn icon_button(args: impl Into<IconButtonArgs>, ripple_state: Arc<RippleStat
     });
 }
 
-/// A glass-styled variant of [`icon_button`] built on top of [`glass_button`].
+/// # glass_icon_button
+///
+/// Renders a button with a glass effect and an icon as its content.
+///
+/// ## Usage
+///
+/// Use for prominent icon-based actions in a modern, layered UI.
+///
+/// ## Parameters
+///
+/// - `args` — configures the underlying glass button and the icon; see [`GlassIconButtonArgs`].
+/// - `ripple_state` — a clonable [`RippleState`] to manage the ripple animation.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use std::sync::Arc;
+/// use tessera_ui_basic_components::{
+///     icon_button::{glass_icon_button, GlassIconButtonArgsBuilder},
+///     glass_button::GlassButtonArgsBuilder,
+///     icon::IconArgsBuilder,
+///     image_vector::{ImageVectorSource, load_image_vector_from_source},
+///     ripple_state::RippleState,
+/// };
+///
+/// let ripple_state = RippleState::new();
+/// let svg_path = "../assets/emoji_u1f416.svg";
+/// let vector_data = load_image_vector_from_source(
+///     &ImageVectorSource::Path(svg_path.to_string())
+/// ).unwrap();
+///
+/// glass_icon_button(
+///     GlassIconButtonArgsBuilder::default()
+///         .button(
+///             GlassButtonArgsBuilder::default()
+///                 .on_click(Arc::new(|| {}))
+///                 .build()
+///                 .unwrap()
+///         )
+///         .icon(IconArgsBuilder::default().content(vector_data).build().unwrap())
+///         .build()
+///         .unwrap(),
+///     ripple_state,
+/// );
+/// ```
 #[tessera]
-pub fn glass_icon_button(args: impl Into<GlassIconButtonArgs>, ripple_state: Arc<RippleState>) {
+pub fn glass_icon_button(args: impl Into<GlassIconButtonArgs>, ripple_state: RippleState) {
     let args: GlassIconButtonArgs = args.into();
     let icon_args = args.icon.clone();
 

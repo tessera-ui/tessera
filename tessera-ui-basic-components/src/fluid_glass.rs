@@ -1,12 +1,8 @@
-//! Fluid glass effect module for Tessera UI Basic Components.
+//! A component for creating a frosted/distorted glass visual effect.
 //!
-//! This module provides the core implementation for the "fluid glass" (frosted/distorted glass) visual effect,
-//! including parameter structures, builder patterns, and the main `fluid_glass` component.
-//! It enables highly customizable backgrounds with blur, tint, chromatic dispersion, noise, and ripple effects,
-//! suitable for creating modern, layered user interfaces with enhanced depth and focus.
-//! Typical use cases include backgrounds for buttons, sliders, switches, and other interactive UI elements
-//! where a dynamic, visually appealing glass-like surface is desired.
-
+//! ## Usage
+//!
+//! Use as a background for buttons, panels, or other UI elements.
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -182,7 +178,7 @@ impl DrawCommand for FluidGlassCommand {
 // These helpers operate on the injected InputHandlerInput type from the core crate.
 fn handle_click_state(
     args: &FluidGlassArgs,
-    ripple_state: Option<Arc<RippleState>>,
+    ripple_state: Option<RippleState>,
     on_click: Arc<dyn Fn() + Send + Sync>,
     input: &mut tessera_ui::InputHandlerInput,
 ) {
@@ -283,41 +279,36 @@ fn apply_fluid_glass_accessibility(
     }
 }
 
-/// Creates a fluid glass effect component, which serves as a dynamic and visually appealing background.
+/// # fluid_glass
 ///
-/// The `fluid_glass` component simulates the look of frosted or distorted glass with a fluid,
-/// animated texture. It can be used to create modern, layered user interfaces where the background
-/// content is blurred and stylized, enhancing depth and focus. The effect is highly customizable
-/// through `FluidGlassArgs`.
+/// Renders a highly customizable surface with blur, tint, and other glass-like effects.
 ///
-/// # Example
+/// ## Usage
+///
+/// Use to create a dynamic, layered background for other components.
+///
+/// ## Parameters
+///
+/// - `args` — configures the glass effect's appearance; see [`FluidGlassArgs`].
+/// - `ripple_state` — an optional [`RippleState`] to manage a ripple animation on interaction.
+/// - `child` — a closure that renders content on top of the glass surface.
+///
+/// ## Examples
 ///
 /// ```
 /// use tessera_ui_basic_components::{
 ///     fluid_glass::{fluid_glass, FluidGlassArgs},
-///     text::text,
+///     text::{text, TextArgsBuilder},
 /// };
 ///
 /// fluid_glass(FluidGlassArgs::default(), None, || {
-///     text("Content on glass".to_string());
+///     text(TextArgsBuilder::default().text("Content on glass".to_string()).build().unwrap());
 /// });
 /// ```
-///
-/// # Arguments
-///
-/// * `args` - A `FluidGlassArgs` struct that specifies the appearance and behavior of the glass
-///   effect. This includes properties like tint color, shape, blur radius, and noise level.
-///   The builder pattern is recommended for constructing the arguments.
-///
-/// * `ripple_state` - An optional `Arc<RippleState>` to enable and manage a ripple effect on user
-///   interaction, such as a click. When `None`, no ripple effect is applied.
-///
-/// * `child` - A closure that defines the child components to be rendered on top of the glass surface.
-///   These children will be contained within the bounds of the `fluid_glass` component.
 #[tessera]
 pub fn fluid_glass(
     mut args: FluidGlassArgs,
-    ripple_state: Option<Arc<RippleState>>,
+    ripple_state: Option<RippleState>,
     child: impl FnOnce(),
 ) {
     if let Some(ripple_state) = &ripple_state

@@ -8,8 +8,6 @@
 //! The example creates three scrollable areas with different behaviors
 //! and plenty of content to demonstrate scrolling.
 
-use std::sync::Arc;
-
 use tessera_ui::{Color, DimensionValue, Dp, Renderer};
 use tessera_ui_basic_components::{
     column::{ColumnArgs, column},
@@ -24,9 +22,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
     // Create states for each scrollable area
-    let state_always_visible = Arc::new(ScrollableState::new());
-    let state_auto_hide = Arc::new(ScrollableState::new());
-    let state_hidden = Arc::new(ScrollableState::new());
+    let state_always_visible = ScrollableState::new();
+    let state_auto_hide = ScrollableState::new();
+    let state_hidden = ScrollableState::new();
 
     Renderer::run(
         || {

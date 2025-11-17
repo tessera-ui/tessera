@@ -22,7 +22,7 @@ pub fn text_showcase(#[state] scrollable_state: ScrollableState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                scrollable_state,
+                scrollable_state.as_ref().clone(),
                 || {
                     surface(
                         SurfaceArgsBuilder::default()

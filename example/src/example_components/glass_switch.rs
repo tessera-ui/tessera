@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
@@ -13,9 +12,9 @@ use tessera_ui_basic_components::{
 
 #[derive(Clone, Default)]
 struct GlassSwitchShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
-    glass_switch_state: Arc<RwLock<GlassSwitchState>>,
-    glass_switch_state2: Arc<RwLock<GlassSwitchState>>,
+    scrollable_state: ScrollableState,
+    glass_switch_state: GlassSwitchState,
+    glass_switch_state2: GlassSwitchState,
 }
 
 #[tessera]

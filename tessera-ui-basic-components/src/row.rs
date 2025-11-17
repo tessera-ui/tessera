@@ -1,33 +1,8 @@
-//! # Row Component
+//! A horizontal layout component.
 //!
-//! Provides the [`row`] component and related utilities for horizontal layout in Tessera UI.
+//! ## Usage
 //!
-//! This module defines a flexible and composable row layout component, allowing child components to be arranged horizontally with customizable alignment, sizing, and weighted space distribution. It is a fundamental building block for constructing responsive UI layouts, such as toolbars, navigation bars, forms, and any scenario requiring horizontal stacking of elements.
-//!
-//! ## Features
-//!
-//! - Horizontal arrangement of child components
-//! - Support for main/cross axis alignment and flexible sizing
-//! - Weighted children for proportional space allocation
-//!
-//! ## Typical Usage
-//!
-//! Use the [`row`] component to build horizontal layouts, optionally combining with [`column`](crate::column) for complex grid or responsive designs.
-//!
-//! See the documentation and examples for details on arguments and usage patterns.
-//!
-//! ---
-//!
-//! This module is part of the `tessera-ui-basic-components` crate.
-//!
-//! ## Example
-//! ```
-//! use tessera_ui_basic_components::{row::{row, RowArgs}, text::text};
-//! row(RowArgs::default(), |scope| {
-//!     scope.child(|| text("A".to_string()));
-//!     scope.child(|| text("B".to_string()));
-//! });
-//! ```
+//! Use to stack children horizontally.
 use derive_builder::Builder;
 use tessera_ui::{
     ComponentNodeMetaDatas, ComputedData, Constraint, DimensionValue, MeasureInput,
@@ -109,14 +84,34 @@ struct MeasureWeightedChildrenArgs<'a> {
     child_weights: &'a [Option<f32>],
 }
 
-/// A row component that arranges its children horizontally.
+/// # row
 ///
-/// The `row` component is a fundamental building block for creating horizontal layouts.
-/// It takes a set of child components and arranges them one after another in a single
-/// row. The layout behavior can be extensively customized through the `RowArgs` struct.
+/// A layout component that arranges its children in a horizontal row.
 ///
-/// Children are added via the `scope` closure, which provides a `RowScope`
-/// to add children declaratively.
+/// ## Usage
+///
+/// Stack components horizontally, with options for alignment and flexible spacing.
+///
+/// ## Parameters
+///
+/// - `args` — configures the row's dimensions and alignment; see [`RowArgs`].
+/// - `scope_config` — a closure that receives a [`RowScope`] for adding children.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui_basic_components::{
+///     row::{row, RowArgs},
+///     text::{text, TextArgsBuilder},
+///     spacer::{spacer, SpacerArgs},
+/// };
+///
+/// row(RowArgs::default(), |scope| {
+///     scope.child(|| text(TextArgsBuilder::default().text("First".to_string()).build().unwrap()));
+///     scope.child_weighted(|| spacer(SpacerArgs::default()), 1.0); // Flexible space
+///     scope.child(|| text(TextArgsBuilder::default().text("Last".to_string()).build().unwrap()));
+/// });
+/// ```
 #[tessera]
 pub fn row<F>(args: RowArgs, scope_config: F)
 where

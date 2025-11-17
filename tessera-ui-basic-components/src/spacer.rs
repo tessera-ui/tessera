@@ -1,23 +1,11 @@
-//! Spacer component for Tessera UI.
+//! An invisible component for creating empty space in a layout.
 //!
-//! This module provides the [`spacer`] component and its configuration struct [`SpacerArgs`].
-//! A spacer is an invisible, non-interactive UI element used to insert empty space between other components
-//! or to create flexible layouts where certain regions expand to fill available space.
+//! ## Usage
 //!
-//! Typical use cases include aligning content within rows or columns, distributing space between widgets,
-//! or enforcing minimum gaps in layouts. The sizing behavior is controlled via [`DimensionValue`], allowing
-//! both fixed-size and flexible (fill) spacers. This is essential for building responsive and adaptive UIs.
-//!
-//! # Examples
-//! - Add a fixed gap between two buttons in a row.
-//! - Use a fill spacer to push content to the edges of a container.
-//! - Combine multiple spacers for complex layout arrangements.
-//!
-//! See [`SpacerArgs`] and [`spacer`] for usage details.
-
+//! Use to add gaps between components or to create flexible, expanding regions.
 use derive_builder::Builder;
 use tessera_ui::{ComputedData, Constraint, DimensionValue, Dp, Px, tessera};
-///
+
 /// Arguments for configuring the [`spacer`] component.
 ///
 /// `SpacerArgs` allows you to specify the width and height behavior of a spacer in a layout.
@@ -148,40 +136,34 @@ impl From<Px> for SpacerArgs {
     }
 }
 
+/// # spacer
 ///
-/// A component that inserts an empty, flexible space into a layout.
+/// Renders an empty, flexible space to influence layout.
 ///
-/// The `spacer` component is commonly used to add gaps between other UI elements,
-/// or to create flexible layouts where certain areas expand to fill available space.
-/// The behavior of the spacer is controlled by the [`SpacerArgs`] parameter, which
-/// allows you to specify fixed or flexible sizing for width and height using [`DimensionValue`].
+/// ## Usage
 ///
-/// - Use `DimensionValue::Fixed` for a fixed-size spacer.
-/// - Use `DimensionValue::Fill` to make the spacer expand to fill available space in its parent container.
+/// Add fixed-size gaps or create flexible space that pushes other components apart.
 ///
-/// # Example
+/// ## Parameters
+///
+/// - `args` — configures the spacer's width and height; see [`SpacerArgs`].
+///
+/// ## Examples
+///
 /// ```
 /// use tessera_ui_basic_components::{
 ///     row::{row, RowArgs},
 ///     spacer::{spacer, SpacerArgs},
-///     text::text,
+///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// row(
-///     RowArgs::default(),
-///     |scope| {
-///         scope.child(|| text("Left".to_string()));
-///         // This spacer will fill the available width, pushing "Right" to the end.
-///         scope.child(|| spacer(SpacerArgs::fill_width()));
-///         scope.child(|| text("Right".to_string()));
-///     }
-/// );
+/// row(RowArgs::default(), |scope| {
+///     scope.child(|| text(TextArgsBuilder::default().text("Left".to_string()).build().unwrap()));
+///     // This spacer will fill the available width, pushing "Right" to the end.
+///     scope.child(|| spacer(SpacerArgs::fill_width()));
+///     scope.child(|| text(TextArgsBuilder::default().text("Right".to_string()).build().unwrap()));
+/// });
 /// ```
-///
-/// You can also use [`SpacerArgs::fill_both`] or [`SpacerArgs::fill_height`] for other layout scenarios.
-///
-/// # Parameters
-/// - `args`: Configuration for the spacer's width and height. Accepts any type convertible to [`SpacerArgs`].
 #[tessera]
 pub fn spacer(args: impl Into<SpacerArgs>) {
     let args: SpacerArgs = args.into();

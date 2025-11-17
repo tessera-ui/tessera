@@ -25,7 +25,7 @@ const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
 
 #[derive(Default)]
 struct FluidGlassShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
+    scrollable_state: ScrollableState,
     example_glass_state: Arc<RwLock<ExampleGlassState>>,
 }
 
@@ -38,7 +38,7 @@ impl Display for CornerRadius {
 }
 
 struct ExampleGlassState {
-    ripple_state: Arc<RippleState>,
+    ripple_state: RippleState,
     width: ConfigSliderState<Dp>,
     height: ConfigSliderState<Dp>,
     border_width: ConfigSliderState<Dp>,
@@ -51,14 +51,14 @@ struct ExampleGlassState {
 
 struct ConfigSliderState<T: Display> {
     value: T,
-    slider_state: Arc<RwLock<GlassSliderState>>,
+    slider_state: GlassSliderState,
 }
 
 impl<T: Display> ConfigSliderState<T> {
     fn new(initial_value: T) -> Self {
         Self {
             value: initial_value,
-            slider_state: Default::default(),
+            slider_state: GlassSliderState::default(),
         }
     }
 }
@@ -87,7 +87,7 @@ impl Default for ExampleGlassState {
         );
 
         Self {
-            ripple_state: Default::default(),
+            ripple_state: RippleState::new(),
             width: ConfigSliderState::new(Dp(100.0)),
             height: ConfigSliderState::new(Dp(100.0)),
             border_width: ConfigSliderState::new(Dp(1.0)),
@@ -417,7 +417,7 @@ fn glass_config_slider(
     label: &str,
     value: f32,
     on_change: Arc<dyn Fn(f32) + Send + Sync>,
-    state: Arc<RwLock<GlassSliderState>>,
+    state: GlassSliderState,
 ) {
     let label = label.to_string();
     column(
@@ -449,16 +449,19 @@ fn glass_config_slider(
                         )
                     });
 
-                    scope.child(move || {
-                        glass_slider(
-                            GlassSliderArgsBuilder::default()
-                                .value(value)
-                                .on_change(on_change)
-                                .width(Dp(300.0))
-                                .build()
-                                .unwrap(),
-                            state,
-                        );
+                    scope.child({
+                        let state = state.clone();
+                        move || {
+                            glass_slider(
+                                GlassSliderArgsBuilder::default()
+                                    .value(value)
+                                    .on_change(on_change)
+                                    .width(Dp(300.0))
+                                    .build()
+                                    .unwrap(),
+                                state,
+                            );
+                        }
                     });
                 });
             });

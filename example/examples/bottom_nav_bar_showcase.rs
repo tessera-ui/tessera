@@ -1,6 +1,3 @@
-use std::sync::Arc;
-
-use parking_lot::RwLock;
 use tessera_ui::{
     Color, DimensionValue, Renderer,
     renderer::TesseraConfig,
@@ -92,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // The state for the bottom_nav_bar is managed here, at the root.
-    let nav_bar_state = Arc::new(RwLock::new(BottomNavBarState::new(0)));
+    let nav_bar_state = BottomNavBarState::new(0);
 
     Renderer::run_with_config(
         {

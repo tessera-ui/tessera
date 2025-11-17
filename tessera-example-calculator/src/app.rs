@@ -2,8 +2,6 @@ mod display_screen;
 mod keyboard;
 pub mod pipelines;
 
-use std::sync::Arc;
-
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use tessera_ui::{shard, tessera};
@@ -22,7 +20,7 @@ struct AppState {
     expr: RwLock<String>,
     result: RwLock<f64>,
     interpreter: RwLock<rsc::Interpreter<f64>>,
-    ripple_states: DashMap<String, Arc<RippleState>>,
+    ripple_states: DashMap<String, RippleState>,
 }
 
 impl Default for AppState {

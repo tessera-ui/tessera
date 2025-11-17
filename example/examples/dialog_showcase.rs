@@ -16,15 +16,17 @@ use tessera_ui_basic_components::{
 
 #[derive(Default)]
 struct AppState {
-    dialog_state: Arc<RwLock<DialogProviderState>>,
-    button_ripple: Arc<RippleState>,
-    close_button_ripple: Arc<RippleState>,
+    dialog_state: DialogProviderState,
+    button_ripple: RippleState,
+    close_button_ripple: RippleState,
 }
 
 #[tessera]
 fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
-    let state = app_state.clone();
-    let button_ripple = state.read().button_ripple.clone();
+    let (button_ripple, dialog_state) = {
+        let state = app_state.read();
+        (state.button_ripple.clone(), state.dialog_state.clone())
+    };
     row(
         RowArgsBuilder::default()
             .main_axis_alignment(MainAxisAlignment::Center)
@@ -40,12 +42,15 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
             .build()
             .unwrap(),
         |scope| {
-            scope.child(|| {
+            scope.child(move || {
                 button(
                     ButtonArgsBuilder::default()
-                        .on_click(Arc::new(move || {
-                            state.write().dialog_state.write().open();
-                        }))
+                        .on_click({
+                            let dialog_state = dialog_state.clone();
+                            Arc::new(move || {
+                                dialog_state.open();
+                            })
+                        })
                         .build()
                         .unwrap(),
                     button_ripple,
@@ -65,8 +70,13 @@ fn dialog_main_content(app_state: Arc<RwLock<AppState>>) {
 
 #[tessera]
 fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
-    let state = app_state.clone();
-    let close_button_ripple = state.read().close_button_ripple.clone();
+    let (close_button_ripple, dialog_state) = {
+        let state = app_state.read();
+        (
+            state.close_button_ripple.clone(),
+            state.dialog_state.clone(),
+        )
+    };
 
     let children: [Box<dyn Fn() + Send + Sync>; _] = [
         Box::new(move || {
@@ -87,14 +97,13 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
             );
         }),
         Box::new(move || {
-            // clone captured Arcs inside this child to avoid moving outer captures
-            let state_for_click = state.clone();
             let ripple_for_call = close_button_ripple.clone();
+            let dialog_state = dialog_state.clone();
             button(
                 ButtonArgsBuilder::default()
                     .color(Color::new(0.2, 0.5, 0.8, content_alpha))
                     .on_click(Arc::new(move || {
-                        state_for_click.write().dialog_state.write().close();
+                        dialog_state.close();
                     }))
                     .build()
                     .unwrap(),
@@ -123,7 +132,7 @@ fn dialog_content(app_state: Arc<RwLock<AppState>>, content_alpha: f32) {
 
 #[tessera]
 fn dialog_provider_wrapper(app_state: Arc<RwLock<AppState>>) {
-    let state_for_provider = app_state.clone();
+    let dialog_state = app_state.read().dialog_state.clone();
     surface(
         SurfaceArgsBuilder::default()
             .style(Color::WHITE.into())
@@ -133,12 +142,13 @@ fn dialog_provider_wrapper(app_state: Arc<RwLock<AppState>>) {
         move || {
             dialog_provider(
                 DialogProviderArgsBuilder::default()
-                    .on_close_request(Arc::new(move || {
-                        state_for_provider.write().dialog_state.write().close();
-                    }))
+                    .on_close_request({
+                        let dialog_state = dialog_state.clone();
+                        Arc::new(move || dialog_state.close())
+                    })
                     .build()
                     .unwrap(),
-                app_state.read().dialog_state.clone(),
+                dialog_state.clone(),
                 {
                     let state = app_state.clone();
                     move || dialog_main_content(state.clone())

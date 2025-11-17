@@ -16,7 +16,7 @@ use tessera_ui_basic_components::{
 
 #[derive(Default, Clone)]
 struct CheckboxShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
+    scrollable_state: ScrollableState,
     is_checked: Arc<AtomicBool>,
     checkbox_state: Arc<CheckboxState>,
 }

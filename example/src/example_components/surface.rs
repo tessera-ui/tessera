@@ -17,7 +17,7 @@ use tessera_ui_basic_components::{
 
 #[derive(Default)]
 struct SurfaceShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
+    scrollable_state: ScrollableState,
     example_surface_state: Arc<RwLock<ExampleSurfaceState>>,
 }
 
@@ -30,7 +30,7 @@ impl Display for CornerRadius {
 }
 
 struct ExampleSurfaceState {
-    ripple_state: Arc<RippleState>,
+    ripple_state: RippleState,
     width: ConfigSliderState<Dp>,
     height: ConfigSliderState<Dp>,
     border_width: ConfigSliderState<Dp>,
@@ -39,14 +39,14 @@ struct ExampleSurfaceState {
 
 struct ConfigSliderState<T: Display> {
     value: T,
-    slider_state: Arc<RwLock<SliderState>>,
+    slider_state: SliderState,
 }
 
 impl<T: Display> ConfigSliderState<T> {
     fn new(initial_value: T) -> Self {
         Self {
             value: initial_value,
-            slider_state: Default::default(),
+            slider_state: SliderState::new(),
         }
     }
 }
@@ -64,7 +64,7 @@ impl Display for ExampleSurfaceState {
 impl Default for ExampleSurfaceState {
     fn default() -> Self {
         Self {
-            ripple_state: Default::default(),
+            ripple_state: RippleState::new(),
             width: ConfigSliderState::new(Dp(100.0)),
             height: ConfigSliderState::new(Dp(100.0)),
             border_width: ConfigSliderState::new(Dp(0.0)),
@@ -300,7 +300,7 @@ fn surface_config_slider(
     label: &str,
     value: f32,
     on_change: Arc<dyn Fn(f32) + Send + Sync>,
-    state: Arc<RwLock<SliderState>>,
+    state: SliderState,
 ) {
     let label = label.to_string();
     column(

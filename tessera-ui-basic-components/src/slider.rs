@@ -1,21 +1,12 @@
-//! A reusable, interactive slider UI component for selecting a value within the range [0.0, 1.0].
+//! An interactive slider component for selecting a value in a range.
 //!
-//! This module provides a customizable horizontal slider, suitable for use in forms, settings panels,
-//! media controls, or any scenario where users need to adjust a continuous value. The slider supports
-//! mouse and keyboard interaction, visual feedback for dragging and focus, and allows full control over
-//! appearance and behavior via configuration options and callbacks.
+//! ## Usage
 //!
-//! Typical use cases include volume controls, progress bars, brightness adjustments, and other parameter selection tasks.
-//!
-//! The slider is fully controlled: you provide the current value and handle updates via a callback.
-//! State management (e.g., dragging, focus) is handled externally and passed in, enabling integration with various UI frameworks.
-//!
-//! See [`SliderArgs`] and [`SliderState`] for configuration and state management details.
-
+//! Use to allow users to select a value from a continuous range.
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, InputHandlerInput,
     MeasureInput, MeasurementError, Px, PxPosition,
@@ -31,31 +22,78 @@ use crate::{
 };
 
 /// Stores the interactive state for the [`slider`] component, such as whether the slider is currently being dragged by the user.
-/// This struct should be managed via [`Arc<Mutex<SliderState>>`] and passed to the [`slider`] function to enable correct interaction handling.
-///
-/// - `is_dragging`: Indicates whether the user is actively dragging the slider thumb.
-/// - `focus`: Manages keyboard focus for the slider component.
-///
-/// [`slider`]: crate::slider
-pub struct SliderState {
+/// The [`SliderState`] handle owns the necessary locking internally, so callers can simply clone and pass it between components.
+pub(crate) struct SliderStateInner {
     /// True if the user is currently dragging the slider.
     pub is_dragging: bool,
     /// The focus handler for the slider.
     pub focus: Focus,
 }
 
-impl Default for SliderState {
+impl Default for SliderStateInner {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SliderState {
+impl SliderStateInner {
     pub fn new() -> Self {
         Self {
             is_dragging: false,
             focus: Focus::new(),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct SliderState {
+    inner: Arc<RwLock<SliderStateInner>>,
+}
+
+impl SliderState {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(SliderStateInner::new())),
+        }
+    }
+
+    pub(crate) fn read(&self) -> RwLockReadGuard<'_, SliderStateInner> {
+        self.inner.read()
+    }
+
+    pub(crate) fn write(&self) -> RwLockWriteGuard<'_, SliderStateInner> {
+        self.inner.write()
+    }
+
+    /// Returns whether the slider thumb is currently being dragged.
+    pub fn is_dragging(&self) -> bool {
+        self.inner.read().is_dragging
+    }
+
+    /// Manually sets the dragging flag. Useful for custom gesture integrations.
+    pub fn set_dragging(&self, dragging: bool) {
+        self.inner.write().is_dragging = dragging;
+    }
+
+    /// Requests focus for the slider.
+    pub fn request_focus(&self) {
+        self.inner.write().focus.request_focus();
+    }
+
+    /// Clears focus from the slider if it is currently focused.
+    pub fn clear_focus(&self) {
+        self.inner.write().focus.unfocus();
+    }
+
+    /// Returns `true` if this slider currently holds focus.
+    pub fn is_focused(&self) -> bool {
+        self.inner.read().focus.is_focused()
+    }
+}
+
+impl Default for SliderState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -115,11 +153,7 @@ fn cursor_progress(cursor_pos: Option<PxPosition>, width_f: f32) -> Option<f32> 
     cursor_pos.map(|pos| (pos.x.0 as f32 / width_f).clamp(0.0, 1.0))
 }
 
-fn handle_slider_state(
-    input: &mut InputHandlerInput,
-    state: &Arc<RwLock<SliderState>>,
-    args: &SliderArgs,
-) {
+fn handle_slider_state(input: &mut InputHandlerInput, state: &SliderState, args: &SliderArgs) {
     if args.disabled {
         return;
     }
@@ -137,28 +171,31 @@ fn handle_slider_state(
     let width_f = input.computed_data.width.0 as f32;
     let mut new_value: Option<f32> = None;
 
-    handle_cursor_events(input, &mut state.write(), &mut new_value, width_f);
-    update_value_on_drag(input, &state.read(), &mut new_value, width_f);
+    handle_cursor_events(input, state, &mut new_value, width_f);
+    update_value_on_drag(input, state, &mut new_value, width_f);
     notify_on_change(new_value, args);
 }
 
 fn handle_cursor_events(
     input: &mut InputHandlerInput,
-    state: &mut SliderState,
+    state: &SliderState,
     new_value: &mut Option<f32>,
     width_f: f32,
 ) {
     for event in input.cursor_events.iter() {
         match &event.content {
             CursorEventContent::Pressed(_) => {
-                state.focus.request_focus();
-                state.is_dragging = true;
+                {
+                    let mut inner = state.write();
+                    inner.focus.request_focus();
+                    inner.is_dragging = true;
+                }
                 if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
                     *new_value = Some(v);
                 }
             }
             CursorEventContent::Released(_) => {
-                state.is_dragging = false;
+                state.write().is_dragging = false;
             }
             _ => {}
         }
@@ -171,7 +208,7 @@ fn update_value_on_drag(
     new_value: &mut Option<f32>,
     width_f: f32,
 ) {
-    if state.is_dragging
+    if state.read().is_dragging
         && let Some(v) = cursor_progress(input.cursor_position_rel, width_f)
     {
         *new_value = Some(v);
@@ -312,56 +349,44 @@ fn measure_slider(
     })
 }
 
-/// Renders a slider UI component that allows users to select a value in the range `[0.0, 1.0]`.
+/// # slider
 ///
-/// The slider displays a horizontal track with a draggable thumb. The current value is visually represented by the filled portion of the track.
-/// The component is fully controlled: you must provide the current value and a callback to handle value changes.
+/// Renders an interactive slider for selecting a value between 0.0 and 1.0.
 ///
-/// # Parameters
-/// - `args`: Arguments for configuring the slider. See [`SliderArgs`] for all options. The most important are:
-///   - `value` (`f32`): The current value of the slider, in the range `[0.0, 1.0]`.
-///   - `on_change` (`Arc<dyn Fn(f32) + Send + Sync>`): Callback invoked when the user changes the slider's value.
-///   - `width`, `track_height`, `active_track_color`, `inactive_track_color`, `disabled`: Appearance and interaction options.
-/// - `state`: Shared state for the slider, used to track interaction (e.g., dragging, focus).
+/// ## Usage
 ///
-/// # State Management
+/// Use for settings like volume or brightness, or for any user-adjustable value.
 ///
-/// The `state` parameter must be an [`Arc<Mutex<SliderState>>`].
+/// ## Parameters
 ///
-/// # Example
+/// - `args` — configures the slider's value, appearance, and callbacks; see [`SliderArgs`].
+/// - `state` — a clonable [`SliderState`] to manage interaction state like dragging and focus.
+///
+/// ## Examples
 ///
 /// ```
 /// use std::sync::Arc;
-/// use parking_lot::RwLock;
 /// use tessera_ui::Dp;
-/// use tessera_ui_basic_components::slider::{slider, SliderArgs, SliderState, SliderArgsBuilder};
+/// use tessera_ui_basic_components::slider::{slider, SliderArgsBuilder, SliderState};
 ///
-/// // In a real application, you would manage the state.
-/// let slider_state = Arc::new(RwLock::new(SliderState::new()));
+/// // In a real application, you would manage this state.
+/// let slider_state = SliderState::new();
 ///
-/// // Create a slider with a width of 200dp and an initial value of 0.5.
 /// slider(
 ///     SliderArgsBuilder::default()
 ///         .width(Dp(200.0))
 ///         .value(0.5)
 ///         .on_change(Arc::new(|new_value| {
-///             // Update your application state here.
-///             println!("Slider value: {}", new_value);
+///             // In a real app, you would update your state here.
+///             println!("Slider value changed to: {}", new_value);
 ///         }))
 ///         .build()
 ///         .unwrap(),
 ///     slider_state,
 /// );
 /// ```
-///
-/// This example demonstrates how to create a stateful slider and respond to value changes by updating your own state.
-///
-/// # See Also
-///
-/// - [`SliderArgs`]
-/// - [`SliderState`]
 #[tessera]
-pub fn slider(args: impl Into<SliderArgs>, state: Arc<RwLock<SliderState>>) {
+pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
     let args: SliderArgs = args.into();
 
     render_track(&args);

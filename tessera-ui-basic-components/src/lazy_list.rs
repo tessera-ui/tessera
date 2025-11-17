@@ -1,10 +1,8 @@
-//! Virtualized list components (`lazy_column` and `lazy_row`) for Tessera UI.
+//! Virtualized list components for displaying long scrolling feeds.
 //!
-//! These components only instantiate and measure the children that intersect the current
-//! viewport, drastically reducing the work needed for long scrolling feeds. They reuse the
-//! existing [`scrollable`](crate::scrollable::scrollable) infrastructure for scroll physics
-//! and scrollbars, layering a virtualization strategy on top.
-
+//! ## Usage
+//!
+//! Use `lazy_column` or `lazy_row` to efficiently display large datasets.
 use std::{ops::Range, sync::Arc};
 
 use derive_builder::Builder;
@@ -23,7 +21,7 @@ const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 /// Persistent state shared by lazy list components.
 #[derive(Default)]
 pub struct LazyListState {
-    scrollable_state: Arc<ScrollableState>,
+    scrollable_state: ScrollableState,
     cache: Arc<RwLock<LazyListCache>>,
 }
 
@@ -33,7 +31,7 @@ impl LazyListState {
         Self::default()
     }
 
-    fn scrollable_state(&self) -> Arc<ScrollableState> {
+    fn scrollable_state(&self) -> ScrollableState {
         self.scrollable_state.clone()
     }
 
@@ -162,6 +160,38 @@ impl<'a> LazyListScope<'a> {
 pub type LazyColumnScope<'a> = LazyListScope<'a>;
 pub type LazyRowScope<'a> = LazyListScope<'a>;
 
+/// # lazy_column
+///
+/// A vertically scrolling list that only renders items visible in the viewport.
+///
+/// ## Usage
+///
+/// Display a long, vertical list of items without incurring the performance cost of rendering every item at once.
+///
+/// ## Parameters
+///
+/// - `args` — configures the list's layout and scrolling behavior; see [`LazyColumnArgs`].
+/// - `state` — a clonable [`LazyListState`] to manage scroll position and item measurement caching.
+/// - `configure` — a closure that receives a [`LazyColumnScope`] for adding items to the list.
+///
+/// ## Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui_basic_components::{
+///     lazy_list::{lazy_column, LazyColumnArgs, LazyListState},
+///     text::{text, TextArgsBuilder},
+/// };
+///
+/// let list_state = Arc::new(LazyListState::new());
+///
+/// lazy_column(LazyColumnArgs::default(), list_state, |scope| {
+///     scope.items(1000, |i| {
+///         let text_content = format!("Item #{}", i);
+///         text(TextArgsBuilder::default().text(text_content).build().unwrap());
+///     });
+/// });
+/// ```
 #[tessera]
 pub fn lazy_column<F>(args: LazyColumnArgs, state: Arc<LazyListState>, configure: F)
 where
@@ -194,6 +224,38 @@ where
     });
 }
 
+/// # lazy_row
+///
+/// A horizontally scrolling list that only renders items visible in the viewport.
+///
+/// ## Usage
+///
+/// Display a long, horizontal list of items, such as a gallery or a set of chips.
+///
+/// ## Parameters
+///
+/// - `args` — configures the list's layout and scrolling behavior; see [`LazyRowArgs`].
+/// - `state` — a clonable [`LazyListState`] to manage scroll position and item measurement caching.
+/// - `configure` — a closure that receives a [`LazyRowScope`] for adding items to the list.
+///
+/// ## Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui_basic_components::{
+///     lazy_list::{lazy_row, LazyRowArgs, LazyListState},
+///     text::{text, TextArgsBuilder},
+/// };
+///
+/// let list_state = Arc::new(LazyListState::new());
+///
+/// lazy_row(LazyRowArgs::default(), list_state, |scope| {
+///     scope.items(100, |i| {
+///         let text_content = format!("Item {}", i);
+///         text(TextArgsBuilder::default().text(text_content).build().unwrap());
+///     });
+/// });
+/// ```
 #[tessera]
 pub fn lazy_row<F>(args: LazyRowArgs, state: Arc<LazyListState>, configure: F)
 where

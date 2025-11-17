@@ -1,15 +1,8 @@
-//! Icon primitives built on top of the raster (`image`) and vector (`image_vector`) components.
+//! A component for rendering raster or vector icons.
 //!
-//! - Pick a source (`IconContent`) once (usually an SVG converted into [`ImageVectorData`]).
-//! - Decide how large the icon should be, defaulting to 24dp – the same default used by most
-//!   UI kits. Override width/height explicitly when icons participate in more complex layouts.
-//! - Optionally tint vector icons so they follow the ambient theme color, without having to
-//!   touch the lower-level drawing commands.
+//! ## Usage
 //!
-//! Icons intentionally do not try to solve asset management. Callers are expected to load and
-//! cache [`ImageVectorData`] / [`ImageData`] the same way they already do for `image` and
-//! `image_vector`, then pass them here.
-
+//! Use to display a scalable icon from image or vector data.
 use std::sync::Arc;
 
 use derive_builder::Builder;
@@ -111,7 +104,43 @@ impl From<Arc<ImageData>> for IconArgs {
     }
 }
 
-/// Renders an icon with consistent sizing semantics and optional tinting.
+/// # icon
+///
+/// Renders an icon with consistent sizing and optional tinting for vectors.
+///
+/// ## Usage
+///
+/// Display a vector or raster image with a uniform size, often inside a button or as a status indicator.
+///
+/// ## Parameters
+///
+/// - `args` — configures the icon's content, size, and tint; see [`IconArgs`].
+///
+/// ## Examples
+///
+/// ```no_run
+/// use std::sync::Arc;
+/// use tessera_ui::Color;
+/// use tessera_ui_basic_components::{
+///     icon::{icon, IconArgsBuilder},
+///     image_vector::{ImageVectorSource, load_image_vector_from_source},
+/// };
+///
+/// // Load vector data from an SVG file.
+/// // In a real app, this should be done once and the data cached.
+/// let svg_path = "../assets/emoji_u1f416.svg";
+/// let vector_data = load_image_vector_from_source(
+///     &ImageVectorSource::Path(svg_path.to_string())
+/// ).unwrap();
+///
+/// icon(
+///     IconArgsBuilder::default()
+///         .content(vector_data)
+///         .tint(Color::new(0.2, 0.5, 0.8, 1.0))
+///         .build()
+///         .unwrap(),
+/// );
+/// ```
 #[tessera]
 pub fn icon(args: impl Into<IconArgs>) {
     let icon_args: IconArgs = args.into();

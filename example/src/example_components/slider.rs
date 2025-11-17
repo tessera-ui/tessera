@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
@@ -11,9 +10,9 @@ use tessera_ui_basic_components::{
 };
 
 struct SliderShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
+    scrollable_state: ScrollableState,
     value: Arc<Mutex<f32>>,
-    slider_state: Arc<RwLock<SliderState>>,
+    slider_state: SliderState,
 }
 
 impl Default for SliderShowcaseState {
@@ -21,7 +20,7 @@ impl Default for SliderShowcaseState {
         Self {
             scrollable_state: Default::default(),
             value: Arc::new(Mutex::new(0.5)),
-            slider_state: Default::default(),
+            slider_state: SliderState::new(),
         }
     }
 }

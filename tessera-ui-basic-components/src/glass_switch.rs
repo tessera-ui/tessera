@@ -1,20 +1,15 @@
-//! # Glass Switch Component Module
+//! A switch (toggle) component with a glassmorphic visual style.
 //!
-//! This module provides a customizable, glassmorphic-style switch (toggle) UI component for the Tessera UI framework.
-//! The glass switch enables toggling a boolean state with smooth animated transitions and a frosted glass visual effect.
-//! It is suitable for modern user interfaces requiring visually appealing, interactive on/off controls, such as settings panels, forms, or dashboards.
-//! The component supports extensive customization, including size, color, border, and animation, and is designed for stateless usage with external state management.
-//! Typical usage involves integrating the switch into application UIs where a clear, elegant toggle is desired.
+//! ## Usage
 //!
-//! See [`glass_switch`] for usage details and customization options.
-
+//! Use in settings, forms, or toolbars to control a boolean state.
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use derive_builder::Builder;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
     PxPosition,
@@ -32,19 +27,19 @@ use crate::{
 const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 
 /// State for the `glass_switch` component, handling animation.
-pub struct GlassSwitchState {
+pub(crate) struct GlassSwitchStateInner {
     checked: bool,
     progress: f32,
     last_toggle_time: Option<Instant>,
 }
 
-impl Default for GlassSwitchState {
+impl Default for GlassSwitchStateInner {
     fn default() -> Self {
         Self::new(false)
     }
 }
 
-impl GlassSwitchState {
+impl GlassSwitchStateInner {
     /// Creates a new `GlassSwitchState` with the given initial checked state.
     pub fn new(initial_state: bool) -> Self {
         Self {
@@ -59,10 +54,57 @@ impl GlassSwitchState {
         self.checked = !self.checked;
         self.last_toggle_time = Some(Instant::now());
     }
+}
+
+#[derive(Clone)]
+pub struct GlassSwitchState {
+    inner: Arc<RwLock<GlassSwitchStateInner>>,
+}
+
+impl GlassSwitchState {
+    pub fn new(initial_state: bool) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(GlassSwitchStateInner::new(initial_state))),
+        }
+    }
+
+    pub(crate) fn read(&self) -> RwLockReadGuard<'_, GlassSwitchStateInner> {
+        self.inner.read()
+    }
+
+    pub(crate) fn write(&self) -> RwLockWriteGuard<'_, GlassSwitchStateInner> {
+        self.inner.write()
+    }
 
     /// Returns whether the switch is currently checked.
     pub fn is_checked(&self) -> bool {
-        self.checked
+        self.inner.read().checked
+    }
+
+    /// Sets the checked state directly, resetting animation progress.
+    pub fn set_checked(&self, checked: bool) {
+        let mut inner = self.inner.write();
+        if inner.checked != checked {
+            inner.checked = checked;
+            inner.progress = if checked { 1.0 } else { 0.0 };
+            inner.last_toggle_time = None;
+        }
+    }
+
+    /// Toggles the switch and starts the animation timeline.
+    pub fn toggle(&self) {
+        self.inner.write().toggle();
+    }
+
+    /// Returns the current animation progress (0.0..1.0).
+    pub fn animation_progress(&self) -> f32 {
+        self.inner.read().progress
+    }
+}
+
+impl Default for GlassSwitchState {
+    fn default() -> Self {
+        Self::new(false)
     }
 }
 
@@ -126,7 +168,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
     }
 }
 
-fn update_progress_from_state(state: Arc<RwLock<GlassSwitchState>>) {
+fn update_progress_from_state(state: GlassSwitchState) {
     let last_toggle_time = state.read().last_toggle_time;
     if let Some(last_toggle_time) = last_toggle_time {
         let elapsed = last_toggle_time.elapsed();
@@ -156,7 +198,7 @@ fn was_pressed_left(input: &tessera_ui::InputHandlerInput) -> bool {
 }
 
 fn handle_input_events(
-    state: Arc<RwLock<GlassSwitchState>>,
+    state: GlassSwitchState,
     on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
     input: &mut tessera_ui::InputHandlerInput,
 ) {
@@ -181,7 +223,7 @@ fn handle_input_events(
 }
 
 fn toggle_glass_switch_state(
-    state: &Arc<RwLock<GlassSwitchState>>,
+    state: &GlassSwitchState,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
 ) -> bool {
     let Some(on_toggle) = on_toggle else {
@@ -195,7 +237,7 @@ fn toggle_glass_switch_state(
 
 fn apply_glass_switch_accessibility(
     input: &mut tessera_ui::InputHandlerInput<'_>,
-    state: &Arc<RwLock<GlassSwitchState>>,
+    state: &GlassSwitchState,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
     label: Option<&String>,
     description: Option<&String>,
@@ -230,49 +272,46 @@ fn apply_glass_switch_accessibility(
         });
     }
 }
-#[tessera]
-/// A glass-like switch component for toggling a boolean state.
+
+/// # glass_switch
 ///
-/// The `glass_switch` provides a visually appealing switch with a frosted glass effect.
-/// It animates smoothly between its "on" and "off" states and is fully customizable
-/// in terms of size, color, and border.
+/// Renders an interactive switch with a customizable glass effect and smooth animation.
 ///
-/// # Example
+/// ## Usage
+///
+/// Use to toggle a boolean state (on/off) with a visually distinct, modern look.
+///
+/// ## Parameters
+///
+/// - `args` — configures the switch's appearance and `on_toggle` callback; see [`GlassSwitchArgs`].
+/// - `state` — a clonable [`GlassSwitchState`] to manage the component's checked and animation state.
+///
+/// ## Examples
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::glass_switch::{glass_switch, GlassSwitchArgs, GlassSwitchArgsBuilder, GlassSwitchState};
-/// use parking_lot::RwLock;
+/// use tessera_ui_basic_components::glass_switch::{
+///     glass_switch, GlassSwitchArgsBuilder, GlassSwitchState,
+/// };
 ///
-/// // In a real app, you would manage the state in shard state or elsewhere.
-/// let state = Arc::new(RwLock::new(GlassSwitchState::new(false)));
+/// let state = GlassSwitchState::new(false);
+/// assert!(!state.is_checked());
 ///
-/// glass_switch(
-///     GlassSwitchArgsBuilder::default()
-///         .on_toggle(Arc::new(|new_state| {
-///             // Update your application state here
-///             println!("Switch toggled to: {}", new_state);
-///         }))
-///         .build()
-///         .unwrap(),
-///     state.clone()
-/// );
+/// // The on_toggle callback would be passed to the component.
+/// let on_toggle = Arc::new({
+///     let state = state.clone();
+///     move |_is_checked: bool| {
+///         state.toggle();
+///     }
+/// });
 ///
-/// // Use the state to toggle the switch programmatically if needed.
-/// state.write().toggle(); // Toggle the switch state
-/// // or get the current on/off state
-/// assert_eq!(state.read().is_checked(), true); // true here after toggle
+/// // In a real app, a click would trigger the callback, which toggles the state.
+/// // For this test, we can call toggle directly to simulate this.
+/// state.toggle();
+/// assert!(state.is_checked());
 /// ```
-///
-/// # Arguments
-///
-/// * `args` - An instance of `GlassSwitchArgs` which can be built using `GlassSwitchArgsBuilder`.
-///   - `checked`: A `bool` indicating the current state of the switch (`true` for on, `false` for off).
-///   - `on_toggle`: A callback `Arc<dyn Fn(bool) + Send + Sync>` that is called when the switch is clicked.
-///     It receives the new boolean state.
-///   - Other arguments for customization like `width`, `height`, `track_on_color`, `track_off_color`, etc.
-///     are also available.
-pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: Arc<RwLock<GlassSwitchState>>) {
+#[tessera]
+pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
     let args: GlassSwitchArgs = args.into();
     // Precompute pixel sizes to avoid repeated conversions
     let width_px = args.width.to_px();

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
@@ -12,8 +11,8 @@ use tessera_ui_basic_components::{
 
 #[derive(Default)]
 struct TabsShowcaseState {
-    scrollable_state: Arc<ScrollableState>,
-    tabs_state: Arc<RwLock<TabsState>>,
+    scrollable_state: ScrollableState,
+    tabs_state: TabsState,
 }
 
 #[tessera]

@@ -1,28 +1,15 @@
-//! # Switch Component Module
+//! An interactive toggle switch component.
 //!
-//! This module provides a customizable toggle switch UI component for boolean state management in the Tessera UI framework.
-//! The `switch` component is commonly used for toggling settings or preferences in user interfaces, offering a modern,
-//! animated on/off control. It supports both controlled (external state via [`SwitchState`]) and uncontrolled usage
-//! (via `checked` and `on_toggle` parameters), and allows for appearance customization such as track and thumb colors, size, and padding.
+//! ## Usage
 //!
-//! ## Typical Usage
-//! - Settings panels, feature toggles, or any scenario requiring a boolean on/off control.
-//! - Can be integrated into forms or interactive UIs where immediate feedback and smooth animation are desired.
-//!
-//! ## Key Features
-//! - Stateless component model: state is managed externally or via parameters, following Tessera's architecture.
-//! - Animation support for smooth transitions between checked and unchecked states.
-//! - Highly customizable appearance and behavior via [`SwitchArgs`].
-//! - Designed for ergonomic integration with the Tessera component tree and event system.
-//!
-//! See [`SwitchArgs`], [`SwitchState`], and [`switch()`] for details and usage examples.
+//! Use to control a boolean on/off state.
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use derive_builder::Builder;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
     PxPosition,
@@ -40,48 +27,23 @@ use crate::{
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 
-///
 /// Represents the state for the `switch` component, including checked status and animation progress.
 ///
 /// This struct can be shared between multiple switches or managed externally to control the checked state and animation.
-///
-/// # Fields
-///
-/// - `checked`: Indicates whether the switch is currently on (`true`) or off (`false`).
-///
-/// # Example
-/// ```
-/// use tessera_ui_basic_components::switch::{SwitchState, SwitchArgs, switch};
-/// use std::sync::Arc;
-/// use parking_lot::RwLock;
-///
-/// let state = Arc::new(RwLock::new(SwitchState::new(false)));
-///
-/// switch(SwitchArgs {
-///     on_toggle: Some(Arc::new(move |checked| {
-///         println!("Switch toggled: {}", checked);
-///     })),
-///     ..Default::default()
-/// }, state.clone());
-/// ```
-pub struct SwitchState {
+pub(crate) struct SwitchStateInner {
     checked: bool,
     progress: f32,
     last_toggle_time: Option<Instant>,
 }
 
-impl Default for SwitchState {
+impl Default for SwitchStateInner {
     fn default() -> Self {
         Self::new(false)
     }
 }
 
-impl SwitchState {
+impl SwitchStateInner {
     /// Creates a new `SwitchState` with the given initial checked state.
-    ///
-    /// # Arguments
-    ///
-    /// * `initial_state` - Whether the switch should start as checked (`true`) or unchecked (`false`).
     pub fn new(initial_state: bool) -> Self {
         Self {
             checked: initial_state,
@@ -95,44 +57,61 @@ impl SwitchState {
         self.checked = !self.checked;
         self.last_toggle_time = Some(Instant::now());
     }
+}
+
+#[derive(Clone)]
+pub struct SwitchState {
+    inner: Arc<RwLock<SwitchStateInner>>,
+}
+
+impl SwitchState {
+    pub fn new(initial_state: bool) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(SwitchStateInner::new(initial_state))),
+        }
+    }
+
+    pub(crate) fn read(&self) -> RwLockReadGuard<'_, SwitchStateInner> {
+        self.inner.read()
+    }
+
+    pub(crate) fn write(&self) -> RwLockWriteGuard<'_, SwitchStateInner> {
+        self.inner.write()
+    }
 
     /// Returns whether the switch is currently checked.
     pub fn is_checked(&self) -> bool {
-        self.checked
+        self.inner.read().checked
+    }
+
+    /// Sets the checked state directly, resetting animation progress.
+    pub fn set_checked(&self, checked: bool) {
+        let mut inner = self.inner.write();
+        if inner.checked != checked {
+            inner.checked = checked;
+            inner.progress = if checked { 1.0 } else { 0.0 };
+            inner.last_toggle_time = None;
+        }
+    }
+
+    /// Toggles the switch and kicks off the animation timeline.
+    pub fn toggle(&self) {
+        self.inner.write().toggle();
+    }
+
+    /// Returns the current animation progress (0.0..1.0).
+    pub fn animation_progress(&self) -> f32 {
+        self.inner.read().progress
+    }
+}
+
+impl Default for SwitchState {
+    fn default() -> Self {
+        Self::new(false)
     }
 }
 
 /// Arguments for configuring the `switch` component.
-///
-/// This struct allows customization of the switch's state, appearance, and behavior.
-///
-/// # Fields
-/// - `state`: Optional external state for the switch. If provided, the switch will use and update this state.
-/// - `checked`: Initial checked state if `state` is not provided.
-/// - `on_toggle`: Callback invoked when the switch is toggled, receiving the new checked state.
-/// - `width`: Width of the switch track.
-/// - `height`: Height of the switch track.
-/// - `track_color`: Color of the track when unchecked.
-/// - `track_checked_color`: Color of the track when checked.
-/// - `thumb_color`: Color of the thumb (handle).
-/// - `thumb_padding`: Padding between the thumb and the track edge.
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui_basic_components::switch::{SwitchArgs, switch, SwitchState};
-/// use std::sync::Arc;
-/// use parking_lot::RwLock;
-///
-/// let state = Arc::new(RwLock::new(SwitchState::new(false)));
-///
-/// switch(SwitchArgs {
-///     on_toggle: Some(Arc::new(|checked| {
-///         println!("Switch toggled: {}", checked);
-///     })),
-///     ..Default::default()
-/// }, state.clone());
-/// ```
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SwitchArgs {
@@ -170,7 +149,7 @@ impl Default for SwitchArgs {
     }
 }
 
-fn update_progress_from_state(state: &Arc<RwLock<SwitchState>>) {
+fn update_progress_from_state(state: &SwitchState) {
     let last_toggle_time = state.read().last_toggle_time;
     if let Some(last_toggle_time) = last_toggle_time {
         let elapsed = last_toggle_time.elapsed();
@@ -189,7 +168,7 @@ fn is_cursor_in_component(size: ComputedData, pos_option: Option<tessera_ui::PxP
 }
 
 fn handle_input_events_switch(
-    state: &Arc<RwLock<SwitchState>>,
+    state: &SwitchState,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
     input: &mut tessera_ui::InputHandlerInput,
 ) {
@@ -214,7 +193,7 @@ fn handle_input_events_switch(
 }
 
 fn toggle_switch_state(
-    state: &Arc<RwLock<SwitchState>>,
+    state: &SwitchState,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
 ) -> bool {
     let Some(on_toggle) = on_toggle else {
@@ -229,7 +208,7 @@ fn toggle_switch_state(
 
 fn apply_switch_accessibility(
     input: &mut tessera_ui::InputHandlerInput<'_>,
-    state: &Arc<RwLock<SwitchState>>,
+    state: &SwitchState,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
     label: Option<&String>,
     description: Option<&String>,
@@ -275,35 +254,39 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
     }
 }
 
-/// A UI component that displays a toggle switch for boolean state.
+/// # switch
 ///
-/// The `switch` component provides a customizable on/off control, commonly used for toggling settings.
-/// It can be controlled via external state (`SwitchState`) or by using the `checked` and `on_toggle` parameters.
+/// Renders an animated on/off toggle switch.
 ///
-/// # Arguments
-/// * `args` - Parameters for configuring the switch, see [`SwitchArgs`].
+/// ## Usage
 ///
-/// # Example
+/// Use for settings or any other boolean state that the user can control.
+///
+/// ## Parameters
+///
+/// - `args` — configures the switch's appearance and `on_toggle` callback; see [`SwitchArgs`].
+/// - `state` — a clonable [`SwitchState`] to manage the checked/unchecked state.
+///
+/// ## Examples
 ///
 /// ```
-/// use tessera_ui::Dp;
-/// use tessera_ui_basic_components::switch::{SwitchArgs, switch, SwitchState};
 /// use std::sync::Arc;
-/// use parking_lot::RwLock;
+/// use tessera_ui_basic_components::switch::{switch, SwitchArgsBuilder, SwitchState};
 ///
-/// let state = Arc::new(RwLock::new(SwitchState::new(false)));
+/// let switch_state = SwitchState::new(false);
 ///
-/// switch(SwitchArgs {
-///     on_toggle: Some(Arc::new(|checked| {
-///         println!("Switch toggled: {}", checked);
-///     })),
-///     width: Dp(60.0),
-///     height: Dp(36.0),
-///     ..Default::default()
-/// }, state.clone());
+/// switch(
+///     SwitchArgsBuilder::default()
+///         .on_toggle(Arc::new(|checked| {
+///             println!("Switch is now: {}", if checked { "ON" } else { "OFF" });
+///         }))
+///         .build()
+///         .unwrap(),
+///     switch_state,
+/// );
 /// ```
 #[tessera]
-pub fn switch(args: impl Into<SwitchArgs>, state: Arc<RwLock<SwitchState>>) {
+pub fn switch(args: impl Into<SwitchArgs>, state: SwitchState) {
     let args: SwitchArgs = args.into();
     let thumb_size = Dp(args.height.0 - (args.thumb_padding.0 * 2.0));
 
