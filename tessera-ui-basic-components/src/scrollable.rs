@@ -95,9 +95,9 @@ pub struct ScrollableState {
     /// The inner state containing scroll position, size
     inner: Arc<RwLock<ScrollableStateInner>>,
     /// The state for vertical scrollbar
-    scrollbar_state_v: Arc<RwLock<ScrollBarState>>,
+    scrollbar_state_v: ScrollBarState,
     /// The state for horizontal scrollbar
-    scrollbar_state_h: Arc<RwLock<ScrollBarState>>,
+    scrollbar_state_h: ScrollBarState,
 }
 
 impl ScrollableState {
@@ -487,8 +487,8 @@ fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
 fn scrollable_inner(
     args: impl Into<ScrollableArgs>,
     state: Arc<RwLock<ScrollableStateInner>>,
-    scrollbar_state_v: Arc<RwLock<ScrollBarState>>,
-    scrollbar_state_h: Arc<RwLock<ScrollBarState>>,
+    scrollbar_state_v: ScrollBarState,
+    scrollbar_state_h: ScrollBarState,
     child: impl FnOnce(),
 ) {
     let args: ScrollableArgs = args.into();

@@ -42,7 +42,7 @@ pub struct ScrollBarArgs {
 }
 
 #[derive(Default)]
-pub struct ScrollBarState {
+pub struct ScrollBarStateInner {
     /// Whether the scrollbar's thumb is currently being dragged.
     pub is_dragging: bool,
     /// Whether the scrollbar's thumb is currently being hovered.
@@ -53,6 +53,34 @@ pub struct ScrollBarState {
     pub last_scroll_activity: Option<std::time::Instant>,
     /// Whether the scrollbar should be visible (for AutoHide behavior).
     pub should_be_visible: bool,
+}
+
+/// Public wrapper for ScrollBarStateInner that stores the internal Arc<RwLock<..>>.
+#[derive(Clone)]
+pub struct ScrollBarState {
+    inner: Arc<RwLock<ScrollBarStateInner>>,
+}
+
+impl ScrollBarState {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(ScrollBarStateInner::default())),
+        }
+    }
+
+    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, ScrollBarStateInner> {
+        self.inner.read()
+    }
+
+    pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, ScrollBarStateInner> {
+        self.inner.write()
+    }
+}
+
+impl Default for ScrollBarState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Calculate the target content position for a vertical scrollbar given a cursor Y.
@@ -125,7 +153,7 @@ fn calculate_target_pos_h(
 
 /// Compute the thumb color with hover interpolation.
 /// Extracted to reduce duplication between vertical and horizontal scrollbar implementations.
-fn compute_thumb_color(state_lock: &Arc<RwLock<ScrollBarState>>, args: &ScrollBarArgs) -> Color {
+fn compute_thumb_color(state_lock: &ScrollBarState, args: &ScrollBarArgs) -> Color {
     let state = state_lock.read();
     let (from_color, to_color) = if state.is_hovered {
         (args.thumb_color, args.thumb_hover_color)
@@ -236,7 +264,7 @@ fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
 }
 
 /// Decide whether the scrollbar should be shown according to behavior and state.
-fn should_show_scrollbar(args: &ScrollBarArgs, state: &Arc<RwLock<ScrollBarState>>) -> bool {
+fn should_show_scrollbar(args: &ScrollBarArgs, state: &ScrollBarState) -> bool {
     match args.scrollbar_behavior {
         ScrollBarBehavior::AlwaysVisible => true,
         ScrollBarBehavior::Hidden => false,
@@ -248,7 +276,7 @@ fn should_show_scrollbar(args: &ScrollBarArgs, state: &Arc<RwLock<ScrollBarState
 }
 
 /// Handle AutoHide behavior: hide the scrollbar after a timeout if no activity.
-fn handle_autohide_if_needed(args: &ScrollBarArgs, state: &Arc<RwLock<ScrollBarState>>) {
+fn handle_autohide_if_needed(args: &ScrollBarArgs, state: &ScrollBarState) {
     if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
         let mut state_guard = state.write();
         if let Some(last_activity) = state_guard.last_scroll_activity {
@@ -261,7 +289,7 @@ fn handle_autohide_if_needed(args: &ScrollBarArgs, state: &Arc<RwLock<ScrollBarS
 }
 
 /// Mark recent scroll activity and make the scrollbar visible (used by AutoHide behavior).
-fn mark_scroll_activity(state: &Arc<RwLock<ScrollBarState>>, behavior: &ScrollBarBehavior) {
+fn mark_scroll_activity(state: &ScrollBarState, behavior: &ScrollBarBehavior) {
     if matches!(*behavior, ScrollBarBehavior::AutoHide) {
         let mut state_guard = state.write();
         state_guard.last_scroll_activity = Some(std::time::Instant::now());
@@ -330,10 +358,7 @@ fn is_on_track_h(cursor_pos: PxPosition, thickness: Px, track_width: Px) -> bool
 
 /// Handle the input handler logic for the vertical scrollbar.
 /// Extracted from the inline closure to reduce function/closure complexity.
-fn check_and_handle_release(
-    input: &tessera_ui::InputHandlerInput,
-    state: &Arc<RwLock<ScrollBarState>>,
-) -> bool {
+fn check_and_handle_release(input: &tessera_ui::InputHandlerInput, state: &ScrollBarState) -> bool {
     if input.cursor_events.iter().any(|event| {
         matches!(
             event.content,
@@ -350,7 +375,7 @@ fn check_and_handle_release(
 fn apply_scrollbar_accessibility(
     input: &mut tessera_ui::InputHandlerInput<'_>,
     args: &ScrollBarArgs,
-    state: &Arc<RwLock<ScrollBarState>>,
+    state: &ScrollBarState,
     orientation: ScrollOrientation,
 ) {
     let mut builder = input.accessibility().role(Role::ScrollBar);
@@ -385,7 +410,7 @@ fn apply_scrollbar_accessibility(
 
 fn scroll_accessibility_step(
     args: &ScrollBarArgs,
-    state: &Arc<RwLock<ScrollBarState>>,
+    state: &ScrollBarState,
     orientation: ScrollOrientation,
     increment: bool,
 ) {
@@ -433,7 +458,7 @@ fn update_drag_vertical(
     input: &tessera_ui::InputHandlerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarArgs,
-    state: &Arc<RwLock<ScrollBarState>>,
+    state: &ScrollBarState,
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
         let new_target_pos = calculate_target(cursor_pos.y);
@@ -446,7 +471,7 @@ fn update_drag_vertical(
 }
 
 /// Update hovered state uniformly.
-fn update_hover_state(is_on_thumb: bool, state: &Arc<RwLock<ScrollBarState>>) {
+fn update_hover_state(is_on_thumb: bool, state: &ScrollBarState) {
     if is_on_thumb && !state.read().is_hovered {
         let mut state_guard = state.write();
         state_guard.is_hovered = true;
@@ -460,7 +485,7 @@ fn update_hover_state(is_on_thumb: bool, state: &Arc<RwLock<ScrollBarState>>) {
 
 fn handle_state_v(
     args: &ScrollBarArgs,
-    state: &Arc<RwLock<ScrollBarState>>,
+    state: &ScrollBarState,
     track_height: Px,
     thumb_height: Px,
     input: &mut tessera_ui::InputHandlerInput<'_>,
@@ -533,7 +558,7 @@ fn update_drag_horizontal(
     input: &tessera_ui::InputHandlerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarArgs,
-    state: &Arc<RwLock<ScrollBarState>>,
+    state: &ScrollBarState,
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
         let new_target_pos = calculate_target(cursor_pos.x);
@@ -547,7 +572,7 @@ fn update_drag_horizontal(
 
 fn handle_state_h(
     args: &ScrollBarArgs,
-    state: &Arc<RwLock<ScrollBarState>>,
+    state: &ScrollBarState,
     track_width: Px,
     thumb_width: Px,
     input: &mut tessera_ui::InputHandlerInput<'_>,
@@ -614,7 +639,7 @@ fn handle_state_h(
 }
 
 #[tessera]
-pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarState>>) {
+pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
     let args: ScrollBarArgs = args.into();
 
     // Check if scrollbar should be visible based on behavior
@@ -681,7 +706,7 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarSt
 }
 
 #[tessera]
-pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: Arc<RwLock<ScrollBarState>>) {
+pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
     let args: ScrollBarArgs = args.into();
 
     // Check if scrollbar should be visible based on behavior

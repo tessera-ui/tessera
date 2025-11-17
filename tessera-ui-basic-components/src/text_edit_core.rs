@@ -2,7 +2,8 @@
 //!
 //! This module provides the foundational structures and functions for building text editing components,
 //! including text buffer management, selection and cursor handling, rendering logic, and keyboard event mapping.
-//! It is designed to be shared across UI components via `Arc<RwLock<TextEditorState>>`, enabling consistent
+//! It is designed to be shared across UI components via the `TextEditorStateHandle` wrapper,
+//! enabling consistent and thread-safe access to editor state.
 //! and efficient text editing experiences.
 //!
 //! Typical use cases include single-line and multi-line text editors, input fields, and any UI element
@@ -69,7 +70,7 @@ pub enum ClickType {
 /// Core state for text editing, including content, selection, cursor, and interaction state.
 ///
 /// This struct manages the text buffer, selection, cursor position, focus, and user interaction state.
-/// It is designed to be shared between UI components via an `Arc<RwLock<TextEditorState>>`.
+/// It is designed to be shared between UI components via a `TextEditorStateHandle`.
 pub struct TextEditorState {
     line_height: Px,
     pub(crate) editor: glyphon::Editor<'static>,
@@ -84,6 +85,28 @@ pub struct TextEditorState {
     is_dragging: bool,
     // For IME
     pub(crate) preedit_string: Option<String>,
+}
+
+/// Thin handle wrapping an internal `Arc<RwLock<TextEditorState>>` and exposing `read()`/`write()`.
+#[derive(Clone)]
+pub struct TextEditorStateHandle {
+    inner: Arc<RwLock<TextEditorState>>,
+}
+
+impl TextEditorStateHandle {
+    pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(TextEditorState::new(size, line_height))),
+        }
+    }
+
+    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, TextEditorState> {
+        self.inner.read()
+    }
+
+    pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, TextEditorState> {
+        self.inner.write()
+    }
 }
 
 impl TextEditorState {
@@ -482,7 +505,7 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
 ///
 /// * `state` - Shared state for the text editor, typically wrapped in `Arc<RwLock<...>>`.
 #[tessera]
-pub fn text_edit_core(state: Arc<RwLock<TextEditorState>>) {
+pub fn text_edit_core(state: TextEditorStateHandle) {
     // text rendering with constraints from parent container
     {
         let state_clone = state.clone();

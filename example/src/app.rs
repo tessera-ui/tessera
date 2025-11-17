@@ -182,7 +182,7 @@ Side bars are bars at side, side at bars, bars side at, at side bars..."#,
 
 #[derive(Default)]
 struct HomeState {
-    lazy_list_state: Arc<LazyListState>,
+    lazy_list_state: LazyListState,
     example_cards_ripple_state: DashMap<usize, RippleState>,
 }
 

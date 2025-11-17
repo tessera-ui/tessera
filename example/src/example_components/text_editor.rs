@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
@@ -8,20 +7,20 @@ use tessera_ui_basic_components::{
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
-    text_editor::{TextEditorArgsBuilder, TextEditorState, text_editor},
+    text_editor::{TextEditorArgsBuilder, TextEditorStateHandle, text_editor},
 };
 
 #[derive(Clone)]
 struct TextEditorShowcaseState {
     scrollable_state: ScrollableState,
-    editor_state: Arc<RwLock<TextEditorState>>,
+    editor_state: TextEditorStateHandle,
 }
 
 impl Default for TextEditorShowcaseState {
     fn default() -> Self {
         Self {
             scrollable_state: Default::default(),
-            editor_state: Arc::new(RwLock::new(TextEditorState::new(Dp(22.0), None))),
+            editor_state: TextEditorStateHandle::new(Dp(22.0), None),
         }
     }
 }

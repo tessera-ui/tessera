@@ -19,7 +19,7 @@ use crate::{
 const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 
 /// Persistent state shared by lazy list components.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct LazyListState {
     scrollable_state: ScrollableState,
     cache: Arc<RwLock<LazyListCache>>,
@@ -177,13 +177,13 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 /// ## Examples
 ///
 /// ```
-/// use std::sync::Arc;
+/// // No Arc wrapper; `LazyListState` encapsulates internal Arc/RwLock state.
 /// use tessera_ui_basic_components::{
 ///     lazy_list::{lazy_column, LazyColumnArgs, LazyListState},
 ///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// let list_state = Arc::new(LazyListState::new());
+/// let list_state = LazyListState::new();
 ///
 /// lazy_column(LazyColumnArgs::default(), list_state, |scope| {
 ///     scope.items(1000, |i| {
@@ -193,7 +193,7 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 /// });
 /// ```
 #[tessera]
-pub fn lazy_column<F>(args: LazyColumnArgs, state: Arc<LazyListState>, configure: F)
+pub fn lazy_column<F>(args: LazyColumnArgs, state: LazyListState, configure: F)
 where
     F: FnOnce(&mut LazyColumnScope),
 {
@@ -241,13 +241,13 @@ where
 /// ## Examples
 ///
 /// ```
-/// use std::sync::Arc;
+/// // No Arc wrapper; `LazyListState` encapsulates internal Arc/RwLock state.
 /// use tessera_ui_basic_components::{
 ///     lazy_list::{lazy_row, LazyRowArgs, LazyListState},
 ///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// let list_state = Arc::new(LazyListState::new());
+/// let list_state = LazyListState::new();
 ///
 /// lazy_row(LazyRowArgs::default(), list_state, |scope| {
 ///     scope.items(100, |i| {
@@ -257,7 +257,7 @@ where
 /// });
 /// ```
 #[tessera]
-pub fn lazy_row<F>(args: LazyRowArgs, state: Arc<LazyListState>, configure: F)
+pub fn lazy_row<F>(args: LazyRowArgs, state: LazyListState, configure: F)
 where
     F: FnOnce(&mut LazyRowScope),
 {
@@ -301,7 +301,7 @@ struct LazyListViewArgs {
 }
 
 #[tessera]
-fn lazy_list_view(view_args: LazyListViewArgs, state: Arc<LazyListState>, slots: Vec<LazySlot>) {
+fn lazy_list_view(view_args: LazyListViewArgs, state: LazyListState, slots: Vec<LazySlot>) {
     let plan = LazySlotPlan::new(slots);
     let total_count = plan.total_count();
 

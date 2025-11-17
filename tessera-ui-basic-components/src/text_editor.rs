@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use glyphon::{Action as GlyphonAction, Edit};
-use parking_lot::RwLock;
 use tessera_ui::{
     Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, accesskit::Role,
     tessera, winit,
@@ -22,7 +21,7 @@ use crate::{
 };
 
 /// State structure for the text editor, managing text content, cursor, selection, and editing logic.
-pub use crate::text_edit_core::TextEditorState;
+pub use crate::text_edit_core::{TextEditorState, TextEditorStateHandle};
 
 /// Arguments for configuring the [`text_editor`] component.
 #[derive(Builder, Clone)]
@@ -98,7 +97,7 @@ impl Default for TextEditorArgs {
 /// ## Parameters
 ///
 /// - `args` — configures the editor's appearance and layout; see [`TextEditorArgs`].
-/// - `state` — an `Arc<RwLock<TextEditorState>>` to manage the editor's content, cursor, and selection.
+/// - `state` — a `TextEditorStateHandle` to manage the editor's content, cursor, and selection.
 ///
 /// ## Examples
 ///
@@ -128,7 +127,7 @@ impl Default for TextEditorArgs {
 /// );
 /// ```
 #[tessera]
-pub fn text_editor(args: impl Into<TextEditorArgs>, state: Arc<RwLock<TextEditorState>>) {
+pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorStateHandle) {
     let editor_args: TextEditorArgs = args.into();
     let on_change = editor_args.on_change.clone();
 
@@ -464,7 +463,7 @@ fn handle_action(
 /// Create surface arguments based on editor configuration and state
 fn create_surface_args(
     args: &TextEditorArgs,
-    state: &Arc<RwLock<TextEditorState>>,
+    state: &TextEditorStateHandle,
 ) -> crate::surface::SurfaceArgs {
     let style = if args.border_width.to_pixels_f32() > 0.0 {
         crate::surface::SurfaceStyle::FilledOutlined {
@@ -489,10 +488,7 @@ fn create_surface_args(
 }
 
 /// Determine background color based on focus state
-fn determine_background_color(
-    args: &TextEditorArgs,
-    state: &Arc<RwLock<TextEditorState>>,
-) -> Color {
+fn determine_background_color(args: &TextEditorArgs, state: &TextEditorStateHandle) -> Color {
     if state.read().focus_handler().is_focused() {
         args.focus_background_color
             .or(args.background_color)
@@ -504,10 +500,7 @@ fn determine_background_color(
 }
 
 /// Determine border color based on focus state
-fn determine_border_color(
-    args: &TextEditorArgs,
-    state: &Arc<RwLock<TextEditorState>>,
-) -> Option<Color> {
+fn determine_border_color(args: &TextEditorArgs, state: &TextEditorStateHandle) -> Option<Color> {
     if state.read().focus_handler().is_focused() {
         args.focus_border_color
             .or(args.border_color)
@@ -773,7 +766,7 @@ fn get_editor_content(editor: &glyphon::Editor) -> String {
 fn apply_text_editor_accessibility(
     input: &mut tessera_ui::InputHandlerInput<'_>,
     args: &TextEditorArgs,
-    state: &Arc<RwLock<TextEditorState>>,
+    state: &TextEditorStateHandle,
 ) {
     let mut builder = input.accessibility().role(Role::MultilineTextInput);
 

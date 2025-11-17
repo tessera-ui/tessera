@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
@@ -13,8 +11,8 @@ use tessera_ui_basic_components::{
 
 #[derive(Default, Clone)]
 pub struct LazyListsShowcaseState {
-    vertical: Arc<LazyListState>,
-    horizontal: Arc<LazyListState>,
+    vertical: LazyListState,
+    horizontal: LazyListState,
 }
 
 #[tessera]
@@ -90,7 +88,7 @@ pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
 }
 
 #[tessera]
-fn vertical_list(state: Arc<LazyListState>) {
+fn vertical_list(state: LazyListState) {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -129,7 +127,7 @@ fn vertical_list(state: Arc<LazyListState>) {
 }
 
 #[tessera]
-fn horizontal_gallery(state: Arc<LazyListState>) {
+fn horizontal_gallery(state: LazyListState) {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)

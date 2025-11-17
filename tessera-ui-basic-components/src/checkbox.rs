@@ -44,38 +44,74 @@ impl CheckboxState {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct CheckboxArgs {
+    /// Callback invoked when the checkbox is toggled.
     #[builder(default = "Arc::new(|_| {})")]
     pub on_toggle: Arc<dyn Fn(bool) + Send + Sync>,
-
+    /// Size of the checkbox (width and height).
+    ///
+    /// Expressed in `Dp` (density-independent pixels). The checkbox will use
+    /// the same value for width and height; default is `Dp(24.0)`.
     #[builder(default = "Dp(24.0)")]
     pub size: Dp,
 
     #[builder(default = "Color::new(0.8, 0.8, 0.8, 1.0)")]
+    /// Background color when the checkbox is not checked.
+    ///
+    /// This sets the surface color shown for the unchecked state and is typically
+    /// a subtle neutral color.
     pub color: Color,
 
     #[builder(default = "Color::new(0.6, 0.7, 0.9, 1.0)")]
+    /// Background color used when the checkbox is checked.
+    ///
+    /// This color is shown behind the checkmark to indicate an active/selected
+    /// state. Choose a higher-contrast color relative to `color`.
     pub checked_color: Color,
 
     #[builder(default = "Color::from_rgb_u8(119, 72, 146)")]
+    /// Color used to draw the checkmark icon inside the checkbox.
+    ///
+    /// This is applied on top of the `checked_color` surface.
     pub checkmark_color: Color,
 
     #[builder(default = "5.0")]
+    /// Stroke width in physical pixels used to render the checkmark path.
+    ///
+    /// Higher values produce a thicker checkmark. The default value is tuned for
+    /// the default `size`.
     pub checkmark_stroke_width: f32,
 
     #[builder(default = "1.0")]
+    /// Initial animation progress of the checkmark (0.0 ..= 1.0).
+    ///
+    /// Used to drive the checkmark animation when toggling. `0.0` means not
+    /// visible; `1.0` means fully drawn. Values in-between show the intermediate
+    /// animation state.
     pub checkmark_animation_progress: f32,
 
     #[builder(
         default = "Shape::RoundedRectangle{ top_left: Dp(4.0), top_right: Dp(4.0), bottom_right: Dp(4.0), bottom_left: Dp(4.0), g2_k_value: 3.0 }"
     )]
     pub shape: Shape,
+    /// Shape used for the outer checkbox surface (rounded rectangle, etc.).
+    ///
+    /// Use this to customize the corner radii or switch to alternate shapes.
 
     #[builder(default)]
     pub hover_color: Option<Color>,
+    /// Optional surface color to apply when the pointer hovers over the control.
+    ///
+    /// If `None`, the control does not apply a hover style by default.
     /// Optional accessibility label read by assistive technologies.
+    ///
+    /// The label should be a short, human-readable string describing the
+    /// purpose of the checkbox (for example "Enable auto-save").
     #[builder(default, setter(strip_option, into))]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description read by assistive technologies.
+    ///
+    /// A longer description or contextual helper text that augments the
+    /// `accessibility_label` for users of assistive technology.
     #[builder(default, setter(strip_option, into))]
     pub accessibility_description: Option<String>,
 }
@@ -155,30 +191,39 @@ impl CheckmarkState {
 /// ## Examples
 ///
 /// ```
-/// use std::sync::{Arc, Mutex};
-/// use tessera_ui_basic_components::checkbox::{checkbox, CheckboxArgs, CheckboxState};
+/// use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+/// use tessera_ui::{tessera, Color, Dp};
+/// use tessera_ui_basic_components::checkbox::{checkbox, CheckboxArgsBuilder, CheckboxState};
 ///
-/// let is_checked = Arc::new(Mutex::new(false));
+/// // A tiny UI demo that shows a checkbox and a text label that reflects its state.
+/// #[derive(Clone, Default)]
+/// struct DemoState {
+///     is_checked: Arc<AtomicBool>,
+///     checkbox_state: CheckboxState,
+/// }
 ///
-/// let on_toggle = {
-///     let is_checked = is_checked.clone();
-///     Arc::new(move |new_state| {
-///         *is_checked.lock().unwrap() = new_state;
-///     })
-/// };
+/// #[tessera]
+/// fn checkbox_demo(state: DemoState) {
+///     // Build a simple checkbox whose on_toggle updates `is_checked`.
+///     let on_toggle = Arc::new({
+///         let is_checked = state.is_checked.clone();
+///         move |new_value| {
+///             is_checked.store(new_value, Ordering::SeqCst);
+///         }
+///     });
 ///
-/// let args = CheckboxArgs { on_toggle, ..Default::default() };
-///
-/// // In a real UI, the on_toggle callback would be fired on click.
-/// // For this test, we can simulate the callback being called.
-/// (args.on_toggle)(true);
-/// assert_eq!(*is_checked.lock().unwrap(), true);
-///
-/// (args.on_toggle)(false);
-/// assert_eq!(*is_checked.lock().unwrap(), false);
+///     // Render the checkbox; the example shows a minimal pattern for interactive demos.
+///     checkbox(
+///         CheckboxArgsBuilder::default()
+///             .on_toggle(on_toggle)
+///             .build()
+///             .unwrap(),
+///         state.checkbox_state.clone(),
+///     );
+/// }
 /// ```
 #[tessera]
-pub fn checkbox(args: impl Into<CheckboxArgs>, state: Arc<CheckboxState>) {
+pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
     let args: CheckboxArgs = args.into();
 
     // If a state is provided, set up an updater to advance the animation each frame
