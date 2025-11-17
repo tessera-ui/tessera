@@ -21,7 +21,7 @@ use crate::{
 };
 
 /// State structure for the text editor, managing text content, cursor, selection, and editing logic.
-pub use crate::text_edit_core::{TextEditorState, TextEditorStateHandle};
+pub use crate::text_edit_core::{TextEditorState, TextEditorStateInner};
 
 /// Arguments for configuring the [`text_editor`] component.
 #[derive(Builder, Clone)]
@@ -111,7 +111,7 @@ impl Default for TextEditorArgs {
 /// };
 ///
 /// // In a real app, you would manage this state.
-/// let editor_state = Arc::new(RwLock::new(TextEditorState::new(Dp(14.0), None)));
+/// let editor_state = TextEditorState::new(Dp(14.0), None);
 /// editor_state.write().editor_mut().set_text_reactive(
 ///     "Initial text",
 ///     &mut write_font_system(),
@@ -123,11 +123,11 @@ impl Default for TextEditorArgs {
 ///         .padding(Dp(8.0))
 ///         .build()
 ///         .unwrap(),
-///     editor_state,
+///     editor_state.clone(),
 /// );
 /// ```
 #[tessera]
-pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorStateHandle) {
+pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorState) {
     let editor_args: TextEditorArgs = args.into();
     let on_change = editor_args.on_change.clone();
 
@@ -363,9 +363,8 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorStateHandle
                 }
 
                 if !all_actions.is_empty() {
-                    let mut state = state_for_handler.write();
                     for action in all_actions {
-                        handle_action(&mut state, action, on_change.clone());
+                        handle_action(&state_for_handler, action, on_change.clone());
                     }
                 }
             }
@@ -383,7 +382,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorStateHandle
                         if let Some(preedit_text) = state.preedit_string.take() {
                             for _ in 0..preedit_text.chars().count() {
                                 handle_action(
-                                    &mut state,
+                                    &state_for_handler,
                                     GlyphonAction::Backspace,
                                     on_change.clone(),
                                 );
@@ -391,7 +390,11 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorStateHandle
                         }
                         // Insert the committed text
                         for c in text.chars() {
-                            handle_action(&mut state, GlyphonAction::Insert(c), on_change.clone());
+                            handle_action(
+                                &state_for_handler,
+                                GlyphonAction::Insert(c),
+                                on_change.clone(),
+                            );
                         }
                     }
                     winit::event::Ime::Preedit(text, _cursor_offset) => {
@@ -399,7 +402,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorStateHandle
                         if let Some(old_preedit) = state.preedit_string.take() {
                             for _ in 0..old_preedit.chars().count() {
                                 handle_action(
-                                    &mut state,
+                                    &state_for_handler,
                                     GlyphonAction::Backspace,
                                     on_change.clone(),
                                 );
@@ -407,7 +410,11 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorStateHandle
                         }
                         // Insert the new preedit text
                         for c in text.chars() {
-                            handle_action(&mut state, GlyphonAction::Insert(c), on_change.clone());
+                            handle_action(
+                                &state_for_handler,
+                                GlyphonAction::Insert(c),
+                                on_change.clone(),
+                            );
                         }
                         state.preedit_string = Some(text.to_string());
                     }
@@ -424,12 +431,12 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorStateHandle
 }
 
 fn handle_action(
-    state: &mut TextEditorState,
+    state: &TextEditorState,
     action: GlyphonAction,
     on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
 ) {
     // Clone a temporary editor and apply action, waiting for on_change to confirm
-    let mut new_editor = state.editor().clone();
+    let mut new_editor = state.read().editor().clone();
 
     // Make sure new editor own a isolated buffer
     let mut new_buffer = None;
@@ -449,11 +456,14 @@ fn handle_action(
     new_editor.action(&mut write_font_system(), action);
     let content_after_action = get_editor_content(&new_editor);
 
-    state.editor_mut().action(&mut write_font_system(), action);
+    state
+        .write()
+        .editor_mut()
+        .action(&mut write_font_system(), action);
     let new_content = on_change(content_after_action);
 
     // Update editor content
-    state.editor_mut().set_text_reactive(
+    state.write().editor_mut().set_text_reactive(
         &new_content,
         &mut write_font_system(),
         &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
@@ -463,7 +473,7 @@ fn handle_action(
 /// Create surface arguments based on editor configuration and state
 fn create_surface_args(
     args: &TextEditorArgs,
-    state: &TextEditorStateHandle,
+    state: &TextEditorState,
 ) -> crate::surface::SurfaceArgs {
     let style = if args.border_width.to_pixels_f32() > 0.0 {
         crate::surface::SurfaceStyle::FilledOutlined {
@@ -488,7 +498,7 @@ fn create_surface_args(
 }
 
 /// Determine background color based on focus state
-fn determine_background_color(args: &TextEditorArgs, state: &TextEditorStateHandle) -> Color {
+fn determine_background_color(args: &TextEditorArgs, state: &TextEditorState) -> Color {
     if state.read().focus_handler().is_focused() {
         args.focus_background_color
             .or(args.background_color)
@@ -500,7 +510,7 @@ fn determine_background_color(args: &TextEditorArgs, state: &TextEditorStateHand
 }
 
 /// Determine border color based on focus state
-fn determine_border_color(args: &TextEditorArgs, state: &TextEditorStateHandle) -> Option<Color> {
+fn determine_border_color(args: &TextEditorArgs, state: &TextEditorState) -> Option<Color> {
     if state.read().focus_handler().is_focused() {
         args.focus_border_color
             .or(args.border_color)
@@ -766,7 +776,7 @@ fn get_editor_content(editor: &glyphon::Editor) -> String {
 fn apply_text_editor_accessibility(
     input: &mut tessera_ui::InputHandlerInput<'_>,
     args: &TextEditorArgs,
-    state: &TextEditorStateHandle,
+    state: &TextEditorState,
 ) {
     let mut builder = input.accessibility().role(Role::MultilineTextInput);
 

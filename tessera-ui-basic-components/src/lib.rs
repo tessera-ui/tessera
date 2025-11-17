@@ -48,7 +48,7 @@
 //! );
 //!
 //! // Text editor example
-//! let editor_state = Arc::new(RwLock::new(TextEditorState::new(Dp(16.0), None)));
+//! let editor_state = TextEditorState::new(Dp(16.0), None);
 //! text_editor(TextEditorArgs::default(), editor_state.clone());
 //! ```
 

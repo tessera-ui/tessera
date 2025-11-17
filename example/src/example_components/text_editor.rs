@@ -7,20 +7,20 @@ use tessera_ui_basic_components::{
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
-    text_editor::{TextEditorArgsBuilder, TextEditorStateHandle, text_editor},
+    text_editor::{TextEditorArgsBuilder, TextEditorState, text_editor},
 };
 
 #[derive(Clone)]
 struct TextEditorShowcaseState {
     scrollable_state: ScrollableState,
-    editor_state: TextEditorStateHandle,
+    editor_state: TextEditorState,
 }
 
 impl Default for TextEditorShowcaseState {
     fn default() -> Self {
         Self {
             scrollable_state: Default::default(),
-            editor_state: TextEditorStateHandle::new(Dp(22.0), None),
+            editor_state: TextEditorState::new(Dp(22.0), None),
         }
     }
 }

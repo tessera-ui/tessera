@@ -71,7 +71,7 @@ pub enum ClickType {
 ///
 /// This struct manages the text buffer, selection, cursor position, focus, and user interaction state.
 /// It is designed to be shared between UI components via a `TextEditorStateHandle`.
-pub struct TextEditorState {
+pub struct TextEditorStateInner {
     line_height: Px,
     pub(crate) editor: glyphon::Editor<'static>,
     blink_timer: Instant,
@@ -89,27 +89,27 @@ pub struct TextEditorState {
 
 /// Thin handle wrapping an internal `Arc<RwLock<TextEditorState>>` and exposing `read()`/`write()`.
 #[derive(Clone)]
-pub struct TextEditorStateHandle {
-    inner: Arc<RwLock<TextEditorState>>,
+pub struct TextEditorState {
+    inner: Arc<RwLock<TextEditorStateInner>>,
 }
 
-impl TextEditorStateHandle {
+impl TextEditorState {
     pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(TextEditorState::new(size, line_height))),
+            inner: Arc::new(RwLock::new(TextEditorStateInner::new(size, line_height))),
         }
     }
 
-    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, TextEditorState> {
+    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, TextEditorStateInner> {
         self.inner.read()
     }
 
-    pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, TextEditorState> {
+    pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, TextEditorStateInner> {
         self.inner.write()
     }
 }
 
-impl TextEditorState {
+impl TextEditorStateInner {
     /// Creates a new `TextEditorState` with the given font size and optional line height.
     ///
     /// # Arguments
@@ -505,7 +505,7 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
 ///
 /// * `state` - Shared state for the text editor, typically wrapped in `Arc<RwLock<...>>`.
 #[tessera]
-pub fn text_edit_core(state: TextEditorStateHandle) {
+pub fn text_edit_core(state: TextEditorState) {
     // text rendering with constraints from parent container
     {
         let state_clone = state.clone();
@@ -554,7 +554,7 @@ pub fn text_edit_core(state: TextEditorStateHandle) {
             state_clone.write().current_selection_rects = selection_rects;
 
             // Handle cursor positioning (cursor comes after selection rects)
-            if let Some(cursor_pos_raw) = state_clone.read().editor.cursor_position() {
+            if let Some(cursor_pos_raw) = state_clone.read().editor().cursor_position() {
                 let cursor_pos = PxPosition::new(Px(cursor_pos_raw.0), Px(cursor_pos_raw.1));
                 let cursor_node_index = selection_rects_len;
                 if let Some(cursor_node_id) = input.children_ids.get(cursor_node_index).copied() {
