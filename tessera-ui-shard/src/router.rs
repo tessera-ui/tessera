@@ -6,7 +6,7 @@
 //! # Responsibilities
 //!
 //! * Maintain an ordered stack (`route_stack`) of active destinations
-//! * Expose [`push`] / [`pop`] helpers that also manage shard state lifetimes
+//! * Expose [`Router::push`] / [`Router::pop`] helpers that also manage shard state lifetimes
 //! * Remove per‑shard state from the registry when a destination whose lifecycle is
 //!   `ShardStateLifeCycle::Shard` is popped
 //! * Keep routing logic minimal; rendering happens when the top destination's
@@ -16,9 +16,13 @@
 //!
 //! ```rust,ignore
 //! // Navigate forward
-//! tessera_ui::router::push(HomeScreenDestination { /* fields */ });
+//! Router::with_mut(|router| {
+//!     router.push(HomeScreenDestination { /* fields */ });
+//! });
 //! // Navigate back
-//! tessera_ui::router::pop();
+//! Router::with_mut(|router| {
+//!     router.pop();
+//! });
 //! ```
 //!
 //! # Related
