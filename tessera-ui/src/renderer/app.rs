@@ -161,7 +161,7 @@ impl WgpuApp {
                     wgpu::Limits::default()
                 },
                 label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
                 experimental_features: wgpu::ExperimentalFeatures::default(),
             })
