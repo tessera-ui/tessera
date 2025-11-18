@@ -1,3 +1,17 @@
+## [v2.7.0] - 2025-11-18 +08:00
+
+### Changes
+
+- feat: Refactor pipeline traits to use context structs
+- feat(pipeline): add pipeline cache support
+- chore(deps): bump image from 0.25.8 to 0.25.9
+- refactor(text_editor): Replace TextEditorStateHandle with TextEditorState
+- refactor: Replace Arc wrappers with direct struct usage for state management in various components
+- Revert "fix(lazy_list): Improve viewport span calculation for lazy lists during resize"
+- fix(lazy_list): Improve viewport span calculation for lazy lists during resize
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.6.0...tessera-ui-basic-components-v2.7.0)
+
 ## [v2.6.0] - 2025-11-17 +08:00
 
 ### Changes
