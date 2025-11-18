@@ -4,7 +4,7 @@ use encase::{ShaderType, UniformBuffer, internal::WriteInto};
 use lru::LruCache;
 use smallvec::SmallVec;
 use tessera_ui::{
-    renderer::compute::{ComputablePipeline, ComputeBatchItem},
+    compute::pipeline::{ComputablePipeline, ComputeContext},
     wgpu,
 };
 
@@ -470,18 +470,8 @@ impl BlurPipeline {
 
 impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
     /// Dispatches one or more blur compute commands within the active pass.
-    fn dispatch(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _config: &wgpu::SurfaceConfiguration,
-        compute_pass: &mut wgpu::ComputePass<'_>,
-        items: &[ComputeBatchItem<'_, DualBlurCommand>],
-        _resource_manager: &mut tessera_ui::ComputeResourceManager,
-        input_view: &wgpu::TextureView,
-        output_view: &wgpu::TextureView,
-    ) {
-        for item in items {
+    fn dispatch(&mut self, context: &mut ComputeContext<DualBlurCommand>) {
+        for item in context.items {
             let target_area = item.target_area;
             let area_x = target_area.x.0 as u32;
             let area_y = target_area.y.0 as u32;
@@ -506,11 +496,11 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 continue;
             }
 
-            let downsample_texture = self.acquire_texture(device, down_width, down_height);
+            let downsample_texture = self.acquire_texture(context.device, down_width, down_height);
             let downsample_view =
                 downsample_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            let blur_texture = self.acquire_texture(device, down_width, down_height);
+            let blur_texture = self.acquire_texture(context.device, down_width, down_height);
             let blur_view = blur_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
             // Downsample pass
@@ -522,35 +512,40 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 scale,
             };
             let downsample_uniform_buffer = Self::create_uniform_buffer(
-                device,
-                queue,
+                context.device,
+                context.queue,
                 "Blur Downsample Uniform Buffer",
                 &downsample_uniforms,
             );
-            let downsample_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &self.downsample_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: downsample_uniform_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(input_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(&downsample_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: wgpu::BindingResource::Sampler(&self.downsample_sampler),
-                    },
-                ],
-                label: Some("blur_downsample_bind_group"),
-            });
-            compute_pass.set_pipeline(&self.downsample_pipeline);
-            compute_pass.set_bind_group(0, &downsample_bind_group, &[]);
+            let downsample_bind_group =
+                context
+                    .device
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        layout: &self.downsample_bind_group_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: downsample_uniform_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: wgpu::BindingResource::TextureView(context.input_view),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: wgpu::BindingResource::TextureView(&downsample_view),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 3,
+                                resource: wgpu::BindingResource::Sampler(&self.downsample_sampler),
+                            },
+                        ],
+                        label: Some("blur_downsample_bind_group"),
+                    });
+            context.compute_pass.set_pipeline(&self.downsample_pipeline);
+            context
+                .compute_pass
+                .set_bind_group(0, &downsample_bind_group, &[]);
             let downsample_workgroups_x = down_width.div_ceil(8);
             let downsample_workgroups_y = down_height.div_ceil(8);
             if downsample_workgroups_x == 0 || downsample_workgroups_y == 0 {
@@ -558,7 +553,11 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 self.release_texture(blur_texture, down_width, down_height);
                 continue;
             }
-            compute_pass.dispatch_workgroups(downsample_workgroups_x, downsample_workgroups_y, 1);
+            context.compute_pass.dispatch_workgroups(
+                downsample_workgroups_x,
+                downsample_workgroups_y,
+                1,
+            );
 
             // Directional blur pass
             let mut read_view = downsample_view.clone();
@@ -580,8 +579,8 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                     sample_count: weight_entry.sample_count,
                 };
                 let blur_uniform_buffer = Self::create_uniform_buffer(
-                    device,
-                    queue,
+                    context.device,
+                    context.queue,
                     "Blur Pass Uniform Buffer",
                     &blur_uniforms,
                 );
@@ -596,41 +595,48 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                     }),
                 };
                 let weights_buffer = Self::create_uniform_buffer(
-                    device,
-                    queue,
+                    context.device,
+                    context.queue,
                     "Blur Weights and Offsets Buffer",
                     &weights_and_offsets,
                 );
 
-                let blur_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &self.blur_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: blur_uniform_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(&read_view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::TextureView(&write_view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: wgpu::BindingResource::Sampler(&self.downsample_sampler),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 4,
-                            resource: weights_buffer.as_entire_binding(),
-                        },
-                    ],
-                    label: Some("blur_directional_bind_group"),
-                });
-                compute_pass.set_pipeline(&self.blur_pipeline);
-                compute_pass.set_bind_group(0, &blur_bind_group, &[]);
-                compute_pass.dispatch_workgroups(
+                let blur_bind_group =
+                    context
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            layout: &self.blur_bind_group_layout,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: blur_uniform_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::TextureView(&read_view),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 2,
+                                    resource: wgpu::BindingResource::TextureView(&write_view),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 3,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &self.downsample_sampler,
+                                    ),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 4,
+                                    resource: weights_buffer.as_entire_binding(),
+                                },
+                            ],
+                            label: Some("blur_directional_bind_group"),
+                        });
+                context.compute_pass.set_pipeline(&self.blur_pipeline);
+                context
+                    .compute_pass
+                    .set_bind_group(0, &blur_bind_group, &[]);
+                context.compute_pass.dispatch_workgroups(
                     downsample_workgroups_x,
                     downsample_workgroups_y,
                     1,
@@ -648,35 +654,40 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 scale,
             };
             let upsample_uniform_buffer = Self::create_uniform_buffer(
-                device,
-                queue,
+                context.device,
+                context.queue,
                 "Blur Upsample Uniform Buffer",
                 &upsample_uniforms,
             );
-            let upsample_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &self.upsample_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: upsample_uniform_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&read_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(output_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: wgpu::BindingResource::Sampler(&self.downsample_sampler),
-                    },
-                ],
-                label: Some("blur_upsample_bind_group"),
-            });
-            compute_pass.set_pipeline(&self.upsample_pipeline);
-            compute_pass.set_bind_group(0, &upsample_bind_group, &[]);
+            let upsample_bind_group =
+                context
+                    .device
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        layout: &self.upsample_bind_group_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: upsample_uniform_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: wgpu::BindingResource::TextureView(&read_view),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: wgpu::BindingResource::TextureView(context.output_view),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 3,
+                                resource: wgpu::BindingResource::Sampler(&self.downsample_sampler),
+                            },
+                        ],
+                        label: Some("blur_upsample_bind_group"),
+                    });
+            context.compute_pass.set_pipeline(&self.upsample_pipeline);
+            context
+                .compute_pass
+                .set_bind_group(0, &upsample_bind_group, &[]);
             let upsample_workgroups_x = area_width.div_ceil(8);
             let upsample_workgroups_y = area_height.div_ceil(8);
             if upsample_workgroups_x == 0 || upsample_workgroups_y == 0 {
@@ -684,7 +695,11 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 self.release_texture(blur_texture, down_width, down_height);
                 continue;
             }
-            compute_pass.dispatch_workgroups(upsample_workgroups_x, upsample_workgroups_y, 1);
+            context.compute_pass.dispatch_workgroups(
+                upsample_workgroups_x,
+                upsample_workgroups_y,
+                1,
+            );
 
             self.release_texture(downsample_texture, down_width, down_height);
             self.release_texture(blur_texture, down_width, down_height);

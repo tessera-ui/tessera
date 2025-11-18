@@ -2,9 +2,7 @@ use bytemuck::{Pod, Zeroable};
 use encase::{ShaderType, UniformBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    PxPosition, PxSize,
-    px::PxRect,
-    renderer::DrawablePipeline,
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu::{self, include_wgsl, util::DeviceExt},
 };
 
@@ -267,27 +265,22 @@ impl CheckmarkPipeline {
 }
 
 impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
-    fn draw(
-        &mut self,
-        _gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        commands: &[(&CheckmarkCommand, PxSize, PxPosition)],
-        _scene_texture_view: &wgpu::TextureView,
-        _clip_rect: Option<PxRect>,
-    ) {
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &self.bind_group, &[]);
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+    fn draw(&mut self, context: &mut DrawContext<CheckmarkCommand>) {
+        context.render_pass.set_pipeline(&self.pipeline);
+        context.render_pass.set_bind_group(0, &self.bind_group, &[]);
+        context
+            .render_pass
+            .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        context
+            .render_pass
+            .set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
-        for (command, size, start_pos) in commands {
+        for (command, size, start_pos) in context.commands.iter() {
             // Convert position and size to NDC coordinates
-            let ndc_pos = pixel_to_ndc(*start_pos, [config.width, config.height]);
+            let ndc_pos = pixel_to_ndc(*start_pos, [context.config.width, context.config.height]);
             let ndc_size = [
-                size.width.to_f32() / config.width as f32 * 2.0,
-                size.height.to_f32() / config.height as f32 * 2.0,
+                size.width.to_f32() / context.config.width as f32 * 2.0,
+                size.height.to_f32() / context.config.height as f32 * 2.0,
             ];
 
             // Create uniforms
@@ -300,13 +293,13 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
             };
 
             // Update uniform buffer
-            self.update_uniforms(gpu_queue, &uniforms);
+            self.update_uniforms(context.queue, &uniforms);
 
             // Update vertex positions
-            self.update_vertices_for(gpu_queue, ndc_pos, ndc_size);
+            self.update_vertices_for(context.queue, ndc_pos, ndc_size);
 
             // Set pipeline and draw
-            render_pass.draw_indexed(0..6, 0, 0..1);
+            context.render_pass.draw_indexed(0..6, 0, 0..1);
         }
     }
 }

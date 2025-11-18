@@ -13,7 +13,11 @@ use std::{num::NonZero, sync::OnceLock};
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tessera_ui::{Color, DrawablePipeline, PxPosition, PxSize, px::PxRect, wgpu};
+use tessera_ui::{
+    Color, PxPosition,
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
+    wgpu,
+};
 
 use super::command::{TextCommand, TextConstraint};
 
@@ -152,36 +156,28 @@ impl GlyphonTextRender {
 }
 
 impl DrawablePipeline<TextCommand> for GlyphonTextRender {
-    fn draw(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        commands: &[(&TextCommand, PxSize, PxPosition)],
-        _scene_texture_view: &wgpu::TextureView,
-        _clip_rect: Option<PxRect>,
-    ) {
-        if commands.is_empty() {
+    fn draw(&mut self, context: &mut DrawContext<TextCommand>) {
+        if context.commands.is_empty() {
             return;
         }
 
         self.viewport.update(
-            gpu_queue,
+            context.queue,
             glyphon::Resolution {
-                width: config.width,
-                height: config.height,
+                width: context.config.width,
+                height: context.config.height,
             },
         );
 
-        let text_areas = commands
+        let text_areas = context
+            .commands
             .iter()
             .map(|(command, _size, start_pos)| command.data.text_area(*start_pos));
 
         self.renderer
             .prepare(
-                gpu,
-                gpu_queue,
+                context.device,
+                context.queue,
                 &mut write_font_system(),
                 &mut self.atlas,
                 &self.viewport,
@@ -191,11 +187,12 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
             .unwrap();
 
         self.renderer
-            .render(&self.atlas, &self.viewport, render_pass)
+            .render(&self.atlas, &self.viewport, context.render_pass)
             .unwrap();
 
         // Re-create the renderer to release borrow on atlas
-        let new_renderer = glyphon::TextRenderer::new(&mut self.atlas, gpu, self.msaa, None);
+        let new_renderer =
+            glyphon::TextRenderer::new(&mut self.atlas, context.device, self.msaa, None);
         let _ = std::mem::replace(&mut self.renderer, new_renderer);
     }
 }

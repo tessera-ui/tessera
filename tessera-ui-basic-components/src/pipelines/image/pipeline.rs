@@ -2,7 +2,11 @@ use std::collections::HashMap;
 
 use encase::{ShaderType, UniformBuffer};
 use glam::Vec4;
-use tessera_ui::{PxPosition, PxSize, px::PxRect, renderer::drawer::DrawablePipeline, wgpu};
+use tessera_ui::{
+    PxPosition, PxSize,
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
+    wgpu,
+};
 
 use super::command::{ImageCommand, ImageData};
 
@@ -246,31 +250,31 @@ impl ImagePipeline {
 }
 
 impl DrawablePipeline<ImageCommand> for ImagePipeline {
-    fn draw(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        commands: &[(&ImageCommand, PxSize, PxPosition)],
-        _scene_texture_view: &wgpu::TextureView,
-        _clip_rect: Option<PxRect>,
-    ) {
-        render_pass.set_pipeline(&self.pipeline);
+    fn draw(&mut self, context: &mut DrawContext<ImageCommand>) {
+        context.render_pass.set_pipeline(&self.pipeline);
 
-        for (command, size, start_pos) in commands {
+        for (command, size, start_pos) in context.commands.iter() {
             // Use the extracted helper to obtain or create GPU resources.
-            let resources = self.get_or_create_resources(gpu, gpu_queue, config, &command.data);
+            let resources = self.get_or_create_resources(
+                context.device,
+                context.queue,
+                context.config,
+                &command.data,
+            );
 
             // Use the extracted uniforms computation helper (dereference borrowed tuple elements).
-            let uniforms = Self::compute_uniforms(*start_pos, *size, config);
+            let uniforms = Self::compute_uniforms(*start_pos, *size, context.config);
 
             let mut buffer = UniformBuffer::new(Vec::new());
             buffer.write(&uniforms).unwrap();
-            gpu_queue.write_buffer(&resources.uniform_buffer, 0, &buffer.into_inner());
+            context
+                .queue
+                .write_buffer(&resources.uniform_buffer, 0, &buffer.into_inner());
 
-            render_pass.set_bind_group(0, &resources.bind_group, &[]);
-            render_pass.draw(0..6, 0..1);
+            context
+                .render_pass
+                .set_bind_group(0, &resources.bind_group, &[]);
+            context.render_pass.draw(0..6, 0..1);
         }
     }
 }

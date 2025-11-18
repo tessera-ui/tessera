@@ -23,8 +23,7 @@ use glam::{Vec2, Vec4};
 use lru::LruCache;
 use tessera_ui::{
     Color, Px, PxPosition, PxSize,
-    px::PxRect,
-    renderer::DrawablePipeline,
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu::{self, include_wgsl, util::DeviceExt},
 };
 
@@ -365,7 +364,7 @@ impl ShapePipeline {
         // Only cache if shape has appeared frequently enough
         if tracker.hit_count >= CACHE_HEAT_THRESHOLD {
             let entry = Arc::new(self.build_cache_entry(gpu, gpu_queue, command, size));
-            _ = self.cache.put(key, entry.clone());
+            self.cache.put(key, entry.clone());
             Some(entry)
         } else {
             // Shape is not hot enough yet, don't cache
@@ -958,17 +957,8 @@ impl ShapeCacheKey {
 }
 
 impl DrawablePipeline<ShapeCommand> for ShapePipeline {
-    fn draw(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        commands: &[(&ShapeCommand, PxSize, PxPosition)],
-        _scene_texture_view: &wgpu::TextureView,
-        _clip_rect: Option<PxRect>,
-    ) {
-        if commands.is_empty() {
+    fn draw(&mut self, context: &mut DrawContext<ShapeCommand>) {
+        if context.commands.is_empty() {
             return;
         }
 
@@ -979,9 +969,10 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             self.current_frame.saturating_sub(tracker.last_seen_frame) < HEAT_TRACKING_WINDOW
         });
 
-        let mut cache_entries = Vec::with_capacity(commands.len());
-        for (command, size, _) in commands.iter() {
-            let entry = self.get_or_create_cache_entry(gpu, gpu_queue, command, *size);
+        let mut cache_entries = Vec::with_capacity(context.commands.len());
+        for (command, size, _) in context.commands.iter() {
+            let entry =
+                self.get_or_create_cache_entry(context.device, context.queue, command, *size);
             cache_entries.push(entry);
         }
 
@@ -989,17 +980,20 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         let mut pending_cached_run: Option<(Arc<ShapeCacheEntry>, Vec<(PxPosition, PxSize)>)> =
             None;
 
-        for (idx, ((_, size, position), cache_entry)) in
-            commands.iter().zip(cache_entries.iter()).enumerate()
+        for (idx, ((_, size, position), cache_entry)) in context
+            .commands
+            .iter()
+            .zip(cache_entries.iter())
+            .enumerate()
         {
             if let Some(entry) = cache_entry {
                 if !pending_uncached.is_empty() {
                     self.draw_uncached_batch(
-                        gpu,
-                        gpu_queue,
-                        config,
-                        render_pass,
-                        commands,
+                        context.device,
+                        context.queue,
+                        context.config,
+                        context.render_pass,
+                        context.commands,
                         &pending_uncached,
                     );
                     pending_uncached.clear();
@@ -1009,39 +1003,45 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                     if Arc::ptr_eq(current_entry, entry) {
                         transforms.push((*position, *size));
                     } else {
-                        let mut instances = std::mem::take(transforms);
-                        let previous_entry = current_entry.clone();
-                        self.draw_cached_run(
-                            gpu,
-                            gpu_queue,
-                            config,
-                            render_pass,
-                            previous_entry,
-                            &instances,
+                        self.flush_cached_run(
+                            context.device,
+                            context.queue,
+                            context.config,
+                            context.render_pass,
+                            &mut pending_cached_run,
                         );
-                        instances.clear();
-                        instances.push((*position, *size));
-                        *current_entry = entry.clone();
-                        *transforms = instances;
+                        pending_cached_run = Some((entry.clone(), vec![(*position, *size)]));
                     }
                 } else {
                     pending_cached_run = Some((entry.clone(), vec![(*position, *size)]));
                 }
             } else {
-                self.flush_cached_run(gpu, gpu_queue, config, render_pass, &mut pending_cached_run);
+                self.flush_cached_run(
+                    context.device,
+                    context.queue,
+                    context.config,
+                    context.render_pass,
+                    &mut pending_cached_run,
+                );
                 pending_uncached.push(idx);
             }
         }
 
-        self.flush_cached_run(gpu, gpu_queue, config, render_pass, &mut pending_cached_run);
+        self.flush_cached_run(
+            context.device,
+            context.queue,
+            context.config,
+            context.render_pass,
+            &mut pending_cached_run,
+        );
 
         if !pending_uncached.is_empty() {
             self.draw_uncached_batch(
-                gpu,
-                gpu_queue,
-                config,
-                render_pass,
-                commands,
+                context.device,
+                context.queue,
+                context.config,
+                context.render_pass,
+                context.commands,
                 &pending_uncached,
             );
         }

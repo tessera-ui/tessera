@@ -1,6 +1,5 @@
 use tessera_ui::{
-    compute::resource::ComputeResourceManager,
-    renderer::compute::{ComputablePipeline, ComputeBatchItem},
+    compute::pipeline::{ComputablePipeline, ComputeContext},
     wgpu,
 };
 
@@ -103,19 +102,12 @@ impl ContrastPipeline {
 
 impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
     /// Dispatches one or more contrast adjustment compute commands.
-    fn dispatch(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        compute_pass: &mut wgpu::ComputePass<'_>,
-        items: &[ComputeBatchItem<'_, ContrastCommand>],
-        resource_manager: &mut ComputeResourceManager,
-        input_view: &wgpu::TextureView,
-        output_view: &wgpu::TextureView,
-    ) {
-        for item in items {
-            let Some(mean_buffer) = resource_manager.get(&item.command.mean_result_handle) else {
+    fn dispatch(&mut self, context: &mut ComputeContext<ContrastCommand>) {
+        for item in context.items {
+            let Some(mean_buffer) = context
+                .resource_manager
+                .get(&item.command.mean_result_handle)
+            else {
                 continue;
             };
 
@@ -130,42 +122,46 @@ impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
 
             let uniform_array = [uniforms];
             let uniform_bytes = bytemuck::cast_slice(&uniform_array);
-            let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            let uniform_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Contrast Uniform Buffer"),
                 size: uniform_bytes.len() as u64,
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
-            queue.write_buffer(&uniform_buffer, 0, uniform_bytes);
+            context
+                .queue
+                .write_buffer(&uniform_buffer, 0, uniform_bytes);
 
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: uniform_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(input_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(output_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: mean_buffer.as_entire_binding(),
-                    },
-                ],
-                label: Some("contrast_bind_group"),
-            });
+            let bind_group = context
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &self.bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: uniform_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(context.input_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(context.output_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: mean_buffer.as_entire_binding(),
+                        },
+                    ],
+                    label: Some("contrast_bind_group"),
+                });
 
-            compute_pass.set_pipeline(&self.pipeline);
-            compute_pass.set_bind_group(0, &bind_group, &[]);
-            compute_pass.dispatch_workgroups(
-                config.width.div_ceil(8),
-                config.height.div_ceil(8),
+            context.compute_pass.set_pipeline(&self.pipeline);
+            context.compute_pass.set_bind_group(0, &bind_group, &[]);
+            context.compute_pass.dispatch_workgroups(
+                context.config.width.div_ceil(8),
+                context.config.height.div_ceil(8),
                 1,
             );
         }

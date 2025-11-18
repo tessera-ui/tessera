@@ -4,8 +4,7 @@ use encase::{ShaderType, UniformBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     Color, PxPosition, PxSize,
-    px::PxRect,
-    renderer::drawer::DrawablePipeline,
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu::{self, util::DeviceExt},
 };
 
@@ -469,29 +468,26 @@ impl ImageVectorPipeline {
 }
 
 impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
-    fn draw(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        commands: &[(&ImageVectorCommand, PxSize, PxPosition)],
-        _scene_texture_view: &wgpu::TextureView,
-        _clip_rect: Option<PxRect>,
-    ) {
-        if commands.is_empty() {
+    fn draw(&mut self, context: &mut DrawContext<ImageVectorCommand>) {
+        if context.commands.is_empty() {
             return;
         }
 
-        for (command, size, _) in commands {
+        for (command, size, _) in context.commands.iter() {
             if let Some((width, height)) = physical_dimensions(*size) {
-                self.ensure_cached_entry(device, queue, &command.data, width, height);
+                self.ensure_cached_entry(
+                    context.device,
+                    context.queue,
+                    &command.data,
+                    width,
+                    height,
+                );
             }
         }
 
-        render_pass.set_pipeline(&self.sample_pipeline);
+        context.render_pass.set_pipeline(&self.sample_pipeline);
 
-        for (command, size, start_pos) in commands {
+        for (command, size, start_pos) in context.commands.iter() {
             let Some((width, height)) = physical_dimensions(*size) else {
                 continue;
             };
@@ -507,16 +503,20 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 command.tint,
                 entry.uv_origin,
                 entry.uv_scale,
-                config,
+                context.config,
             );
             let mut buffer = UniformBuffer::new(Vec::new());
             buffer
                 .write(&uniforms)
                 .expect("sample uniform serialization failed");
-            queue.write_buffer(&entry.uniform_buffer, 0, &buffer.into_inner());
+            context
+                .queue
+                .write_buffer(&entry.uniform_buffer, 0, &buffer.into_inner());
 
-            render_pass.set_bind_group(0, &entry.bind_group, &[]);
-            render_pass.draw(0..6, 0..1);
+            context
+                .render_pass
+                .set_bind_group(0, &entry.bind_group, &[]);
+            context.render_pass.draw(0..6, 0..1);
         }
     }
 }

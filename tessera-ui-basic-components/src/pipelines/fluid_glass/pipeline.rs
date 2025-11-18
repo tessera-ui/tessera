@@ -3,7 +3,12 @@ use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};
 use encase::{ShaderType, StorageBuffer, UniformBuffer};
 use glam::{Vec2, Vec4};
 use lru::LruCache;
-use tessera_ui::{PxPosition, PxSize, px::PxRect, renderer::DrawablePipeline, wgpu};
+use tessera_ui::{
+    PxPosition, PxSize,
+    px::PxRect,
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
+    wgpu,
+};
 
 use crate::fluid_glass::FluidGlassCommand;
 
@@ -435,16 +440,7 @@ impl FluidGlassPipeline {
 }
 
 impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
-    fn draw(
-        &mut self,
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        commands: &[(&FluidGlassCommand, PxSize, PxPosition)],
-        scene_texture_view: &wgpu::TextureView,
-        clip_rect: Option<PxRect>,
-    ) {
+    fn draw(&mut self, context: &mut DrawContext<FluidGlassCommand>) {
         // Advance frame counter and cleanup old SDF heat tracking data
         self.current_frame = self.current_frame.wrapping_add(1);
         self.sdf_heat_tracker.retain(|_, tracker| {
@@ -452,32 +448,43 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             self.current_frame.saturating_sub(tracker.last_seen_frame) < SDF_HEAT_TRACKING_WINDOW
         });
 
-        let instances = self.build_instances(commands, config, clip_rect, gpu, queue);
+        let instances = self.build_instances(
+            context.commands,
+            context.config,
+            context.clip_rect,
+            context.device,
+            context.queue,
+        );
         if instances.is_empty() {
             return;
         }
 
         let groups = self.group_instances_by_sdf(instances);
 
-        render_pass.set_pipeline(&self.pipeline);
+        context.render_pass.set_pipeline(&self.pipeline);
         let mut alive_buffers: Vec<wgpu::Buffer> = Vec::new();
 
         for (entry, uniforms) in groups {
             if uniforms.is_empty() {
                 continue;
             }
-            let uniform_buffer = match Self::create_and_upload_buffer(gpu, queue, &uniforms) {
-                Ok(buf) => buf,
-                Err(_) => continue,
-            };
+            let uniform_buffer =
+                match Self::create_and_upload_buffer(context.device, context.queue, &uniforms) {
+                    Ok(buf) => buf,
+                    Err(_) => continue,
+                };
             let sdf_view = entry
                 .as_ref()
                 .map(|entry| &entry.view)
                 .unwrap_or(&self.dummy_sdf_view);
-            let bind_group =
-                self.create_bind_group(gpu, &uniform_buffer, scene_texture_view, sdf_view);
-            render_pass.set_bind_group(0, &bind_group, &[]);
-            render_pass.draw(0..6, 0..uniforms.len() as u32);
+            let bind_group = self.create_bind_group(
+                context.device,
+                &uniform_buffer,
+                context.scene_texture_view,
+                sdf_view,
+            );
+            context.render_pass.set_bind_group(0, &bind_group, &[]);
+            context.render_pass.draw(0..6, 0..uniforms.len() as u32);
             alive_buffers.push(uniform_buffer);
         }
     }
@@ -685,7 +692,7 @@ impl FluidGlassPipeline {
                 g2_k_value,
             ));
 
-            _ = self.sdf_cache.put(key, entry.clone());
+            self.sdf_cache.put(key, entry.clone());
             Some(entry)
         } else {
             // SDF is not hot enough yet, don't cache

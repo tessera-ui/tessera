@@ -4,7 +4,7 @@
 //! handling graphics pipeline registration and command dispatch.
 
 pub mod command;
-mod pipeline;
+pub mod pipeline;
 
 use crate::{
     PxPosition,

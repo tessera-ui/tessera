@@ -82,42 +82,32 @@
 //! }
 //!
 //! impl ComputablePipeline<BrightnessCommand> for BrightnessPipeline {
-//!     fn dispatch(
-//!         &mut self,
-//!         device: &wgpu::Device,
-//!         queue: &wgpu::Queue,
-//!         config: &wgpu::SurfaceConfiguration,
-//!         compute_pass: &mut wgpu::ComputePass<'_>,
-//!         command: &BrightnessCommand,
-//!         resource_manager: &mut ComputeResourceManager,
-//!         input_view: &wgpu::TextureView,
-//!         output_view: &wgpu::TextureView,
-//!     ) {
+//!     fn dispatch(&mut self, context: &mut ComputeContext<BrightnessCommand>) {
 //!         // Create uniforms buffer with brightness value
-//!         let uniforms = [command.brightness];
-//!         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+//!         let uniforms = [context.items[0].command.brightness];
+//!         let uniform_buffer = context.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 //!             label: Some("Brightness Uniforms"),
 //!             contents: bytemuck::cast_slice(&uniforms),
 //!             usage: wgpu::BufferUsages::UNIFORM,
 //!         });
 //!         
 //!         // Create bind group with input/output textures and uniforms
-//!         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+//!         let bind_group = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
 //!             layout: &self.bind_group_layout,
 //!             entries: &[
 //!                 wgpu::BindGroupEntry { binding: 0, resource: uniform_buffer.as_entire_binding() },
-//!                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(input_view) },
-//!                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(output_view) },
+//!                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(context.input_view) },
+//!                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(context.output_view) },
 //!             ],
 //!             label: Some("brightness_bind_group"),
 //!         });
 //!         
 //!         // Dispatch compute shader
-//!         compute_pass.set_pipeline(&self.compute_pipeline);
-//!         compute_pass.set_bind_group(0, &bind_group, &[]);
-//!         compute_pass.dispatch_workgroups(
-//!             (config.width + 7) / 8,
-//!             (config.height + 7) / 8,
+//!         context.compute_pass.set_pipeline(&self.compute_pipeline);
+//!         context.compute_pass.set_bind_group(0, &bind_group, &[]);
+//!         context.compute_pass.dispatch_workgroups(
+//!             (context.config.width + 7) / 8,
+//!             (context.config.height + 7) / 8,
 //!             1
 //!         );
 //!     }
@@ -197,6 +187,36 @@ pub struct ComputeBatchItem<'a, C: ComputeCommand> {
     pub target_area: PxRect,
 }
 
+/// Provides comprehensive context for compute operations within a compute pass.
+///
+/// This struct bundles essential WGPU resources, configuration, and command-specific data
+/// required for a compute pipeline to process its commands.
+///
+/// # Type Parameters
+///
+/// * `C` - The specific [`ComputeCommand`] type being processed.
+///
+/// # Fields
+///
+/// * `device` - The WGPU device, used for creating and managing GPU resources.
+/// * `queue` - The WGPU queue, used for submitting command buffers and writing buffer data.
+/// * `config` - The current surface configuration, providing information like format and dimensions.
+/// * `compute_pass` - The active `wgpu::ComputePass` encoder, used to record compute commands.
+/// * `items` - A slice of [`ComputeBatchItem`]s, each containing a compute command and its metadata.
+/// * `resource_manager` - A mutable reference to the [`ComputeResourceManager`], used for managing reusable GPU buffers.
+/// * `input_view` - A view of the input texture for the compute operation.
+/// * `output_view` - A view of the output texture for the compute operation.
+pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
+    pub device: &'a wgpu::Device,
+    pub queue: &'a wgpu::Queue,
+    pub config: &'a wgpu::SurfaceConfiguration,
+    pub compute_pass: &'a mut wgpu::ComputePass<'b>,
+    pub items: &'c [ComputeBatchItem<'c, C>],
+    pub resource_manager: &'a mut ComputeResourceManager,
+    pub input_view: &'a wgpu::TextureView,
+    pub output_view: &'a wgpu::TextureView,
+}
+
 /// Core trait for implementing GPU compute pipelines.
 ///
 /// This trait defines the interface for compute pipelines that process specific types
@@ -226,20 +246,19 @@ pub struct ComputeBatchItem<'a, C: ComputeCommand> {
 ///
 /// ```rust,ignore
 /// impl ComputablePipeline<MyCommand> for MyPipeline {
-///     fn dispatch(&mut self, device, queue, config, compute_pass, items,
-///                 resource_manager, input_view, output_view) {
-///         for item in items {
+///     fn dispatch(&mut self, context: &mut ComputeContext<MyCommand>) {
+///         for item in context.items {
 ///             // 1. Create or retrieve uniform buffer
 ///             let uniforms = create_uniforms_from_command(item.command);
-///             let uniform_buffer = device.create_buffer_init(...);
+///             let uniform_buffer = context.device.create_buffer_init(...);
 ///
 ///             // 2. Create bind group with textures and uniforms
-///             let bind_group = device.create_bind_group(...);
+///             let bind_group = context.device.create_bind_group(...);
 ///
 ///             // 3. Set pipeline and dispatch
-///             compute_pass.set_pipeline(&self.compute_pipeline);
-///             compute_pass.set_bind_group(0, &bind_group, &[]);
-///             compute_pass.dispatch_workgroups(workgroup_x, workgroup_y, 1);
+///             context.compute_pass.set_pipeline(&self.compute_pipeline);
+///             context.compute_pass.set_bind_group(0, &bind_group, &[]);
+///             context.compute_pass.dispatch_workgroups(workgroup_x, workgroup_y, 1);
 ///         }
 ///     }
 /// }
@@ -255,14 +274,7 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     ///
     /// # Parameters
     ///
-    /// * `device` - The WGPU device for creating GPU resources
-    /// * `queue` - The WGPU queue for submitting commands and updating buffers
-    /// * `config` - Current surface configuration containing dimensions and format info
-    /// * `compute_pass` - The active compute pass to record commands into
-    /// * `items` - Slice of compute commands with associated metadata describing their target areas
-    /// * `resource_manager` - Manager for reusing GPU buffers across operations
-    /// * `input_view` - View of the input texture (result from previous pass)
-    /// * `output_view` - View of the output texture (target for this operation)
+    /// * `context` - The context for the compute pass.
     ///
     /// # Texture Format Requirements
     ///
@@ -286,9 +298,9 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     /// Common dispatch pattern:
     /// ```rust,ignore
     /// let workgroup_size = 8; // Match shader @workgroup_size(8, 8)
-    /// let dispatch_x = (config.width + workgroup_size - 1) / workgroup_size;
-    /// let dispatch_y = (config.height + workgroup_size - 1) / workgroup_size;
-    /// compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
+    /// let dispatch_x = (context.config.width + workgroup_size - 1) / workgroup_size;
+    /// let dispatch_y = (context.config.height + workgroup_size - 1) / workgroup_size;
+    /// context.compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
     /// ```
     ///
     /// # Resource Management
@@ -304,17 +316,7 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     /// - Validate command parameters before use
     /// - Ensure texture dimensions are compatible
     /// - Handle resource creation failures appropriately
-    fn dispatch(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        compute_pass: &mut wgpu::ComputePass<'_>,
-        items: &[ComputeBatchItem<'_, C>],
-        resource_manager: &mut ComputeResourceManager,
-        input_view: &wgpu::TextureView,
-        output_view: &wgpu::TextureView,
-    );
+    fn dispatch(&mut self, context: &mut ComputeContext<C>);
 }
 
 /// Internal trait for type erasure of computable pipelines.
@@ -382,16 +384,16 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
             });
         }
 
-        self.pipeline.dispatch(
+        self.pipeline.dispatch(&mut ComputeContext {
             device,
             queue,
             config,
             compute_pass,
-            &typed_items,
+            items: &typed_items,
             resource_manager,
             input_view,
             output_view,
-        );
+        });
     }
 }
 

@@ -84,20 +84,13 @@
 //! impl DrawablePipeline<RectangleCommand> for RectanglePipeline {
 //!     fn draw(
 //!         &mut self,
-//!         gpu: &wgpu::Device,
-//!         gpu_queue: &wgpu::Queue,
-//!         config: &wgpu::SurfaceConfiguration,
-//!         render_pass: &mut wgpu::RenderPass<'_>,
-//!         command: &RectangleCommand,
-//!         size: PxSize,
-//!         start_pos: PxPosition,
-//!         scene_texture_view: &wgpu::TextureView,
+//!         context: &mut DrawContext<RectangleCommand>,
 //!     ) {
 //!         // Update uniforms with command data
 //!         // Set pipeline and draw
-//!         render_pass.set_pipeline(&self.render_pipeline);
-//!         render_pass.set_bind_group(0, &self.bind_group, &[]);
-//!         render_pass.draw(0..6, 0..1); // Draw quad
+//!         context.render_pass.set_pipeline(&self.render_pipeline);
+//!         context.render_pass.set_bind_group(0, &self.bind_group, &[]);
+//!         context.render_pass.draw(0..6, 0..1); // Draw quad
 //!     }
 //! }
 //!
@@ -146,10 +139,74 @@
 use std::{any::TypeId, collections::HashMap};
 
 use crate::{
-    PxPosition,
-    px::{PxRect, PxSize},
+    px::{PxPosition, PxRect, PxSize},
     renderer::DrawCommand,
 };
+
+/// Provides context for operations that occur once per frame.
+///
+/// This struct bundles essential WGPU resources and configuration that are relevant
+/// for the entire rendering frame, but are not specific to a single render pass.
+pub struct FrameContext<'a> {
+    /// The WGPU device.
+    pub device: &'a wgpu::Device,
+    /// The WGPU queue.
+    pub queue: &'a wgpu::Queue,
+    /// The current surface configuration.
+    pub config: &'a wgpu::SurfaceConfiguration,
+}
+
+/// Provides context for operations within a single render pass.
+///
+/// This struct bundles WGPU resources and configuration specific to a render pass,
+/// including the active render pass encoder and the scene texture view for sampling.
+pub struct PassContext<'a, 'b> {
+    /// The WGPU device.
+    pub device: &'a wgpu::Device,
+    /// The WGPU queue.
+    pub queue: &'a wgpu::Queue,
+    /// The current surface configuration.
+    pub config: &'a wgpu::SurfaceConfiguration,
+    /// The active render pass encoder.
+    pub render_pass: &'a mut wgpu::RenderPass<'b>,
+    /// A view of the current scene texture.
+    pub scene_texture_view: &'a wgpu::TextureView,
+}
+
+/// Provides comprehensive context for drawing operations within a render pass.
+///
+/// This struct extends `PassContext` with information specific to individual draw calls,
+/// including the commands to be rendered and an optional clipping rectangle.
+///
+/// # Type Parameters
+///
+/// * `T` - The specific [`DrawCommand`] type being processed.
+///
+/// # Fields
+///
+/// * `device` - The WGPU device, used for creating and managing GPU resources.
+/// * `queue` - The WGPU queue, used for submitting command buffers and writing buffer data.
+/// * `config` - The current surface configuration, providing information like format and dimensions.
+/// * `render_pass` - The active `wgpu::RenderPass` encoder, used to record rendering commands.
+/// * `commands` - A slice of tuples, each containing a draw command, its size, and its position.
+/// * `scene_texture_view` - A view of the current scene texture, useful for effects that sample from the background.
+/// * `clip_rect` - An optional rectangle defining the clipping area for the draw call.
+pub struct DrawContext<'a, 'b, 'c, T> {
+    /// The WGPU device.
+    pub device: &'a wgpu::Device,
+    /// The WGPU queue.
+    pub queue: &'a wgpu::Queue,
+    /// The current surface configuration.
+    pub config: &'a wgpu::SurfaceConfiguration,
+    /// The active render pass encoder.
+    pub render_pass: &'a mut wgpu::RenderPass<'b>,
+    /// The draw commands to be processed.
+    pub commands: &'c [(&'c T, PxSize, PxPosition)],
+    /// A view of the current scene texture.
+    pub scene_texture_view: &'a wgpu::TextureView,
+    /// An optional clipping rectangle for the draw call.
+    pub clip_rect: Option<PxRect>,
+}
 
 /// Core trait for implementing custom graphics rendering pipelines.
 ///
@@ -202,20 +259,12 @@ pub trait DrawablePipeline<T: DrawCommand> {
     ///
     /// # Parameters
     ///
-    /// * `gpu` - The WGPU device, for resource creation.
-    /// * `gpu_queue` - The WGPU queue, for submitting buffer writes.
-    /// * `config` - The current surface configuration.
+    /// * `context` - The context for the frame.
     ///
     /// # Default Implementation
     ///
     /// The default implementation does nothing.
-    fn begin_frame(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-    ) {
-    }
+    fn begin_frame(&mut self, context: &FrameContext<'_>) {}
 
     /// Called once at the beginning of the render pass.
     ///
@@ -228,24 +277,12 @@ pub trait DrawablePipeline<T: DrawCommand> {
     ///
     /// # Parameters
     ///
-    /// * `gpu` - The WGPU device for creating resources
-    /// * `gpu_queue` - The WGPU queue for submitting commands
-    /// * `config` - Current surface configuration
-    /// * `render_pass` - The active render pass
-    /// * `scene_texture_view` - View of the current scene texture for background sampling
+    /// * `context` - The context for the render pass.
     ///
     /// # Default Implementation
     ///
     /// The default implementation does nothing, which is suitable for most pipelines.
-    fn begin_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        scene_texture_view: &wgpu::TextureView,
-    ) {
-    }
+    fn begin_pass(&mut self, context: &mut PassContext<'_, '_>) {}
 
     /// Renders a batch of draw commands.
     ///
@@ -254,38 +291,23 @@ pub trait DrawablePipeline<T: DrawCommand> {
     ///
     /// # Parameters
     ///
-    /// * `gpu` - The WGPU device for creating resources.
-    /// * `gpu_queue` - The WGPU queue for submitting commands and updating buffers.
-    /// * `config` - Current surface configuration containing format and size information.
-    /// * `render_pass` - The active render pass to record draw commands into.
-    /// * `commands` - A slice of tuples, each containing the command, its size, and its position.
-    /// * `scene_texture_view` - View of the current scene texture for background sampling.
-    /// * `clip_rect` - An optional rectangle to clip the drawing area.
+    /// * `context` - The context for drawing, including the render pass and commands.
     ///
     /// # Implementation Guidelines
     ///
-    /// - Iterate over the `commands` slice to process each command.
+    /// - Iterate over the `context.commands` slice to process each command.
     /// - Update buffers (e.g., instance buffers, storage buffers) with data from the command batch.
     /// - Set the appropriate render pipeline.
     /// - Bind necessary resources (textures, buffers, bind groups).
     /// - Issue one or more draw calls (e.g., an instanced draw call) to render the entire batch.
-    /// - If `clip_rect` is `Some`, use `render_pass.set_scissor_rect()` to clip rendering.
+    /// - If `context.clip_rect` is `Some`, use `context.render_pass.set_scissor_rect()` to clip rendering.
     /// - Avoid expensive operations like buffer creation; prefer reusing and updating existing resources.
     ///
     /// # Scene Texture Usage
     ///
-    /// The `scene_texture_view` provides access to the current rendered scene,
+    /// The `context.scene_texture_view` provides access to the current rendered scene,
     /// enabling effects that sample from the background.
-    fn draw(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        commands: &[(&T, PxSize, PxPosition)],
-        scene_texture_view: &wgpu::TextureView,
-        clip_rect: Option<PxRect>,
-    );
+    fn draw(&mut self, context: &mut DrawContext<'_, '_, '_, T>);
 
     /// Called once at the end of the render pass.
     ///
@@ -298,24 +320,12 @@ pub trait DrawablePipeline<T: DrawCommand> {
     ///
     /// # Parameters
     ///
-    /// * `gpu` - The WGPU device for creating resources
-    /// * `gpu_queue` - The WGPU queue for submitting commands
-    /// * `config` - Current surface configuration
-    /// * `render_pass` - The active render pass
-    /// * `scene_texture_view` - View of the current scene texture for background sampling
+    /// * `context` - The context for the render pass.
     ///
     /// # Default Implementation
     ///
     /// The default implementation does nothing, which is suitable for most pipelines.
-    fn end_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        scene_texture_view: &wgpu::TextureView,
-    ) {
-    }
+    fn end_pass(&mut self, context: &mut PassContext<'_, '_>) {}
 
     /// Called once at the end of the frame, after all render passes are complete.
     ///
@@ -331,20 +341,12 @@ pub trait DrawablePipeline<T: DrawCommand> {
     ///
     /// # Parameters
     ///
-    /// * `gpu` - The WGPU device.
-    /// * `gpu_queue` - The WGPU queue.
-    /// * `config` - The current surface configuration.
+    /// * `context` - The context for the frame.
     ///
     /// # Default Implementation
     ///
     /// The default implementation does nothing.
-    fn end_frame(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-    ) {
-    }
+    fn end_frame(&mut self, context: &FrameContext<'_>) {}
 }
 
 /// Internal trait for type erasure of drawable pipelines.
@@ -361,40 +363,14 @@ pub trait DrawablePipeline<T: DrawCommand> {
 /// This trait is automatically implemented for any type that implements
 /// [`DrawablePipeline<T>`] through the [`DrawablePipelineImpl`] wrapper.
 pub trait ErasedDrawablePipeline {
-    fn begin_frame(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-    );
-    fn end_frame(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-    );
-    fn begin_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        scene_texture_view: &wgpu::TextureView,
-    );
-
-    fn end_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        scene_texture_view: &wgpu::TextureView,
-    );
-
+    fn begin_frame(&mut self, context: &FrameContext<'_>);
+    fn end_frame(&mut self, context: &FrameContext<'_>);
+    fn begin_pass(&mut self, context: &mut PassContext<'_, '_>);
+    fn end_pass(&mut self, context: &mut PassContext<'_, '_>);
     fn draw_erased(
         &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
@@ -411,52 +387,26 @@ struct DrawablePipelineImpl<T: DrawCommand, P: DrawablePipeline<T>> {
 impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawablePipeline
     for DrawablePipelineImpl<T, P>
 {
-    fn begin_frame(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-    ) {
-        self.pipeline.begin_frame(gpu, gpu_queue, config);
+    fn begin_frame(&mut self, context: &FrameContext<'_>) {
+        self.pipeline.begin_frame(context);
     }
 
-    fn end_frame(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-    ) {
-        self.pipeline.end_frame(gpu, gpu_queue, config);
+    fn end_frame(&mut self, context: &FrameContext<'_>) {
+        self.pipeline.end_frame(context);
     }
 
-    fn begin_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        scene_texture_view: &wgpu::TextureView,
-    ) {
-        self.pipeline
-            .begin_pass(gpu, gpu_queue, config, render_pass, scene_texture_view);
+    fn begin_pass(&mut self, context: &mut PassContext<'_, '_>) {
+        self.pipeline.begin_pass(context);
     }
 
-    fn end_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        scene_texture_view: &wgpu::TextureView,
-    ) {
-        self.pipeline
-            .end_pass(gpu, gpu_queue, config, render_pass, scene_texture_view);
+    fn end_pass(&mut self, context: &mut PassContext<'_, '_>) {
+        self.pipeline.end_pass(context);
     }
 
     fn draw_erased(
         &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
@@ -481,15 +431,15 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
                 })
                 .collect();
 
-            self.pipeline.draw(
-                gpu,
-                gpu_queue,
+            self.pipeline.draw(&mut DrawContext {
+                device,
+                queue,
                 config,
                 render_pass,
-                &typed_commands,
+                commands: &typed_commands,
                 scene_texture_view,
                 clip_rect,
-            );
+            });
             true
         } else {
             false
@@ -605,56 +555,76 @@ impl PipelineRegistry {
 
     pub(crate) fn begin_all_passes(
         &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         scene_texture_view: &wgpu::TextureView,
     ) {
         for pipeline in self.pipelines.values_mut() {
-            pipeline.begin_pass(gpu, gpu_queue, config, render_pass, scene_texture_view);
+            pipeline.begin_pass(&mut PassContext {
+                device,
+                queue,
+                config,
+                render_pass,
+                scene_texture_view,
+            });
         }
     }
 
     pub(crate) fn end_all_passes(
         &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         scene_texture_view: &wgpu::TextureView,
     ) {
         for pipeline in self.pipelines.values_mut() {
-            pipeline.end_pass(gpu, gpu_queue, config, render_pass, scene_texture_view);
+            pipeline.end_pass(&mut PassContext {
+                device,
+                queue,
+                config,
+                render_pass,
+                scene_texture_view,
+            });
         }
     }
 
     pub(crate) fn begin_all_frames(
         &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
     ) {
         for pipeline in self.pipelines.values_mut() {
-            pipeline.begin_frame(gpu, gpu_queue, config);
+            pipeline.begin_frame(&FrameContext {
+                device,
+                queue,
+                config,
+            });
         }
     }
 
     pub(crate) fn end_all_frames(
         &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
     ) {
         for pipeline in self.pipelines.values_mut() {
-            pipeline.end_frame(gpu, gpu_queue, config);
+            pipeline.end_frame(&FrameContext {
+                device,
+                queue,
+                config,
+            });
         }
     }
 
     pub(crate) fn dispatch(
         &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
@@ -668,8 +638,8 @@ impl PipelineRegistry {
         let command_type_id = commands[0].0.as_any().type_id();
         if let Some(pipeline) = self.pipelines.get_mut(&command_type_id) {
             if !pipeline.draw_erased(
-                gpu,
-                gpu_queue,
+                device,
+                queue,
                 config,
                 render_pass,
                 commands,

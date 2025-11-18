@@ -1,11 +1,9 @@
-//! Lightweight pipeline for rendering solid rectangles.
-
 use encase::{ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    PxPosition, PxSize,
-    px::PxRect,
-    renderer::DrawablePipeline,
+    PxSize,
+    px::PxPosition,
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu::{self, include_wgsl, util::DeviceExt},
 };
 
@@ -167,26 +165,17 @@ fn build_instances(
 }
 
 impl DrawablePipeline<SimpleRectCommand> for SimpleRectPipeline {
-    fn draw(
-        &mut self,
-        gpu: &wgpu::Device,
-        gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        commands: &[(&SimpleRectCommand, PxSize, PxPosition)],
-        _scene_texture_view: &wgpu::TextureView,
-        _clip_rect: Option<PxRect>,
-    ) {
-        if commands.is_empty() {
+    fn draw(&mut self, context: &mut DrawContext<SimpleRectCommand>) {
+        if context.commands.is_empty() {
             return;
         }
 
-        let instances = build_instances(commands, config);
+        let instances = build_instances(context.commands, context.config);
         if instances.is_empty() {
             return;
         }
 
-        let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
+        let uniform_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Simple Rect Storage Buffer"),
             size: 16 + RectUniform::SHADER_SIZE.get() * instances.len() as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -196,21 +185,31 @@ impl DrawablePipeline<SimpleRectCommand> for SimpleRectPipeline {
         let uniforms = RectInstances { instances };
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
         buffer_content.write(&uniforms).unwrap();
-        gpu_queue.write_buffer(&uniform_buffer, 0, buffer_content.as_ref());
+        context
+            .queue
+            .write_buffer(&uniform_buffer, 0, buffer_content.as_ref());
 
-        let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-            label: Some("simple_rect_bind_group"),
-        });
+        let bind_group = context
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &self.bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                }],
+                label: Some("simple_rect_bind_group"),
+            });
 
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..6, 0, 0..commands.len() as u32);
+        context.render_pass.set_pipeline(&self.pipeline);
+        context.render_pass.set_bind_group(0, &bind_group, &[]);
+        context
+            .render_pass
+            .set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
+        context
+            .render_pass
+            .set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        context
+            .render_pass
+            .draw_indexed(0..6, 0, 0..context.commands.len() as u32);
     }
 }

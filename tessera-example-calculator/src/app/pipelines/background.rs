@@ -2,9 +2,8 @@ use std::{sync::OnceLock, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, DrawCommand, DrawablePipeline, Px, PxPosition,
-    PxSize,
-    px::PxRect,
+    Color, ComputedData, Constraint, DimensionValue, DrawCommand, Px,
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     tessera,
     wgpu::{self, util::DeviceExt},
 };
@@ -107,41 +106,37 @@ impl BackgroundPipeline {
 }
 
 impl DrawablePipeline<BackgroundCommand> for BackgroundPipeline {
-    fn draw(
-        &mut self,
-        gpu: &wgpu::Device,
-        _queue: &wgpu::Queue,
-        _config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass,
-        commands: &[(&BackgroundCommand, PxSize, PxPosition)],
-        _scene_texture_view: &wgpu::TextureView,
-        _clip_rect: Option<PxRect>,
-    ) {
-        if let Some((command, size, _)) = commands.first() {
+    fn draw(&mut self, context: &mut DrawContext<BackgroundCommand>) {
+        if let Some((command, size, _)) = context.commands.first() {
             let uniforms = Uniforms {
                 time: command.time,
                 width: size.width.to_f32(),
                 height: size.height.to_f32(),
                 _padding: 0,
             };
-            let uniform_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Background Uniform Buffer"),
-                contents: bytemuck::bytes_of(&uniforms),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
+            let uniform_buffer =
+                context
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Background Uniform Buffer"),
+                        contents: bytemuck::bytes_of(&uniforms),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
 
-            let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &self.bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                }],
-                label: Some("background_bind_group"),
-            });
+            let bind_group = context
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &self.bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_buffer.as_entire_binding(),
+                    }],
+                    label: Some("background_bind_group"),
+                });
 
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, &bind_group, &[]);
-            render_pass.draw(0..4, 0..1);
+            context.render_pass.set_pipeline(&self.pipeline);
+            context.render_pass.set_bind_group(0, &bind_group, &[]);
+            context.render_pass.draw(0..4, 0..1);
         }
     }
 }
