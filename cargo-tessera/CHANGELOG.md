@@ -1,3 +1,11 @@
+## [v0.5.0] - 2025-11-18 +08:00
+
+### Changes
+
+- feat: add Windows subsystem configuration to prevent additional console window
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/cargo-tessera-v0.4.1...cargo-tessera-v0.5.0)
+
 ## [v0.4.1] - 2025-11-15 +08:00
 
 ### Changes
