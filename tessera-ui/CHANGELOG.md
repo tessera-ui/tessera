@@ -1,3 +1,14 @@
+## [v2.5.0] - 2025-11-18 +08:00
+
+### Changes
+
+- feat: Refactor pipeline traits to use context structs
+- perf(app): change memory hints from Performance to MemoryUsage
+- feat(pipeline): add pipeline cache support
+- docs(lib): Update link for `tessera-ui-basic-components` in documentation
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.4.1...tessera-ui-v2.5.0)
+
 ## [v2.4.1] - 2025-11-17 +08:00
 
 ### Changes
