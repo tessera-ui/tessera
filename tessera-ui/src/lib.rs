@@ -139,6 +139,7 @@ pub mod dyn_eq_compute;
 pub mod focus_state;
 mod ime_state;
 mod keyboard_state;
+pub(crate) mod pipeline_cache;
 pub mod px;
 pub mod renderer;
 pub mod runtime;

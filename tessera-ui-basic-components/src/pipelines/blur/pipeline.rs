@@ -166,7 +166,7 @@ pub struct BlurPipeline {
 }
 
 impl BlurPipeline {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
         let downsample_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Blur Downsample Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("downsample.wgsl").into()),
@@ -368,7 +368,7 @@ impl BlurPipeline {
                 module: &downsample_shader,
                 entry_point: Some("main"),
                 compilation_options: Default::default(),
-                cache: None,
+                cache: pipeline_cache,
             });
         let blur_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Blur Pipeline"),
@@ -376,7 +376,7 @@ impl BlurPipeline {
             module: &blur_shader,
             entry_point: Some("main"),
             compilation_options: Default::default(),
-            cache: None,
+            cache: pipeline_cache,
         });
         let upsample_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Blur Upsample Pipeline"),
@@ -384,7 +384,7 @@ impl BlurPipeline {
             module: &upsample_shader,
             entry_point: Some("main"),
             compilation_options: Default::default(),
-            cache: None,
+            cache: pipeline_cache,
         });
 
         Self {

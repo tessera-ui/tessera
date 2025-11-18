@@ -53,14 +53,26 @@ pub struct CheckmarkPipeline {
 }
 
 impl CheckmarkPipeline {
-    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
+    pub fn new(
+        gpu: &wgpu::Device,
+        pipeline_cache: Option<&wgpu::PipelineCache>,
+        config: &wgpu::SurfaceConfiguration,
+        sample_count: u32,
+    ) -> Self {
         // Keep the constructor concise by delegating creation details to small helpers.
         let shader = Self::create_shader_module(gpu);
         let uniform_buffer = Self::create_uniform_buffer(gpu);
         let bind_group_layout = Self::create_bind_group_layout(gpu);
         let bind_group = Self::create_bind_group(gpu, &bind_group_layout, &uniform_buffer);
         let pipeline_layout = Self::create_pipeline_layout(gpu, &bind_group_layout);
-        let pipeline = Self::create_pipeline(gpu, &shader, &pipeline_layout, config, sample_count);
+        let pipeline = Self::create_pipeline(
+            gpu,
+            pipeline_cache,
+            &shader,
+            &pipeline_layout,
+            config,
+            sample_count,
+        );
         let (vertex_buffer, index_buffer) = Self::create_buffers(gpu);
 
         Self {
@@ -170,6 +182,7 @@ impl CheckmarkPipeline {
 
     fn create_pipeline(
         gpu: &wgpu::Device,
+        pipeline_cache: Option<&wgpu::PipelineCache>,
         shader: &wgpu::ShaderModule,
         pipeline_layout: &wgpu::PipelineLayout,
         config: &wgpu::SurfaceConfiguration,
@@ -210,7 +223,7 @@ impl CheckmarkPipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-            cache: None,
+            cache: pipeline_cache,
         })
     }
 

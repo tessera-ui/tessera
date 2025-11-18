@@ -78,6 +78,7 @@ impl ImageVectorPipeline {
     pub fn new(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
+        pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
     ) -> Self {
         let raster_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -210,7 +211,7 @@ impl ImageVectorPipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-            cache: None,
+            cache: pipeline_cache,
         });
 
         let sample_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -246,7 +247,7 @@ impl ImageVectorPipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-            cache: None,
+            cache: pipeline_cache,
         });
 
         let atlas_sampler = device.create_sampler(&wgpu::SamplerDescriptor {

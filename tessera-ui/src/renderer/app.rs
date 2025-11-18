@@ -1,4 +1,4 @@
-use std::{any::TypeId, mem, sync::Arc};
+use std::{any::TypeId, io, mem, sync::Arc};
 
 use parking_lot::RwLock;
 use smallvec::SmallVec;
@@ -10,6 +10,7 @@ use crate::{
     ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, Px, PxPosition,
     compute::resource::ComputeResourceManager,
     dp::SCALE_FACTOR,
+    pipeline_cache::{initialize_cache, save_cache},
     px::{PxRect, PxSize},
     renderer::command::{AsAny, BarrierRequirement, Command},
 };
@@ -96,6 +97,11 @@ pub struct WgpuApp {
     /// compute pipelines
     pub compute_pipeline_registry: ComputePipelineRegistry,
 
+    /// Wgpu cache, if available
+    pub pipeline_cache: Option<wgpu::PipelineCache>,
+    /// Gpu adapter info
+    adapter_info: wgpu::AdapterInfo,
+
     // Offscreen rendering resources
     offscreen_texture: wgpu::TextureView,
 
@@ -146,7 +152,9 @@ impl WgpuApp {
     ) -> (wgpu::Device, wgpu::Queue) {
         match adapter
             .request_device(&wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty() | wgpu::Features::CLEAR_TEXTURE,
+                required_features: wgpu::Features::empty()
+                    | wgpu::Features::CLEAR_TEXTURE
+                    | wgpu::Features::PIPELINE_CACHE,
                 required_limits: if cfg!(target_arch = "wasm32") {
                     wgpu::Limits::downlevel_webgl2_defaults()
                 } else {
@@ -237,6 +245,9 @@ impl WgpuApp {
         };
         surface.configure(&gpu, &config);
 
+        // Create pipeline cache if supported
+        let pipeline_cache = initialize_cache(&gpu, &adapter.get_info());
+
         // Create MSAA Target
         let (msaa_texture, msaa_view) = Self::make_msaa_resources(&gpu, sample_count, &config);
 
@@ -305,7 +316,7 @@ impl WgpuApp {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-            cache: None,
+            cache: pipeline_cache.as_ref(),
         });
 
         let compute_blit_pipeline = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -327,7 +338,7 @@ impl WgpuApp {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-            cache: None,
+            cache: pipeline_cache.as_ref(),
         });
 
         Self {
@@ -341,6 +352,8 @@ impl WgpuApp {
             drawer,
             offscreen_texture,
             compute_pipeline_registry: ComputePipelineRegistry::new(),
+            pipeline_cache,
+            adapter_info: adapter.get_info(),
             sample_count,
             msaa_texture,
             msaa_view,
@@ -592,6 +605,7 @@ impl WgpuApp {
     /// Commands that require barriers will trigger texture copies between passes.
     ///
     /// # Arguments
+    ///
     /// * `commands` - An iterable of (Command, PxSize, PxPosition) tuples representing
     ///   the rendering operations to perform.
     ///
@@ -1035,6 +1049,13 @@ impl WgpuApp {
         rpass.set_pipeline(pipeline);
         rpass.set_bind_group(0, &bind_group, &[]);
         rpass.draw(0..3, 0..1);
+    }
+
+    pub(crate) fn save_pipeline_cache(&self) -> io::Result<()> {
+        if let Some(cache) = self.pipeline_cache.as_ref() {
+            save_cache(cache, &self.adapter_info)?;
+        }
+        Ok(())
     }
 }
 

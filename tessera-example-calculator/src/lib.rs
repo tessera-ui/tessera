@@ -89,6 +89,7 @@ pub fn desktop_main() -> anyhow::Result<()> {
             tessera_ui_basic_components::pipelines::register_pipelines(app);
             let background_pipeline = app::pipelines::background::BackgroundPipeline::new(
                 &app.gpu,
+                app.pipeline_cache.as_ref(),
                 &app.config,
                 app.sample_count,
             );

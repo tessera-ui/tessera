@@ -64,7 +64,7 @@ impl FluidGlassSdfCacheKey {
 }
 
 impl FluidGlassSdfGenerator {
-    fn new(device: &wgpu::Device) -> Self {
+    fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Fluid Glass SDF Cache Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("sdf_cache.wgsl").into()),
@@ -108,7 +108,7 @@ impl FluidGlassSdfGenerator {
             module: &shader,
             entry_point: Some("main"),
             compilation_options: Default::default(),
-            cache: None,
+            cache: pipeline_cache,
         });
 
         Self {
@@ -261,7 +261,12 @@ impl FluidGlassPipeline {
     /// Construct a new FluidGlassPipeline.
     /// This constructor delegates sampler, bind group layout and pipeline construction
     /// to small helpers to keep the top-level function short and easier to reason about.
-    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
+    pub fn new(
+        gpu: &wgpu::Device,
+        pipeline_cache: Option<&wgpu::PipelineCache>,
+        config: &wgpu::SurfaceConfiguration,
+        sample_count: u32,
+    ) -> Self {
         let shader = gpu.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Fluid Glass Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("glass.wgsl").into()),
@@ -270,9 +275,15 @@ impl FluidGlassPipeline {
         let sampler = Self::create_sampler(gpu);
         let sdf_sampler = Self::create_sampler(gpu);
         let bind_group_layout = Self::create_bind_group_layout(gpu);
-        let pipeline =
-            Self::create_render_pipeline(gpu, config, sample_count, &shader, &bind_group_layout);
-        let sdf_generator = FluidGlassSdfGenerator::new(gpu);
+        let pipeline = Self::create_render_pipeline(
+            gpu,
+            config,
+            pipeline_cache,
+            sample_count,
+            &shader,
+            &bind_group_layout,
+        );
+        let sdf_generator = FluidGlassSdfGenerator::new(gpu, pipeline_cache);
         let dummy_sdf_texture = gpu.create_texture(&wgpu::TextureDescriptor {
             label: Some("Fluid Glass Dummy SDF Texture"),
             size: wgpu::Extent3d {
@@ -374,6 +385,7 @@ impl FluidGlassPipeline {
     fn create_render_pipeline(
         gpu: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
+        pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
         shader: &wgpu::ShaderModule,
         bind_group_layout: &wgpu::BindGroupLayout,
@@ -417,7 +429,7 @@ impl FluidGlassPipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-            cache: None,
+            cache: pipeline_cache,
         })
     }
 }

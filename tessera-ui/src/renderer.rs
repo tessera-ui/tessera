@@ -896,10 +896,14 @@ Fps: {:.2}
 }
 
 impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
-    // --- Private helper methods extracted from the large match in window_event ---
     // These keep behavior identical but reduce per-function complexity.
     fn handle_close_requested(&mut self, event_loop: &ActiveEventLoop) {
         TesseraRuntime::with(|rt| rt.trigger_close_callbacks());
+        if let Some(ref app) = self.app
+            && let Err(e) = app.save_pipeline_cache()
+        {
+            warn!("Failed to save pipeline cache: {}", e);
+        }
         event_loop.exit();
     }
 

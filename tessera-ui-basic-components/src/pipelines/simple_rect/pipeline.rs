@@ -40,7 +40,12 @@ pub struct SimpleRectPipeline {
 }
 
 impl SimpleRectPipeline {
-    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
+    pub fn new(
+        gpu: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        pipeline_cache: Option<&wgpu::PipelineCache>,
+        sample_count: u32,
+    ) -> Self {
         let shader = gpu.create_shader_module(include_wgsl!("simple_rect.wgsl"));
 
         let bind_group_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -102,7 +107,7 @@ impl SimpleRectPipeline {
                 })],
             }),
             multiview: None,
-            cache: None,
+            cache: pipeline_cache,
         });
 
         let quad_vertices = [

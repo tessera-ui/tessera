@@ -35,6 +35,7 @@ impl ImagePipeline {
     pub fn new(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
+        pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -107,7 +108,7 @@ impl ImagePipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-            cache: None,
+            cache: pipeline_cache,
         });
 
         Self {

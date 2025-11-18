@@ -22,7 +22,7 @@ pub struct MeanPipeline {
 }
 
 impl MeanPipeline {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Mean Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("mean.wgsl").into()),
@@ -90,7 +90,7 @@ impl MeanPipeline {
             module: &shader,
             entry_point: Some("main"),
             compilation_options: Default::default(),
-            cache: None,
+            cache: pipeline_cache,
         });
 
         Self {

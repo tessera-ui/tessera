@@ -38,7 +38,12 @@ pub struct BackgroundPipeline {
 }
 
 impl BackgroundPipeline {
-    pub fn new(gpu: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
+    pub fn new(
+        gpu: &wgpu::Device,
+        pipeline_cache: Option<&wgpu::PipelineCache>,
+        config: &wgpu::SurfaceConfiguration,
+        sample_count: u32,
+    ) -> Self {
         let shader = gpu.create_shader_module(wgpu::include_wgsl!("shaders/background.wgsl"));
         let bind_group_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -91,7 +96,7 @@ impl BackgroundPipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-            cache: None,
+            cache: pipeline_cache,
         });
 
         Self {

@@ -13,17 +13,32 @@ pub(super) fn register(app: &mut WgpuApp) {
 }
 
 fn register_simple_rect(app: &mut WgpuApp) {
-    let pipeline = simple_rect::SimpleRectPipeline::new(&app.gpu, &app.config, app.sample_count);
+    let pipeline = simple_rect::SimpleRectPipeline::new(
+        &app.gpu,
+        &app.config,
+        app.pipeline_cache.as_ref(),
+        app.sample_count,
+    );
     app.register_draw_pipeline(pipeline);
 }
 
 fn register_shape(app: &mut WgpuApp) {
-    let pipeline = shape::ShapePipeline::new(&app.gpu, &app.config, app.sample_count);
+    let pipeline = shape::ShapePipeline::new(
+        &app.gpu,
+        &app.config,
+        app.pipeline_cache.as_ref(),
+        app.sample_count,
+    );
     app.register_draw_pipeline(pipeline);
 }
 
 fn register_checkmark(app: &mut WgpuApp) {
-    let pipeline = checkmark::CheckmarkPipeline::new(&app.gpu, &app.config, app.sample_count);
+    let pipeline = checkmark::CheckmarkPipeline::new(
+        &app.gpu,
+        app.pipeline_cache.as_ref(),
+        &app.config,
+        app.sample_count,
+    );
     app.register_draw_pipeline(pipeline);
 }
 
@@ -34,16 +49,31 @@ fn register_text(app: &mut WgpuApp) {
 }
 
 fn register_fluid_glass(app: &mut WgpuApp) {
-    let pipeline = fluid_glass::FluidGlassPipeline::new(&app.gpu, &app.config, app.sample_count);
+    let pipeline = fluid_glass::FluidGlassPipeline::new(
+        &app.gpu,
+        app.pipeline_cache.as_ref(),
+        &app.config,
+        app.sample_count,
+    );
     app.register_draw_pipeline(pipeline);
 }
 
 fn register_image(app: &mut WgpuApp) {
-    let pipeline = image::ImagePipeline::new(&app.gpu, &app.config, app.sample_count);
+    let pipeline = image::ImagePipeline::new(
+        &app.gpu,
+        &app.config,
+        app.pipeline_cache.as_ref(),
+        app.sample_count,
+    );
     app.register_draw_pipeline(pipeline);
 }
 
 fn register_image_vector(app: &mut WgpuApp) {
-    let pipeline = image_vector::ImageVectorPipeline::new(&app.gpu, &app.config, app.sample_count);
+    let pipeline = image_vector::ImageVectorPipeline::new(
+        &app.gpu,
+        &app.config,
+        app.pipeline_cache.as_ref(),
+        app.sample_count,
+    );
     app.register_draw_pipeline(pipeline);
 }

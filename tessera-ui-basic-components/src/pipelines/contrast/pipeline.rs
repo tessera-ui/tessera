@@ -23,7 +23,7 @@ pub struct ContrastPipeline {
 }
 
 impl ContrastPipeline {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Contrast Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("contrast.wgsl").into()),
@@ -91,7 +91,7 @@ impl ContrastPipeline {
             module: &shader,
             entry_point: Some("main"),
             compilation_options: Default::default(),
-            cache: None,
+            cache: pipeline_cache,
         });
 
         Self {
