@@ -1063,7 +1063,9 @@ mod tests {
 
         for positions in type_positions.values() {
             let first = positions[0];
-            let last = *positions.last().unwrap();
+            let last = *positions
+                .last()
+                .expect("compute positions should not be empty");
             assert_eq!(
                 last - first + 1,
                 positions.len(),
