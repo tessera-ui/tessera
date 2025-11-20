@@ -362,11 +362,16 @@ pub trait DrawablePipeline<T: DrawCommand> {
 ///
 /// This trait is automatically implemented for any type that implements
 /// [`DrawablePipeline<T>`] through the [`DrawablePipelineImpl`] wrapper.
-pub trait ErasedDrawablePipeline {
+pub(crate) trait ErasedDrawablePipeline {
+    /// Called at the beginning of a frame to prepare pipeline resources.
     fn begin_frame(&mut self, context: &FrameContext<'_>);
+    /// Called at the end of a frame for cleanup or readback.
     fn end_frame(&mut self, context: &FrameContext<'_>);
+    /// Invoked before a render pass starts to bind shared pass state.
     fn begin_pass(&mut self, context: &mut PassContext<'_, '_>);
+    /// Invoked after a render pass ends to finalize pass-level resources.
     fn end_pass(&mut self, context: &mut PassContext<'_, '_>);
+    /// Draws a batch of commands with type-erased dispatch.
     fn draw_erased(
         &mut self,
         device: &wgpu::Device,

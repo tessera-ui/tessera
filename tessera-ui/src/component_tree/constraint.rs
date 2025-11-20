@@ -165,7 +165,12 @@ pub enum DimensionValue {
     /// // Text that wraps but never exceeds container width
     /// let bounded_text = DimensionValue::Wrap { min: Some(Px(50)), max: Some(Px(300)) };
     /// ```
-    Wrap { min: Option<Px>, max: Option<Px> },
+    Wrap {
+        /// Optional minimum size, the component should never be smaller than this
+        min: Option<Px>,
+        /// Optional maximum size, the component should never be larger than this
+        max: Option<Px>,
+    },
 
     /// The dimension should fill the available space, optionally bounded by min and/or max logical pixels.
     ///
@@ -190,7 +195,12 @@ pub enum DimensionValue {
     /// // Fill space but cap maximum size for readability
     /// let capped_fill = DimensionValue::Fill { min: Some(Px(100)), max: Some(Px(800)) };
     /// ```
-    Fill { min: Option<Px>, max: Option<Px> },
+    Fill {
+        /// Optional minimum size, the component should never be smaller than this
+        min: Option<Px>,
+        /// Optional maximum size, the component should never be larger than this
+        max: Option<Px>,
+    },
 }
 
 impl Default for DimensionValue {

@@ -150,7 +150,10 @@ impl ComponentTree {
             gpu,
             clipboard,
         } = params;
-        let Some(root_node) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
+        let Some(root_node) = self
+            .tree
+            .get_node_id_at(NonZero::new(1).expect("root node index must be non-zero"))
+        else {
             return (vec![], WindowRequests::default());
         };
         let screen_constraint = Constraint::new(
@@ -217,8 +220,16 @@ impl ComponentTree {
                 continue;
             };
 
-            let metadata = self.metadatas.get(&node_id).unwrap();
-            let abs_pos = metadata.abs_position.unwrap();
+            let Some(metadata) = self.metadatas.get(&node_id) else {
+                warn!(
+                    "Input handler metadata missing for node {node_id:?}; skipping input handling"
+                );
+                continue;
+            };
+            let Some(abs_pos) = metadata.abs_position else {
+                warn!("Absolute position missing for node {node_id:?}; skipping input handling");
+                continue;
+            };
             let event_clip_rect = metadata.event_clip_rect;
             let node_computed_data = metadata.computed_data;
             drop(metadata); // release DashMap guard so handlers can mutate metadata if needed
@@ -316,7 +327,10 @@ fn compute_draw_commands_inner_parallel(
     let mut local_commands = Vec::new();
 
     // Get metadata and calculate absolute position. This MUST happen for all nodes.
-    let mut metadata = metadatas.get_mut(&node_id).unwrap();
+    let Some(mut metadata) = metadatas.get_mut(&node_id) else {
+        warn!("Missing metadata for node {node_id:?}; skipping draw computation");
+        return local_commands;
+    };
     let rel_pos = match metadata.rel_position {
         Some(pos) => pos,
         None if is_root => PxPosition::ZERO,
@@ -387,10 +401,20 @@ fn compute_draw_commands_inner_parallel(
     let children: Vec<_> = node_id.children(tree).collect();
     let child_results: Vec<Vec<_>> = children
         .into_par_iter()
-        .map(|child| {
-            // The unwrap is safe because we just set the parent's abs_position.
-            let parent_abs_pos = metadatas.get(&node_id).unwrap().abs_position.unwrap();
-            compute_draw_commands_inner_parallel(
+        .filter_map(|child| {
+            let Some(parent_meta) = metadatas.get(&node_id) else {
+                warn!(
+                    "Missing parent metadata for node {node_id:?}; skipping child {child:?}"
+                );
+                return None;
+            };
+            let Some(parent_abs_pos) = parent_meta.abs_position else {
+                warn!(
+                    "Missing parent absolute position for node {node_id:?}; skipping child {child:?}"
+                );
+                return None;
+            };
+            Some(compute_draw_commands_inner_parallel(
                 parent_abs_pos, // Pass the calculated absolute position
                 false,
                 child,
@@ -399,7 +423,7 @@ fn compute_draw_commands_inner_parallel(
                 screen_width,
                 screen_height,
                 clip_rect,
-            )
+            ))
         })
         .collect();
 

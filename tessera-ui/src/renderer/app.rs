@@ -1,3 +1,6 @@
+//! Core WGPU app wrapper for Tessera renderer components.
+//! ## Usage Manage window/surface lifecycle, pipeline registries, and frame submission.
+
 use std::{any::TypeId, io, mem, sync::Arc};
 
 use parking_lot::RwLock;
@@ -76,6 +79,7 @@ struct PendingComputeCommand {
     sampling_rect: PxRect,
 }
 
+/// WGPU application container holding device, surface, pipelines, and frame resources.
 pub struct WgpuApp {
     /// Avoiding release the window
     #[allow(unused)]
@@ -92,12 +96,12 @@ pub struct WgpuApp {
     size: winit::dpi::PhysicalSize<u32>,
     /// if size is changed
     size_changed: bool,
-    /// draw pipelines
+    /// Draw pipeline registry and execution entry points.
     pub drawer: Drawer,
-    /// compute pipelines
+    /// Compute pipeline registry and dispatchers.
     pub compute_pipeline_registry: ComputePipelineRegistry,
 
-    /// Wgpu cache, if available
+    /// WGPU pipeline cache for faster pipeline creation when supported.
     pub pipeline_cache: Option<wgpu::PipelineCache>,
     /// Gpu adapter info
     adapter_info: wgpu::AdapterInfo,
@@ -106,6 +110,7 @@ pub struct WgpuApp {
     offscreen_texture: wgpu::TextureView,
 
     // MSAA resources
+    /// Number of samples used for multi-sample anti-aliasing.
     pub sample_count: u32,
     msaa_texture: Option<wgpu::Texture>,
     msaa_view: Option<wgpu::TextureView>,
@@ -114,6 +119,7 @@ pub struct WgpuApp {
     compute_target_a: wgpu::TextureView,
     compute_target_b: wgpu::TextureView,
     compute_commands: Vec<PendingComputeCommand>,
+    /// Shared compute resource manager.
     pub resource_manager: Arc<RwLock<ComputeResourceManager>>,
 
     // Blit resources for partial copies
@@ -453,6 +459,9 @@ impl WgpuApp {
         texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
+    /// Registers draw and compute pipelines through a user-provided callback.
+    ///
+    /// Call this during initialization to add all pipelines needed by the application.
     pub fn register_pipelines(&mut self, register_fn: impl FnOnce(&mut Self)) {
         register_fn(self);
     }
@@ -1309,7 +1318,9 @@ fn submit_buffered_commands(
         return;
     }
 
-    let rect = current_batch_draw_rect.unwrap();
+    let Some(rect) = *current_batch_draw_rect else {
+        return;
+    };
     set_scissor_rect_from_pxrect(rpass, rect);
 
     drawer.submit(

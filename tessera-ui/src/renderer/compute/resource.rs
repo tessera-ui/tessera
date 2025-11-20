@@ -1,8 +1,13 @@
+//! Compute resource management for sharing GPU buffers.
+
 use std::collections::HashMap;
 
+/// Type alias for compute resources stored in the manager.
 pub type ComputeResource = wgpu::Buffer;
+/// Opaque identifier for a compute resource.
 pub type ComputeResourceRef = usize;
 
+/// Manages reusable GPU buffers for compute workloads.
 #[derive(Debug)]
 pub struct ComputeResourceManager {
     idx: usize,
@@ -16,6 +21,7 @@ impl Default for ComputeResourceManager {
 }
 
 impl ComputeResourceManager {
+    /// Creates an empty compute resource manager.
     pub fn new() -> Self {
         Self {
             idx: 0,

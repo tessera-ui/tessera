@@ -1,3 +1,5 @@
+//! This module provides a workaround for dynamic equality testing of trait objects of the `ComputeCommand` trait.
+
 use std::any::Any;
 
 use crate::ComputeCommand;

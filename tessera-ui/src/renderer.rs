@@ -185,16 +185,22 @@
 //! }
 //! ```
 
+/// WGPU application management and window lifecycle.
 pub mod app;
+/// Unified rendering and compute command types.
 pub mod command;
+/// Compute pipeline orchestration for GPU effects.
 pub mod compute;
+/// Draw pipeline registry and submission helpers.
 pub mod drawer;
+/// Command reordering and batching strategies.
 pub mod reorder;
 
 use std::{any::TypeId, sync::Arc, thread, time::Instant};
 
 use accesskit::{self, TreeUpdate};
 use accesskit_winit::{Adapter as AccessKitAdapter, Event as AccessKitEvent};
+use parking_lot::RwLock;
 use tessera_ui_macros::tessera;
 use tracing::{debug, error, instrument, warn};
 use winit::{
@@ -431,9 +437,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         register_pipelines_fn: R,
         config: TesseraConfig,
     ) -> Result<(), EventLoopError> {
-        let event_loop = EventLoop::<AccessKitEvent>::with_user_event()
-            .build()
-            .unwrap();
+        let event_loop = EventLoop::<AccessKitEvent>::with_user_event().build()?;
         let event_loop_proxy = event_loop.create_proxy();
         let app = None;
         let cursor_state = CursorState::default();
@@ -864,10 +868,13 @@ Fps: {:.2}
                     *args.android_ime_opened = true;
                 }
             }
-            args.app.window.set_ime_cursor_area::<PxPosition, PxSize>(
-                ime_request.position.unwrap(),
-                ime_request.size,
-            );
+            if let Some(position) = ime_request.position {
+                args.app
+                    .window
+                    .set_ime_cursor_area::<PxPosition, PxSize>(position, ime_request.size);
+            } else {
+                warn!("IME request missing position; skipping IME cursor area update");
+            }
         } else {
             #[cfg(not(target_os = "android"))]
             args.app.window.set_ime_allowed(false);
@@ -965,7 +972,9 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         TesseraRuntime::with(|runtime| {
             let tree = runtime.component_tree.tree();
             let metadatas = runtime.component_tree.metadatas();
-            let root_node_id = tree.get_node_id_at(std::num::NonZero::new(1).unwrap())?;
+            let root_node_id = tree.get_node_id_at(
+                std::num::NonZero::new(1).expect("root node index must be non-zero"),
+            )?;
             crate::accessibility::build_tree_update(
                 tree,
                 metadatas,
@@ -1115,7 +1124,13 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler<AccessKi
             .with_title(&self.config.window_title)
             .with_transparent(true)
             .with_visible(false); // Hide initially for AccessKit
-        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let window = match event_loop.create_window(window_attributes) {
+            Ok(window) => Arc::new(window),
+            Err(err) => {
+                error!("Failed to create window: {err}");
+                return;
+            }
+        };
 
         // Initialize AccessKit adapter BEFORE showing the window
         if let Some(proxy) = self.event_loop_proxy.clone() {
@@ -1272,7 +1287,11 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler<AccessKi
                 self.handle_touch(touch_event);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                *SCALE_FACTOR.get().unwrap().write() = scale_factor;
+                if let Some(scale_factor_lock) = SCALE_FACTOR.get() {
+                    *scale_factor_lock.write() = scale_factor;
+                } else {
+                    let _ = SCALE_FACTOR.set(RwLock::new(scale_factor));
+                }
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 self.handle_keyboard_input(event);

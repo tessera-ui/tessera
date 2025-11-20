@@ -1,3 +1,6 @@
+//! Command reordering utilities to improve batching and reduce GPU barriers.
+//! ## Usage Sort command streams before submission to minimize pipeline flushes.
+
 use std::{
     any::TypeId,
     collections::{BinaryHeap, HashMap},
@@ -234,7 +237,11 @@ fn priority_topological_sort(
             }
         }
 
-        let priority_node = selected.unwrap_or_else(|| ready_queue.pop().unwrap());
+        let priority_node = selected.unwrap_or_else(|| {
+            ready_queue
+                .pop()
+                .expect("ready_queue should not be empty while sorting instructions")
+        });
         let u = priority_node.node_index;
         sorted_list.push(u);
         match priority_node.category {

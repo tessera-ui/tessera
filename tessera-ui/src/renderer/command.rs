@@ -59,13 +59,18 @@ pub enum BarrierRequirement {
 /// Padding values for all four sides of a rectangle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PaddingRect {
+    /// Padding applied to the top edge.
     pub top: Px,
+    /// Padding applied to the right edge.
     pub right: Px,
+    /// Padding applied to the bottom edge.
     pub bottom: Px,
+    /// Padding applied to the left edge.
     pub left: Px,
 }
 
 impl PaddingRect {
+    /// A zero padding rectangle that leaves the sampling region unchanged.
     pub const ZERO: Self = Self {
         top: Px::ZERO,
         right: Px::ZERO,
@@ -86,6 +91,7 @@ impl PaddingRect {
 }
 
 impl BarrierRequirement {
+    /// A zero-padding local barrier requirement for commands that only sample within their bounds.
     pub const ZERO_PADDING_LOCAL: Self = Self::PaddedLocal(PaddingRect::ZERO);
 
     /// Creates a `PaddedLocal` barrier requirement with uniform sampling padding on all sides.

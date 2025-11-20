@@ -173,17 +173,25 @@ use super::command::ComputeCommand;
 
 /// Type-erased metadata describing a compute command within a batch.
 pub struct ErasedComputeBatchItem<'a> {
+    /// The compute command to execute.
     pub command: &'a dyn ComputeCommand,
+    /// The measured size of the target region.
     pub size: PxSize,
+    /// The absolute position of the target region.
     pub position: PxPosition,
+    /// The rectangle of the content that will be written.
     pub target_area: PxRect,
 }
 
 /// Strongly typed metadata describing a compute command within a batch.
 pub struct ComputeBatchItem<'a, C: ComputeCommand> {
+    /// The compute command to execute.
     pub command: &'a C,
+    /// The measured size of the target region.
     pub size: PxSize,
+    /// The absolute position of the target region.
     pub position: PxPosition,
+    /// The rectangle of the content that will be written.
     pub target_area: PxRect,
 }
 
@@ -207,13 +215,21 @@ pub struct ComputeBatchItem<'a, C: ComputeCommand> {
 /// * `input_view` - A view of the input texture for the compute operation.
 /// * `output_view` - A view of the output texture for the compute operation.
 pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
+    /// WGPU device used to create and manage GPU resources.
     pub device: &'a wgpu::Device,
+    /// Queue for submitting GPU workloads.
     pub queue: &'a wgpu::Queue,
+    /// Surface configuration describing output formats and dimensions.
     pub config: &'a wgpu::SurfaceConfiguration,
+    /// Active compute pass encoder.
     pub compute_pass: &'a mut wgpu::ComputePass<'b>,
+    /// Batch of typed compute items to process.
     pub items: &'c [ComputeBatchItem<'c, C>],
+    /// Shared resource manager used to reuse GPU buffers.
     pub resource_manager: &'a mut ComputeResourceManager,
+    /// Input texture view sampled by the compute pass.
     pub input_view: &'a wgpu::TextureView,
+    /// Output texture view written by the compute pass.
     pub output_view: &'a wgpu::TextureView,
 }
 

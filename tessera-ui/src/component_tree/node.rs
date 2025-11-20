@@ -517,6 +517,9 @@ pub struct ImeRequest {
 }
 
 impl ImeRequest {
+    /// Creates a new IME request with the target input area size.
+    ///
+    /// The absolute position is injected during the compute pass.
     pub fn new(size: PxSize) -> Self {
         Self {
             size,
@@ -778,7 +781,9 @@ pub fn measure_nodes(
 /// Layout information computed at the measure stage, representing the size of a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ComputedData {
+    /// The resolved width of the node in physical pixels.
     pub width: Px,
+    /// The resolved height of the node in physical pixels.
     pub height: Px,
 }
 
@@ -799,6 +804,7 @@ impl AddAssign for ComputedData {
 }
 
 impl ComputedData {
+    /// Zero-sized layout data.
     pub const ZERO: Self = Self {
         width: Px(0),
         height: Px(0),
@@ -820,6 +826,7 @@ impl ComputedData {
         Self { width, height }
     }
 
+    /// Returns the component-wise minimum of two computed sizes.
     pub fn min(self, rhs: Self) -> Self {
         Self {
             width: self.width.min(rhs.width),
@@ -827,6 +834,7 @@ impl ComputedData {
         }
     }
 
+    /// Returns the component-wise maximum of two computed sizes.
     pub fn max(self, rhs: Self) -> Self {
         Self {
             width: self.width.max(rhs.width),

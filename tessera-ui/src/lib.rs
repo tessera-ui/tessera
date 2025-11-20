@@ -127,6 +127,7 @@
 //! - Efficient GPU utilization through custom shaders
 //! - Minimal allocations in hot paths
 //! - Optimized component tree traversal
+#![deny(missing_docs, clippy::unwrap_used)]
 
 pub mod accessibility;
 pub mod clipboard;
