@@ -409,18 +409,23 @@ fn compute_draw_commands_inner_parallel(
     let child_results: Vec<Vec<_>> = children
         .into_par_iter()
         .filter_map(|child| {
-            let Some(parent_meta) = metadatas.get(&node_id) else {
-                warn!(
-                    "Missing parent metadata for node {node_id:?}; skipping child {child:?}"
-                );
-                return None;
+            // Grab the parent's absolute position without holding the DashMap guard across recursion.
+            let parent_abs_pos = {
+                let Some(parent_meta) = metadatas.get(&node_id) else {
+                    warn!(
+                        "Missing parent metadata for node {node_id:?}; skipping child {child:?}"
+                    );
+                    return None;
+                };
+                let Some(pos) = parent_meta.abs_position else {
+                    warn!(
+                        "Missing parent absolute position for node {node_id:?}; skipping child {child:?}"
+                    );
+                    return None;
+                };
+                pos
             };
-            let Some(parent_abs_pos) = parent_meta.abs_position else {
-                warn!(
-                    "Missing parent absolute position for node {node_id:?}; skipping child {child:?}"
-                );
-                return None;
-            };
+
             Some(compute_draw_commands_inner_parallel(
                 parent_abs_pos, // Pass the calculated absolute position
                 false,
