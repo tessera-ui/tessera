@@ -206,7 +206,13 @@ impl WgpuApp {
     pub(crate) async fn new(window: Arc<Window>, sample_count: u32) -> Self {
         // Looking for gpus
         let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
+            /* Currently the renderer's design only supports VULKAN.
+             * Given VULKAN's broad compatibility, this does not affect cross-platform support for now.
+             *
+             * TODO: Refactor the renderer to support additional backends.
+             */
+            backends: wgpu::Backends::VULKAN,
+            // backends: wgpu::Backends::all(),
             ..Default::default()
         });
         // Create a surface
