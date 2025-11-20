@@ -77,4 +77,3 @@ fn register_image_vector(app: &mut WgpuApp) {
     );
     app.register_draw_pipeline(pipeline);
 }
-

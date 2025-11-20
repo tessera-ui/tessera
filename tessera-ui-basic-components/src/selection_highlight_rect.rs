@@ -39,4 +39,3 @@ pub fn selection_highlight_rect(
         Ok(ComputedData { width, height })
     }));
 }
-

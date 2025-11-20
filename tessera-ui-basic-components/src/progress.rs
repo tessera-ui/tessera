@@ -87,7 +87,8 @@ pub fn progress(args: impl Into<ProgressArgs>) {
                 min: None,
                 max: None,
             })
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         None,
         || {},
     );
@@ -113,7 +114,8 @@ pub fn progress(args: impl Into<ProgressArgs>) {
                 min: None,
                 max: None,
             })
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         None,
         || {},
     );
@@ -150,5 +152,3 @@ pub fn progress(args: impl Into<ProgressArgs>) {
         })
     }));
 }
-
-

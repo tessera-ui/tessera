@@ -87,6 +87,18 @@ struct DialogProviderStateInner {
     timer: Option<Instant>,
 }
 
+/// Shared state for [`dialog_provider`], controlling visibility and animation.
+///
+/// # Example
+///
+/// ```
+/// use tessera_ui_basic_components::dialog::DialogProviderState;
+///
+/// let state = DialogProviderState::new();
+/// assert!(!state.is_open()); // Initially closed
+/// state.open();
+/// assert!(state.is_open()); // Now opened
+/// ```
 #[derive(Clone, Default)]
 pub struct DialogProviderState {
     inner: Arc<RwLock<DialogProviderStateInner>>,
@@ -178,7 +190,8 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                         g2_k_value: 3.0,
                     })
                     .noise_amount(0.0)
-                    .build().expect("builder construction failed"),
+                    .build()
+                    .expect("builder construction failed"),
                 None,
                 || {},
             );
@@ -198,7 +211,8 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                         max: None,
                     })
                     .block_input(true)
-                    .build().expect("builder construction failed"),
+                    .build()
+                    .expect("builder construction failed"),
                 None,
                 || {},
             );
@@ -233,7 +247,8 @@ fn dialog_content_wrapper(
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .alignment(Alignment::Center)
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         |scope| {
             scope.child(move || match style {
                 DialogStyle::Glass => {
@@ -251,7 +266,8 @@ fn dialog_content_wrapper(
                             .refraction_amount(32.0 * alpha)
                             .block_input(true)
                             .padding(padding)
-                            .build().expect("builder construction failed"),
+                            .build()
+                            .expect("builder construction failed"),
                         None,
                         content,
                     );
@@ -273,7 +289,8 @@ fn dialog_content_wrapper(
                             })
                             .padding(padding)
                             .block_input(true)
-                            .build().expect("builder construction failed"),
+                            .build()
+                            .expect("builder construction failed"),
                         None,
                         content,
                     );
@@ -348,5 +365,3 @@ pub fn dialog_provider(
         });
     }
 }
-
-

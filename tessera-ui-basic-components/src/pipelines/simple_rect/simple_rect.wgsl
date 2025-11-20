@@ -2,7 +2,6 @@ struct RectUniform {
     position: vec4<f32>,
     color: vec4<f32>,
     screen_size: vec2<f32>,
-    _padding: vec2<f32>,
 }
 
 struct RectInstances {

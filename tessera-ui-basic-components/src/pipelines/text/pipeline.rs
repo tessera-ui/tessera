@@ -55,9 +55,9 @@ impl std::hash::Hash for LruKey {
 fn write_lru_cache() -> RwLockWriteGuard<'static, lru::LruCache<LruKey, TextData>> {
     TEXT_DATA_CACHE
         .get_or_init(|| {
-            RwLock::new(
-                lru::LruCache::new(NonZero::new(100).expect("text cache size must be non-zero")),
-            )
+            RwLock::new(lru::LruCache::new(
+                NonZero::new(100).expect("text cache size must be non-zero"),
+            ))
         })
         .write()
 }
@@ -306,6 +306,7 @@ impl TextData {
         result
     }
 
+    /// Builds [`TextData`] directly from a pre-shaped glyphon buffer.
     pub fn from_buffer(text_buffer: glyphon::Buffer) -> Self {
         // Calculate total height including descender for the last line
         let metrics = text_buffer.metrics();
@@ -344,4 +345,3 @@ impl TextData {
         }
     }
 }
-

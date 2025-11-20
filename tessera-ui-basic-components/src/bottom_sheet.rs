@@ -47,6 +47,12 @@ pub struct BottomSheetProviderArgs {
     pub style: BottomSheetStyle,
 }
 
+#[derive(Default)]
+struct BottomSheetProviderStateInner {
+    is_open: bool,
+    timer: Option<Instant>,
+}
+
 /// Manages the open/closed state of a [`bottom_sheet_provider`].
 ///
 /// This state object must be created by the application and passed to the
@@ -60,25 +66,15 @@ pub struct BottomSheetProviderArgs {
 /// # Example
 ///
 /// ```
-/// use std::sync::Arc;
 /// use tessera_ui_basic_components::bottom_sheet::BottomSheetProviderState;
 ///
-/// // Create the state handle (cheap to clone and share).
 /// let sheet_state = BottomSheetProviderState::new();
-///
-/// // Later, in an event handler (e.g., a button click):
-/// let state = sheet_state.clone();
-/// state.open();
-///
-/// // Or to close it:
+/// assert!(!sheet_state.is_open());
+/// sheet_state.open();
+/// assert!(sheet_state.is_open());
 /// sheet_state.close();
+/// assert!(!sheet_state.is_open());
 /// ```
-#[derive(Default)]
-struct BottomSheetProviderStateInner {
-    is_open: bool,
-    timer: Option<Instant>,
-}
-
 #[derive(Clone, Default)]
 pub struct BottomSheetProviderState {
     inner: Arc<RwLock<BottomSheetProviderStateInner>>,
@@ -451,4 +447,3 @@ pub fn bottom_sheet_provider(
     });
     measure(measure_closure);
 }
-

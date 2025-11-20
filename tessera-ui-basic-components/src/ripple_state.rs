@@ -189,4 +189,3 @@ impl RippleStateInner {
         self.is_hovered.load(atomic::Ordering::SeqCst)
     }
 }
-

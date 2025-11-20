@@ -18,4 +18,3 @@ pub use command::CheckmarkCommand;
 
 /// Pipeline for rendering checkmark graphics.
 pub use pipeline::CheckmarkPipeline;
-

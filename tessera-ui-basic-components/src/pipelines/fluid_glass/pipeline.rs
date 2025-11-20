@@ -175,7 +175,9 @@ impl FluidGlassSdfGenerator {
         };
 
         let mut uniform_buffer = UniformBuffer::new(Vec::new());
-        uniform_buffer.write(&sdf_uniforms).expect("buffer write failed");
+        uniform_buffer
+            .write(&sdf_uniforms)
+            .expect("buffer write failed");
         let uniform_data = uniform_buffer.into_inner();
         let uniform_buffer_gpu = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Fluid Glass SDF Uniform Buffer"),
@@ -820,5 +822,3 @@ impl FluidGlassPipeline {
         }
     }
 }
-
-

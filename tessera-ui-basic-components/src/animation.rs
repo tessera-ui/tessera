@@ -12,4 +12,3 @@ pub(crate) fn easing(progress: f32) -> f32 {
         1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
     }
 }
-

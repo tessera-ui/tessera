@@ -153,6 +153,7 @@ struct UpsampleUniforms {
     scale: u32,
 }
 
+/// Compute pipeline handling downsample, blur, and upsample passes.
 pub struct BlurPipeline {
     downsample_pipeline: wgpu::ComputePipeline,
     blur_pipeline: wgpu::ComputePipeline,
@@ -166,6 +167,7 @@ pub struct BlurPipeline {
 }
 
 impl BlurPipeline {
+    /// Builds the blur pipeline, optionally using an existing pipeline cache.
     pub fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
         let downsample_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Blur Downsample Shader"),
@@ -709,5 +711,3 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
         }
     }
 }
-
-

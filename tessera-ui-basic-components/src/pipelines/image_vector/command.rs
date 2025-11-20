@@ -5,22 +5,31 @@ use std::{
 
 use tessera_ui::{Color, DrawCommand};
 
+/// Vertex attributes for tessellated vector geometry.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ImageVectorVertex {
+    /// 2D position in normalized SVG viewport coordinates.
     pub position: [f32; 2],
+    /// Premultiplied color for the vertex.
     pub color: Color,
 }
 
+/// Tessellated vector data ready for rendering.
 #[derive(Debug, Clone)]
 pub struct ImageVectorData {
+    /// Width of the original SVG viewport.
     pub viewport_width: f32,
+    /// Height of the original SVG viewport.
     pub viewport_height: f32,
+    /// Vertex data (positions and colors).
     pub vertices: Arc<Vec<ImageVectorVertex>>,
+    /// Triangle indices referencing `vertices`.
     pub indices: Arc<Vec<u32>>,
 }
 
 impl ImageVectorData {
+    /// Creates vector data from raw vertices and indices.
     pub fn new(
         viewport_width: f32,
         viewport_height: f32,
@@ -56,11 +65,13 @@ impl Hash for ImageVectorData {
     }
 }
 
+/// Draw command for vector images.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImageVectorCommand {
+    /// Shared vector mesh data.
     pub data: Arc<ImageVectorData>,
+    /// Tint color multiplied with the mesh.
     pub tint: Color,
 }
 
 impl DrawCommand for ImageVectorCommand {}
-

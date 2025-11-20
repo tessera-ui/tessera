@@ -94,16 +94,19 @@ pub struct TextEditorState {
 }
 
 impl TextEditorState {
+    /// Creates a new text editor state with the given font size and optional line height.
     pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
         Self {
             inner: Arc::new(RwLock::new(TextEditorStateInner::new(size, line_height))),
         }
     }
 
+    /// Returns a read guard for inspecting the underlying editor state.
     pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, TextEditorStateInner> {
         self.inner.read()
     }
 
+    /// Returns a write guard for mutating the underlying editor state.
     pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, TextEditorStateInner> {
         self.inner.write()
     }
@@ -599,4 +602,3 @@ pub fn text_edit_core(state: TextEditorState) {
         cursor::cursor(state.read().line_height(), state.read().blink_timer());
     }
 }
-

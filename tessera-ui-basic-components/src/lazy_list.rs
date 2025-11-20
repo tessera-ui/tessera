@@ -75,7 +75,9 @@ pub struct LazyColumnArgs {
 
 impl Default for LazyColumnArgs {
     fn default() -> Self {
-        LazyColumnArgsBuilder::default().build().expect("builder construction failed")
+        LazyColumnArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -83,26 +85,34 @@ impl Default for LazyColumnArgs {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct LazyRowArgs {
+    /// Scroll container arguments. Horizontal scrolling is enforced.
     #[builder(default = "ScrollableArgs::default()")]
     pub scrollable: ScrollableArgs,
+    /// How children are aligned along the cross axis (vertical for rows).
     #[builder(default = "CrossAxisAlignment::Start")]
     pub cross_axis_alignment: CrossAxisAlignment,
+    /// Gap between successive items.
     #[builder(default = "Dp(0.0)")]
     pub item_spacing: Dp,
+    /// Number of extra items instantiated before/after the viewport.
     #[builder(default = "2")]
     pub overscan: usize,
+    /// Estimated main-axis size for each item, used before real measurements exist.
     #[builder(default = "Dp(48.0)")]
     pub estimated_item_size: Dp,
     /// Symmetric padding applied around the lazy list content.
     #[builder(default = "Dp(0.0)")]
     pub content_padding: Dp,
+    /// Maximum viewport length reported back to parents for horizontal lists.
     #[builder(default = "Some(Px(8192))")]
     pub max_viewport_main: Option<Px>,
 }
 
 impl Default for LazyRowArgs {
     fn default() -> Self {
-        LazyRowArgsBuilder::default().build().expect("builder construction failed")
+        LazyRowArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -157,7 +167,9 @@ impl<'a> LazyListScope<'a> {
     }
 }
 
+/// Scope alias for vertical lazy lists.
 pub type LazyColumnScope<'a> = LazyListScope<'a>;
+/// Scope alias for horizontal lazy lists.
 pub type LazyRowScope<'a> = LazyListScope<'a>;
 
 /// # lazy_column
@@ -856,4 +868,3 @@ fn shrink_dimension_max(dim: DimensionValue, amount: Px) -> DimensionValue {
 fn saturating_sub_px(lhs: Px, rhs: Px) -> Px {
     Px(lhs.0.saturating_sub(rhs.0))
 }
-

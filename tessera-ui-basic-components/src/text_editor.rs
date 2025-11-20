@@ -82,7 +82,9 @@ pub struct TextEditorArgs {
 
 impl Default for TextEditorArgs {
     fn default() -> Self {
-        TextEditorArgsBuilder::default().build().expect("builder construction failed")
+        TextEditorArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -494,7 +496,8 @@ fn create_surface_args(
         .padding(args.padding)
         .width(args.width)
         .height(args.height)
-        .build().expect("builder construction failed")
+        .build()
+        .expect("builder construction failed")
 }
 
 /// Determine background color based on focus state
@@ -547,7 +550,8 @@ impl TextEditorArgs {
                 bottom_left: Dp(0.0),
                 g2_k_value: 3.0,
             })
-            .build().expect("builder construction failed")
+            .build()
+            .expect("builder construction failed")
     }
 
     /// Creates a text editor with an emphasized border for better visibility.
@@ -585,7 +589,8 @@ impl TextEditorArgs {
                 bottom_left: Dp(0.0),
                 g2_k_value: 3.0,
             })
-            .build().expect("builder construction failed")
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -796,5 +801,3 @@ fn apply_text_editor_accessibility(
 
     builder.focusable().commit();
 }
-
-

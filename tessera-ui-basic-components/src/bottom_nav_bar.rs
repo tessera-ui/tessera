@@ -204,6 +204,17 @@ impl BottomNavBarStateInner {
     }
 }
 
+/// Shared state for the `bottom_nav_bar` component.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui_basic_components::bottom_nav_bar::BottomNavBarState;
+///
+/// // Create a new state, starting with the first item (index 0) selected.
+/// let state = BottomNavBarState::new(0);
+/// assert_eq!(state.selected(), 0);
+/// ```
 #[derive(Clone)]
 pub struct BottomNavBarState {
     inner: Arc<RwLock<BottomNavBarStateInner>>,
@@ -270,4 +281,3 @@ impl<'a> BottomNavBarScope<'a> {
         ));
     }
 }
-

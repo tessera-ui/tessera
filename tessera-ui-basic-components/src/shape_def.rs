@@ -48,12 +48,18 @@ use tessera_ui::dp::Dp;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Shape {
     /// Rounded rectangle with independent corner radii and a curvature factor:
+    ///
     /// * `g2_k_value` controls the transition curve (G2 continuity parameter).
     RoundedRectangle {
+        /// Radius for the top-left corner.
         top_left: Dp,
+        /// Radius for the top-right corner.
         top_right: Dp,
+        /// Radius for the bottom-right corner.
         bottom_right: Dp,
+        /// Radius for the bottom-left corner.
         bottom_left: Dp,
+        /// Curvature tension parameter used by the renderer.
         g2_k_value: f32,
     },
     /// Ellipse fitting the component bounds.
@@ -118,4 +124,3 @@ impl Shape {
         }
     }
 }
-

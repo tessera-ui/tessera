@@ -59,7 +59,8 @@ impl SpacerArgs {
                 min: None,
                 max: None,
             })
-            .build().expect("builder construction failed") // build() should not fail with these defaults
+            .build()
+            .expect("builder construction failed") // build() should not fail with these defaults
     }
 
     /// Creates a spacer that tries to fill available width.
@@ -76,7 +77,8 @@ impl SpacerArgs {
                 max: None,
             })
             .height(DimensionValue::Fixed(Px(0))) // Default height if only filling width
-            .build().expect("builder construction failed")
+            .build()
+            .expect("builder construction failed")
     }
 
     /// Creates a spacer that tries to fill available height.
@@ -93,7 +95,8 @@ impl SpacerArgs {
                 min: None,
                 max: None,
             })
-            .build().expect("builder construction failed")
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -110,7 +113,8 @@ impl From<Dp> for SpacerArgs {
         SpacerArgsBuilder::default()
             .width(DimensionValue::Fixed(value.to_px()))
             .height(DimensionValue::Fixed(value.to_px()))
-            .build().expect("builder construction failed")
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -127,7 +131,8 @@ impl From<Px> for SpacerArgs {
         SpacerArgsBuilder::default()
             .width(DimensionValue::Fixed(value))
             .height(DimensionValue::Fixed(value))
-            .build().expect("builder construction failed")
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -198,5 +203,3 @@ pub fn spacer(args: impl Into<SpacerArgs>) {
         })
     }));
 }
-
-

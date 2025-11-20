@@ -19,8 +19,11 @@ use tessera_ui::DrawCommand;
 /// ```
 #[derive(Debug, Clone)]
 pub struct ImageData {
+    /// Raw RGBA pixel buffer.
     pub data: Arc<Vec<u8>>,
+    /// Image width in pixels.
     pub width: u32,
+    /// Image height in pixels.
     pub height: u32,
 }
 
@@ -51,6 +54,7 @@ impl Eq for ImageData {}
 /// ```
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ImageCommand {
+    /// Shared image buffer used by the draw pass.
     pub data: Arc<ImageData>,
 }
 
@@ -60,4 +64,3 @@ impl DrawCommand for ImageCommand {
         None
     }
 }
-

@@ -25,6 +25,7 @@ use crate::{
     surface::{SurfaceArgsBuilder, surface},
 };
 
+/// Shared state for the `checkbox` component, including ripple feedback.
 #[derive(Clone, Default)]
 pub struct CheckboxState {
     ripple: RippleState,
@@ -32,6 +33,7 @@ pub struct CheckboxState {
 }
 
 impl CheckboxState {
+    /// Creates a new checkbox state with the provided initial value.
     pub fn new(initial_state: bool) -> Self {
         Self {
             ripple: RippleState::new(),
@@ -92,16 +94,17 @@ pub struct CheckboxArgs {
     #[builder(
         default = "Shape::RoundedRectangle{ top_left: Dp(4.0), top_right: Dp(4.0), bottom_right: Dp(4.0), bottom_left: Dp(4.0), g2_k_value: 3.0 }"
     )]
-    pub shape: Shape,
     /// Shape used for the outer checkbox surface (rounded rectangle, etc.).
     ///
     /// Use this to customize the corner radii or switch to alternate shapes.
+    pub shape: Shape,
 
-    #[builder(default)]
-    pub hover_color: Option<Color>,
     /// Optional surface color to apply when the pointer hovers over the control.
     ///
     /// If `None`, the control does not apply a hover style by default.
+    #[builder(default)]
+    pub hover_color: Option<Color>,
+
     /// Optional accessibility label read by assistive technologies.
     ///
     /// The label should be a short, human-readable string describing the
@@ -128,8 +131,8 @@ impl Default for CheckboxArgs {
 const CHECKMARK_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 
 /// State for checkmark animation (similar to `SwitchState`)
-pub struct CheckmarkState {
-    pub checked: bool,
+struct CheckmarkState {
+    checked: bool,
     progress: f32,
     last_toggle_time: Option<Instant>,
 }
@@ -141,7 +144,7 @@ impl Default for CheckmarkState {
 }
 
 impl CheckmarkState {
-    pub fn new(initial_state: bool) -> Self {
+    fn new(initial_state: bool) -> Self {
         Self {
             checked: initial_state,
             progress: if initial_state { 1.0 } else { 0.0 },
@@ -150,13 +153,13 @@ impl CheckmarkState {
     }
 
     /// Toggle checked state and start animation
-    pub fn toggle(&mut self) {
+    fn toggle(&mut self) {
         self.checked = !self.checked;
         self.last_toggle_time = Some(Instant::now());
     }
 
     /// Update progress based on elapsed time
-    pub fn update_progress(&mut self) {
+    fn update_progress(&mut self) {
         if let Some(start) = self.last_toggle_time {
             let elapsed = start.elapsed();
             let fraction =
@@ -172,7 +175,7 @@ impl CheckmarkState {
         }
     }
 
-    pub fn progress(&self) -> f32 {
+    fn progress(&self) -> f32 {
         self.progress
     }
 }
@@ -262,7 +265,8 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
             .hover_style(args.hover_color.map(|c| c.into()))
             .shape(args.shape)
             .on_click(on_click_for_surface)
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         Some(ripple_state),
         {
             let state_for_child = state.clone();
@@ -273,13 +277,15 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
                         SurfaceArgsBuilder::default()
                             .padding(Dp(2.0))
                             .style(Color::TRANSPARENT.into())
-                            .build().expect("builder construction failed"),
+                            .build()
+                            .expect("builder construction failed"),
                         None,
                         move || {
                             boxed(
                                 BoxedArgsBuilder::default()
                                     .alignment(Alignment::Center)
-                                    .build().expect("builder construction failed"),
+                                    .build()
+                                    .expect("builder construction failed"),
                                 |scope| {
                                     scope.child(move || {
                                         checkmark(
@@ -289,7 +295,8 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
                                                 .progress(progress)
                                                 .size(Dp(args.size.0 * 0.8))
                                                 .padding([2.0, 2.0])
-                                                .build().expect("builder construction failed"),
+                                                .build()
+                                                .expect("builder construction failed"),
                                         )
                                     });
                                 },
@@ -337,5 +344,3 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
         });
     }));
 }
-
-

@@ -8,4 +8,3 @@ mod pipeline;
 
 pub use command::MeanCommand;
 pub use pipeline::MeanPipeline;
-

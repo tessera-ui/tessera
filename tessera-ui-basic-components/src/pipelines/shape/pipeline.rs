@@ -115,6 +115,7 @@ pub struct ShapePipeline {
 }
 
 impl ShapePipeline {
+    /// Creates the shape rendering pipeline, configuring multisampling and caches.
     pub fn new(
         gpu: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
@@ -428,7 +429,9 @@ impl ShapePipeline {
 
         let uniforms = ShapeInstances { instances };
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
-        buffer_content.write(&uniforms).expect("buffer write failed");
+        buffer_content
+            .write(&uniforms)
+            .expect("buffer write failed");
         gpu_queue.write_buffer(&storage_buffer, 0, buffer_content.as_ref());
 
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -554,7 +557,9 @@ impl ShapePipeline {
 
         let uniforms = ShapeInstances { instances };
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
-        buffer_content.write(&uniforms).expect("buffer write failed");
+        buffer_content
+            .write(&uniforms)
+            .expect("buffer write failed");
         gpu_queue.write_buffer(&storage_buffer, 0, buffer_content.as_ref());
 
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -602,7 +607,9 @@ impl ShapePipeline {
 
         let rect_instances = CachedRectInstances { rects };
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
-        buffer_content.write(&rect_instances).expect("buffer write failed");
+        buffer_content
+            .write(&rect_instances)
+            .expect("buffer write failed");
 
         let instance_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Shape Cache Instance Buffer"),
@@ -1048,5 +1055,3 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         }
     }
 }
-
-

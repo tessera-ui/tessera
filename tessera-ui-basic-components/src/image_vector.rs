@@ -109,6 +109,46 @@ impl From<ImageVectorData> for ImageVectorArgs {
     }
 }
 
+/// # image_vector
+///
+/// Renders a scalable vector image with optional tinting.
+///
+/// ## Usage
+///
+/// Display icons or illustrations without losing fidelity at different sizes.
+///
+/// ## Parameters
+///
+/// - `args` — see [`ImageVectorArgs`] for sizing, tint, and source data.
+///
+/// ## Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui::{Color, DimensionValue};
+/// use tessera_ui_basic_components::image_vector::{
+///     image_vector, ImageVectorArgs, ImageVectorData, ImageVectorVertex,
+/// };
+///
+/// // Simple triangle geometry (clockwise winding).
+/// let vertices = Arc::new(vec![
+///     ImageVectorVertex { position: [0.0, 0.0], color: Color::WHITE },
+///     ImageVectorVertex { position: [1.0, 0.0], color: Color::WHITE },
+///     ImageVectorVertex { position: [0.0, 1.0], color: Color::WHITE },
+/// ]);
+/// let indices = Arc::new(vec![0, 1, 2]);
+/// let data = ImageVectorData::new(1.0, 1.0, vertices, indices);
+///
+/// let args = ImageVectorArgs {
+///     data: Arc::new(data),
+///     width: DimensionValue::WRAP,
+///     height: DimensionValue::WRAP,
+///     tint: Color::from_rgb(1.0, 1.0, 1.0),
+/// };
+///
+/// image_vector(args.clone());
+/// assert_eq!(args.data.vertices.len(), 3);
+/// ```
 #[tessera]
 pub fn image_vector(args: impl Into<ImageVectorArgs>) {
     let image_args: ImageVectorArgs = args.into();
@@ -439,4 +479,3 @@ impl ImageVectorVertex {
         }
     }
 }
-

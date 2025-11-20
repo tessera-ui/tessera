@@ -45,12 +45,22 @@ impl SliderStateInner {
     }
 }
 
+/// External state for the `slider` component.
+///
+/// # Example
+///
+/// ```
+/// use tessera_ui_basic_components::slider::SliderState;
+///
+/// let slider_state = SliderState::new();
+/// ```
 #[derive(Clone)]
 pub struct SliderState {
     inner: Arc<RwLock<SliderStateInner>>,
 }
 
 impl SliderState {
+    /// Creates a new slider state handle.
     pub fn new() -> Self {
         Self {
             inner: Arc::new(RwLock::new(SliderStateInner::new())),
@@ -290,7 +300,8 @@ fn render_track(args: &SliderArgs) {
                     g2_k_value: 2.0, // Capsule shape
                 }
             })
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         None,
         move || {
             render_progress_fill(args);
@@ -318,7 +329,8 @@ fn render_progress_fill(args: &SliderArgs) {
                     g2_k_value: 2.0, // Capsule shape
                 }
             })
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         None,
         || {},
     );
@@ -405,5 +417,3 @@ pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
     measure(Box::new(move |input| measure_slider(input, &cloned_args)));
 }
 const ACCESSIBILITY_STEP: f32 = 0.05;
-
-

@@ -41,6 +41,7 @@ impl CheckmarkVertex {
     }
 }
 
+/// Render pipeline for animated checkmark strokes.
 pub struct CheckmarkPipeline {
     pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
@@ -51,6 +52,7 @@ pub struct CheckmarkPipeline {
 }
 
 impl CheckmarkPipeline {
+    /// Creates the render pipeline for drawing checkmarks.
     pub fn new(
         gpu: &wgpu::Device,
         pipeline_cache: Option<&wgpu::PipelineCache>,
@@ -303,4 +305,3 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
         }
     }
 }
-

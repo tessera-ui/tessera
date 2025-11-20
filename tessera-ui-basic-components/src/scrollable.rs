@@ -20,6 +20,7 @@ use crate::{
     scrollable::scrollbar::{ScrollBarArgs, ScrollBarState, scrollbar_h, scrollbar_v},
 };
 
+/// Arguments for the `scrollable` container.
 #[derive(Debug, Builder, Clone)]
 pub struct ScrollableArgs {
     /// The desired width behavior of the scrollable area
@@ -81,7 +82,9 @@ pub enum ScrollBarLayout {
 
 impl Default for ScrollableArgs {
     fn default() -> Self {
-        ScrollableArgsBuilder::default().build().expect("builder construction failed")
+        ScrollableArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -421,7 +424,8 @@ fn scrollable_with_overlay_scrollbar(
             .width(args.width)
             .height(args.height)
             .alignment(Alignment::BottomEnd)
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         |scope| {
             scope.child({
                 let state = state.clone();
@@ -678,5 +682,3 @@ fn constrain_position(
 
     PxPosition { x, y }
 }
-
-

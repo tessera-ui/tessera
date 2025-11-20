@@ -278,5 +278,3 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
         }
     }
 }
-
-

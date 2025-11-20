@@ -26,13 +26,24 @@ use crate::{
 #[derive(Clone)]
 pub enum SurfaceStyle {
     /// A solid color fill.
-    Filled { color: Color },
+    Filled {
+        /// Fill color used for the surface.
+        color: Color,
+    },
     /// A solid color outline with a transparent fill.
-    Outlined { color: Color, width: Dp },
+    Outlined {
+        /// Outline color for the surface border.
+        color: Color,
+        /// Width of the outline stroke.
+        width: Dp,
+    },
     /// A solid color fill with a solid color outline.
     FilledOutlined {
+        /// Fill color used for the surface.
         fill_color: Color,
+        /// Outline color used to draw the border.
         border_color: Color,
+        /// Width of the outline stroke.
         border_width: Dp,
     },
 }
@@ -51,6 +62,7 @@ impl From<Color> for SurfaceStyle {
     }
 }
 
+/// Arguments for the `surface` component.
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SurfaceArgs {
@@ -115,7 +127,9 @@ pub struct SurfaceArgs {
 
 impl Default for SurfaceArgs {
     fn default() -> Self {
-        SurfaceArgsBuilder::default().build().expect("builder construction failed")
+        SurfaceArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -683,4 +697,3 @@ fn apply_surface_accessibility(
         });
     }
 }
-

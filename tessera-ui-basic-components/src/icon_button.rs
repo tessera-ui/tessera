@@ -162,4 +162,3 @@ pub fn glass_icon_button(args: impl Into<GlassIconButtonArgs>, ripple_state: Rip
         icon(icon_args.clone());
     });
 }
-

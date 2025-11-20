@@ -11,6 +11,7 @@
 //! // Create and use BlurPipeline and DualBlurCommand in your rendering logic.
 //! ```
 
+/// Command definitions for dual-pass Gaussian blur.
 pub mod command;
+/// GPU pipeline implementation for blur rendering.
 pub mod pipeline;
-

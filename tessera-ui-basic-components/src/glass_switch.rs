@@ -56,12 +56,22 @@ impl GlassSwitchStateInner {
     }
 }
 
+/// External state handle for the `glass_switch` component.
+///
+/// # Example
+///
+/// ```
+/// use tessera_ui_basic_components::glass_switch::GlassSwitchState;
+///
+/// let switch_state = GlassSwitchState::new();
+/// ```
 #[derive(Clone)]
 pub struct GlassSwitchState {
     inner: Arc<RwLock<GlassSwitchStateInner>>,
 }
 
 impl GlassSwitchState {
+    /// Creates a new state handle with the given initial value.
     pub fn new(initial_state: bool) -> Self {
         Self {
             inner: Arc::new(RwLock::new(GlassSwitchStateInner::new(initial_state))),
@@ -108,15 +118,19 @@ impl Default for GlassSwitchState {
     }
 }
 
+/// Arguments for the `glass_switch` component.
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct GlassSwitchArgs {
+    /// Optional callback invoked when the switch toggles.
     #[builder(default, setter(strip_option))]
     pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
 
+    /// Total width of the switch track.
     #[builder(default = "Dp(52.0)")]
     pub width: Dp,
 
+    /// Total height of the switch track (including padding).
     #[builder(default = "Dp(32.0)")]
     pub height: Dp,
 
@@ -155,7 +169,9 @@ pub struct GlassSwitchArgs {
 
 impl Default for GlassSwitchArgs {
     fn default() -> Self {
-        GlassSwitchArgsBuilder::default().build().expect("builder construction failed")
+        GlassSwitchArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -342,7 +358,11 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
     if let Some(border) = args.track_border {
         track_builder = track_builder.border(border);
     }
-    fluid_glass(track_builder.build().expect("builder construction failed"), None, || {});
+    fluid_glass(
+        track_builder.build().expect("builder construction failed"),
+        None,
+        || {},
+    );
 
     // Build and render thumb
     let thumb_alpha =
@@ -357,7 +377,11 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
     if let Some(border) = args.thumb_border {
         thumb_builder = thumb_builder.border(border);
     }
-    fluid_glass(thumb_builder.build().expect("builder construction failed"), None, || {});
+    fluid_glass(
+        thumb_builder.build().expect("builder construction failed"),
+        None,
+        || {},
+    );
 
     let state_for_handler = state.clone();
     let on_toggle = args.on_toggle.clone();
@@ -434,4 +458,3 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
         })
     }));
 }
-

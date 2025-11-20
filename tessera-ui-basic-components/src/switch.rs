@@ -59,12 +59,14 @@ impl SwitchStateInner {
     }
 }
 
+/// External state handle for the `switch` component.
 #[derive(Clone)]
 pub struct SwitchState {
     inner: Arc<RwLock<SwitchStateInner>>,
 }
 
 impl SwitchState {
+    /// Creates a new state handle with the given initial value.
     pub fn new(initial_state: bool) -> Self {
         Self {
             inner: Arc::new(RwLock::new(SwitchStateInner::new(initial_state))),
@@ -115,24 +117,25 @@ impl Default for SwitchState {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SwitchArgs {
+    /// Optional callback invoked when the switch toggles.
     #[builder(default, setter(strip_option))]
     pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
-
+    /// Total width of the switch track.
     #[builder(default = "Dp(52.0)")]
     pub width: Dp,
-
+    /// Total height of the switch track (including padding).
     #[builder(default = "Dp(32.0)")]
     pub height: Dp,
-
+    /// Track color when the switch is off.
     #[builder(default = "Color::new(0.8, 0.8, 0.8, 1.0)")]
     pub track_color: Color,
-
+    /// Track color when the switch is on.
     #[builder(default = "Color::new(0.6, 0.7, 0.9, 1.0)")]
     pub track_checked_color: Color,
-
+    /// Thumb color used in both states.
     #[builder(default = "Color::WHITE")]
     pub thumb_color: Color,
-
+    /// Padding around the thumb inside the track.
     #[builder(default = "Dp(3.0)")]
     pub thumb_padding: Dp,
     /// Optional accessibility label read by assistive technologies.
@@ -145,7 +148,9 @@ pub struct SwitchArgs {
 
 impl Default for SwitchArgs {
     fn default() -> Self {
-        SwitchArgsBuilder::default().build().expect("builder construction failed")
+        SwitchArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -296,7 +301,8 @@ pub fn switch(args: impl Into<SwitchArgs>, state: SwitchState) {
             .height(DimensionValue::Fixed(thumb_size.to_px()))
             .style(args.thumb_color.into())
             .shape(Shape::Ellipse)
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         None,
         || {},
     );
@@ -365,5 +371,3 @@ pub fn switch(args: impl Into<SwitchArgs>, state: SwitchState) {
         })
     }));
 }
-
-

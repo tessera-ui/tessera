@@ -23,12 +23,24 @@ use crate::{
     shape_def::Shape,
 };
 
+/// Border properties applied to the glass surface.
+///
+/// # Example
+///
+/// ```
+/// use tessera_ui::Px;
+/// use tessera_ui_basic_components::fluid_glass::GlassBorder;
+///
+/// let border = GlassBorder::new(Px(2)); // Creates a border with 2 physical pixels width
+/// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GlassBorder {
+    /// Border width in physical pixels.
     pub width: Px,
 }
 
 impl GlassBorder {
+    /// Creates a new border with the given width.
     pub fn new(width: Px) -> Self {
         Self { width }
     }
@@ -90,19 +102,24 @@ pub struct FluidGlassArgs {
     /// Padding inside the glass component.
     #[builder(default = "Dp(0.0)")]
     pub padding: Dp,
-    // Ripple effect properties
+    /// Optional normalized center (x, y) for the ripple animation on click.
     #[builder(default, setter(strip_option))]
     pub ripple_center: Option<[f32; 2]>,
+    /// Optional ripple radius, expressed in normalized coordinates relative to the surface.
     #[builder(default, setter(strip_option))]
     pub ripple_radius: Option<f32>,
+    /// Optional ripple tint alpha (0.0 = transparent, 1.0 = opaque).
     #[builder(default, setter(strip_option))]
     pub ripple_alpha: Option<f32>,
+    /// Strength multiplier for the ripple distortion.
     #[builder(default, setter(strip_option))]
     pub ripple_strength: Option<f32>,
 
+    /// Optional click callback for interactive glass surfaces.
     #[builder(default, setter(strip_option, into = false))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
 
+    /// Optional border defining the outline thickness for the glass.
     #[builder(default = "Some(GlassBorder { width: Dp(1.35).into() })")]
     pub border: Option<GlassBorder>,
 
@@ -159,12 +176,16 @@ impl FluidGlassArgsBuilder {
 // Manual implementation of Default because derive_builder's default conflicts with our specific defaults
 impl Default for FluidGlassArgs {
     fn default() -> Self {
-        FluidGlassArgsBuilder::default().build().expect("builder construction failed")
+        FluidGlassArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
     }
 }
 
+/// Draw command wrapping the arguments for the fluid glass surface.
 #[derive(Clone, PartialEq)]
 pub struct FluidGlassCommand {
+    /// Full configuration used by the draw pipeline.
     pub args: FluidGlassArgs,
 }
 
@@ -447,4 +468,3 @@ pub fn fluid_glass(
         }));
     }
 }
-

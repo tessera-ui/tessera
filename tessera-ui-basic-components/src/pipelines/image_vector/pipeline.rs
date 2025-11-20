@@ -61,6 +61,7 @@ struct AtlasSampleUniforms {
     tint: Vec4,
 }
 
+/// Render pipeline that rasterizes SVG vector meshes into an atlas for sampling.
 pub struct ImageVectorPipeline {
     raster_pipeline: wgpu::RenderPipeline,
     raster_bind_group: wgpu::BindGroup,
@@ -74,6 +75,7 @@ pub struct ImageVectorPipeline {
 }
 
 impl ImageVectorPipeline {
+    /// Creates the vector atlas pipeline with raster and sampling passes.
     pub fn new(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
@@ -761,4 +763,3 @@ impl AtlasPage {
         Some(rect)
     }
 }
-

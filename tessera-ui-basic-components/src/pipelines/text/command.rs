@@ -2,8 +2,10 @@ use tessera_ui::DrawCommand;
 
 use super::pipeline::TextData;
 
+/// Draw command carrying formatted text layout data.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextCommand {
+    /// Glyph layout and styling for the text draw.
     pub data: TextData,
 }
 
@@ -47,4 +49,3 @@ impl TextConstraint {
         max_height: None,
     };
 }
-

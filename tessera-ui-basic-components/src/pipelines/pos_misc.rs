@@ -37,4 +37,3 @@ pub fn pixel_to_ndc(pos: PxPosition, screen_size: [u32; 2]) -> [f32; 2] {
     // Convert UI top-left origin to NDC bottom-left origin by inverting Y.
     [ndc_x, -ndc_y]
 }
-

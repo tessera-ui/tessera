@@ -45,12 +45,22 @@ impl GlassSliderStateInner {
     }
 }
 
+/// External state handle for the `glass_slider` component.
+///
+/// # Example
+///
+/// ```
+/// use tessera_ui_basic_components::glass_slider::GlassSliderState;
+///
+/// let slider_state = GlassSliderState::new();
+/// ```
 #[derive(Clone)]
 pub struct GlassSliderState {
     inner: Arc<RwLock<GlassSliderStateInner>>,
 }
 
 impl GlassSliderState {
+    /// Creates a new slider state handle.
     pub fn new() -> Self {
         Self {
             inner: Arc::new(RwLock::new(GlassSliderStateInner::new())),
@@ -278,7 +288,8 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
             })
             .border(GlassBorder::new(args.track_border_width.into()))
             .padding(args.track_border_width)
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         None,
         move || {
             // Internal progress fill - capsule shape using surface
@@ -305,7 +316,8 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
                         }
                     })
                     .refraction_amount(0.0)
-                    .build().expect("builder construction failed"),
+                    .build()
+                    .expect("builder construction failed"),
                 None,
                 || {},
             );
@@ -414,5 +426,3 @@ fn apply_glass_slider_accessibility(
         }
     });
 }
-
-

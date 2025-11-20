@@ -34,6 +34,7 @@ pub enum SideBarStyle {
     Material,
 }
 
+/// Configuration arguments for the [`side_bar_provider`] component.
 #[derive(Builder)]
 pub struct SideBarProviderArgs {
     /// A callback that is invoked when the user requests to close the side bar.
@@ -46,17 +47,30 @@ pub struct SideBarProviderArgs {
     pub style: SideBarStyle,
 }
 
-/// Manages the open/closed state of a [`side_bar_provider`].
-///
-/// This state object must be created by the application and passed to the
-/// [`side_bar_provider`]. It is used to control the visibility of the side bar
-/// programmatically. Clone the handle freely to share it across UI parts.
 #[derive(Default)]
 struct SideBarProviderStateInner {
     is_open: bool,
     timer: Option<Instant>,
 }
 
+/// Manages the open/closed state of a [`side_bar_provider`].
+///
+/// This state object must be created by the application and passed to the
+/// [`side_bar_provider`]. It is used to control the visibility of the side bar
+/// programmatically. Clone the handle freely to share it across UI parts.
+///
+/// # Example
+///
+/// ```
+/// use tessera_ui_basic_components::side_bar::SideBarProviderState;
+///
+/// let state = SideBarProviderState::new();
+/// assert!(!state.is_open()); // Initially closed
+/// state.open();
+/// assert!(state.is_open()); // Now open
+/// state.close();
+/// assert!(!state.is_open()); // Closed again
+/// ```
 #[derive(Clone, Default)]
 pub struct SideBarProviderState {
     inner: Arc<RwLock<SideBarProviderStateInner>>,
@@ -201,7 +215,8 @@ fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) 
                 g2_k_value: 3.0,
             })
             .noise_amount(0.0)
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         None,
         || {},
     );
@@ -223,7 +238,8 @@ fn render_material_scrim(args: &SideBarProviderArgs, progress: f32, is_open: boo
                 max: None,
             })
             .block_input(true)
-            .build().expect("builder construction failed"),
+            .build()
+            .expect("builder construction failed"),
         None,
         || {},
     );
@@ -389,7 +405,8 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                     .blur_radius(Dp(10.0))
                     .padding(Dp(16.0))
                     .block_input(true)
-                    .build().expect("builder construction failed"),
+                    .build()
+                    .expect("builder construction failed"),
                 None,
                 content,
             );
@@ -412,12 +429,11 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                         g2_k_value: 3.0,
                     })
                     .block_input(true)
-                    .build().expect("builder construction failed"),
+                    .build()
+                    .expect("builder construction failed"),
                 None,
                 content,
             );
         }
     }
 }
-
-

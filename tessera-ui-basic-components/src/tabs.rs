@@ -111,6 +111,14 @@ impl TabsStateInner {
     }
 }
 
+/// State handle for the `tabs` component, tracking selection and indicator animation.
+///
+/// ```
+/// use tessera_ui_basic_components::tabs::TabsState;
+///
+/// let tabs_state = TabsState::new(0); // Start with the first tab active
+/// assert_eq!(tabs_state.active_tab(), 0);
+/// ```
 #[derive(Clone)]
 pub struct TabsState {
     inner: Arc<RwLock<TabsStateInner>>,
@@ -124,6 +132,7 @@ impl TabsState {
         }
     }
 
+    /// Updates the active tab index and resets indicator progress.
     pub fn set_active_tab(&self, index: usize) {
         self.inner.write().set_active_tab(index);
     }
@@ -138,19 +147,23 @@ impl TabsState {
         self.inner.read().prev_active_tab
     }
 
+    /// Returns the time of the last tab switch, when available.
     pub fn last_switch_time(&self) -> Option<Instant> {
         self.inner.read().last_switch_time
     }
 
-    pub fn set_progress(&self, progress: f32) {
+    /// Sets the indicator animation progress (0.0..1.0).
+    fn set_progress(&self, progress: f32) {
         self.inner.write().progress = progress;
     }
 
-    pub fn progress(&self) -> f32 {
+    /// Current indicator animation progress (0.0..1.0).
+    fn progress(&self) -> f32 {
         self.inner.read().progress
     }
 
-    pub fn content_offsets(&self) -> (Px, Px) {
+    /// Returns the current and target scroll offsets for tab content.
+    fn content_offsets(&self) -> (Px, Px) {
         let inner = self.inner.read();
         (
             inner.content_scroll_offset,
@@ -158,19 +171,22 @@ impl TabsState {
         )
     }
 
-    pub fn update_content_offsets(&self, current: Px, target: Px) {
+    /// Updates the current and target content offsets, typically during animations.
+    fn update_content_offsets(&self, current: Px, target: Px) {
         let mut inner = self.inner.write();
         inner.content_scroll_offset = current;
         inner.target_content_scroll_offset = target;
     }
 
-    pub fn set_indicator_targets(&self, width: Px, x: Px) {
+    /// Sets the indicator's target width and X offset for the active tab.
+    fn set_indicator_targets(&self, width: Px, x: Px) {
         let mut inner = self.inner.write();
         inner.indicator_to_width = width;
         inner.indicator_to_x = x;
     }
 
-    pub fn indicator_metrics(&self) -> (Px, Px, Px, Px) {
+    /// Returns indicator start/target width and X positions.
+    fn indicator_metrics(&self) -> (Px, Px, Px, Px) {
         let inner = self.inner.read();
         (
             inner.indicator_from_width,
@@ -180,7 +196,8 @@ impl TabsState {
         )
     }
 
-    pub fn ripple_state(&self, index: usize) -> RippleState {
+    /// Retrieves or initializes the ripple state for the given tab.
+    fn ripple_state(&self, index: usize) -> RippleState {
         self.inner.write().ripple_state(index)
     }
 }
@@ -195,30 +212,37 @@ impl Default for TabsState {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TabsArgs {
+    /// Color of the active tab indicator.
     #[builder(default = "Color::new(0.4745, 0.5255, 0.7961, 1.0)")]
     pub indicator_color: Color,
+    /// Width behavior for the entire tabs container.
     #[builder(default = "DimensionValue::FILLED")]
     pub width: DimensionValue,
+    /// Height behavior for the tabs container.
     #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
     pub height: DimensionValue,
 }
 
 impl Default for TabsArgs {
     fn default() -> Self {
-        TabsArgsBuilder::default().build().expect("builder construction failed")
+        TabsArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
     }
 }
 
-pub struct TabDef {
+struct TabDef {
     title: Box<dyn FnOnce() + Send + Sync>,
     content: Box<dyn FnOnce() + Send + Sync>,
 }
 
+/// Scope passed to tab configuration closures.
 pub struct TabsScope<'a> {
     tabs: &'a mut Vec<TabDef>,
 }
 
 impl<'a> TabsScope<'a> {
+    /// Adds a tab with its title and content builders.
     pub fn child<F1, F2>(&mut self, title: F1, content: F2)
     where
         F1: FnOnce() + Send + Sync + 'static,
@@ -377,7 +401,8 @@ where
                 })
                 .width(DimensionValue::FILLED)
                 .shape(shape)
-                .build().expect("builder construction failed"),
+                .build()
+                .expect("builder construction failed"),
             ripple_state,
             child,
         );
@@ -524,5 +549,3 @@ where
         },
     ));
 }
-
-

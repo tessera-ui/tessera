@@ -21,6 +21,7 @@ pub struct MeanPipeline {
 }
 
 impl MeanPipeline {
+    /// Builds the mean (box blur) compute pipeline.
     pub fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Mean Shader"),
@@ -36,7 +37,9 @@ impl MeanPipeline {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: Some(std::num::NonZeroU64::new(16).expect("binding size must be non-zero")),
+                        min_binding_size: Some(
+                            std::num::NonZeroU64::new(16).expect("binding size must be non-zero"),
+                        ),
                     },
                     count: None,
                 },
@@ -58,7 +61,9 @@ impl MeanPipeline {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: false },
                         has_dynamic_offset: false,
-                        min_binding_size: Some(std::num::NonZeroU64::new(8).expect("binding size must be non-zero")),
+                        min_binding_size: Some(
+                            std::num::NonZeroU64::new(8).expect("binding size must be non-zero"),
+                        ),
                     },
                     count: None,
                 },
@@ -160,5 +165,3 @@ impl ComputablePipeline<MeanCommand> for MeanPipeline {
         }
     }
 }
-
-

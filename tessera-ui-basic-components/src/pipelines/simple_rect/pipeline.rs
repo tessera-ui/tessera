@@ -20,8 +20,6 @@ struct RectUniform {
     position: Vec4,
     color: Vec4,
     screen_size: Vec2,
-    #[shader(size(8))]
-    _padding: [f32; 2],
 }
 
 #[derive(ShaderType)]
@@ -30,6 +28,7 @@ struct RectInstances {
     instances: Vec<RectUniform>,
 }
 
+/// Render pipeline for drawing batches of simple rectangles.
 pub struct SimpleRectPipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
@@ -38,6 +37,7 @@ pub struct SimpleRectPipeline {
 }
 
 impl SimpleRectPipeline {
+    /// Creates the rectangle pipeline with the provided surface configuration.
     pub fn new(
         gpu: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
@@ -159,7 +159,6 @@ fn build_instances(
             ),
             color: Vec4::from_array(command.color.to_array()),
             screen_size: Vec2::new(config.width as f32, config.height as f32),
-            _padding: [0.0; 2],
         })
         .collect()
 }
@@ -184,7 +183,9 @@ impl DrawablePipeline<SimpleRectCommand> for SimpleRectPipeline {
 
         let uniforms = RectInstances { instances };
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
-        buffer_content.write(&uniforms).expect("buffer write failed");
+        buffer_content
+            .write(&uniforms)
+            .expect("buffer write failed");
         context
             .queue
             .write_buffer(&uniform_buffer, 0, buffer_content.as_ref());
@@ -213,5 +214,3 @@ impl DrawablePipeline<SimpleRectCommand> for SimpleRectPipeline {
             .draw_indexed(0..6, 0, 0..context.commands.len() as u32);
     }
 }
-
-

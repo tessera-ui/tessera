@@ -22,6 +22,7 @@ pub struct ContrastPipeline {
 }
 
 impl ContrastPipeline {
+    /// Builds the contrast compute pipeline, optionally reusing a cache.
     pub fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Contrast Shader"),
@@ -37,7 +38,9 @@ impl ContrastPipeline {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: Some(std::num::NonZeroU64::new(20).expect("binding size must be non-zero")),
+                        min_binding_size: Some(
+                            std::num::NonZeroU64::new(20).expect("binding size must be non-zero"),
+                        ),
                     },
                     count: None,
                 },
@@ -70,7 +73,9 @@ impl ContrastPipeline {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size: Some(std::num::NonZeroU64::new(8).expect("binding size must be non-zero")),
+                        min_binding_size: Some(
+                            std::num::NonZeroU64::new(8).expect("binding size must be non-zero"),
+                        ),
                     },
                     count: None,
                 },
@@ -167,5 +172,3 @@ impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
         }
     }
 }
-
-

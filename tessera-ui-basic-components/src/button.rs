@@ -216,45 +216,52 @@ impl ButtonArgs {
 
 /// Builder methods for fluent API
 impl ButtonArgs {
+    /// Sets the fill color for the button.
     pub fn with_color(mut self, color: Color) -> Self {
         self.color = color;
         self
     }
 
+    /// Sets the hover color applied when the pointer is over the button.
     pub fn with_hover_color(mut self, hover_color: Color) -> Self {
         self.hover_color = Some(hover_color);
         self
     }
 
+    /// Updates the padding inside the button.
     pub fn with_padding(mut self, padding: Dp) -> Self {
         self.padding = padding;
         self
     }
 
+    /// Overrides the button's shape.
     pub fn with_shape(mut self, shape: Shape) -> Self {
         self.shape = shape;
         self
     }
 
+    /// Sets a fixed or flexible width constraint.
     pub fn with_width(mut self, width: DimensionValue) -> Self {
         self.width = width;
         self
     }
 
+    /// Sets a fixed or flexible height constraint.
     pub fn with_height(mut self, height: DimensionValue) -> Self {
         self.height = height;
         self
     }
 
+    /// Adjusts the ripple color tint.
     pub fn with_ripple_color(mut self, ripple_color: Color) -> Self {
         self.ripple_color = ripple_color;
         self
     }
 
+    /// Configures the border width and optional color.
     pub fn with_border(mut self, width: Dp, color: Option<Color>) -> Self {
         self.border_width = width;
         self.border_color = color;
         self
     }
 }
-

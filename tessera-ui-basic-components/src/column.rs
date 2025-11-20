@@ -31,7 +31,9 @@ pub struct ColumnArgs {
 
 impl Default for ColumnArgs {
     fn default() -> Self {
-        ColumnArgsBuilder::default().build().expect("builder construction failed")
+        ColumnArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
     }
 }
 
@@ -557,4 +559,3 @@ fn calculate_cross_axis_offset_for_column(
         CrossAxisAlignment::Stretch => Px(0),
     }
 }
-

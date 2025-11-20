@@ -32,9 +32,11 @@ impl BlurCommand {
 /// within a single dispatch sequence.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DualBlurCommand {
+    /// Ordered blur passes to execute.
     pub passes: [BlurCommand; 2],
 }
 
+/// Choose a downscale factor that balances quality and performance for a blur radius.
 pub fn downscale_factor_for_radius(radius: f32) -> u32 {
     if radius <= 6.0 {
         1
@@ -46,6 +48,7 @@ pub fn downscale_factor_for_radius(radius: f32) -> u32 {
 }
 
 impl DualBlurCommand {
+    /// Creates a dual-pass blur command with explicit passes.
     pub fn new(passes: [BlurCommand; 2]) -> Self {
         Self { passes }
     }
@@ -83,4 +86,3 @@ impl ComputeCommand for DualBlurCommand {
         BarrierRequirement::uniform_padding_local(Px(sampling_padding))
     }
 }
-

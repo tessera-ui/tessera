@@ -75,4 +75,3 @@ pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
         })
     }));
 }
-
