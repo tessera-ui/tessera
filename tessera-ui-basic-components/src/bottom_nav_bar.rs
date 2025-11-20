@@ -28,6 +28,11 @@ const ACTIVE_COLOR: Color = Color::from_rgb_u8(225, 235, 255);
 const INACTIVE_COLOR: Color = Color::WHITE;
 const ACTIVE_COLOR_SHADOW: Color = Color::from_rgba_u8(100, 115, 140, 100);
 
+type NavChildClosure = (
+    Box<dyn FnOnce() + Send + Sync>,
+    Arc<Mutex<Option<Box<dyn FnOnce() + Send + Sync>>>>,
+);
+
 fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
     Color {
         r: from.r + (to.r - from.r) * progress,
@@ -241,10 +246,7 @@ impl Default for BottomNavBarState {
 
 /// Scope passed to the closure for defining children of the BottomNavBar.
 pub struct BottomNavBarScope<'a> {
-    child_closures: &'a mut Vec<(
-        Box<dyn FnOnce() + Send + Sync>,
-        Arc<Mutex<Option<Box<dyn FnOnce() + Send + Sync>>>>,
-    )>,
+    child_closures: &'a mut Vec<NavChildClosure>,
 }
 
 impl<'a> BottomNavBarScope<'a> {

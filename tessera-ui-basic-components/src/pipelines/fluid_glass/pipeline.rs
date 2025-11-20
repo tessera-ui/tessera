@@ -46,6 +46,25 @@ struct PreparedGlassInstance {
     sdf_entry: Option<Arc<FluidGlassSdfCacheEntry>>,
 }
 
+struct InstanceBuildInput<'a> {
+    command: &'a FluidGlassCommand,
+    size: &'a PxSize,
+    start_pos: &'a PxPosition,
+    config: &'a wgpu::SurfaceConfiguration,
+    clip_rect: Option<PxRect>,
+    device: &'a wgpu::Device,
+    queue: &'a wgpu::Queue,
+}
+
+struct SdfGenerationInput<'a> {
+    device: &'a wgpu::Device,
+    queue: &'a wgpu::Queue,
+    size: (u32, u32),
+    corner_radii: Vec4,
+    shape_type: f32,
+    g2_k_value: f32,
+}
+
 struct FluidGlassSdfGenerator {
     pipeline: wgpu::ComputePipeline,
     bind_group_layout: wgpu::BindGroupLayout,
@@ -122,16 +141,16 @@ impl FluidGlassSdfGenerator {
         }
     }
 
-    fn generate(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        width: u32,
-        height: u32,
-        corner_radii: Vec4,
-        shape_type: f32,
-        g2_k_value: f32,
-    ) -> FluidGlassSdfCacheEntry {
+    fn generate(&self, input: SdfGenerationInput<'_>) -> FluidGlassSdfCacheEntry {
+        let SdfGenerationInput {
+            device,
+            queue,
+            size,
+            corner_radii,
+            shape_type,
+            g2_k_value,
+        } = input;
+        let (width, height) = size;
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Fluid Glass Cached SDF Texture"),
             size: wgpu::Extent3d {
@@ -491,16 +510,16 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
 }
 
 impl FluidGlassPipeline {
-    fn build_instance(
-        &mut self,
-        command: &FluidGlassCommand,
-        size: &PxSize,
-        start_pos: &PxPosition,
-        config: &wgpu::SurfaceConfiguration,
-        clip_rect: Option<PxRect>,
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) -> PreparedGlassInstance {
+    fn build_instance(&mut self, input: InstanceBuildInput<'_>) -> PreparedGlassInstance {
+        let InstanceBuildInput {
+            command,
+            size,
+            start_pos,
+            config,
+            clip_rect,
+            device: gpu,
+            queue,
+        } = input;
         let args = &command.args;
         let screen_w = config.width as f32;
         let screen_h = config.height as f32;
@@ -625,7 +644,15 @@ impl FluidGlassPipeline {
         let mut instances = commands
             .iter()
             .map(|(cmd, size, pos)| {
-                self.build_instance(cmd, size, pos, config, clip_rect, gpu, queue)
+                self.build_instance(InstanceBuildInput {
+                    command: cmd,
+                    size,
+                    start_pos: pos,
+                    config,
+                    clip_rect,
+                    device: gpu,
+                    queue,
+                })
             })
             .collect::<Vec<_>>();
         Self::enforce_instance_limit(&mut instances);
@@ -682,15 +709,14 @@ impl FluidGlassPipeline {
 
         // Only cache if SDF has been requested frequently enough
         if tracker.hit_count >= SDF_CACHE_HEAT_THRESHOLD {
-            let entry = Arc::new(self.sdf_generator.generate(
-                gpu,
+            let entry = Arc::new(self.sdf_generator.generate(SdfGenerationInput {
+                device: gpu,
                 queue,
-                width,
-                height,
+                size: (width, height),
                 corner_radii,
                 shape_type,
                 g2_k_value,
-            ));
+            }));
 
             self.sdf_cache.put(key, entry.clone());
             Some(entry)

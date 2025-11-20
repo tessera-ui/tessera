@@ -73,8 +73,10 @@ pub fn load_image_vector_from_source(
 ) -> Result<ImageVectorData, ImageVectorLoadError> {
     let (bytes, resources_dir) = read_source_bytes(source)?;
 
-    let mut options = usvg::Options::default();
-    options.resources_dir = resources_dir;
+    let options = usvg::Options {
+        resources_dir,
+        ..Default::default()
+    };
     let tree = Tree::from_data(&bytes, &options)?;
 
     build_vector_data(&tree)

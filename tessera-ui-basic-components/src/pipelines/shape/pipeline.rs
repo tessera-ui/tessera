@@ -38,6 +38,8 @@ const CACHE_HEAT_THRESHOLD: u32 = 3;
 /// Number of frames to keep heat tracking data before cleanup.
 const HEAT_TRACKING_WINDOW: u32 = 10;
 
+type CachedInstanceBatch = Option<(Arc<ShapeCacheEntry>, Vec<(PxPosition, PxSize)>)>;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
@@ -633,7 +635,7 @@ impl ShapePipeline {
         gpu_queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         render_pass: &mut wgpu::RenderPass<'_>,
-        pending: &mut Option<(Arc<ShapeCacheEntry>, Vec<(PxPosition, PxSize)>)>,
+        pending: &mut CachedInstanceBatch,
     ) {
         if let Some((entry, instances)) = pending.take() {
             self.draw_cached_run(gpu, gpu_queue, config, render_pass, entry, &instances);
@@ -977,8 +979,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         }
 
         let mut pending_uncached: Vec<usize> = Vec::new();
-        let mut pending_cached_run: Option<(Arc<ShapeCacheEntry>, Vec<(PxPosition, PxSize)>)> =
-            None;
+        let mut pending_cached_run: CachedInstanceBatch = None;
 
         for (idx, ((_, size, position), cache_entry)) in context
             .commands

@@ -248,15 +248,19 @@ fn measure_unweighted_children_for_column(
 }
 
 /// Measure weighted children by distributing the remaining height proportionally.
+struct WeightedColumnMeasureContext<'a> {
+    input: &'a MeasureInput<'a>,
+    children_sizes: &'a mut [Option<ComputedData>],
+    max_child_width: &'a mut Px,
+    column_effective_constraint: &'a Constraint,
+    child_weights: &'a [Option<f32>],
+}
+
 fn measure_weighted_children_for_column(
-    input: &MeasureInput,
+    ctx: WeightedColumnMeasureContext<'_>,
     weighted_indices: &[usize],
-    children_sizes: &mut [Option<ComputedData>],
-    max_child_width: &mut Px,
     remaining_height: Px,
     total_weight: f32,
-    column_effective_constraint: &Constraint,
-    child_weights: &[Option<f32>],
 ) -> Result<(), MeasurementError> {
     if total_weight <= 0.0 {
         return Ok(());
@@ -265,25 +269,25 @@ fn measure_weighted_children_for_column(
     let children_to_measure: Vec<_> = weighted_indices
         .iter()
         .map(|&child_idx| {
-            let child_weight = child_weights[child_idx].unwrap_or(0.0);
+            let child_weight = ctx.child_weights[child_idx].unwrap_or(0.0);
             let allocated_height =
                 Px((remaining_height.0 as f32 * (child_weight / total_weight)) as i32);
-            let child_id = input.children_ids[child_idx];
+            let child_id = ctx.input.children_ids[child_idx];
             let parent_offered_constraint_for_child = Constraint::new(
-                column_effective_constraint.width,
+                ctx.column_effective_constraint.width,
                 DimensionValue::Fixed(allocated_height),
             );
             (child_id, parent_offered_constraint_for_child)
         })
         .collect();
 
-    let children_results = input.measure_children(children_to_measure)?;
+    let children_results = ctx.input.measure_children(children_to_measure)?;
 
     for &child_idx in weighted_indices {
-        let child_id = input.children_ids[child_idx];
+        let child_id = ctx.input.children_ids[child_idx];
         if let Some(child_result) = children_results.get(&child_id) {
-            children_sizes[child_idx] = Some(*child_result);
-            *max_child_width = (*max_child_width).max(child_result.width);
+            ctx.children_sizes[child_idx] = Some(*child_result);
+            *ctx.max_child_width = (*ctx.max_child_width).max(child_result.width);
         }
     }
 
@@ -382,14 +386,16 @@ fn measure_weighted_column(
         (available_height_for_children - total_height_of_unweighted_children).max(Px(0));
 
     measure_weighted_children_for_column(
-        input,
+        WeightedColumnMeasureContext {
+            input,
+            children_sizes,
+            max_child_width,
+            column_effective_constraint,
+            child_weights,
+        },
         &weighted_children_indices,
-        children_sizes,
-        max_child_width,
         remaining_height_for_weighted_children,
         total_weight_sum,
-        column_effective_constraint,
-        child_weights,
     )?;
 
     let total_measured_children_height: Px = children_sizes
