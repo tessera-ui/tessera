@@ -208,6 +208,22 @@ pub struct DrawContext<'a, 'b, 'c, T> {
     pub clip_rect: Option<PxRect>,
 }
 
+/// Type-erased context used for dispatching draw pipelines.
+pub struct ErasedDrawContext<'a, 'b> {
+    /// WGPU device used for pipeline resource access.
+    pub device: &'a wgpu::Device,
+    /// WGPU queue used for submissions.
+    pub queue: &'a wgpu::Queue,
+    /// Current surface configuration for the render target.
+    pub config: &'a wgpu::SurfaceConfiguration,
+    /// Active render pass that receives draw calls.
+    pub render_pass: &'a mut wgpu::RenderPass<'b>,
+    /// Scene texture view available for sampling.
+    pub scene_texture_view: &'a wgpu::TextureView,
+    /// Optional clipping rectangle applied to the submission.
+    pub clip_rect: Option<PxRect>,
+}
+
 /// Core trait for implementing custom graphics rendering pipelines.
 ///
 /// This trait defines the interface for rendering pipelines that process specific types
@@ -374,13 +390,8 @@ pub(crate) trait ErasedDrawablePipeline {
     /// Draws a batch of commands with type-erased dispatch.
     fn draw_erased(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
+        context: ErasedDrawContext<'_, '_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
-        scene_texture_view: &wgpu::TextureView,
-        clip_rect: Option<PxRect>,
     ) -> bool;
 }
 
@@ -410,17 +421,21 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
 
     fn draw_erased(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
+        context: ErasedDrawContext<'_, '_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
-        scene_texture_view: &wgpu::TextureView,
-        clip_rect: Option<PxRect>,
     ) -> bool {
         if commands.is_empty() {
             return true;
         }
+
+        let ErasedDrawContext {
+            device,
+            queue,
+            config,
+            render_pass,
+            scene_texture_view,
+            clip_rect,
+        } = context;
 
         if commands[0].0.as_any().is::<T>() {
             let typed_commands: Vec<(&T, PxSize, PxPosition)> = commands
@@ -628,13 +643,8 @@ impl PipelineRegistry {
 
     pub(crate) fn dispatch(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
+        context: ErasedDrawContext<'_, '_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
-        scene_texture_view: &wgpu::TextureView,
-        clip_rect: Option<PxRect>,
     ) {
         if commands.is_empty() {
             return;
@@ -642,15 +652,7 @@ impl PipelineRegistry {
 
         let command_type_id = commands[0].0.as_any().type_id();
         if let Some(pipeline) = self.pipelines.get_mut(&command_type_id) {
-            if !pipeline.draw_erased(
-                device,
-                queue,
-                config,
-                render_pass,
-                commands,
-                scene_texture_view,
-                clip_rect,
-            ) {
+            if !pipeline.draw_erased(context, commands) {
                 panic!(
                     "FATAL: A command in a batch has a different type than the first one. This should not happen."
                 )

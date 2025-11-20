@@ -234,6 +234,12 @@ use winit::platform::android::{
     ActiveEventLoopExtAndroid, EventLoopBuilderExtAndroid, activity::AndroidApp,
 };
 
+type RenderComputationOutput = (
+    Vec<(Command, TypeId, PxSize, PxPosition)>,
+    WindowRequests,
+    std::time::Duration,
+);
+
 /// Configuration for the Tessera runtime and renderer.
 ///
 /// This struct allows you to customize various aspects of the renderer's behavior,
@@ -693,11 +699,7 @@ Fps: {:.2}
     fn compute_draw_commands<'a>(
         args: &mut RenderFrameArgs<'a>,
         screen_size: PxSize,
-    ) -> (
-        Vec<(Command, TypeId, PxSize, PxPosition)>,
-        WindowRequests,
-        std::time::Duration,
-    ) {
+    ) -> RenderComputationOutput {
         let draw_timer = Instant::now();
         debug!("Computing draw commands...");
         let cursor_position = args.cursor_state.position();

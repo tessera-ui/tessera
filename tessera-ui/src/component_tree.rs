@@ -21,6 +21,12 @@ pub use node::{
     WindowRequests, measure_node, measure_nodes, place_node,
 };
 
+#[derive(Debug, Clone, Copy)]
+struct ScreenSize {
+    width: i32,
+    height: i32,
+}
+
 /// Parameters for the compute function
 pub struct ComputeParams<'a> {
     pub screen_size: PxSize,
@@ -307,8 +313,10 @@ fn compute_draw_commands_parallel(
         node_id,
         tree,
         metadatas,
-        screen_width,
-        screen_height,
+        ScreenSize {
+            width: screen_width,
+            height: screen_height,
+        },
         None,
     )
 }
@@ -320,8 +328,7 @@ fn compute_draw_commands_inner_parallel(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
-    screen_width: i32,
-    screen_height: i32,
+    screen_size: ScreenSize,
     clip_rect: Option<PxRect>,
 ) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
     let mut local_commands = Vec::new();
@@ -384,8 +391,8 @@ fn compute_draw_commands_inner_parallel(
     let screen_rect = PxRect {
         x: Px(0),
         y: Px(0),
-        width: Px(screen_width),
-        height: Px(screen_height),
+        width: Px(screen_size.width),
+        height: Px(screen_size.height),
     };
 
     // Only drain commands if the node is visible.
@@ -420,8 +427,7 @@ fn compute_draw_commands_inner_parallel(
                 child,
                 tree,
                 metadatas,
-                screen_width,
-                screen_height,
+                screen_size,
                 clip_rect,
             ))
         })

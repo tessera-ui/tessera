@@ -19,8 +19,8 @@ use crate::{
 };
 
 use super::{
-    compute::{ComputePipelineRegistry, ErasedComputeBatchItem},
-    drawer::Drawer,
+    compute::{ComputePipelineRegistry, ErasedComputeBatchItem, pipeline::ErasedDispatchContext},
+    drawer::{Drawer, ErasedDrawContext},
 };
 
 // WGPU context for ping-pong operations
@@ -29,6 +29,13 @@ struct WgpuContext<'a> {
     gpu: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
+}
+
+struct BlitResources<'a> {
+    bind_group_layout: &'a wgpu::BindGroupLayout,
+    sampler: &'a wgpu::Sampler,
+    blit_pipeline: &'a wgpu::RenderPipeline,
+    compute_blit_pipeline: &'a wgpu::RenderPipeline,
 }
 
 // Parameters for render_current_pass function
@@ -44,6 +51,12 @@ struct RenderCurrentPassParams<'a> {
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
     clip_stack: &'a mut SmallVec<[PxRect; 16]>,
+}
+
+struct SubmitResources<'a> {
+    gpu: &'a wgpu::Device,
+    queue: &'a wgpu::Queue,
+    config: &'a wgpu::SurfaceConfiguration,
 }
 
 // Parameters for do_compute function
@@ -539,13 +552,10 @@ impl WgpuApp {
         compute_commands: Vec<PendingComputeCommand>,
         compute_resources: ComputeResources<'_>,
         copy_rect: PxRect,
-        blit_bind_group_layout: &wgpu::BindGroupLayout,
-        blit_sampler: &wgpu::Sampler,
-        blit_pipeline: &wgpu::RenderPipeline,
-        compute_blit_pipeline: &wgpu::RenderPipeline,
+        blit_resources: BlitResources<'_>,
     ) -> wgpu::TextureView {
         let blit_bind_group = context.gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: blit_bind_group_layout,
+            layout: blit_resources.bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -553,7 +563,7 @@ impl WgpuApp {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(blit_sampler),
+                    resource: wgpu::BindingResource::Sampler(blit_resources.sampler),
                 },
             ],
             label: Some("Blit Bind Group"),
@@ -576,7 +586,7 @@ impl WgpuApp {
                 ..Default::default()
             });
 
-        rpass.set_pipeline(blit_pipeline);
+        rpass.set_pipeline(blit_resources.blit_pipeline);
         rpass.set_bind_group(0, &blit_bind_group, &[]);
         // Set a scissor rect to ensure we only write to the required region.
         rpass.set_scissor_rect(
@@ -603,9 +613,9 @@ impl WgpuApp {
                 scene_view: offscreen_texture,
                 target_a: compute_resources.compute_target_a,
                 target_b: compute_resources.compute_target_b,
-                blit_bind_group_layout,
-                blit_sampler,
-                compute_blit_pipeline,
+                blit_bind_group_layout: blit_resources.bind_group_layout,
+                blit_sampler: blit_resources.sampler,
+                compute_blit_pipeline: blit_resources.compute_blit_pipeline,
             })
         } else {
             // Return an owned clone so caller does not keep a borrow on read_target
@@ -736,10 +746,12 @@ impl WgpuApp {
                                 compute_target_b: &self.compute_target_b,
                             },
                             combined_rect,
-                            &self.blit_bind_group_layout,
-                            &self.blit_sampler,
-                            &self.blit_pipeline,
-                            &self.compute_blit_pipeline,
+                            BlitResources {
+                                bind_group_layout: &self.blit_bind_group_layout,
+                                sampler: &self.blit_sampler,
+                                blit_pipeline: &self.blit_pipeline,
+                                compute_blit_pipeline: &self.compute_blit_pipeline,
+                            },
                         );
                         scene_texture_view = final_view_after_compute;
                     }
@@ -846,10 +858,12 @@ impl WgpuApp {
                             compute_target_b: &self.compute_target_b,
                         },
                         combined_rect,
-                        &self.blit_bind_group_layout,
-                        &self.blit_sampler,
-                        &self.blit_pipeline,
-                        &self.compute_blit_pipeline,
+                        BlitResources {
+                            bind_group_layout: &self.blit_bind_group_layout,
+                            sampler: &self.blit_sampler,
+                            blit_pipeline: &self.blit_pipeline,
+                            compute_blit_pipeline: &self.compute_blit_pipeline,
+                        },
                     );
                     scene_texture_view = final_view_after_compute;
                 }
@@ -1001,14 +1015,16 @@ impl WgpuApp {
                     });
 
                 params.compute_pipeline_registry.dispatch_erased(
-                    params.gpu,
-                    params.queue,
-                    params.config,
-                    &mut cpass,
+                    ErasedDispatchContext {
+                        device: params.gpu,
+                        queue: params.queue,
+                        config: params.config,
+                        compute_pass: &mut cpass,
+                        resource_manager: params.resource_manager,
+                        input_view: &read_view,
+                        output_view: write_target,
+                    },
                     &batch_items,
-                    params.resource_manager,
-                    &read_view,
-                    write_target,
                 );
             }
 
@@ -1223,12 +1239,14 @@ fn render_current_pass(params: RenderCurrentPassParams<'_>) {
                     submit_buffered_commands(
                         &mut rpass,
                         params.drawer,
-                        params.gpu,
-                        params.queue,
-                        params.config,
+                        SubmitResources {
+                            gpu: params.gpu,
+                            queue: params.queue,
+                            config: params.config,
+                        },
                         &mut buffer,
                         params.scene_texture_view,
-                        params.clip_stack,
+                        params.clip_stack.as_slice(),
                         &mut current_batch_draw_rect,
                     );
                     last_command_type_id = None; // Reset batch type after flush
@@ -1253,9 +1271,11 @@ fn render_current_pass(params: RenderCurrentPassParams<'_>) {
             submit_buffered_commands(
                 &mut rpass,
                 params.drawer,
-                params.gpu,
-                params.queue,
-                params.config,
+                SubmitResources {
+                    gpu: params.gpu,
+                    queue: params.queue,
+                    config: params.config,
+                },
                 &mut buffer,
                 params.scene_texture_view,
                 params.clip_stack.as_slice(),
@@ -1274,9 +1294,11 @@ fn render_current_pass(params: RenderCurrentPassParams<'_>) {
         submit_buffered_commands(
             &mut rpass,
             params.drawer,
-            params.gpu,
-            params.queue,
-            params.config,
+            SubmitResources {
+                gpu: params.gpu,
+                queue: params.queue,
+                config: params.config,
+            },
             &mut buffer,
             params.scene_texture_view,
             params.clip_stack.as_slice(),
@@ -1296,9 +1318,7 @@ fn render_current_pass(params: RenderCurrentPassParams<'_>) {
 fn submit_buffered_commands(
     rpass: &mut wgpu::RenderPass<'_>,
     drawer: &mut Drawer,
-    gpu: &wgpu::Device,
-    queue: &wgpu::Queue,
-    config: &wgpu::SurfaceConfiguration,
+    resources: SubmitResources<'_>,
     buffer: &mut Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)>,
     scene_texture_view: &wgpu::TextureView,
     clip_stack: &[PxRect],
@@ -1324,13 +1344,15 @@ fn submit_buffered_commands(
     set_scissor_rect_from_pxrect(rpass, rect);
 
     drawer.submit(
-        gpu,
-        queue,
-        config,
-        rpass,
+        ErasedDrawContext {
+            device: resources.gpu,
+            queue: resources.queue,
+            config: resources.config,
+            render_pass: rpass,
+            scene_texture_view,
+            clip_rect: current_clip_rect,
+        },
         &commands,
-        scene_texture_view,
-        current_clip_rect,
     );
     *current_batch_draw_rect = None;
 }

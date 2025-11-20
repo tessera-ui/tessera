@@ -6,13 +6,10 @@
 pub mod command;
 pub mod pipeline;
 
-use crate::{
-    PxPosition,
-    px::{PxRect, PxSize},
-};
+use crate::{PxPosition, px::PxSize};
 
 pub use command::DrawCommand;
-pub use pipeline::{DrawablePipeline, PipelineRegistry};
+pub use pipeline::{DrawablePipeline, ErasedDrawContext, PipelineRegistry};
 
 /// Drawer manages graphics pipelines and processes draw commands.
 ///
@@ -89,22 +86,9 @@ impl Drawer {
     /// * `compute_texture_view` - Compute pipeline output texture
     pub fn submit(
         &mut self,
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        render_pass: &mut wgpu::RenderPass<'_>,
+        context: ErasedDrawContext<'_, '_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
-        scene_texture_view: &wgpu::TextureView,
-        clip_rect: Option<PxRect>,
     ) {
-        self.pipeline_registry.dispatch(
-            gpu,
-            queue,
-            config,
-            render_pass,
-            commands,
-            scene_texture_view,
-            clip_rect,
-        );
+        self.pipeline_registry.dispatch(context, commands);
     }
 }

@@ -233,6 +233,17 @@ pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
     pub output_view: &'a wgpu::TextureView,
 }
 
+/// Type-erased context used when dispatching compute pipelines.
+pub(crate) struct ErasedDispatchContext<'a, 'b> {
+    pub device: &'a wgpu::Device,
+    pub queue: &'a wgpu::Queue,
+    pub config: &'a wgpu::SurfaceConfiguration,
+    pub compute_pass: &'a mut wgpu::ComputePass<'b>,
+    pub resource_manager: &'a mut ComputeResourceManager,
+    pub input_view: &'a wgpu::TextureView,
+    pub output_view: &'a wgpu::TextureView,
+}
+
 /// Core trait for implementing GPU compute pipelines.
 ///
 /// This trait defines the interface for compute pipelines that process specific types
@@ -352,14 +363,8 @@ pub(crate) trait ErasedComputablePipeline: Send + Sync {
     /// Dispatches a type-erased compute command.
     fn dispatch_erased(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        compute_pass: &mut wgpu::ComputePass<'_>,
+        context: ErasedDispatchContext<'_, '_>,
         items: &[ErasedComputeBatchItem<'_>],
-        resource_manager: &mut ComputeResourceManager,
-        input_view: &wgpu::TextureView,
-        output_view: &wgpu::TextureView,
     );
 }
 
@@ -374,14 +379,8 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
 {
     fn dispatch_erased(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        compute_pass: &mut wgpu::ComputePass<'_>,
+        context: ErasedDispatchContext<'_, '_>,
         items: &[ErasedComputeBatchItem<'_>],
-        resource_manager: &mut ComputeResourceManager,
-        input_view: &wgpu::TextureView,
-        output_view: &wgpu::TextureView,
     ) {
         if items.is_empty() {
             return;
@@ -401,14 +400,14 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
         }
 
         self.pipeline.dispatch(&mut ComputeContext {
-            device,
-            queue,
-            config,
-            compute_pass,
+            device: context.device,
+            queue: context.queue,
+            config: context.config,
+            compute_pass: context.compute_pass,
             items: &typed_items,
-            resource_manager,
-            input_view,
-            output_view,
+            resource_manager: context.resource_manager,
+            input_view: context.input_view,
+            output_view: context.output_view,
         });
     }
 }
@@ -522,14 +521,8 @@ impl ComputePipelineRegistry {
     /// Dispatches one or more commands to their corresponding registered pipeline.
     pub(crate) fn dispatch_erased(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        compute_pass: &mut wgpu::ComputePass<'_>,
+        context: ErasedDispatchContext<'_, '_>,
         items: &[ErasedComputeBatchItem<'_>],
-        resource_manager: &mut ComputeResourceManager,
-        input_view: &wgpu::TextureView,
-        output_view: &wgpu::TextureView,
     ) {
         if items.is_empty() {
             return;
@@ -537,16 +530,7 @@ impl ComputePipelineRegistry {
 
         let command_type_id = AsAny::as_any(items[0].command).type_id();
         if let Some(pipeline) = self.pipelines.get_mut(&command_type_id) {
-            pipeline.dispatch_erased(
-                device,
-                queue,
-                config,
-                compute_pass,
-                items,
-                resource_manager,
-                input_view,
-                output_view,
-            );
+            pipeline.dispatch_erased(context, items);
         } else {
             panic!(
                 "No pipeline found for command {:?}",
