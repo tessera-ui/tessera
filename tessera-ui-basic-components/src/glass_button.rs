@@ -84,8 +84,7 @@ impl GlassButtonArgs {
             .on_click(on_click)
             .tint_color(Color::new(0.2, 0.5, 0.8, 0.2)) // Blue tint
             .border(GlassBorder::new(Dp(1.0).into()))
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 
     /// Create a secondary glass button with gray tint
@@ -94,8 +93,7 @@ impl GlassButtonArgs {
             .on_click(on_click)
             .tint_color(Color::new(0.6, 0.6, 0.6, 0.2)) // Gray tint
             .border(GlassBorder::new(Dp(1.0).into()))
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 
     /// Create a success glass button with green tint
@@ -104,8 +102,7 @@ impl GlassButtonArgs {
             .on_click(on_click)
             .tint_color(Color::new(0.1, 0.7, 0.3, 0.2)) // Green tint
             .border(GlassBorder::new(Dp(1.0).into()))
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 
     /// Create a danger glass button with red tint
@@ -114,8 +111,7 @@ impl GlassButtonArgs {
             .on_click(on_click)
             .tint_color(Color::new(0.8, 0.2, 0.2, 0.2)) // Red tint
             .border(GlassBorder::new(Dp(1.0).into()))
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 }
 
@@ -153,7 +149,7 @@ impl GlassButtonArgs {
 ///         ..Default::default()
 ///     },
 ///     ripple_state,
-///     || text(TextArgsBuilder::default().text("Click Me".to_string()).build().unwrap()),
+///     || text(TextArgsBuilder::default().text("Click Me".to_string()).build().expect("builder construction failed")),
 /// );
 /// ```
 #[tessera]
@@ -213,7 +209,9 @@ pub fn glass_button(
         glass_args = glass_args.accessibility_focusable(true);
     }
 
-    let glass_args = glass_args.build().unwrap();
+    let glass_args = glass_args.build().expect("builder construction failed");
 
     fluid_glass(glass_args, Some(ripple_state), child);
 }
+
+

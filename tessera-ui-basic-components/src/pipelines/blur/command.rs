@@ -83,3 +83,4 @@ impl ComputeCommand for DualBlurCommand {
         BarrierRequirement::uniform_padding_local(Px(sampling_padding))
     }
 }
+

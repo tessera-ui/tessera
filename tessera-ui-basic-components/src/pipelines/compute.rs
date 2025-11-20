@@ -22,3 +22,4 @@ fn register_contrast(app: &mut WgpuApp) {
     let pipeline = contrast::ContrastPipeline::new(&app.gpu, app.pipeline_cache.as_ref());
     app.register_compute_pipeline(pipeline);
 }
+

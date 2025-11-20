@@ -61,7 +61,7 @@ impl std::fmt::Debug for CheckmarkArgs {
 
 impl Default for CheckmarkArgs {
     fn default() -> Self {
-        CheckmarkArgsBuilder::default().build().unwrap()
+        CheckmarkArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -110,3 +110,4 @@ pub fn checkmark(args: impl Into<CheckmarkArgs>) {
         })
     }));
 }
+

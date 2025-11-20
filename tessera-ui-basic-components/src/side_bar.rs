@@ -201,8 +201,7 @@ fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) 
                 g2_k_value: 3.0,
             })
             .noise_amount(0.0)
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         || {},
     );
@@ -224,8 +223,7 @@ fn render_material_scrim(args: &SideBarProviderArgs, progress: f32, is_open: boo
                 max: None,
             })
             .block_input(true)
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         || {},
     );
@@ -391,8 +389,7 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                     .blur_radius(Dp(10.0))
                     .padding(Dp(16.0))
                     .block_input(true)
-                    .build()
-                    .unwrap(),
+                    .build().expect("builder construction failed"),
                 None,
                 content,
             );
@@ -415,11 +412,12 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                         g2_k_value: 3.0,
                     })
                     .block_input(true)
-                    .build()
-                    .unwrap(),
+                    .build().expect("builder construction failed"),
                 None,
                 content,
             );
         }
     }
 }
+
+

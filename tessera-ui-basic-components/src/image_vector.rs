@@ -439,3 +439,4 @@ impl ImageVectorVertex {
         }
     }
 }
+

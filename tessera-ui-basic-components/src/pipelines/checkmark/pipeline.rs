@@ -303,3 +303,4 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
         }
     }
 }
+

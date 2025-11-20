@@ -159,7 +159,7 @@ impl FluidGlassArgsBuilder {
 // Manual implementation of Default because derive_builder's default conflicts with our specific defaults
 impl Default for FluidGlassArgs {
     fn default() -> Self {
-        FluidGlassArgsBuilder::default().build().unwrap()
+        FluidGlassArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -302,7 +302,7 @@ fn apply_fluid_glass_accessibility(
 /// };
 ///
 /// fluid_glass(FluidGlassArgs::default(), None, || {
-///     text(TextArgsBuilder::default().text("Content on glass".to_string()).build().unwrap());
+///     text(TextArgsBuilder::default().text("Content on glass".to_string()).build().expect("builder construction failed"));
 /// });
 /// ```
 #[tessera]
@@ -447,3 +447,4 @@ pub fn fluid_glass(
         }));
     }
 }
+

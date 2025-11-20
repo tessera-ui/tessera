@@ -184,8 +184,7 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
                     g2_k_value: 2.0,
                 }
             })
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         || {},
     );
@@ -208,8 +207,7 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
                 }
             })
             .style(color.into())
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         || {},
     );
@@ -232,8 +230,7 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
                     g2_k_value: 2.0,
                 }
             })
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         || {},
     );
@@ -256,8 +253,7 @@ fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
                 }
             })
             .style(color.into())
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         || {},
     );
@@ -771,3 +767,5 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
         );
     }));
 }
+
+

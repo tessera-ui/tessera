@@ -145,7 +145,7 @@ pub struct SwitchArgs {
 
 impl Default for SwitchArgs {
     fn default() -> Self {
-        SwitchArgsBuilder::default().build().unwrap()
+        SwitchArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -296,8 +296,7 @@ pub fn switch(args: impl Into<SwitchArgs>, state: SwitchState) {
             .height(DimensionValue::Fixed(thumb_size.to_px()))
             .style(args.thumb_color.into())
             .shape(Shape::Ellipse)
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         || {},
     );
@@ -366,3 +365,5 @@ pub fn switch(args: impl Into<SwitchArgs>, state: SwitchState) {
         })
     }));
 }
+
+

@@ -75,7 +75,7 @@ pub struct LazyColumnArgs {
 
 impl Default for LazyColumnArgs {
     fn default() -> Self {
-        LazyColumnArgsBuilder::default().build().unwrap()
+        LazyColumnArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -102,7 +102,7 @@ pub struct LazyRowArgs {
 
 impl Default for LazyRowArgs {
     fn default() -> Self {
-        LazyRowArgsBuilder::default().build().unwrap()
+        LazyRowArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -188,7 +188,7 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 /// lazy_column(LazyColumnArgs::default(), list_state, |scope| {
 ///     scope.items(1000, |i| {
 ///         let text_content = format!("Item #{}", i);
-///         text(TextArgsBuilder::default().text(text_content).build().unwrap());
+///         text(TextArgsBuilder::default().text(text_content).build().expect("builder construction failed"));
 ///     });
 /// });
 /// ```
@@ -252,7 +252,7 @@ where
 /// lazy_row(LazyRowArgs::default(), list_state, |scope| {
 ///     scope.items(100, |i| {
 ///         let text_content = format!("Item {}", i);
-///         text(TextArgsBuilder::default().text(text_content).build().unwrap());
+///         text(TextArgsBuilder::default().text(text_content).build().expect("builder construction failed"));
 ///     });
 /// });
 /// ```
@@ -856,3 +856,4 @@ fn shrink_dimension_max(dim: DimensionValue, amount: Px) -> DimensionValue {
 fn saturating_sub_px(lhs: Px, rhs: Px) -> Px {
     Px(lhs.0.saturating_sub(rhs.0))
 }
+

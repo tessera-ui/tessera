@@ -91,7 +91,7 @@ where
             .shadow(ShadowProps::default())
             .block_input(true)
             .build()
-            .unwrap(),
+            .expect("SurfaceArgsBuilder failed with required fields set"),
         None,
         move || {
             row(
@@ -99,7 +99,7 @@ where
                     .width(DimensionValue::FILLED)
                     .main_axis_alignment(MainAxisAlignment::SpaceAround)
                     .build()
-                    .unwrap(),
+                    .expect("RowArgsBuilder failed with required fields set"),
                 move |row_scope| {
                     for (index, (child_content, on_click)) in child_closures.into_iter().enumerate()
                     {
@@ -130,7 +130,9 @@ where
                                 .on_click(Arc::new(move || {
                                     if index != selected {
                                         state_clone.set_selected(index);
-                                        on_click.lock().take().unwrap()();
+                                        if let Some(callback) = on_click.lock().take() {
+                                            callback();
+                                        }
                                     }
                                 }))
                                 .shadow(ShadowProps {
@@ -138,7 +140,7 @@ where
                                     ..Default::default()
                                 })
                                 .build()
-                                .unwrap();
+                                .expect("ButtonArgsBuilder failed with required fields set");
 
                             button(button_args, ripple_state, || {
                                 child_content();
@@ -268,3 +270,4 @@ impl<'a> BottomNavBarScope<'a> {
         ));
     }
 }
+

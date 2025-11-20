@@ -77,8 +77,7 @@ impl From<ImageData> for ImageArgs {
     fn from(data: ImageData) -> Self {
         ImageArgsBuilder::default()
             .data(Arc::new(data))
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 }
 
@@ -167,3 +166,5 @@ pub fn image(args: impl Into<ImageArgs>) {
         Ok(ComputedData { width, height })
     }));
 }
+
+

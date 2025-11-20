@@ -25,7 +25,9 @@ pub struct BoxedArgs {
 
 impl Default for BoxedArgs {
     fn default() -> Self {
-        BoxedArgsBuilder::default().build().unwrap()
+        BoxedArgsBuilder::default()
+            .build()
+            .expect("BoxedArgsBuilder default build should succeed")
     }
 }
 
@@ -132,11 +134,11 @@ fn compute_child_offset(
 /// boxed(BoxedArgs::default(), |scope| {
 ///     // Add a child that will be in the background (rendered first).
 ///     scope.child(|| {
-///         text(TextArgsBuilder::default().text("Background".to_string()).build().unwrap());
+///         text(TextArgsBuilder::default().text("Background".to_string()).build().expect("builder construction failed"));
 ///     });
 ///     // Add another child aligned to the center, which will appear on top.
 ///     scope.child_with_alignment(Alignment::Center, || {
-///         text(TextArgsBuilder::default().text("Foreground".to_string()).build().unwrap());
+///         text(TextArgsBuilder::default().text("Foreground".to_string()).build().expect("builder construction failed"));
 ///     });
 /// });
 /// ```
@@ -222,3 +224,4 @@ where
         child_closure();
     }
 }
+

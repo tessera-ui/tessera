@@ -83,8 +83,7 @@ fn render_track_and_fill(args: GlassProgressArgs) {
             .shape(capsule_shape_for_height(args.height))
             .border(GlassBorder::new(args.track_border_width.into()))
             .padding(args.track_border_width)
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         move || {
             // Internal progress fill - capsule shape
@@ -101,8 +100,7 @@ fn render_track_and_fill(args: GlassProgressArgs) {
                             effective_height,
                         )))
                         .refraction_amount(0.0)
-                        .build()
-                        .unwrap(),
+                        .build().expect("builder construction failed"),
                     None,
                     || {},
                 );
@@ -164,3 +162,5 @@ pub fn glass_progress(args: impl Into<GlassProgressArgs>) {
         })
     }));
 }
+
+

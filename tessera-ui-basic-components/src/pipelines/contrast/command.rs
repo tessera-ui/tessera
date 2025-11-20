@@ -40,3 +40,4 @@ impl ComputeCommand for ContrastCommand {
         BarrierRequirement::ZERO_PADDING_LOCAL
     }
 }
+

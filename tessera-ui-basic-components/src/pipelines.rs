@@ -24,3 +24,4 @@ pub fn register_pipelines(app: &mut tessera_ui::renderer::WgpuApp) {
     draw::register(app);
     compute::register(app);
 }
+

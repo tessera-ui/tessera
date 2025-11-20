@@ -178,8 +178,7 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                         g2_k_value: 3.0,
                     })
                     .noise_amount(0.0)
-                    .build()
-                    .unwrap(),
+                    .build().expect("builder construction failed"),
                 None,
                 || {},
             );
@@ -199,8 +198,7 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                         max: None,
                     })
                     .block_input(true)
-                    .build()
-                    .unwrap(),
+                    .build().expect("builder construction failed"),
                 None,
                 || {},
             );
@@ -235,8 +233,7 @@ fn dialog_content_wrapper(
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .alignment(Alignment::Center)
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         |scope| {
             scope.child(move || match style {
                 DialogStyle::Glass => {
@@ -254,8 +251,7 @@ fn dialog_content_wrapper(
                             .refraction_amount(32.0 * alpha)
                             .block_input(true)
                             .padding(padding)
-                            .build()
-                            .unwrap(),
+                            .build().expect("builder construction failed"),
                         None,
                         content,
                     );
@@ -277,8 +273,7 @@ fn dialog_content_wrapper(
                             })
                             .padding(padding)
                             .block_input(true)
-                            .build()
-                            .unwrap(),
+                            .build().expect("builder construction failed"),
                         None,
                         content,
                     );
@@ -353,3 +348,5 @@ pub fn dialog_provider(
         });
     }
 }
+
+

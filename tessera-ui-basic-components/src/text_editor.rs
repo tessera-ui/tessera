@@ -82,7 +82,7 @@ pub struct TextEditorArgs {
 
 impl Default for TextEditorArgs {
     fn default() -> Self {
-        TextEditorArgsBuilder::default().build().unwrap()
+        TextEditorArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -478,7 +478,8 @@ fn create_surface_args(
     let style = if args.border_width.to_pixels_f32() > 0.0 {
         crate::surface::SurfaceStyle::FilledOutlined {
             fill_color: determine_background_color(args, state),
-            border_color: determine_border_color(args, state).unwrap(),
+            border_color: determine_border_color(args, state)
+                .expect("Border color should exist when border width is positive"),
             border_width: args.border_width,
         }
     } else {
@@ -493,8 +494,7 @@ fn create_surface_args(
         .padding(args.padding)
         .width(args.width)
         .height(args.height)
-        .build()
-        .unwrap()
+        .build().expect("builder construction failed")
 }
 
 /// Determine background color based on focus state
@@ -547,8 +547,7 @@ impl TextEditorArgs {
                 bottom_left: Dp(0.0),
                 g2_k_value: 3.0,
             })
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 
     /// Creates a text editor with an emphasized border for better visibility.
@@ -586,8 +585,7 @@ impl TextEditorArgs {
                 bottom_left: Dp(0.0),
                 g2_k_value: 3.0,
             })
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 }
 
@@ -798,3 +796,5 @@ fn apply_text_editor_accessibility(
 
     builder.focusable().commit();
 }
+
+

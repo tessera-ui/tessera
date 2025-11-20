@@ -205,7 +205,7 @@ pub struct TabsArgs {
 
 impl Default for TabsArgs {
     fn default() -> Self {
-        TabsArgsBuilder::default().build().unwrap()
+        TabsArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -296,16 +296,16 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
 /// let tabs_state = TabsState::new(0);
 ///
 /// tabs(
-///     TabsArgsBuilder::default().build().unwrap(),
+///     TabsArgsBuilder::default().build().expect("builder construction failed"),
 ///     tabs_state,
 ///     |scope| {
 ///         scope.child(
-///             || text(TextArgsBuilder::default().text("Tab 1".to_string()).build().unwrap()),
-///             || text(TextArgsBuilder::default().text("Content for Tab 1").build().unwrap())
+///             || text(TextArgsBuilder::default().text("Tab 1".to_string()).build().expect("builder construction failed")),
+///             || text(TextArgsBuilder::default().text("Content for Tab 1").build().expect("builder construction failed"))
 ///         );
 ///         scope.child(
-///             || text(TextArgsBuilder::default().text("Tab 2".to_string()).build().unwrap()),
-///             || text(TextArgsBuilder::default().text("Content for Tab 2").build().unwrap())
+///             || text(TextArgsBuilder::default().text("Tab 2".to_string()).build().expect("builder construction failed")),
+///             || text(TextArgsBuilder::default().text("Content for Tab 2").build().expect("builder construction failed"))
 ///         );
 ///     },
 /// );
@@ -377,8 +377,7 @@ where
                 })
                 .width(DimensionValue::FILLED)
                 .shape(shape)
-                .build()
-                .unwrap(),
+                .build().expect("builder construction failed"),
             ripple_state,
             child,
         );
@@ -525,3 +524,5 @@ where
         },
     ));
 }
+
+

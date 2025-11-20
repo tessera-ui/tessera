@@ -61,3 +61,4 @@ impl DrawCommand for CheckmarkCommand {
         None
     }
 }
+

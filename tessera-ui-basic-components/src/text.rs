@@ -39,7 +39,7 @@ pub struct TextArgs {
 
 impl From<String> for TextArgs {
     fn from(val: String) -> Self {
-        TextArgsBuilder::default().text(val).build().unwrap()
+        TextArgsBuilder::default().text(val).build().expect("builder construction failed")
     }
 }
 
@@ -47,8 +47,7 @@ impl From<&str> for TextArgs {
     fn from(val: &str) -> Self {
         TextArgsBuilder::default()
             .text(val.to_string())
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 }
 
@@ -143,3 +142,5 @@ pub fn text(args: impl Into<TextArgs>) {
         })
     }));
 }
+
+

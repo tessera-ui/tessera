@@ -278,8 +278,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
             })
             .border(GlassBorder::new(args.track_border_width.into()))
             .padding(args.track_border_width)
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         move || {
             // Internal progress fill - capsule shape using surface
@@ -306,8 +305,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
                         }
                     })
                     .refraction_amount(0.0)
-                    .build()
-                    .unwrap(),
+                    .build().expect("builder construction failed"),
                 None,
                 || {},
             );
@@ -416,3 +414,5 @@ fn apply_glass_slider_accessibility(
         }
     });
 }
+
+

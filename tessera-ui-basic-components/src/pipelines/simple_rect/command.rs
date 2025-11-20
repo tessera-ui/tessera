@@ -7,3 +7,4 @@ pub struct SimpleRectCommand {
 }
 
 impl DrawCommand for SimpleRectCommand {}
+

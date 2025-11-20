@@ -54,7 +54,11 @@ impl std::hash::Hash for LruKey {
 
 fn write_lru_cache() -> RwLockWriteGuard<'static, lru::LruCache<LruKey, TextData>> {
     TEXT_DATA_CACHE
-        .get_or_init(|| RwLock::new(lru::LruCache::new(NonZero::new(100).unwrap())))
+        .get_or_init(|| {
+            RwLock::new(
+                lru::LruCache::new(NonZero::new(100).expect("text cache size must be non-zero")),
+            )
+        })
         .write()
 }
 
@@ -184,11 +188,11 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
                 text_areas,
                 &mut self.swash_cache,
             )
-            .unwrap();
+            .expect("glyphon prepare failed");
 
         self.renderer
             .render(&self.atlas, &self.viewport, context.render_pass)
-            .unwrap();
+            .expect("glyphon render failed");
 
         // Re-create the renderer to release borrow on atlas
         let new_renderer =
@@ -340,3 +344,4 @@ impl TextData {
         }
     }
 }
+

@@ -266,7 +266,7 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
             let uniforms = Self::compute_uniforms(*start_pos, *size, context.config);
 
             let mut buffer = UniformBuffer::new(Vec::new());
-            buffer.write(&uniforms).unwrap();
+            buffer.write(&uniforms).expect("buffer write failed");
             context
                 .queue
                 .write_buffer(&resources.uniform_buffer, 0, &buffer.into_inner());
@@ -278,3 +278,5 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
         }
     }
 }
+
+

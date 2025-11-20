@@ -1,6 +1,3 @@
-//! Basic UI components library for Tessera.
-//! Internal animation utilities are available via the private `animation` module.
-
 //! Basic components for the Tessera UI framework.
 //!
 //! # Usage
@@ -51,6 +48,7 @@
 //! let editor_state = TextEditorState::new(Dp(16.0), None);
 //! text_editor(TextEditorArgs::default(), editor_state.clone());
 //! ```
+#![deny(missing_docs, clippy::unwrap_used)]
 
 mod animation;
 mod padding_utils;
@@ -92,3 +90,4 @@ pub mod tabs;
 pub mod text;
 mod text_edit_core;
 pub mod text_editor;
+

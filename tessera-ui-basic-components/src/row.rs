@@ -31,7 +31,7 @@ pub struct RowArgs {
 
 impl Default for RowArgs {
     fn default() -> Self {
-        RowArgsBuilder::default().build().unwrap()
+        RowArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -107,9 +107,9 @@ struct MeasureWeightedChildrenArgs<'a> {
 /// };
 ///
 /// row(RowArgs::default(), |scope| {
-///     scope.child(|| text(TextArgsBuilder::default().text("First".to_string()).build().unwrap()));
+///     scope.child(|| text(TextArgsBuilder::default().text("First".to_string()).build().expect("builder construction failed")));
 ///     scope.child_weighted(|| spacer(SpacerArgs::default()), 1.0); // Flexible space
-///     scope.child(|| text(TextArgsBuilder::default().text("Last".to_string()).build().unwrap()));
+///     scope.child(|| text(TextArgsBuilder::default().text("Last".to_string()).build().expect("builder construction failed")));
 /// });
 /// ```
 #[tessera]
@@ -174,7 +174,10 @@ fn measure_weighted_row(
     // - `available_width_for_children` is the total width available to allocate to children under the current constraint (present only for Fill/Fixed/Wrap(max)).
     let mut children_sizes = vec![None; n];
     let mut max_child_height = Px(0);
-    let available_width_for_children = row_effective_constraint.width.get_max().unwrap();
+    let available_width_for_children = row_effective_constraint
+        .width
+        .get_max()
+        .expect("Row width Fill expected with finite max constraint");
 
     // Classify children into weighted and unweighted and compute the total weight.
     let (weighted_indices, unweighted_indices, total_weight) = classify_children(child_weights);
@@ -541,3 +544,4 @@ fn calculate_cross_axis_offset(
         CrossAxisAlignment::Stretch => Px(0),
     }
 }
+

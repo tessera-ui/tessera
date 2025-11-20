@@ -37,7 +37,7 @@ impl ContrastPipeline {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: Some(std::num::NonZeroU64::new(20).unwrap()),
+                        min_binding_size: Some(std::num::NonZeroU64::new(20).expect("binding size must be non-zero")),
                     },
                     count: None,
                 },
@@ -70,7 +70,7 @@ impl ContrastPipeline {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size: Some(std::num::NonZeroU64::new(8).unwrap()),
+                        min_binding_size: Some(std::num::NonZeroU64::new(8).expect("binding size must be non-zero")),
                     },
                     count: None,
                 },
@@ -167,3 +167,5 @@ impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
         }
     }
 }
+
+

@@ -59,8 +59,7 @@ impl SpacerArgs {
                 min: None,
                 max: None,
             })
-            .build()
-            .unwrap() // build() should not fail with these defaults
+            .build().expect("builder construction failed") // build() should not fail with these defaults
     }
 
     /// Creates a spacer that tries to fill available width.
@@ -77,8 +76,7 @@ impl SpacerArgs {
                 max: None,
             })
             .height(DimensionValue::Fixed(Px(0))) // Default height if only filling width
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 
     /// Creates a spacer that tries to fill available height.
@@ -95,8 +93,7 @@ impl SpacerArgs {
                 min: None,
                 max: None,
             })
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 }
 
@@ -113,8 +110,7 @@ impl From<Dp> for SpacerArgs {
         SpacerArgsBuilder::default()
             .width(DimensionValue::Fixed(value.to_px()))
             .height(DimensionValue::Fixed(value.to_px()))
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 }
 
@@ -131,8 +127,7 @@ impl From<Px> for SpacerArgs {
         SpacerArgsBuilder::default()
             .width(DimensionValue::Fixed(value))
             .height(DimensionValue::Fixed(value))
-            .build()
-            .unwrap()
+            .build().expect("builder construction failed")
     }
 }
 
@@ -158,10 +153,10 @@ impl From<Px> for SpacerArgs {
 /// };
 ///
 /// row(RowArgs::default(), |scope| {
-///     scope.child(|| text(TextArgsBuilder::default().text("Left".to_string()).build().unwrap()));
+///     scope.child(|| text(TextArgsBuilder::default().text("Left".to_string()).build().expect("builder construction failed")));
 ///     // This spacer will fill the available width, pushing "Right" to the end.
 ///     scope.child(|| spacer(SpacerArgs::fill_width()));
-///     scope.child(|| text(TextArgsBuilder::default().text("Right".to_string()).build().unwrap()));
+///     scope.child(|| text(TextArgsBuilder::default().text("Right".to_string()).build().expect("builder construction failed")));
 /// });
 /// ```
 #[tessera]
@@ -203,3 +198,5 @@ pub fn spacer(args: impl Into<SpacerArgs>) {
         })
     }));
 }
+
+

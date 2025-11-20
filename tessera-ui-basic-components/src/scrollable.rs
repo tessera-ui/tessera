@@ -81,7 +81,7 @@ pub enum ScrollBarLayout {
 
 impl Default for ScrollableArgs {
     fn default() -> Self {
-        ScrollableArgsBuilder::default().build().unwrap()
+        ScrollableArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -261,7 +261,7 @@ impl ScrollableStateInner {
 ///             for i in 0..20 {
 ///                 let text_content = format!("Item #{}", i + 1);
 ///                 scope.child(|| {
-///                     text(TextArgsBuilder::default().text(text_content).build().unwrap());
+///                     text(TextArgsBuilder::default().text(text_content).build().expect("builder construction failed"));
 ///                 });
 ///             }
 ///         });
@@ -421,8 +421,7 @@ fn scrollable_with_overlay_scrollbar(
             .width(args.width)
             .height(args.height)
             .alignment(Alignment::BottomEnd)
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         |scope| {
             scope.child({
                 let state = state.clone();
@@ -679,3 +678,5 @@ fn constrain_position(
 
     PxPosition { x, y }
 }
+
+

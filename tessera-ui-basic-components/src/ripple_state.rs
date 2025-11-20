@@ -142,7 +142,7 @@ impl RippleStateInner {
     fn start_animation(&self, click_pos: [f32; 2]) {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time earlier than UNIX_EPOCH")
             .as_millis() as u64;
 
         self.start_time.store(now, atomic::Ordering::SeqCst);
@@ -162,7 +162,7 @@ impl RippleStateInner {
 
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time earlier than UNIX_EPOCH")
             .as_millis() as u64;
         let start = self.start_time.load(atomic::Ordering::SeqCst);
         let elapsed_ms = now.saturating_sub(start);
@@ -189,3 +189,4 @@ impl RippleStateInner {
         self.is_hovered.load(atomic::Ordering::SeqCst)
     }
 }
+

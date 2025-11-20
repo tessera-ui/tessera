@@ -155,7 +155,7 @@ pub struct GlassSwitchArgs {
 
 impl Default for GlassSwitchArgs {
     fn default() -> Self {
-        GlassSwitchArgsBuilder::default().build().unwrap()
+        GlassSwitchArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -342,7 +342,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
     if let Some(border) = args.track_border {
         track_builder = track_builder.border(border);
     }
-    fluid_glass(track_builder.build().unwrap(), None, || {});
+    fluid_glass(track_builder.build().expect("builder construction failed"), None, || {});
 
     // Build and render thumb
     let thumb_alpha =
@@ -357,7 +357,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
     if let Some(border) = args.thumb_border {
         thumb_builder = thumb_builder.border(border);
     }
-    fluid_glass(thumb_builder.build().unwrap(), None, || {});
+    fluid_glass(thumb_builder.build().expect("builder construction failed"), None, || {});
 
     let state_for_handler = state.clone();
     let on_toggle = args.on_toggle.clone();
@@ -400,8 +400,12 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
         let nodes_constraints = vec![(track_id, track_constraint), (thumb_id, thumb_constraint)];
         let sizes_map = input.measure_children(nodes_constraints)?;
 
-        let _track_size = sizes_map.get(&track_id).unwrap();
-        let thumb_size = sizes_map.get(&thumb_id).unwrap();
+        let _track_size = sizes_map
+            .get(&track_id)
+            .expect("track size should be measured");
+        let thumb_size = sizes_map
+            .get(&thumb_id)
+            .expect("thumb size should be measured");
         let self_width_px = width_px;
         let self_height_px = height_px;
         let thumb_padding_px = args.thumb_padding.to_px();
@@ -430,3 +434,4 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
         })
     }));
 }
+

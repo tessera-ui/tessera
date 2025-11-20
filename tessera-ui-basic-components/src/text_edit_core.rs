@@ -599,3 +599,4 @@ pub fn text_edit_core(state: TextEditorState) {
         cursor::cursor(state.read().line_height(), state.read().blink_timer());
     }
 }
+

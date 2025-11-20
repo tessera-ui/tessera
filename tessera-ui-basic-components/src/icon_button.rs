@@ -92,7 +92,7 @@ impl GlassIconButtonArgsBuilder {
 ///                 .build()
 ///                 .unwrap()
 ///         )
-///         .icon(IconArgsBuilder::default().content(vector_data.clone()).build().unwrap())
+///         .icon(IconArgsBuilder::default().content(vector_data.clone()).build().expect("builder construction failed"))
 ///         .build()
 ///         .unwrap(),
 ///     ripple_state,
@@ -147,7 +147,7 @@ pub fn icon_button(args: impl Into<IconButtonArgs>, ripple_state: RippleState) {
 ///                 .build()
 ///                 .unwrap()
 ///         )
-///         .icon(IconArgsBuilder::default().content(vector_data).build().unwrap())
+///         .icon(IconArgsBuilder::default().content(vector_data).build().expect("builder construction failed"))
 ///         .build()
 ///         .unwrap(),
 ///     ripple_state,
@@ -162,3 +162,4 @@ pub fn glass_icon_button(args: impl Into<GlassIconButtonArgs>, ripple_state: Rip
         icon(icon_args.clone());
     });
 }
+

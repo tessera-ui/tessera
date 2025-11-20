@@ -290,8 +290,7 @@ fn render_track(args: &SliderArgs) {
                     g2_k_value: 2.0, // Capsule shape
                 }
             })
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         move || {
             render_progress_fill(args);
@@ -319,8 +318,7 @@ fn render_progress_fill(args: &SliderArgs) {
                     g2_k_value: 2.0, // Capsule shape
                 }
             })
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         None,
         || {},
     );
@@ -407,3 +405,5 @@ pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
     measure(Box::new(move |input| measure_slider(input, &cloned_args)));
 }
 const ACCESSIBILITY_STEP: f32 = 0.05;
+
+

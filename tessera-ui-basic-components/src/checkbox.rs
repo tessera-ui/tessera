@@ -118,7 +118,9 @@ pub struct CheckboxArgs {
 
 impl Default for CheckboxArgs {
     fn default() -> Self {
-        CheckboxArgsBuilder::default().build().unwrap()
+        CheckboxArgsBuilder::default()
+            .build()
+            .expect("CheckboxArgsBuilder default build should succeed")
     }
 }
 
@@ -260,8 +262,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
             .hover_style(args.hover_color.map(|c| c.into()))
             .shape(args.shape)
             .on_click(on_click_for_surface)
-            .build()
-            .unwrap(),
+            .build().expect("builder construction failed"),
         Some(ripple_state),
         {
             let state_for_child = state.clone();
@@ -272,15 +273,13 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
                         SurfaceArgsBuilder::default()
                             .padding(Dp(2.0))
                             .style(Color::TRANSPARENT.into())
-                            .build()
-                            .unwrap(),
+                            .build().expect("builder construction failed"),
                         None,
                         move || {
                             boxed(
                                 BoxedArgsBuilder::default()
                                     .alignment(Alignment::Center)
-                                    .build()
-                                    .unwrap(),
+                                    .build().expect("builder construction failed"),
                                 |scope| {
                                     scope.child(move || {
                                         checkmark(
@@ -290,8 +289,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
                                                 .progress(progress)
                                                 .size(Dp(args.size.0 * 0.8))
                                                 .padding([2.0, 2.0])
-                                                .build()
-                                                .unwrap(),
+                                                .build().expect("builder construction failed"),
                                         )
                                     });
                                 },
@@ -339,3 +337,5 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
         });
     }));
 }
+
+

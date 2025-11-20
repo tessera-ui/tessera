@@ -31,7 +31,7 @@ pub struct ColumnArgs {
 
 impl Default for ColumnArgs {
     fn default() -> Self {
-        ColumnArgsBuilder::default().build().unwrap()
+        ColumnArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -82,9 +82,9 @@ impl<'a> ColumnScope<'a> {
 /// use tessera_ui_basic_components::spacer::{spacer, SpacerArgs};
 ///
 /// column(ColumnArgs::default(), |scope| {
-///     scope.child(|| text(TextArgsBuilder::default().text("First item".to_string()).build().unwrap()));
+///     scope.child(|| text(TextArgsBuilder::default().text("First item".to_string()).build().expect("builder construction failed")));
 ///     scope.child_weighted(|| spacer(SpacerArgs::default()), 1.0); // This spacer will be flexible
-///     scope.child(|| text(TextArgsBuilder::default().text("Last item".to_string()).build().unwrap()));
+///     scope.child(|| text(TextArgsBuilder::default().text("Last item".to_string()).build().expect("builder construction failed")));
 /// });
 /// ```
 #[tessera]
@@ -369,7 +369,10 @@ fn measure_weighted_column(
     children_sizes: &mut [Option<ComputedData>],
     max_child_width: &mut Px,
 ) -> Result<(Px, Px, Px), MeasurementError> {
-    let available_height_for_children = column_effective_constraint.height.get_max().unwrap();
+    let available_height_for_children = column_effective_constraint
+        .height
+        .get_max()
+        .expect("Column height Fill expected with finite max constraint");
 
     let (weighted_children_indices, unweighted_children_indices, total_weight_sum) =
         classify_children(child_weights);
@@ -554,3 +557,4 @@ fn calculate_cross_axis_offset_for_column(
         CrossAxisAlignment::Stretch => Px(0),
     }
 }
+

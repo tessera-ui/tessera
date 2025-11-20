@@ -184,7 +184,7 @@ impl DrawablePipeline<SimpleRectCommand> for SimpleRectPipeline {
 
         let uniforms = RectInstances { instances };
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
-        buffer_content.write(&uniforms).unwrap();
+        buffer_content.write(&uniforms).expect("buffer write failed");
         context
             .queue
             .write_buffer(&uniform_buffer, 0, buffer_content.as_ref());
@@ -213,3 +213,5 @@ impl DrawablePipeline<SimpleRectCommand> for SimpleRectPipeline {
             .draw_indexed(0..6, 0, 0..context.commands.len() as u32);
     }
 }
+
+

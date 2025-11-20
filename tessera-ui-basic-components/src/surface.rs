@@ -115,7 +115,7 @@ pub struct SurfaceArgs {
 
 impl Default for SurfaceArgs {
     fn default() -> Self {
-        SurfaceArgsBuilder::default().build().unwrap()
+        SurfaceArgsBuilder::default().build().expect("builder construction failed")
     }
 }
 
@@ -455,7 +455,7 @@ fn compute_surface_size(
 ///         .unwrap(),
 ///     Some(ripple),
 ///     || {
-///         text(TextArgsBuilder::default().text("Click me".to_string()).build().unwrap());
+///         text(TextArgsBuilder::default().text("Click me".to_string()).build().expect("builder construction failed"));
 ///     },
 /// );
 /// ```
@@ -517,11 +517,11 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<RippleState>, child: impl
             .map(|state| state.is_hovered())
             .unwrap_or(false);
 
-        let effective_style = if is_hovered && args_measure_clone.hover_style.is_some() {
-            args_measure_clone.hover_style.as_ref().unwrap()
-        } else {
-            &args_measure_clone.style
-        };
+        let effective_style = args_measure_clone
+            .hover_style
+            .as_ref()
+            .filter(|_| is_hovered)
+            .unwrap_or(&args_measure_clone.style);
 
         let padding_px: Px = args_measure_clone.padding.into();
         let (width, height) =
@@ -683,3 +683,4 @@ fn apply_surface_accessibility(
         });
     }
 }
+

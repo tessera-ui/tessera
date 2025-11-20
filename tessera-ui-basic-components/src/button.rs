@@ -67,7 +67,7 @@ impl Default for ButtonArgs {
         ButtonArgsBuilder::default()
             .on_click(Arc::new(|| {}))
             .build()
-            .unwrap()
+            .expect("ButtonArgsBuilder default build should succeed")
     }
 }
 
@@ -103,7 +103,7 @@ impl Default for ButtonArgs {
 ///     .unwrap();
 ///
 /// button(args, ripple, || {
-///     text(TextArgsBuilder::default().text("Click Me".to_string()).build().unwrap());
+///     text(TextArgsBuilder::default().text("Click Me".to_string()).build().expect("builder construction failed"));
 /// });
 /// ```
 #[tessera]
@@ -172,7 +172,7 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         .accessibility_role(Role::Button)
         .accessibility_focusable(true)
         .build()
-        .unwrap()
+        .expect("SurfaceArgsBuilder failed with required button fields set")
 }
 
 /// Convenience constructors for common button styles
@@ -183,7 +183,7 @@ impl ButtonArgs {
             .color(Color::new(0.2, 0.5, 0.8, 1.0)) // Blue
             .on_click(on_click)
             .build()
-            .unwrap()
+            .expect("ButtonArgsBuilder failed for primary button")
     }
 
     /// Create a secondary button with gray styling
@@ -192,7 +192,7 @@ impl ButtonArgs {
             .color(Color::new(0.6, 0.6, 0.6, 1.0)) // Gray
             .on_click(on_click)
             .build()
-            .unwrap()
+            .expect("ButtonArgsBuilder failed for secondary button")
     }
 
     /// Create a success button with green styling
@@ -201,7 +201,7 @@ impl ButtonArgs {
             .color(Color::new(0.1, 0.7, 0.3, 1.0)) // Green
             .on_click(on_click)
             .build()
-            .unwrap()
+            .expect("ButtonArgsBuilder failed for success button")
     }
 
     /// Create a danger button with red styling
@@ -210,7 +210,7 @@ impl ButtonArgs {
             .color(Color::new(0.8, 0.2, 0.2, 1.0)) // Red
             .on_click(on_click)
             .build()
-            .unwrap()
+            .expect("ButtonArgsBuilder failed for danger button")
     }
 }
 
@@ -257,3 +257,4 @@ impl ButtonArgs {
         self
     }
 }
+

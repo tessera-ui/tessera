@@ -396,7 +396,10 @@ impl BlurPipeline {
             upsample_bind_group_layout,
             downsample_sampler,
             texture_pool: HashMap::new(),
-            weight_cache: LruCache::new(NonZeroUsize::new(WEIGHT_CACHE_CAPACITY).unwrap()),
+            weight_cache: LruCache::new(
+                NonZeroUsize::new(WEIGHT_CACHE_CAPACITY)
+                    .expect("WEIGHT_CACHE_CAPACITY must be non-zero"),
+            ),
         }
     }
 
@@ -455,7 +458,7 @@ impl BlurPipeline {
         data: &T,
     ) -> wgpu::Buffer {
         let mut buffer = UniformBuffer::new(Vec::new());
-        buffer.write(data).unwrap();
+        buffer.write(data).expect("buffer write failed");
         let bytes = buffer.into_inner();
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(label),
@@ -706,3 +709,5 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
         }
     }
 }
+
+

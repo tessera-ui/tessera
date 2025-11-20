@@ -381,3 +381,4 @@ pub(crate) fn rect_to_uniforms(
         screen_size: Vec2::ZERO, // Will be populated in the pipeline
     }
 }
+

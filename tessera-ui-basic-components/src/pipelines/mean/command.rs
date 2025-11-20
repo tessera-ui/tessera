@@ -48,3 +48,4 @@ impl ComputeCommand for MeanCommand {
         BarrierRequirement::ZERO_PADDING_LOCAL
     }
 }
+

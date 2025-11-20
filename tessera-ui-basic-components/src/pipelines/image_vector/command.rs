@@ -63,3 +63,4 @@ pub struct ImageVectorCommand {
 }
 
 impl DrawCommand for ImageVectorCommand {}
+
