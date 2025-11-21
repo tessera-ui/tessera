@@ -58,12 +58,15 @@ impl GlassSwitchStateInner {
 
 /// External state handle for the `glass_switch` component.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// use tessera_ui_basic_components::glass_switch::GlassSwitchState;
 ///
-/// let switch_state = GlassSwitchState::new();
+/// let switch_state = GlassSwitchState::new(false);
+/// assert!(!switch_state.is_checked());
+/// switch_state.toggle();
+/// assert!(switch_state.is_checked());
 /// ```
 #[derive(Clone)]
 pub struct GlassSwitchState {

@@ -126,8 +126,9 @@ impl From<ImageVectorData> for ImageVectorArgs {
 /// ```
 /// use std::sync::Arc;
 /// use tessera_ui::{Color, DimensionValue};
-/// use tessera_ui_basic_components::image_vector::{
-///     image_vector, ImageVectorArgs, ImageVectorData, ImageVectorVertex,
+/// use tessera_ui_basic_components::{
+///     image_vector::{image_vector, ImageVectorArgs, ImageVectorData},
+///     pipelines::image_vector::ImageVectorVertex,
 /// };
 ///
 /// // Simple triangle geometry (clockwise winding).
