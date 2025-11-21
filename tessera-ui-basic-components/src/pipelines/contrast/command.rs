@@ -5,14 +5,9 @@ use tessera_ui::{
 /// Command to apply a contrast adjustment using a pre-calculated mean luminance.
 ///
 /// # Parameters
+///
 /// - `contrast`: The contrast adjustment factor.
 /// - `mean_result_handle`: Handle to the buffer containing mean luminance data.
-///
-/// # Example
-/// ```rust,ignore
-/// use tessera_ui_basic_components::pipelines::contrast::ContrastCommand;
-/// let command = ContrastCommand::new(1.2, mean_result_handle);
-/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ContrastCommand {
     /// The contrast adjustment factor.
@@ -25,6 +20,7 @@ impl ContrastCommand {
     /// Creates a new `ContrastCommand`.
     ///
     /// # Parameters
+    ///
     /// - `contrast`: The contrast adjustment factor.
     /// - `mean_result_handle`: Handle to the buffer containing mean luminance data.
     pub fn new(contrast: f32, mean_result_handle: ComputeResourceRef) -> Self {

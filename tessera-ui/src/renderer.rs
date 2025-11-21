@@ -1,189 +1,6 @@
-//! # Tessera Renderer
-//!
 //! The core rendering system for the Tessera UI framework. This module provides the main
 //! [`Renderer`] struct that manages the application lifecycle, event handling, and rendering
 //! pipeline for cross-platform UI applications.
-//!
-//! ## Overview
-//!
-//! The renderer is built on top of WGPU and winit, providing:
-//! - Cross-platform window management (Windows, Linux, macOS, Android)
-//! - Event handling (mouse, touch, keyboard, IME)
-//! - Pluggable rendering pipeline system
-//! - Component tree management and rendering
-//! - Performance monitoring and optimization
-//!
-//! ## Architecture
-//!
-//! The renderer follows a modular architecture with several key components:
-//!
-//! - **[`app`]**: WGPU application management and surface handling
-//! - **[`command`]**: Rendering command abstraction
-//! - **[`compute`]**: Compute shader pipeline management
-//! - **[`drawer`]**: Drawing pipeline management and execution
-//!
-//! ## Basic Usage
-//!
-//! The most common way to use the renderer is through the [`Renderer::run`] method:
-//!
-//! ```no_run
-//! use tessera_ui::Renderer;
-//!
-//! // Define your UI entry point
-//! fn my_app() {
-//!     // Your UI components go here
-//! }
-//!
-//! // Run the application
-//! Renderer::run(
-//!     my_app,  // Entry point function
-//!     |app| {
-//!         // Register rendering pipelines
-//!         // For example, tessera_ui_basic_components::pipelines::register_pipelines(app);
-//!     }
-//! ).unwrap();
-//! ```
-//!
-//! ## Configuration
-//!
-//! You can customize the renderer behavior using [`TesseraConfig`]:
-//!
-//! ```no_run
-//! use tessera_ui::{Renderer, renderer::TesseraConfig};
-//!
-//! # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-//! let config = TesseraConfig {
-//!     sample_count: 8,  // 8x MSAA
-//!     ..Default::default()
-//! };
-//!
-//! Renderer::run_with_config(
-//!     || { /* my_app */ },
-//!     |_app| { /* register_pipelines */ },
-//!     config
-//! )?;
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ## Platform Support
-//!
-//! ### Desktop Platforms (Windows, Linux, macOS)
-//!
-//! ```rust,ignore
-//! use tessera_ui::Renderer;
-//! use tessera_ui_macros::tessera;
-//!
-//! #[tessera] // You need to mark every component function with `#[tessera_macros::tessera]`
-//! fn entry_point() {}
-//! fn register_pipelines(_: &mut tessera_ui::renderer::WgpuApp) {}
-//!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! Renderer::run(entry_point, register_pipelines)?;
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ### Android
-//!
-//! ```no_run
-//! use tessera_ui::Renderer;
-//! #[cfg(target_os = "android")]
-//! use winit::platform::android::activity::AndroidApp;
-//!
-//! fn entry_point() {}
-//! fn register_pipelines(_: &mut tessera_ui::renderer::WgpuApp) {}
-//!
-//! #[cfg(target_os = "android")]
-//! fn android_main(android_app: AndroidApp) {
-//!     Renderer::run(entry_point, register_pipelines, android_app).unwrap();
-//! }
-//! ```
-//!
-//! ## Event Handling
-//!
-//! The renderer automatically handles various input events:
-//!
-//! - **Mouse Events**: Click, move, scroll, enter/leave
-//! - **Touch Events**: Multi-touch support with gesture recognition
-//! - **Keyboard Events**: Key press/release, with platform-specific handling
-//! - **IME Events**: Input method support for international text input
-//!
-//! Events are processed and forwarded to the component tree for handling.
-//!
-//! ## Performance Monitoring
-//!
-//! The renderer includes built-in performance monitoring that logs frame statistics
-//! when performance drops below 60 FPS:
-//!
-//! ```text
-//! WARN Jank detected! Frame statistics:
-//!     Build tree cost: 2.1ms
-//!     Draw commands cost: 1.8ms
-//!     Render cost: 12.3ms
-//!     Total frame cost: 16.2ms
-//!     Fps: 61.73
-//! ```
-//!
-//! ## Examples
-//!
-//! ### Simple Counter Application
-//!
-//! ```rust,ignore
-//! use std::sync::{Arc, atomic::{AtomicU32, Ordering}};
-//!
-//! use tessera_ui::{Renderer, Color, Dp};
-//! use tessera_ui_macros::tessera;
-//!
-//! struct AppState {
-//!     count: AtomicU32,
-//! }
-//!
-//! #[tessera] // You need to mark every component function with `#[tessera_macros::tessera]`
-//! fn counter_app(state: Arc<AppState>) {
-//!     let _count = state.count.load(Ordering::Relaxed);
-//!     // Your UI components would go here
-//!     // This is a simplified example without actual UI components
-//! }
-//!
-//! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let state = Arc::new(AppState {
-//!         count: AtomicU32::new(0),
-//!     });
-//!
-//!     Renderer::run(
-//!         move || counter_app(state.clone()),
-//!         |_app| {
-//!             // Register your rendering pipelines here
-//!             // tessera_ui_basic_components::pipelines::register_pipelines(app);
-//!         }
-//!     )?;
-//!     
-//!     Ok(())
-//! }
-//! ```
-//!
-//! ### Custom Rendering Pipeline
-//!
-//! ```no_run
-//! use tessera_ui::{Renderer, renderer::WgpuApp};
-//!
-//! fn register_custom_pipelines(app: &mut WgpuApp) {
-//!     // Register basic components first
-//!     // tessera_ui_basic_components::pipelines::register_pipelines(app);
-//!     
-//!     // Add your custom pipelines
-//!     // app.drawer.register_pipeline("my_custom_shader", my_pipeline);
-//! }
-//!
-//! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     Renderer::run(
-//!         || { /* your UI */ },
-//!         register_custom_pipelines
-//!     )?;
-//!     Ok(())
-//! }
-//! ```
 
 /// WGPU application management and window lifecycle.
 pub mod app;
@@ -298,9 +115,12 @@ impl Default for TesseraConfig {
     }
 }
 
+/// # Renderer
+///
 /// The main renderer struct that manages the application lifecycle and rendering.
 ///
 /// The `Renderer` is the core component of the Tessera UI framework, responsible for:
+///
 /// - Managing the application window and WGPU context
 /// - Handling input events (mouse, touch, keyboard, IME)
 /// - Coordinating the component tree building and rendering process
@@ -326,9 +146,65 @@ impl Default for TesseraConfig {
 /// - Resource management
 /// - Event processing
 ///
-/// ## Examples
+/// ## Usage
 ///
-/// See the module-level documentation for usage examples.
+/// ## Basic Usage
+///
+/// It's suggested to use `cargo-tessera` to create your project from templates which
+/// include all necessary setup. However, here's a minimal example of how to use the renderer
+/// through the [`Renderer::run`] method:
+///
+/// ```no_run
+/// use tessera_ui::Renderer;
+///
+/// // Define your UI entry point
+/// fn my_app() {
+///     // Your UI components go here
+/// }
+///
+/// // Run the application
+/// Renderer::run(
+///     my_app,  // Entry point function
+///     |app| {
+///         // Register rendering pipelines
+///         // For example, tessera_ui_basic_components::pipelines::register_pipelines(app);
+///     }
+/// ).unwrap();
+/// ```
+///
+/// ### Android Usage
+///
+/// On android, [`Renderer::run`] requires an additional `AndroidApp` parameter from app context
+/// or `android_main` function.
+///
+/// ## Configuration
+///
+/// You can customize the renderer behavior by passing [`TesseraConfig`] when using [`Renderer::run_with_config`].
+/// instead of [`Renderer::run`].
+///
+/// ```no_run
+/// use tessera_ui::{Renderer, renderer::TesseraConfig};
+///
+/// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+/// let config = TesseraConfig {
+///     sample_count: 8,  // 8x MSAA
+///     window_title: "My Tessera App".to_string(), // Custom window title
+///     ..Default::default()
+/// };
+///
+/// Renderer::run_with_config(
+///     || { /* my_app */ },
+///     |_app| { /* register_pipelines */ },
+///     config
+/// )?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Performance Monitoring
+///
+/// The renderer includes built-in performance monitoring that logs frame statistics
+/// when performance drops below 60 FPS.
 pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     /// The WGPU application context, initialized after window creation
     app: Option<WgpuApp>,

@@ -64,12 +64,6 @@ pub enum CrossAxisAlignment {
 
 impl Default for CrossAxisAlignment {
     /// Returns [`CrossAxisAlignment::Start`] as the default value.
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// use tessera_ui_basic_components::CrossAxisAlignment;
-    /// assert_eq!(CrossAxisAlignment::default(), CrossAxisAlignment::Start);
-    /// ```
     fn default() -> Self {
         Self::Start
     }

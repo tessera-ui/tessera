@@ -22,12 +22,6 @@ struct ImageResources {
 }
 
 /// Pipeline for rendering images in UI components.
-///
-/// # Example
-/// ```rust,ignore
-/// use tessera_ui_basic_components::pipelines::image::ImagePipeline;
-/// let pipeline = ImagePipeline::new(&device, &config, sample_count);
-/// ```
 pub struct ImagePipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,

@@ -8,15 +8,10 @@ use tessera_ui::DrawCommand;
 /// Image pixel data for rendering.
 ///
 /// # Fields
+///
 /// - `data`: Raw pixel data (RGBA).
 /// - `width`: Image width in pixels.
 /// - `height`: Image height in pixels.
-///
-/// # Example
-/// ```rust,ignore
-/// use tessera_ui_basic_components::pipelines::image::ImageData;
-/// let img = ImageData { data: Arc::new(vec![255, 0, 0, 255]), width: 1, height: 1 };
-/// ```
 #[derive(Debug, Clone)]
 pub struct ImageData {
     /// Raw RGBA pixel buffer.
@@ -46,12 +41,6 @@ impl PartialEq for ImageData {
 impl Eq for ImageData {}
 
 /// Command for rendering an image in a UI component.
-///
-/// # Example
-/// ```rust,ignore
-/// use tessera_ui_basic_components::pipelines::image::{ImageCommand, ImageData};
-/// let cmd = ImageCommand { data: img_data };
-/// ```
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ImageCommand {
     /// Shared image buffer used by the draw pass.

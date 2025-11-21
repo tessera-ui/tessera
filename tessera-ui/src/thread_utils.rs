@@ -2,43 +2,6 @@
 //!
 //! This module provides cross-platform utilities for thread management and debugging
 //! in the Tessera UI framework.
-//!
-//! ## Overview
-//!
-//! Thread naming is essential for debugging and profiling multi-threaded applications.
-//! This module provides a unified interface for setting thread names across different
-//! operating systems, abstracting away the platform-specific implementation details.
-//!
-//! ## Platform Support
-//!
-//! - **Unix-like systems** (Linux, macOS, etc.): Uses `pthread_setname_np`
-//! - **Windows**: Uses `SetThreadDescription` API
-//! - **Other platforms**: No-op (function exists but does nothing)
-//!
-//! ## Usage
-//!
-//! ```rust,ignore
-//! use crate::thread_utils::set_thread_name;
-//!
-//! // Set the current thread's name for debugging
-//! set_thread_name("tessera-renderer");
-//!
-//! // In a spawned thread
-//! std::thread::spawn(|| {
-//!     set_thread_name("tessera-worker");
-//!     // ... thread work
-//! });
-//! ```
-//!
-//! ## Thread Name Limitations
-//!
-//! Different platforms have different limitations on thread names:
-//! - **Linux**: Maximum 15 characters (excluding null terminator)
-//! - **macOS**: Maximum 63 characters
-//! - **Windows**: No specific length limit, but shorter names are recommended
-//!
-//! Names longer than the platform limit will be truncated or may cause the
-//! operation to fail silently.
 
 /// Sets the name of the current thread for debugging and profiling purposes.
 ///
@@ -56,21 +19,6 @@
 /// - **Unix-like systems**: Uses `pthread_setname_np()` to set the thread name
 /// - **Windows**: Uses `SetThreadDescription()` API
 /// - **Other platforms**: No operation is performed
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// use tessera_ui::thread_utils::set_thread_name;
-///
-/// // Set a descriptive name for the current thread
-/// set_thread_name("ui-renderer");
-///
-/// // In a worker thread
-/// std::thread::spawn(|| {
-///     set_thread_name("background-task");
-///     // ... perform background work
-/// });
-/// ```
 ///
 /// # Panics
 ///

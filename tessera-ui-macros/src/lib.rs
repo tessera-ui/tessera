@@ -3,25 +3,6 @@
 //! This crate provides procedural macros for the Tessera UI framework.
 //! The main export is the `#[tessera]` attribute macro, which transforms
 //! regular Rust functions into Tessera UI components.
-//!
-//! ## Usage
-//!
-//! ```rust,ignore
-//! use tessera_ui::tessera;
-//!
-//! #[tessera]
-//! fn my_component() {
-//!     // Component logic here
-//!     // The macro provides access to `measure`, `input_handler` and `on_minimize` functions
-//! }
-//! ```
-//!
-//! The `#[tessera]` macro automatically:
-//!
-//! - Registers the function as a component in the Tessera component tree
-//! - Injects `measure`, `input_handler` and `on_minimize` functions into the component scope
-//! - Handles component tree management (adding/removing nodes)
-//! - Provides error safety by wrapping the function body
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -131,6 +112,7 @@ fn cleanup_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
 /// Transforms a regular Rust function into a Tessera UI component.
 ///
 /// # What It Generates
+///
 /// The macro rewrites the function body so that on every invocation (every frame in an
 /// immediate‑mode pass) it:
 /// 1. Registers a new component node (push) into the global `ComponentTree`
@@ -148,46 +130,13 @@ fn cleanup_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
 /// Annotate a free function (no captured self) with `#[tessera]`. You may then (optionally)
 /// call any of the injected helpers exactly once (last call wins if repeated).
 ///
-/// # Example
-///
-/// ```rust,ignore
-/// use tessera_ui::tessera;
-///
-/// #[tessera]
-/// pub fn simple_button(label: String) {
-///     // Optional layout definition
-///     measure(Box::new(|_input| {
-///         use tessera_ui::{ComputedData, Px};
-///         Ok(ComputedData { width: Px(90), height: Px(32) })
-///     }));
-///
-///     // Optional interaction handling
-///     input_handler(Box::new(|input| {
-///         // Inspect input.cursor_events / keyboard_events ...
-///         let _ = input.cursor_events.len();
-///     }));
-///
-///     on_close(Box::new(|| {
-///         println!("Window closing – component had registered an on_close hook.");
-///     }));
-///
-///     // Build children here (invoke child closures so they register themselves)
-///     // child();
-/// }
-/// ```
-///
-/// # Error Handling & Early Return
-///
-/// Your original function body is wrapped in an inner closure; an early `return` inside
-/// the body only returns from that closure, after which cleanup (node pop) still occurs.
-///
 /// # Parameters
 ///
 /// * Attribute arguments are currently unused; pass nothing or `#[tessera]`.
 ///
 /// # When NOT to Use
 ///
-/// * For function that should not be a component.
+/// * For function that should not be a ui component.
 ///
 /// # See Also
 ///
@@ -246,6 +195,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// system and (optionally) provided with a lazily‑initialized per‑shard state.
 ///
 /// # Features
+///
 /// * Generates a `StructNameDestination` (UpperCamelCase + `Destination`) implementing
 ///   `tessera_ui_shard::router::RouterDestination`
 /// * (Optional) Injects a single `#[state]` parameter whose type:
@@ -261,31 +211,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// When `pop()` is called and the destination lifecycle is `Shard`, the registry
 /// entry is removed, freeing the state.
 ///
-/// # Example
-///
-/// ```rust,ignore
-/// use tessera_ui::{shard, tessera};
-///
-/// #[tessera]
-/// #[shard]
-/// fn profile_page(#[state] state: ProfileState) {
-///     // Build your UI. You can navigate:
-///     // router::push(OtherPageDestination { ... });
-/// }
-///
-/// #[derive(Default)]
-/// struct ProfileState {
-///     // fields...
-/// }
-/// ```
-///
-/// Pushing a shard:
-///
-/// ```rust,ignore
-/// use tessera_ui::router;
-/// router::push(ProfilePageDestination { /* fields from fn params (excluding #[state]) */ });
-/// ```
-///
 /// # Parameter Transformation
 /// * At most one parameter may be annotated with `#[state]`.
 /// * That parameter is removed from the *generated* function signature and supplied implicitly.
@@ -293,7 +218,8 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   `*Destination` struct.
 ///
 /// # Generated Destination (Conceptual)
-/// ```text
+///
+/// ```rust,ignore
 /// struct ProfilePageDestination { /* non-state params as public fields */ }
 /// impl RouterDestination for ProfilePageDestination {
 ///     fn exec_component(&self) { profile_page(/* fields */); }
@@ -302,18 +228,22 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 ///
 /// # Limitations
+///
 /// * No support for multiple `#[state]` params (compile panic if violated)
 /// * Do not manually implement `RouterDestination` for these pages; rely on generation
 ///
 /// # See Also
+///
 /// * Routing helpers: `tessera_ui::router::{push, pop, router_root}`
 /// * Shard state registry: `tessera_ui_shard::ShardRegistry`
 ///
 /// # Safety
+///
 /// Internally uses an unsafe cast inside the registry to recover `Arc<T>` from
 /// `Arc<dyn ShardState>`; this is encapsulated and not exposed.
 ///
 /// # Errors / Panics
+///
 /// * Panics at compile time if multiple `#[state]` parameters are used or unsupported
 ///   pattern forms are encountered.
 #[proc_macro_attribute]

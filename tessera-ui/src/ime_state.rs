@@ -1,53 +1,6 @@
 //! # Input Method Editor (IME) State Management
 //!
-//! This module provides IME state management for the Tessera UI framework.
-//!
-//! ## Overview
-//!
-//! Input Method Editor (IME) support is essential for handling complex text input,
-//! particularly for languages that require composition (such as Chinese, Japanese,
-//! Korean, and others). The IME system allows users to input characters through
-//! a multi-step process where intermediate composition states are displayed before
-//! the final text is committed.
-//!
-//! ## Design
-//!
-//! The [`ImeState`] struct maintains a bounded queue of IME events to ensure:
-//! - **Memory efficiency**: Old events are automatically discarded to prevent unbounded growth
-//! - **Event ordering**: Events are processed in the order they were received
-//! - **Performance**: The queue size is limited to prevent excessive memory usage
-//!
-//! ## Usage
-//!
-//! ```rust,ignore
-//! use crate::ImeState;
-//! use winit::event::Ime;
-//!
-//! let mut ime_state = ImeState::default();
-//!
-//! // Push IME events as they arrive
-//! ime_state.push_event(Ime::Preedit("hello".to_string(), None));
-//! ime_state.push_event(Ime::Commit("world".to_string()));
-//!
-//! // Process all pending events
-//! let events = ime_state.take_events();
-//! for event in events {
-//!     match event {
-//!         Ime::Preedit(text, cursor) => {
-//!             // Handle composition text with optional cursor position
-//!         }
-//!         Ime::Commit(text) => {
-//!             // Handle committed text
-//!         }
-//!         Ime::Enabled => {
-//!             // IME was enabled
-//!         }
-//!         Ime::Disabled => {
-//!             // IME was disabled
-//!         }
-//!     }
-//! }
-//! ```
+//! This module provides IME state management.
 
 use std::collections::VecDeque;
 
@@ -98,21 +51,6 @@ impl ImeState {
     /// * `event` - The IME event to add to the queue. This can be any variant of
     ///   [`winit::event::Ime`], including composition text, committed text, or
     ///   IME state changes.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use crate::ImeState;
-    /// use winit::event::Ime;
-    ///
-    /// let mut ime_state = ImeState::default();
-    ///
-    /// // Add a composition event
-    /// ime_state.push_event(Ime::Preedit("hello".to_string(), Some(5)));
-    ///
-    /// // Add a commit event
-    /// ime_state.push_event(Ime::Commit("world".to_string()));
-    /// ```
     pub fn push_event(&mut self, event: winit::event::Ime) {
         // Add the event to the back of the deque
         self.events.push_back(event);
@@ -136,26 +74,6 @@ impl ImeState {
     ///
     /// A `Vec<winit::event::Ime>` containing all events that were in the queue,
     /// ordered from oldest to newest. If the queue was empty, returns an empty vector.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use crate::ImeState;
-    /// use winit::event::Ime;
-    ///
-    /// let mut ime_state = ImeState::default();
-    /// ime_state.push_event(Ime::Enabled);
-    /// ime_state.push_event(Ime::Preedit("test".to_string(), None));
-    /// ime_state.push_event(Ime::Commit("test".to_string()));
-    ///
-    /// // Process all events
-    /// let events = ime_state.take_events();
-    /// assert_eq!(events.len(), 3);
-    ///
-    /// // Queue is now empty
-    /// let empty_events = ime_state.take_events();
-    /// assert_eq!(empty_events.len(), 0);
-    /// ```
     pub fn take_events(&mut self) -> Vec<winit::event::Ime> {
         self.events.drain(..).collect()
     }

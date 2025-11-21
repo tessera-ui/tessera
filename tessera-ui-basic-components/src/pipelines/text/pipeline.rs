@@ -99,14 +99,6 @@ pub fn write_font_system() -> RwLockWriteGuard<'static, glyphon::FontSystem> {
 /// Pipeline for rendering text using the Glyphon engine.
 ///
 /// This struct manages font atlas, cache, viewport, and swash cache for efficient text rendering.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use tessera_ui_basic_components::pipelines::text::GlyphonTextRender;
-///
-/// let pipeline = GlyphonTextRender::new(&device, &queue, &config, sample_count);
-/// ```
 pub struct GlyphonTextRender {
     /// Glyphon font atlas, a heavy-weight, shared resource.
     atlas: glyphon::TextAtlas,
@@ -127,6 +119,7 @@ impl GlyphonTextRender {
     /// Creates a new text renderer pipeline.
     ///
     /// # Parameters
+    ///
     /// - `gpu`: The wgpu device.
     /// - `queue`: The wgpu queue.
     /// - `config`: Surface configuration.
@@ -202,24 +195,6 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
 }
 
 /// Text data for rendering, including buffer and size.
-///
-/// # Fields
-///
-/// - `text_buffer`: The glyphon text buffer.
-/// - `size`: The size of the text area [width, height].
-///
-/// # Example
-///
-///
-/// ```rust
-/// use tessera_ui_basic_components::pipelines::text::TextData;
-/// use tessera_ui::Color;
-/// use tessera_ui_basic_components::pipelines::text::TextConstraint;
-///
-/// let color = Color::from_rgb(1.0, 1.0, 1.0);
-/// let constraint = TextConstraint { max_width: Some(200.0), max_height: Some(50.0) };
-/// let data = TextData::new("Hello".to_string(), color, 16.0, 1.2, constraint);
-/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextData {
     /// glyphon text buffer

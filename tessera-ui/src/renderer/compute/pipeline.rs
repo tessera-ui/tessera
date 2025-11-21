@@ -48,104 +48,6 @@
 //! 3. Write a compute shader in WGSL
 //! 4. Register the pipeline with [`ComputePipelineRegistry::register`]
 //!
-//! ## Example: Simple Brightness Adjustment Pipeline
-//!
-//! ```rust,ignore
-//! use tessera_ui::{ComputeCommand, ComputablePipeline, compute::resource::ComputeResourceManager};
-//! use wgpu;
-//!
-//! // 1. Define the compute command
-//! #[derive(Debug)]
-//! struct BrightnessCommand {
-//!     brightness: f32,
-//! }
-//!
-//! impl ComputeCommand for BrightnessCommand {}
-//!
-//! // 2. Implement the pipeline
-//! struct BrightnessPipeline {
-//!     compute_pipeline: wgpu::ComputePipeline,
-//!     bind_group_layout: wgpu::BindGroupLayout,
-//! }
-//!
-//! impl BrightnessPipeline {
-//!     fn new(device: &wgpu::Device) -> Self {
-//!         // Create compute shader and pipeline
-//!         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-//!             label: Some("Brightness Shader"),
-//!             source: wgpu::ShaderSource::Wgsl(include_str!("brightness.wgsl").into()),
-//!         });
-//!         
-//!         // ... setup bind group layout and pipeline ...
-//!         # unimplemented!()
-//!     }
-//! }
-//!
-//! impl ComputablePipeline<BrightnessCommand> for BrightnessPipeline {
-//!     fn dispatch(&mut self, context: &mut ComputeContext<BrightnessCommand>) {
-//!         // Create uniforms buffer with brightness value
-//!         let uniforms = [context.items[0].command.brightness];
-//!         let uniform_buffer = context.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-//!             label: Some("Brightness Uniforms"),
-//!             contents: bytemuck::cast_slice(&uniforms),
-//!             usage: wgpu::BufferUsages::UNIFORM,
-//!         });
-//!         
-//!         // Create bind group with input/output textures and uniforms
-//!         let bind_group = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
-//!             layout: &self.bind_group_layout,
-//!             entries: &[
-//!                 wgpu::BindGroupEntry { binding: 0, resource: uniform_buffer.as_entire_binding() },
-//!                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(context.input_view) },
-//!                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(context.output_view) },
-//!             ],
-//!             label: Some("brightness_bind_group"),
-//!         });
-//!         
-//!         // Dispatch compute shader
-//!         context.compute_pass.set_pipeline(&self.compute_pipeline);
-//!         context.compute_pass.set_bind_group(0, &bind_group, &[]);
-//!         context.compute_pass.dispatch_workgroups(
-//!             (context.config.width + 7) / 8,
-//!             (context.config.height + 7) / 8,
-//!             1
-//!         );
-//!     }
-//! }
-//!
-//! // 3. Register the pipeline
-//! let mut registry = ComputePipelineRegistry::new();
-//! let brightness_pipeline = BrightnessPipeline::new(&device);
-//! registry.register(brightness_pipeline);
-//! ```
-//!
-//! ## Example WGSL Compute Shader
-//!
-//! ```wgsl
-//! @group(0) @binding(0) var<uniform> brightness: f32;
-//! @group(0) @binding(1) var input_texture: texture_2d<f32>;
-//! @group(0) @binding(2) var output_texture: texture_storage_2d<rgba8unorm, write>;
-//!
-//! @compute @workgroup_size(8, 8)
-//! fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-//!     let coords = vec2<i32>(global_id.xy);
-//!     let input_color = textureLoad(input_texture, coords, 0);
-//!     let output_color = vec4<f32>(input_color.rgb * brightness, input_color.a);
-//!     textureStore(output_texture, coords, output_color);
-//! }
-//! ```
-//!
-//! # Integration with Basic Components
-//!
-//! The `tessera_basic_components` crate provides several compute pipeline implementations:
-//!
-//! - **BlurPipeline**: Gaussian blur effects for backgrounds and UI elements
-//! - **MeanPipeline**: Average color calculation for adaptive UI themes
-//! - **ContrastPipeline**: Contrast and saturation adjustments
-//!
-//! These pipelines demonstrate real-world usage patterns and can serve as references
-//! for implementing custom compute operations.
-//!
 //! # Performance Considerations
 //!
 //! - **Workgroup Size**: Choose workgroup sizes that align with GPU architecture (typically 8x8 or 16x16)
@@ -268,28 +170,6 @@ pub(crate) struct ErasedDispatchContext<'a, 'b> {
 /// 1. **After Rendering**: Process the rendered scene for post-effects
 /// 2. **Between Passes**: Transform data between different rendering stages
 /// 3. **Before Rendering**: Prepare data or textures for subsequent render operations
-///
-/// # Example Implementation Pattern
-///
-/// ```rust,ignore
-/// impl ComputablePipeline<MyCommand> for MyPipeline {
-///     fn dispatch(&mut self, context: &mut ComputeContext<MyCommand>) {
-///         for item in context.items {
-///             // 1. Create or retrieve uniform buffer
-///             let uniforms = create_uniforms_from_command(item.command);
-///             let uniform_buffer = context.device.create_buffer_init(...);
-///
-///             // 2. Create bind group with textures and uniforms
-///             let bind_group = context.device.create_bind_group(...);
-///
-///             // 3. Set pipeline and dispatch
-///             context.compute_pass.set_pipeline(&self.compute_pipeline);
-///             context.compute_pass.set_bind_group(0, &bind_group, &[]);
-///             context.compute_pass.dispatch_workgroups(workgroup_x, workgroup_y, 1);
-///         }
-///     }
-/// }
-/// ```
 pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     /// Dispatches the compute command within an active compute pass.
     ///
@@ -321,14 +201,6 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     /// - **Workgroup Size**: Match your shader's `@workgroup_size` declaration
     /// - **Coverage**: Ensure all pixels are processed by calculating appropriate dispatch dimensions
     /// - **Alignment**: Round up dispatch dimensions to cover the entire texture
-    ///
-    /// Common dispatch pattern:
-    /// ```rust,ignore
-    /// let workgroup_size = 8; // Match shader @workgroup_size(8, 8)
-    /// let dispatch_x = (context.config.width + workgroup_size - 1) / workgroup_size;
-    /// let dispatch_y = (context.config.height + workgroup_size - 1) / workgroup_size;
-    /// context.compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
-    /// ```
     ///
     /// # Resource Management
     ///
@@ -430,20 +302,6 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
 /// 2. Register all required compute pipelines during application initialization
 /// 3. The renderer uses the registry to dispatch commands during frame rendering
 ///
-/// # Example
-///
-/// ```rust,ignore
-/// use tessera_ui::renderer::compute::ComputePipelineRegistry;
-///
-/// // Create registry and register pipelines
-/// let mut registry = ComputePipelineRegistry::new();
-/// registry.register(blur_pipeline);
-/// registry.register(contrast_pipeline);
-/// registry.register(brightness_pipeline);
-///
-/// // Registry is now ready for use by the renderer
-/// ```
-///
 /// # Performance Considerations
 ///
 /// - Pipeline lookup is O(1) on average due to HashMap implementation.
@@ -483,25 +341,6 @@ impl ComputePipelineRegistry {
     /// # Parameters
     ///
     /// * `pipeline` - The pipeline instance to register
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::renderer::compute::ComputePipelineRegistry;
-    ///
-    /// let mut registry = ComputePipelineRegistry::new();
-    ///
-    /// // Register custom compute pipelines
-    /// let blur_pipeline = BlurPipeline::new(&device);
-    /// registry.register(blur_pipeline);
-    ///
-    /// let contrast_pipeline = ContrastPipeline::new(&device);
-    /// registry.register(contrast_pipeline);
-    ///
-    /// // Register multiple pipelines for different effects
-    /// registry.register(BrightnessAdjustmentPipeline::new(&device));
-    /// registry.register(ColorGradingPipeline::new(&device));
-    /// ```
     ///
     /// # Thread Safety
     ///

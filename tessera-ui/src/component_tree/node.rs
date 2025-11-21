@@ -199,15 +199,6 @@ impl ComponentNodeMetaData {
     /// Draw commands are responsible for rendering visual content (shapes, text, images).
     /// This method wraps the command in the unified `Command::Draw` variant and adds it
     /// to the command queue. Commands are executed in the order they are added.
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// metadata.push_draw_command(ShapeCommand::Rect {
-    ///     color: [1.0, 0.0, 0.0, 1.0],
-    ///     corner_radius: 8.0,
-    ///     shadow: None,
-    /// });
-    /// ```
     pub fn push_draw_command<C: DrawCommand + 'static>(&mut self, command: C) {
         let command = Box::new(command);
         let command = command as Box<dyn DrawCommand>;
@@ -220,11 +211,6 @@ impl ComponentNodeMetaData {
     /// Compute commands perform GPU computation tasks (post-processing effects,
     /// complex calculations). This method wraps the command in the unified
     /// `Command::Compute` variant and adds it to the command queue.
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// metadata.push_compute_command(DualBlurCommand::horizontal_then_vertical(5.0, Px::new(16)));
-    /// ```
     pub fn push_compute_command<C: ComputeCommand + 'static>(&mut self, command: C) {
         let command = Box::new(command);
         let command = command as Box<dyn ComputeCommand>;

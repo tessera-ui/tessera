@@ -46,60 +46,6 @@
 //! 2. Create a pipeline struct implementing [`DrawablePipeline<YourCommand>`]
 //! 3. Register the pipeline with [`PipelineRegistry::register`]
 //!
-//! ## Example: Simple Rectangle Pipeline
-//!
-//! ```rust,ignore
-//! use tessera_ui::{DrawCommand, DrawablePipeline, PxPosition, PxSize};
-//! use wgpu;
-//!
-//! // 1. Define the draw command
-//! #[derive(Debug)]
-//! struct RectangleCommand {
-//!     color: [f32; 4],
-//!     corner_radius: f32,
-//! }
-//!
-//! impl DrawCommand for RectangleCommand {
-//!     // Most commands don't need barriers
-//!     fn barrier(&self) -> Option<tessera_ui::BarrierRequirement> {
-//!         None
-//!     }
-//! }
-//!
-//! // 2. Implement the pipeline
-//! struct RectanglePipeline {
-//!     render_pipeline: wgpu::RenderPipeline,
-//!     uniform_buffer: wgpu::Buffer,
-//!     bind_group: wgpu::BindGroup,
-//! }
-//!
-//! impl RectanglePipeline {
-//!     fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, sample_count: u32) -> Self {
-//!         // Create shader, pipeline, buffers, etc.
-//!         // ... implementation details ...
-//!         # unimplemented!()
-//!     }
-//! }
-//!
-//! impl DrawablePipeline<RectangleCommand> for RectanglePipeline {
-//!     fn draw(
-//!         &mut self,
-//!         context: &mut DrawContext<RectangleCommand>,
-//!     ) {
-//!         // Update uniforms with command data
-//!         // Set pipeline and draw
-//!         context.render_pass.set_pipeline(&self.render_pipeline);
-//!         context.render_pass.set_bind_group(0, &self.bind_group, &[]);
-//!         context.render_pass.draw(0..6, 0..1); // Draw quad
-//!     }
-//! }
-//!
-//! // 3. Register the pipeline
-//! let mut registry = PipelineRegistry::new();
-//! let rectangle_pipeline = RectanglePipeline::new(&device, &config, sample_count);
-//! registry.register(rectangle_pipeline);
-//! ```
-//!
 //! # Integration with Basic Components
 //!
 //! The `tessera_basic_components` crate demonstrates real-world pipeline implementations:
@@ -484,24 +430,6 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
 /// 1. Create a new registry
 /// 2. Register all required pipelines during application initialization
 /// 3. The renderer uses the registry to dispatch commands during frame rendering
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use tessera_ui::renderer::drawer::PipelineRegistry;
-///
-/// // Create registry and register pipelines
-/// let mut registry = PipelineRegistry::new();
-/// registry.register(my_shape_pipeline);
-/// registry.register(my_text_pipeline);
-/// registry.register(my_image_pipeline);
-///
-/// // Registry is now ready for use by the renderer
-/// ```
-///
-/// # Performance Considerations
-///
-/// - Pipeline lookup is O(1) on average due to HashMap implementation.
 pub struct PipelineRegistry {
     pub(crate) pipelines: HashMap<TypeId, Box<dyn ErasedDrawablePipeline>>,
 }
@@ -546,22 +474,6 @@ impl PipelineRegistry {
     ///
     /// This method does not panic, but the registry will panic during dispatch
     /// if no pipeline is found for a given command type.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::renderer::drawer::PipelineRegistry;
-    ///
-    /// let mut registry = PipelineRegistry::new();
-    ///
-    /// // Register a custom pipeline
-    /// let my_pipeline = MyCustomPipeline::new(&device, &config, sample_count);
-    /// registry.register(my_pipeline);
-    ///
-    /// // Register multiple pipelines
-    /// registry.register(ShapePipeline::new(&device, &config, sample_count));
-    /// registry.register(TextPipeline::new(&device, &config, sample_count));
-    /// ```
     pub fn register<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static>(
         &mut self,
         pipeline: P,

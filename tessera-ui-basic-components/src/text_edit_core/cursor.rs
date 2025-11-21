@@ -3,7 +3,6 @@
 //! This module provides a blinking cursor component used within text editing interfaces.
 //! The cursor provides visual feedback for text insertion point and blinks at regular
 //! intervals to maintain user attention.
-
 use std::time::Instant;
 
 use tessera_ui::{Color, ComputedData, Dp, Px, tessera};
@@ -23,31 +22,6 @@ pub(crate) const CURSOR_WIDRH: Dp = Dp(2.5);
 ///
 /// * `height_px` - The height of the cursor in pixels, typically matching the line height
 /// * `bink_timer` - Timer used to control the blinking animation cycle
-///
-/// # Blinking Behavior
-///
-/// The cursor follows a 1-second blinking cycle:
-/// - Visible for 500ms
-/// - Hidden for 500ms
-/// - Repeats continuously
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use std::time::Instant;
-/// use tessera_ui::Px;
-///
-/// // Create a cursor with line height and current time
-/// cursor(Px(20.0), Instant::now());
-/// ```
-///
-/// # Rendering
-///
-/// The cursor is rendered as a solid black rectangle with:
-/// - Fixed width of 2.5 device-independent pixels
-/// - Variable height matching the text line height
-/// - No corner radius (sharp rectangular appearance)
-/// - No shadow effects
 #[tessera]
 pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
     // Skip rendering the cursor during the "off" phase of the blink cycle

@@ -6,12 +6,6 @@ use tessera_ui::{
 };
 
 /// Command to calculate the mean luminance of the input texture.
-///
-/// # Example
-/// ```rust,ignore
-/// use tessera_ui_basic_components::pipelines::mean::MeanCommand;
-/// let command = MeanCommand::new(gpu, resource_manager);
-/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MeanCommand {
     result_buffer_ref: ComputeResourceRef,

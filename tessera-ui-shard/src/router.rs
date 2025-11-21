@@ -12,19 +12,6 @@
 //! * Keep routing logic minimal; rendering happens when the top destination's
 //!   `exec_component()` is invoked every frame by `router_root`
 //!
-//! # Typical Usage
-//!
-//! ```rust,ignore
-//! // Navigate forward
-//! Router::with_mut(|router| {
-//!     router.push(HomeScreenDestination { /* fields */ });
-//! });
-//! // Navigate back
-//! Router::with_mut(|router| {
-//!     router.pop();
-//! });
-//! ```
-//!
 //! # Related
 //!
 //! * `#[shard]` macro – generates the `*Destination` structs + optional state injection

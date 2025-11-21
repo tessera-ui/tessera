@@ -3,40 +3,6 @@
 //! This module provides comprehensive cursor and touch event handling for the Tessera UI framework.
 //! It manages cursor position tracking, event queuing, touch gesture recognition, and inertial
 //! scrolling for smooth user interactions.
-//!
-//! # Key Features
-//!
-//! - **Multi-touch Support**: Tracks multiple simultaneous touch points with unique IDs
-//! - **Inertial Scrolling**: Provides smooth momentum-based scrolling after touch gestures
-//! - **Event Queuing**: Maintains a bounded queue of cursor events for processing
-//! - **Velocity Tracking**: Calculates touch velocities for natural gesture recognition
-//! - **Cross-platform**: Handles both mouse and touch input events consistently
-//!
-//! # Usage
-//!
-//! The main entry point is [`CursorState`], which maintains all cursor-related state:
-//!
-//! ```rust,ignore
-//! use tessera_ui::cursor::CursorState;
-//! use tessera_ui::PxPosition;
-//!
-//! let mut cursor_state = CursorState::default();
-//!
-//! // Handle touch start
-//! cursor_state.handle_touch_start(0, PxPosition::new(100.0, 200.0));
-//!
-//! // Process events
-//! let events = cursor_state.take_events();
-//! for event in events {
-//!     match event.content {
-//!         CursorEventContent::Pressed(_) => println!("Touch started"),
-//!         CursorEventContent::Scroll(scroll) => {
-//!             println!("Scroll: dx={}, dy={}", scroll.delta_x, scroll.delta_y);
-//!         }
-//!         _ => {}
-//!     }
-//! }
-//! ```
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -67,16 +33,6 @@ const MAX_INERTIA_VELOCITY: f32 = 6000.0;
 ///
 /// This struct maintains the necessary information to track touch movement, calculate
 /// velocities, and determine when to trigger inertial scrolling.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// let touch_state = TouchPointState {
-///     last_position: PxPosition::new(100.0, 200.0),
-///     last_update_time: Instant::now(),
-///     velocity_tracker: VelocityTracker::new(Instant::now()),
-/// };
-/// ```
 #[derive(Debug, Clone)]
 struct TouchPointState {
     /// The last recorded position of this touch point.
@@ -105,16 +61,6 @@ const VELOCITY_IDLE_CUTOFF: Duration = Duration::from_millis(65);
 ///
 /// When a touch gesture ends with sufficient velocity, this struct tracks
 /// the momentum and gradually decelerates the scroll movement over time.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// let inertia = ActiveInertia {
-///     velocity_x: 200.0,  // pixels per second
-///     velocity_y: -150.0, // pixels per second  
-///     last_tick_time: Instant::now(),
-/// };
-/// ```
 #[derive(Debug, Clone)]
 struct ActiveInertia {
     /// Current horizontal velocity in pixels per second.
@@ -148,15 +94,6 @@ fn clamp_inertia_velocity(vx: f32, vy: f32) -> (f32, f32) {
 ///
 /// This struct controls various aspects of how touch gestures are interpreted
 /// and converted into scroll events.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// let config = TouchScrollConfig {
-///     min_move_threshold: 3.0,  // More sensitive
-///     enabled: true,
-/// };
-/// ```
 #[derive(Debug, Clone)]
 struct TouchScrollConfig {
     /// Minimum movement distance in pixels required to trigger a scroll event.
@@ -183,45 +120,6 @@ impl Default for TouchScrollConfig {
 /// `CursorState` is the main interface for handling all cursor-related events in the Tessera
 /// UI framework. It manages cursor position tracking, event queuing, multi-touch support,
 /// and provides smooth inertial scrolling for touch gestures.
-///
-/// # Key Responsibilities
-///
-/// - **Position Tracking**: Maintains current cursor/touch position
-/// - **Event Management**: Queues and processes cursor events with bounded storage
-/// - **Multi-touch Support**: Tracks multiple simultaneous touch points
-/// - **Inertial Scrolling**: Provides momentum-based scrolling after touch gestures
-/// - **Cross-platform Input**: Handles both mouse and touch events uniformly
-///
-/// # Usage
-///
-/// ```rust,ignore
-/// use tessera_ui::cursor::{CursorState, CursorEventContent};
-/// use tessera_ui::PxPosition;
-///
-/// let mut cursor_state = CursorState::default();
-///
-/// // Handle a touch gesture
-/// cursor_state.handle_touch_start(0, PxPosition::new(100.0, 200.0));
-/// cursor_state.handle_touch_move(0, PxPosition::new(110.0, 190.0));
-/// cursor_state.handle_touch_end(0);
-///
-/// // Process accumulated events
-/// let events = cursor_state.take_events();
-/// for event in events {
-///     match event.content {
-///         CursorEventContent::Pressed(_) => println!("Touch started"),
-///         CursorEventContent::Scroll(scroll) => {
-///             println!("Scrolling: dx={}, dy={}", scroll.delta_x, scroll.delta_y);
-///         }
-///         CursorEventContent::Released(_) => println!("Touch ended"),
-///     }
-/// }
-/// ```
-///
-/// # Thread Safety
-///
-/// `CursorState` is not thread-safe and should be used from a single thread,
-/// typically the main UI thread where input events are processed.
 #[derive(Default)]
 pub struct CursorState {
     /// Current cursor position, if any cursor is active.
@@ -255,23 +153,6 @@ impl CursorState {
     /// # Arguments
     ///
     /// * `event` - The cursor event to add to the queue
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::cursor::{
-    ///     CursorState, CursorEvent, CursorEventContent, GestureState, PressKeyEventType,
-    /// };
-    /// use std::time::Instant;
-    ///
-    /// let mut cursor_state = CursorState::default();
-    /// let event = CursorEvent {
-    ///     timestamp: Instant::now(),
-    ///     content: CursorEventContent::Pressed(PressKeyEventType::Left),
-    ///     gesture_state: GestureState::TapCandidate,
-    /// };
-    /// cursor_state.push_event(event);
-    /// ```
     pub fn push_event(&mut self, event: CursorEvent) {
         self.events.push_back(event);
 
@@ -290,21 +171,6 @@ impl CursorState {
     /// # Arguments
     ///
     /// * `position` - New cursor position or `None` to clear the position
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::cursor::CursorState;
-    /// use tessera_ui::PxPosition;
-    ///
-    /// let mut cursor_state = CursorState::default();
-    ///
-    /// // Set position
-    /// cursor_state.update_position(PxPosition::new(100.0, 200.0));
-    ///
-    /// // Clear position
-    /// cursor_state.update_position(None);
-    /// ```
     pub fn update_position(&mut self, position: impl Into<Option<PxPosition>>) {
         self.position = position.into();
     }
@@ -383,22 +249,6 @@ impl CursorState {
     ///
     /// A vector of [`CursorEvent`]s ordered from oldest to newest.
     ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::cursor::CursorState;
-    ///
-    /// let mut cursor_state = CursorState::default();
-    ///
-    /// // ... handle some input events ...
-    ///
-    /// // Process all events at once
-    /// let events = cursor_state.take_events();
-    /// for event in events {
-    ///     println!("Event at {:?}: {:?}", event.timestamp, event.content);
-    /// }
-    /// ```
-    ///
     /// # Note
     ///
     /// Events are ordered from oldest to newest to ensure proper event processing order.
@@ -409,28 +259,9 @@ impl CursorState {
 
     /// Clears all cursor state and pending events.
     ///
-    /// This method resets the cursor state to its initial condition by:
-    /// - Clearing all queued events
-    /// - Removing cursor position information
-    /// - Stopping any active inertial scrolling
-    /// - Clearing all touch point tracking
-    ///
     /// This is typically used when the UI context changes significantly,
     /// such as when switching between different UI screens or when input
     /// focus changes.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::cursor::CursorState;
-    ///
-    /// let mut cursor_state = CursorState::default();
-    ///
-    /// // ... handle various input events ...
-    ///
-    /// // Reset everything when changing UI context
-    /// cursor_state.clear();
-    /// ```
     pub fn clear(&mut self) {
         self.events.clear();
         self.update_position(None);
@@ -448,22 +279,6 @@ impl CursorState {
     ///
     /// - `Some(PxPosition)` if a cursor position is currently tracked
     /// - `None` if no cursor is active
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::cursor::CursorState;
-    /// use tessera_ui::PxPosition;
-    ///
-    /// let mut cursor_state = CursorState::default();
-    ///
-    /// // Initially no position
-    /// assert_eq!(cursor_state.position(), None);
-    ///
-    /// // After setting position
-    /// cursor_state.update_position(PxPosition::new(100.0, 200.0));
-    /// assert_eq!(cursor_state.position(), Some(PxPosition::new(100.0, 200.0)));
-    /// ```
     pub fn position(&self) -> Option<PxPosition> {
         self.position
     }
@@ -477,20 +292,6 @@ impl CursorState {
     ///
     /// * `touch_id` - Unique identifier for this touch point
     /// * `position` - Initial position of the touch in pixel coordinates
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::cursor::CursorState;
-    /// use tessera_ui::PxPosition;
-    ///
-    /// let mut cursor_state = CursorState::default();
-    /// cursor_state.handle_touch_start(0, PxPosition::new(100.0, 200.0));
-    ///
-    /// // This generates a Pressed event and updates the cursor position
-    /// let events = cursor_state.take_events();
-    /// assert_eq!(events.len(), 1);
-    /// ```
     pub fn handle_touch_start(&mut self, touch_id: u64, position: PxPosition) {
         self.active_inertia = None; // Stop any existing inertia on new touch
         let now = Instant::now();
@@ -528,21 +329,6 @@ impl CursorState {
     ///
     /// - `Some(CursorEvent)` containing a scroll event if movement exceeds threshold
     /// - `None` if movement is below threshold or touch scrolling is disabled
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::cursor::CursorState;
-    /// use tessera_ui::PxPosition;
-    ///
-    /// let mut cursor_state = CursorState::default();
-    /// cursor_state.handle_touch_start(0, PxPosition::new(100.0, 200.0));
-    ///
-    /// // Move touch point - may generate scroll event
-    /// if let Some(scroll_event) = cursor_state.handle_touch_move(0, PxPosition::new(110.0, 190.0)) {
-    ///     println!("Scroll detected!");
-    /// }
-    /// ```
     pub fn handle_touch_move(
         &mut self,
         touch_id: u64,
@@ -605,22 +391,6 @@ impl CursorState {
     /// # Arguments
     ///
     /// * `touch_id` - Unique identifier for the touch point that ended
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::cursor::CursorState;
-    /// use tessera_ui::PxPosition;
-    ///
-    /// let mut cursor_state = CursorState::default();
-    /// cursor_state.handle_touch_start(0, PxPosition::new(100.0, 200.0));
-    /// cursor_state.handle_touch_move(0, PxPosition::new(150.0, 180.0));
-    /// cursor_state.handle_touch_end(0);
-    ///
-    /// // May start inertial scrolling based on gesture velocity
-    /// let events = cursor_state.take_events();
-    /// // Events may include scroll events from inertia
-    /// ```
     pub fn handle_touch_end(&mut self, touch_id: u64) {
         let now = Instant::now();
         let mut was_drag = false;
@@ -752,26 +522,6 @@ impl VelocityTracker {
 /// `CursorEvent` encapsulates all types of cursor interactions including presses,
 /// releases, and scroll actions. Each event includes a timestamp for precise
 /// timing and ordering of input events.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use tessera_ui::cursor::{CursorEvent, CursorEventContent, PressKeyEventType};
-/// use std::time::Instant;
-///
-/// let event = CursorEvent {
-///     timestamp: Instant::now(),
-///     content: CursorEventContent::Pressed(PressKeyEventType::Left),
-/// };
-///
-/// match event.content {
-///     CursorEventContent::Pressed(button) => println!("Button pressed: {:?}", button),
-///     CursorEventContent::Released(button) => println!("Button released: {:?}", button),
-///     CursorEventContent::Scroll(scroll) => {
-///         println!("Scroll: dx={}, dy={}", scroll.delta_x, scroll.delta_y);
-///     }
-/// }
-/// ```
 #[derive(Debug, Clone)]
 pub struct CursorEvent {
     /// Timestamp indicating when this event occurred.
@@ -790,31 +540,11 @@ pub struct CursorEvent {
 /// `ScrollEventConent` represents the amount of scrolling that occurred,
 /// with positive values typically indicating rightward/downward movement
 /// and negative values indicating leftward/upward movement.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use tessera_ui::cursor::ScrollEventConent;
-///
-/// let scroll = ScrollEventConent {
-///     delta_x: 10.0,   // Scroll right 10 pixels
-///     delta_y: -20.0,  // Scroll up 20 pixels
-/// };
-///
-/// println!("Horizontal scroll: {}", scroll.delta_x);
-/// println!("Vertical scroll: {}", scroll.delta_y);
-/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScrollEventConent {
     /// Horizontal scroll distance in pixels.
-    ///
-    /// Positive values indicate rightward scrolling,
-    /// negative values indicate leftward scrolling.
     pub delta_x: f32,
     /// Vertical scroll distance in pixels.
-    ///
-    /// Positive values indicate downward scrolling,
-    /// negative values indicate upward scrolling.
     pub delta_y: f32,
 }
 
@@ -823,25 +553,6 @@ pub struct ScrollEventConent {
 /// `CursorEventContent` represents the different kinds of interactions
 /// that can occur with cursor or touch input, including button presses,
 /// releases, and scroll actions.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use tessera_ui::cursor::{CursorEventContent, PressKeyEventType, ScrollEventConent};
-///
-/// // Handle different event types
-/// match event_content {
-///     CursorEventContent::Pressed(PressKeyEventType::Left) => {
-///         println!("Left button pressed");
-///     }
-///     CursorEventContent::Released(PressKeyEventType::Right) => {
-///         println!("Right button released");
-///     }
-///     CursorEventContent::Scroll(scroll) => {
-///         println!("Scrolled by ({}, {})", scroll.delta_x, scroll.delta_y);
-///     }
-/// }
-/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum CursorEventContent {
     /// A cursor button or touch point was pressed.
@@ -878,22 +589,6 @@ impl CursorEventContent {
     ///
     /// - `Some(CursorEventContent)` for supported mouse buttons
     /// - `None` for unsupported mouse buttons
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::cursor::CursorEventContent;
-    /// use winit::event::{ElementState, MouseButton};
-    ///
-    /// let press_event = CursorEventContent::from_press_event(
-    ///     ElementState::Pressed,
-    ///     MouseButton::Left
-    /// );
-    ///
-    /// if let Some(event) = press_event {
-    ///     println!("Created cursor event: {:?}", event);
-    /// }
-    /// ```
     pub fn from_press_event(
         state: winit::event::ElementState,
         button: winit::event::MouseButton,
@@ -924,24 +619,6 @@ impl CursorEventContent {
     /// # Returns
     ///
     /// A `CursorEventContent::Scroll` event with scaled delta values.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use tessera_ui::cursor::CursorEventContent;
-    /// use winit::event::MouseScrollDelta;
-    ///
-    /// let scroll_event = CursorEventContent::from_scroll_event(
-    ///     MouseScrollDelta::LineDelta(0.0, 1.0)  // Scroll down one line
-    /// );
-    ///
-    /// match scroll_event {
-    ///     CursorEventContent::Scroll(scroll) => {
-    ///         println!("Scroll delta: ({}, {})", scroll.delta_x, scroll.delta_y);
-    ///     }
-    ///     _ => {}
-    /// }
-    /// ```
     pub fn from_scroll_event(delta: winit::event::MouseScrollDelta) -> Self {
         let (delta_x, delta_y) = match delta {
             winit::event::MouseScrollDelta::LineDelta(x, y) => (x, y),
@@ -957,22 +634,6 @@ impl CursorEventContent {
 }
 
 /// Represents the different types of cursor buttons or touch interactions.
-///
-/// `PressKeyEventType` identifies which button was pressed or released in
-/// a cursor event. This covers the three standard mouse buttons that are
-/// commonly supported across different platforms and input devices.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use tessera_ui::cursor::PressKeyEventType;
-///
-/// match button_type {
-///     PressKeyEventType::Left => println!("Primary button (usually left-click)"),
-///     PressKeyEventType::Right => println!("Secondary button (usually right-click)"),
-///     PressKeyEventType::Middle => println!("Middle button (usually scroll wheel click)"),
-/// }
-/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PressKeyEventType {
     /// The primary mouse button (typically left button) or primary touch.

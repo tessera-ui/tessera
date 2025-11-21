@@ -16,7 +16,9 @@
 //! There are three fundamental ways a component can specify its size:
 //!
 //! ### Fixed
+//!
 //! The component has a specific, unchanging size:
+//!
 //! ```
 //! # use tessera_ui::Px;
 //! # use tessera_ui::DimensionValue;
@@ -24,7 +26,9 @@
 //! ```
 //!
 //! ### Wrap
+//!
 //! The component sizes itself to fit its content, with optional bounds:
+//!
 //! ```
 //! # use tessera_ui::Px;
 //! # use tessera_ui::DimensionValue;
@@ -45,6 +49,7 @@
 //! ```
 //!
 //! ### Fill
+//!
 //! The component expands to fill available space, with optional bounds:
 //! ```
 //! # use tessera_ui::Px;
@@ -93,29 +98,6 @@
 //!     max: Some(Px(200))
 //! });
 //! ```
-//!
-//! ## Usage in Components
-//!
-//! Components typically specify their constraints during the measurement phase:
-//!
-//! ```rust,ignore
-//! #[tessera]
-//! fn my_component() {
-//!     measure(|constraints| {
-//!         // This component wants to be exactly 100x50 pixels
-//!         let my_constraint = Constraint::new(
-//!             DimensionValue::Fixed(Px(100)),
-//!             DimensionValue::Fixed(Px(50))
-//!         );
-//!         
-//!         // Measure children with merged constraints
-//!         let child_constraint = my_constraint.merge(&constraints);
-//!         // ... measure children ...
-//!         
-//!         ComputedData::new(Size::new(Px(100), Px(50)))
-//!     });
-//! }
-//! ```
 
 use std::ops::Sub;
 
@@ -135,6 +117,7 @@ pub enum DimensionValue {
     /// always maintain their specified size regardless of available space.
     ///
     /// # Example
+    ///
     /// ```
     /// # use tessera_ui::Px;
     /// # use tessera_ui::DimensionValue;
@@ -153,6 +136,7 @@ pub enum DimensionValue {
     /// - `max`: Optional maximum size - the component will never be larger than this
     ///
     /// # Examples
+    ///
     /// ```
     /// # use tessera_ui::Px;
     /// # use tessera_ui::DimensionValue;
@@ -179,10 +163,12 @@ pub enum DimensionValue {
     /// and maximum bounds.
     ///
     /// # Parameters
+    ///
     /// - `min`: Optional minimum size - the component will never be smaller than this
     /// - `max`: Optional maximum size - the component will never be larger than this
     ///
     /// # Examples
+    ///
     /// ```
     /// # use tessera_ui::Px;
     /// # use tessera_ui::DimensionValue;
@@ -239,10 +225,12 @@ impl DimensionValue {
     /// which is useful for layout calculations and constraint validation.
     ///
     /// # Returns
+    ///
     /// - For `Fixed`: Returns `Some(fixed_value)` since fixed dimensions have an implicit maximum
     /// - For `Wrap` and `Fill`: Returns the `max` value if specified, otherwise `None`
     ///
     /// # Example
+    ///
     /// ```
     /// # use tessera_ui::Px;
     /// # use tessera_ui::DimensionValue;
@@ -270,6 +258,7 @@ impl DimensionValue {
     /// maintain their minimum required size.
     ///
     /// # Returns
+    ///
     /// - For `Fixed`: Returns `Some(fixed_value)` since fixed dimensions have an implicit minimum
     /// - For `Wrap` and `Fill`: Returns the `min` value if specified, otherwise `None`
     ///
@@ -428,6 +417,7 @@ impl Constraint {
     /// constraint and is useful as a starting point for constraint calculations.
     ///
     /// # Example
+    ///
     /// ```
     /// # use tessera_ui::{Constraint, DimensionValue};
     /// let flexible = Constraint::NONE;
@@ -478,25 +468,30 @@ impl Constraint {
     /// while ensuring layout consistency:
     ///
     /// ## Fixed Constraints (Highest Priority)
+    ///
     /// - **Fixed always wins**: A fixed constraint cannot be overridden by its parent
     /// - Fixed dimensions maintain their exact size regardless of available space
     ///
     /// ## Wrap Constraints (Content-Based)
+    ///
     /// - **Preserves content sizing**: Wrap constraints maintain their intrinsic sizing behavior
     /// - When parent is Fixed: Child wraps within parent's fixed bounds
     /// - When parent is Wrap: Child combines min/max constraints with parent
     /// - When parent is Fill: Child wraps within parent's fill bounds
     ///
     /// ## Fill Constraints (Space-Filling)
+    ///
     /// - **Adapts to available space**: Fill constraints expand within parent bounds
     /// - When parent is Fixed: Child fills parent's fixed space (respecting own min/max)
     /// - When parent is Wrap: Child fills available space within parent's wrap bounds
     /// - When parent is Fill: Child combines fill constraints with parent
     ///
     /// # Parameters
+    ///
     /// - `parent_constraint`: The constraint from the parent component
     ///
     /// # Returns
+    ///
     /// A new constraint that represents the resolved layout requirements
     ///
     /// # Examples
@@ -539,10 +534,12 @@ impl Constraint {
     /// It's called by the public `merge` method to handle width and height dimensions separately.
     ///
     /// # Parameters
+    ///
     /// - `child_dim`: The dimension constraint from the child component
     /// - `parent_dim`: The dimension constraint from the parent component
     ///
     /// # Returns
+    ///
     /// The merged dimension value that respects both constraints appropriately
     fn merge_dimension(child_dim: DimensionValue, parent_dim: DimensionValue) -> DimensionValue {
         match child_dim {

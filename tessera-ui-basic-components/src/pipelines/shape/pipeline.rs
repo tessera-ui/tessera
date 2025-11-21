@@ -88,14 +88,6 @@ struct ShapeHeatTracker {
 }
 
 /// Pipeline for rendering vector shapes in UI components.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use tessera_ui_basic_components::pipelines::shape::ShapePipeline;
-///
-/// let pipeline = ShapePipeline::new(&device, &config, sample_count);
-/// ```
 pub struct ShapePipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
