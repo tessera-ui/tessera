@@ -30,6 +30,7 @@ use tessera_ui_basic_components::{
 
 use crate::example_components::{
     button::ButtonShowcaseDestination,
+    button_group::ButtonGroupShowcaseDestination,
     checkbox::CheckboxShowcaseDestination,
     fluid_glass::FluidGlassShowcaseDestination,
     glass_button::GlassButtonShowcaseDestination,
@@ -339,6 +340,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(ButtonShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Button Group",
+            "Material 3 segmented buttons supporting single or multiple selection.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(ButtonGroupShowcaseDestination {});
                 });
             },
         ),
