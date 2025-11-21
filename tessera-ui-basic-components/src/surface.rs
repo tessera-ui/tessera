@@ -51,7 +51,7 @@ pub enum SurfaceStyle {
 impl Default for SurfaceStyle {
     fn default() -> Self {
         SurfaceStyle::Filled {
-            color: Color::new(0.4745, 0.5255, 0.7961, 1.0),
+            color: Color::new(0.97, 0.97, 0.98, 1.0), // MD3 surface-variant tone
         }
     }
 }
@@ -69,44 +69,36 @@ pub struct SurfaceArgs {
     /// Defines the visual style of the surface (fill, outline, or both).
     #[builder(default)]
     pub style: SurfaceStyle,
-
     /// Optional style to apply when the cursor is hovering over the surface.
     /// This is only active when `on_click` is also provided.
     #[builder(default)]
     pub hover_style: Option<SurfaceStyle>,
-
     /// Geometric outline of the surface (rounded rectangle / ellipse / capsule variants).
     #[builder(default)]
     pub shape: Shape,
-
     /// Optional shadow/elevation style. When present it is passed through to the shape pipeline.
     #[builder(default, setter(strip_option))]
     pub shadow: Option<ShadowProps>,
-
     /// Internal padding applied symmetrically (left/right & top/bottom). Child content is
     /// positioned at (padding, padding). Also influences measured minimum size.
     #[builder(default = "Dp(0.0)")]
     pub padding: Dp,
-
     /// Explicit width constraint (Fixed / Wrap / Fill). Defaults to `Wrap`.
     #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub width: DimensionValue,
-
     /// Explicit height constraint (Fixed / Wrap / Fill). Defaults to `Wrap`.
     #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub height: DimensionValue,
-
     /// Optional click handler. Presence of this value makes the surface interactive:
+    ///
     /// * Cursor changes to pointer when hovered
     /// * Press / release events are captured
     /// * Ripple animation starts on press if a `RippleState` is provided
     #[builder(default, setter(strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
-
     /// Color of the ripple effect (if interactive & ripple state provided).
-    #[builder(default = "Color::from_rgb(1.0, 1.0, 1.0)")]
+    #[builder(default = "Color::new(0.05, 0.27, 0.58, 1.0)")]
     pub ripple_color: Color,
-
     /// If true, all input events inside the surface bounds are blocked (stop propagation),
     /// after (optionally) handling its own click logic.
     #[builder(default = "false")]
