@@ -73,6 +73,7 @@ pub mod icon_button;
 pub mod image;
 pub mod image_vector;
 pub mod lazy_list;
+pub mod menus;
 pub mod pipelines;
 pub mod pos_misc;
 pub mod progress;

@@ -40,6 +40,7 @@ use crate::example_components::{
     image::{IconShowcaseDestination, ImageShowcaseDestination},
     layouts::LayoutsShowcaseDestination,
     lazy_lists::LazyListsShowcaseDestination,
+    menus::MenusShowcaseDestination,
     progress::ProgressShowcaseDestination,
     slider::SliderShowcaseDestination,
     spacer::SpacerShowcaseDestination,
@@ -349,6 +350,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(ButtonGroupShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Menus",
+            "Material 3 anchored menus with selection and pin toggle.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(MenusShowcaseDestination {});
                 });
             },
         ),
