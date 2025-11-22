@@ -368,6 +368,7 @@ fn apply_close_action(state: &MenuState, on_dismiss: &Option<Arc<dyn Fn() + Send
 ///
 /// let state = MenuState::new();
 /// state.open_at(MenuAnchor::from_dp((Dp(8.0), Dp(24.0)), (Dp(120.0), Dp(36.0))));
+/// let state_for_menu = state.clone();
 ///
 /// let args = MenuProviderArgsBuilder::default()
 ///     .placement(MenuPlacement::BelowStart)
@@ -381,14 +382,15 @@ fn apply_close_action(state: &MenuState, on_dismiss: &Option<Arc<dyn Fn() + Send
 ///         text("Main content");
 ///     },
 ///     move |menu_scope: &mut MenuScope<'_, '_>| {
-///         menu_scope.item(|| {
+///         let menu_state = state_for_menu.clone();
+///         menu_scope.item(move || {
 ///             menu_item(
 ///                 MenuItemArgsBuilder::default()
 ///                     .label("Edit")
 ///                     .on_click(Arc::new(|| {}))
 ///                     .build()
 ///                     .unwrap(),
-///                 Some(state.clone()),
+///                 Some(menu_state.clone()),
 ///                 RippleState::new(),
 ///             );
 ///         });
