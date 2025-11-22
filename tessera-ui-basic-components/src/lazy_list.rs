@@ -130,6 +130,16 @@ impl<'a> LazyListScope<'a> {
         self.slots.push(LazySlot::items(count, builder));
     }
 
+    /// Add a single lazily generated item.
+    pub fn item<F>(&mut self, builder: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.items(1, move |_| {
+            builder();
+        });
+    }
+
     /// Adds lazily generated items from an iterator, providing both index and element reference.
     ///
     /// The iterator is eagerly collected so it can be accessed on demand while virtualizing.
