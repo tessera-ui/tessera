@@ -12,9 +12,9 @@ pub enum ShapeCommand {
         color: Color,
         /// Corner radii of the rectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
-        /// G2 exponent for rounded corners.
+        /// G2 exponent per corner (tl, tr, br, bl).
         /// k=2.0 results in standard G1 circular corners.
-        g2_k_value: f32,
+        corner_g2: [f32; 4],
         /// Shadow properties of the rectangle
         shadow: Option<ShadowProps>,
     },
@@ -24,9 +24,9 @@ pub enum ShapeCommand {
         color: Color,
         /// Corner radii of the rectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
-        /// G2 exponent for rounded corners.
+        /// G2 exponent per corner (tl, tr, br, bl).
         /// k=2.0 results in standard G1 circular corners.
-        g2_k_value: f32,
+        corner_g2: [f32; 4],
         /// Shadow properties of the rectangle (applied to the outline shape)
         shadow: Option<ShadowProps>,
         /// Width of the border
@@ -38,9 +38,9 @@ pub enum ShapeCommand {
         color: Color,
         /// Corner radii of therectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
-        /// G2 exponent for rounded corners.
+        /// G2 exponent per corner (tl, tr, br, bl).
         /// k=2.0 results in standard G1 circular corners.
-        g2_k_value: f32,
+        corner_g2: [f32; 4],
         /// Shadow properties of the rectangle
         shadow: Option<ShadowProps>,
         /// Ripple effect properties
@@ -52,9 +52,9 @@ pub enum ShapeCommand {
         color: Color,
         /// Corner radii of the rectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
-        /// G2 exponent for rounded corners.
+        /// G2 exponent per corner (tl, tr, br, bl).
         /// k=2.0 results in standard G1 circular corners.
-        g2_k_value: f32,
+        corner_g2: [f32; 4],
         /// Shadow properties of the rectangle (applied to the outline shape)
         shadow: Option<ShadowProps>,
         /// Width of the border
@@ -86,9 +86,9 @@ pub enum ShapeCommand {
         border_color: Color,
         /// Corner radii of the rectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
-        /// G2 exponent for rounded corners.
+        /// G2 exponent per corner (tl, tr, br, bl).
         /// k=2.0 results in standard G1 circular corners.
-        g2_k_value: f32,
+        corner_g2: [f32; 4],
         /// Shadow properties of the rectangle (applied to the outline shape)
         shadow: Option<ShadowProps>,
         /// Width of the border
@@ -102,9 +102,9 @@ pub enum ShapeCommand {
         border_color: Color,
         /// Corner radii of the rectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
-        /// G2 exponent for rounded corners.
+        /// G2 exponent per corner (tl, tr, br, bl).
         /// k=2.0 results in standard G1 circular corners.
-        g2_k_value: f32,
+        corner_g2: [f32; 4],
         /// Shadow properties of the rectangle (applied to the outline shape)
         shadow: Option<ShadowProps>,
         /// Width of the border
@@ -186,7 +186,7 @@ pub(crate) fn rect_to_uniforms(
         primary_color_rgba,
         border_color_rgba,
         corner_radii,
-        g2_k_value,
+        corner_g2,
         shadow,
         border_width,
         render_mode,
@@ -195,13 +195,13 @@ pub(crate) fn rect_to_uniforms(
         ShapeCommand::Rect {
             color,
             corner_radii,
-            g2_k_value,
+            corner_g2,
             shadow,
         } => (
             *color,
             Color::TRANSPARENT,
             *corner_radii,
-            *g2_k_value,
+            *corner_g2,
             *shadow,
             0.0,
             0.0,
@@ -210,14 +210,14 @@ pub(crate) fn rect_to_uniforms(
         ShapeCommand::OutlinedRect {
             color,
             corner_radii,
-            g2_k_value,
+            corner_g2,
             shadow,
             border_width,
         } => (
             *color,
             Color::TRANSPARENT,
             *corner_radii,
-            *g2_k_value,
+            *corner_g2,
             *shadow,
             *border_width,
             1.0,
@@ -226,14 +226,14 @@ pub(crate) fn rect_to_uniforms(
         ShapeCommand::RippleRect {
             color,
             corner_radii,
-            g2_k_value,
+            corner_g2,
             shadow,
             ripple,
         } => (
             *color,
             Color::TRANSPARENT,
             *corner_radii,
-            *g2_k_value,
+            *corner_g2,
             *shadow,
             0.0,
             3.0,
@@ -242,7 +242,7 @@ pub(crate) fn rect_to_uniforms(
         ShapeCommand::RippleOutlinedRect {
             color,
             corner_radii,
-            g2_k_value,
+            corner_g2,
             shadow,
             border_width,
             ripple,
@@ -250,7 +250,7 @@ pub(crate) fn rect_to_uniforms(
             *color,
             Color::TRANSPARENT,
             *corner_radii,
-            *g2_k_value,
+            *corner_g2,
             *shadow,
             *border_width,
             4.0,
@@ -260,7 +260,7 @@ pub(crate) fn rect_to_uniforms(
             *color,
             Color::TRANSPARENT,
             [-1.0, -1.0, -1.0, -1.0],
-            0.0,
+            [0.0; 4],
             *shadow,
             0.0,
             0.0,
@@ -274,7 +274,7 @@ pub(crate) fn rect_to_uniforms(
             *color,
             Color::TRANSPARENT,
             [-1.0, -1.0, -1.0, -1.0],
-            0.0,
+            [0.0; 4],
             *shadow,
             *border_width,
             1.0,
@@ -284,14 +284,14 @@ pub(crate) fn rect_to_uniforms(
             color,
             border_color,
             corner_radii,
-            g2_k_value,
+            corner_g2,
             shadow,
             border_width,
         } => (
             *color,
             *border_color,
             *corner_radii,
-            *g2_k_value,
+            *corner_g2,
             *shadow,
             *border_width,
             5.0,
@@ -301,7 +301,7 @@ pub(crate) fn rect_to_uniforms(
             color,
             border_color,
             corner_radii,
-            g2_k_value,
+            corner_g2,
             shadow,
             border_width,
             ripple,
@@ -309,7 +309,7 @@ pub(crate) fn rect_to_uniforms(
             *color,
             *border_color,
             *corner_radii,
-            *g2_k_value,
+            *corner_g2,
             *shadow,
             *border_width,
             5.0,
@@ -324,7 +324,7 @@ pub(crate) fn rect_to_uniforms(
             *color,
             *border_color,
             [-1.0, -1.0, -1.0, -1.0],
-            0.0,
+            [0.0; 4],
             *shadow,
             *border_width,
             5.0,
@@ -357,6 +357,7 @@ pub(crate) fn rect_to_uniforms(
 
     ShapeUniforms {
         corner_radii: corner_radii.into(),
+        corner_g2: corner_g2.into(),
         primary_color: primary_color_rgba.to_array().into(),
         border_color: border_color_rgba.to_array().into(),
         shadow_color: shadow_rgba_color.to_array().into(),
@@ -369,7 +370,6 @@ pub(crate) fn rect_to_uniforms(
         .into(),
         ripple_params,
         ripple_color,
-        g2_k_value,
         border_width,
         position: [
             position.x.to_f32(),

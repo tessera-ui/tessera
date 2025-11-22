@@ -35,7 +35,7 @@ pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
         let drawable = ShapeCommand::Rect {
             color: Color::BLACK,
             corner_radii: glam::Vec4::ZERO.into(),
-            g2_k_value: 3.0, // Use G2-like corners
+            corner_g2: [3.0; 4], // Use G2-like corners
             shadow: None,
         };
 

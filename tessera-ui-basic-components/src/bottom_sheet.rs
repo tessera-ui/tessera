@@ -15,7 +15,7 @@ use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, tessera, winit};
 use crate::{
     animation,
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
 };
 
@@ -216,11 +216,10 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
             .blur_radius(Dp(blur_radius as f64))
             .border(None)
             .shape(Shape::RoundedRectangle {
-                top_left: Dp(0.0),
-                top_right: Dp(0.0),
-                bottom_right: Dp(0.0),
-                bottom_left: Dp(0.0),
-                g2_k_value: 3.0,
+                top_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             })
             .noise_amount(0.0)
             .build()
@@ -316,11 +315,10 @@ fn render_content(
             fluid_glass(
                 FluidGlassArgsBuilder::default()
                     .shape(Shape::RoundedRectangle {
-                        top_left: Dp(50.0),
-                        top_right: Dp(50.0),
-                        bottom_right: Dp(0.0),
-                        bottom_left: Dp(0.0),
-                        g2_k_value: 3.0,
+                        top_left: RoundedCorner::manual(Dp(50.0), 3.0),
+                        top_right: RoundedCorner::manual(Dp(50.0), 3.0),
+                        bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
                     .tint_color(Color::new(0.6, 0.8, 1.0, 0.3)) // Give it a slight blue tint
                     .width(DimensionValue::Fill {
@@ -342,11 +340,10 @@ fn render_content(
                 SurfaceArgsBuilder::default()
                     .style(Color::new(0.2, 0.2, 0.2, 1.0).into())
                     .shape(Shape::RoundedRectangle {
-                        top_left: Dp(25.0),
-                        top_right: Dp(25.0),
-                        bottom_right: Dp(0.0),
-                        bottom_left: Dp(0.0),
-                        g2_k_value: 3.0,
+                        top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+                        top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                        bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
                     .width(DimensionValue::Fill {
                         min: None,

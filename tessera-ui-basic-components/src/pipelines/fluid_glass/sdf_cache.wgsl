@@ -1,26 +1,29 @@
 struct SdfUniforms {
     size: vec2<f32>,
     corner_radii: vec4<f32>,
+    corner_g2: vec4<f32>,
     shape_type: f32,
-    g2_k_value: f32,
 }
 
 @group(0) @binding(0) var<uniform> uniforms: SdfUniforms;
 @group(0) @binding(1) var sdf_texture: texture_storage_2d<rgba16float, write>;
 
-fn sdf_g2_rounded_box(p: vec2<f32>, b: vec2<f32>, r: vec4<f32>, k: f32) -> f32 {
+fn sdf_g2_rounded_box(p: vec2<f32>, b: vec2<f32>, r: vec4<f32>, k: vec4<f32>) -> f32 {
     let top_radii = select(r.x, r.y, p.x > 0.0);
     let bottom_radii = select(r.w, r.z, p.x > 0.0);
     let r_for_quadrant = select(top_radii, bottom_radii, p.y > 0.0);
+    let top_k = select(k.x, k.y, p.x > 0.0);
+    let bottom_k = select(k.w, k.z, p.x > 0.0);
+    let k_for_quadrant = select(top_k, bottom_k, p.y > 0.0);
 
     let q = abs(p) - b + r_for_quadrant;
     let v = max(q, vec2<f32>(0.0));
 
-    if abs(k - 2.0) < 0.001 {
+    if abs(k_for_quadrant - 2.0) < 0.001 {
         return length(v) + min(max(q.x, q.y), 0.0) - r_for_quadrant;
     }
 
-    let dist_corner_shape = pow(pow(v.x, k) + pow(v.y, k), 1.0 / k);
+    let dist_corner_shape = pow(pow(v.x, k_for_quadrant) + pow(v.y, k_for_quadrant), 1.0 / k_for_quadrant);
     return dist_corner_shape + min(max(q.x, q.y), 0.0) - r_for_quadrant;
 }
 
@@ -41,17 +44,20 @@ fn signed_one(value: f32) -> f32 {
     return select(-1.0, 1.0, value >= 0.0);
 }
 
-fn grad_sd_g2_rounded_box(coord: vec2<f32>, half_size: vec2<f32>, r: vec4<f32>, k: f32) -> vec2<f32> {
+fn grad_sd_g2_rounded_box(coord: vec2<f32>, half_size: vec2<f32>, r: vec4<f32>, k: vec4<f32>) -> vec2<f32> {
     let top_radii = select(r.x, r.y, coord.x > 0.0);
     let bottom_radii = select(r.w, r.z, coord.x > 0.0);
     let r_for_quadrant = select(top_radii, bottom_radii, coord.y > 0.0);
+    let top_k = select(k.x, k.y, coord.x > 0.0);
+    let bottom_k = select(k.w, k.z, coord.x > 0.0);
+    let k_for_quadrant = select(top_k, bottom_k, coord.y > 0.0);
     let inner_half_size = half_size - r_for_quadrant;
     let corner_coord = abs(coord) - inner_half_size;
 
     if corner_coord.x >= 0.0 && corner_coord.y >= 0.0 {
         let grad_dir = vec2<f32>(
-            pow(corner_coord.x + 0.0001, k - 1.0),
-            pow(corner_coord.y + 0.0001, k - 1.0)
+            pow(corner_coord.x + 0.0001, k_for_quadrant - 1.0),
+            pow(corner_coord.y + 0.0001, k_for_quadrant - 1.0)
         );
         return sign(coord) * normalize(grad_dir);
     } else {
@@ -93,8 +99,8 @@ fn compute_sd_and_normal(coord: vec2<f32>, half_size: vec2<f32>, uniforms: SdfUn
         let normal = grad_sd_axis_aligned_box(coord, half_size);
         return vec3<f32>(sd, normal);
     }
-    let sd = sdf_g2_rounded_box(coord, half_size, uniforms.corner_radii, uniforms.g2_k_value);
-    let normal = grad_sd_g2_rounded_box(coord, half_size, uniforms.corner_radii, uniforms.g2_k_value);
+    let sd = sdf_g2_rounded_box(coord, half_size, uniforms.corner_radii, uniforms.corner_g2);
+    let normal = grad_sd_g2_rounded_box(coord, half_size, uniforms.corner_radii, uniforms.corner_g2);
     return vec3<f32>(sd, normal);
 }
 

@@ -24,15 +24,15 @@ const SDF_HEAT_TRACKING_WINDOW: u32 = 10;
 struct SdfUniforms {
     size: Vec2,
     corner_radii: Vec4,
+    corner_g2: Vec4,
     shape_type: f32,
-    g2_k_value: f32,
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct FluidGlassSdfCacheKey {
     shape_type: u32,
     corner_radii: [u32; 4],
-    g2_k_value: u32,
+    corner_g2: [u32; 4],
     width: u32,
     height: u32,
 }
@@ -61,8 +61,8 @@ struct SdfGenerationInput<'a> {
     queue: &'a wgpu::Queue,
     size: (u32, u32),
     corner_radii: Vec4,
+    corner_g2: Vec4,
     shape_type: f32,
-    g2_k_value: f32,
 }
 
 struct FluidGlassSdfGenerator {
@@ -71,7 +71,7 @@ struct FluidGlassSdfGenerator {
 }
 
 impl FluidGlassSdfCacheKey {
-    fn new(shape_type: f32, corner_radii: Vec4, g2_k_value: f32, width: u32, height: u32) -> Self {
+    fn new(shape_type: f32, corner_radii: Vec4, corner_g2: Vec4, width: u32, height: u32) -> Self {
         Self {
             shape_type: shape_type.to_bits(),
             corner_radii: [
@@ -80,7 +80,12 @@ impl FluidGlassSdfCacheKey {
                 corner_radii.z.to_bits(),
                 corner_radii.w.to_bits(),
             ],
-            g2_k_value: g2_k_value.to_bits(),
+            corner_g2: [
+                corner_g2.x.to_bits(),
+                corner_g2.y.to_bits(),
+                corner_g2.z.to_bits(),
+                corner_g2.w.to_bits(),
+            ],
             width,
             height,
         }
@@ -147,8 +152,8 @@ impl FluidGlassSdfGenerator {
             queue,
             size,
             corner_radii,
+            corner_g2,
             shape_type,
-            g2_k_value,
         } = input;
         let (width, height) = size;
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -170,8 +175,8 @@ impl FluidGlassSdfGenerator {
         let sdf_uniforms = SdfUniforms {
             size: Vec2::new(width as f32, height as f32),
             corner_radii,
+            corner_g2,
             shape_type,
-            g2_k_value,
         };
 
         let mut uniform_buffer = UniformBuffer::new(Vec::new());
@@ -229,11 +234,11 @@ struct GlassUniforms {
     tint_color: Vec4,
     rect_uv_bounds: Vec4,
     corner_radii: Vec4,
+    corner_g2: Vec4,
     clip_rect_uv: Vec4,
     rect_size_px: Vec2,
     ripple_center: Vec2,
     shape_type: f32,
-    g2_k_value: f32,
     dispersion_height: f32,
     chroma_multiplier: f32,
     refraction_height: f32,
@@ -545,53 +550,20 @@ impl FluidGlassPipeline {
             (start_pos.y.0 + size.height.0) as f32 / screen_h,
         ];
 
-        let corner_radii = match args.shape {
-            crate::shape_def::Shape::RoundedRectangle {
-                top_left,
-                top_right,
-                bottom_right,
-                bottom_left,
-                ..
-            } => [
-                top_left.to_pixels_f32(),
-                top_right.to_pixels_f32(),
-                bottom_right.to_pixels_f32(),
-                bottom_left.to_pixels_f32(),
-            ]
-            .into(),
-            crate::shape_def::Shape::Ellipse => Vec4::ZERO,
-            crate::shape_def::Shape::HorizontalCapsule => {
-                let radius = size.height.to_f32() / 2.0;
-                [radius, radius, radius, radius].into()
-            }
-            crate::shape_def::Shape::VerticalCapsule => {
-                let radius = size.width.to_f32() / 2.0;
-                [radius, radius, radius, radius].into()
-            }
+        let resolved_shape = args.shape.resolve_for_size(*size);
+        let (corner_radii, corner_g2, mut shape_type) = match resolved_shape {
+            crate::shape_def::ResolvedShape::Rounded {
+                corner_radii,
+                corner_g2,
+            } => (corner_radii.into(), corner_g2.into(), 0.0),
+            crate::shape_def::ResolvedShape::Ellipse => (Vec4::ZERO, Vec4::ZERO, 1.0),
         };
 
-        let is_axis_aligned_rect =
-            matches!(args.shape, crate::shape_def::Shape::RoundedRectangle { .. })
-                && corner_radii == Vec4::ZERO;
+        let is_axis_aligned_rect = matches!(resolved_shape, crate::shape_def::ResolvedShape::Rounded { corner_radii, .. } if corner_radii == [0.0, 0.0, 0.0, 0.0]);
 
-        let shape_type = match args.shape {
-            crate::shape_def::Shape::RoundedRectangle { .. } => 0.0,
-            crate::shape_def::Shape::Ellipse => 1.0,
-            crate::shape_def::Shape::HorizontalCapsule => 0.0,
-            crate::shape_def::Shape::VerticalCapsule => 0.0,
-        };
-        let shape_type = if is_axis_aligned_rect {
-            2.0
-        } else {
-            shape_type
-        };
-
-        let g2_k_value = match args.shape {
-            crate::shape_def::Shape::RoundedRectangle { g2_k_value, .. } => g2_k_value,
-            crate::shape_def::Shape::Ellipse => 0.0,
-            crate::shape_def::Shape::HorizontalCapsule => 2.0,
-            crate::shape_def::Shape::VerticalCapsule => 2.0,
-        };
+        if is_axis_aligned_rect {
+            shape_type = 2.0;
+        }
 
         let border_width = args
             .border
@@ -600,7 +572,7 @@ impl FluidGlassPipeline {
             .unwrap_or(0.0);
 
         let sdf_entry =
-            self.maybe_get_sdf_entry(gpu, queue, size, corner_radii, shape_type, g2_k_value);
+            self.maybe_get_sdf_entry(gpu, queue, size, corner_radii, shape_type, corner_g2);
 
         let uniforms = GlassUniforms {
             tint_color: args.tint_color.to_array().into(),
@@ -609,8 +581,8 @@ impl FluidGlassPipeline {
             rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
             ripple_center: args.ripple_center.unwrap_or([0.0, 0.0]).into(),
             corner_radii,
+            corner_g2,
             shape_type,
-            g2_k_value,
             dispersion_height: args.dispersion_height.to_pixels_f32(),
             chroma_multiplier: args.chroma_multiplier,
             refraction_height: args.refraction_height.to_pixels_f32(),
@@ -675,7 +647,7 @@ impl FluidGlassPipeline {
         size: &PxSize,
         corner_radii: Vec4,
         shape_type: f32,
-        g2_k_value: f32,
+        corner_g2: Vec4,
     ) -> Option<Arc<FluidGlassSdfCacheEntry>> {
         if !(shape_type == 0.0 || shape_type == 1.0) {
             return None;
@@ -687,7 +659,7 @@ impl FluidGlassPipeline {
             return None;
         }
 
-        let key = FluidGlassSdfCacheKey::new(shape_type, corner_radii, g2_k_value, width, height);
+        let key = FluidGlassSdfCacheKey::new(shape_type, corner_radii, corner_g2, width, height);
 
         // Check if already cached
         if let Some(entry) = self.sdf_cache.get(&key) {
@@ -717,7 +689,7 @@ impl FluidGlassPipeline {
                 size: (width, height),
                 corner_radii,
                 shape_type,
-                g2_k_value,
+                corner_g2,
             }));
 
             self.sdf_cache.put(key, entry.clone());

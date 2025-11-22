@@ -360,7 +360,7 @@ pub fn switch(args: impl Into<SwitchArgs>, state: SwitchState) {
         let track_command = ShapeCommand::Rect {
             color: track_color,
             corner_radii: glam::Vec4::splat((self_height_px.0 as f32) / 2.0).into(),
-            g2_k_value: 2.0, // Use G1 corners here specifically
+            corner_g2: [2.0; 4], // Use G1 corners here specifically
             shadow: None,
         };
         input.metadata_mut().push_draw_command(track_command);

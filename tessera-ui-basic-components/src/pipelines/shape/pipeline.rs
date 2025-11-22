@@ -56,17 +56,16 @@ struct Vertex {
 /// - `render_params`: Additional rendering parameters.
 /// - `ripple_params`: Ripple effect parameters.
 /// - `ripple_color`: Ripple color.
-/// - `g2_k_value`: G2 curve parameter for rounded rectangles.
 #[derive(ShaderType, Clone, Copy, Debug, PartialEq)]
 pub struct ShapeUniforms {
     pub corner_radii: Vec4, // x:tl, y:tr, z:br, w:bl
+    pub corner_g2: Vec4,    // x:tl, y:tr, z:br, w:bl
     pub primary_color: Vec4,
     pub border_color: Vec4,
     pub shadow_color: Vec4,
     pub render_params: Vec4,
     pub ripple_params: Vec4,
     pub ripple_color: Vec4,
-    pub g2_k_value: f32,
     pub border_width: f32, // separate border_width field
     pub position: Vec4,    // x, y, width, height
     pub screen_size: Vec2,
@@ -700,7 +699,7 @@ struct ShapeCacheKey {
     primary_color: [u32; 4],
     border_color: Option<[u32; 4]>,
     corner_radii: [u32; 4],
-    g2_k_value: u32,
+    corner_g2: [u32; 4],
     border_width: u32,
     shadow: Option<ShadowKey>,
     ripple: Option<RippleKey>,
@@ -763,14 +762,14 @@ impl ShapeCacheKey {
             ShapeCommand::Rect {
                 color,
                 corner_radii,
-                g2_k_value,
+                corner_g2,
                 shadow,
             } => Some(Self {
                 variant: ShapeCacheVariant::Rect,
                 primary_color: color_to_bits(*color),
                 border_color: None,
                 corner_radii: corner_radii.map(f32_to_bits),
-                g2_k_value: f32_to_bits(*g2_k_value),
+                corner_g2: corner_g2.map(f32_to_bits),
                 border_width: 0,
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
                     color: color_to_bits(shadow.color),
@@ -784,7 +783,7 @@ impl ShapeCacheKey {
             ShapeCommand::OutlinedRect {
                 color,
                 corner_radii,
-                g2_k_value,
+                corner_g2,
                 shadow,
                 border_width,
             } => Some(Self {
@@ -792,7 +791,7 @@ impl ShapeCacheKey {
                 primary_color: color_to_bits(*color),
                 border_color: None,
                 corner_radii: corner_radii.map(f32_to_bits),
-                g2_k_value: f32_to_bits(*g2_k_value),
+                corner_g2: corner_g2.map(f32_to_bits),
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
                     color: color_to_bits(shadow.color),
@@ -807,7 +806,7 @@ impl ShapeCacheKey {
                 color,
                 border_color,
                 corner_radii,
-                g2_k_value,
+                corner_g2,
                 shadow,
                 border_width,
             } => Some(Self {
@@ -815,7 +814,7 @@ impl ShapeCacheKey {
                 primary_color: color_to_bits(*color),
                 border_color: Some(color_to_bits(*border_color)),
                 corner_radii: corner_radii.map(f32_to_bits),
-                g2_k_value: f32_to_bits(*g2_k_value),
+                corner_g2: corner_g2.map(f32_to_bits),
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
                     color: color_to_bits(shadow.color),
@@ -831,7 +830,7 @@ impl ShapeCacheKey {
                 primary_color: color_to_bits(*color),
                 border_color: None,
                 corner_radii: [f32_to_bits(-1.0_f32); 4],
-                g2_k_value: f32_to_bits(0.0),
+                corner_g2: [f32_to_bits(0.0); 4],
                 border_width: 0,
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
                     color: color_to_bits(shadow.color),
@@ -851,7 +850,7 @@ impl ShapeCacheKey {
                 primary_color: color_to_bits(*color),
                 border_color: None,
                 corner_radii: [f32_to_bits(-1.0_f32); 4],
-                g2_k_value: f32_to_bits(0.0),
+                corner_g2: [f32_to_bits(0.0); 4],
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
                     color: color_to_bits(shadow.color),
@@ -872,7 +871,7 @@ impl ShapeCacheKey {
                 primary_color: color_to_bits(*color),
                 border_color: Some(color_to_bits(*border_color)),
                 corner_radii: [f32_to_bits(-1.0_f32); 4],
-                g2_k_value: f32_to_bits(0.0),
+                corner_g2: [f32_to_bits(0.0); 4],
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
                     color: color_to_bits(shadow.color),
@@ -886,7 +885,7 @@ impl ShapeCacheKey {
             ShapeCommand::RippleRect {
                 color,
                 corner_radii,
-                g2_k_value,
+                corner_g2,
                 shadow,
                 ripple,
             } if ripple.alpha.abs() <= f32::EPSILON => Some(Self {
@@ -894,7 +893,7 @@ impl ShapeCacheKey {
                 primary_color: color_to_bits(*color),
                 border_color: None,
                 corner_radii: corner_radii.map(f32_to_bits),
-                g2_k_value: f32_to_bits(*g2_k_value),
+                corner_g2: corner_g2.map(f32_to_bits),
                 border_width: 0,
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
                     color: color_to_bits(shadow.color),
@@ -908,7 +907,7 @@ impl ShapeCacheKey {
             ShapeCommand::RippleOutlinedRect {
                 color,
                 corner_radii,
-                g2_k_value,
+                corner_g2,
                 shadow,
                 border_width,
                 ripple,
@@ -917,7 +916,7 @@ impl ShapeCacheKey {
                 primary_color: color_to_bits(*color),
                 border_color: None,
                 corner_radii: corner_radii.map(f32_to_bits),
-                g2_k_value: f32_to_bits(*g2_k_value),
+                corner_g2: corner_g2.map(f32_to_bits),
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
                     color: color_to_bits(shadow.color),
@@ -932,7 +931,7 @@ impl ShapeCacheKey {
                 color,
                 border_color,
                 corner_radii,
-                g2_k_value,
+                corner_g2,
                 shadow,
                 border_width,
                 ripple,
@@ -941,7 +940,7 @@ impl ShapeCacheKey {
                 primary_color: color_to_bits(*color),
                 border_color: Some(color_to_bits(*border_color)),
                 corner_radii: corner_radii.map(f32_to_bits),
-                g2_k_value: f32_to_bits(*g2_k_value),
+                corner_g2: corner_g2.map(f32_to_bits),
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
                     color: color_to_bits(shadow.color),

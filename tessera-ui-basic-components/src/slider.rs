@@ -290,16 +290,7 @@ fn render_track(args: &SliderArgs) {
             .width(DimensionValue::Fixed(args.width.to_px()))
             .height(DimensionValue::Fixed(args.track_height.to_px()))
             .style(args.inactive_track_color.into())
-            .shape({
-                let radius = Dp(args.track_height.0 / 2.0);
-                Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
-                    g2_k_value: 2.0, // Capsule shape
-                }
-            })
+            .shape(Shape::capsule())
             .build()
             .expect("builder construction failed"),
         None,
@@ -319,16 +310,7 @@ fn render_progress_fill(args: &SliderArgs) {
                 max: None,
             })
             .style(args.active_track_color.into())
-            .shape({
-                let radius = Dp(args.track_height.0 / 2.0);
-                Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
-                    g2_k_value: 2.0, // Capsule shape
-                }
-            })
+            .shape(Shape::capsule())
             .build()
             .expect("builder construction failed"),
         None,

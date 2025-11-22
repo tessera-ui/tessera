@@ -15,7 +15,7 @@ use crate::{
     button::{ButtonArgsBuilder, button},
     icon::{IconArgs, icon},
     row::{RowArgsBuilder, RowScope, row},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
@@ -51,9 +51,6 @@ pub struct ButtonGroupArgs {
     /// Height of the group container.
     #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub height: DimensionValue,
-    /// Overall shape shared by the segmented group (corners are inherited by edge segments).
-    #[builder(default = "Shape::rounded_rectangle(Dp(25.0))")]
-    pub shape: Shape,
     /// Fill color for the container behind the segments (MD3 uses surface-variant).
     #[builder(default = "Color::new(0.97, 0.97, 0.98, 1.0)")]
     pub container_color: Color,
@@ -380,42 +377,25 @@ fn overlay(base: Color, layer: Color, opacity: f32) -> Color {
     )
 }
 
-fn segment_shape(index: usize, count: usize, base_shape: Shape) -> Shape {
+fn segment_shape(index: usize, count: usize) -> Shape {
     if count <= 1 {
-        return base_shape;
+        return Shape::capsule();
     }
 
-    match base_shape {
-        Shape::RoundedRectangle {
-            top_left,
-            top_right,
-            bottom_right,
-            bottom_left,
-            g2_k_value,
-        } => match (index, count) {
-            (0, _) => Shape::RoundedRectangle {
-                top_left,
-                top_right: Dp(0.0),
-                bottom_right: Dp(0.0),
-                bottom_left,
-                g2_k_value,
-            },
-            (i, c) if i + 1 == c => Shape::RoundedRectangle {
-                top_left: Dp(0.0),
-                top_right,
-                bottom_right,
-                bottom_left: Dp(0.0),
-                g2_k_value,
-            },
-            _ => Shape::RoundedRectangle {
-                top_left: Dp(0.0),
-                top_right: Dp(0.0),
-                bottom_right: Dp(0.0),
-                bottom_left: Dp(0.0),
-                g2_k_value,
-            },
+    match index {
+        0 => Shape::RoundedRectangle {
+            top_left: RoundedCorner::Capsule,
+            top_right: RoundedCorner::manual(Dp(0.0), 3.0),
+            bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+            bottom_left: RoundedCorner::Capsule,
         },
-        _ => base_shape,
+        i if i + 1 == count => Shape::RoundedRectangle {
+            top_left: RoundedCorner::manual(Dp(0.0), 3.0),
+            top_right: RoundedCorner::Capsule,
+            bottom_right: RoundedCorner::Capsule,
+            bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
+        },
+        _ => Shape::RECTANGLE,
     }
 }
 
@@ -547,7 +527,7 @@ where
             border_color: args.outline_color,
             border_width: args.outline_width,
         })
-        .shape(args.shape)
+        .shape(Shape::capsule())
         .padding(args.container_padding)
         .width(args.width)
         .height(args.height)
@@ -625,7 +605,7 @@ where
                             move || {
                                 let state_clone = state_for_item.clone();
                                 let on_select = item.on_select.clone();
-                                let button_shape = segment_shape(idx, item_count, args.shape);
+                                let button_shape = segment_shape(idx, item_count);
                                 let ripple = if is_selected {
                                     args.selected_ripple_color
                                 } else {

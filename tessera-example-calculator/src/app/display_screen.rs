@@ -5,7 +5,7 @@ use tessera_ui_basic_components::{
     alignment::MainAxisAlignment,
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     row::{RowArgsBuilder, row},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -51,11 +51,10 @@ fn render_material_display(app_state: Arc<AppState>) {
         SurfaceArgsBuilder::default()
             .padding(Dp(10.0))
             .shape(Shape::RoundedRectangle {
-                top_left: Dp(25.0),
-                top_right: Dp(25.0),
-                bottom_right: Dp(25.0),
-                bottom_left: Dp(25.0),
-                g2_k_value: 3.0,
+                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
             })
             .style(Color::GREY.into())
             .build()

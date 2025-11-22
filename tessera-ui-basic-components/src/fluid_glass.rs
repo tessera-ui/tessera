@@ -20,7 +20,7 @@ use crate::{
     pipelines::{blur::command::DualBlurCommand, contrast::ContrastCommand, mean::MeanCommand},
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
 };
 
 /// Border properties applied to the glass surface.
@@ -59,9 +59,12 @@ pub struct FluidGlassArgs {
     #[builder(default = "Color::TRANSPARENT")]
     pub tint_color: Color,
     /// The shape of the component, an enum that can be `RoundedRectangle` or `Ellipse`.
-    #[builder(
-        default = "Shape::RoundedRectangle { top_left: Dp(25.0), top_right: Dp(25.0), bottom_right: Dp(25.0), bottom_left: Dp(25.0), g2_k_value: 3.0 }"
-    )]
+    #[builder(default = "Shape::RoundedRectangle {
+            top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+            top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+            bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+            bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
+        }")]
     pub shape: Shape,
     /// The radius for the background blur effect. A value of `0.0` disables the blur.
     #[builder(default = "Dp(0.0)")]

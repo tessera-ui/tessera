@@ -8,7 +8,7 @@ use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosi
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
 };
 
 /// Arguments for the `glass_progress` component.
@@ -48,11 +48,10 @@ pub struct GlassProgressArgs {
 fn capsule_shape_for_height(height: Dp) -> Shape {
     let radius = Dp(height.0 / 2.0);
     Shape::RoundedRectangle {
-        top_left: radius,
-        top_right: radius,
-        bottom_right: radius,
-        bottom_left: radius,
-        g2_k_value: 2.0,
+        top_left: RoundedCorner::manual(radius, 2.0),
+        top_right: RoundedCorner::manual(radius, 2.0),
+        bottom_right: RoundedCorner::manual(radius, 2.0),
+        bottom_left: RoundedCorner::manual(radius, 2.0),
     }
 }
 

@@ -64,21 +64,12 @@ pub struct ProgressArgs {
 #[tessera]
 pub fn progress(args: impl Into<ProgressArgs>) {
     let args: ProgressArgs = args.into();
-    let radius_dp = Dp(args.height.0 / 2.0);
 
     // Child 1: The background track. It's drawn first.
     surface(
         SurfaceArgsBuilder::default()
             .style(args.track_color.into())
-            .shape({
-                Shape::RoundedRectangle {
-                    top_left: radius_dp,
-                    top_right: radius_dp,
-                    bottom_right: radius_dp,
-                    bottom_left: radius_dp,
-                    g2_k_value: 2.0,
-                }
-            })
+            .shape(Shape::capsule())
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -97,15 +88,7 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     surface(
         SurfaceArgsBuilder::default()
             .style(args.progress_color.into())
-            .shape({
-                Shape::RoundedRectangle {
-                    top_left: radius_dp,
-                    top_right: radius_dp,
-                    bottom_right: radius_dp,
-                    bottom_left: radius_dp,
-                    g2_k_value: 2.0,
-                }
-            })
+            .shape(Shape::capsule())
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,

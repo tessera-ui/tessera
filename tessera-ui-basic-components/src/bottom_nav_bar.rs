@@ -126,7 +126,7 @@ where
 
                             let button_args = ButtonArgsBuilder::default()
                                 .color(color)
-                                .shape(Shape::HorizontalCapsule)
+                                .shape(Shape::capsule())
                                 .on_click(Arc::new(move || {
                                     if index != selected {
                                         state_clone.set_selected(index);

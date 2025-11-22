@@ -11,7 +11,7 @@ use tessera_ui::{Color, DimensionValue, Dp, tessera};
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
     ripple_state::RippleState,
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
 };
 
 /// Arguments for the `glass_button` component.
@@ -37,9 +37,12 @@ pub struct GlassButtonArgs {
     #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
     pub tint_color: Color,
     /// Shape used for the button background.
-    #[builder(
-        default = "Shape::RoundedRectangle { top_left: Dp(25.0), top_right: Dp(25.0), bottom_right: Dp(25.0), bottom_left: Dp(25.0), g2_k_value: 3.0 }"
-    )]
+    #[builder(default = "Shape::RoundedRectangle {
+            top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+            top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+            bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+            bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
+        }")]
     pub shape: Shape,
     /// Blur radius applied to the captured background.
     #[builder(default = "Dp(0.0)")]

@@ -19,7 +19,7 @@ use crate::{
     pipelines::{RippleProps, ShadowProps, ShapeCommand, SimpleRectCommand},
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
-    shape_def::Shape,
+    shape_def::{ResolvedShape, RoundedCorner, Shape},
 };
 
 /// Defines the visual style of the surface (fill, outline, or both).
@@ -146,7 +146,7 @@ fn build_rounded_rectangle_command(
     style: &SurfaceStyle,
     ripple_props: RippleProps,
     corner_radii: [f32; 4],
-    g2_k_value: f32,
+    corner_g2: [f32; 4],
     interactive: bool,
 ) -> ShapeCommand {
     match style {
@@ -155,7 +155,7 @@ fn build_rounded_rectangle_command(
                 ShapeCommand::RippleRect {
                     color: *color,
                     corner_radii,
-                    g2_k_value,
+                    corner_g2,
                     shadow: args.shadow,
                     ripple: ripple_props,
                 }
@@ -163,7 +163,7 @@ fn build_rounded_rectangle_command(
                 ShapeCommand::Rect {
                     color: *color,
                     corner_radii,
-                    g2_k_value,
+                    corner_g2,
                     shadow: args.shadow,
                 }
             }
@@ -173,7 +173,7 @@ fn build_rounded_rectangle_command(
                 ShapeCommand::RippleOutlinedRect {
                     color: *color,
                     corner_radii,
-                    g2_k_value,
+                    corner_g2,
                     shadow: args.shadow,
                     border_width: width.to_pixels_f32(),
                     ripple: ripple_props,
@@ -182,7 +182,7 @@ fn build_rounded_rectangle_command(
                 ShapeCommand::OutlinedRect {
                     color: *color,
                     corner_radii,
-                    g2_k_value,
+                    corner_g2,
                     shadow: args.shadow,
                     border_width: width.to_pixels_f32(),
                 }
@@ -198,7 +198,7 @@ fn build_rounded_rectangle_command(
                     color: *fill_color,
                     border_color: *border_color,
                     corner_radii,
-                    g2_k_value,
+                    corner_g2,
                     shadow: args.shadow,
                     border_width: border_width.to_pixels_f32(),
                     ripple: ripple_props,
@@ -208,7 +208,7 @@ fn build_rounded_rectangle_command(
                     color: *fill_color,
                     border_color: *border_color,
                     corner_radii,
-                    g2_k_value,
+                    corner_g2,
                     shadow: args.shadow,
                     border_width: border_width.to_pixels_f32(),
                 }
@@ -230,7 +230,7 @@ fn build_ellipse_command(
                 ShapeCommand::RippleRect {
                     color: *color,
                     corner_radii: corner_marker,
-                    g2_k_value: 0.0,
+                    corner_g2: [0.0; 4],
                     shadow: args.shadow,
                     ripple: ripple_props,
                 }
@@ -246,7 +246,7 @@ fn build_ellipse_command(
                 ShapeCommand::RippleOutlinedRect {
                     color: *color,
                     corner_radii: corner_marker,
-                    g2_k_value: 0.0,
+                    corner_g2: [0.0; 4],
                     shadow: args.shadow,
                     border_width: width.to_pixels_f32(),
                     ripple: ripple_props,
@@ -283,54 +283,19 @@ fn build_shape_command(
 ) -> ShapeCommand {
     let interactive = args.on_click.is_some();
 
-    match args.shape {
-        Shape::RoundedRectangle {
-            top_left,
-            top_right,
-            bottom_right,
-            bottom_left,
-            g2_k_value,
-        } => {
-            let corner_radii = [
-                top_left.to_pixels_f32(),
-                top_right.to_pixels_f32(),
-                bottom_right.to_pixels_f32(),
-                bottom_left.to_pixels_f32(),
-            ];
-            build_rounded_rectangle_command(
-                args,
-                style,
-                ripple_props,
-                corner_radii,
-                g2_k_value,
-                interactive,
-            )
-        }
-        Shape::Ellipse => build_ellipse_command(args, style, ripple_props, interactive),
-        Shape::HorizontalCapsule => {
-            let radius = size.height.to_f32() / 2.0;
-            let corner_radii = [radius, radius, radius, radius];
-            build_rounded_rectangle_command(
-                args,
-                style,
-                ripple_props,
-                corner_radii,
-                2.0, // Use G1 curve for perfect circle
-                interactive,
-            )
-        }
-        Shape::VerticalCapsule => {
-            let radius = size.width.to_f32() / 2.0;
-            let corner_radii = [radius, radius, radius, radius];
-            build_rounded_rectangle_command(
-                args,
-                style,
-                ripple_props,
-                corner_radii,
-                2.0, // Use G1 curve for perfect circle
-                interactive,
-            )
-        }
+    match args.shape.resolve_for_size(size) {
+        ResolvedShape::Rounded {
+            corner_radii,
+            corner_g2,
+        } => build_rounded_rectangle_command(
+            args,
+            style,
+            ripple_props,
+            corner_radii,
+            corner_g2,
+            interactive,
+        ),
+        ResolvedShape::Ellipse => build_ellipse_command(args, style, ripple_props, interactive),
     }
 }
 
@@ -374,14 +339,19 @@ fn try_build_simple_rect_command(
             bottom_left,
             ..
         } => {
-            let radii = [
-                top_left.to_pixels_f32(),
-                top_right.to_pixels_f32(),
-                bottom_right.to_pixels_f32(),
-                bottom_left.to_pixels_f32(),
-            ];
+            let corners = [top_left, top_right, bottom_right, bottom_left];
+            if corners
+                .iter()
+                .any(|corner| matches!(corner, RoundedCorner::Capsule))
+            {
+                return None;
+            }
+
             let zero_eps = 0.0001;
-            if radii.iter().all(|r| r.abs() <= zero_eps) {
+            if corners.iter().all(|corner| match corner {
+                RoundedCorner::Manual { radius, .. } => radius.to_pixels_f32().abs() <= zero_eps,
+                RoundedCorner::Capsule => false,
+            }) {
                 Some(SimpleRectCommand { color })
             } else {
                 None

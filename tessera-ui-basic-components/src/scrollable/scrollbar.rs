@@ -174,16 +174,7 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
             .width(width)
             .height(height)
             .style(color.into())
-            .shape({
-                let radius = Dp::from_pixels_f32(width.to_f32() / 2.0);
-                Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
-                    g2_k_value: 2.0,
-                }
-            })
+            .shape(Shape::capsule())
             .build()
             .expect("builder construction failed"),
         None,
@@ -197,16 +188,7 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
         SurfaceArgsBuilder::default()
             .width(width)
             .height(height)
-            .shape({
-                let radius = Dp::from_pixels_f32(width.to_f32() / 2.0);
-                Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
-                    g2_k_value: 2.0,
-                }
-            })
+            .shape(Shape::capsule())
             .style(color.into())
             .build()
             .expect("builder construction failed"),
@@ -222,16 +204,7 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
             .width(width)
             .height(height)
             .style(color.into())
-            .shape({
-                let radius = Dp::from_pixels_f32(height.to_f32() / 2.0);
-                Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
-                    g2_k_value: 2.0,
-                }
-            })
+            .shape(Shape::capsule())
             .build()
             .expect("builder construction failed"),
         None,
@@ -245,16 +218,7 @@ fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
         SurfaceArgsBuilder::default()
             .width(width)
             .height(height)
-            .shape({
-                let radius = Dp::from_pixels_f32(height.to_f32() / 2.0);
-                Shape::RoundedRectangle {
-                    top_left: radius,
-                    top_right: radius,
-                    bottom_right: radius,
-                    bottom_left: radius,
-                    g2_k_value: 2.0,
-                }
-            })
+            .shape(Shape::capsule())
             .style(color.into())
             .build()
             .expect("builder construction failed"),

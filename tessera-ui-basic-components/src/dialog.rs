@@ -18,7 +18,7 @@ use crate::{
     boxed::{BoxedArgsBuilder, boxed},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
     pipelines::ShadowProps,
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
 };
 
@@ -183,11 +183,10 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                     .blur_radius(Dp(blur_radius as f64))
                     .border(None)
                     .shape(Shape::RoundedRectangle {
-                        top_left: Dp(0.0),
-                        top_right: Dp(0.0),
-                        bottom_right: Dp(0.0),
-                        bottom_left: Dp(0.0),
-                        g2_k_value: 3.0,
+                        top_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                        top_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                        bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
                     .noise_amount(0.0)
                     .build()
@@ -257,11 +256,10 @@ fn dialog_content_wrapper(
                             .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
                             .blur_radius(Dp(5.0 * alpha as f64))
                             .shape(Shape::RoundedRectangle {
-                                top_left: Dp(25.0),
-                                top_right: Dp(25.0),
-                                bottom_right: Dp(25.0),
-                                bottom_left: Dp(25.0),
-                                g2_k_value: 3.0,
+                                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+                                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                                bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                                bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
                             })
                             .refraction_amount(32.0 * alpha)
                             .block_input(true)
@@ -281,11 +279,10 @@ fn dialog_content_wrapper(
                                 ..Default::default()
                             })
                             .shape(Shape::RoundedRectangle {
-                                top_left: Dp(25.0),
-                                top_right: Dp(25.0),
-                                bottom_right: Dp(25.0),
-                                bottom_left: Dp(25.0),
-                                g2_k_value: 3.0,
+                                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+                                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                                bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                                bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
                             })
                             .padding(padding)
                             .block_input(true)

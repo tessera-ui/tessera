@@ -194,10 +194,22 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                                                 .height(DimensionValue::from(height))
                                                 .blur_radius(blur_radius)
                                                 .shape(Shape::RoundedRectangle {
-                                                    top_left: RoundedCorner::manual(corner_radius, 3.0),
-                                                    top_right: RoundedCorner::manual(corner_radius, 3.0),
-                                                    bottom_left: RoundedCorner::manual(corner_radius, 3.0),
-                                                    bottom_right: RoundedCorner::manual(corner_radius, 3.0),
+                                                    top_left: RoundedCorner::manual(
+                                                        corner_radius,
+                                                        3.0,
+                                                    ),
+                                                    top_right: RoundedCorner::manual(
+                                                        corner_radius,
+                                                        3.0,
+                                                    ),
+                                                    bottom_left: RoundedCorner::manual(
+                                                        corner_radius,
+                                                        3.0,
+                                                    ),
+                                                    bottom_right: RoundedCorner::manual(
+                                                        corner_radius,
+                                                        3.0,
+                                                    ),
                                                 })
                                                 .border(GlassBorder {
                                                     width: border_width.into(),

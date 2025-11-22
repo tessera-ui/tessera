@@ -71,8 +71,6 @@ Tessera 是一个为 Rust 设计的声明式、立即模式的 UI 框架。其�
 
 ## 预览
 
-下面为来自 example/examples/alignment_showcase.rs 的示例片段）：
-
 ```rust
 /// Create a small colored box
 #[tessera]
@@ -81,11 +79,10 @@ fn small_box(text_content: &str, color: Color) {
         SurfaceArgs {
             style: color.into(),
             shape: Shape::RoundedRectangle {
-                top_left: Dp(25.0),
-                top_right: Dp(25.0),
-                bottom_right: Dp(25.0),
-                bottom_left: Dp(25.0),
-                g2_k_value: 3.0,
+                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
             },
             padding: Dp(8.0),
             width: DimensionValue::Fixed(Px(40)),

@@ -15,7 +15,7 @@ use tessera_ui::{
 use crate::{
     pipelines::write_font_system,
     pos_misc::is_position_in_component,
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
     text_edit_core::{ClickType, text_edit_core},
 };
@@ -53,11 +53,10 @@ pub struct TextEditorArgs {
     pub border_color: Option<Color>,
     /// The shape of the text editor container.
     #[builder(default = "Shape::RoundedRectangle {
-                            top_left: Dp(4.0),
-                            top_right: Dp(4.0),
-                            bottom_right: Dp(4.0),
-                            bottom_left: Dp(4.0),
-                            g2_k_value: 3.0,
+                            top_left: RoundedCorner::manual(Dp(4.0), 3.0),
+                            top_right: RoundedCorner::manual(Dp(4.0), 3.0),
+                            bottom_right: RoundedCorner::manual(Dp(4.0), 3.0),
+                            bottom_left: RoundedCorner::manual(Dp(4.0), 3.0),
                         }")]
     pub shape: Shape,
     /// Padding inside the text editor. Defaults to 5.0 Dp.
@@ -544,11 +543,10 @@ impl TextEditorArgs {
             .border_width(Dp(1.0))
             .border_color(Some(Color::new(0.7, 0.7, 0.7, 1.0)))
             .shape(Shape::RoundedRectangle {
-                top_left: Dp(0.0),
-                top_right: Dp(0.0),
-                bottom_right: Dp(0.0),
-                bottom_left: Dp(0.0),
-                g2_k_value: 3.0,
+                top_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             })
             .build()
             .expect("builder construction failed")
@@ -583,11 +581,10 @@ impl TextEditorArgs {
             .min_width(Some(Dp(120.0)))
             .background_color(Some(Color::WHITE))
             .shape(Shape::RoundedRectangle {
-                top_left: Dp(0.0),
-                top_right: Dp(0.0),
-                bottom_right: Dp(0.0),
-                bottom_left: Dp(0.0),
-                g2_k_value: 3.0,
+                top_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             })
             .build()
             .expect("builder construction failed")
@@ -701,8 +698,13 @@ impl TextEditorArgs {
     /// ```
     /// use tessera_ui::Dp;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
-    /// use tessera_ui_basic_components::shape_def::Shape;
-    /// let args = TextEditorArgs::simple().with_shape(Shape::RoundedRectangle { top_left: Dp(8.0), top_right: Dp(8.0), bottom_right: Dp(8.0), bottom_left: Dp(8.0), g2_k_value: 3.0 });
+    /// use tessera_ui_basic_components::shape_def::{RoundedCorner, Shape};
+    /// let args = TextEditorArgs::simple().with_shape(Shape::RoundedRectangle {
+    ///     top_left: RoundedCorner::manual(Dp(8.0), 3.0),
+    ///     top_right: RoundedCorner::manual(Dp(8.0), 3.0),
+    ///     bottom_right: RoundedCorner::manual(Dp(8.0), 3.0),
+    ///     bottom_left: RoundedCorner::manual(Dp(8.0), 3.0),
+    /// });
     /// ```
     pub fn with_shape(mut self, shape: Shape) -> Self {
         self.shape = shape;

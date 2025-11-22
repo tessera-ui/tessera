@@ -19,7 +19,7 @@ use tessera_ui::{
 use crate::{
     RippleState, animation,
     button::{ButtonArgsBuilder, button},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgs, surface},
 };
 
@@ -372,19 +372,17 @@ where
 
         let shape = if index == 0 {
             Shape::RoundedRectangle {
-                top_left: Dp(25.0),
-                top_right: Dp(0.0),
-                bottom_right: Dp(0.0),
-                bottom_left: Dp(0.0),
-                g2_k_value: 3.0,
+                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             }
         } else if index == titles_count - 1 {
             Shape::RoundedRectangle {
-                top_left: Dp(0.0),
-                top_right: Dp(25.0),
-                bottom_right: Dp(0.0),
-                bottom_left: Dp(0.0),
-                g2_k_value: 3.0,
+                top_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             }
         } else {
             Shape::RECTANGLE

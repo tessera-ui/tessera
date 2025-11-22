@@ -15,7 +15,7 @@ use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, tessera, winit};
 use crate::{
     animation,
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
 };
 
@@ -208,11 +208,10 @@ fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) 
             .blur_radius(Dp(blur_radius as f64))
             .border(None)
             .shape(Shape::RoundedRectangle {
-                top_left: Dp(0.0),
-                top_right: Dp(0.0),
-                bottom_right: Dp(0.0),
-                bottom_left: Dp(0.0),
-                g2_k_value: 3.0,
+                top_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             })
             .noise_amount(0.0)
             .build()
@@ -390,11 +389,10 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
             fluid_glass(
                 FluidGlassArgsBuilder::default()
                     .shape(Shape::RoundedRectangle {
-                        top_left: Dp(0.0),
-                        top_right: Dp(25.0),
-                        bottom_right: Dp(25.0),
-                        bottom_left: Dp(0.0),
-                        g2_k_value: 3.0,
+                        top_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                        top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                        bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
                     .tint_color(Color::new(0.6, 0.8, 1.0, 0.3))
                     .width(DimensionValue::from(Dp(250.0)))
@@ -422,11 +420,10 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                     })
                     .padding(Dp(16.0))
                     .shape(Shape::RoundedRectangle {
-                        top_left: Dp(0.0),
-                        top_right: Dp(25.0),
-                        bottom_right: Dp(25.0),
-                        bottom_left: Dp(0.0),
-                        g2_k_value: 3.0,
+                        top_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                        top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                        bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
                     .block_input(true)
                     .build()

@@ -29,7 +29,7 @@ pub fn selection_highlight_rect(
         let drawable = ShapeCommand::Rect {
             color,
             corner_radii: glam::Vec4::ZERO.into(), // Sharp corners for text selection
-            g2_k_value: 3.0,                       // g2-like corners
+            corner_g2: [3.0; 4],                   // g2-like corners
             shadow: None,                          // No shadow for selection highlight
         };
 

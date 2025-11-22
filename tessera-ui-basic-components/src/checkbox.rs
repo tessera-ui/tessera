@@ -21,7 +21,7 @@ use crate::{
     alignment::Alignment,
     boxed::{BoxedArgsBuilder, boxed},
     checkmark::{CheckmarkArgsBuilder, checkmark},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
 };
 
@@ -92,7 +92,7 @@ pub struct CheckboxArgs {
     pub checkmark_animation_progress: f32,
 
     #[builder(
-        default = "Shape::RoundedRectangle{ top_left: Dp(4.0), top_right: Dp(4.0), bottom_right: Dp(4.0), bottom_left: Dp(4.0), g2_k_value: 3.0 }"
+        default = "Shape::RoundedRectangle{ top_left: RoundedCorner::manual(Dp(4.0), 3.0), top_right: RoundedCorner::manual(Dp(4.0), 3.0), bottom_right: RoundedCorner::manual(Dp(4.0), 3.0), bottom_left: RoundedCorner::manual(Dp(4.0), 3.0) }"
     )]
     /// Shape used for the outer checkbox surface (rounded rectangle, etc.).
     ///

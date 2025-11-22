@@ -69,8 +69,6 @@ Tessera is a declarative, immediate-mode UI framework for Rust. With a functiona
 
 ## Preview
 
-An excerpt from `example\examples\alignment_showcase.rs`:
-
 ```rust
 /// Create a small colored box
 #[tessera]
@@ -79,11 +77,10 @@ fn small_box(text_content: &str, color: Color) {
         SurfaceArgs {
             style: color.into(),
             shape: Shape::RoundedRectangle {
-                top_left: Dp(25.0),
-                top_right: Dp(25.0),
-                bottom_right: Dp(25.0),
-                bottom_left: Dp(25.0),
-                g2_k_value: 3.0,
+                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
             },
             padding: Dp(8.0),
             width: DimensionValue::Fixed(Px(40)),

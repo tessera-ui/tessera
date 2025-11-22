@@ -1,12 +1,12 @@
 struct ShapeUniforms {
     corner_radii: vec4f,       // x:tl, y:tr, z:br, w:bl
+    corner_g2: vec4f,          // x:tl, y:tr, z:br, w:bl
     primary_color: vec4f,
     border_color: vec4f,
     shadow_color: vec4f,
     render_params: vec4f,
     ripple_params: vec4f,
     ripple_color: vec4f,
-    g2_k_value: f32,
     border_width: f32,
     position: vec4f,           // x, y, width, height
     screen_size: vec2f,
@@ -59,22 +59,27 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 // p: point to sample (in object space, centered at 0,0)
 // b: half-size of the box
 // r: corner radii (tl, tr, br, bl) -> (x, y, z, w)
-// k: exponent for p-norm
-fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: vec4f, k: f32) -> f32 {
+// k: exponent for p-norm per corner
+fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: vec4f, k: vec4f) -> f32 {
     // Select radius based on the quadrant p is in.
     // In our local coordinates, p.y is negative for the top half and positive for the bottom half.
     var radius: f32;
+    var corner_k: f32;
     if (p.y < 0.0) { // Top half
         if (p.x < 0.0) { // Top-Left
             radius = r.x;
+            corner_k = k.x;
         } else { // Top-Right
             radius = r.y;
+            corner_k = k.y;
         }
     } else { // Bottom half
         if (p.x < 0.0) { // Bottom-Left
             radius = r.w;
+            corner_k = k.w;
         } else { // Bottom-Right
             radius = r.z;
+            corner_k = k.z;
         }
     }
 
@@ -84,13 +89,13 @@ fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: vec4f, k: f32) -> f32 {
     let v_y = max(q.y, 0.0);
 
     var dist_corner_shape: f32;
-    if abs(k - 2.0) < 0.001 {
+    if abs(corner_k - 2.0) < 0.001 {
         dist_corner_shape = length(vec2f(v_x, v_y));
     } else {
         if v_x == 0.0 && v_y == 0.0 {
             dist_corner_shape = 0.0;
         } else {
-            dist_corner_shape = pow(pow(v_x, k) + pow(v_y, k), 1.0 / k);
+            dist_corner_shape = pow(pow(v_x, corner_k) + pow(v_y, corner_k), 1.0 / corner_k);
         }
     }
 
@@ -149,9 +154,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let ripple_alpha = instance.ripple_params.w;
     let ripple_color_rgb = instance.ripple_color.rgb;
 
-    // G2 exponent for rounded corners.
-    let G2_K_VALUE: f32 = instance.g2_k_value;
-
     // in.local_pos is expected to be in normalized range, e.g., [-0.5, 0.5] for x and y
     let p_normalized = in.local_pos;
     // Scale to actual rectangle dimensions, centered at (0,0) for SDF calculation
@@ -166,7 +168,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         if corner_radii.x < 0.0 {
             dist_shadow = sdf_ellipse(p_scaled_shadow_space, rect_half_size);
         } else {
-            dist_shadow = sdf_g2_rounded_box(p_scaled_shadow_space, rect_half_size, corner_radii, G2_K_VALUE);
+            dist_shadow = sdf_g2_rounded_box(
+                p_scaled_shadow_space,
+                rect_half_size,
+                corner_radii,
+                instance.corner_g2
+            );
         }
 
         // Anti-aliasing for shadow edge
@@ -188,7 +195,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         if corner_radii.x < 0.0 {
             dist_object = sdf_ellipse(p_scaled_object_space, rect_half_size);
         } else {
-            dist_object = sdf_g2_rounded_box(p_scaled_object_space, rect_half_size, corner_radii, G2_K_VALUE);
+            dist_object = sdf_g2_rounded_box(
+                p_scaled_object_space,
+                rect_half_size,
+                corner_radii,
+                instance.corner_g2
+            );
         }
         let aa_width_object = fwidth(dist_object);
 

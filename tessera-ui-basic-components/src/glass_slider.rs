@@ -276,16 +276,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
             .height(DimensionValue::Fixed(args.track_height.to_px()))
             .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
-            .shape({
-                let track_radius_dp = Dp(args.track_height.0 / 2.0);
-                Shape::RoundedRectangle {
-                    top_left: track_radius_dp,
-                    top_right: track_radius_dp,
-                    bottom_right: track_radius_dp,
-                    bottom_left: track_radius_dp,
-                    g2_k_value: 2.0, // Capsule shape
-                }
-            })
+            .shape(Shape::capsule())
             .border(GlassBorder::new(args.track_border_width.into()))
             .padding(args.track_border_width)
             .build()
@@ -295,7 +286,6 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
             // Internal progress fill - capsule shape using surface
             let progress_width_px =
                 compute_progress_width(args.width.to_px(), args.value, border_padding_px);
-            let effective_height = args.track_height.to_px().to_f32() - border_padding_px;
             fluid_glass(
                 FluidGlassArgsBuilder::default()
                     .width(DimensionValue::Fixed(progress_width_px))
@@ -304,17 +294,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
                         max: None,
                     })
                     .tint_color(args.progress_tint_color)
-                    .shape({
-                        let effective_height_dp = Dp::from_pixels_f32(effective_height);
-                        let radius_dp = Dp(effective_height_dp.0 / 2.0);
-                        Shape::RoundedRectangle {
-                            top_left: radius_dp,
-                            top_right: radius_dp,
-                            bottom_right: radius_dp,
-                            bottom_left: radius_dp,
-                            g2_k_value: 2.0, // Capsule shape
-                        }
-                    })
+                    .shape(Shape::capsule())
                     .refraction_amount(0.0)
                     .build()
                     .expect("builder construction failed"),

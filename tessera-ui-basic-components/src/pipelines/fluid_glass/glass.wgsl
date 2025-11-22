@@ -4,6 +4,7 @@ struct GlassUniforms {
     tint_color: vec4<f32>,
     rect_uv_bounds: vec4<f32>,
     corner_radii: vec4<f32>, // top-left, top-right, bottom-right, bottom-left
+    corner_g2: vec4<f32>,    // per-corner G2 parameters
     clip_rect_uv: vec4<f32>,
 
     // vec2s
@@ -12,7 +13,6 @@ struct GlassUniforms {
 
     // f32s
     shape_type: f32,
-    g2_k_value: f32,
     dispersion_height: f32,
     chroma_multiplier: f32,
     refraction_height: f32,
@@ -99,19 +99,22 @@ fn normal_to_tangent(normal: vec2<f32>) -> vec2<f32> {
     return vec2<f32>(normal.y, -normal.x);
 }
 
-fn sdf_g2_rounded_box(p: vec2<f32>, b: vec2<f32>, r: vec4<f32>, k: f32) -> f32 {
+fn sdf_g2_rounded_box(p: vec2<f32>, b: vec2<f32>, r: vec4<f32>, k: vec4<f32>) -> f32 {
     let top_radii = select(r.x, r.y, p.x > 0.0);
     let bottom_radii = select(r.w, r.z, p.x > 0.0);
     let r_for_quadrant = select(top_radii, bottom_radii, p.y > 0.0);
+    let top_k = select(k.x, k.y, p.x > 0.0);
+    let bottom_k = select(k.w, k.z, p.x > 0.0);
+    let k_for_quadrant = select(top_k, bottom_k, p.y > 0.0);
 
     let q = abs(p) - b + r_for_quadrant;
     let v = max(q, vec2<f32>(0.0));
 
-    if abs(k - 2.0) < 0.001 {
+    if abs(k_for_quadrant - 2.0) < 0.001 {
         return length(v) + min(max(q.x, q.y), 0.0) - r_for_quadrant;
     }
 
-    let dist_corner_shape = pow(pow(v.x, k) + pow(v.y, k), 1.0 / k);
+    let dist_corner_shape = pow(pow(v.x, k_for_quadrant) + pow(v.y, k_for_quadrant), 1.0 / k_for_quadrant);
 
     return dist_corner_shape + min(max(q.x, q.y), 0.0) - r_for_quadrant;
 }
@@ -129,17 +132,20 @@ fn sdf_axis_aligned_box(p: vec2<f32>, half_size: vec2<f32>) -> f32 {
     return length(outside) + min(max(dist.x, dist.y), 0.0);
 }
 
-fn grad_sd_g2_rounded_box(coord: vec2<f32>, half_size: vec2<f32>, r: vec4<f32>, k: f32) -> vec2<f32> {
+fn grad_sd_g2_rounded_box(coord: vec2<f32>, half_size: vec2<f32>, r: vec4<f32>, k: vec4<f32>) -> vec2<f32> {
     let top_radii = select(r.x, r.y, coord.x > 0.0);
     let bottom_radii = select(r.w, r.z, coord.x > 0.0);
     let r_for_quadrant = select(top_radii, bottom_radii, coord.y > 0.0);
+    let top_k = select(k.x, k.y, coord.x > 0.0);
+    let bottom_k = select(k.w, k.z, coord.x > 0.0);
+    let k_for_quadrant = select(top_k, bottom_k, coord.y > 0.0);
     let inner_half_size = half_size - r_for_quadrant;
     let corner_coord = abs(coord) - inner_half_size;
 
     if corner_coord.x >= 0.0 && corner_coord.y >= 0.0 {
         let grad_dir = vec2<f32>(
-            pow(corner_coord.x + 0.0001, k - 1.0),
-            pow(corner_coord.y + 0.0001, k - 1.0)
+            pow(corner_coord.x + 0.0001, k_for_quadrant - 1.0),
+            pow(corner_coord.y + 0.0001, k_for_quadrant - 1.0)
         );
         return sign(coord) * normalize(grad_dir);
     } else {
@@ -174,7 +180,7 @@ fn grad_sd_axis_aligned_box(coord: vec2<f32>, half_size: vec2<f32>) -> vec2<f32>
     }
 }
 
-fn shape_sd(instance: GlassUniforms, coord: vec2<f32>, half_size: vec2<f32>, k: f32) -> f32 {
+fn shape_sd(instance: GlassUniforms, coord: vec2<f32>, half_size: vec2<f32>, k: vec4<f32>) -> f32 {
     if instance.shape_type == 1.0 {
         return sdf_ellipse(coord, half_size);
     }
@@ -184,7 +190,7 @@ fn shape_sd(instance: GlassUniforms, coord: vec2<f32>, half_size: vec2<f32>, k: 
     return sdf_g2_rounded_box(coord, half_size, instance.corner_radii, k);
 }
 
-fn shape_normal(instance: GlassUniforms, coord: vec2<f32>, half_size: vec2<f32>, k: f32) -> vec2<f32> {
+fn shape_normal(instance: GlassUniforms, coord: vec2<f32>, half_size: vec2<f32>, k: vec4<f32>) -> vec2<f32> {
     if instance.shape_type == 1.0 {
         return grad_sd_ellipse(coord, half_size);
     }
@@ -198,7 +204,7 @@ fn evaluate_shape(
     instance: GlassUniforms,
     coord: vec2<f32>,
     half_size: vec2<f32>,
-    k: f32
+    k: vec4<f32>
 ) -> vec3<f32> {
     if instance.sdf_cache_enabled > 0.5 {
         let uv = clamp((coord + half_size) / (half_size * 2.0), vec2<f32>(0.0), vec2<f32>(1.0));
@@ -255,7 +261,7 @@ fn refraction_sample_with_eval(
     local_coord: vec2<f32>,
     centered_coord: vec2<f32>,
     half_size: vec2<f32>,
-    k: f32,
+    k: vec4<f32>,
     shape_eval: vec3<f32>
 ) -> RefractionResult {
     let rect_uv_start = instance.rect_uv_bounds.xy;
@@ -306,7 +312,7 @@ fn refraction_color_with_eval(
     local_coord: vec2<f32>,
     centered_coord: vec2<f32>,
     half_size: vec2<f32>,
-    k: f32,
+    k: vec4<f32>,
     shape_eval: vec3<f32>
 ) -> vec4<f32> {
     let result = refraction_sample_with_eval(
@@ -320,7 +326,7 @@ fn refraction_color_with_eval(
     return result.color;
 }
 
-fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<f32>, k: f32) -> vec4<f32> {
+fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<f32>, k: vec4<f32>) -> vec4<f32> {
     let half_size = size * 0.5;
     let centered_coord = local_coord - half_size;
     let shape_eval = evaluate_shape(instance, centered_coord, half_size, k);
@@ -339,7 +345,7 @@ fn dispersion_color_on_refracted(
     instance: GlassUniforms,
     local_coord: vec2<f32>,
     size: vec2<f32>,
-    k: f32,
+    k: vec4<f32>,
     base_shape_eval: vec3<f32>
 ) -> vec4<f32> {
     let half_size = size * 0.5;
@@ -427,9 +433,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let local_coord = in.uv * instance.rect_size_px;
     let half_size = instance.rect_size_px * 0.5;
     let centered_coord = local_coord - half_size;
-    let k = instance.g2_k_value;
 
-    let shape_eval = evaluate_shape(instance, centered_coord, half_size, k);
+    let shape_eval = evaluate_shape(instance, centered_coord, half_size, instance.corner_g2);
     let sd = shape_eval.x;
 
     var base_color: vec4<f32>;
@@ -438,7 +443,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             instance,
             local_coord,
             instance.rect_size_px,
-            k,
+            instance.corner_g2,
             shape_eval
         );
     } else {
@@ -447,7 +452,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             local_coord,
             centered_coord,
             half_size,
-            k,
+            instance.corner_g2,
             shape_eval
         );
     }
