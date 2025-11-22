@@ -22,79 +22,82 @@ pub struct LazyListsShowcaseState {
 #[tessera]
 #[shard]
 pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
-    lazy_column(
-        LazyColumnArgs::default(),
-        state.showcase.clone(),
-        move |scope| {
-            scope.items(1, move |_| {
-            let state = state.clone();
-            surface(
-                SurfaceArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
-                    .style(Color::WHITE.into())
-                    .padding(Dp(24.0))
-                    .build()
-                    .unwrap(),
-                None,
-                move || {
-                    column(
-                        ColumnArgsBuilder::default()
-                            .width(DimensionValue::FILLED)
-                            .build()
-                            .unwrap(),
-                        move |scope| {
-                            scope.child(|| {
-                                text(
-                                    TextArgsBuilder::default()
-                                        .text("Lazy Lists")
-                                        .size(Dp(24.0))
-                                        .build()
-                                        .unwrap(),
-                                );
-                            });
-                            scope.child(|| {
-                                text(
-                                    TextArgsBuilder::default()
-                                        .text(
-                                            "Virtualized column/row that only mounts what is visible in the \
-                                            viewport.",
-                                        )
-                                        .color(Color::new(0.2, 0.2, 0.3, 0.75))
-                                        .build()
-                                        .unwrap(),
-                                );
-                            });
-                            scope.child(|| {
-                                text(
-                                    TextArgsBuilder::default()
-                                        .text("Virtual contacts (lazy_column)")
-                                        .size(Dp(18.0))
-                                        .build()
-                                        .unwrap(),
-                                );
-                            });
-                            let vertical_state = state.vertical.clone();
-                            scope.child(move || {
-                                vertical_list(vertical_state.clone());
-                            });
-                            scope.child(|| {
-                                text(
-                                    TextArgsBuilder::default()
-                                        .text("Horizontal gallery (lazy_row)")
-                                        .size(Dp(18.0))
-                                        .build()
-                                        .unwrap(),
-                                );
-                            });
-                            let horizontal_state = state.horizontal.clone();
-                            scope.child(move || {
-                                horizontal_gallery(horizontal_state.clone());
-                            });
-                        },
-                    );
+    surface(
+        SurfaceArgsBuilder::default()
+            .width(DimensionValue::FILLED)
+            .style(Color::WHITE.into())
+            .build()
+            .unwrap(),
+        None,
+        move || {
+            lazy_column(
+                LazyColumnArgs {
+                    content_padding: Dp(24.0),
+                    ..Default::default()
+                },
+                state.showcase.clone(),
+                move |scope| {
+                    scope.item(move || {
+                        let state = state.clone();
+
+                        column(
+                            ColumnArgsBuilder::default()
+                                .width(DimensionValue::FILLED)
+                                .build()
+                                .unwrap(),
+                            move |scope| {
+                                scope.child(|| {
+                                    text(
+                                        TextArgsBuilder::default()
+                                            .text("Lazy Lists")
+                                            .size(Dp(24.0))
+                                            .build()
+                                            .unwrap(),
+                                    );
+                                });
+                                scope.child(|| {
+                                    text(
+                                        TextArgsBuilder::default()
+                                            .text(
+                                                "Virtualized column/row that only mounts what is visible in the \
+                                                viewport.",
+                                            )
+                                            .color(Color::new(0.2, 0.2, 0.3, 0.75))
+                                            .build()
+                                            .unwrap(),
+                                    );
+                                });
+                                scope.child(|| {
+                                    text(
+                                        TextArgsBuilder::default()
+                                            .text("Virtual contacts (lazy_column)")
+                                            .size(Dp(18.0))
+                                            .build()
+                                            .unwrap(),
+                                    );
+                                });
+                                let vertical_state = state.vertical.clone();
+                                scope.child(move || {
+                                    vertical_list(vertical_state.clone());
+                                });
+                                scope.child(|| {
+                                    text(
+                                        TextArgsBuilder::default()
+                                            .text("Horizontal gallery (lazy_row)")
+                                            .size(Dp(18.0))
+                                            .build()
+                                            .unwrap(),
+                                    );
+                                });
+                                let horizontal_state = state.horizontal.clone();
+                                scope.child(move || {
+                                    horizontal_gallery(horizontal_state.clone());
+                                });
+                            },
+                        );
+                    });
                 },
             );
-        });
         },
     );
 }
