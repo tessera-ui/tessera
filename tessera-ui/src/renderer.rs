@@ -339,7 +339,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
         };
-        thread_utils::set_thread_name("Tessera Renderer");
+        thread_utils::set_thread_name("TesseraMain");
         event_loop.run_app(&mut renderer)
     }
 
@@ -463,7 +463,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
         };
-        thread_utils::set_thread_name("Tessera Renderer");
+        thread_utils::set_thread_name("TesseraMain");
         event_loop.run_app(&mut renderer)
     }
 }
