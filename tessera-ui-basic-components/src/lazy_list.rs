@@ -253,7 +253,6 @@ where
 /// ## Examples
 ///
 /// ```
-/// // No Arc wrapper; `LazyListState` encapsulates internal Arc/RwLock state.
 /// use tessera_ui_basic_components::{
 ///     lazy_list::{lazy_row, LazyRowArgs, LazyListState},
 ///     text::{text, TextArgsBuilder},
