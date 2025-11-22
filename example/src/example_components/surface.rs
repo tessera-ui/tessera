@@ -8,7 +8,7 @@ use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     slider::{SliderArgsBuilder, SliderState, slider},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
@@ -156,11 +156,10 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                                     .width(DimensionValue::from(width))
                                     .height(DimensionValue::from(height))
                                     .shape(Shape::RoundedRectangle {
-                                        top_left: corner_radius,
-                                        top_right: corner_radius,
-                                        bottom_left: corner_radius,
-                                        bottom_right: corner_radius,
-                                        g2_k_value: 3.0,
+                                        top_left: RoundedCorner::manual(corner_radius, 3.0),
+                                        top_right: RoundedCorner::manual(corner_radius, 3.0),
+                                        bottom_left: RoundedCorner::manual(corner_radius, 3.0),
+                                        bottom_right: RoundedCorner::manual(corner_radius, 3.0),
                                     })
                                     .style(style)
                                     .on_click(Arc::new(|| {

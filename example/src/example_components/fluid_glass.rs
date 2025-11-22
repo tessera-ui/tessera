@@ -12,7 +12,7 @@ use tessera_ui_basic_components::{
     image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -20,7 +20,7 @@ use tessera_ui_basic_components::{
 
 const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/examples/assets/grid_background.png",
+    "/assets/grid_background.png",
 ));
 
 #[derive(Default)]
@@ -194,11 +194,10 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                                                 .height(DimensionValue::from(height))
                                                 .blur_radius(blur_radius)
                                                 .shape(Shape::RoundedRectangle {
-                                                    top_left: corner_radius,
-                                                    top_right: corner_radius,
-                                                    bottom_left: corner_radius,
-                                                    bottom_right: corner_radius,
-                                                    g2_k_value: 3.0,
+                                                    top_left: RoundedCorner::manual(corner_radius, 3.0),
+                                                    top_right: RoundedCorner::manual(corner_radius, 3.0),
+                                                    bottom_left: RoundedCorner::manual(corner_radius, 3.0),
+                                                    bottom_right: RoundedCorner::manual(corner_radius, 3.0),
                                                 })
                                                 .border(GlassBorder {
                                                     width: border_width.into(),

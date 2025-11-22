@@ -14,7 +14,7 @@ use tessera_ui_basic_components::{
 
 const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/examples/assets/scarlet_ut.jpg",
+    "/assets/scarlet_ut.jpg",
 ));
 const VECTOR_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),

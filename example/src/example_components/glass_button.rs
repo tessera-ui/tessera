@@ -20,7 +20,7 @@ use tessera_ui_basic_components::{
 
 const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/examples/assets/grid_background.png",
+    "/assets/grid_background.png",
 ));
 const ICON_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
