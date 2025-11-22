@@ -17,13 +17,16 @@ use tessera_ui::{
 };
 
 use crate::{
-    RippleState, animation,
+    RippleState,
+    alignment::Alignment,
+    animation,
+    boxed::{BoxedArgs, boxed},
     button::{ButtonArgsBuilder, button},
-    shape_def::{RoundedCorner, Shape},
+    shape_def::Shape,
     surface::{SurfaceArgs, surface},
 };
 
-const ANIMATION_DURATION: Duration = Duration::from_millis(250);
+const ANIMATION_DURATION: Duration = Duration::from_millis(300);
 
 fn clamp_wrap(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
     min.unwrap_or(Px(0))
@@ -37,11 +40,26 @@ fn fill_value(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
         .max(min.unwrap_or(Px(0)))
 }
 
+fn clamp_px(value: Px, min: Px, max: Option<Px>) -> Px {
+    let clamped_max = max.unwrap_or(value);
+    Px(value.0.max(min.0).min(clamped_max.0))
+}
+
 fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
     match dim {
         DimensionValue::Fixed(v) => v,
         DimensionValue::Wrap { min, max } => clamp_wrap(min, max, measure),
         DimensionValue::Fill { min, max } => fill_value(min, max, measure),
+    }
+}
+
+fn blend_state_layer(base: Color, layer: Color, opacity: f32) -> Color {
+    let opacity = opacity.clamp(0.0, 1.0);
+    Color {
+        r: base.r * (1.0 - opacity) + layer.r * opacity,
+        g: base.g * (1.0 - opacity) + layer.g * opacity,
+        b: base.b * (1.0 - opacity) + layer.b * opacity,
+        a: base.a,
     }
 }
 
@@ -213,8 +231,42 @@ impl Default for TabsState {
 #[builder(pattern = "owned")]
 pub struct TabsArgs {
     /// Color of the active tab indicator.
-    #[builder(default = "Color::new(0.4745, 0.5255, 0.7961, 1.0)")]
+    #[builder(default = "Color::new(0.4059, 0.3137, 0.6431, 1.0)")]
+    // MD3 primary tone (#6750A4)
     pub indicator_color: Color,
+    /// Background color for the tab row container.
+    #[builder(default = "Color::new(0.98, 0.98, 0.99, 1.0)")]
+    pub container_color: Color,
+    /// Color applied to active tab titles (MD3 on-surface).
+    #[builder(default = "Color::new(0.4059, 0.3137, 0.6431, 1.0)")]
+    pub active_content_color: Color,
+    /// Color applied to inactive tab titles (MD3 on-surface-variant).
+    #[builder(default = "Color::new(0.39, 0.41, 0.44, 1.0)")]
+    pub inactive_content_color: Color,
+    /// Height of the indicator bar in density-independent pixels.
+    #[builder(default = "Dp(3.0)")]
+    pub indicator_height: Dp,
+    /// Minimum width for the indicator bar.
+    #[builder(default = "Dp(24.0)")]
+    pub indicator_min_width: Dp,
+    /// Optional maximum width for the indicator bar.
+    #[builder(default = "Some(Dp(64.0))")]
+    pub indicator_max_width: Option<Dp>,
+    /// Shape used for the indicator (MD3 uses a capsule).
+    #[builder(default = "Shape::capsule()")]
+    pub indicator_shape: Shape,
+    /// Minimum height for a tab (MD3 spec uses 48dp).
+    #[builder(default = "Dp(48.0)")]
+    pub min_tab_height: Dp,
+    /// Internal padding for each tab, applied symmetrically.
+    #[builder(default = "Dp(12.0)")]
+    pub tab_padding: Dp,
+    /// Color used for hover/pressed state layers.
+    #[builder(default = "Color::new(0.4059, 0.3137, 0.6431, 1.0)")]
+    pub state_layer_color: Color,
+    /// Opacity applied to the state layer on hover.
+    #[builder(default = "0.08")]
+    pub hover_state_layer_opacity: f32,
     /// Width behavior for the entire tabs container.
     #[builder(default = "DimensionValue::FILLED")]
     pub width: DimensionValue,
@@ -232,8 +284,13 @@ impl Default for TabsArgs {
 }
 
 struct TabDef {
-    title: Box<dyn FnOnce() + Send + Sync>,
+    title: TabTitle,
     content: Box<dyn FnOnce() + Send + Sync>,
+}
+
+enum TabTitle {
+    Custom(Box<dyn FnOnce() + Send + Sync>),
+    Themed(Box<dyn FnOnce(Color) + Send + Sync>),
 }
 
 /// Scope passed to tab configuration closures.
@@ -249,7 +306,19 @@ impl<'a> TabsScope<'a> {
         F2: FnOnce() + Send + Sync + 'static,
     {
         self.tabs.push(TabDef {
-            title: Box::new(title),
+            title: TabTitle::Custom(Box::new(title)),
+            content: Box::new(content),
+        });
+    }
+
+    /// Adds a tab whose title closure receives the resolved content color (active/inactive).
+    pub fn child_with_color<F1, F2>(&mut self, title: F1, content: F2)
+    where
+        F1: FnOnce(Color) + Send + Sync + 'static,
+        F2: FnOnce() + Send + Sync + 'static,
+    {
+        self.tabs.push(TabDef {
+            title: TabTitle::Themed(Box::new(title)),
             content: Box::new(content),
         });
     }
@@ -307,29 +376,63 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
 /// - `args` — configures the tabs' layout and indicator color; see [`TabsArgs`].
 /// - `state` — a clonable [`TabsState`] to manage the active tab and animation.
 /// - `scope_config` — a closure that receives a [`TabsScope`] for defining each tab's title and content.
+///   Use [`TabsScope::child_with_color`] to let the component supply MD3-compliant active/inactive colors.
 ///
 /// ## Examples
 ///
 /// ```
+/// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
 ///     tabs::{tabs, TabsArgsBuilder, TabsState},
 ///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// // In a real app, you would manage this state.
 /// let tabs_state = TabsState::new(0);
+/// assert_eq!(tabs_state.active_tab(), 0);
 ///
 /// tabs(
 ///     TabsArgsBuilder::default().build().expect("builder construction failed"),
 ///     tabs_state,
 ///     |scope| {
-///         scope.child(
-///             || text(TextArgsBuilder::default().text("Tab 1".to_string()).build().expect("builder construction failed")),
-///             || text(TextArgsBuilder::default().text("Content for Tab 1").build().expect("builder construction failed"))
+///         scope.child_with_color(
+///             |color| {
+///                 text(
+///                     TextArgsBuilder::default()
+///                         .text("Flights".to_string())
+///                         .color(color)
+///                         .size(Dp(14.0))
+///                         .build()
+///                         .expect("builder construction failed"),
+///                 )
+///             },
+///             || {
+///                 text(
+///                     TextArgsBuilder::default()
+///                         .text("Content for Flights")
+///                         .build()
+///                         .expect("builder construction failed"),
+///                 )
+///             },
 ///         );
-///         scope.child(
-///             || text(TextArgsBuilder::default().text("Tab 2".to_string()).build().expect("builder construction failed")),
-///             || text(TextArgsBuilder::default().text("Content for Tab 2").build().expect("builder construction failed"))
+///         scope.child_with_color(
+///             |color| {
+///                 text(
+///                     TextArgsBuilder::default()
+///                         .text("Hotel".to_string())
+///                         .color(color)
+///                         .size(Dp(14.0))
+///                         .build()
+///                         .expect("builder construction failed"),
+///                 )
+///             },
+///             || {
+///                 text(
+///                     TextArgsBuilder::default()
+///                         .text("Content for Hotel")
+///                         .build()
+///                         .expect("builder construction failed"),
+///                 )
+///             },
 ///         );
 ///     },
 /// );
@@ -344,6 +447,9 @@ where
     scope_config(&mut scope);
 
     let num_tabs = tabs.len();
+    if num_tabs == 0 {
+        return;
+    }
     let active_tab = state.active_tab().min(num_tabs.saturating_sub(1));
 
     let (title_closures, content_closures): (Vec<_>, Vec<_>) =
@@ -354,43 +460,35 @@ where
             style: args.indicator_color.into(),
             width: DimensionValue::FILLED,
             height: DimensionValue::FILLED,
+            shape: args.indicator_shape,
             ..Default::default()
         },
         None,
         || {},
     );
 
-    let titles_count = title_closures.len();
+    let hover_color = blend_state_layer(
+        args.container_color,
+        args.state_layer_color,
+        args.hover_state_layer_opacity,
+    );
+
     for (index, child) in title_closures.into_iter().enumerate() {
-        let color = if index == active_tab {
-            Color::new(0.9, 0.9, 0.9, 1.0) // Active tab color
-        } else {
-            Color::TRANSPARENT
-        };
         let ripple_state = state.ripple_state(index);
         let state_clone = state.clone();
 
-        let shape = if index == 0 {
-            Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
-                top_right: RoundedCorner::manual(Dp(0.0), 3.0),
-                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-            }
-        } else if index == titles_count - 1 {
-            Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(Dp(0.0), 3.0),
-                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
-                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-            }
+        let label_color = if index == active_tab {
+            args.active_content_color
         } else {
-            Shape::RECTANGLE
+            args.inactive_content_color
         };
 
         button(
             ButtonArgsBuilder::default()
-                .color(color)
+                .color(args.container_color)
+                .hover_color(Some(hover_color))
+                .padding(args.tab_padding)
+                .ripple_color(args.state_layer_color)
                 .on_click({
                     let state_clone = state_clone.clone();
                     Arc::new(move || {
@@ -398,11 +496,25 @@ where
                     })
                 })
                 .width(DimensionValue::FILLED)
-                .shape(shape)
+                .shape(Shape::RECTANGLE)
                 .build()
                 .expect("builder construction failed"),
             ripple_state,
-            child,
+            move || {
+                boxed(
+                    BoxedArgs {
+                        alignment: Alignment::Center,
+                        width: DimensionValue::FILLED,
+                        ..Default::default()
+                    },
+                    |scope| {
+                        scope.child(move || match child {
+                            TabTitle::Custom(render) => render(),
+                            TabTitle::Themed(render) => render(label_color),
+                        });
+                    },
+                );
+            },
         );
     }
 
@@ -473,7 +585,7 @@ where
 
             let content_container_constraint = Constraint::new(
                 DimensionValue::Fill {
-                    min: None,
+                    min: Some(titles_total_width),
                     max: Some(titles_total_width),
                 },
                 DimensionValue::Wrap {
@@ -485,7 +597,8 @@ where
                 input.measure_child(content_container_id, &content_container_constraint)?;
 
             let final_width = titles_total_width;
-            let target_offset = -Px(active_tab as i32 * final_width.0);
+            let page_width = content_container_size.width;
+            let target_offset = -Px(active_tab as i32 * page_width.0);
             let (_, target_content_scroll_offset) = state.content_offsets();
             if target_content_scroll_offset != target_offset {
                 state.update_content_offsets(target_content_scroll_offset, target_offset);
@@ -499,7 +612,14 @@ where
                     .map(|s| s.width)
                     .fold(Px(0), |acc, w| acc + w);
 
-                state.set_indicator_targets(active_title_width, active_title_x);
+                let clamped_width = clamp_px(
+                    active_title_width,
+                    tabs_args.indicator_min_width.into(),
+                    tabs_args.indicator_max_width.map(|v| v.into()),
+                );
+                let centered_x = active_title_x + Px((active_title_width.0 - clamped_width.0) / 2);
+
+                state.set_indicator_targets(clamped_width, centered_x);
 
                 let (from_width, to_width, from_x, to_x) = state.indicator_metrics();
                 let eased_progress = animation::easing(state.progress());
@@ -510,19 +630,25 @@ where
                 (width, x)
             };
 
-            let indicator_height = Dp(2.0).into();
+            let indicator_height: Px = tabs_args.indicator_height.into();
             let indicator_constraint = Constraint::new(
                 DimensionValue::Fixed(indicator_width),
                 DimensionValue::Fixed(indicator_height),
             );
             let _ = input.measure_child(indicator_id, &indicator_constraint)?;
 
-            let final_width = titles_total_width;
-            let final_height = titles_max_height + content_container_size.height;
+            let tab_bar_height =
+                (titles_max_height + indicator_height).max(tabs_args.min_tab_height.into());
+            let final_height = tab_bar_height + content_container_size.height;
+            let title_offset_y = (tab_bar_height - indicator_height - titles_max_height).max(Px(0));
 
             let mut current_x = Px(0);
             for (i, &title_id) in title_ids.iter().enumerate() {
-                place_node(title_id, PxPosition::new(current_x, Px(0)), input.metadatas);
+                place_node(
+                    title_id,
+                    PxPosition::new(current_x, title_offset_y),
+                    input.metadatas,
+                );
                 if let Some(title_size) = title_sizes.get(i) {
                     current_x += title_size.width;
                 }
@@ -530,13 +656,13 @@ where
 
             place_node(
                 indicator_id,
-                PxPosition::new(indicator_x, titles_max_height),
+                PxPosition::new(indicator_x, tab_bar_height - indicator_height),
                 input.metadatas,
             );
 
             place_node(
                 content_container_id,
-                PxPosition::new(Px(0), titles_max_height),
+                PxPosition::new(Px(0), tab_bar_height),
                 input.metadatas,
             );
 

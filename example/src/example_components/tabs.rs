@@ -79,9 +79,45 @@ fn test_content(state: Arc<TabsShowcaseState>) {
                         .unwrap(),
                     tabs_state,
                     |scope| {
-                        scope.child(|| text("Flights"), || text("Fly in the air..."));
-                        scope.child(|| text("Hotel"), || text("Sleep well..."));
-                        scope.child(|| text("Cars"), || text("Beep beep..."));
+                        scope.child_with_color(
+                            |color| {
+                                text(
+                                    TextArgsBuilder::default()
+                                        .text("Flights")
+                                        .size(Dp(14.0))
+                                        .color(color)
+                                        .build()
+                                        .unwrap(),
+                                )
+                            },
+                            || text("Fly in the air..."),
+                        );
+                        scope.child_with_color(
+                            |color| {
+                                text(
+                                    TextArgsBuilder::default()
+                                        .text("Hotel")
+                                        .size(Dp(14.0))
+                                        .color(color)
+                                        .build()
+                                        .unwrap(),
+                                )
+                            },
+                            || text("Sleep well..."),
+                        );
+                        scope.child_with_color(
+                            |color| {
+                                text(
+                                    TextArgsBuilder::default()
+                                        .text("Cars")
+                                        .size(Dp(14.0))
+                                        .color(color)
+                                        .build()
+                                        .unwrap(),
+                                )
+                            },
+                            || text("Beep beep..."),
+                        );
                     },
                 );
             });
