@@ -76,9 +76,6 @@ pub mod lazy_list;
 pub mod material_color;
 pub mod material_icons;
 pub use ripple_state::RippleState;
-
-#[deprecated(note = "Use material_color module instead.")]
-pub use material_color as md3_color;
 pub mod menus;
 pub mod navigation_bar;
 pub mod pipelines;
