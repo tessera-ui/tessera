@@ -7,11 +7,12 @@ use material_color_utilities::{
     dynamiccolor::{DynamicSchemeBuilder, MaterialDynamicColors, SpecVersion, Variant},
     hct::Hct,
 };
+use parking_lot::RwLock;
 use tessera_ui::Color;
 
 const DEFAULT_COLOR: Color = Color::from_rgb(0.4039, 0.3137, 0.6431); // #6750A4
 
-static GLOBAL_SCHEME: OnceLock<std::sync::Mutex<Md3ColorScheme>> = OnceLock::new();
+static GLOBAL_SCHEME: OnceLock<RwLock<Md3ColorScheme>> = OnceLock::new();
 
 /// Returns the global Material Design 3 color scheme.
 ///
@@ -19,9 +20,8 @@ static GLOBAL_SCHEME: OnceLock<std::sync::Mutex<Md3ColorScheme>> = OnceLock::new
 /// with a seed color of #6750A4.
 pub fn global_md3_scheme() -> Md3ColorScheme {
     GLOBAL_SCHEME
-        .get_or_init(|| std::sync::Mutex::new(Md3ColorScheme::light_from_seed(DEFAULT_COLOR)))
-        .lock()
-        .unwrap()
+        .get_or_init(|| RwLock::new(Md3ColorScheme::light_from_seed(DEFAULT_COLOR)))
+        .read()
         .clone()
 }
 
@@ -35,11 +35,10 @@ pub fn set_global_md3_scheme(seed: Color, is_dark: bool) {
         Md3ColorScheme::light_from_seed(seed)
     };
 
-    let lock = GLOBAL_SCHEME.get_or_init(|| std::sync::Mutex::new(scheme.clone()));
-
-    if let Ok(mut guard) = lock.lock() {
-        *guard = scheme;
-    }
+    GLOBAL_SCHEME
+        .get_or_init(|| RwLock::new(scheme.clone()))
+        .write()
+        .clone_from(&scheme);
 }
 
 /// An MD3 (Material Design 3) color scheme, which can be light or dark,
