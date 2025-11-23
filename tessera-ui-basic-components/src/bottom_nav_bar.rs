@@ -17,6 +17,7 @@ use crate::{
     alignment::MainAxisAlignment,
     animation,
     button::{ButtonArgsBuilder, button},
+    md3_color::{blend_over, global_md3_scheme},
     pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
     shape_def::Shape,
@@ -24,9 +25,6 @@ use crate::{
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
-const ACTIVE_COLOR: Color = Color::from_rgb_u8(225, 235, 255);
-const INACTIVE_COLOR: Color = Color::WHITE;
-const ACTIVE_COLOR_SHADOW: Color = Color::from_rgba_u8(100, 115, 140, 100);
 
 type NavChildClosure = (
     Box<dyn FnOnce() + Send + Sync>,
@@ -74,6 +72,20 @@ where
     F: FnOnce(&mut BottomNavBarScope),
 {
     let mut child_closures = Vec::new();
+    let scheme = global_md3_scheme();
+    let container_color = scheme.surface;
+    let active_color = scheme.secondary_container;
+    let inactive_color = scheme.surface;
+    let active_shadow_color = scheme.shadow.with_alpha(0.25);
+    let inactive_shadow_color = scheme.shadow.with_alpha(0.0);
+    let active_hover_color = blend_over(active_color, scheme.on_secondary_container, 0.08);
+    let inactive_hover_color = blend_over(inactive_color, scheme.on_surface_variant, 0.08);
+    let active_ripple_color = scheme.on_secondary_container.with_alpha(0.12);
+    let inactive_ripple_color = scheme.on_surface.with_alpha(0.12);
+    let container_shadow = ShadowProps {
+        color: scheme.shadow.with_alpha(0.18),
+        ..Default::default()
+    };
 
     {
         let mut scope = BottomNavBarScope {
@@ -87,8 +99,8 @@ where
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .style(Color::from_rgb(9.333, 9.333, 9.333).into())
-            .shadow(ShadowProps::default())
+            .style(container_color.into())
+            .shadow(container_shadow)
             .block_input(true)
             .build()
             .expect("SurfaceArgsBuilder failed with required fields set"),
@@ -109,23 +121,41 @@ where
                             let previous_selected = state_clone.previous_selected();
                             let ripple_state = state_clone.ripple_state(index);
 
-                            let color;
-                            let shadow_color;
-                            if index == selected {
-                                color = interpolate_color(INACTIVE_COLOR, ACTIVE_COLOR, progress);
-                                shadow_color =
-                                    interpolate_color(INACTIVE_COLOR, ACTIVE_COLOR_SHADOW, progress)
-                            } else if index == previous_selected {
-                                color = interpolate_color(ACTIVE_COLOR, INACTIVE_COLOR, progress);
-                                shadow_color =
-                                    interpolate_color(ACTIVE_COLOR_SHADOW, INACTIVE_COLOR, progress)
-                            } else {
-                                color = INACTIVE_COLOR;
-                                shadow_color = INACTIVE_COLOR;
-                            }
+                            let (color, shadow_color, hover_color, ripple_color) =
+                                if index == selected {
+                                    (
+                                        interpolate_color(inactive_color, active_color, progress),
+                                        interpolate_color(
+                                            inactive_shadow_color,
+                                            active_shadow_color,
+                                            progress,
+                                        ),
+                                        active_hover_color,
+                                        active_ripple_color,
+                                    )
+                                } else if index == previous_selected {
+                                    (
+                                        interpolate_color(active_color, inactive_color, progress),
+                                        interpolate_color(
+                                            active_shadow_color,
+                                            inactive_shadow_color,
+                                            progress,
+                                        ),
+                                        inactive_hover_color,
+                                        inactive_ripple_color,
+                                    )
+                                } else {
+                                    (
+                                        inactive_color,
+                                        inactive_shadow_color,
+                                        inactive_hover_color,
+                                        inactive_ripple_color,
+                                    )
+                                };
 
                             let button_args = ButtonArgsBuilder::default()
                                 .color(color)
+                                .hover_color(Some(hover_color))
                                 .shape(Shape::capsule())
                                 .on_click(Arc::new(move || {
                                     if index != selected {
@@ -135,6 +165,7 @@ where
                                         }
                                     }
                                 }))
+                                .ripple_color(ripple_color)
                                 .shadow(ShadowProps {
                                     color: shadow_color,
                                     ..Default::default()
