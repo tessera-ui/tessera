@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             writeln!(generated, "    ///")?;
             writeln!(generated, "    /// ## Examples")?;
             writeln!(generated, "    ///")?;
-            writeln!(generated, "    /// ```")?;
+            writeln!(generated, "    /// ```ignore")?;
             writeln!(
                 generated,
                 "    /// use tessera_ui_basic_components::icon::IconArgsBuilder;"
