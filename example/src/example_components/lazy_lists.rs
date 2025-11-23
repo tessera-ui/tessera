@@ -6,6 +6,7 @@ use tessera_ui_basic_components::{
         LazyColumnArgs, LazyColumnArgsBuilder, LazyListState, LazyRowArgsBuilder, lazy_column,
         lazy_row,
     },
+    md3_color::global_md3_scheme,
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -25,7 +26,6 @@ pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -62,7 +62,7 @@ pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
                                                 "Virtualized column/row that only mounts what is visible in the \
                                                 viewport.",
                                             )
-                                            .color(Color::new(0.2, 0.2, 0.3, 0.75))
+                                            .color(global_md3_scheme().on_surface_variant)
                                             .build()
                                             .unwrap(),
                                     );
@@ -107,7 +107,7 @@ fn vertical_list(state: LazyListState) {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .style(Color::new(0.95, 0.96, 0.98, 1.0).into())
+            .style(global_md3_scheme().surface_variant.into())
             .padding(Dp(12.0))
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
@@ -146,7 +146,7 @@ fn horizontal_gallery(state: LazyListState) {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .style(Color::new(0.95, 0.96, 0.98, 1.0).into())
+            .style(global_md3_scheme().surface_variant.into())
             .padding(Dp(12.0))
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
@@ -215,7 +215,7 @@ fn contact_card(index: usize) {
                             text(
                                 TextArgsBuilder::default()
                                     .text(format!("{unread_count} unread messages"))
-                                    .color(Color::new(0.2, 0.2, 0.3, 0.75))
+                                    .color(global_md3_scheme().on_surface_variant)
                                     .build()
                                     .unwrap(),
                             );

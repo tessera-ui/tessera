@@ -1,7 +1,8 @@
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     button_group::{ButtonGroupArgsBuilder, ButtonGroupItem, ButtonGroupState, button_group},
     column::{ColumnArgsBuilder, column},
+    md3_color::global_md3_scheme,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     spacer::{SpacerArgs, spacer},
@@ -42,7 +43,6 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .expect("builder construction failed"),
         None,
@@ -56,7 +56,6 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.into())
                             .padding(Dp(24.0))
                             .width(DimensionValue::FILLED)
                             .build()
@@ -86,7 +85,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                     scope.child(move || {
                                         surface(
                                             SurfaceArgsBuilder::default()
-                                                .style(Color::new(0.98, 0.98, 0.99, 1.0).into())
+                                                .style(global_md3_scheme().surface_variant.into())
                                                 .padding(Dp(16.0))
                                                 .width(DimensionValue::FILLED)
                                                 .build()
@@ -104,9 +103,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                                                 TextArgsBuilder::default()
                                                                     .text("Single (no deselect)".to_string())
                                                                     .size(Dp(16.0))
-                                                                    .color(Color::new(
-                                                                        0.15, 0.17, 0.21, 1.0,
-                                                                    ))
+                                                                    .color(global_md3_scheme().on_surface)
                                                                     .build()
                                                                     .expect(
                                                                         "builder construction failed",
@@ -148,7 +145,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                     scope.child(move || {
                                         surface(
                                             SurfaceArgsBuilder::default()
-                                                .style(Color::new(0.98, 0.98, 0.99, 1.0).into())
+                                                .style(global_md3_scheme().surface_variant.into())
                                                 .padding(Dp(16.0))
                                                 .width(DimensionValue::FILLED)
                                                 .build()
@@ -166,9 +163,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                                                 TextArgsBuilder::default()
                                                                     .text("Multi-select".to_string())
                                                                     .size(Dp(16.0))
-                                                                    .color(Color::new(
-                                                                        0.15, 0.17, 0.21, 1.0,
-                                                                    ))
+                                                                    .color(global_md3_scheme().on_surface)
                                                                     .build()
                                                                     .expect(
                                                                         "builder construction failed",
@@ -225,9 +220,10 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                                                 single.selected_indices()
                                                             ))
                                                             .size(Dp(14.0))
-                                                            .color(Color::new(
-                                                                0.23, 0.25, 0.30, 1.0,
-                                                            ))
+                                                            .color(
+                                                                global_md3_scheme()
+                                                                    .on_surface_variant,
+                                                            )
                                                             .build()
                                                             .expect("builder construction failed"),
                                                     );
@@ -242,9 +238,10 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                                                 multi.selected_indices()
                                                             ))
                                                             .size(Dp(14.0))
-                                                            .color(Color::new(
-                                                                0.23, 0.25, 0.30, 1.0,
-                                                            ))
+                                                            .color(
+                                                                global_md3_scheme()
+                                                                    .on_surface_variant,
+                                                            )
                                                             .build()
                                                             .expect("builder construction failed"),
                                                     );

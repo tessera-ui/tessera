@@ -1,11 +1,12 @@
 use std::{fmt::Display, sync::Arc};
 
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     RippleState,
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{ColumnArgsBuilder, column},
+    md3_color::global_md3_scheme,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     shape_def::{RoundedCorner, Shape},
@@ -81,7 +82,6 @@ pub fn surface_showcase(#[state] state: SurfaceShowcaseState) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -95,7 +95,6 @@ pub fn surface_showcase(#[state] state: SurfaceShowcaseState) {
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.into())
                             .padding(Dp(16.0))
                             .width(DimensionValue::FILLED)
                             .build()
@@ -142,13 +141,13 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                         scope.child(move || {
                             let style = if border_width.to_pixels_f32() > 0.1 {
                                 SurfaceStyle::FilledOutlined {
-                                    fill_color: Color::new(0.4745, 0.5255, 0.7961, 1.0),
-                                    border_color: Color::GREY,
+                                    fill_color: global_md3_scheme().primary_container,
+                                    border_color: global_md3_scheme().outline,
                                     border_width,
                                 }
                             } else {
                                 SurfaceStyle::Filled {
-                                    color: Color::new(0.4745, 0.5255, 0.7961, 1.0),
+                                    color: global_md3_scheme().primary_container,
                                 }
                             };
                             surface(

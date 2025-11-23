@@ -1,9 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     glass_progress::{GlassProgressArgsBuilder, glass_progress},
+    md3_color::global_md3_scheme,
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     slider::{SliderArgsBuilder, SliderState, slider},
     spacer::spacer,
@@ -35,7 +36,6 @@ pub fn glass_progress_showcase(#[state] state: GlassProgressShowcaseState) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -49,7 +49,6 @@ pub fn glass_progress_showcase(#[state] state: GlassProgressShowcaseState) {
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.into())
                             .padding(Dp(25.0))
                             .width(DimensionValue::FILLED)
                             .build()
@@ -83,7 +82,7 @@ fn test_content(state: Arc<GlassProgressShowcaseState>) {
                 text(TextArgsBuilder::default()
                     .text("This is the glass progress, adjust the slider below to change its value.")
                     .size(Dp(20.0))
-                    .color(Color::GRAY)
+                    .color(global_md3_scheme().on_surface_variant)
                     .build()
                     .unwrap());
             });

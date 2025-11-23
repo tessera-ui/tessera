@@ -20,7 +20,6 @@ pub fn spacer_showcase(#[state] state: SpacerShowcaseState) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -34,7 +33,6 @@ pub fn spacer_showcase(#[state] state: SpacerShowcaseState) {
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.into())
                             .padding(Dp(25.0))
                             .width(DimensionValue::FILLED)
                             .build()

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     RippleState,
     alignment::CrossAxisAlignment,
@@ -9,6 +9,7 @@ use tessera_ui_basic_components::{
     icon::{IconArgsBuilder, IconContent},
     icon_button::{IconButtonArgsBuilder, icon_button},
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
+    md3_color::global_md3_scheme,
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -66,7 +67,6 @@ pub fn button_showcase(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -80,7 +80,6 @@ pub fn button_showcase(
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.into())
                             .padding(Dp(25.0))
                             .width(DimensionValue::FILLED)
                             .build()
@@ -169,8 +168,10 @@ pub fn button_showcase(
                                     scope.child(move || {
                                         let button_args = ButtonArgsBuilder::default()
                                             .shape(Shape::rounded_rectangle(Dp(12.0)))
-                                            .color(Color::new(0.2, 0.8, 0.2, 1.0))
-                                            .hover_color(Some(Color::new(0.3, 0.9, 0.3, 1.0)))
+                                            .color(global_md3_scheme().primary)
+                                            .hover_color(Some(
+                                                global_md3_scheme().primary_container,
+                                            ))
                                             .on_click(Arc::new(|| {
                                                 println!("Styled button clicked!");
                                             }))
@@ -185,7 +186,7 @@ pub fn button_showcase(
                                                 text(
                                                     TextArgsBuilder::default()
                                                         .text("Styled")
-                                                        .color(Color::WHITE)
+                                                        .color(global_md3_scheme().on_primary)
                                                         .build()
                                                         .unwrap(),
                                                 );
@@ -218,10 +219,8 @@ pub fn button_showcase(
                                             .button(
                                                 ButtonArgsBuilder::default()
                                                     .shape(Shape::Ellipse)
-                                                    .color(Color::from_rgb(0.95, 0.95, 0.98))
-                                                    .hover_color(Some(Color::from_rgb(
-                                                        0.9, 0.9, 1.0,
-                                                    )))
+                                                    .color(global_md3_scheme().surface_variant)
+                                                    .hover_color(Some(global_md3_scheme().surface))
                                                     .on_click(Arc::new(move || {
                                                         let mut count =
                                                             on_click_counter.lock().unwrap();

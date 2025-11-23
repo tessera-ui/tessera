@@ -19,6 +19,7 @@ use tessera_ui_basic_components::{
     column::{ColumnArgs, column},
     dialog::{DialogProviderArgsBuilder, DialogProviderState, DialogStyle, dialog_provider},
     lazy_list::{LazyColumnArgsBuilder, LazyListState, lazy_column},
+    md3_color::global_md3_scheme,
     pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
     scrollable::ScrollableArgsBuilder,
@@ -152,11 +153,12 @@ pub fn app(#[state] app_state: AppState) {
                             });
                         },
                         move |alpha| {
+                            let scheme = global_md3_scheme();
                             text(
                                 TextArgsBuilder::default()
                                     .text("Hello from Dialog!")
                                     .size(Dp(20.0))
-                                    .color(Color::BLACK.with_alpha(alpha))
+                                    .color(scheme.on_surface.with_alpha(alpha))
                                     .build()
                                     .unwrap(),
                             );
@@ -418,7 +420,6 @@ fn home(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -496,7 +497,7 @@ fn component_card(
                         TextArgsBuilder::default()
                             .text(description)
                             .size(Dp(14.0))
-                            .color(Color::GRAY)
+                            .color(global_md3_scheme().on_surface_variant)
                             .build()
                             .unwrap(),
                     );
@@ -516,7 +517,6 @@ struct TopAppBarState {
 fn top_app_bar(#[state] state: TopAppBarState) {
     surface(
         SurfaceArgsBuilder::default()
-            .style(Color::WHITE.into())
             .shadow(ShadowProps::default())
             .width(DimensionValue::FILLED)
             .height(DimensionValue::Fixed(Dp(55.0).into()))
@@ -539,7 +539,7 @@ fn top_app_bar(#[state] state: TopAppBarState) {
                             .padding(Dp(5.0))
                             .shape(Shape::Ellipse)
                             .color(Color::TRANSPARENT)
-                            .hover_color(Some(Color::GRAY.with_alpha(0.1)))
+                            .hover_color(Some(global_md3_scheme().on_surface.with_alpha(0.1)))
                             .width(DimensionValue::Fixed(Dp(40.0).into()))
                             .height(DimensionValue::Fixed(Dp(40.0).into()));
                         if Router::with(|router| router.len()) > 1 {
@@ -587,7 +587,6 @@ fn top_app_bar(#[state] state: TopAppBarState) {
 fn about() {
     surface(
         SurfaceArgsBuilder::default()
-            .style(Color::WHITE.into())
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .padding(Dp(16.0))
@@ -613,7 +612,7 @@ Copyright 2025 Tessera UI Framework Developers
                                     .to_string(),
                                 )
                                 .size(Dp(20.0))
-                                .color(Color::BLACK)
+                                .color(global_md3_scheme().on_surface)
                                 .build()
                                 .unwrap(),
                         );

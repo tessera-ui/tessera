@@ -1,7 +1,5 @@
 mod app;
 mod example_components;
-mod material_colors;
-
 use tessera_ui::Renderer;
 use tracing::error;
 

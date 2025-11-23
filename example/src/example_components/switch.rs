@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
@@ -24,7 +24,6 @@ pub fn switch_showcase(#[state] state: SwitchShowcaseState) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -38,7 +37,6 @@ pub fn switch_showcase(#[state] state: SwitchShowcaseState) {
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.into())
                             .padding(Dp(25.0))
                             .width(DimensionValue::FILLED)
                             .build()

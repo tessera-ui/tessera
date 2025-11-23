@@ -3,6 +3,7 @@ use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
+    md3_color::global_md3_scheme,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     surface::{SurfaceArgsBuilder, surface},
@@ -16,7 +17,6 @@ pub fn layouts_showcase(#[state] scrollable_state: ScrollableState) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -30,7 +30,6 @@ pub fn layouts_showcase(#[state] scrollable_state: ScrollableState) {
                 || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.into())
                             .padding(Dp(25.0))
                             .width(DimensionValue::FILLED)
                             .build()
@@ -81,7 +80,7 @@ fn row_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(Color::new(0.9, 0.9, 0.9, 1.0).into())
+                    .style(global_md3_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
                 None,
@@ -120,7 +119,7 @@ fn column_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(Color::new(0.9, 0.9, 0.9, 1.0).into())
+                    .style(global_md3_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
                 None,
@@ -159,7 +158,7 @@ fn boxed_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(Color::new(0.9, 0.9, 0.9, 1.0).into())
+                    .style(global_md3_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
                 None,

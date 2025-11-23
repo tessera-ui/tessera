@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     RippleState,
     alignment::{Alignment, CrossAxisAlignment},
@@ -66,7 +66,6 @@ pub fn glass_button_showcase(#[state] state: GlassButtonShowcaseState) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -80,7 +79,6 @@ pub fn glass_button_showcase(#[state] state: GlassButtonShowcaseState) {
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.into())
                             .padding(Dp(16.0))
                             .width(DimensionValue::FILLED)
                             .build()

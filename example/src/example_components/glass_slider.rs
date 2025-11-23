@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     glass_slider::{GlassSliderArgsBuilder, GlassSliderState, glass_slider},
@@ -33,7 +33,6 @@ pub fn glass_slider_showcase(#[state] state: GlassSliderShowcaseState) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -47,7 +46,6 @@ pub fn glass_slider_showcase(#[state] state: GlassSliderShowcaseState) {
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.into())
                             .padding(Dp(25.0))
                             .width(DimensionValue::FILLED)
                             .build()

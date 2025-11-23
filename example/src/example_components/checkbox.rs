@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{self, AtomicBool},
 };
 
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     checkbox::{CheckboxArgsBuilder, CheckboxState, checkbox},
@@ -28,7 +28,6 @@ pub fn checkbox_showcase(#[state] state: CheckboxShowcaseState) {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
-            .style(Color::WHITE.into())
             .build()
             .unwrap(),
         None,
@@ -42,7 +41,6 @@ pub fn checkbox_showcase(#[state] state: CheckboxShowcaseState) {
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.into())
                             .padding(Dp(25.0))
                             .width(DimensionValue::FILLED)
                             .build()

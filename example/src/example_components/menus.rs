@@ -1,11 +1,12 @@
 use std::sync::{Arc, Mutex};
 
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     RippleState,
     alignment::CrossAxisAlignment,
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgsBuilder, column},
+    md3_color::global_md3_scheme,
     menus::{
         MenuAnchor, MenuItemArgsBuilder, MenuPlacement, MenuProviderArgsBuilder, MenuState,
         menu_item, menu_provider,
@@ -67,7 +68,6 @@ pub fn menus_showcase(
 
     surface(
         SurfaceArgsBuilder::default()
-            .style(Color::WHITE.into())
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .padding(Dp(20.0))
@@ -114,7 +114,7 @@ pub fn menus_showcase(
                                                 if pinned_display { "Yes" } else { "No" }
                                             ))
                                             .size(Dp(14.0))
-                                            .color(Color::GRAY)
+                                            .color(global_md3_scheme().on_surface_variant)
                                             .build()
                                             .expect("builder construction failed"),
                                     );
@@ -169,17 +169,15 @@ pub fn menus_showcase(
 
                                             row_scope.child(|| {
                                                 text(
-                                                    TextArgsBuilder::default()
-                                                        .text(
-                                                            "Click to open at the button's anchor point.",
-                                                        )
-                                                        .size(Dp(14.0))
-                                                        .color(Color::from_rgb(
-                                                            0.25, 0.25, 0.28,
-                                                        ))
-                                                        .build()
-                                                        .expect("builder construction failed"),
-                                                );
+                                            TextArgsBuilder::default()
+                                                .text(
+                                                    "Click to open at the button's anchor point.",
+                                                )
+                                                .size(Dp(14.0))
+                                                .color(global_md3_scheme().on_surface_variant)
+                                                .build()
+                                                .expect("builder construction failed"),
+                                        );
                                             });
                                         },
                                     );
