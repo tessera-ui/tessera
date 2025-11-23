@@ -2,7 +2,7 @@ use std::{
     path::PathBuf,
     process::{Child, Command},
     sync::mpsc::channel,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Result, anyhow};
@@ -60,10 +60,34 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
     }
 
     let mut child: Option<Child> = None;
-    let mut should_rebuild = true;
+    let mut build_child: Option<Child> = None;
+    let mut pending_change = true;
+    let mut last_change = Instant::now() - Duration::from_secs(1);
+    let debounce_window = Duration::from_millis(300);
 
     loop {
-        if should_rebuild {
+        // Wait for file changes (or time out to check running processes)
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(_) => {
+                pending_change = true;
+                last_change = Instant::now();
+
+                // Cancel an in-flight build so we only build once per stable tree.
+                if let Some(mut active_build) = build_child.take() {
+                    println!(
+                        "\n{}",
+                        "Change detected, canceling in-progress build...".bright_yellow()
+                    );
+                    let _ = active_build.kill();
+                    let _ = active_build.wait();
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(_) => break,
+        }
+
+        // Kick off a build once the tree is quiet and no build is currently running.
+        if pending_change && build_child.is_none() && last_change.elapsed() >= debounce_window {
             // Kill previous process
             if let Some(mut c) = child.take() {
                 let _ = c.kill();
@@ -72,7 +96,6 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
 
             println!("\n{}", "Rebuilding project...".bright_yellow());
 
-            // Build first
             let mut build_cmd = Command::new("cargo");
             build_cmd.arg("build");
             if release {
@@ -84,77 +107,93 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
             if let Some(pkg) = package {
                 build_cmd.arg("-p").arg(pkg);
             }
-            let build_status = build_cmd.status()?;
 
-            if !build_status.success() {
-                println!("{}", "Build failed, waiting for changes...".red());
-                should_rebuild = false;
-            } else {
-                println!("{}", "Build succeeded, launching app...".green());
-
-                // Run the app
-                let mut run_cmd = Command::new("cargo");
-                run_cmd.arg("run");
-                if verbose {
-                    run_cmd.arg("-v");
+            match build_cmd.spawn() {
+                Ok(c) => {
+                    build_child = Some(c);
+                    pending_change = false;
                 }
-                if let Some(pkg) = package {
-                    run_cmd.arg("-p").arg(pkg);
-                }
-
-                match run_cmd.spawn() {
-                    Ok(c) => {
-                        child = Some(c);
-                        should_rebuild = false;
-                        println!("{}", "Watching for changes... (Ctrl+C to stop)".cyan());
-                    }
-                    Err(e) => {
-                        println!("{} Failed to start app: {}", "Error".red(), e);
-                        should_rebuild = false;
-                    }
+                Err(e) => {
+                    println!("{} Failed to start build: {}", "Error".red(), e);
                 }
             }
         }
 
-        // Wait for file changes
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(_) => {
-                println!("\n{}", "Change detected, restarting...".bright_cyan());
-                should_rebuild = true;
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                if let Some(mut running_child) = child.take() {
-                    match running_child.try_wait() {
-                        Ok(Some(status)) => {
-                            if !status.success() {
-                                println!(
-                                    "\n{}",
-                                    format!(
-                                        "Application crashed with exit code: {:?}",
-                                        status.code()
-                                    )
-                                    .red()
-                                );
-                            } else {
-                                println!("\n{}", "Application exited normally.".green());
+        // Monitor build progress so we can relaunch the app when ready.
+        if let Some(mut active_build) = build_child.take() {
+            match active_build.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        println!("{}", "Build failed, waiting for changes...".red());
+                    } else if pending_change {
+                        println!(
+                            "{}",
+                            "New changes arrived during build; skipping run and rebuilding..."
+                                .yellow()
+                        );
+                    } else {
+                        println!("{}", "Build succeeded, launching app...".green());
+
+                        let mut run_cmd = Command::new("cargo");
+                        run_cmd.arg("run");
+                        if verbose {
+                            run_cmd.arg("-v");
+                        }
+                        if let Some(pkg) = package {
+                            run_cmd.arg("-p").arg(pkg);
+                        }
+
+                        match run_cmd.spawn() {
+                            Ok(c) => {
+                                child = Some(c);
+                                println!("{}", "Watching for changes... (Ctrl+C to stop)".cyan());
                             }
-                            println!("{}", "Stopping dev server...".dimmed());
-                            break;
-                        }
-                        Ok(None) => {
-                            child = Some(running_child);
-                        }
-                        Err(err) => {
-                            println!("{} Failed to check app status: {}", "⚠️".yellow(), err);
+                            Err(e) => {
+                                println!("{} Failed to start app: {}", "Error".red(), e);
+                            }
                         }
                     }
                 }
+                Ok(None) => {
+                    build_child = Some(active_build);
+                }
+                Err(err) => {
+                    println!("{} Failed to check build status: {}", "⚠️".yellow(), err);
+                }
             }
-            Err(_) => break,
+        }
+
+        // Monitor the running app so we can exit cleanly if it stops.
+        if let Some(mut running_child) = child.take() {
+            match running_child.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        println!(
+                            "\n{}",
+                            format!("Application crashed with exit code: {:?}", status.code())
+                                .red()
+                        );
+                    } else {
+                        println!("\n{}", "Application exited normally.".green());
+                    }
+                    println!("{}", "Stopping dev server...".dimmed());
+                    break;
+                }
+                Ok(None) => {
+                    child = Some(running_child);
+                }
+                Err(err) => {
+                    println!("{} Failed to check app status: {}", "⚠️".yellow(), err);
+                }
+            }
         }
     }
 
     // Cleanup
+    if let Some(mut build) = build_child {
+        let _ = build.kill();
+        let _ = build.wait();
+    }
     if let Some(mut c) = child {
         let _ = c.kill();
         let _ = c.wait();

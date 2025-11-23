@@ -1,7 +1,14 @@
-use std::{fs, io, path::Path, process::Command};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+    process::{Child, Command},
+    sync::mpsc::channel,
+    time::{Duration, Instant},
+};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::ValueEnum;
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 use owo_colors::colored::*;
 use serde::Deserialize;
 
@@ -173,12 +180,107 @@ package.metadata.tessera.android.package in Cargo.toml"
         anyhow!("`cargo tessera android dev` requires --device <adb_serial|emulator>. Use `x devices` to list available targets.")
     })?;
 
-    run_x_run(&package, &arch, opts.release, device)?;
+    println!("{}", "Watching for file changes...".dimmed());
 
-    println!(
-        "{}",
-        "Application launched via `x run`. Use Ctrl+C to stop or rerun after code changes.".green()
-    );
+    let (tx, rx) = channel();
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
+        if let Ok(event) = res
+            && matches!(
+                event.kind,
+                EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
+            )
+        {
+            let _ = tx.send(());
+        }
+    })?;
+
+    let watch_dir = package_dir.unwrap_or_else(|| PathBuf::from("."));
+    let src_path = watch_dir.join("src");
+    if src_path.exists() {
+        watcher.watch(&src_path, RecursiveMode::Recursive)?;
+    } else {
+        return Err(anyhow!(
+            "Source directory not found: {}",
+            src_path.display()
+        ));
+    }
+
+    for file in ["Cargo.toml", "build.rs"] {
+        let path = watch_dir.join(file);
+        if path.exists() {
+            watcher.watch(&path, RecursiveMode::NonRecursive)?;
+        }
+    }
+
+    let mut run_child: Option<Child> = None;
+    let mut pending_change = true;
+    let mut last_change = Instant::now() - Duration::from_secs(1);
+    let debounce_window = Duration::from_millis(300);
+
+    loop {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(_) => {
+                pending_change = true;
+                last_change = Instant::now();
+
+                if let Some(mut active_run) = run_child.take() {
+                    println!(
+                        "\n{}",
+                        "Change detected, canceling in-progress Android deploy...".bright_yellow()
+                    );
+                    let _ = active_run.kill();
+                    let _ = active_run.wait();
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(_) => break,
+        }
+
+        if pending_change && run_child.is_none() && last_change.elapsed() >= debounce_window {
+            while rx.try_recv().is_ok() {}
+
+            println!(
+                "\n{}",
+                "Building and deploying to Android device...".bright_yellow()
+            );
+
+            match run_x_run(&package, &arch, opts.release, device) {
+                Ok(child) => {
+                    run_child = Some(child);
+                    pending_change = false;
+                }
+                Err(e) => {
+                    println!("{} Failed to start deploy: {}", "Error".red(), e);
+                }
+            }
+        }
+
+        if let Some(mut active_run) = run_child.take() {
+            match active_run.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        println!("{}", "Deploy failed, waiting for changes...".red());
+                    } else {
+                        println!(
+                            "{}",
+                            "Deploy finished. App should be running on the device.".green()
+                        );
+                    }
+                }
+                Ok(None) => {
+                    run_child = Some(active_run);
+                }
+                Err(err) => {
+                    println!("{} Failed to check deploy status: {}", "⚠️".yellow(), err);
+                }
+            }
+        }
+    }
+
+    if let Some(mut run) = run_child {
+        let _ = run.kill();
+        let _ = run.wait();
+    }
 
     Ok(())
 }
@@ -216,7 +318,7 @@ fn run_x_build(package: &str, arch: &str, release: bool, format: AndroidFormat) 
     }
 }
 
-fn run_x_run(package: &str, arch: &str, release: bool, device: &str) -> Result<()> {
+fn run_x_run(package: &str, arch: &str, release: bool, device: &str) -> Result<Child> {
     let mut cmd = Command::new("x");
     cmd.arg("run")
         .arg("-p")
@@ -230,20 +332,12 @@ fn run_x_run(package: &str, arch: &str, release: bool, device: &str) -> Result<(
         cmd.arg("--release");
     }
 
-    let status = match cmd.status() {
-        Ok(status) => status,
+    match cmd.spawn() {
+        Ok(child) => Ok(child),
         Err(err) if err.kind() == io::ErrorKind::NotFound => bail!(
             "`x` (xbuild) was not found. Install it with `cargo install xbuild --features vendored` or open `nix develop .#android`."
         ),
-        Err(err) => return Err(err).context("Failed to run `x run`"),
-    };
-
-    if status.success() {
-        Ok(())
-    } else if let Some(code) = status.code() {
-        bail!("`x run` failed (exit code {code}). Run `x doctor` for diagnostics.");
-    } else {
-        bail!("`x run` terminated unexpectedly. Run `x doctor` for diagnostics.");
+        Err(err) => Err(err).context("Failed to run `x run`"),
     }
 }
 
