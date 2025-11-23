@@ -24,12 +24,12 @@ use crate::{
 #[derive(Debug, Builder, Clone)]
 pub struct ScrollableArgs {
     /// The desired width behavior of the scrollable area
-    /// Defaults to Wrap { min: None, max: None }.
-    #[builder(default = "tessera_ui::DimensionValue::Wrap { min: None, max: None }")]
+    /// Defaults to [`tessera_ui::DimensionValue::FILLED`].
+    #[builder(default = "tessera_ui::DimensionValue::FILLED")]
     pub width: tessera_ui::DimensionValue,
     /// The desired height behavior of the scrollable area.
-    /// Defaults to Wrap { min: None, max: None }.
-    #[builder(default = "tessera_ui::DimensionValue::Wrap { min: None, max: None }")]
+    /// Defaults to [`tessera_ui::DimensionValue::FILLED`].
+    #[builder(default = "tessera_ui::DimensionValue::FILLED")]
     pub height: tessera_ui::DimensionValue,
     /// Is vertical scrollable?
     /// Defaults to `true` since most scrollable areas are vertical.
