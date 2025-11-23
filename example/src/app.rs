@@ -25,7 +25,7 @@ use tessera_ui_basic_components::{
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
     side_bar::{SideBarProviderArgsBuilder, SideBarProviderState, SideBarStyle, side_bar_provider},
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
 };
 
@@ -476,6 +476,9 @@ fn component_card(
             .width(DimensionValue::FILLED)
             .padding(Dp(25.0))
             .on_click(on_click)
+            .style(SurfaceStyle::Filled {
+                color: global_md3_scheme().primary_container,
+            })
             .shape(Shape::rounded_rectangle(Dp(25.0)))
             .shadow(ShadowProps::default())
             .build()
