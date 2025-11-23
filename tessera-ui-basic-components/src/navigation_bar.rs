@@ -148,15 +148,15 @@ where
         None,
         move || {
             let separator_color = scheme.outline_variant.with_alpha(0.12);
-            boxed(
-                BoxedArgsBuilder::default()
-                    .alignment(Alignment::Center)
+            column(
+                ColumnArgsBuilder::default()
                     .width(DimensionValue::FILLED)
                     .height(DimensionValue::FILLED)
+                    .cross_axis_alignment(CrossAxisAlignment::Stretch)
                     .build()
-                    .expect("BoxedArgsBuilder failed with required fields set"),
-                move |boxed_scope| {
-                    boxed_scope.child_with_alignment(Alignment::TopCenter, move || {
+                    .expect("ColumnArgsBuilder failed with required fields set"),
+                move |column_scope| {
+                    column_scope.child(move || {
                         surface(
                             SurfaceArgsBuilder::default()
                                 .width(DimensionValue::FILLED)
@@ -169,37 +169,40 @@ where
                         );
                     });
 
-                    boxed_scope.child(move || {
-                        row(
-                            RowArgsBuilder::default()
-                                .width(DimensionValue::FILLED)
-                                .height(DimensionValue::FILLED)
-                                .main_axis_alignment(MainAxisAlignment::SpaceEvenly)
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .build()
-                                .expect("RowArgsBuilder failed with required fields set"),
-                            move |row_scope| {
-                                for (index, item) in items.into_iter().enumerate() {
-                                    let state_clone = state.clone();
-                                    let scheme_for_item = scheme.clone();
-                                    row_scope.child_weighted(
-                                        move || {
-                                            render_navigation_item(
-                                                &state_clone,
-                                                index,
-                                                item,
-                                                selected_index,
-                                                previous_index,
-                                                animation_progress,
-                                                scheme_for_item,
-                                            );
-                                        },
-                                        1.0,
-                                    );
-                                }
-                            },
-                        );
-                    });
+                    column_scope.child_weighted(
+                        move || {
+                            row(
+                                RowArgsBuilder::default()
+                                    .width(DimensionValue::FILLED)
+                                    .height(DimensionValue::FILLED)
+                                    .main_axis_alignment(MainAxisAlignment::SpaceEvenly)
+                                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                                    .build()
+                                    .expect("RowArgsBuilder failed with required fields set"),
+                                move |row_scope| {
+                                    for (index, item) in items.into_iter().enumerate() {
+                                        let state_clone = state.clone();
+                                        let scheme_for_item = scheme.clone();
+                                        row_scope.child_weighted(
+                                            move || {
+                                                render_navigation_item(
+                                                    &state_clone,
+                                                    index,
+                                                    item,
+                                                    selected_index,
+                                                    previous_index,
+                                                    animation_progress,
+                                                    scheme_for_item,
+                                                );
+                                            },
+                                            1.0,
+                                        );
+                                    }
+                                },
+                            );
+                        },
+                        1.0,
+                    );
                 },
             );
         },
@@ -252,6 +255,7 @@ fn render_navigation_item(
     let ripple_state = state.ripple_state(index);
     let on_click = item.on_click.clone();
     let state_for_click = state.clone();
+    let icon_only_indicator_color = indicator_color;
 
     surface(
         SurfaceArgsBuilder::default()
@@ -277,38 +281,15 @@ fn render_navigation_item(
         move || {
             let label_for_text = label_text.clone();
             let label_color_for_text = label_color;
-            let indicator_color_for_draw = indicator_color;
             boxed(
                 BoxedArgsBuilder::default()
                     .alignment(Alignment::Center)
                     .width(DimensionValue::FILLED)
                     .height(DimensionValue::FILLED)
                     .build()
-                    .expect("BoxedArgsBuilder failed for item stack"),
-                move |stack| {
-                    if indicator_alpha > 0.0 {
-                        let indicator_color = indicator_color_for_draw;
-                        stack.child(move || {
-                            surface(
-                                SurfaceArgsBuilder::default()
-                                    .style(SurfaceStyle::Filled {
-                                        color: indicator_color,
-                                    })
-                                    .shape(Shape::capsule())
-                                    .width(INDICATOR_WIDTH)
-                                    .height(INDICATOR_HEIGHT)
-                                    .build()
-                                    .expect("SurfaceArgsBuilder failed for indicator"),
-                                None,
-                                || {},
-                            );
-                        });
-                    }
-
-                    stack.child(move || {
-                        let icon_closure = icon_closure.clone();
-                        let label_for_text = label_for_text.clone();
-                        let label_color = label_color_for_text;
+                    .expect("BoxedArgsBuilder failed for item container"),
+                move |container| {
+                    container.child(move || {
                         column(
                             ColumnArgsBuilder::default()
                                 .width(DimensionValue::WRAP)
@@ -318,14 +299,46 @@ fn render_navigation_item(
                                 .build()
                                 .expect("ColumnArgsBuilder failed with required fields set"),
                             move |column_scope| {
-                                if let Some(draw_icon) = icon_closure.clone() {
-                                    column_scope.child(move || {
-                                        draw_icon();
-                                    });
-                                }
+                                let label_for_text = label_for_text.clone();
+                                let label_color = label_color_for_text;
+                                let has_icon = icon_closure.is_some();
+                                let icon_closure_for_stack = icon_closure.clone();
+                                column_scope.child(move || {
+                                    boxed(
+                                        BoxedArgsBuilder::default()
+                                        .alignment(Alignment::Center)
+                                        .build()
+                                        .expect("BoxedArgsBuilder failed for icon stack"),
+                                    move |icon_stack| {
+                                        let indicator_color = icon_only_indicator_color;
+                                        icon_stack.child(move || {
+                                            surface(
+                                                SurfaceArgsBuilder::default()
+                                                    .style(SurfaceStyle::Filled {
+                                                        color: indicator_color,
+                                                    })
+                                                    .shape(Shape::capsule())
+                                                    .width(INDICATOR_WIDTH)
+                                                    .height(INDICATOR_HEIGHT)
+                                                    .build()
+                                                    .expect("SurfaceArgsBuilder failed for indicator"),
+                                                None,
+                                                || {},
+                                            );
+                                        });
+
+                                        if let Some(draw_icon) = icon_closure_for_stack.clone()
+                                        {
+                                            icon_stack.child(move || {
+                                                draw_icon();
+                                                });
+                                            }
+                                        },
+                                    );
+                                });
 
                                 if !label_for_text.is_empty() {
-                                    if icon_closure.is_some() {
+                                    if has_icon {
                                         column_scope.child(move || {
                                             spacer(
                                                 SpacerArgsBuilder::default()
