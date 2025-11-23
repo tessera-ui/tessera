@@ -1,0 +1,35 @@
+{
+  "name": "@material-design-icons/svg",
+  "version": "0.14.15",
+  "description": "Latest optimized SVGs for material design icons.",
+  "files": [
+    "{filled,outlined,round,sharp,two-tone}/*.svg"
+  ],
+  "scripts": {
+    "build": "svgo --config svgo.config.js --quiet --recursive ."
+  },
+  "devDependencies": {
+    "svgo": "2.8.0"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marella/material-design-icons.git",
+    "directory": "svg"
+  },
+  "bugs": {
+    "url": "https://github.com/marella/material-design-icons/issues"
+  },
+  "homepage": "https://marella.github.io/material-design-icons/demo/svg/",
+  "keywords": [
+    "material-design-icons",
+    "material-icons",
+    "material-design",
+    "material",
+    "icons",
+    "svg"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Basic components for tessera-ui"
+build = "build.rs"
 
 [dependencies]
 bytemuck = "1.24.0"

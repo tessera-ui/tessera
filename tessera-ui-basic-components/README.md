@@ -32,6 +32,7 @@
 - `image`: image display (supports AVIF, BMP, DDS, EXR, GIF, HDR, ICO, JPEG, PNG, PNM, QOI, TGA, TIFF, WebP)
 - `image_vector`: vector image display (SVG support)
 - `icon`: semantic wrapper over vector/raster icons with consistent sizing & tint helpers
+- `material_icons`: bundled Material Design icon contents (filled/outlined/round/sharp/two-tone)
 - `icon_button`: wraps `button` with a centered icon for quick icon-only actions
 - `glass_icon_button`: glass-style icon button built on `glass_button`
 - `checkbox`: checkbox

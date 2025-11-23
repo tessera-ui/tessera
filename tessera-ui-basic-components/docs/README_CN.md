@@ -31,6 +31,7 @@
 - `text`: 文本显示，支持系统字体和彩色emoji
 - `image`: 图片显示(支持 AVIF, BMP, DDS, EXR, FF, GIF, HDR, ICO, JPEG, PNG, PNM, QOI, TGA, TIFF, WebP)
 - `icon`: 复用向量/栅格管线的图标封装，提供统一的尺寸和可选的 tint
+- `material_icons`: 内置 Material Design 图标内容（filled/outlined/round/sharp/two-tone）
 - `icon_button`: 封装 `button` 与 `icon`，方便构建图标按钮
 - `glass_icon_button`: 基于 `glass_button` 的玻璃风格图标按钮
 - `checkbox`: 复选框

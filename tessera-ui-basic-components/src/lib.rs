@@ -73,6 +73,7 @@ pub mod icon_button;
 pub mod image;
 pub mod image_vector;
 pub mod lazy_list;
+pub mod material_icons;
 pub mod md3_color;
 pub mod menus;
 pub mod pipelines;

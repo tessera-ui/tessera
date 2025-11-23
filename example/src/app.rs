@@ -17,7 +17,9 @@ use tessera_ui_basic_components::{
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgs, column},
     dialog::{DialogProviderArgsBuilder, DialogProviderState, DialogStyle, dialog_provider},
+    icon::{IconArgsBuilder, icon},
     lazy_list::{LazyColumnArgsBuilder, LazyListState, lazy_column},
+    material_icons::filled,
     md3_color::global_md3_scheme,
     navigation_bar::{NavigationBarItemBuilder, NavigationBarState, navigation_bar},
     pipelines::ShadowProps,
@@ -118,6 +120,17 @@ pub fn app(#[state] app_state: AppState) {
                                 let side_bar_state = app_state.side_bar_state.clone();
                                 let dialog_state = app_state.dialog_state.clone();
                                 scope.child(move || {
+                                    let home_icon_content = filled::home_icon();
+                                    let home_icon_args = IconArgsBuilder::default()
+                                        .content(home_icon_content)
+                                        .build()
+                                        .unwrap();
+                                    let about_icon_content = filled::info_icon();
+                                    let about_icon_args = IconArgsBuilder::default()
+                                        .content(about_icon_content)
+                                        .build()
+                                        .unwrap();
+
                                     navigation_bar(
                                         app_state.navigation_bar_state.clone(),
                                         |scope| {
@@ -128,6 +141,9 @@ pub fn app(#[state] app_state: AppState) {
                                             scope.item(
                                                 NavigationBarItemBuilder::default()
                                                     .label("Home")
+                                                    .icon(Arc::new(move || {
+                                                        icon(home_icon_args.clone());
+                                                    }))
                                                     .on_click(Arc::new(move || {
                                                         Router::with_mut(|router| {
                                                             router.reset_with(HomeDestination {
@@ -146,6 +162,9 @@ pub fn app(#[state] app_state: AppState) {
                                             scope.item(
                                                 NavigationBarItemBuilder::default()
                                                     .label("About")
+                                                    .icon(Arc::new(move || {
+                                                        icon(about_icon_args.clone());
+                                                    }))
                                                     .on_click(Arc::new(|| {
                                                         Router::with_mut(|router| {
                                                             router.reset_with(AboutDestination {});

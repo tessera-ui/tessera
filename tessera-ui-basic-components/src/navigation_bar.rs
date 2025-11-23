@@ -19,7 +19,6 @@ use crate::{
     animation,
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
-    icon::{IconArgs, icon},
     md3_color::{Md3ColorScheme, global_md3_scheme},
     pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
@@ -32,7 +31,6 @@ use crate::{
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
 const CONTAINER_HEIGHT: Dp = Dp(80.0);
 const ITEM_PADDING: Dp = Dp(12.0);
-const ICON_SIZE: Dp = Dp(24.0);
 const LABEL_TEXT_SIZE: Dp = Dp(16.0);
 const LABEL_SPACING: Dp = Dp(4.0);
 const INDICATOR_WIDTH: Dp = Dp(56.0);
@@ -65,9 +63,9 @@ pub struct NavigationBarItem {
     /// Text label shown under the icon.
     #[builder(setter(into))]
     pub label: String,
-    /// Optional icon rendered above the label. When provided, it is tinted by the active state.
+    /// Optional icon rendered above the label.
     #[builder(default, setter(strip_option))]
-    pub icon: Option<IconArgs>,
+    pub icon: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Callback invoked after selection changes to this item.
     #[builder(default = "Arc::new(|| {})")]
     pub on_click: Arc<dyn Fn() + Send + Sync>,
@@ -248,11 +246,7 @@ fn render_navigation_item(
     let label_color = content_color.with_alpha(content_color.a * label_alpha);
 
     let label_text = item.label.clone();
-    let mut icon_args = item.icon.clone();
-    if let Some(icon) = icon_args.as_mut() {
-        icon.tint = content_color;
-        icon.size = ICON_SIZE;
-    }
+    let icon_closure = item.icon.clone();
     let indicator_color = scheme.secondary_container.with_alpha(indicator_alpha);
 
     let ripple_state = state.ripple_state(index);
@@ -281,7 +275,6 @@ fn render_navigation_item(
             .expect("SurfaceArgsBuilder failed with required fields set"),
         Some(ripple_state),
         move || {
-            let icon_args_for_column = icon_args.clone();
             let label_for_text = label_text.clone();
             let label_color_for_text = label_color;
             let indicator_color_for_draw = indicator_color;
@@ -313,7 +306,7 @@ fn render_navigation_item(
                     }
 
                     stack.child(move || {
-                        let icon_args = icon_args_for_column.clone();
+                        let icon_closure = icon_closure.clone();
                         let label_for_text = label_for_text.clone();
                         let label_color = label_color_for_text;
                         column(
@@ -325,14 +318,14 @@ fn render_navigation_item(
                                 .build()
                                 .expect("ColumnArgsBuilder failed with required fields set"),
                             move |column_scope| {
-                                if let Some(item_icon) = icon_args.clone() {
+                                if let Some(draw_icon) = icon_closure.clone() {
                                     column_scope.child(move || {
-                                        icon(item_icon);
+                                        draw_icon();
                                     });
                                 }
 
                                 if !label_for_text.is_empty() {
-                                    if icon_args.is_some() {
+                                    if icon_closure.is_some() {
                                         column_scope.child(move || {
                                             spacer(
                                                 SpacerArgsBuilder::default()
