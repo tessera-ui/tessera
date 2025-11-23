@@ -231,17 +231,17 @@ impl Default for TabsState {
 #[builder(pattern = "owned")]
 pub struct TabsArgs {
     /// Color of the active tab indicator.
-    #[builder(default = "Color::new(0.4059, 0.3137, 0.6431, 1.0)")]
-    // MD3 primary tone (#6750A4)
+    #[builder(default = "crate::md3_color::global_md3_scheme().primary")]
+    // MD3 primary tone
     pub indicator_color: Color,
     /// Background color for the tab row container.
-    #[builder(default = "Color::new(0.98, 0.98, 0.99, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().surface")]
     pub container_color: Color,
     /// Color applied to active tab titles (MD3 on-surface).
-    #[builder(default = "Color::new(0.4059, 0.3137, 0.6431, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
     pub active_content_color: Color,
     /// Color applied to inactive tab titles (MD3 on-surface-variant).
-    #[builder(default = "Color::new(0.39, 0.41, 0.44, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface_variant")]
     pub inactive_content_color: Color,
     /// Height of the indicator bar in density-independent pixels.
     #[builder(default = "Dp(3.0)")]
@@ -262,7 +262,7 @@ pub struct TabsArgs {
     #[builder(default = "Dp(12.0)")]
     pub tab_padding: Dp,
     /// Color used for hover/pressed state layers.
-    #[builder(default = "Color::new(0.4059, 0.3137, 0.6431, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
     pub state_layer_color: Color,
     /// Opacity applied to the state layer on hover.
     #[builder(default = "0.08")]

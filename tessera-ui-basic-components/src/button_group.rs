@@ -52,10 +52,10 @@ pub struct ButtonGroupArgs {
     #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub height: DimensionValue,
     /// Fill color for the container behind the segments (MD3 uses surface-variant).
-    #[builder(default = "Color::new(0.97, 0.97, 0.98, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().surface_variant")]
     pub container_color: Color,
     /// Outline color for the group perimeter.
-    #[builder(default = "Color::new(0.39, 0.41, 0.44, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().outline")]
     pub outline_color: Color,
     /// Outline width for the group perimeter.
     #[builder(default = "Dp(1.0)")]
@@ -64,28 +64,30 @@ pub struct ButtonGroupArgs {
     #[builder(default = "Dp(2.0)")]
     pub container_padding: Dp,
     /// Background color for an unselected segment (usually matches `container_color`).
-    #[builder(default = "Color::new(0.97, 0.97, 0.98, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().surface_variant")]
     pub segment_background: Color,
     /// Background color for a selected segment (MD3 primary-container default).
-    #[builder(default = "Color::new(0.87, 0.91, 1.0, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().primary_container")]
     pub selected_background: Color,
     /// Foreground color for unselected segment content.
-    #[builder(default = "Color::new(0.14, 0.16, 0.20, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
     pub content_color: Color,
     /// Foreground color for selected segment content.
-    #[builder(default = "Color::new(0.08, 0.22, 0.43, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_primary_container")]
     pub selected_content_color: Color,
     /// Foreground color for disabled segment content.
-    #[builder(default = "Color::new(0.14, 0.16, 0.20, 0.38)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface.with_alpha(0.38)")]
     pub disabled_content_color: Color,
     /// Ripple tint for unselected segments.
-    #[builder(default = "Color::new(0.08, 0.22, 0.43, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface.with_alpha(0.12)")]
     pub ripple_color: Color,
     /// Ripple tint for selected segments.
-    #[builder(default = "Color::new(0.08, 0.22, 0.43, 1.0)")]
+    #[builder(
+        default = "crate::md3_color::global_md3_scheme().on_primary_container.with_alpha(0.12)"
+    )]
     pub selected_ripple_color: Color,
     /// Color used for hover/pressed state layers (applied as an overlay).
-    #[builder(default = "Color::new(0.08, 0.22, 0.43, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
     pub state_layer_color: Color,
     /// Opacity applied to `state_layer_color` on hover.
     #[builder(default = "0.12")]
@@ -100,7 +102,7 @@ pub struct ButtonGroupArgs {
     #[builder(default = "Dp(1.0)")]
     pub divider_width: Dp,
     /// Color of vertical dividers between segments.
-    #[builder(default = "Color::new(0.82, 0.84, 0.86, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().outline_variant")]
     pub divider_color: Color,
     /// Whether to draw dividers between segments.
     #[builder(default = "true")]

@@ -127,13 +127,13 @@ pub struct SwitchArgs {
     #[builder(default = "Dp(32.0)")]
     pub height: Dp,
     /// Track color when the switch is off.
-    #[builder(default = "Color::new(0.8, 0.8, 0.8, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().surface_variant")]
     pub track_color: Color,
     /// Track color when the switch is on.
-    #[builder(default = "Color::new(0.6, 0.7, 0.9, 1.0)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().primary")]
     pub track_checked_color: Color,
     /// Thumb color used in both states.
-    #[builder(default = "Color::WHITE")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
     pub thumb_color: Color,
     /// Padding around the thumb inside the track.
     #[builder(default = "Dp(3.0)")]

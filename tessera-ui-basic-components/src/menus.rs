@@ -13,6 +13,7 @@ use crate::{
     alignment::CrossAxisAlignment,
     checkmark::{CheckmarkArgsBuilder, checkmark},
     column::{ColumnArgsBuilder, column},
+    md3_color::{blend_over, global_md3_scheme},
     pipelines::ShadowProps,
     pos_misc::is_position_in_rect,
     ripple_state::RippleState,
@@ -48,21 +49,21 @@ fn default_menu_shape() -> Shape {
 }
 
 fn default_menu_shadow() -> Option<ShadowProps> {
+    let scheme = global_md3_scheme();
     Some(ShadowProps {
-        color: Color::BLACK.with_alpha(0.12),
+        color: scheme.shadow.with_alpha(0.12),
         offset: [0.0, 3.0],
         smoothness: 8.0,
     })
 }
 
 fn default_menu_color() -> Color {
-    // MD3 surface (#FFFBFE)
-    Color::new(0.999, 0.984, 0.996, 1.0)
+    global_md3_scheme().surface
 }
 
 fn default_hover_color() -> Color {
-    // MD3 state layer for menus (#E8DEF8)
-    Color::new(0.9098, 0.8705, 0.9725, 1.0)
+    let scheme = global_md3_scheme();
+    blend_over(scheme.surface, scheme.on_surface, 0.08)
 }
 
 fn default_scrim_color() -> Color {
@@ -606,13 +607,13 @@ pub struct MenuItemArgs {
     #[builder(default = "MENU_ITEM_HEIGHT")]
     pub height: Dp,
     /// Tint applied to the label text.
-    #[builder(default = "Color::new(0.1, 0.1, 0.1, 0.94)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
     pub label_color: Color,
     /// Tint applied to supporting or trailing text.
-    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.65)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface_variant")]
     pub supporting_color: Color,
     /// Tint applied when the item is disabled.
-    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.38)")]
+    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface.with_alpha(0.38)")]
     pub disabled_color: Color,
     /// Callback invoked when the item is activated.
     #[builder(default, setter(strip_option))]
@@ -829,7 +830,11 @@ pub fn menu_item(args: MenuItemArgs, menu_state: Option<MenuState>, ripple_state
         .accessibility_role(Role::MenuItem)
         .accessibility_label(args.label.clone())
         .block_input(true)
-        .ripple_color(Color::new(0.0, 0.0, 0.0, 0.12));
+        .ripple_color(
+            crate::md3_color::global_md3_scheme()
+                .on_surface
+                .with_alpha(0.12),
+        );
 
     if let Some(click) = interactive_click {
         surface_builder = surface_builder.on_click(click);
