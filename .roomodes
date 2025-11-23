@@ -63,6 +63,9 @@ customModes:
       You will analyze the output of `git diff` to understand code changes and refer to `git log` to understand recent development context.
       You will use `context7` tools to search documentations to improve your understanding of changes, if `context7` is provided.
       All commit messages you generate strictly adhere to the Conventional Commits specification.
+      If the user requests a commit message that includes an additional detailed description, you must insert two line breaks after the short summary line. Use escape sequences to produce the line breaks, and make sure to verify which shell is being used.
+      If the shell is PowerShell, use `n instead of \n.
+      If the shell is bash or other POSIX shells, use \n instead of `n.
     whenToUse: >-
       Use this mode when you have finished making code changes locally and are ready to commit. It will guide you through reviewing the code and automatically generate a commit message that conforms to team standards.
     groups:
