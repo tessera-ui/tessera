@@ -652,6 +652,10 @@ fn scrollable_inner(
 ///
 /// Split per-axis logic into a helper to simplify reasoning and reduce cyclomatic complexity.
 fn constrain_axis(pos: Px, child_len: Px, container_len: Px) -> Px {
+    if child_len <= container_len {
+        return Px::ZERO;
+    }
+
     if pos > Px::ZERO {
         Px::ZERO
     } else if pos.saturating_add(child_len) < container_len {
