@@ -9,7 +9,6 @@ use tessera_ui::{
 use tessera_ui_basic_components::{
     RippleState,
     alignment::{Alignment, CrossAxisAlignment},
-    bottom_nav_bar::{BottomNavBarState, bottom_nav_bar},
     bottom_sheet::{
         BottomSheetProviderArgsBuilder, BottomSheetProviderState, BottomSheetStyle,
         bottom_sheet_provider,
@@ -20,6 +19,7 @@ use tessera_ui_basic_components::{
     dialog::{DialogProviderArgsBuilder, DialogProviderState, DialogStyle, dialog_provider},
     lazy_list::{LazyColumnArgsBuilder, LazyListState, lazy_column},
     md3_color::global_md3_scheme,
+    navigation_bar::{NavigationBarItemBuilder, NavigationBarState, navigation_bar},
     pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
     scrollable::ScrollableArgsBuilder,
@@ -54,7 +54,7 @@ use crate::example_components::{
 
 #[derive(Default)]
 struct AppState {
-    bottom_nav_bar_state: BottomNavBarState,
+    navigation_bar_state: NavigationBarState,
     bottom_sheet_state: BottomSheetProviderState,
     side_bar_state: SideBarProviderState,
     dialog_state: DialogProviderState,
@@ -118,34 +118,41 @@ pub fn app(#[state] app_state: AppState) {
                                 let side_bar_state = app_state.side_bar_state.clone();
                                 let dialog_state = app_state.dialog_state.clone();
                                 scope.child(move || {
-                                    bottom_nav_bar(
-                                        app_state.bottom_nav_bar_state.clone(),
+                                    navigation_bar(
+                                        app_state.navigation_bar_state.clone(),
                                         |scope| {
-                                            scope.child(
-                                                move || {
-                                                    text("Home");
-                                                },
-                                                move || {
-                                                    Router::with_mut(|router| {
-                                                        router.reset_with(HomeDestination {
-                                                            bottom_sheet_state: bottom_sheet_state
-                                                                .clone(),
-                                                            side_bar_state: side_bar_state.clone(),
-                                                            dialog_state: dialog_state.clone(),
+                                            let bottom_sheet_state = bottom_sheet_state.clone();
+                                            let side_bar_state = side_bar_state.clone();
+                                            let dialog_state = dialog_state.clone();
+
+                                            scope.item(
+                                                NavigationBarItemBuilder::default()
+                                                    .label("Home")
+                                                    .on_click(Arc::new(move || {
+                                                        Router::with_mut(|router| {
+                                                            router.reset_with(HomeDestination {
+                                                                bottom_sheet_state:
+                                                                    bottom_sheet_state.clone(),
+                                                                side_bar_state: side_bar_state
+                                                                    .clone(),
+                                                                dialog_state: dialog_state.clone(),
+                                                            });
                                                         });
-                                                    });
-                                                },
+                                                    }))
+                                                    .build()
+                                                    .unwrap(),
                                             );
 
-                                            scope.child(
-                                                || {
-                                                    text("About");
-                                                },
-                                                || {
-                                                    Router::with_mut(|router| {
-                                                        router.reset_with(AboutDestination {});
-                                                    });
-                                                },
+                                            scope.item(
+                                                NavigationBarItemBuilder::default()
+                                                    .label("About")
+                                                    .on_click(Arc::new(|| {
+                                                        Router::with_mut(|router| {
+                                                            router.reset_with(AboutDestination {});
+                                                        });
+                                                    }))
+                                                    .build()
+                                                    .unwrap(),
                                             );
                                         },
                                     );

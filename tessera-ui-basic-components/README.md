@@ -37,7 +37,7 @@
 - `checkbox`: checkbox
 - `tabs`: tab component
 - `text_editor`: multi-line text editor
-- `bottom_nav_bar`: bottom navigation bar
+- `navigation_bar`: Material Design 3 navigation bar
 - `side_bar_provider`: side popup panel, provides both glass and non-glass styles
 - `dialog_provider`: dialog, provides both glass and non-glass styles
 - `bottom_sheet_provider`: bottom sheet, provides both glass and non-glass styles

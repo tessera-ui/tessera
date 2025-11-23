@@ -36,7 +36,7 @@
 - `checkbox`: 复选框
 - `tabs`: 选项卡组件
 - `text_editor`: 多行文本编辑器
-- `bottom_nav_bar`: 底部导航栏
+- `navigation_bar`: 底部 Navigation bar（Material Design 3）
 - `side_bar_provider`: 侧边弹出栏，提供了玻璃和非玻璃两种风格
 - `dialog_provider`: 对话框，提供了玻璃和非玻璃两种风格
 - `bottom_sheet_provider`: 底部弹出栏，提供了玻璃和非玻璃两种风格
