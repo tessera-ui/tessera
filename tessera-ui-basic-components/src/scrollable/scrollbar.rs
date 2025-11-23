@@ -622,11 +622,21 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
     let width = args.thickness.to_px();
     let track_height = args.visible;
     let thumb_height = compute_thumb_size(args.visible, args.total);
+    let has_vertical_overflow = args.total > args.visible;
+    let track_color = if has_vertical_overflow {
+        args.track_color
+    } else {
+        args.track_color.with_alpha(0.0)
+    };
 
     // track surface
-    render_track_surface_v(width, track_height, args.track_color);
+    render_track_surface_v(width, track_height, track_color);
 
-    let thumb_color = compute_thumb_color(&state, &args);
+    let thumb_color = if has_vertical_overflow {
+        compute_thumb_color(&state, &args)
+    } else {
+        args.thumb_color.with_alpha(0.0)
+    };
 
     // thumb surface
     render_thumb_surface_v(width, thumb_height, thumb_color);
@@ -689,11 +699,21 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
     let height = args.thickness.to_px();
     let track_width = args.visible;
     let thumb_width = compute_thumb_size(args.visible, args.total);
+    let has_horizontal_overflow = args.total > args.visible;
+    let track_color = if has_horizontal_overflow {
+        args.track_color
+    } else {
+        args.track_color.with_alpha(0.0)
+    };
 
     // track surface
-    render_track_surface_h(track_width, height, args.track_color);
+    render_track_surface_h(track_width, height, track_color);
 
-    let thumb_color = compute_thumb_color(&state, &args);
+    let thumb_color = if has_horizontal_overflow {
+        compute_thumb_color(&state, &args)
+    } else {
+        args.thumb_color.with_alpha(0.0)
+    };
 
     // thumb surface
     render_thumb_surface_h(thumb_width, height, thumb_color);
