@@ -316,10 +316,9 @@ fn should_close_on_click(
     cursor_position: Option<PxPosition>,
     bounds: Option<MenuBounds>,
 ) -> bool {
-    if bounds.is_none() {
+    let Some(bounds) = bounds else {
         return false;
-    }
-    let bounds = bounds.unwrap();
+    };
 
     cursor_events.iter().any(|event| {
         matches!(event.content, CursorEventContent::Released(_))
