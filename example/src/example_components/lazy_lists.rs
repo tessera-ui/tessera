@@ -6,7 +6,7 @@ use tessera_ui_basic_components::{
         LazyColumnArgs, LazyColumnArgsBuilder, LazyListState, LazyRowArgsBuilder, lazy_column,
         lazy_row,
     },
-    md3_color::global_md3_scheme,
+    material_color::global_material_scheme,
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -62,7 +62,7 @@ pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
                                                 "Virtualized column/row that only mounts what is visible in the \
                                                 viewport.",
                                             )
-                                            .color(global_md3_scheme().on_surface_variant)
+                                            .color(global_material_scheme().on_surface_variant)
                                             .build()
                                             .unwrap(),
                                     );
@@ -107,7 +107,7 @@ fn vertical_list(state: LazyListState) {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .style(global_md3_scheme().surface_variant.into())
+            .style(global_material_scheme().surface_variant.into())
             .padding(Dp(12.0))
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
@@ -146,7 +146,7 @@ fn horizontal_gallery(state: LazyListState) {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .style(global_md3_scheme().surface_variant.into())
+            .style(global_material_scheme().surface_variant.into())
             .padding(Dp(12.0))
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
@@ -215,7 +215,7 @@ fn contact_card(index: usize) {
                             text(
                                 TextArgsBuilder::default()
                                     .text(format!("{unread_count} unread messages"))
-                                    .color(global_md3_scheme().on_surface_variant)
+                                    .color(global_material_scheme().on_surface_variant)
                                     .build()
                                     .unwrap(),
                             );

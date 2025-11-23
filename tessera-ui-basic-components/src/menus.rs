@@ -13,7 +13,7 @@ use crate::{
     alignment::CrossAxisAlignment,
     checkmark::{CheckmarkArgsBuilder, checkmark},
     column::{ColumnArgsBuilder, column},
-    md3_color::{blend_over, global_md3_scheme},
+    material_color::{blend_over, global_material_scheme},
     pipelines::ShadowProps,
     pos_misc::is_position_in_rect,
     ripple_state::RippleState,
@@ -49,7 +49,7 @@ fn default_menu_shape() -> Shape {
 }
 
 fn default_menu_shadow() -> Option<ShadowProps> {
-    let scheme = global_md3_scheme();
+    let scheme = global_material_scheme();
     Some(ShadowProps {
         color: scheme.shadow.with_alpha(0.12),
         offset: [0.0, 3.0],
@@ -58,11 +58,11 @@ fn default_menu_shadow() -> Option<ShadowProps> {
 }
 
 fn default_menu_color() -> Color {
-    global_md3_scheme().surface
+    global_material_scheme().surface
 }
 
 fn default_hover_color() -> Color {
-    let scheme = global_md3_scheme();
+    let scheme = global_material_scheme();
     blend_over(scheme.surface, scheme.on_surface, 0.08)
 }
 
@@ -196,7 +196,7 @@ pub struct MenuProviderArgs {
     /// Additional x/y offset applied after placement relative to the anchor.
     #[builder(default = "[Dp(0.0), MENU_VERTICAL_GAP]")]
     pub offset: [Dp; 2],
-    /// Width behavior of the menu container. Defaults to the MD3 112–280 dp range.
+    /// Width behavior of the menu container. Defaults to the Material 112–280 dp range.
     #[builder(default = "default_menu_width()")]
     pub width: DimensionValue,
     /// Maximum height of the menu before scrolling is required.
@@ -205,7 +205,7 @@ pub struct MenuProviderArgs {
     /// Shape of the menu container.
     #[builder(default = "default_menu_shape()")]
     pub shape: Shape,
-    /// Optional shadow representing elevation. Defaults to a soft MD3 shadow.
+    /// Optional shadow representing elevation. Defaults to a soft Material shadow.
     #[builder(default = "default_menu_shadow()", setter(strip_option))]
     pub shadow: Option<ShadowProps>,
     /// Background color of the menu container.
@@ -606,13 +606,15 @@ pub struct MenuItemArgs {
     #[builder(default = "MENU_ITEM_HEIGHT")]
     pub height: Dp,
     /// Tint applied to the label text.
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
+    #[builder(default = "crate::material_color::global_material_scheme().on_surface")]
     pub label_color: Color,
     /// Tint applied to supporting or trailing text.
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface_variant")]
+    #[builder(default = "crate::material_color::global_material_scheme().on_surface_variant")]
     pub supporting_color: Color,
     /// Tint applied when the item is disabled.
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface.with_alpha(0.38)")]
+    #[builder(
+        default = "crate::material_color::global_material_scheme().on_surface.with_alpha(0.38)"
+    )]
     pub disabled_color: Color,
     /// Callback invoked when the item is activated.
     #[builder(default, setter(strip_option))]
@@ -759,7 +761,7 @@ fn render_trailing(args: &MenuItemArgs, enabled: bool) {
 
 /// # menu_item
 ///
-/// Renders a single MD3-styled menu item with hover and ripple feedback.
+/// Renders a single Material-styled menu item with hover and ripple feedback.
 ///
 /// ## Usage
 ///
@@ -830,7 +832,7 @@ pub fn menu_item(args: MenuItemArgs, menu_state: Option<MenuState>, ripple_state
         .accessibility_label(args.label.clone())
         .block_input(true)
         .ripple_color(
-            crate::md3_color::global_md3_scheme()
+            crate::material_color::global_material_scheme()
                 .on_surface
                 .with_alpha(0.12),
         );

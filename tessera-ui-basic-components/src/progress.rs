@@ -28,11 +28,11 @@ pub struct ProgressArgs {
     pub height: Dp,
 
     /// The color of the active part of the track.
-    #[builder(default = "crate::md3_color::global_md3_scheme().primary")]
+    #[builder(default = "crate::material_color::global_material_scheme().primary")]
     pub progress_color: Color,
 
     /// The color of the inactive part of the track.
-    #[builder(default = "crate::md3_color::global_md3_scheme().surface_variant")]
+    #[builder(default = "crate::material_color::global_material_scheme().surface_variant")]
     pub track_color: Color,
 }
 

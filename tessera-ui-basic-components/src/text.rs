@@ -17,7 +17,7 @@ pub struct TextArgs {
     pub text: String,
 
     /// The color of the text.
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
+    #[builder(default = "crate::material_color::global_material_scheme().on_surface")]
     pub color: Color,
 
     /// The font size in density-independent pixels (dp).

@@ -3,7 +3,7 @@ use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
-    md3_color::global_md3_scheme,
+    material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     surface::{SurfaceArgsBuilder, surface},
@@ -80,7 +80,7 @@ fn row_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(global_md3_scheme().surface_variant.into())
+                    .style(global_material_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
                 None,
@@ -119,7 +119,7 @@ fn column_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(global_md3_scheme().surface_variant.into())
+                    .style(global_material_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
                 None,
@@ -158,7 +158,7 @@ fn boxed_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(global_md3_scheme().surface_variant.into())
+                    .style(global_material_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
                 None,

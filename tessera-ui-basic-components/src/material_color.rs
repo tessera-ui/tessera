@@ -1,5 +1,5 @@
-//! Material Design 3 color utilities for HCT and dynamic scheme generation.
-//! ## Usage Generate MD3-compliant dynamic palettes for consistent UI theming.
+//! Material Design color utilities for HCT and dynamic scheme generation.
+//! ## Usage Generate Material-compliant dynamic palettes for consistent UI theming.
 
 use std::sync::OnceLock;
 
@@ -12,15 +12,15 @@ use tessera_ui::Color;
 
 const DEFAULT_COLOR: Color = Color::from_rgb(0.4039, 0.3137, 0.6431); // #6750A4
 
-static GLOBAL_SCHEME: OnceLock<RwLock<Md3ColorScheme>> = OnceLock::new();
+static GLOBAL_SCHEME: OnceLock<RwLock<MaterialColorScheme>> = OnceLock::new();
 
 /// Returns the global Material Design 3 color scheme.
 ///
 /// If no scheme has been set, it initializes a default light scheme
 /// with a seed color of #6750A4.
-pub fn global_md3_scheme() -> Md3ColorScheme {
+pub fn global_material_scheme() -> MaterialColorScheme {
     GLOBAL_SCHEME
-        .get_or_init(|| RwLock::new(Md3ColorScheme::light_from_seed(DEFAULT_COLOR)))
+        .get_or_init(|| RwLock::new(MaterialColorScheme::light_from_seed(DEFAULT_COLOR)))
         .read()
         .clone()
 }
@@ -28,11 +28,11 @@ pub fn global_md3_scheme() -> Md3ColorScheme {
 /// Sets the global Material Design 3 color scheme.
 ///
 /// The scheme is generated based on the provided `seed` color and `is_dark` flag.
-pub fn set_global_md3_scheme(seed: Color, is_dark: bool) {
+pub fn set_global_material_scheme(seed: Color, is_dark: bool) {
     let scheme = if is_dark {
-        Md3ColorScheme::dark_from_seed(seed)
+        MaterialColorScheme::dark_from_seed(seed)
     } else {
-        Md3ColorScheme::light_from_seed(seed)
+        MaterialColorScheme::light_from_seed(seed)
     };
 
     GLOBAL_SCHEME
@@ -41,10 +41,10 @@ pub fn set_global_md3_scheme(seed: Color, is_dark: bool) {
         .clone_from(&scheme);
 }
 
-/// An MD3 (Material Design 3) color scheme, which can be light or dark,
+/// A Material Design color scheme, which can be light or dark,
 /// produced from a seed color.
 #[derive(Clone, Debug)]
-pub struct Md3ColorScheme {
+pub struct MaterialColorScheme {
     /// Indicates if the scheme is dark mode (`true`) or light mode (`false`).
     pub is_dark: bool,
     /// The primary color of the scheme.
@@ -107,7 +107,7 @@ pub struct Md3ColorScheme {
     pub inverse_primary: Color,
 }
 
-impl Md3ColorScheme {
+impl MaterialColorScheme {
     /// Generates a light color scheme derived from the provided seed color.
     pub fn light_from_seed(seed: Color) -> Self {
         scheme_from_seed(seed, false)
@@ -119,7 +119,23 @@ impl Md3ColorScheme {
     }
 }
 
-fn scheme_from_seed(seed: Color, is_dark: bool) -> Md3ColorScheme {
+/// Backward-compatible alias for the previous material naming.
+#[deprecated(note = "Use MaterialColorScheme instead.")]
+pub type Md3ColorScheme = MaterialColorScheme;
+
+/// Backward-compatible global getter using the previous material naming.
+#[deprecated(note = "Use global_material_scheme instead.")]
+pub fn global_md3_scheme() -> MaterialColorScheme {
+    global_material_scheme()
+}
+
+/// Backward-compatible global setter using the previous material naming.
+#[deprecated(note = "Use set_global_material_scheme instead.")]
+pub fn set_global_md3_scheme(seed: Color, is_dark: bool) {
+    set_global_material_scheme(seed, is_dark);
+}
+
+fn scheme_from_seed(seed: Color, is_dark: bool) -> MaterialColorScheme {
     let scheme = DynamicSchemeBuilder::default()
         .source_color_hct(Hct::from_int(color_to_argb(seed)))
         .variant(Variant::TonalSpot)
@@ -128,7 +144,7 @@ fn scheme_from_seed(seed: Color, is_dark: bool) -> Md3ColorScheme {
         .build();
     let dynamic_colors = MaterialDynamicColors::new();
 
-    Md3ColorScheme {
+    MaterialColorScheme {
         is_dark,
         primary: argb_to_color(dynamic_colors.primary().get_argb(&scheme)),
         on_primary: argb_to_color(dynamic_colors.on_primary().get_argb(&scheme)),

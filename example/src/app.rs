@@ -19,8 +19,8 @@ use tessera_ui_basic_components::{
     dialog::{DialogProviderArgsBuilder, DialogProviderState, DialogStyle, dialog_provider},
     icon::{IconArgsBuilder, icon},
     lazy_list::{LazyColumnArgsBuilder, LazyListState, lazy_column},
+    material_color::global_material_scheme,
     material_icons::filled,
-    md3_color::global_md3_scheme,
     navigation_bar::{NavigationBarItemBuilder, NavigationBarState, navigation_bar},
     pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
@@ -179,7 +179,7 @@ pub fn app(#[state] app_state: AppState) {
                             });
                         },
                         move |alpha| {
-                            let scheme = global_md3_scheme();
+                            let scheme = global_material_scheme();
                             text(
                                 TextArgsBuilder::default()
                                     .text("Hello from Dialog!")
@@ -503,7 +503,7 @@ fn component_card(
             .padding(Dp(25.0))
             .on_click(on_click)
             .style(SurfaceStyle::Filled {
-                color: global_md3_scheme().primary_container,
+                color: global_material_scheme().primary_container,
             })
             .shape(Shape::rounded_rectangle(Dp(25.0)))
             .shadow(ShadowProps::default())
@@ -526,7 +526,7 @@ fn component_card(
                         TextArgsBuilder::default()
                             .text(description)
                             .size(Dp(14.0))
-                            .color(global_md3_scheme().on_surface_variant)
+                            .color(global_material_scheme().on_surface_variant)
                             .build()
                             .unwrap(),
                     );
@@ -568,7 +568,7 @@ fn top_app_bar(#[state] state: TopAppBarState) {
                             .padding(Dp(5.0))
                             .shape(Shape::Ellipse)
                             .color(Color::TRANSPARENT)
-                            .hover_color(Some(global_md3_scheme().on_surface.with_alpha(0.1)))
+                            .hover_color(Some(global_material_scheme().on_surface.with_alpha(0.1)))
                             .width(DimensionValue::Fixed(Dp(40.0).into()))
                             .height(DimensionValue::Fixed(Dp(40.0).into()));
                         if Router::with(|router| router.len()) > 1 {
@@ -641,7 +641,7 @@ Copyright 2025 Tessera UI Framework Developers
                                     .to_string(),
                                 )
                                 .size(Dp(20.0))
-                                .color(global_md3_scheme().on_surface)
+                                .color(global_material_scheme().on_surface)
                                 .build()
                                 .unwrap(),
                         );

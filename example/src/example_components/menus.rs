@@ -6,7 +6,7 @@ use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgsBuilder, column},
-    md3_color::global_md3_scheme,
+    material_color::global_material_scheme,
     menus::{
         MenuAnchor, MenuItemArgsBuilder, MenuPlacement, MenuProviderArgsBuilder, MenuState,
         menu_item, menu_provider,
@@ -114,7 +114,7 @@ pub fn menus_showcase(
                                                 if pinned_display { "Yes" } else { "No" }
                                             ))
                                             .size(Dp(14.0))
-                                            .color(global_md3_scheme().on_surface_variant)
+                                            .color(global_material_scheme().on_surface_variant)
                                             .build()
                                             .expect("builder construction failed"),
                                     );
@@ -174,7 +174,7 @@ pub fn menus_showcase(
                                                     "Click to open at the button's anchor point.",
                                                 )
                                                 .size(Dp(14.0))
-                                                .color(global_md3_scheme().on_surface_variant)
+                                                .color(global_material_scheme().on_surface_variant)
                                                 .build()
                                                 .expect("builder construction failed"),
                                         );

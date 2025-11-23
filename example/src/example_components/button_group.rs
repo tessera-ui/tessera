@@ -2,7 +2,7 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     button_group::{ButtonGroupArgsBuilder, ButtonGroupItem, ButtonGroupState, button_group},
     column::{ColumnArgsBuilder, column},
-    md3_color::global_md3_scheme,
+    material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     spacer::{SpacerArgs, spacer},
@@ -71,7 +71,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                     scope.child(|| {
                                         text(
                                             TextArgsBuilder::default()
-                                                .text("Button Group (MD3 Segmented)".to_string())
+                                                .text("Button Group".to_string())
                                                 .size(Dp(20.0))
                                                 .build()
                                                 .expect("builder construction failed"),
@@ -85,7 +85,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                     scope.child(move || {
                                         surface(
                                             SurfaceArgsBuilder::default()
-                                                .style(global_md3_scheme().surface_variant.into())
+                                                .style(global_material_scheme().surface_variant.into())
                                                 .padding(Dp(16.0))
                                                 .width(DimensionValue::FILLED)
                                                 .build()
@@ -103,7 +103,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                                                 TextArgsBuilder::default()
                                                                     .text("Single (no deselect)".to_string())
                                                                     .size(Dp(16.0))
-                                                                    .color(global_md3_scheme().on_surface)
+                                                                    .color(global_material_scheme().on_surface)
                                                                     .build()
                                                                     .expect(
                                                                         "builder construction failed",
@@ -145,7 +145,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                     scope.child(move || {
                                         surface(
                                             SurfaceArgsBuilder::default()
-                                                .style(global_md3_scheme().surface_variant.into())
+                                                .style(global_material_scheme().surface_variant.into())
                                                 .padding(Dp(16.0))
                                                 .width(DimensionValue::FILLED)
                                                 .build()
@@ -163,7 +163,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                                                 TextArgsBuilder::default()
                                                                     .text("Multi-select".to_string())
                                                                     .size(Dp(16.0))
-                                                                    .color(global_md3_scheme().on_surface)
+                                                                    .color(global_material_scheme().on_surface)
                                                                     .build()
                                                                     .expect(
                                                                         "builder construction failed",
@@ -221,7 +221,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                                             ))
                                                             .size(Dp(14.0))
                                                             .color(
-                                                                global_md3_scheme()
+                                                                global_material_scheme()
                                                                     .on_surface_variant,
                                                             )
                                                             .build()
@@ -239,7 +239,7 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                                                             ))
                                                             .size(Dp(14.0))
                                                             .color(
-                                                                global_md3_scheme()
+                                                                global_material_scheme()
                                                                     .on_surface_variant,
                                                             )
                                                             .build()

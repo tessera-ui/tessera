@@ -1,5 +1,5 @@
 //! Material 3-style segmented buttons with single or multiple selection.
-//! ## Usage: Group related actions into adjacent buttons that share MD3 styling and state feedback.
+//! ## Usage: Group related actions into adjacent buttons that share Material styling and state feedback.
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -51,11 +51,11 @@ pub struct ButtonGroupArgs {
     /// Height of the group container.
     #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub height: DimensionValue,
-    /// Fill color for the container behind the segments (MD3 uses surface-variant).
-    #[builder(default = "crate::md3_color::global_md3_scheme().surface_variant")]
+    /// Fill color for the container behind the segments (Material spec uses surface-variant).
+    #[builder(default = "crate::material_color::global_material_scheme().surface_variant")]
     pub container_color: Color,
     /// Outline color for the group perimeter.
-    #[builder(default = "crate::md3_color::global_md3_scheme().outline")]
+    #[builder(default = "crate::material_color::global_material_scheme().outline")]
     pub outline_color: Color,
     /// Outline width for the group perimeter.
     #[builder(default = "Dp(1.0)")]
@@ -64,30 +64,34 @@ pub struct ButtonGroupArgs {
     #[builder(default = "Dp(2.0)")]
     pub container_padding: Dp,
     /// Background color for an unselected segment (usually matches `container_color`).
-    #[builder(default = "crate::md3_color::global_md3_scheme().surface_variant")]
+    #[builder(default = "crate::material_color::global_material_scheme().surface_variant")]
     pub segment_background: Color,
-    /// Background color for a selected segment (MD3 primary-container default).
-    #[builder(default = "crate::md3_color::global_md3_scheme().primary_container")]
+    /// Background color for a selected segment (Material primary-container default).
+    #[builder(default = "crate::material_color::global_material_scheme().primary_container")]
     pub selected_background: Color,
     /// Foreground color for unselected segment content.
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
+    #[builder(default = "crate::material_color::global_material_scheme().on_surface")]
     pub content_color: Color,
     /// Foreground color for selected segment content.
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_primary_container")]
+    #[builder(default = "crate::material_color::global_material_scheme().on_primary_container")]
     pub selected_content_color: Color,
     /// Foreground color for disabled segment content.
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface.with_alpha(0.38)")]
+    #[builder(
+        default = "crate::material_color::global_material_scheme().on_surface.with_alpha(0.38)"
+    )]
     pub disabled_content_color: Color,
     /// Ripple tint for unselected segments.
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface.with_alpha(0.12)")]
+    #[builder(
+        default = "crate::material_color::global_material_scheme().on_surface.with_alpha(0.12)"
+    )]
     pub ripple_color: Color,
     /// Ripple tint for selected segments.
     #[builder(
-        default = "crate::md3_color::global_md3_scheme().on_primary_container.with_alpha(0.12)"
+        default = "crate::material_color::global_material_scheme().on_primary_container.with_alpha(0.12)"
     )]
     pub selected_ripple_color: Color,
     /// Color used for hover/pressed state layers (applied as an overlay).
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
+    #[builder(default = "crate::material_color::global_material_scheme().on_surface")]
     pub state_layer_color: Color,
     /// Opacity applied to `state_layer_color` on hover.
     #[builder(default = "0.12")]
@@ -102,7 +106,7 @@ pub struct ButtonGroupArgs {
     #[builder(default = "Dp(1.0)")]
     pub divider_width: Dp,
     /// Color of vertical dividers between segments.
-    #[builder(default = "crate::md3_color::global_md3_scheme().outline_variant")]
+    #[builder(default = "crate::material_color::global_material_scheme().outline_variant")]
     pub divider_color: Color,
     /// Whether to draw dividers between segments.
     #[builder(default = "true")]
@@ -475,7 +479,7 @@ fn accessibility_label_for_item(
 ///
 /// ## Parameters
 ///
-/// - `args` — controls MD3 styling, spacing, and callbacks; see [`ButtonGroupArgs`].
+/// - `args` — controls Material styling, spacing, and callbacks; see [`ButtonGroupArgs`].
 /// - `state` — a clonable [`ButtonGroupState`] to drive single/multi selection.
 /// - `scope_config` — closure used to register each segment via [`ButtonGroupScope`].
 ///

@@ -56,21 +56,21 @@ pub struct CheckboxArgs {
     #[builder(default = "Dp(24.0)")]
     pub size: Dp,
 
-    #[builder(default = "crate::md3_color::global_md3_scheme().surface_variant")]
+    #[builder(default = "crate::material_color::global_material_scheme().surface_variant")]
     /// Background color when the checkbox is not checked.
     ///
     /// This sets the surface color shown for the unchecked state and is typically
     /// a subtle neutral color.
     pub color: Color,
 
-    #[builder(default = "crate::md3_color::global_md3_scheme().primary")]
+    #[builder(default = "crate::material_color::global_material_scheme().primary")]
     /// Background color used when the checkbox is checked.
     ///
     /// This color is shown behind the checkmark to indicate an active/selected
     /// state. Choose a higher-contrast color relative to `color`.
     pub checked_color: Color,
 
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_primary")]
+    #[builder(default = "crate::material_color::global_material_scheme().on_primary")]
     /// Color used to draw the checkmark icon inside the checkbox.
     ///
     /// This is applied on top of the `checked_color` surface.
@@ -103,7 +103,7 @@ pub struct CheckboxArgs {
     ///
     /// If `None`, the control does not apply a hover style by default.
     #[builder(
-        default = "Some(crate::md3_color::blend_over(crate::md3_color::global_md3_scheme().surface_variant, crate::md3_color::global_md3_scheme().on_surface, 0.08))"
+        default = "Some(crate::material_color::blend_over(crate::material_color::global_material_scheme().surface_variant, crate::material_color::global_material_scheme().on_surface, 0.08))"
     )]
     pub hover_color: Option<Color>,
 

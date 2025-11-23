@@ -4,7 +4,7 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     glass_progress::{GlassProgressArgsBuilder, glass_progress},
-    md3_color::global_md3_scheme,
+    material_color::global_material_scheme,
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     slider::{SliderArgsBuilder, SliderState, slider},
     spacer::spacer,
@@ -82,7 +82,7 @@ fn test_content(state: Arc<GlassProgressShowcaseState>) {
                 text(TextArgsBuilder::default()
                     .text("This is the glass progress, adjust the slider below to change its value.")
                     .size(Dp(20.0))
-                    .color(global_md3_scheme().on_surface_variant)
+                    .color(global_material_scheme().on_surface_variant)
                     .build()
                     .unwrap());
             });

@@ -20,11 +20,11 @@ use crate::{
 #[builder(pattern = "owned")]
 pub struct ButtonArgs {
     /// The fill color of the button (RGBA).
-    #[builder(default = "crate::md3_color::global_md3_scheme().primary")]
+    #[builder(default = "crate::material_color::global_material_scheme().primary")]
     pub color: Color,
     /// The hover color of the button (RGBA). If None, no hover effect is applied.
     #[builder(
-        default = "Some(crate::md3_color::blend_over(crate::md3_color::global_md3_scheme().primary, crate::md3_color::global_md3_scheme().on_primary, 0.08))"
+        default = "Some(crate::material_color::blend_over(crate::material_color::global_material_scheme().primary, crate::material_color::global_material_scheme().on_primary, 0.08))"
     )]
     pub hover_color: Option<Color>,
     /// The shape of the button.
@@ -43,7 +43,9 @@ pub struct ButtonArgs {
     #[builder(default, setter(strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// The ripple color (RGB) for the button.
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_primary.with_alpha(0.12)")]
+    #[builder(
+        default = "crate::material_color::global_material_scheme().on_primary.with_alpha(0.12)"
+    )]
     pub ripple_color: Color,
     /// Width of the border. If > 0, an outline will be drawn.
     #[builder(default = "Dp(0.0)")]

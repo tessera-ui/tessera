@@ -231,17 +231,17 @@ impl Default for TabsState {
 #[builder(pattern = "owned")]
 pub struct TabsArgs {
     /// Color of the active tab indicator.
-    #[builder(default = "crate::md3_color::global_md3_scheme().primary")]
-    // MD3 primary tone
+    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    // Material primary tone
     pub indicator_color: Color,
     /// Background color for the tab row container.
-    #[builder(default = "crate::md3_color::global_md3_scheme().surface")]
+    #[builder(default = "crate::material_color::global_material_scheme().surface")]
     pub container_color: Color,
-    /// Color applied to active tab titles (MD3 on-surface).
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
+    /// Color applied to active tab titles (Material on-surface).
+    #[builder(default = "crate::material_color::global_material_scheme().on_surface")]
     pub active_content_color: Color,
-    /// Color applied to inactive tab titles (MD3 on-surface-variant).
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface_variant")]
+    /// Color applied to inactive tab titles (Material on-surface-variant).
+    #[builder(default = "crate::material_color::global_material_scheme().on_surface_variant")]
     pub inactive_content_color: Color,
     /// Height of the indicator bar in density-independent pixels.
     #[builder(default = "Dp(3.0)")]
@@ -252,17 +252,17 @@ pub struct TabsArgs {
     /// Optional maximum width for the indicator bar.
     #[builder(default = "Some(Dp(64.0))")]
     pub indicator_max_width: Option<Dp>,
-    /// Shape used for the indicator (MD3 uses a capsule).
+    /// Shape used for the indicator (Material spec uses a capsule).
     #[builder(default = "Shape::capsule()")]
     pub indicator_shape: Shape,
-    /// Minimum height for a tab (MD3 spec uses 48dp).
+    /// Minimum height for a tab (Material spec uses 48dp).
     #[builder(default = "Dp(48.0)")]
     pub min_tab_height: Dp,
     /// Internal padding for each tab, applied symmetrically.
     #[builder(default = "Dp(12.0)")]
     pub tab_padding: Dp,
     /// Color used for hover/pressed state layers.
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface")]
+    #[builder(default = "crate::material_color::global_material_scheme().on_surface")]
     pub state_layer_color: Color,
     /// Opacity applied to the state layer on hover.
     #[builder(default = "0.08")]
@@ -376,7 +376,7 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
 /// - `args` — configures the tabs' layout and indicator color; see [`TabsArgs`].
 /// - `state` — a clonable [`TabsState`] to manage the active tab and animation.
 /// - `scope_config` — a closure that receives a [`TabsScope`] for defining each tab's title and content.
-///   Use [`TabsScope::child_with_color`] to let the component supply MD3-compliant active/inactive colors.
+///   Use [`TabsScope::child_with_color`] to let the component supply Material-compliant active/inactive colors.
 ///
 /// ## Examples
 ///

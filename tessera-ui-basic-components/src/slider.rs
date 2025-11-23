@@ -128,11 +128,11 @@ pub struct SliderArgs {
     pub track_height: Dp,
 
     /// The color of the active part of the track (progress fill).
-    #[builder(default = "crate::md3_color::global_md3_scheme().primary")]
+    #[builder(default = "crate::material_color::global_material_scheme().primary")]
     pub active_track_color: Color,
 
     /// The color of the inactive part of the track (background).
-    #[builder(default = "crate::md3_color::global_md3_scheme().surface_variant")]
+    #[builder(default = "crate::material_color::global_material_scheme().surface_variant")]
     pub inactive_track_color: Color,
 
     /// Disable interaction.

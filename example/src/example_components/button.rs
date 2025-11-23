@@ -9,7 +9,7 @@ use tessera_ui_basic_components::{
     icon::{IconArgsBuilder, IconContent},
     icon_button::{IconButtonArgsBuilder, icon_button},
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
-    md3_color::global_md3_scheme,
+    material_color::global_material_scheme,
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -168,9 +168,9 @@ pub fn button_showcase(
                                     scope.child(move || {
                                         let button_args = ButtonArgsBuilder::default()
                                             .shape(Shape::rounded_rectangle(Dp(12.0)))
-                                            .color(global_md3_scheme().primary)
+                                            .color(global_material_scheme().primary)
                                             .hover_color(Some(
-                                                global_md3_scheme().primary_container,
+                                                global_material_scheme().primary_container,
                                             ))
                                             .on_click(Arc::new(|| {
                                                 println!("Styled button clicked!");
@@ -186,7 +186,7 @@ pub fn button_showcase(
                                                 text(
                                                     TextArgsBuilder::default()
                                                         .text("Styled")
-                                                        .color(global_md3_scheme().on_primary)
+                                                        .color(global_material_scheme().on_primary)
                                                         .build()
                                                         .unwrap(),
                                                 );
@@ -219,8 +219,10 @@ pub fn button_showcase(
                                             .button(
                                                 ButtonArgsBuilder::default()
                                                     .shape(Shape::Ellipse)
-                                                    .color(global_md3_scheme().surface_variant)
-                                                    .hover_color(Some(global_md3_scheme().surface))
+                                                    .color(global_material_scheme().surface_variant)
+                                                    .hover_color(Some(
+                                                        global_material_scheme().surface,
+                                                    ))
                                                     .on_click(Arc::new(move || {
                                                         let mut count =
                                                             on_click_counter.lock().unwrap();

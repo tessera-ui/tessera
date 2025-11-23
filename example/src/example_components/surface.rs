@@ -6,7 +6,7 @@ use tessera_ui_basic_components::{
     RippleState,
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{ColumnArgsBuilder, column},
-    md3_color::global_md3_scheme,
+    material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     shape_def::{RoundedCorner, Shape},
@@ -141,13 +141,13 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                         scope.child(move || {
                             let style = if border_width.to_pixels_f32() > 0.1 {
                                 SurfaceStyle::FilledOutlined {
-                                    fill_color: global_md3_scheme().primary_container,
-                                    border_color: global_md3_scheme().outline,
+                                    fill_color: global_material_scheme().primary_container,
+                                    border_color: global_material_scheme().outline,
                                     border_width,
                                 }
                             } else {
                                 SurfaceStyle::Filled {
-                                    color: global_md3_scheme().primary_container,
+                                    color: global_material_scheme().primary_container,
                                 }
                             };
                             surface(

@@ -15,7 +15,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    md3_color::global_md3_scheme,
+    material_color::global_material_scheme,
     padding_utils::remove_padding_from_dimension,
     pipelines::{RippleProps, ShadowProps, ShapeCommand, SimpleRectCommand},
     pos_misc::is_position_in_component,
@@ -51,7 +51,7 @@ pub enum SurfaceStyle {
 
 impl Default for SurfaceStyle {
     fn default() -> Self {
-        let scheme = global_md3_scheme();
+        let scheme = global_material_scheme();
         SurfaceStyle::Filled {
             color: scheme.surface,
         }
@@ -99,7 +99,9 @@ pub struct SurfaceArgs {
     #[builder(default, setter(strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Color of the ripple effect (if interactive & ripple state provided).
-    #[builder(default = "crate::md3_color::global_md3_scheme().on_surface.with_alpha(0.12)")]
+    #[builder(
+        default = "crate::material_color::global_material_scheme().on_surface.with_alpha(0.12)"
+    )]
     pub ripple_color: Color,
     /// If true, all input events inside the surface bounds are blocked (stop propagation),
     /// after (optionally) handling its own click logic.

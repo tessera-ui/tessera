@@ -19,7 +19,7 @@ use crate::{
     animation,
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
-    md3_color::{Md3ColorScheme, global_md3_scheme},
+    material_color::{MaterialColorScheme, global_material_scheme},
     pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
     shape_def::Shape,
@@ -76,7 +76,7 @@ pub struct NavigationBarItem {
 
 /// # navigation_bar
 ///
-/// MD3 navigation bar with active indicator and icon/label pairs.
+/// Material navigation bar with active indicator and icon/label pairs.
 ///
 /// ## Usage
 ///
@@ -125,7 +125,7 @@ where
         scope_config(&mut scope);
     }
 
-    let scheme = global_md3_scheme();
+    let scheme = global_material_scheme();
     let container_shadow = ShadowProps {
         color: scheme.shadow.with_alpha(0.16),
         offset: [0.0, 3.0],
@@ -216,7 +216,7 @@ fn render_navigation_item(
     selected_index: usize,
     previous_index: usize,
     animation_progress: f32,
-    scheme: Md3ColorScheme,
+    scheme: MaterialColorScheme,
 ) {
     let is_selected = index == selected_index;
     let was_selected = index == previous_index && selected_index != previous_index;

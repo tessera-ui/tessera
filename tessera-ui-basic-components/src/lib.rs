@@ -73,15 +73,18 @@ pub mod icon_button;
 pub mod image;
 pub mod image_vector;
 pub mod lazy_list;
+pub mod material_color;
 pub mod material_icons;
-pub mod md3_color;
+pub use ripple_state::RippleState;
+
+#[deprecated(note = "Use material_color module instead.")]
+pub use material_color as md3_color;
 pub mod menus;
+pub mod navigation_bar;
 pub mod pipelines;
 pub mod pos_misc;
 pub mod progress;
 pub mod ripple_state;
-pub use ripple_state::RippleState;
-pub mod navigation_bar;
 pub mod row;
 pub mod scrollable;
 pub mod shape_def;
