@@ -22,7 +22,7 @@ use crate::{
     animation,
     boxed::{BoxedArgs, boxed},
     button::{ButtonArgsBuilder, button},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgs, surface},
 };
 
@@ -252,9 +252,6 @@ pub struct TabsArgs {
     /// Optional maximum width for the indicator bar.
     #[builder(default = "Some(Dp(64.0))")]
     pub indicator_max_width: Option<Dp>,
-    /// Shape used for the indicator (Material spec uses a capsule).
-    #[builder(default = "Shape::capsule()")]
-    pub indicator_shape: Shape,
     /// Minimum height for a tab (Material spec uses 48dp).
     #[builder(default = "Dp(48.0)")]
     pub min_tab_height: Dp,
@@ -460,7 +457,12 @@ where
             style: args.indicator_color.into(),
             width: DimensionValue::FILLED,
             height: DimensionValue::FILLED,
-            shape: args.indicator_shape,
+            shape: Shape::RoundedRectangle {
+                top_left: RoundedCorner::Capsule,
+                top_right: RoundedCorner::Capsule,
+                bottom_right: RoundedCorner::ZERO,
+                bottom_left: RoundedCorner::ZERO,
+            },
             ..Default::default()
         },
         None,
