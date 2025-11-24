@@ -8,19 +8,22 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, InputHandlerInput,
-    MeasureInput, MeasurementError, Px, PxPosition,
-    accesskit::{Action, Role},
-    focus_state::Focus,
-    tessera,
-    winit::window::CursorIcon,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasureInput, MeasurementError, Px,
+    PxPosition, focus_state::Focus, tessera,
 };
 
-use crate::{
-    material_color,
-    shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceArgsBuilder, surface},
+use crate::material_color;
+
+use interaction::{apply_slider_accessibility, handle_slider_state};
+use layout::{SliderLayout, fallback_component_width, resolve_component_width, slider_layout};
+use render::{
+    render_active_segment, render_decoration_dot, render_focus, render_handle,
+    render_inactive_segment,
 };
+
+mod interaction;
+mod layout;
+mod render;
 
 const ACCESSIBILITY_STEP: f32 = 0.05;
 const MIN_TOUCH_TARGET: Dp = Dp(40.0);
@@ -179,242 +182,6 @@ pub struct SliderArgs {
     pub accessibility_description: Option<String>,
 }
 
-/// Helper: check if a cursor position is within the bounds of a component.
-fn cursor_within_component(cursor_pos: Option<PxPosition>, computed: &ComputedData) -> bool {
-    if let Some(pos) = cursor_pos {
-        let within_x = pos.x.0 >= 0 && pos.x.0 < computed.width.0;
-        let within_y = pos.y.0 >= 0 && pos.y.0 < computed.height.0;
-        within_x && within_y
-    } else {
-        false
-    }
-}
-
-/// Helper: compute normalized progress (0.0..1.0) from cursor X and overall width.
-/// Returns None when cursor is not available.
-fn cursor_progress(cursor_pos: Option<PxPosition>, layout: &SliderLayout) -> Option<f32> {
-    if layout.component_width.0 <= 0 {
-        return None;
-    }
-    cursor_pos.map(|pos| {
-        (pos.x.0 as f32 / layout.component_width.to_f32())
-            .clamp(0.0, 1.0)
-    })
-}
-
-fn handle_slider_state(
-    input: &mut InputHandlerInput,
-    state: &SliderState,
-    args: &SliderArgs,
-    layout: &SliderLayout,
-) {
-    if args.disabled {
-        let mut inner = state.write();
-        inner.is_hovered = false;
-        inner.is_dragging = false;
-        return;
-    }
-
-    let is_in_component = cursor_within_component(input.cursor_position_rel, &input.computed_data);
-
-    {
-        let mut inner = state.write();
-        inner.is_hovered = is_in_component;
-    }
-
-    if is_in_component {
-        input.requests.cursor_icon = CursorIcon::Pointer;
-    }
-
-    if !is_in_component && !state.read().is_dragging {
-        return;
-    }
-
-    let mut new_value: Option<f32> = None;
-
-    handle_cursor_events(input, state, &mut new_value, layout);
-    update_value_on_drag(input, state, &mut new_value, layout);
-    notify_on_change(new_value, args);
-}
-
-fn handle_cursor_events(
-    input: &mut InputHandlerInput,
-    state: &SliderState,
-    new_value: &mut Option<f32>,
-    layout: &SliderLayout,
-) {
-    for event in input.cursor_events.iter() {
-        match &event.content {
-            CursorEventContent::Pressed(_) => {
-                {
-                    let mut inner = state.write();
-                    inner.focus.request_focus();
-                    inner.is_dragging = true;
-                }
-                if let Some(v) = cursor_progress(input.cursor_position_rel, layout) {
-                    *new_value = Some(v);
-                }
-            }
-            CursorEventContent::Released(_) => {
-                state.write().is_dragging = false;
-            }
-            _ => {}
-        }
-    }
-}
-
-fn update_value_on_drag(
-    input: &InputHandlerInput,
-    state: &SliderState,
-    new_value: &mut Option<f32>,
-    layout: &SliderLayout,
-) {
-    if state.read().is_dragging
-        && let Some(v) = cursor_progress(input.cursor_position_rel, layout)
-    {
-        *new_value = Some(v);
-    }
-}
-
-fn notify_on_change(new_value: Option<f32>, args: &SliderArgs) {
-    if let Some(v) = new_value
-        && (v - args.value).abs() > f32::EPSILON
-    {
-        (args.on_change)(v);
-    }
-}
-
-fn apply_slider_accessibility(
-    input: &mut InputHandlerInput<'_>,
-    args: &SliderArgs,
-    current_value: f32,
-    on_change: &Arc<dyn Fn(f32) + Send + Sync>,
-) {
-    let mut builder = input.accessibility().role(Role::Slider);
-
-    if let Some(label) = args.accessibility_label.as_ref() {
-        builder = builder.label(label.clone());
-    }
-    if let Some(description) = args.accessibility_description.as_ref() {
-        builder = builder.description(description.clone());
-    }
-
-    builder = builder
-        .numeric_value(current_value as f64)
-        .numeric_range(0.0, 1.0);
-
-    if args.disabled {
-        builder = builder.disabled();
-    } else {
-        builder = builder
-            .focusable()
-            .action(Action::Increment)
-            .action(Action::Decrement);
-    }
-
-    builder.commit();
-
-    if args.disabled {
-        return;
-    }
-
-    let value_for_handler = current_value;
-    let on_change = on_change.clone();
-    input.set_accessibility_action_handler(move |action| {
-        let new_value = match action {
-            Action::Increment => Some((value_for_handler + ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
-            Action::Decrement => Some((value_for_handler - ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
-            _ => None,
-        };
-
-        if let Some(new_value) = new_value
-            && (new_value - value_for_handler).abs() > f32::EPSILON
-        {
-            on_change(new_value);
-        }
-    });
-}
-
-fn render_active_segment(layout: SliderLayout, colors: &SliderColors) {
-    surface(
-        SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fill { min: None, max: None })
-            .height(DimensionValue::Fixed(layout.track_height))
-            .style(colors.active_track.into())
-            .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::Capsule,
-                top_right: RoundedCorner::manual(layout.track_corner_radius, 3.0),
-                bottom_right: RoundedCorner::manual(layout.track_corner_radius, 3.0),
-                bottom_left: RoundedCorner::Capsule,
-            })
-            .build()
-            .expect("builder construction failed"),
-        None,
-        || {},
-    );
-}
-
-fn render_inactive_segment(layout: SliderLayout, colors: &SliderColors) {
-    surface(
-        SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fill { min: None, max: None })
-            .height(DimensionValue::Fixed(layout.track_height))
-            .style(colors.inactive_track.into())
-            .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
-                top_right: RoundedCorner::Capsule,
-                bottom_right: RoundedCorner::Capsule,
-                bottom_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
-            })
-            .build()
-            .expect("builder construction failed"),
-        None,
-        || {},
-    );
-}
-
-fn render_focus(layout: SliderLayout, colors: &SliderColors) {
-    surface(
-        SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.focus_width))
-            .height(DimensionValue::Fixed(layout.focus_height))
-            .style(colors.handle_focus.into())
-            .shape(Shape::capsule())
-            .build()
-            .expect("builder construction failed"),
-        None,
-        || {},
-    );
-}
-
-fn render_handle(layout: SliderLayout, colors: &SliderColors) {
-    surface(
-        SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.handle_width))
-            .height(DimensionValue::Fixed(layout.handle_height))
-            .style(colors.handle.into())
-            .shape(Shape::capsule())
-            .build()
-            .expect("builder construction failed"),
-        None,
-        || {},
-    );
-}
-
-fn render_decoration_dot(layout: SliderLayout, colors: &SliderColors) {
-    surface(
-        SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.decoration_diameter))
-            .height(DimensionValue::Fixed(layout.decoration_diameter))
-            .style(colors.handle.into())
-            .shape(Shape::Ellipse)
-            .build()
-            .expect("builder construction failed"),
-        None,
-        || {},
-    );
-}
-
 fn measure_slider(
     input: &MeasureInput,
     layout: SliderLayout,
@@ -437,10 +204,7 @@ fn measure_slider(
         DimensionValue::Fixed(layout.track_height),
     );
     input.measure_child(active_id, &active_constraint)?;
-    input.place_child(
-        active_id,
-        PxPosition::new(Px(0), layout.track_y),
-    );
+    input.place_child(active_id, PxPosition::new(Px(0), layout.track_y));
 
     let inactive_constraint = Constraint::new(
         DimensionValue::Fixed(inactive_width),
@@ -471,19 +235,13 @@ fn measure_slider(
     let focus_offset = layout.center_child_offset(layout.focus_width);
     input.place_child(
         focus_id,
-        PxPosition::new(
-            Px(handle_center.x.0 - focus_offset.0),
-            layout.focus_y,
-        ),
+        PxPosition::new(Px(handle_center.x.0 - focus_offset.0), layout.focus_y),
     );
 
     let handle_offset = layout.center_child_offset(layout.handle_width);
     input.place_child(
         handle_id,
-        PxPosition::new(
-            Px(handle_center.x.0 - handle_offset.0),
-            layout.handle_y,
-        ),
+        PxPosition::new(Px(handle_center.x.0 - handle_offset.0), layout.handle_y),
     );
 
     let dot_size = layout.decoration_diameter;
@@ -493,136 +251,18 @@ fn measure_slider(
     );
     input.measure_child(dot_id, &dot_constraint)?;
     let dot_offset = layout.center_child_offset(layout.decoration_diameter);
-    let inactive_start =
-        active_width.0 + layout.handle_gap.0 * 2 + layout.handle_width.0;
+    let inactive_start = active_width.0 + layout.handle_gap.0 * 2 + layout.handle_width.0;
     let padding = Dp(8.0).to_px() - dot_size / Px(2);
     let dot_center_x = Px(inactive_start + inactive_width.0 - padding.0);
     input.place_child(
         dot_id,
-        PxPosition::new(
-            Px(dot_center_x.0 - dot_offset.0),
-            layout.decoration_y,
-        ),
+        PxPosition::new(Px(dot_center_x.0 - dot_offset.0), layout.decoration_y),
     );
 
     Ok(ComputedData {
         width: self_width,
         height: self_height,
     })
-}
-
-#[derive(Clone, Copy)]
-struct SliderLayout {
-    component_width: Px,
-    component_height: Px,
-    track_total_width: Px,
-    track_height: Px,
-    track_corner_radius: Dp,
-    track_y: Px,
-    handle_width: Px,
-    handle_height: Px,
-    handle_y: Px,
-    handle_gap: Px,
-    focus_width: Px,
-    focus_height: Px,
-    focus_y: Px,
-    decoration_diameter: Px,
-    decoration_y: Px,
-}
-
-impl SliderLayout {
-    fn active_width(&self, value: f32) -> Px {
-        let clamped = value.clamp(0.0, 1.0);
-        Px::saturating_from_f32(self.track_total_width.to_f32() * clamped)
-    }
-
-    fn inactive_width(&self, value: f32) -> Px {
-        let active = self.active_width(value);
-        Px((self.track_total_width.0 - active.0).max(0))
-    }
-
-    fn center_child_offset(&self, width: Px) -> Px {
-        Px(width.0 / 2)
-    }
-
-    fn handle_center(&self, value: f32) -> PxPosition {
-        let active_width = self.active_width(value);
-        let center_x = active_width.to_f32()
-            + self.handle_gap.to_f32()
-            + self.handle_width.to_f32() / 2.0;
-        let max_x =
-            (self.component_width.to_f32() - self.handle_width.to_f32() / 2.0).max(0.0);
-        let clamped_x = center_x.clamp(self.handle_width.to_f32() / 2.0, max_x);
-        PxPosition::new(Px(clamped_x.round() as i32), Px(self.component_height.0 / 2))
-    }
-}
-
-fn resolve_component_width(args: &SliderArgs, parent_constraint: &Constraint) -> Px {
-    let fallback = Dp(260.0).to_px();
-    let merged = Constraint::new(args.width, DimensionValue::Fixed(args.track_height.to_px()))
-        .merge(parent_constraint);
-
-    match merged.width {
-        DimensionValue::Fixed(px) => px,
-        DimensionValue::Fill { max, .. } | DimensionValue::Wrap { max, .. } => {
-            max.unwrap_or(fallback)
-        }
-    }
-}
-
-fn fallback_component_width(args: &SliderArgs) -> Px {
-    match args.width {
-        DimensionValue::Fixed(px) => px,
-        DimensionValue::Fill { max, .. } | DimensionValue::Wrap { max, .. } => {
-            max.unwrap_or(Dp(260.0).to_px())
-        }
-    }
-}
-
-fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLayout {
-    let handle_width = args.thumb_diameter.to_px();
-    let track_height = args.track_height.to_px();
-    let touch_target_height = MIN_TOUCH_TARGET.to_px();
-    let handle_gap = HANDLE_GAP.to_px();
-    let handle_height = HANDLE_HEIGHT_DEFAULT.to_px();
-    let focus_width = Px((handle_width.to_f32() * 1.6).round() as i32);
-    let focus_height = Px((handle_height.to_f32() * 1.2).round() as i32);
-    let decoration_diameter = DECORATION_DIAMETER.to_px();
-    let track_corner_radius = Dp(args.track_height.0 / 2.0);
-
-    let track_total_width =
-        Px((component_width.0 - handle_width.0 - handle_gap.0 * 2).max(0));
-
-    let component_height = Px(
-        *[
-            track_height.0,
-            handle_height.0,
-            focus_height.0,
-            touch_target_height.0,
-        ]
-        .iter()
-        .max()
-        .expect("non-empty"),
-    );
-    let track_y = Px((component_height.0 - track_height.0) / 2);
-
-    SliderLayout {
-        component_width,
-        component_height,
-        track_total_width,
-        track_height,
-        track_corner_radius,
-        track_y,
-        handle_width,
-        handle_height,
-        handle_gap,
-        handle_y: Px((component_height.0 - handle_height.0) / 2),
-        focus_width,
-        focus_height,
-        focus_y: Px((component_height.0 - focus_height.0) / 2),
-        decoration_diameter,
-        decoration_y: Px((component_height.0 - decoration_diameter.0) / 2),
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -718,8 +358,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
     let state_clone = state.clone();
     let clamped_value_for_accessibility = clamped_value;
     input_handler(Box::new(move |mut input| {
-        let resolved_layout =
-            slider_layout(&cloned_args, input.computed_data.width);
+        let resolved_layout = slider_layout(&cloned_args, input.computed_data.width);
         handle_slider_state(&mut input, &state_clone, &cloned_args, &resolved_layout);
         apply_slider_accessibility(
             &mut input,
