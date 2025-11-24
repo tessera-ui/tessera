@@ -9,7 +9,7 @@ use tessera_ui::{
 
 use crate::{
     scrollable::{ScrollBarBehavior, ScrollableStateInner},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
 };
 
@@ -174,7 +174,12 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
             .width(width)
             .height(height)
             .style(color.into())
-            .shape(Shape::capsule())
+            .shape(Shape::RoundedRectangle {
+                top_left: RoundedCorner::Capsule,
+                top_right: RoundedCorner::ZERO,
+                bottom_left: RoundedCorner::Capsule,
+                bottom_right: RoundedCorner::ZERO,
+            })
             .build()
             .expect("builder construction failed"),
         None,
@@ -188,7 +193,12 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
         SurfaceArgsBuilder::default()
             .width(width)
             .height(height)
-            .shape(Shape::capsule())
+            .shape(Shape::RoundedRectangle {
+                top_left: RoundedCorner::Capsule,
+                top_right: RoundedCorner::ZERO,
+                bottom_left: RoundedCorner::Capsule,
+                bottom_right: RoundedCorner::ZERO,
+            })
             .style(color.into())
             .build()
             .expect("builder construction failed"),
@@ -204,7 +214,12 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
             .width(width)
             .height(height)
             .style(color.into())
-            .shape(Shape::capsule())
+            .shape(Shape::RoundedRectangle {
+                top_left: RoundedCorner::Capsule,
+                top_right: RoundedCorner::Capsule,
+                bottom_left: RoundedCorner::ZERO,
+                bottom_right: RoundedCorner::ZERO,
+            })
             .build()
             .expect("builder construction failed"),
         None,
@@ -218,7 +233,12 @@ fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
         SurfaceArgsBuilder::default()
             .width(width)
             .height(height)
-            .shape(Shape::capsule())
+            .shape(Shape::RoundedRectangle {
+                top_left: RoundedCorner::Capsule,
+                top_right: RoundedCorner::Capsule,
+                bottom_left: RoundedCorner::ZERO,
+                bottom_right: RoundedCorner::ZERO,
+            })
             .style(color.into())
             .build()
             .expect("builder construction failed"),
