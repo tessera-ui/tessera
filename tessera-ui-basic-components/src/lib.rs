@@ -81,6 +81,7 @@ pub mod navigation_bar;
 pub mod pipelines;
 pub mod pos_misc;
 pub mod progress;
+pub mod radio_button;
 pub mod ripple_state;
 pub mod row;
 pub mod scrollable;

@@ -45,6 +45,7 @@ use crate::example_components::{
     lazy_lists::LazyListsShowcaseDestination,
     menus::MenusShowcaseDestination,
     progress::ProgressShowcaseDestination,
+    radio_button::RadioButtonShowcaseDestination,
     slider::SliderShowcaseDestination,
     spacer::SpacerShowcaseDestination,
     surface::SurfaceShowcaseDestination,
@@ -360,6 +361,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(CheckboxShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Radio Button",
+            "A single-choice control that selects exactly one option in a group.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(RadioButtonShowcaseDestination {});
                 });
             },
         ),

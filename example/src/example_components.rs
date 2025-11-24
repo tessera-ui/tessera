@@ -11,6 +11,7 @@ pub mod layouts;
 pub mod lazy_lists;
 pub mod menus;
 pub mod progress;
+pub mod radio_button;
 pub mod slider;
 pub mod spacer;
 pub mod surface;
