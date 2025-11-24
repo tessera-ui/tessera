@@ -4,9 +4,11 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
+    icon::{IconArgsBuilder, icon},
+    material_icons::round::check_icon,
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     surface::{SurfaceArgsBuilder, surface},
-    switch::{SwitchArgsBuilder, SwitchState, switch},
+    switch::{SwitchArgsBuilder, SwitchState, switch, switch_with_child},
     text::{TextArgsBuilder, text},
 };
 
@@ -73,15 +75,39 @@ fn test_content(state: Arc<SwitchShowcaseState>) {
 
             let state_clone = state.clone();
             scope.child(move || {
-                switch(
-                    SwitchArgsBuilder::default()
-                        .on_toggle(Arc::new(|value| {
-                            println!("Switch toggled to: {}", value);
-                        }))
-                        .build()
-                        .unwrap(),
-                    state_clone.switch_state.clone(),
-                );
+                let icon_state = state_clone.switch_state.clone();
+                if icon_state.is_checked() {
+                    switch_with_child(
+                        SwitchArgsBuilder::default()
+                            .on_toggle(Arc::new(|value| {
+                                println!("Switch toggled to: {}", value);
+                            }))
+                            .build()
+                            .unwrap(),
+                        state_clone.switch_state.clone(),
+                        move || {
+                            if icon_state.is_checked() {
+                                icon(
+                                    IconArgsBuilder::default()
+                                        .content(check_icon())
+                                        .size(Dp(16.0))
+                                        .build()
+                                        .unwrap(),
+                                );
+                            }
+                        },
+                    );
+                } else {
+                    switch(
+                        SwitchArgsBuilder::default()
+                            .on_toggle(Arc::new(|value| {
+                                println!("Switch toggled to: {}", value);
+                            }))
+                            .build()
+                            .unwrap(),
+                        state_clone.switch_state.clone(),
+                    );
+                }
             });
 
             scope.child(|| {
