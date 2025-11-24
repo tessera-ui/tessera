@@ -337,7 +337,6 @@ fn switch_inner(
             .expect("builder construction failed"),
         None,
         {
-            let thumb_size_px = thumb_size_px;
             move || {
                 if let Some(child) = child {
                     boxed(
