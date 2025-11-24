@@ -101,7 +101,7 @@ fn test_content(state: Arc<ProgressShowcaseState>) {
                     SliderArgsBuilder::default()
                         .value(*state_clone.progress.lock().unwrap())
                         .on_change(on_change)
-                        .width(Dp(250.0))
+                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
                         .unwrap(),
                     state_clone.slider_state.clone(),

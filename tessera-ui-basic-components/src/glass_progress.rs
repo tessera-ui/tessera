@@ -20,8 +20,8 @@ pub struct GlassProgressArgs {
     pub value: f32,
 
     /// The width of the progress bar.
-    #[builder(default = "Dp(200.0)")]
-    pub width: Dp,
+    #[builder(default = "DimensionValue::Fixed(Dp(200.0).to_px())")]
+    pub width: DimensionValue,
 
     /// The height of the progress bar.
     #[builder(default = "Dp(12.0)")]
@@ -57,8 +57,8 @@ fn capsule_shape_for_height(height: Dp) -> Shape {
 
 /// Compute progress width and inner effective height (excluding borders).
 /// Returns None when progress width is zero or negative.
-fn compute_progress_dims(args: &GlassProgressArgs) -> Option<(Px, f32)> {
-    let progress_width = (args.width.to_px().to_f32() * args.value.clamp(0.0, 1.0))
+fn compute_progress_dims(args: &GlassProgressArgs, width_px: Px) -> Option<(Px, f32)> {
+    let progress_width = (width_px.to_f32() * args.value.clamp(0.0, 1.0))
         - (args.track_border_width.to_px().to_f32() * 2.0);
     let effective_height =
         args.height.to_px().to_f32() - (args.track_border_width.to_px().to_f32() * 2.0);
@@ -70,12 +70,28 @@ fn compute_progress_dims(args: &GlassProgressArgs) -> Option<(Px, f32)> {
     }
 }
 
+fn resolve_width_px(args: &GlassProgressArgs, parent: Option<&Constraint>) -> Px {
+    let fallback = Dp(200.0).to_px();
+    let base = Constraint::new(args.width, DimensionValue::Fixed(args.height.to_px()));
+    let merged = match parent {
+        Some(parent_constraint) => base.merge(parent_constraint),
+        None => base,
+    };
+
+    match merged.width {
+        DimensionValue::Fixed(px) => px,
+        DimensionValue::Fill { max, .. } | DimensionValue::Wrap { max, .. } => {
+            max.unwrap_or(fallback)
+        }
+    }
+}
+
 /// Render the outer track and the inner progress fill.
 /// Extracted to reduce the size of `glass_progress` and keep each unit focused.
-fn render_track_and_fill(args: GlassProgressArgs) {
+fn render_track_and_fill(args: GlassProgressArgs, width_px: Px) {
     fluid_glass(
         FluidGlassArgsBuilder::default()
-            .width(DimensionValue::Fixed(args.width.to_px()))
+            .width(DimensionValue::Fixed(width_px))
             .height(DimensionValue::Fixed(args.height.to_px()))
             .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
@@ -87,7 +103,7 @@ fn render_track_and_fill(args: GlassProgressArgs) {
         None,
         move || {
             // Internal progress fill - capsule shape
-            if let Some((progress_px, effective_height)) = compute_progress_dims(&args) {
+            if let Some((progress_px, effective_height)) = compute_progress_dims(&args, width_px) {
                 fluid_glass(
                     FluidGlassArgsBuilder::default()
                         .width(DimensionValue::Fixed(progress_px))
@@ -138,13 +154,14 @@ fn render_track_and_fill(args: GlassProgressArgs) {
 #[tessera]
 pub fn glass_progress(args: impl Into<GlassProgressArgs>) {
     let args: GlassProgressArgs = args.into();
+    let fallback_width = resolve_width_px(&args, None);
 
     // Render track and inner fill using extracted helper.
     let args_for_render = args.clone();
-    render_track_and_fill(args_for_render);
+    render_track_and_fill(args_for_render, fallback_width);
 
     measure(Box::new(move |input| {
-        let self_width = args.width.to_px();
+        let self_width = resolve_width_px(&args, Some(input.parent_constraint));
         let self_height = args.height.to_px();
 
         let track_id = input.children_ids[0];

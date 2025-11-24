@@ -335,7 +335,7 @@ fn surface_config_slider(
                             SliderArgsBuilder::default()
                                 .value(value)
                                 .on_change(on_change)
-                                .width(Dp(300.0))
+                                .width(DimensionValue::Fixed(Dp(300.0).to_px()))
                                 .build()
                                 .unwrap(),
                             state,

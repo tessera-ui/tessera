@@ -93,7 +93,7 @@ fn test_content(state: Arc<GlassProgressShowcaseState>) {
                 glass_progress(
                     GlassProgressArgsBuilder::default()
                         .value(progress_val)
-                        .width(Dp(250.0))
+                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
                         .unwrap(),
                 );
@@ -113,7 +113,7 @@ fn test_content(state: Arc<GlassProgressShowcaseState>) {
                     SliderArgsBuilder::default()
                         .value(*state_clone.progress.lock().unwrap())
                         .on_change(on_change)
-                        .width(Dp(250.0))
+                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
                         .unwrap(),
                     state_clone.slider_state.clone(),
