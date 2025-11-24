@@ -23,6 +23,12 @@ pub enum RoundedCorner {
 }
 
 impl RoundedCorner {
+    /// A corner with zero radius.
+    pub const ZERO: Self = RoundedCorner::Manual {
+        radius: Dp(0.0),
+        g2_k_value: 3.0,
+    };
+
     /// Helper to create a manual corner.
     pub const fn manual(radius: Dp, g2_k_value: f32) -> Self {
         Self::Manual { radius, g2_k_value }
