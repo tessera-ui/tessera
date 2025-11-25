@@ -17,10 +17,10 @@ pub(super) fn render_active_segment(layout: SliderLayout, colors: &SliderColors)
             .height(DimensionValue::Fixed(layout.track_height))
             .style(colors.active_track.into())
             .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::Capsule,
-                top_right: RoundedCorner::manual(layout.track_corner_radius, 3.0),
-                bottom_right: RoundedCorner::manual(layout.track_corner_radius, 3.0),
-                bottom_left: RoundedCorner::Capsule,
+                top_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
+                top_right: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
+                bottom_right: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
+                bottom_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
             })
             .build()
             .expect("builder construction failed"),
@@ -39,10 +39,10 @@ pub(super) fn render_inactive_segment(layout: SliderLayout, colors: &SliderColor
             .height(DimensionValue::Fixed(layout.track_height))
             .style(colors.inactive_track.into())
             .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
-                top_right: RoundedCorner::Capsule,
-                bottom_right: RoundedCorner::Capsule,
-                bottom_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
+                top_left: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
+                top_right: RoundedCorner::manual(layout.track_corner_radius, 3.0),
+                bottom_right: RoundedCorner::manual(layout.track_corner_radius, 3.0),
+                bottom_left: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
             })
             .build()
             .expect("builder construction failed"),
@@ -107,10 +107,10 @@ pub(super) fn render_centered_tracks(
             .height(DimensionValue::Fixed(layout.base.track_height))
             .style(colors.inactive_track.into())
             .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::Capsule,
-                bottom_left: RoundedCorner::Capsule,
-                top_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
+                top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
+                bottom_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
+                top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             })
             .build()
             .expect("builder construction failed"),
@@ -128,10 +128,10 @@ pub(super) fn render_centered_tracks(
             .height(DimensionValue::Fixed(layout.base.track_height))
             .style(colors.active_track.into())
             .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                bottom_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                top_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
+                top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             })
             .build()
             .expect("builder construction failed"),
@@ -149,10 +149,10 @@ pub(super) fn render_centered_tracks(
             .height(DimensionValue::Fixed(layout.base.track_height))
             .style(colors.inactive_track.into())
             .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                bottom_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                top_right: RoundedCorner::Capsule,
-                bottom_right: RoundedCorner::Capsule,
+                top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                top_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
+                bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
             })
             .build()
             .expect("builder construction failed"),
@@ -237,10 +237,10 @@ pub(super) fn render_range_tracks(
             .height(DimensionValue::Fixed(layout.base.track_height))
             .style(colors.inactive_track.into())
             .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::Capsule,
-                bottom_left: RoundedCorner::Capsule,
-                top_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
+                top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
+                bottom_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
+                top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             })
             .build()
             .expect("builder construction failed"),
@@ -258,10 +258,10 @@ pub(super) fn render_range_tracks(
             .height(DimensionValue::Fixed(layout.base.track_height))
             .style(colors.active_track.into())
             .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                bottom_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                top_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
+                top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             })
             .build()
             .expect("builder construction failed"),
@@ -279,10 +279,10 @@ pub(super) fn render_range_tracks(
             .height(DimensionValue::Fixed(layout.base.track_height))
             .style(colors.inactive_track.into())
             .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                bottom_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-                top_right: RoundedCorner::Capsule,
-                bottom_right: RoundedCorner::Capsule,
+                top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
+                top_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
+                bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
             })
             .build()
             .expect("builder construction failed"),

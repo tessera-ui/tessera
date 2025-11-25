@@ -1,8 +1,44 @@
 use tessera_ui::{Constraint, DimensionValue, Dp, Px, PxPosition};
 
-use super::{
-    HANDLE_GAP, HANDLE_HEIGHT, MIN_TOUCH_TARGET, STOP_INDICATOR_DIAMETER, SliderArgs, TRACK_HEIGHT,
-};
+use super::{HANDLE_GAP, MIN_TOUCH_TARGET, STOP_INDICATOR_DIAMETER, SliderArgs, SliderSize};
+
+struct SliderSpecs {
+    track_height: Dp,
+    handle_height: Dp,
+    track_corner_radius: Dp,
+}
+
+fn get_slider_specs(size: SliderSize) -> SliderSpecs {
+    match size {
+        SliderSize::ExtraSmall => SliderSpecs {
+            track_height: Dp(16.0),
+            handle_height: Dp(44.0),
+            track_corner_radius: Dp(8.0),
+        },
+        SliderSize::Small => SliderSpecs {
+            track_height: Dp(24.0),
+            handle_height: Dp(44.0),
+            track_corner_radius: Dp(8.0),
+        },
+        SliderSize::Medium => SliderSpecs {
+            track_height: Dp(40.0),
+            handle_height: Dp(52.0),
+            track_corner_radius: Dp(12.0),
+        },
+        SliderSize::Large => SliderSpecs {
+            track_height: Dp(56.0),
+            handle_height: Dp(68.0),
+            track_corner_radius: Dp(16.0),
+        },
+        SliderSize::ExtraLarge => SliderSpecs {
+            track_height: Dp(96.0),
+            handle_height: Dp(108.0),
+            track_corner_radius: Dp(28.0),
+        },
+    }
+}
+
+const INNER_CORNER_RADIUS: Dp = Dp(4.0);
 
 #[derive(Clone, Copy)]
 pub(super) struct SliderLayout {
@@ -11,6 +47,7 @@ pub(super) struct SliderLayout {
     pub track_total_width: Px,
     pub track_height: Px,
     pub track_corner_radius: Dp,
+    pub inner_corner_radius: Dp,
     pub track_y: Px,
     pub handle_width: Px,
     pub handle_height: Px,
@@ -140,9 +177,13 @@ impl CenteredSliderLayout {
 }
 
 pub(super) fn resolve_component_width(args: &SliderArgs, parent_constraint: &Constraint) -> Px {
+    let specs = get_slider_specs(args.size);
     let fallback = Dp(260.0).to_px();
-    let merged = Constraint::new(args.width, DimensionValue::Fixed(TRACK_HEIGHT.to_px()))
-        .merge(parent_constraint);
+    let merged = Constraint::new(
+        args.width,
+        DimensionValue::Fixed(specs.track_height.to_px()),
+    )
+    .merge(parent_constraint);
 
     match merged.width {
         DimensionValue::Fixed(px) => px,
@@ -162,15 +203,17 @@ pub(super) fn fallback_component_width(args: &SliderArgs) -> Px {
 }
 
 pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLayout {
+    let specs = get_slider_specs(args.size);
+
     let handle_width = args.thumb_diameter.to_px();
-    let track_height = TRACK_HEIGHT.to_px();
+    let track_height = specs.track_height.to_px();
     let touch_target_height = MIN_TOUCH_TARGET.to_px();
     let handle_gap = HANDLE_GAP.to_px();
-    let handle_height = HANDLE_HEIGHT.to_px();
+    let handle_height = specs.handle_height.to_px();
     let focus_width = Px((handle_width.to_f32() * 1.6).round() as i32);
     let focus_height = Px((handle_height.to_f32() * 1.2).round() as i32);
     let stop_indicator_diameter = STOP_INDICATOR_DIAMETER.to_px();
-    let track_corner_radius = Dp(TRACK_HEIGHT.0 / 2.0);
+    let track_corner_radius = specs.track_corner_radius;
 
     let track_total_width = Px((component_width.0 - handle_width.0 - handle_gap.0 * 2).max(0));
 
@@ -191,6 +234,7 @@ pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLay
         track_total_width,
         track_height,
         track_corner_radius,
+        inner_corner_radius: INNER_CORNER_RADIUS,
         track_y,
         handle_width,
         handle_height,
@@ -301,6 +345,7 @@ pub(super) fn range_slider_layout(
     let dummy_args = SliderArgs {
         value: 0.0,
         on_change: std::sync::Arc::new(|_| {}),
+        size: args.size,
         width: args.width,
         active_track_color: args.active_track_color,
         inactive_track_color: args.inactive_track_color,

@@ -37,8 +37,6 @@ mod render;
 const ACCESSIBILITY_STEP: f32 = 0.05;
 const MIN_TOUCH_TARGET: Dp = Dp(40.0);
 const HANDLE_GAP: Dp = Dp(6.0);
-const HANDLE_HEIGHT: Dp = Dp(44.0);
-const TRACK_HEIGHT: Dp = Dp(16.0);
 const STOP_INDICATOR_DIAMETER: Dp = Dp(4.0);
 
 /// Stores the interactive state for the [`slider`] component, such as whether the slider is currently being dragged by the user.
@@ -135,6 +133,22 @@ impl Default for SliderState {
     }
 }
 
+/// Size variants for the slider component.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SliderSize {
+    /// Extra Small (default).
+    #[default]
+    ExtraSmall,
+    /// Small.
+    Small,
+    /// Medium.
+    Medium,
+    /// Large.
+    Large,
+    /// Extra Large.
+    ExtraLarge,
+}
+
 /// Arguments for the `slider` component.
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
@@ -146,6 +160,10 @@ pub struct SliderArgs {
     /// Callback function triggered when the slider's value changes.
     #[builder(default = "Arc::new(|_| {})")]
     pub on_change: Arc<dyn Fn(f32) + Send + Sync>,
+
+    /// Size variant of the slider.
+    #[builder(default)]
+    pub size: SliderSize,
 
     /// Total width of the slider control.
     #[builder(default = "DimensionValue::Fixed(Dp(260.0).to_px())")]
@@ -199,6 +217,10 @@ pub struct RangeSliderArgs {
     /// Callback function triggered when the range values change.
     #[builder(default = "Arc::new(|_| {})")]
     pub on_change: Arc<dyn Fn((f32, f32)) + Send + Sync>,
+
+    /// Size variant of the slider.
+    #[builder(default)]
+    pub size: SliderSize,
 
     /// Total width of the slider control.
     #[builder(default = "DimensionValue::Fixed(Dp(260.0).to_px())")]
@@ -847,6 +869,7 @@ pub fn range_slider(args: impl Into<RangeSliderArgs>, state: RangeSliderState) {
     // or rely on the dedicated range_slider_layout which handles this.
     let dummy_slider_args = SliderArgsBuilder::default()
         .width(args.width)
+        .size(args.size)
         .build()
         .expect("Failed to build dummy args");
     let initial_width = fallback_component_width(&dummy_slider_args);
@@ -941,6 +964,7 @@ pub fn range_slider(args: impl Into<RangeSliderArgs>, state: RangeSliderState) {
     measure(Box::new(move |input| {
         let dummy_args_for_resolve = SliderArgsBuilder::default()
             .width(args.width)
+            .size(args.size)
             .build()
             .expect("Failed to build dummy args");
         let component_width =
