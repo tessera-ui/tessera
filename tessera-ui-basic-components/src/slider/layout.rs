@@ -6,6 +6,7 @@ struct SliderSpecs {
     track_height: Dp,
     handle_height: Dp,
     track_corner_radius: Dp,
+    icon_size: Option<Dp>,
 }
 
 fn get_slider_specs(size: SliderSize) -> SliderSpecs {
@@ -14,26 +15,31 @@ fn get_slider_specs(size: SliderSize) -> SliderSpecs {
             track_height: Dp(16.0),
             handle_height: Dp(44.0),
             track_corner_radius: Dp(8.0),
+            icon_size: None,
         },
         SliderSize::Small => SliderSpecs {
             track_height: Dp(24.0),
             handle_height: Dp(44.0),
             track_corner_radius: Dp(8.0),
+            icon_size: None,
         },
         SliderSize::Medium => SliderSpecs {
             track_height: Dp(40.0),
             handle_height: Dp(52.0),
             track_corner_radius: Dp(12.0),
+            icon_size: Some(Dp(24.0)),
         },
         SliderSize::Large => SliderSpecs {
             track_height: Dp(56.0),
             handle_height: Dp(68.0),
             track_corner_radius: Dp(16.0),
+            icon_size: Some(Dp(24.0)),
         },
         SliderSize::ExtraLarge => SliderSpecs {
             track_height: Dp(96.0),
             handle_height: Dp(108.0),
             track_corner_radius: Dp(28.0),
+            icon_size: Some(Dp(32.0)),
         },
     }
 }
@@ -59,6 +65,7 @@ pub(super) struct SliderLayout {
     pub stop_indicator_diameter: Px,
     pub stop_indicator_y: Px,
     pub show_stop_indicator: bool,
+    pub icon_size: Option<Px>,
 }
 
 impl SliderLayout {
@@ -137,7 +144,9 @@ impl CenteredSliderLayout {
             let ri_x_calc = handle_right + h_gap;
             let ri_w_calc = (w - ri_x_calc).max(0.0);
 
-            (li_x_calc, li_w_calc, a_x_calc, a_w_calc, ri_x_calc, ri_w_calc)
+            (
+                li_x_calc, li_w_calc, a_x_calc, a_w_calc, ri_x_calc, ri_w_calc,
+            )
         } else {
             // Handle is to the left of or at center_x_track
             // Left Inactive: From 0 to start of handle's left gap.
@@ -152,7 +161,9 @@ impl CenteredSliderLayout {
             let ri_x_calc = center_x_track + h_gap / 2.0;
             let ri_w_calc = (w - ri_x_calc).max(0.0);
 
-            (li_x_calc, li_w_calc, a_x_calc, a_w_calc, ri_x_calc, ri_w_calc)
+            (
+                li_x_calc, li_w_calc, a_x_calc, a_w_calc, ri_x_calc, ri_w_calc,
+            )
         };
 
         CenteredSegments {
@@ -243,6 +254,7 @@ pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLay
         stop_indicator_diameter,
         stop_indicator_y: Px((component_height.0 - stop_indicator_diameter.0) / 2),
         show_stop_indicator: args.show_stop_indicator,
+        icon_size: specs.icon_size.map(|dp| dp.to_px()),
     }
 }
 
@@ -355,6 +367,7 @@ pub(super) fn range_slider_layout(
         accessibility_label: None,
         accessibility_description: None,
         show_stop_indicator: args.show_stop_indicator,
+        inset_icon: None,
     };
 
     RangeSliderLayout {

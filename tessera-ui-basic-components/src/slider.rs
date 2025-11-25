@@ -12,7 +12,7 @@ use tessera_ui::{
     PxPosition, focus_state::Focus, tessera,
 };
 
-use crate::material_color;
+use crate::{material_color, pipelines::image_vector::VectorTintMode};
 
 use interaction::{
     apply_range_slider_accessibility, apply_slider_accessibility, handle_range_slider_state,
@@ -197,6 +197,9 @@ pub struct SliderArgs {
     /// Whether to show the stop indicators at the ends of the track.
     #[builder(default = "true")]
     pub show_stop_indicator: bool,
+    /// Optional icon content to display at the start of the slider (only for Medium sizes and above).
+    #[builder(default, setter(strip_option, into))]
+    pub inset_icon: Option<crate::icon::IconContent>,
 }
 
 /// Arguments for the `range_slider` component.
@@ -264,15 +267,35 @@ fn measure_slider(
     input: &MeasureInput,
     layout: SliderLayout,
     clamped_value: f32,
+    has_inset_icon: bool,
 ) -> Result<ComputedData, MeasurementError> {
     let self_width = layout.component_width;
     let self_height = layout.component_height;
 
     let active_id = input.children_ids[0];
     let inactive_id = input.children_ids[1];
-    let focus_id = input.children_ids[2];
-    let handle_id = input.children_ids[3];
-    let stop_id = input.children_ids[4];
+
+    // Order in render: active, inactive, [icon], focus, handle, [stop]
+    let mut current_index = 2;
+
+    let icon_id = if has_inset_icon {
+        let id = input.children_ids.get(current_index).copied();
+        current_index += 1;
+        id
+    } else {
+        None
+    };
+
+    let focus_id = input.children_ids[current_index];
+    current_index += 1;
+    let handle_id = input.children_ids[current_index];
+    current_index += 1;
+
+    let stop_id = if layout.show_stop_indicator {
+        input.children_ids.get(current_index).copied()
+    } else {
+        None
+    };
 
     let active_width = layout.active_width(clamped_value);
     let inactive_width = layout.inactive_width(clamped_value);
@@ -322,7 +345,7 @@ fn measure_slider(
         PxPosition::new(Px(handle_center.x.0 - handle_offset.0), layout.handle_y),
     );
 
-    if layout.show_stop_indicator {
+    if let Some(stop_id) = stop_id {
         let stop_size = layout.stop_indicator_diameter;
         let stop_constraint = Constraint::new(
             DimensionValue::Fixed(stop_size),
@@ -337,6 +360,27 @@ fn measure_slider(
             stop_id,
             PxPosition::new(Px(stop_center_x.0 - stop_offset.0), layout.stop_indicator_y),
         );
+    }
+
+    if let Some(icon_id) = icon_id
+        && let Some(icon_size) = layout.icon_size
+    {
+        let icon_constraint = Constraint::new(
+            DimensionValue::Wrap {
+                min: None,
+                max: Some(icon_size),
+            },
+            DimensionValue::Wrap {
+                min: None,
+                max: Some(icon_size),
+            },
+        );
+        let icon_measured = input.measure_child(icon_id, &icon_constraint)?;
+
+        // Icon placement: 8dp padding from left edge, vertically centered within the track
+        let icon_padding = Dp(8.0).to_px();
+        let icon_y = layout.track_y + Px((layout.track_height.0 - icon_measured.height.0) / 2);
+        input.place_child(icon_id, PxPosition::new(icon_padding, icon_y));
     }
 
     Ok(ComputedData {
@@ -430,6 +474,28 @@ pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
 
     render_active_segment(layout, &colors);
     render_inactive_segment(layout, &colors);
+
+    if let Some(icon_size) = layout.icon_size
+        && let Some(inset_icon) = args.inset_icon.as_ref()
+    {
+        let scheme = material_color::global_material_scheme();
+        let tint = if args.disabled {
+            scheme.on_surface.with_alpha(0.38)
+        } else {
+            scheme.on_primary
+        };
+
+        crate::icon::icon(
+            crate::icon::IconArgsBuilder::default()
+                .content(inset_icon.clone())
+                .tint(tint)
+                .tint_mode(VectorTintMode::Solid)
+                .size(tessera_ui::Dp::from(icon_size))
+                .build()
+                .expect("Failed to build icon args"),
+        );
+    }
+
     render_focus(layout, &colors);
     render_handle(layout, &colors);
     if layout.show_stop_indicator {
@@ -453,7 +519,8 @@ pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
     measure(Box::new(move |input| {
         let component_width = resolve_component_width(&args, input.parent_constraint);
         let resolved_layout = slider_layout(&args, component_width);
-        measure_slider(input, resolved_layout, clamped_value)
+        let has_inset_icon = args.inset_icon.is_some();
+        measure_slider(input, resolved_layout, clamped_value, has_inset_icon)
     }));
 }
 
