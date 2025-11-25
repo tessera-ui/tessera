@@ -17,8 +17,8 @@ use crate::material_color;
 use interaction::{apply_slider_accessibility, handle_slider_state};
 use layout::{SliderLayout, fallback_component_width, resolve_component_width, slider_layout};
 use render::{
-    render_active_segment, render_decoration_dot, render_focus, render_handle,
-    render_inactive_segment,
+    render_active_segment, render_focus, render_handle, render_inactive_segment,
+    render_stop_indicator,
 };
 
 mod interaction;
@@ -28,8 +28,9 @@ mod render;
 const ACCESSIBILITY_STEP: f32 = 0.05;
 const MIN_TOUCH_TARGET: Dp = Dp(40.0);
 const HANDLE_GAP: Dp = Dp(6.0);
-const HANDLE_HEIGHT_DEFAULT: Dp = Dp(44.0);
-const DECORATION_DIAMETER: Dp = Dp(4.0);
+const HANDLE_HEIGHT: Dp = Dp(44.0);
+const TRACK_HEIGHT: Dp = Dp(16.0);
+const STOP_INDICATOR_DIAMETER: Dp = Dp(4.0);
 
 /// Stores the interactive state for the [`slider`] component, such as whether the slider is currently being dragged by the user.
 /// The [`SliderState`] handle owns the necessary locking internally, so callers can simply clone and pass it between components.
@@ -141,10 +142,6 @@ pub struct SliderArgs {
     #[builder(default = "DimensionValue::Fixed(Dp(260.0).to_px())")]
     pub width: DimensionValue,
 
-    /// The height of the slider track.
-    #[builder(default = "Dp(16.0)")]
-    pub track_height: Dp,
-
     /// The color of the active part of the track (progress fill).
     #[builder(default = "crate::material_color::global_material_scheme().primary")]
     pub active_track_color: Color,
@@ -194,7 +191,7 @@ fn measure_slider(
     let inactive_id = input.children_ids[1];
     let focus_id = input.children_ids[2];
     let handle_id = input.children_ids[3];
-    let dot_id = input.children_ids[4];
+    let stop_id = input.children_ids[4];
 
     let active_width = layout.active_width(clamped_value);
     let inactive_width = layout.inactive_width(clamped_value);
@@ -244,19 +241,19 @@ fn measure_slider(
         PxPosition::new(Px(handle_center.x.0 - handle_offset.0), layout.handle_y),
     );
 
-    let dot_size = layout.decoration_diameter;
-    let dot_constraint = Constraint::new(
-        DimensionValue::Fixed(dot_size),
-        DimensionValue::Fixed(dot_size),
+    let stop_size = layout.stop_indicator_diameter;
+    let stop_constraint = Constraint::new(
+        DimensionValue::Fixed(stop_size),
+        DimensionValue::Fixed(stop_size),
     );
-    input.measure_child(dot_id, &dot_constraint)?;
-    let dot_offset = layout.center_child_offset(layout.decoration_diameter);
+    input.measure_child(stop_id, &stop_constraint)?;
+    let stop_offset = layout.center_child_offset(layout.stop_indicator_diameter);
     let inactive_start = active_width.0 + layout.handle_gap.0 * 2 + layout.handle_width.0;
-    let padding = Dp(8.0).to_px() - dot_size / Px(2);
-    let dot_center_x = Px(inactive_start + inactive_width.0 - padding.0);
+    let padding = Dp(8.0).to_px() - stop_size / Px(2);
+    let stop_center_x = Px(inactive_start + inactive_width.0 - padding.0);
     input.place_child(
-        dot_id,
-        PxPosition::new(Px(dot_center_x.0 - dot_offset.0), layout.decoration_y),
+        stop_id,
+        PxPosition::new(Px(stop_center_x.0 - stop_offset.0), layout.stop_indicator_y),
     );
 
     Ok(ComputedData {
@@ -352,7 +349,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
     render_inactive_segment(layout, &colors);
     render_focus(layout, &colors);
     render_handle(layout, &colors);
-    render_decoration_dot(layout, &colors);
+    render_stop_indicator(layout, &colors);
 
     let cloned_args = args.clone();
     let state_clone = state.clone();

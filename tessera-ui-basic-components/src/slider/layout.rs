@@ -1,6 +1,8 @@
 use tessera_ui::{Constraint, DimensionValue, Dp, Px, PxPosition};
 
-use super::{DECORATION_DIAMETER, HANDLE_GAP, HANDLE_HEIGHT_DEFAULT, MIN_TOUCH_TARGET, SliderArgs};
+use super::{
+    HANDLE_GAP, HANDLE_HEIGHT, MIN_TOUCH_TARGET, STOP_INDICATOR_DIAMETER, SliderArgs, TRACK_HEIGHT,
+};
 
 #[derive(Clone, Copy)]
 pub(super) struct SliderLayout {
@@ -17,8 +19,8 @@ pub(super) struct SliderLayout {
     pub focus_width: Px,
     pub focus_height: Px,
     pub focus_y: Px,
-    pub decoration_diameter: Px,
-    pub decoration_y: Px,
+    pub stop_indicator_diameter: Px,
+    pub stop_indicator_y: Px,
 }
 
 impl SliderLayout {
@@ -51,7 +53,7 @@ impl SliderLayout {
 
 pub(super) fn resolve_component_width(args: &SliderArgs, parent_constraint: &Constraint) -> Px {
     let fallback = Dp(260.0).to_px();
-    let merged = Constraint::new(args.width, DimensionValue::Fixed(args.track_height.to_px()))
+    let merged = Constraint::new(args.width, DimensionValue::Fixed(TRACK_HEIGHT.to_px()))
         .merge(parent_constraint);
 
     match merged.width {
@@ -73,14 +75,14 @@ pub(super) fn fallback_component_width(args: &SliderArgs) -> Px {
 
 pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLayout {
     let handle_width = args.thumb_diameter.to_px();
-    let track_height = args.track_height.to_px();
+    let track_height = TRACK_HEIGHT.to_px();
     let touch_target_height = MIN_TOUCH_TARGET.to_px();
     let handle_gap = HANDLE_GAP.to_px();
-    let handle_height = HANDLE_HEIGHT_DEFAULT.to_px();
+    let handle_height = HANDLE_HEIGHT.to_px();
     let focus_width = Px((handle_width.to_f32() * 1.6).round() as i32);
     let focus_height = Px((handle_height.to_f32() * 1.2).round() as i32);
-    let decoration_diameter = DECORATION_DIAMETER.to_px();
-    let track_corner_radius = Dp(args.track_height.0 / 2.0);
+    let stop_indicator_diameter = STOP_INDICATOR_DIAMETER.to_px();
+    let track_corner_radius = Dp(TRACK_HEIGHT.0 / 2.0);
 
     let track_total_width = Px((component_width.0 - handle_width.0 - handle_gap.0 * 2).max(0));
 
@@ -109,7 +111,7 @@ pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLay
         focus_width,
         focus_height,
         focus_y: Px((component_height.0 - focus_height.0) / 2),
-        decoration_diameter,
-        decoration_y: Px((component_height.0 - decoration_diameter.0) / 2),
+        stop_indicator_diameter,
+        stop_indicator_y: Px((component_height.0 - stop_indicator_diameter.0) / 2),
     }
 }

@@ -79,11 +79,11 @@ pub(super) fn render_handle(layout: SliderLayout, colors: &SliderColors) {
     );
 }
 
-pub(super) fn render_decoration_dot(layout: SliderLayout, colors: &SliderColors) {
+pub(super) fn render_stop_indicator(layout: SliderLayout, colors: &SliderColors) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.decoration_diameter))
-            .height(DimensionValue::Fixed(layout.decoration_diameter))
+            .width(DimensionValue::Fixed(layout.stop_indicator_diameter))
+            .height(DimensionValue::Fixed(layout.stop_indicator_diameter))
             .style(colors.handle.into())
             .shape(Shape::Ellipse)
             .build()
