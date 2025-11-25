@@ -156,45 +156,35 @@ pub struct SliderArgs {
     /// The current value of the slider, ranging from 0.0 to 1.0.
     #[builder(default = "0.0")]
     pub value: f32,
-
     /// Callback function triggered when the slider's value changes.
     #[builder(default = "Arc::new(|_| {})")]
     pub on_change: Arc<dyn Fn(f32) + Send + Sync>,
-
     /// Size variant of the slider.
     #[builder(default)]
     pub size: SliderSize,
-
     /// Total width of the slider control.
     #[builder(default = "DimensionValue::Fixed(Dp(260.0).to_px())")]
     pub width: DimensionValue,
-
     /// The color of the active part of the track (progress fill).
     #[builder(default = "crate::material_color::global_material_scheme().primary")]
     pub active_track_color: Color,
-
     /// The color of the inactive part of the track (background).
     #[builder(default = "crate::material_color::global_material_scheme().secondary_container")]
     pub inactive_track_color: Color,
-
     /// The thickness of the handle indicator.
     #[builder(default = "Dp(4.0)")]
     pub thumb_diameter: Dp,
-
     /// Color of the handle indicator.
     #[builder(default = "crate::material_color::global_material_scheme().primary")]
     pub thumb_color: Color,
-
     /// Height of the handle focus layer (hover/drag halo).
     #[builder(default = "Dp(18.0)")]
     pub state_layer_diameter: Dp,
-
     /// Base color for the state layer; alpha will be adjusted per interaction state.
     #[builder(
         default = "crate::material_color::global_material_scheme().primary.with_alpha(0.18)"
     )]
     pub state_layer_color: Color,
-
     /// Disable interaction.
     #[builder(default = "false")]
     pub disabled: bool,
@@ -204,6 +194,9 @@ pub struct SliderArgs {
     /// Optional accessibility description.
     #[builder(default, setter(strip_option, into))]
     pub accessibility_description: Option<String>,
+    /// Whether to show the stop indicators at the ends of the track.
+    #[builder(default = "true")]
+    pub show_stop_indicator: bool,
 }
 
 /// Arguments for the `range_slider` component.
@@ -261,6 +254,10 @@ pub struct RangeSliderArgs {
     /// Optional accessibility description.
     #[builder(default, setter(strip_option, into))]
     pub accessibility_description: Option<String>,
+
+    /// Whether to show the stop indicators at the ends of the track.
+    #[builder(default = "true")]
+    pub show_stop_indicator: bool,
 }
 
 fn measure_slider(
@@ -325,20 +322,22 @@ fn measure_slider(
         PxPosition::new(Px(handle_center.x.0 - handle_offset.0), layout.handle_y),
     );
 
-    let stop_size = layout.stop_indicator_diameter;
-    let stop_constraint = Constraint::new(
-        DimensionValue::Fixed(stop_size),
-        DimensionValue::Fixed(stop_size),
-    );
-    input.measure_child(stop_id, &stop_constraint)?;
-    let stop_offset = layout.center_child_offset(layout.stop_indicator_diameter);
-    let inactive_start = active_width.0 + layout.handle_gap.0 * 2 + layout.handle_width.0;
-    let padding = Dp(8.0).to_px() - stop_size / Px(2);
-    let stop_center_x = Px(inactive_start + inactive_width.0 - padding.0);
-    input.place_child(
-        stop_id,
-        PxPosition::new(Px(stop_center_x.0 - stop_offset.0), layout.stop_indicator_y),
-    );
+    if layout.show_stop_indicator {
+        let stop_size = layout.stop_indicator_diameter;
+        let stop_constraint = Constraint::new(
+            DimensionValue::Fixed(stop_size),
+            DimensionValue::Fixed(stop_size),
+        );
+        input.measure_child(stop_id, &stop_constraint)?;
+        let stop_offset = layout.center_child_offset(layout.stop_indicator_diameter);
+        let inactive_start = active_width.0 + layout.handle_gap.0 * 2 + layout.handle_width.0;
+        let padding = Dp(8.0).to_px() - stop_size / Px(2);
+        let stop_center_x = Px(inactive_start + inactive_width.0 - padding.0);
+        input.place_child(
+            stop_id,
+            PxPosition::new(Px(stop_center_x.0 - stop_offset.0), layout.stop_indicator_y),
+        );
+    }
 
     Ok(ComputedData {
         width: self_width,
@@ -433,7 +432,9 @@ pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
     render_inactive_segment(layout, &colors);
     render_focus(layout, &colors);
     render_handle(layout, &colors);
-    render_stop_indicator(layout, &colors);
+    if layout.show_stop_indicator {
+        render_stop_indicator(layout, &colors);
+    }
 
     let cloned_args = args.clone();
     let state_clone = state.clone();
@@ -545,38 +546,40 @@ fn measure_centered_slider(
         ),
     );
 
-    // 6. Left Stop
-    let stop_size = layout.base.stop_indicator_diameter;
-    let stop_constraint = Constraint::new(
-        DimensionValue::Fixed(stop_size),
-        DimensionValue::Fixed(stop_size),
-    );
-    input.measure_child(left_stop_id, &stop_constraint)?;
+    if layout.base.show_stop_indicator {
+        // 6. Left Stop
+        let stop_size = layout.base.stop_indicator_diameter;
+        let stop_constraint = Constraint::new(
+            DimensionValue::Fixed(stop_size),
+            DimensionValue::Fixed(stop_size),
+        );
+        input.measure_child(left_stop_id, &stop_constraint)?;
 
-    let stop_offset = layout.base.center_child_offset(stop_size);
-    let stop_padding = layout.stop_indicator_offset();
+        let stop_offset = layout.base.center_child_offset(stop_size);
+        let stop_padding = layout.stop_indicator_offset();
 
-    let left_stop_x = Px(stop_padding.0);
+        let left_stop_x = Px(stop_padding.0);
 
-    input.place_child(
-        left_stop_id,
-        PxPosition::new(
-            Px(left_stop_x.0 - stop_offset.0),
-            layout.base.stop_indicator_y,
-        ),
-    );
+        input.place_child(
+            left_stop_id,
+            PxPosition::new(
+                Px(left_stop_x.0 - stop_offset.0),
+                layout.base.stop_indicator_y,
+            ),
+        );
 
-    // 7. Right Stop
-    input.measure_child(right_stop_id, &stop_constraint)?;
-    let right_stop_x = Px(self_width.0 - stop_padding.0);
+        // 7. Right Stop
+        input.measure_child(right_stop_id, &stop_constraint)?;
+        let right_stop_x = Px(self_width.0 - stop_padding.0);
 
-    input.place_child(
-        right_stop_id,
-        PxPosition::new(
-            Px(right_stop_x.0 - stop_offset.0),
-            layout.base.stop_indicator_y,
-        ),
-    );
+        input.place_child(
+            right_stop_id,
+            PxPosition::new(
+                Px(right_stop_x.0 - stop_offset.0),
+                layout.base.stop_indicator_y,
+            ),
+        );
+    }
 
     Ok(ComputedData {
         width: self_width,
@@ -650,7 +653,9 @@ pub fn centered_slider(args: impl Into<SliderArgs>, state: SliderState) {
     render_centered_tracks(layout, &colors);
     render_focus(layout.base, &colors);
     render_handle(layout.base, &colors);
-    render_centered_stops(layout, &colors);
+    if layout.base.show_stop_indicator {
+        render_centered_stops(layout, &colors);
+    }
 
     let cloned_args = args.clone();
     let state_clone = state.clone();
@@ -785,40 +790,42 @@ fn measure_range_slider(
         ),
     );
 
-    // 6. Start Stop
-    let stop_size = layout.base.stop_indicator_diameter;
-    let stop_constraint = Constraint::new(
-        DimensionValue::Fixed(stop_size),
-        DimensionValue::Fixed(stop_size),
-    );
-    input.measure_child(stop_start_id, &stop_constraint)?;
+    if layout.base.show_stop_indicator {
+        // 6. Start Stop
+        let stop_size = layout.base.stop_indicator_diameter;
+        let stop_constraint = Constraint::new(
+            DimensionValue::Fixed(stop_size),
+            DimensionValue::Fixed(stop_size),
+        );
+        input.measure_child(stop_start_id, &stop_constraint)?;
 
-    let stop_offset = layout.base.center_child_offset(stop_size);
-    // We can reuse stop_indicator_offset logic if we expose it or reimplement it.
-    // layout.base doesn't have it, CenteredSliderLayout does.
-    // Let's reimplement simple padding: Dp(8.0) - size/2
-    let padding = Dp(8.0).to_px() - stop_size / Px(2);
-    let start_stop_x = Px(padding.0);
+        let stop_offset = layout.base.center_child_offset(stop_size);
+        // We can reuse stop_indicator_offset logic if we expose it or reimplement it.
+        // layout.base doesn't have it, CenteredSliderLayout does.
+        // Let's reimplement simple padding: Dp(8.0) - size/2
+        let padding = Dp(8.0).to_px() - stop_size / Px(2);
+        let start_stop_x = Px(padding.0);
 
-    input.place_child(
-        stop_start_id,
-        PxPosition::new(
-            Px(start_stop_x.0 - stop_offset.0),
-            layout.base.stop_indicator_y,
-        ),
-    );
+        input.place_child(
+            stop_start_id,
+            PxPosition::new(
+                Px(start_stop_x.0 - stop_offset.0),
+                layout.base.stop_indicator_y,
+            ),
+        );
 
-    // 7. End Stop
-    input.measure_child(stop_end_id, &stop_constraint)?;
-    let end_stop_x = Px(self_width.0 - padding.0);
+        // 7. End Stop
+        input.measure_child(stop_end_id, &stop_constraint)?;
+        let end_stop_x = Px(self_width.0 - padding.0);
 
-    input.place_child(
-        stop_end_id,
-        PxPosition::new(
-            Px(end_stop_x.0 - stop_offset.0),
-            layout.base.stop_indicator_y,
-        ),
-    );
+        input.place_child(
+            stop_end_id,
+            PxPosition::new(
+                Px(end_stop_x.0 - stop_offset.0),
+                layout.base.stop_indicator_y,
+            ),
+        );
+    }
 
     Ok(ComputedData {
         width: self_width,
@@ -937,7 +944,9 @@ pub fn range_slider(args: impl Into<RangeSliderArgs>, state: RangeSliderState) {
     // Render End Handle
     render_handle(layout.base, &colors);
 
-    render_range_stops(layout, &colors);
+    if layout.base.show_stop_indicator {
+        render_range_stops(layout, &colors);
+    }
 
     let cloned_args = args.clone();
     let state_clone = state.clone();

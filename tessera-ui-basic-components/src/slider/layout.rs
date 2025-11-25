@@ -58,6 +58,7 @@ pub(super) struct SliderLayout {
     pub focus_y: Px,
     pub stop_indicator_diameter: Px,
     pub stop_indicator_y: Px,
+    pub show_stop_indicator: bool,
 }
 
 impl SliderLayout {
@@ -241,6 +242,7 @@ pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLay
         focus_y: Px((component_height.0 - focus_height.0) / 2),
         stop_indicator_diameter,
         stop_indicator_y: Px((component_height.0 - stop_indicator_diameter.0) / 2),
+        show_stop_indicator: args.show_stop_indicator,
     }
 }
 
@@ -352,6 +354,7 @@ pub(super) fn range_slider_layout(
         disabled: args.disabled,
         accessibility_label: None,
         accessibility_description: None,
+        show_stop_indicator: args.show_stop_indicator,
     };
 
     RangeSliderLayout {
