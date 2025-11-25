@@ -335,6 +335,12 @@ impl ShapePipeline {
     ) -> Option<Arc<ShapeCacheEntry>> {
         let key = ShapeCacheKey::from_command(command, size)?;
 
+        // Check texture limits
+        let max_dim = gpu.limits().max_texture_dimension_2d;
+        if key.width > max_dim || key.height > max_dim {
+            return None;
+        }
+
         // Check if already cached
         if let Some(entry) = self.cache.get(&key) {
             return Some(entry.clone());
