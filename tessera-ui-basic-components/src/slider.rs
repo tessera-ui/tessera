@@ -15,10 +15,13 @@ use tessera_ui::{
 use crate::material_color;
 
 use interaction::{apply_slider_accessibility, handle_slider_state};
-use layout::{SliderLayout, fallback_component_width, resolve_component_width, slider_layout};
+use layout::{
+    CenteredSliderLayout, SliderLayout, centered_slider_layout, fallback_component_width,
+    resolve_component_width, slider_layout,
+};
 use render::{
-    render_active_segment, render_focus, render_handle, render_inactive_segment,
-    render_stop_indicator,
+    render_active_segment, render_centered_stops, render_centered_tracks, render_focus,
+    render_handle, render_inactive_segment, render_stop_indicator,
 };
 
 mod interaction;
@@ -369,5 +372,227 @@ pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
         let component_width = resolve_component_width(&args, input.parent_constraint);
         let resolved_layout = slider_layout(&args, component_width);
         measure_slider(input, resolved_layout, clamped_value)
+    }));
+}
+
+fn measure_centered_slider(
+    input: &MeasureInput,
+    layout: CenteredSliderLayout,
+    value: f32,
+) -> Result<ComputedData, MeasurementError> {
+    let self_width = layout.base.component_width;
+    let self_height = layout.base.component_height;
+    let track_y = layout.base.track_y;
+
+    let left_inactive_id = input.children_ids[0];
+    let active_id = input.children_ids[1];
+    let right_inactive_id = input.children_ids[2];
+    let focus_id = input.children_ids[3];
+    let handle_id = input.children_ids[4];
+    let left_stop_id = input.children_ids[5];
+    let right_stop_id = input.children_ids[6];
+
+    let segments = layout.segments(value);
+
+    // 1. Left Inactive
+    input.measure_child(
+        left_inactive_id,
+        &Constraint::new(
+            DimensionValue::Fixed(segments.left_inactive.1),
+            DimensionValue::Fixed(layout.base.track_height),
+        ),
+    )?;
+    input.place_child(
+        left_inactive_id,
+        PxPosition::new(segments.left_inactive.0, track_y),
+    );
+
+    // 2. Active
+    input.measure_child(
+        active_id,
+        &Constraint::new(
+            DimensionValue::Fixed(segments.active.1),
+            DimensionValue::Fixed(layout.base.track_height),
+        ),
+    )?;
+    input.place_child(active_id, PxPosition::new(segments.active.0, track_y));
+
+    // 3. Right Inactive
+    input.measure_child(
+        right_inactive_id,
+        &Constraint::new(
+            DimensionValue::Fixed(segments.right_inactive.1),
+            DimensionValue::Fixed(layout.base.track_height),
+        ),
+    )?;
+    input.place_child(
+        right_inactive_id,
+        PxPosition::new(segments.right_inactive.0, track_y),
+    );
+
+    // 4. Focus
+    let focus_offset = layout.base.center_child_offset(layout.base.focus_width);
+    input.measure_child(
+        focus_id,
+        &Constraint::new(
+            DimensionValue::Fixed(layout.base.focus_width),
+            DimensionValue::Fixed(layout.base.focus_height),
+        ),
+    )?;
+    input.place_child(
+        focus_id,
+        PxPosition::new(
+            Px(segments.handle_center.x.0 - focus_offset.0),
+            layout.base.focus_y,
+        ),
+    );
+
+    // 5. Handle
+    let handle_offset = layout.base.center_child_offset(layout.base.handle_width);
+    input.measure_child(
+        handle_id,
+        &Constraint::new(
+            DimensionValue::Fixed(layout.base.handle_width),
+            DimensionValue::Fixed(layout.base.handle_height),
+        ),
+    )?;
+    input.place_child(
+        handle_id,
+        PxPosition::new(
+            Px(segments.handle_center.x.0 - handle_offset.0),
+            layout.base.handle_y,
+        ),
+    );
+
+    // 6. Left Stop
+    let stop_size = layout.base.stop_indicator_diameter;
+    let stop_constraint = Constraint::new(
+        DimensionValue::Fixed(stop_size),
+        DimensionValue::Fixed(stop_size),
+    );
+    input.measure_child(left_stop_id, &stop_constraint)?;
+
+    let stop_offset = layout.base.center_child_offset(stop_size);
+    let stop_padding = layout.stop_indicator_offset();
+
+    let left_stop_x = Px(stop_padding.0);
+
+    input.place_child(
+        left_stop_id,
+        PxPosition::new(
+            Px(left_stop_x.0 - stop_offset.0),
+            layout.base.stop_indicator_y,
+        ),
+    );
+
+    // 7. Right Stop
+    input.measure_child(right_stop_id, &stop_constraint)?;
+    let right_stop_x = Px(self_width.0 - stop_padding.0);
+
+    input.place_child(
+        right_stop_id,
+        PxPosition::new(
+            Px(right_stop_x.0 - stop_offset.0),
+            layout.base.stop_indicator_y,
+        ),
+    );
+
+    Ok(ComputedData {
+        width: self_width,
+        height: self_height,
+    })
+}
+
+/// # centered_slider
+///
+/// Renders an interactive slider that originates from the center (0.5), allowing selection of a value
+/// between 0.0 and 1.0. The active track extends from the center to the handle, while inactive
+/// tracks fill the remaining space.
+///
+/// ## Usage
+///
+/// Use for adjustments that have a neutral midpoint, such as balance controls or deviation settings.
+///
+/// ## Parameters
+///
+/// - `args` — configures the slider's value, appearance, and callbacks; see [`SliderArgs`].
+/// - `state` — a clonable [`SliderState`] to manage interaction state like dragging and focus.
+///
+/// ## Examples
+///
+/// ```
+/// use std::sync::{Arc, Mutex};
+/// use tessera_ui::{DimensionValue, Dp};
+/// use tessera_ui_basic_components::slider::{centered_slider, SliderArgsBuilder, SliderState};
+///
+/// let slider_state = SliderState::new();
+/// let current_value = Arc::new(Mutex::new(0.5));
+///
+/// // Simulate a value change
+/// {
+///     let mut value_guard = current_value.lock().unwrap();
+///     *value_guard = 0.75;
+///     assert_eq!(*value_guard, 0.75);
+/// }
+///
+/// centered_slider(
+///     SliderArgsBuilder::default()
+///         .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///         .value(*current_value.lock().unwrap())
+///         .on_change(Arc::new(move |new_value| {
+///             // In a real app, you would update your state here.
+///             // For this example, we'll just check it after the simulated change.
+///             println!("Centered slider value changed to: {}", new_value);
+///         }))
+///         .build()
+///         .unwrap(),
+///     slider_state.clone(),
+/// );
+///
+/// // Simulate another value change and check the state
+/// {
+///     let mut value_guard = current_value.lock().unwrap();
+///     *value_guard = 0.25;
+///     assert_eq!(*value_guard, 0.25);
+/// }
+/// ```
+#[tessera]
+pub fn centered_slider(args: impl Into<SliderArgs>, state: SliderState) {
+    let args: SliderArgs = args.into();
+    let initial_width = fallback_component_width(&args);
+    let layout = centered_slider_layout(&args, initial_width);
+    let clamped_value = args.value.clamp(0.0, 1.0);
+    let state_snapshot = state.read();
+    let colors = slider_colors(&args, state_snapshot.is_hovered, state_snapshot.is_dragging);
+    drop(state_snapshot);
+
+    render_centered_tracks(layout, &colors);
+    render_focus(layout.base, &colors);
+    render_handle(layout.base, &colors);
+    render_centered_stops(layout, &colors);
+
+    let cloned_args = args.clone();
+    let state_clone = state.clone();
+    let clamped_value_for_accessibility = clamped_value;
+    input_handler(Box::new(move |mut input| {
+        let resolved_layout = centered_slider_layout(&cloned_args, input.computed_data.width);
+        handle_slider_state(
+            &mut input,
+            &state_clone,
+            &cloned_args,
+            &resolved_layout.base,
+        );
+        apply_slider_accessibility(
+            &mut input,
+            &cloned_args,
+            clamped_value_for_accessibility,
+            &cloned_args.on_change,
+        );
+    }));
+
+    measure(Box::new(move |input| {
+        let component_width = resolve_component_width(&args, input.parent_constraint);
+        let resolved_layout = centered_slider_layout(&args, component_width);
+        measure_centered_slider(input, resolved_layout, clamped_value)
     }));
 }

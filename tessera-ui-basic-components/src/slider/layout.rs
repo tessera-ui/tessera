@@ -51,6 +51,94 @@ impl SliderLayout {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct CenteredSliderLayout {
+    pub base: SliderLayout,
+}
+
+pub(super) struct CenteredSegments {
+    pub left_inactive: (Px, Px),  // x, width
+    pub active: (Px, Px),         // x, width
+    pub right_inactive: (Px, Px), // x, width
+    pub handle_center: PxPosition,
+}
+
+impl CenteredSliderLayout {
+    pub fn segments(&self, value: f32) -> CenteredSegments {
+        let value = value.clamp(0.0, 1.0);
+        let w = self.base.component_width.to_f32();
+        let h_w = self.base.handle_width.to_f32();
+        let gap = self.base.handle_gap.to_f32();
+        let center_x = w / 2.0;
+
+        // Calculate Handle Center X using base logic
+        // We can't just call self.base.handle_center(value) because it returns PxPosition
+        // and we need floats for intermediate calcs, but we can reuse the logic.
+        let track_total = self.base.track_total_width.to_f32();
+        // Mapping: 0.0 -> gap + h/2, 1.0 -> W - gap - h/2
+        // active_width (for value) = value * track_total
+        // x = active_width + gap + h/2
+        let handle_center_x_raw = (value * track_total) + gap + (h_w / 2.0);
+        let max_x = (w - h_w / 2.0).max(0.0);
+        let handle_center_x = handle_center_x_raw.clamp(h_w / 2.0, max_x);
+
+        let handle_left = handle_center_x - h_w / 2.0;
+        let handle_right = handle_center_x + h_w / 2.0;
+
+        let (li_x, li_w, a_x, a_w, ri_x, ri_w): (f32, f32, f32, f32, f32, f32) = if value > 0.5 {
+            // Handle is to the right
+            // Left Inactive: 0 to min(Center, HandleLeft) - Gap
+            let li_end = (center_x.min(handle_left) - gap).max(0.0);
+            let li_w = li_end;
+
+            // Active: Center + Gap to HandleLeft - Gap
+            let a_start = center_x + gap;
+            let a_end = (handle_left - gap).max(a_start);
+            let a_w = a_end - a_start;
+
+            // Right Inactive: HandleRight + Gap to Width
+            let ri_start = handle_right + gap;
+            let ri_end = w;
+            let ri_w = (ri_end - ri_start).max(0.0);
+
+            (0.0, li_w, a_start, a_w, ri_start, ri_w)
+        } else {
+            // Handle is to the left (or center)
+            // Left Inactive: 0 to HandleLeft - Gap
+            let li_end = (handle_left - gap).max(0.0);
+            let li_w = li_end;
+
+            // Active: HandleRight + Gap to Center - Gap
+            let a_start = handle_right + gap;
+            let a_end = (center_x - gap).max(a_start);
+            let a_w = a_end - a_start;
+
+            // Right Inactive: Center + Gap to Width
+            let ri_start = center_x + gap;
+            let ri_end = w;
+            let ri_w = (ri_end - ri_start).max(0.0);
+
+            (0.0, li_w, a_start, a_w, ri_start, ri_w)
+        };
+
+        CenteredSegments {
+            left_inactive: (Px(li_x.round() as i32), Px(li_w.round() as i32)),
+            active: (Px(a_x.round() as i32), Px(a_w.round() as i32)),
+            right_inactive: (Px(ri_x.round() as i32), Px(ri_w.round() as i32)),
+            handle_center: PxPosition::new(
+                Px(handle_center_x.round() as i32),
+                Px(self.base.component_height.0 / 2),
+            ),
+        }
+    }
+
+    pub fn stop_indicator_offset(&self) -> Px {
+        // Replicating padding logic: Dp(8.0) - size/2
+
+        Dp(8.0).to_px() - self.base.stop_indicator_diameter / Px(2)
+    }
+}
+
 pub(super) fn resolve_component_width(args: &SliderArgs, parent_constraint: &Constraint) -> Px {
     let fallback = Dp(260.0).to_px();
     let merged = Constraint::new(args.width, DimensionValue::Fixed(TRACK_HEIGHT.to_px()))
@@ -113,5 +201,14 @@ pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLay
         focus_y: Px((component_height.0 - focus_height.0) / 2),
         stop_indicator_diameter,
         stop_indicator_y: Px((component_height.0 - stop_indicator_diameter.0) / 2),
+    }
+}
+
+pub(super) fn centered_slider_layout(
+    args: &SliderArgs,
+    component_width: Px,
+) -> CenteredSliderLayout {
+    CenteredSliderLayout {
+        base: slider_layout(args, component_width),
     }
 }
