@@ -105,57 +105,53 @@ impl CenteredSliderLayout {
         let value = value.clamp(0.0, 1.0);
         let w = self.base.component_width.to_f32();
         let h_w = self.base.handle_width.to_f32();
-        let gap = self.base.handle_gap.to_f32();
-        let center_x = w / 2.0;
+        let h_gap = self.base.handle_gap.to_f32(); // Handle gap
+        let center_x_track = w / 2.0; // Geometric center of the component, for tracks
 
-        // Calculate Handle Center X using base logic
-        // We can't just call self.base.handle_center(value) because it returns PxPosition
-        // and we need floats for intermediate calcs, but we can reuse the logic.
-        let track_total = self.base.track_total_width.to_f32();
-        // Mapping: 0.0 -> gap + h/2, 1.0 -> W - gap - h/2
-        // active_width (for value) = value * track_total
-        // x = active_width + gap + h/2
-        let handle_center_x_raw = (value * track_total) + gap + (h_w / 2.0);
-        let max_x = (w - h_w / 2.0).max(0.0);
-        let handle_center_x = handle_center_x_raw.clamp(h_w / 2.0, max_x);
+        // Calculate Handle Center X using base logic.
+        // This maps the 0.0-1.0 value to the physical X position of the handle's center.
+        let track_total_length = self.base.track_total_width.to_f32();
+        let handle_center_x_raw = (value * track_total_length) + h_gap + (h_w / 2.0);
+
+        // Clamp handle center X within component boundaries, considering handle width and its gaps.
+        let min_handle_center_x = h_w / 2.0; // Handle's left edge at 0
+        let max_handle_center_x = w - h_w / 2.0; // Handle's right edge at w
+        let handle_center_x = handle_center_x_raw.clamp(min_handle_center_x, max_handle_center_x);
 
         let handle_left = handle_center_x - h_w / 2.0;
         let handle_right = handle_center_x + h_w / 2.0;
 
         let (li_x, li_w, a_x, a_w, ri_x, ri_w): (f32, f32, f32, f32, f32, f32) = if value > 0.5 {
-            // Handle is to the right
-            // Left Inactive: 0 to min(Center, HandleLeft) - Gap
-            let li_end = (center_x.min(handle_left) - gap).max(0.0);
-            let li_w = li_end;
+            // Handle is to the right of center_x_track
+            // Left Inactive: From 0 to the start of the active segment, accounting for a single h_gap at the center.
+            let li_x_calc = 0.0;
+            let li_w_calc = (center_x_track - h_gap / 2.0).max(0.0);
 
-            // Active: Center + Gap to HandleLeft - Gap
-            let a_start = center_x + gap;
-            let a_end = (handle_left - gap).max(a_start);
-            let a_w = a_end - a_start;
+            // Active: From end of left inactive to start of handle's left gap.
+            // This segment starts after the h_gap at the center and ends before the handle's left h_gap.
+            let a_x_calc = center_x_track + h_gap / 2.0;
+            let a_w_calc = (handle_left - h_gap - a_x_calc).max(0.0); // Ensure width is non-negative
 
-            // Right Inactive: HandleRight + Gap to Width
-            let ri_start = handle_right + gap;
-            let ri_end = w;
-            let ri_w = (ri_end - ri_start).max(0.0);
+            // Right Inactive: From end of handle's right gap to component width.
+            let ri_x_calc = handle_right + h_gap;
+            let ri_w_calc = (w - ri_x_calc).max(0.0);
 
-            (0.0, li_w, a_start, a_w, ri_start, ri_w)
+            (li_x_calc, li_w_calc, a_x_calc, a_w_calc, ri_x_calc, ri_w_calc)
         } else {
-            // Handle is to the left (or center)
-            // Left Inactive: 0 to HandleLeft - Gap
-            let li_end = (handle_left - gap).max(0.0);
-            let li_w = li_end;
+            // Handle is to the left of or at center_x_track
+            // Left Inactive: From 0 to start of handle's left gap.
+            let li_x_calc = 0.0;
+            let li_w_calc = (handle_left - h_gap).max(0.0);
 
-            // Active: HandleRight + Gap to Center - Gap
-            let a_start = handle_right + gap;
-            let a_end = (center_x - gap).max(a_start);
-            let a_w = a_end - a_start;
+            // Active: From end of handle's right gap to before the h_gap at the center.
+            let a_x_calc = handle_right + h_gap;
+            let a_w_calc = (center_x_track - h_gap / 2.0 - a_x_calc).max(0.0);
 
-            // Right Inactive: Center + Gap to Width
-            let ri_start = center_x + gap;
-            let ri_end = w;
-            let ri_w = (ri_end - ri_start).max(0.0);
+            // Right Inactive: From after the h_gap at the center to component width.
+            let ri_x_calc = center_x_track + h_gap / 2.0;
+            let ri_w_calc = (w - ri_x_calc).max(0.0);
 
-            (0.0, li_w, a_start, a_w, ri_start, ri_w)
+            (li_x_calc, li_w_calc, a_x_calc, a_w_calc, ri_x_calc, ri_w_calc)
         };
 
         CenteredSegments {
