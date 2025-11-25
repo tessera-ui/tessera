@@ -14,15 +14,21 @@ use tessera_ui::{
 
 use crate::material_color;
 
-use interaction::{apply_slider_accessibility, handle_slider_state};
+use interaction::{
+    apply_range_slider_accessibility, apply_slider_accessibility, handle_range_slider_state,
+    handle_slider_state,
+};
 use layout::{
-    CenteredSliderLayout, SliderLayout, centered_slider_layout, fallback_component_width,
-    resolve_component_width, slider_layout,
+    CenteredSliderLayout, RangeSliderLayout, SliderLayout, centered_slider_layout,
+    fallback_component_width, range_slider_layout, resolve_component_width, slider_layout,
 };
 use render::{
     render_active_segment, render_centered_stops, render_centered_tracks, render_focus,
-    render_handle, render_inactive_segment, render_stop_indicator,
+    render_handle, render_inactive_segment, render_range_stops, render_range_tracks,
+    render_stop_indicator,
 };
+
+pub use interaction::RangeSliderState;
 
 mod interaction;
 mod layout;
@@ -175,6 +181,59 @@ pub struct SliderArgs {
     #[builder(default = "false")]
     pub disabled: bool,
     /// Optional accessibility label read by assistive technologies.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_label: Option<String>,
+    /// Optional accessibility description.
+    #[builder(default, setter(strip_option, into))]
+    pub accessibility_description: Option<String>,
+}
+
+/// Arguments for the `range_slider` component.
+#[derive(Builder, Clone)]
+#[builder(pattern = "owned")]
+pub struct RangeSliderArgs {
+    /// The current range values (start, end), each between 0.0 and 1.0.
+    #[builder(default = "(0.0, 1.0)")]
+    pub value: (f32, f32),
+
+    /// Callback function triggered when the range values change.
+    #[builder(default = "Arc::new(|_| {})")]
+    pub on_change: Arc<dyn Fn((f32, f32)) + Send + Sync>,
+
+    /// Total width of the slider control.
+    #[builder(default = "DimensionValue::Fixed(Dp(260.0).to_px())")]
+    pub width: DimensionValue,
+
+    /// The color of the active part of the track (range fill).
+    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    pub active_track_color: Color,
+
+    /// The color of the inactive part of the track (background).
+    #[builder(default = "crate::material_color::global_material_scheme().secondary_container")]
+    pub inactive_track_color: Color,
+
+    /// The thickness of the handle indicators.
+    #[builder(default = "Dp(4.0)")]
+    pub thumb_diameter: Dp,
+
+    /// Color of the handle indicators.
+    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    pub thumb_color: Color,
+
+    /// Height of the handle focus layer.
+    #[builder(default = "Dp(18.0)")]
+    pub state_layer_diameter: Dp,
+
+    /// Base color for the state layer.
+    #[builder(
+        default = "crate::material_color::global_material_scheme().primary.with_alpha(0.18)"
+    )]
+    pub state_layer_color: Color,
+
+    /// Disable interaction.
+    #[builder(default = "false")]
+    pub disabled: bool,
+    /// Optional accessibility label.
     #[builder(default, setter(strip_option, into))]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
@@ -594,5 +653,299 @@ pub fn centered_slider(args: impl Into<SliderArgs>, state: SliderState) {
         let component_width = resolve_component_width(&args, input.parent_constraint);
         let resolved_layout = centered_slider_layout(&args, component_width);
         measure_centered_slider(input, resolved_layout, clamped_value)
+    }));
+}
+
+fn measure_range_slider(
+    input: &MeasureInput,
+    layout: RangeSliderLayout,
+    start: f32,
+    end: f32,
+) -> Result<ComputedData, MeasurementError> {
+    let self_width = layout.base.component_width;
+    let self_height = layout.base.component_height;
+    let track_y = layout.base.track_y;
+
+    let left_inactive_id = input.children_ids[0];
+    let active_id = input.children_ids[1];
+    let right_inactive_id = input.children_ids[2];
+    let focus_start_id = input.children_ids[3];
+    let focus_end_id = input.children_ids[4];
+    let handle_start_id = input.children_ids[5];
+    let handle_end_id = input.children_ids[6];
+    let stop_start_id = input.children_ids[7];
+    let stop_end_id = input.children_ids[8];
+
+    let segments = layout.segments(start, end);
+
+    // 1. Left Inactive
+    input.measure_child(
+        left_inactive_id,
+        &Constraint::new(
+            DimensionValue::Fixed(segments.left_inactive.1),
+            DimensionValue::Fixed(layout.base.track_height),
+        ),
+    )?;
+    input.place_child(
+        left_inactive_id,
+        PxPosition::new(segments.left_inactive.0, track_y),
+    );
+
+    // 2. Active
+    input.measure_child(
+        active_id,
+        &Constraint::new(
+            DimensionValue::Fixed(segments.active.1),
+            DimensionValue::Fixed(layout.base.track_height),
+        ),
+    )?;
+    input.place_child(active_id, PxPosition::new(segments.active.0, track_y));
+
+    // 3. Right Inactive
+    input.measure_child(
+        right_inactive_id,
+        &Constraint::new(
+            DimensionValue::Fixed(segments.right_inactive.1),
+            DimensionValue::Fixed(layout.base.track_height),
+        ),
+    )?;
+    input.place_child(
+        right_inactive_id,
+        PxPosition::new(segments.right_inactive.0, track_y),
+    );
+
+    let focus_constraint = Constraint::new(
+        DimensionValue::Fixed(layout.base.focus_width),
+        DimensionValue::Fixed(layout.base.focus_height),
+    );
+    let handle_constraint = Constraint::new(
+        DimensionValue::Fixed(layout.base.handle_width),
+        DimensionValue::Fixed(layout.base.handle_height),
+    );
+    let focus_offset = layout.base.center_child_offset(layout.base.focus_width);
+    let handle_offset = layout.base.center_child_offset(layout.base.handle_width);
+
+    // 4. Start Focus & Handle
+    input.measure_child(focus_start_id, &focus_constraint)?;
+    input.place_child(
+        focus_start_id,
+        PxPosition::new(
+            Px(segments.start_handle_center.x.0 - focus_offset.0),
+            layout.base.focus_y,
+        ),
+    );
+
+    input.measure_child(handle_start_id, &handle_constraint)?;
+    input.place_child(
+        handle_start_id,
+        PxPosition::new(
+            Px(segments.start_handle_center.x.0 - handle_offset.0),
+            layout.base.handle_y,
+        ),
+    );
+
+    // 5. End Focus & Handle
+    input.measure_child(focus_end_id, &focus_constraint)?;
+    input.place_child(
+        focus_end_id,
+        PxPosition::new(
+            Px(segments.end_handle_center.x.0 - focus_offset.0),
+            layout.base.focus_y,
+        ),
+    );
+
+    input.measure_child(handle_end_id, &handle_constraint)?;
+    input.place_child(
+        handle_end_id,
+        PxPosition::new(
+            Px(segments.end_handle_center.x.0 - handle_offset.0),
+            layout.base.handle_y,
+        ),
+    );
+
+    // 6. Start Stop
+    let stop_size = layout.base.stop_indicator_diameter;
+    let stop_constraint = Constraint::new(
+        DimensionValue::Fixed(stop_size),
+        DimensionValue::Fixed(stop_size),
+    );
+    input.measure_child(stop_start_id, &stop_constraint)?;
+
+    let stop_offset = layout.base.center_child_offset(stop_size);
+    // We can reuse stop_indicator_offset logic if we expose it or reimplement it.
+    // layout.base doesn't have it, CenteredSliderLayout does.
+    // Let's reimplement simple padding: Dp(8.0) - size/2
+    let padding = Dp(8.0).to_px() - stop_size / Px(2);
+    let start_stop_x = Px(padding.0);
+
+    input.place_child(
+        stop_start_id,
+        PxPosition::new(
+            Px(start_stop_x.0 - stop_offset.0),
+            layout.base.stop_indicator_y,
+        ),
+    );
+
+    // 7. End Stop
+    input.measure_child(stop_end_id, &stop_constraint)?;
+    let end_stop_x = Px(self_width.0 - padding.0);
+
+    input.place_child(
+        stop_end_id,
+        PxPosition::new(
+            Px(end_stop_x.0 - stop_offset.0),
+            layout.base.stop_indicator_y,
+        ),
+    );
+
+    Ok(ComputedData {
+        width: self_width,
+        height: self_height,
+    })
+}
+
+/// # range_slider
+///
+/// Renders an interactive slider with two handles, allowing selection of a range (start, end)
+/// between 0.0 and 1.0.
+///
+/// ## Usage
+///
+/// Use for filtering by range, setting minimum and maximum values, or defining an interval.
+///
+/// ## Parameters
+///
+/// - `args` — configures the slider's range, appearance, and callbacks; see [`RangeSliderArgs`].
+/// - `state` — a clonable [`RangeSliderState`] to manage interaction state for both handles.
+///
+/// ## Examples
+///
+/// ```
+/// use std::sync::{Arc, Mutex};
+/// use tessera_ui::{DimensionValue, Dp};
+/// use tessera_ui_basic_components::slider::{range_slider, RangeSliderArgsBuilder, RangeSliderState};
+///
+/// let slider_state = RangeSliderState::new();
+/// let range_value = Arc::new(Mutex::new((0.2, 0.8)));
+///
+/// range_slider(
+///     RangeSliderArgsBuilder::default()
+///         .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///         .value(*range_value.lock().unwrap())
+///         .on_change(Arc::new(move |(start, end)| {
+///             println!("Range changed: {} - {}", start, end);
+///         }))
+///         .build()
+///         .unwrap(),
+///     slider_state,
+/// );
+/// ```
+#[tessera]
+pub fn range_slider(args: impl Into<RangeSliderArgs>, state: RangeSliderState) {
+    let args: RangeSliderArgs = args.into();
+    // Convert RangeSliderArgs to SliderArgs for layout helpers where possible,
+    // or rely on the dedicated range_slider_layout which handles this.
+    let dummy_slider_args = SliderArgsBuilder::default()
+        .width(args.width)
+        .build()
+        .expect("Failed to build dummy args");
+    let initial_width = fallback_component_width(&dummy_slider_args);
+    let layout = range_slider_layout(&args, initial_width);
+
+    let start = args.value.0.clamp(0.0, 1.0);
+    let end = args.value.1.clamp(start, 1.0);
+
+    let state_snapshot = state.read();
+    // Determine colors based on interaction.
+    // We check if *either* handle is interacted with to highlight the active tracks/handles?
+    // Or ideally, we highlight specific handles.
+    // For simplicity, let's use a unified color struct but apply focus colors selectively.
+
+    let is_dragging_any = state_snapshot.is_dragging_start || state_snapshot.is_dragging_end;
+
+    // Override colors from specific RangeSliderArgs
+    // We need a helper to convert RangeSliderArgs colors to SliderColors if they differ
+    // But for now we just reused the dummy args construction above which didn't copy colors.
+    // Let's reconstruct colors properly.
+    let mut state_layer_alpha_scale = 0.0;
+    if is_dragging_any {
+        state_layer_alpha_scale = 1.0;
+    } else if state_snapshot.is_hovered {
+        state_layer_alpha_scale = 0.7;
+    }
+
+    let base_state = args.state_layer_color;
+    let state_layer_alpha = (base_state.a * state_layer_alpha_scale).clamp(0.0, 1.0);
+    let handle_focus_color =
+        Color::new(base_state.r, base_state.g, base_state.b, state_layer_alpha);
+
+    let colors = if args.disabled {
+        let scheme = material_color::global_material_scheme();
+        SliderColors {
+            active_track: scheme.on_surface.with_alpha(0.38),
+            inactive_track: scheme.on_surface.with_alpha(0.12),
+            handle: scheme.on_surface.with_alpha(0.38),
+            handle_focus: Color::new(0.0, 0.0, 0.0, 0.0),
+        }
+    } else {
+        SliderColors {
+            active_track: args.active_track_color,
+            inactive_track: args.inactive_track_color,
+            handle: args.thumb_color,
+            handle_focus: handle_focus_color,
+        }
+    };
+
+    drop(state_snapshot);
+
+    render_range_tracks(layout, &colors);
+
+    // Render Start Focus & Handle
+    render_focus(layout.base, &colors);
+    // Note: render_focus uses layout.focus_width/height. Position is handled by measure/place.
+    // But we need two focus indicators.
+
+    // Render End Focus
+    render_focus(layout.base, &colors);
+
+    // Render Start Handle
+    render_handle(layout.base, &colors);
+
+    // Render End Handle
+    render_handle(layout.base, &colors);
+
+    render_range_stops(layout, &colors);
+
+    let cloned_args = args.clone();
+    let state_clone = state.clone();
+    let start_val = start;
+    let end_val = end;
+
+    input_handler(Box::new(move |mut input| {
+        let resolved_layout = range_slider_layout(&cloned_args, input.computed_data.width);
+        handle_range_slider_state(
+            &mut input,
+            &state_clone,
+            &cloned_args,
+            &resolved_layout.base,
+        );
+        apply_range_slider_accessibility(
+            &mut input,
+            &cloned_args,
+            start_val,
+            end_val,
+            &cloned_args.on_change,
+        );
+    }));
+
+    measure(Box::new(move |input| {
+        let dummy_args_for_resolve = SliderArgsBuilder::default()
+            .width(args.width)
+            .build()
+            .expect("Failed to build dummy args");
+        let component_width =
+            resolve_component_width(&dummy_args_for_resolve, input.parent_constraint);
+        let resolved_layout = range_slider_layout(&args, component_width);
+        measure_range_slider(input, resolved_layout, start, end)
     }));
 }

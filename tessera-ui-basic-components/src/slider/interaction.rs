@@ -166,3 +166,171 @@ pub(super) fn apply_slider_accessibility(
         }
     });
 }
+
+pub(crate) struct RangeSliderStateInner {
+    pub is_dragging_start: bool,
+    pub is_dragging_end: bool,
+    pub focus_start: tessera_ui::focus_state::Focus,
+    pub focus_end: tessera_ui::focus_state::Focus,
+    pub is_hovered: bool,
+}
+
+impl Default for RangeSliderStateInner {
+    fn default() -> Self {
+        Self {
+            is_dragging_start: false,
+            is_dragging_end: false,
+            focus_start: tessera_ui::focus_state::Focus::new(),
+            focus_end: tessera_ui::focus_state::Focus::new(),
+            is_hovered: false,
+        }
+    }
+}
+
+/// External state for the `range_slider` component.
+#[derive(Clone)]
+pub struct RangeSliderState {
+    inner: Arc<parking_lot::RwLock<RangeSliderStateInner>>,
+}
+
+impl Default for RangeSliderState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RangeSliderState {
+    /// Creates a new range slider state handle.
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(parking_lot::RwLock::new(RangeSliderStateInner::default())),
+        }
+    }
+
+    pub(crate) fn read(&self) -> parking_lot::RwLockReadGuard<'_, RangeSliderStateInner> {
+        self.inner.read()
+    }
+
+    pub(crate) fn write(&self) -> parking_lot::RwLockWriteGuard<'_, RangeSliderStateInner> {
+        self.inner.write()
+    }
+}
+
+pub(super) fn handle_range_slider_state(
+    input: &mut InputHandlerInput,
+    state: &RangeSliderState,
+    args: &super::RangeSliderArgs,
+    layout: &SliderLayout,
+) {
+    if args.disabled {
+        let mut inner = state.write();
+        inner.is_hovered = false;
+        inner.is_dragging_start = false;
+        inner.is_dragging_end = false;
+        return;
+    }
+
+    let is_in_component = cursor_within_component(input.cursor_position_rel, &input.computed_data);
+
+    {
+        let mut inner = state.write();
+        inner.is_hovered = is_in_component;
+    }
+
+    if is_in_component {
+        input.requests.cursor_icon = CursorIcon::Pointer;
+    }
+
+    let is_dragging = {
+        let r = state.read();
+        r.is_dragging_start || r.is_dragging_end
+    };
+
+    if !is_in_component && !is_dragging {
+        return;
+    }
+
+    let mut new_start: Option<f32> = None;
+    let mut new_end: Option<f32> = None;
+
+    for event in input.cursor_events.iter() {
+        match &event.content {
+            CursorEventContent::Pressed(_) => {
+                if let Some(progress) = cursor_progress(input.cursor_position_rel, layout) {
+                    let dist_start = (progress - args.value.0).abs();
+                    let dist_end = (progress - args.value.1).abs();
+
+                    let mut inner = state.write();
+                    // Determine which handle to drag based on proximity
+                    if dist_start <= dist_end {
+                        inner.is_dragging_start = true;
+                        inner.focus_start.request_focus();
+                        new_start = Some(progress);
+                    } else {
+                        inner.is_dragging_end = true;
+                        inner.focus_end.request_focus();
+                        new_end = Some(progress);
+                    }
+                }
+            }
+            CursorEventContent::Released(_) => {
+                let mut inner = state.write();
+                inner.is_dragging_start = false;
+                inner.is_dragging_end = false;
+            }
+            _ => {}
+        }
+    }
+
+    let r = state.read();
+    if (r.is_dragging_start || r.is_dragging_end)
+        && let Some(progress) = cursor_progress(input.cursor_position_rel, layout)
+    {
+        if r.is_dragging_start {
+            new_start = Some(progress.min(args.value.1)); // Don't cross end
+        } else {
+            new_end = Some(progress.max(args.value.0)); // Don't cross start
+        }
+    }
+    drop(r);
+
+    if let Some(ns) = new_start
+        && (ns - args.value.0).abs() > f32::EPSILON
+    {
+        (args.on_change)((ns, args.value.1));
+    }
+    if let Some(ne) = new_end
+        && (ne - args.value.1).abs() > f32::EPSILON
+    {
+        (args.on_change)((args.value.0, ne));
+    }
+}
+
+pub(super) fn apply_range_slider_accessibility(
+    input: &mut InputHandlerInput<'_>,
+    args: &super::RangeSliderArgs,
+    _current_start: f32,
+    _current_end: f32,
+    _on_change: &Arc<dyn Fn((f32, f32)) + Send + Sync>,
+) {
+    // For range slider, we ideally need two accessibility nodes.
+    // However, given current limitations, we might just expose one node or the "primary" interaction.
+    // A better approach for accessibility in range sliders is usually multiple children nodes.
+    // For now, let's just make the container focusable but it might be confusing.
+    // To do this properly, we should probably split the accessibility into the two handles in the main component code
+    // by attaching accessibility info to the handle children instead of the container.
+    // But the current structure attaches to the container.
+    // TODO: Improve accessibility for range slider (requires structural changes to expose handles as children).
+
+    // Minimal implementation: report range as a string? or just focusable?
+    // Let's skip specific numeric value reporting for the container to avoid confusion,
+    // or just report the start value for now.
+    let mut builder = input.accessibility().role(Role::Slider);
+    if let Some(label) = args.accessibility_label.as_ref() {
+        builder = builder.label(label.clone());
+    }
+    if args.disabled {
+        builder = builder.disabled();
+    }
+    builder.commit();
+}

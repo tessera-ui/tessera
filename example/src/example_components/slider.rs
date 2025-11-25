@@ -4,7 +4,10 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
-    slider::{SliderArgsBuilder, SliderState, centered_slider, slider},
+    slider::{
+        RangeSliderArgsBuilder, RangeSliderState, SliderArgsBuilder, SliderState, centered_slider,
+        range_slider, slider,
+    },
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };
@@ -15,6 +18,8 @@ struct SliderShowcaseState {
     slider_state: SliderState,
     centered_value: Arc<Mutex<f32>>,
     centered_slider_state: SliderState,
+    range_value: Arc<Mutex<(f32, f32)>>,
+    range_slider_state: RangeSliderState,
 }
 
 impl Default for SliderShowcaseState {
@@ -25,6 +30,8 @@ impl Default for SliderShowcaseState {
             slider_state: SliderState::new(),
             centered_value: Arc::new(Mutex::new(0.5)),
             centered_slider_state: SliderState::new(),
+            range_value: Arc::new(Mutex::new((0.2, 0.8))),
+            range_slider_state: RangeSliderState::new(),
         }
     }
 }
@@ -124,6 +131,32 @@ fn test_content(state: Arc<SliderShowcaseState>) {
                     .lock()
                     .unwrap();
                 text(format!("Centered value: {:.2}", centered_value));
+            });
+
+            // Range Slider Showcase
+            scope.child(|| text("Range Slider Showcase"));
+
+            let state_for_range_slider = state.clone();
+            scope.child(move || {
+                let range_value_clone = state_for_range_slider.range_value.clone();
+                let on_change = Arc::new(move |new_value| {
+                    *range_value_clone.lock().unwrap() = new_value;
+                });
+                range_slider(
+                    RangeSliderArgsBuilder::default()
+                        .value(*state_for_range_slider.range_value.lock().unwrap())
+                        .on_change(on_change)
+                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
+                        .build()
+                        .unwrap(),
+                    state_for_range_slider.range_slider_state.clone(),
+                );
+            });
+
+            let state_for_range_value_display = state.clone();
+            scope.child(move || {
+                let (start, end) = *state_for_range_value_display.range_value.lock().unwrap();
+                text(format!("Range value: {:.2} - {:.2}", start, end));
             });
         },
     )

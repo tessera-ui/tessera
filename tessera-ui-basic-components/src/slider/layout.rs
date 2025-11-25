@@ -212,3 +212,108 @@ pub(super) fn centered_slider_layout(
         base: slider_layout(args, component_width),
     }
 }
+
+#[derive(Clone, Copy)]
+pub(super) struct RangeSliderLayout {
+    pub base: SliderLayout,
+}
+
+pub(super) struct RangeSegments {
+    pub left_inactive: (Px, Px),  // x, width
+    pub active: (Px, Px),         // x, width
+    pub right_inactive: (Px, Px), // x, width
+    pub start_handle_center: PxPosition,
+    pub end_handle_center: PxPosition,
+}
+
+impl RangeSliderLayout {
+    pub fn segments(&self, start: f32, end: f32) -> RangeSegments {
+        let start = start.clamp(0.0, 1.0);
+        let end = end.clamp(start, 1.0); // Ensure start <= end
+
+        let w = self.base.component_width.to_f32();
+        let h_w = self.base.handle_width.to_f32();
+        let gap = self.base.handle_gap.to_f32();
+        let track_total = self.base.track_total_width.to_f32();
+
+        // Handle Centers
+        // Mapping: 0.0 -> gap + h/2, 1.0 -> W - gap - h/2
+        // active_width (for value) = value * track_total
+        // x = active_width + gap + h/2
+
+        let start_center_raw = (start * track_total) + gap + (h_w / 2.0);
+        let end_center_raw = (end * track_total) + gap + (h_w / 2.0);
+
+        let max_x = (w - h_w / 2.0).max(0.0);
+
+        let start_handle_center_x = start_center_raw.clamp(h_w / 2.0, max_x);
+        let end_handle_center_x = end_center_raw.clamp(h_w / 2.0, max_x);
+
+        let start_handle_right = start_handle_center_x + h_w / 2.0;
+        let end_handle_left = end_handle_center_x - h_w / 2.0;
+
+        // Left Inactive: 0 to StartHandleLeft - Gap
+        let start_handle_left = start_handle_center_x - h_w / 2.0;
+        let li_end = (start_handle_left - gap).max(0.0);
+        let li_w = li_end;
+        let li_x: f32 = 0.0;
+
+        // Active: StartHandleRight + Gap to EndHandleLeft - Gap
+        let a_start = start_handle_right + gap;
+        let a_end = (end_handle_left - gap).max(a_start);
+        let a_w = a_end - a_start;
+        let a_x = a_start;
+
+        // Right Inactive: EndHandleRight + Gap to Width
+        let end_handle_right = end_handle_center_x + h_w / 2.0;
+        let ri_start = end_handle_right + gap;
+        let ri_end = w;
+        let ri_w = (ri_end - ri_start).max(0.0);
+        let ri_x = ri_start;
+
+        RangeSegments {
+            left_inactive: (Px(li_x.round() as i32), Px(li_w.round() as i32)),
+            active: (Px(a_x.round() as i32), Px(a_w.round() as i32)),
+            right_inactive: (Px(ri_x.round() as i32), Px(ri_w.round() as i32)),
+            start_handle_center: PxPosition::new(
+                Px(start_handle_center_x.round() as i32),
+                Px(self.base.component_height.0 / 2),
+            ),
+            end_handle_center: PxPosition::new(
+                Px(end_handle_center_x.round() as i32),
+                Px(self.base.component_height.0 / 2),
+            ),
+        }
+    }
+}
+
+pub(super) fn range_slider_layout(
+    args: &super::RangeSliderArgs,
+    component_width: Px,
+) -> RangeSliderLayout {
+    // Reuse basic slider layout logic for dimensions, but we need to construct a dummy SliderArgs
+    // or refactor slider_layout. Since slider_layout mainly uses width and style args which exist
+    // in RangeSliderArgs, let's create a temporary adapter or just manually construct if needed.
+    // Better yet, let's extract the common args into a helper or just construct SliderArgs.
+
+    // Note: We'll construct a SliderArgs to reuse the layout calculation.
+    // This is a bit of a hack but avoids refactoring everything.
+    let dummy_args = SliderArgs {
+        value: 0.0,
+        on_change: std::sync::Arc::new(|_| {}),
+        width: args.width,
+        active_track_color: args.active_track_color,
+        inactive_track_color: args.inactive_track_color,
+        thumb_diameter: args.thumb_diameter,
+        thumb_color: args.thumb_color,
+        state_layer_diameter: args.state_layer_diameter,
+        state_layer_color: args.state_layer_color,
+        disabled: args.disabled,
+        accessibility_label: None,
+        accessibility_description: None,
+    };
+
+    RangeSliderLayout {
+        base: slider_layout(&dummy_args, component_width),
+    }
+}
