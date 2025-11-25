@@ -1,3 +1,6 @@
+use std::{thread, time::Duration};
+
+use parking_lot::deadlock;
 use tessera_ui::{Renderer, tessera};
 use tracing::error;
 use tracing_subscriber::EnvFilter;
@@ -14,6 +17,7 @@ fn app() {
 #[unsafe(no_mangle)]
 fn android_main(android_app: AndroidApp) {
     init_tracing_android();
+    spawn_deadlock_detector();
     Renderer::run(
         app,
         |app| {
@@ -27,6 +31,7 @@ fn android_main(android_app: AndroidApp) {
 #[cfg(not(target_os = "android"))]
 pub fn desktop_main() {
     init_tracing_desktop();
+    spawn_deadlock_detector();
     Renderer::run(app, |app| {
         tessera_ui_basic_components::pipelines::register_pipelines(app);
     })
@@ -46,7 +51,7 @@ fn init_tracing_android() {
 #[cfg(not(target_os = "android"))]
 fn init_tracing_desktop() {
     let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("off,tessera_ui=info"))
+        .or_else(|_| EnvFilter::try_new("error,tessera_ui=info"))
         .unwrap();
     tracing_subscriber::fmt()
         .pretty()
@@ -58,3 +63,29 @@ fn init_tracing_desktop() {
 #[allow(dead_code)]
 #[cfg(target_os = "android")]
 fn main() {}
+
+fn spawn_deadlock_detector() {
+    thread::spawn(|| {
+        loop {
+            thread::sleep(Duration::from_secs(10));
+            let deadlocks = deadlock::check_deadlock();
+            if deadlocks.is_empty() {
+                continue;
+            }
+
+            for (idx, threads) in deadlocks.iter().enumerate() {
+                error!(
+                    "Deadlock #{idx} detected involving {} threads",
+                    threads.len()
+                );
+                for thread_info in threads {
+                    error!(
+                        "Thread {:?}\n{:?}",
+                        thread_info.thread_id(),
+                        thread_info.backtrace()
+                    );
+                }
+            }
+        }
+    });
+}
