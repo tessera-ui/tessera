@@ -8,9 +8,12 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, tessera};
 
-use crate::pipelines::{
-    image::{ImageCommand, ImageData},
-    image_vector::{ImageVectorCommand, ImageVectorData},
+use crate::{
+    image_vector::TintMode,
+    pipelines::{
+        image::{ImageCommand, ImageData},
+        image_vector::{ImageVectorCommand, ImageVectorData},
+    },
 };
 
 /// Icon content can be provided either as vector geometry or raster pixels.
@@ -69,6 +72,9 @@ pub struct IconArgs {
     /// colors (multiplying by white is a no-op). Raster icons ignore this field.
     #[builder(default = "Color::WHITE")]
     pub tint: Color,
+    /// How the tint is applied to vector icons.
+    #[builder(default)]
+    pub tint_mode: TintMode,
 }
 
 impl From<IconContent> for IconArgs {
@@ -188,6 +194,7 @@ pub fn icon(args: impl Into<IconArgs>) {
                 let command = ImageVectorCommand {
                     data: data.clone(),
                     tint: icon_args.tint,
+                    tint_mode: icon_args.tint_mode,
                 };
                 input
                     .metadatas

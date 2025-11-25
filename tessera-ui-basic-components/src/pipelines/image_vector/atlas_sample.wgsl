@@ -9,6 +9,7 @@ struct SampleUniforms {
     uv_origin: vec2<f32>,
     uv_scale: vec2<f32>,
     tint: vec4<f32>,
+    tint_mode: u32,
 }
 
 @group(0) @binding(0)
@@ -40,6 +41,14 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let tinted = textureSample(atlas_texture, atlas_sampler, in.uv) * uniforms.tint;
-    return vec4<f32>(tinted.rgb * tinted.a, tinted.a);
+    let sampled = textureSample(atlas_texture, atlas_sampler, in.uv);
+    
+    // tint_mode == 1u is Solid, 0u is Multiply (default)
+    if (uniforms.tint_mode == 1u) {
+        let alpha = sampled.a * uniforms.tint.a;
+        return vec4<f32>(uniforms.tint.rgb * alpha, alpha);
+    } else {
+        let tinted = sampled * uniforms.tint;
+        return vec4<f32>(tinted.rgb * tinted.a, tinted.a);
+    }
 }

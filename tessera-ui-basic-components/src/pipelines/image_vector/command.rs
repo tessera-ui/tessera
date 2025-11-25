@@ -65,6 +65,19 @@ impl Hash for ImageVectorData {
     }
 }
 
+/// Defines how the tint color is combined with the vector image.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VectorTintMode {
+    /// Multiplies the tint color with the image color.
+    /// This is the default behavior.
+    /// Result = Image * Tint
+    #[default]
+    Multiply,
+    /// Ignores the image's color channels, using only its alpha to mask the tint color.
+    /// Result = Tint * Image.Alpha
+    Solid,
+}
+
 /// Draw command for vector images.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImageVectorCommand {
@@ -72,6 +85,8 @@ pub struct ImageVectorCommand {
     pub data: Arc<ImageVectorData>,
     /// Tint color multiplied with the mesh.
     pub tint: Color,
+    /// How to apply the tint.
+    pub tint_mode: VectorTintMode,
 }
 
 impl DrawCommand for ImageVectorCommand {}

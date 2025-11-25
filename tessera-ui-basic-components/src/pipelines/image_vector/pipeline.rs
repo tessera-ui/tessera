@@ -8,7 +8,7 @@ use tessera_ui::{
     wgpu::{self, util::DeviceExt},
 };
 
-use super::command::{ImageVectorCommand, ImageVectorData, ImageVectorVertex};
+use super::command::{ImageVectorCommand, ImageVectorData, ImageVectorVertex, VectorTintMode};
 
 const DEFAULT_ATLAS_SIZE: u32 = 2048;
 const MIN_ATLAS_SIZE: u32 = 256;
@@ -59,6 +59,7 @@ struct AtlasSampleUniforms {
     uv_origin: Vec2,
     uv_scale: Vec2,
     tint: Vec4,
+    tint_mode: u32,
 }
 
 /// Render pipeline that rasterizes SVG vector meshes into an atlas for sampling.
@@ -503,6 +504,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 *start_pos,
                 *size,
                 command.tint,
+                command.tint_mode,
                 entry.uv_origin,
                 entry.uv_scale,
                 context.config,
@@ -543,6 +545,7 @@ fn compute_sample_uniforms(
     start_pos: PxPosition,
     size: PxSize,
     tint: Color,
+    tint_mode: VectorTintMode,
     uv_origin: [f32; 2],
     uv_scale: [f32; 2],
     config: &wgpu::SurfaceConfiguration,
@@ -558,6 +561,10 @@ fn compute_sample_uniforms(
         uv_origin: Vec2::from_array(uv_origin),
         uv_scale: Vec2::from_array(uv_scale),
         tint: Vec4::new(tint.r, tint.g, tint.b, tint.a),
+        tint_mode: match tint_mode {
+            VectorTintMode::Multiply => 0,
+            VectorTintMode::Solid => 1,
+        },
     }
 }
 
