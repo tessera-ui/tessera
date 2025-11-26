@@ -4,7 +4,7 @@
 //!
 //! Use to create layered UIs, overlays, or composite controls.
 use derive_builder::Builder;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, place_node, tessera};
+use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, tessera};
 
 use crate::alignment::Alignment;
 
@@ -209,7 +209,7 @@ where
                     child_size.width,
                     child_size.height,
                 );
-                place_node(child_id, PxPosition::new(x, y), input.metadatas);
+                input.place_child(child_id, PxPosition::new(x, y));
             }
         }
 

@@ -34,8 +34,8 @@
 //! For developers who want to create custom components and handle complex layouts:
 //!
 //! **Essential functions and types:**
-//! - [`measure_node`] - Measure child component sizes with constraints
-//! - [`place_node`] - Position child components in the layout
+//! - [`MeasureInput::measure_child`] - Measure child component sizes with constraints
+//! - [`MeasureInput::place_child`] - Position child components in the layout
 //! - [`InputHandlerFn`] - Handle user interactions and state changes
 //! - [`Constraint`], [`DimensionValue`] - Layout constraint system
 //! - [`ComputedData`] - Return computed size and layout information
@@ -47,7 +47,7 @@
 //! - Working with the constraint-based layout system
 //!
 //! ```
-//! use tessera_ui::{measure_node, place_node, ComputedData, Constraint, PxPosition, tessera};
+//! use tessera_ui::{ComputedData, Constraint, PxPosition, tessera};
 //!
 //! #[tessera]
 //! fn custom_layout(child: impl FnOnce()) {
@@ -88,7 +88,7 @@
 //! ### Essential Types and Functions
 //!
 //! - [`Renderer`] - Main application renderer and lifecycle manager
-//! - [`measure_node`], [`place_node`] - Core layout functions
+//! - [`MeasureInput`] - Context for layout measurement and placement
 //! - [`Constraint`], [`DimensionValue`] - Layout constraint system
 //! - [`Dp`], [`Px`] - Measurement units (device-independent and pixel units)
 //! - [`Color`] - Color representation and utilities
@@ -162,8 +162,7 @@ pub use crate::{
     component_tree::{
         ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
         ComponentTree, ComputedData, Constraint, DimensionValue, ImeRequest, InputHandlerFn,
-        InputHandlerInput, MeasureFn, MeasureInput, MeasurementError, measure_node, measure_nodes,
-        place_node,
+        InputHandlerInput, MeasureFn, MeasureInput, MeasurementError,
     },
     cursor::{CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent},
     dp::Dp,

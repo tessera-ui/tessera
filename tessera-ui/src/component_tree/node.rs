@@ -519,7 +519,7 @@ impl ImeRequest {
 /// See [`measure_nodes`] for concurrent measurement of multiple nodes.
 /// Which is very recommended for most cases. You should only use this function
 /// when your're very sure that you only need to measure a single node.
-pub fn measure_node(
+pub(crate) fn measure_node(
     node_id: NodeId,
     parent_constraint: &Constraint,
     tree: &ComponentNodeTree,
@@ -581,7 +581,7 @@ pub fn measure_node(
 }
 
 /// Places a node at the specified relative position within its parent.
-pub fn place_node(
+pub(crate) fn place_node(
     node: indextree::NodeId,
     rel_position: PxPosition,
     component_node_metadatas: &ComponentNodeMetaDatas,
@@ -734,7 +734,7 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
 };
 
 /// Concurrently measures multiple nodes using Rayon for parallelism.
-pub fn measure_nodes(
+pub(crate) fn measure_nodes(
     nodes_to_measure: Vec<(NodeId, Constraint)>,
     tree: &ComponentNodeTree,
     component_node_metadatas: &ComponentNodeMetaDatas,
