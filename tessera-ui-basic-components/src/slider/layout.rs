@@ -65,7 +65,7 @@ pub(super) struct SliderLayout {
     pub stop_indicator_diameter: Px,
     pub stop_indicator_y: Px,
     pub show_stop_indicator: bool,
-    pub icon_size: Option<Px>,
+    pub icon_size: Option<Dp>,
 }
 
 impl SliderLayout {
@@ -254,7 +254,7 @@ pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLay
         stop_indicator_diameter,
         stop_indicator_y: Px((component_height.0 - stop_indicator_diameter.0) / 2),
         show_stop_indicator: args.show_stop_indicator,
-        icon_size: specs.icon_size.map(|dp| dp.to_px()),
+        icon_size: specs.icon_size,
     }
 }
 

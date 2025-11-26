@@ -368,11 +368,11 @@ fn measure_slider(
         let icon_constraint = Constraint::new(
             DimensionValue::Wrap {
                 min: None,
-                max: Some(icon_size),
+                max: Some(icon_size.into()),
             },
             DimensionValue::Wrap {
                 min: None,
-                max: Some(icon_size),
+                max: Some(icon_size.into()),
             },
         );
         let icon_measured = input.measure_child(icon_id, &icon_constraint)?;
@@ -490,7 +490,7 @@ pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
                 .content(inset_icon.clone())
                 .tint(tint)
                 .tint_mode(VectorTintMode::Solid)
-                .size(tessera_ui::Dp::from(icon_size))
+                .size(icon_size)
                 .build()
                 .expect("Failed to build icon args"),
         );
