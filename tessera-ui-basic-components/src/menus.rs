@@ -2,6 +2,7 @@
 //! ## Usage Present anchored overflow or context actions as surfaced menus.
 use std::sync::Arc;
 
+use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
@@ -798,19 +799,18 @@ fn render_trailing(args: &MenuItemArgs, enabled: bool) {
 #[tessera]
 pub fn menu_item(args: MenuItemArgs, menu_state: Option<MenuState>, ripple_state: RippleState) {
     let is_enabled = args.enabled && args.on_click.is_some();
-    let menu_state_for_click = menu_state.clone();
     let on_click = args.on_click.clone();
     let close_on_click = args.close_on_click;
 
     let interactive_click = if is_enabled {
-        Some(Arc::new(move || {
+        Some(Arc::new(closure!(clone on_click, clone menu_state, || {
             if let Some(handler) = &on_click {
                 handler();
             }
-            if close_on_click && let Some(state) = &menu_state_for_click {
+            if close_on_click && let Some(state) = &menu_state {
                 state.close();
             }
-        }) as Arc<dyn Fn() + Send + Sync>)
+        })) as Arc<dyn Fn() + Send + Sync>)
     } else {
         None
     };

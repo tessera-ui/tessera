@@ -48,11 +48,6 @@ pub fn downscale_factor_for_radius(radius: f32) -> u32 {
 }
 
 impl DualBlurCommand {
-    /// Creates a dual-pass blur command with explicit passes.
-    pub fn new(passes: [BlurCommand; 2]) -> Self {
-        Self { passes }
-    }
-
     /// Creates a dual blur command with horizontal and vertical passes using the same radius/padding.
     pub fn horizontal_then_vertical(radius: f32) -> Self {
         Self {

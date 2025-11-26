@@ -1,5 +1,6 @@
 use std::{fmt::Display, sync::Arc};
 
+use closure::closure;
 use parking_lot::RwLock;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
@@ -263,12 +264,9 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                 glass_config_slider(
                     "Width",
                     state.read().width.value.0 as f32 / 500.0,
-                    {
-                        let state = state.clone();
-                        Arc::new(move |value| {
-                            state.write().width.value = Dp(f64::from(value) * 500.0);
-                        })
-                    },
+                    Arc::new(closure!(clone state, |value| {
+                        state.write().width.value = Dp(f64::from(value) * 500.0);
+                    })),
                     state.read().width.slider_state.clone(),
                 );
             });
@@ -288,12 +286,9 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                 glass_config_slider(
                     "Height",
                     state.read().height.value.0 as f32 / 500.0,
-                    {
-                        let state = state.clone();
-                        Arc::new(move |value| {
-                            state.write().height.value = Dp(f64::from(value) * 500.0);
-                        })
-                    },
+                    Arc::new(closure!(clone state, |value| {
+                        state.write().height.value = Dp(f64::from(value) * 500.0);
+                    })),
                     state.read().height.slider_state.clone(),
                 );
             });
@@ -312,12 +307,9 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                 glass_config_slider(
                     "Corner Radius",
                     state.read().corner_radius.value.0 / 100.0,
-                    {
-                        let state = state.clone();
-                        Arc::new(move |value| {
-                            state.write().corner_radius.value = CornerRadius(value * 100.0);
-                        })
-                    },
+                    Arc::new(closure!(clone state, |value| {
+                        state.write().corner_radius.value = CornerRadius(value * 100.0);
+                    })),
                     state.read().corner_radius.slider_state.clone(),
                 );
             });
@@ -336,12 +328,9 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                 glass_config_slider(
                     "Border Width",
                     state.read().border_width.value.0 as f32 / 20.0,
-                    {
-                        let state = state.clone();
-                        Arc::new(move |value| {
-                            state.write().border_width.value = Dp(f64::from(value) * 20.0);
-                        })
-                    },
+                    Arc::new(closure!(clone state, |value| {
+                        state.write().border_width.value = Dp(f64::from(value) * 20.0);
+                    })),
                     state.read().border_width.slider_state.clone(),
                 );
             });
@@ -360,12 +349,9 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                 glass_config_slider(
                     "Refraction Strength",
                     state.read().refraction_amount.value / 100.0,
-                    {
-                        let state = state.clone();
-                        Arc::new(move |value| {
-                            state.write().refraction_amount.value = value * 100.0;
-                        })
-                    },
+                    Arc::new(closure!(clone state, |value| {
+                        state.write().refraction_amount.value = value * 100.0;
+                    })),
                     state.read().refraction_amount.slider_state.clone(),
                 );
             });
@@ -384,12 +370,9 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                 glass_config_slider(
                     "Refraction Height",
                     state.read().refraction_height.value.0 as f32 / 50.0,
-                    {
-                        let state = state.clone();
-                        Arc::new(move |value| {
-                            state.write().refraction_height.value = Dp(f64::from(value * 50.0));
-                        })
-                    },
+                    Arc::new(closure!(clone state, |value| {
+                        state.write().refraction_height.value = Dp(f64::from(value * 50.0));
+                    })),
                     state.read().refraction_height.slider_state.clone(),
                 );
             });
@@ -408,12 +391,9 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                 glass_config_slider(
                     "Blur Radius",
                     state.read().blur_radius.value.0 as f32 / 100.0,
-                    {
-                        let state = state.clone();
-                        Arc::new(move |value| {
-                            state.write().blur_radius.value = Dp(f64::from(value * 100.0));
-                        })
-                    },
+                    Arc::new(closure!(clone state, |value| {
+                        state.write().blur_radius.value = Dp(f64::from(value * 100.0));
+                    })),
                     state.read().blur_radius.slider_state.clone(),
                 );
             });

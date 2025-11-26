@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use closure::closure;
 use dashmap::DashMap;
 use tessera_ui::{
     Color, DimensionValue, Dp,
@@ -65,14 +66,11 @@ struct AppState {
 #[tessera]
 #[shard]
 pub fn app(#[state] app_state: AppState) {
-    let state_for_bottom_sheet = app_state.clone();
-    let state_for_side_bar = app_state.clone();
-    let state_for_dialog = app_state.clone();
     side_bar_provider(
         SideBarProviderArgsBuilder::default()
-            .on_close_request(Arc::new(move || {
-                state_for_side_bar.side_bar_state.close();
-            }))
+            .on_close_request(Arc::new(closure!(clone app_state.side_bar_state, || {
+                side_bar_state.close();
+            })))
             .style(SideBarStyle::Glass)
             .build()
             .unwrap(),
@@ -80,24 +78,23 @@ pub fn app(#[state] app_state: AppState) {
         move || {
             bottom_sheet_provider(
                 BottomSheetProviderArgsBuilder::default()
-                    .on_close_request(Arc::new(move || {
-                        state_for_bottom_sheet.bottom_sheet_state.close();
-                    }))
+                    .on_close_request(Arc::new(closure!(clone app_state.bottom_sheet_state, || {
+                        bottom_sheet_state.close();
+                    })))
                     .style(BottomSheetStyle::Glass)
                     .build()
                     .unwrap(),
                 app_state.bottom_sheet_state.clone(),
                 move || {
-                    let dialog_state = app_state.dialog_state.clone();
                     dialog_provider(
                         DialogProviderArgsBuilder::default()
-                            .on_close_request(Arc::new(move || {
+                            .on_close_request(Arc::new(closure!(clone app_state.dialog_state, || {
                                 dialog_state.close();
-                            }))
+                            })))
                             .style(DialogStyle::Glass)
                             .build()
                             .unwrap(),
-                        state_for_dialog.dialog_state.clone(),
+                        app_state.dialog_state.clone(),
                         move || {
                             column(ColumnArgs::default(), |scope| {
                                 scope.child(|| {
@@ -134,27 +131,35 @@ pub fn app(#[state] app_state: AppState) {
                                     navigation_bar(
                                         app_state.navigation_bar_state.clone(),
                                         |scope| {
-                                            let bottom_sheet_state = bottom_sheet_state.clone();
-                                            let side_bar_state = side_bar_state.clone();
-                                            let dialog_state = dialog_state.clone();
-
                                             scope.item(
                                                 NavigationBarItemBuilder::default()
                                                     .label("Home")
-                                                    .icon(Arc::new(move || {
-                                                        icon(home_icon_args.clone());
-                                                    }))
-                                                    .on_click(Arc::new(move || {
-                                                        Router::with_mut(|router| {
-                                                            router.reset_with(HomeDestination {
-                                                                bottom_sheet_state:
-                                                                    bottom_sheet_state.clone(),
-                                                                side_bar_state: side_bar_state
-                                                                    .clone(),
-                                                                dialog_state: dialog_state.clone(),
+                                                    .icon(Arc::new(closure!(
+                                                        clone home_icon_args,
+                                                        || {
+                                                            icon(home_icon_args.clone());
+                                                        }
+                                                    )))
+                                                    .on_click(Arc::new(closure!(
+                                                        clone bottom_sheet_state,
+                                                        clone side_bar_state,
+                                                        clone dialog_state,
+                                                        || {
+                                                            Router::with_mut(|router| {
+                                                                router.reset_with(
+                                                                    HomeDestination {
+                                                                        bottom_sheet_state:
+                                                                            bottom_sheet_state
+                                                                                .clone(),
+                                                                        side_bar_state:
+                                                                            side_bar_state.clone(),
+                                                                        dialog_state:
+                                                                            dialog_state.clone(),
+                                                                    },
+                                                                );
                                                             });
-                                                        });
-                                                    }))
+                                                        }
+                                                    )))
                                                     .build()
                                                     .unwrap(),
                                             );
@@ -162,9 +167,12 @@ pub fn app(#[state] app_state: AppState) {
                                             scope.item(
                                                 NavigationBarItemBuilder::default()
                                                     .label("About")
-                                                    .icon(Arc::new(move || {
-                                                        icon(about_icon_args.clone());
-                                                    }))
+                                                    .icon(Arc::new(closure!(
+                                                        clone about_icon_args,
+                                                        || {
+                                                            icon(about_icon_args.clone());
+                                                        }
+                                                    )))
                                                     .on_click(Arc::new(|| {
                                                         Router::with_mut(|router| {
                                                             router.reset_with(AboutDestination {});

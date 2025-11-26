@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
@@ -234,20 +235,15 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
     let args: CheckboxArgs = args.into();
 
     // If a state is provided, set up an updater to advance the animation each frame
-    let checkmark_state = state.checkmark.clone();
-    input_handler(Box::new(move |_input| {
-        checkmark_state.write().update_progress();
-    }));
+    input_handler(Box::new(closure!(clone state.checkmark, |_input| {
+        checkmark.write().update_progress();
+    })));
 
     // Click handler: toggle animation state if present, otherwise simply forward toggle callback
-    let on_click = {
-        let state = state.clone();
-        let on_toggle = args.on_toggle.clone();
-        Arc::new(move || {
-            state.checkmark.write().toggle();
-            on_toggle(state.checkmark.read().checked);
-        })
-    };
+    let on_click = Arc::new(closure!(clone state, clone args.on_toggle, || {
+        state.checkmark.write().toggle();
+        on_toggle(state.checkmark.read().checked);
+    }));
     let on_click_for_surface = on_click.clone();
 
     let ripple_state = state.ripple.clone();
@@ -270,79 +266,88 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
             .build()
             .expect("builder construction failed"),
         Some(ripple_state),
-        {
-            let state_for_child = state.clone();
-            move || {
-                let progress = state_for_child.checkmark.read().progress();
-                if progress > 0.0 {
-                    surface(
-                        SurfaceArgsBuilder::default()
-                            .padding(Dp(2.0))
-                            .style(Color::TRANSPARENT.into())
-                            .build()
-                            .expect("builder construction failed"),
-                        None,
-                        move || {
-                            boxed(
-                                BoxedArgsBuilder::default()
-                                    .alignment(Alignment::Center)
-                                    .build()
-                                    .expect("builder construction failed"),
-                                |scope| {
-                                    scope.child(move || {
-                                        checkmark(
-                                            CheckmarkArgsBuilder::default()
-                                                .color(args.checkmark_color)
-                                                .stroke_width(args.checkmark_stroke_width)
-                                                .progress(progress)
-                                                .size(Dp(args.size.0 * 0.8))
-                                                .padding([2.0, 2.0])
-                                                .build()
-                                                .expect("builder construction failed"),
-                                        )
-                                    });
-                                },
-                            );
-                        },
-                    )
-                }
+        closure!(
+            clone state,
+            clone args.checkmark_color,
+            clone args.checkmark_stroke_width,
+            clone args.size,
+            || {
+            let progress = state.checkmark.read().progress();
+            if progress > 0.0 {
+                surface(
+                    SurfaceArgsBuilder::default()
+                        .padding(Dp(2.0))
+                        .style(Color::TRANSPARENT.into())
+                        .build()
+                        .expect("builder construction failed"),
+                    None,
+                    move || {
+                        boxed(
+                            BoxedArgsBuilder::default()
+                                .alignment(Alignment::Center)
+                                .build()
+                                .expect("builder construction failed"),
+                            |scope| {
+                                scope.child(move || {
+                                    checkmark(
+                                        CheckmarkArgsBuilder::default()
+                                            .color(checkmark_color)
+                                            .stroke_width(checkmark_stroke_width)
+                                            .progress(progress)
+                                            .size(Dp(size.0 * 0.8))
+                                            .padding([2.0, 2.0])
+                                            .build()
+                                            .expect("builder construction failed"),
+                                    )
+                                });
+                            },
+                        );
+                    },
+                )
             }
-        },
+        }
+        ),
     );
 
     let accessibility_label = args.accessibility_label.clone();
     let accessibility_description = args.accessibility_description.clone();
     let accessibility_state = state.clone();
     let on_click_for_accessibility = on_click.clone();
-    input_handler(Box::new(move |input| {
-        let checked = accessibility_state.checkmark.read().checked;
-        let mut builder = input.accessibility().role(Role::CheckBox);
+    input_handler(Box::new(closure!(
+        clone accessibility_state,
+        clone accessibility_label,
+        clone accessibility_description,
+        clone on_click_for_accessibility,
+        |input| {
+            let checked = accessibility_state.checkmark.read().checked;
+            let mut builder = input.accessibility().role(Role::CheckBox);
 
-        if let Some(label) = accessibility_label.as_ref() {
-            builder = builder.label(label.clone());
-        }
-        if let Some(description) = accessibility_description.as_ref() {
-            builder = builder.description(description.clone());
-        }
-
-        builder = builder
-            .focusable()
-            .action(Action::Click)
-            .toggled(if checked {
-                Toggled::True
-            } else {
-                Toggled::False
-            });
-
-        builder.commit();
-
-        input.set_accessibility_action_handler({
-            let on_click = on_click_for_accessibility.clone();
-            move |action| {
-                if action == Action::Click {
-                    on_click();
-                }
+            if let Some(label) = accessibility_label.as_ref() {
+                builder = builder.label(label.clone());
             }
-        });
-    }));
+            if let Some(description) = accessibility_description.as_ref() {
+                builder = builder.description(description.clone());
+            }
+
+            builder = builder
+                .focusable()
+                .action(Action::Click)
+                .toggled(if checked {
+                    Toggled::True
+                } else {
+                    Toggled::False
+                });
+
+            builder.commit();
+
+            input.set_accessibility_action_handler(closure!(
+                clone on_click_for_accessibility,
+                |action| {
+                    if action == Action::Click {
+                        on_click_for_accessibility();
+                    }
+                }
+            ));
+        }
+    )));
 }

@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use closure::closure;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     RippleState,
@@ -136,7 +137,6 @@ pub fn menus_showcase(
                                             .build()
                                             .expect("builder construction failed"),
                                         |row_scope| {
-                                            let state_for_click = menu_state_for_button.clone();
                                             let ripple = open_button_ripple.clone();
                                             row_scope.child(move || {
                                                 button(
@@ -144,9 +144,13 @@ pub fn menus_showcase(
                                                         .width(DimensionValue::Fixed(
                                                             Dp(180.0).into(),
                                                         ))
-                                                        .on_click(Arc::new(move || {
-                                                            state_for_click.open_at(anchor);
-                                                        }))
+                                                        .on_click(Arc::new(closure!(
+                                                            clone menu_state_for_button,
+                                                            || {
+                                                                menu_state_for_button
+                                                                    .open_at(anchor);
+                                                            }
+                                                        )))
                                                         .build()
                                                         .expect("builder construction failed"),
                                                     ripple.clone(),
@@ -203,9 +207,13 @@ pub fn menus_showcase(
                         menu_item(
                             MenuItemArgsBuilder::default()
                                 .label("Revert")
-                                .on_click(Arc::new(move || {
-                                    *selection_for_edit.lock().unwrap() = "Revert".to_string();
-                                }))
+                                .on_click(Arc::new(closure!(
+                                    clone selection_for_edit,
+                                    || {
+                                        *selection_for_edit.lock().unwrap() =
+                                            "Revert".to_string();
+                                    }
+                                )))
                                 .build()
                                 .expect("builder construction failed"),
                             Some(menu_state),
@@ -220,9 +228,13 @@ pub fn menus_showcase(
                         menu_item(
                             MenuItemArgsBuilder::default()
                                 .label("Settings")
-                                .on_click(Arc::new(move || {
-                                    *selection_for_share.lock().unwrap() = "Settings".to_string();
-                                }))
+                                .on_click(Arc::new(closure!(
+                                    clone selection_for_share,
+                                    || {
+                                        *selection_for_share.lock().unwrap() =
+                                            "Settings".to_string();
+                                    }
+                                )))
                                 .build()
                                 .expect("builder construction failed"),
                             Some(menu_state),
@@ -240,15 +252,19 @@ pub fn menus_showcase(
                             MenuItemArgsBuilder::default()
                                 .label("Send Feedback")
                                 .selected(is_pinned)
-                                .on_click(Arc::new(move || {
-                                    let mut flag = pin_state.lock().unwrap();
-                                    *flag = !*flag;
-                                    *pin_selection.lock().unwrap() = if *flag {
-                                        "Send Feedback".to_string()
-                                    } else {
-                                        "Unpinned".to_string()
-                                    };
-                                }))
+                                .on_click(Arc::new(closure!(
+                                    clone pin_state,
+                                    clone pin_selection,
+                                    || {
+                                        let mut flag = pin_state.lock().unwrap();
+                                        *flag = !*flag;
+                                        *pin_selection.lock().unwrap() = if *flag {
+                                            "Send Feedback".to_string()
+                                        } else {
+                                            "Unpinned".to_string()
+                                        };
+                                    }
+                                )))
                                 .build()
                                 .expect("builder construction failed"),
                             Some(menu_state),

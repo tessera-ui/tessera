@@ -9,6 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
@@ -476,7 +477,6 @@ where
 
     for (index, child) in title_closures.into_iter().enumerate() {
         let ripple_state = state.ripple_state(index);
-        let state_clone = state.clone();
 
         let label_color = if index == active_tab {
             args.active_content_color
@@ -490,12 +490,9 @@ where
                 .hover_color(Some(hover_color))
                 .padding(args.tab_padding)
                 .ripple_color(args.state_layer_color)
-                .on_click({
-                    let state_clone = state_clone.clone();
-                    Arc::new(move || {
-                        state_clone.set_active_tab(index);
-                    })
-                })
+                .on_click(Arc::new(closure!(clone state, || {
+                    state.set_active_tab(index);
+                })))
                 .width(DimensionValue::FILLED)
                 .shape(Shape::RECTANGLE)
                 .build()

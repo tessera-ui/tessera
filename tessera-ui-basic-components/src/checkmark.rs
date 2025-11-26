@@ -94,12 +94,11 @@ pub fn checkmark(args: impl Into<CheckmarkArgs>) {
     let size_px = args.size.to_px();
 
     // Create the checkmark command
-    let command = CheckmarkCommand {
-        color: args.color,
-        stroke_width: args.stroke_width,
-        progress: args.progress,
-        padding: args.padding,
-    };
+    let command = CheckmarkCommand::new()
+        .with_color(args.color)
+        .with_stroke_width(args.stroke_width)
+        .with_progress(args.progress)
+        .with_padding(args.padding[0], args.padding[1]);
 
     // Measure the component and push the draw command within the measure function
     measure(Box::new(move |input| {

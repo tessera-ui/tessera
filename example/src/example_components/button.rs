@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use closure::closure;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     RippleState,
@@ -103,14 +104,16 @@ pub fn button_showcase(
                                     });
 
                                     let state_clone = state.clone();
-                                    let counter_clone = state.counter.clone();
                                     scope.child(move || {
                                         let button_args = ButtonArgsBuilder::default()
-                                            .on_click(Arc::new(move || {
-                                                let mut count = counter_clone.lock().unwrap();
-                                                *count += 1;
-                                                println!("Button clicked! Count: {}", *count);
-                                            }))
+                                            .on_click(Arc::new(closure!(
+                                                clone state_clone.counter,
+                                                || {
+                                                    let mut count = counter.lock().unwrap();
+                                                    *count += 1;
+                                                    println!("Button clicked! Count: {}", *count);
+                                                }
+                                            )))
                                             .build()
                                             .unwrap();
 
@@ -206,7 +209,6 @@ pub fn button_showcase(
 
                                     let state_clone = state.clone();
                                     scope.child(move || {
-                                        let on_click_counter = state_clone.counter.clone();
                                         let icon = IconArgsBuilder::default()
                                             .content(IconContent::from(
                                                 state_clone.icon_data.clone(),
@@ -223,12 +225,15 @@ pub fn button_showcase(
                                                     .hover_color(Some(
                                                         global_material_scheme().surface,
                                                     ))
-                                                    .on_click(Arc::new(move || {
-                                                        let mut count =
-                                                            on_click_counter.lock().unwrap();
-                                                        *count += 1;
-                                                        println!("Icon button clicked!");
-                                                    }))
+                                                    .on_click(Arc::new(closure!(
+                                                        clone state_clone.counter,
+                                                        || {
+                                                            let mut count =
+                                                                counter.lock().unwrap();
+                                                            *count += 1;
+                                                            println!("Icon button clicked!");
+                                                        }
+                                                    )))
                                                     .padding(Dp(12.0))
                                                     .build()
                                                     .unwrap(),

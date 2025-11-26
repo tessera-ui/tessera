@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, accesskit::Role, tessera};
@@ -609,8 +610,6 @@ where
 
                         row_scope.child_weighted(
                             move || {
-                                let state_clone = state_for_item.clone();
-                                let on_select = item.on_select.clone();
                                 let button_shape = segment_shape(idx, item_count);
                                 let ripple = if is_selected {
                                     args.selected_ripple_color
@@ -619,29 +618,35 @@ where
                                 };
 
                                 let click_handler = if item.enabled {
-                                    Some(Arc::new(move || {
-                                        let will_deselect = selection_mode
-                                            == ButtonGroupSelection::Single
-                                            && allow_deselect
-                                            && state_clone.is_selected(idx);
-                                        let selected_now = if will_deselect {
-                                            state_clone.deselect(idx);
-                                            false
-                                        } else {
-                                            state_clone.toggle(idx)
-                                        };
+                                    Some(Arc::new(closure!(
+                                        clone state_for_item,
+                                        clone item.on_select,
+                                        clone on_change,
+                                        || {
+                                            let will_deselect = selection_mode
+                                                == ButtonGroupSelection::Single
+                                                && allow_deselect
+                                                && state_for_item.is_selected(idx);
+                                            let selected_now = if will_deselect {
+                                                state_for_item.deselect(idx);
+                                                false
+                                            } else {
+                                                state_for_item.toggle(idx)
+                                            };
 
-                                        if let Some(cb) = on_select.as_ref() {
-                                            cb(selected_now);
+                                            if let Some(cb) = on_select.as_ref() {
+                                                cb(selected_now);
+                                            }
+                                            if let Some(change) = on_change.as_ref() {
+                                                change(ButtonGroupChange {
+                                                    index: idx,
+                                                    selected: selected_now,
+                                                    selection: state_for_item
+                                                        .selected_indices(),
+                                                });
+                                            }
                                         }
-                                        if let Some(change) = on_change.as_ref() {
-                                            change(ButtonGroupChange {
-                                                index: idx,
-                                                selected: selected_now,
-                                                selection: state_clone.selected_indices(),
-                                            });
-                                        }
-                                    })
+                                    ))
                                         as Arc<dyn Fn() + Send + Sync>)
                                 } else {
                                     None

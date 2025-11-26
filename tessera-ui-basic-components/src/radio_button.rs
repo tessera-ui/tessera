@@ -6,6 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
@@ -326,13 +327,11 @@ pub fn radio_button(args: impl Into<RadioButtonArgs>, state: RadioButtonState) {
     };
 
     let on_click = if args.enabled {
-        let on_select = args.on_select.clone();
-        let state_for_click = state.clone();
-        Some(Arc::new(move || {
-            if state_for_click.select() {
+        Some(Arc::new(closure!(clone args.on_select, clone state, || {
+            if state.select() {
                 on_select(true);
             }
-        }) as Arc<dyn Fn() + Send + Sync>)
+        })) as Arc<dyn Fn() + Send + Sync>)
     } else {
         None
     };

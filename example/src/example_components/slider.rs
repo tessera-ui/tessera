@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use closure::closure;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
@@ -88,10 +89,9 @@ fn test_content(state: Arc<SliderShowcaseState>) {
 
             let state_for_slider = state.clone();
             scope.child(move || {
-                let value_clone = state_for_slider.value.clone();
-                let on_change = Arc::new(move |new_value| {
-                    *value_clone.lock().unwrap() = new_value;
-                });
+                let on_change = Arc::new(closure!(clone state_for_slider.value, |new_value| {
+                    *value.lock().unwrap() = new_value;
+                }));
                 slider(
                     SliderArgsBuilder::default()
                         .value(*state_for_slider.value.lock().unwrap())
@@ -114,10 +114,12 @@ fn test_content(state: Arc<SliderShowcaseState>) {
 
             let state_for_centered_slider = state.clone();
             scope.child(move || {
-                let centered_value_clone = state_for_centered_slider.centered_value.clone();
-                let on_change = Arc::new(move |new_value| {
-                    *centered_value_clone.lock().unwrap() = new_value;
-                });
+                let on_change = Arc::new(closure!(
+                    clone state_for_centered_slider.centered_value,
+                    |new_value| {
+                        *centered_value.lock().unwrap() = new_value;
+                    }
+                ));
                 centered_slider(
                     SliderArgsBuilder::default()
                         .value(*state_for_centered_slider.centered_value.lock().unwrap())
@@ -143,10 +145,12 @@ fn test_content(state: Arc<SliderShowcaseState>) {
 
             let state_for_range_slider = state.clone();
             scope.child(move || {
-                let range_value_clone = state_for_range_slider.range_value.clone();
-                let on_change = Arc::new(move |new_value| {
-                    *range_value_clone.lock().unwrap() = new_value;
-                });
+                let on_change = Arc::new(closure!(
+                    clone state_for_range_slider.range_value,
+                    |new_value| {
+                        *range_value.lock().unwrap() = new_value;
+                    }
+                ));
                 range_slider(
                     RangeSliderArgsBuilder::default()
                         .value(*state_for_range_slider.range_value.lock().unwrap())
@@ -169,10 +173,12 @@ fn test_content(state: Arc<SliderShowcaseState>) {
 
             let state_for_icon_slider = state.clone();
             scope.child(move || {
-                let value_clone = state_for_icon_slider.icon_slider_value.clone();
-                let on_change = Arc::new(move |new_value| {
-                    *value_clone.lock().unwrap() = new_value;
-                });
+                let on_change = Arc::new(closure!(
+                    clone state_for_icon_slider.icon_slider_value,
+                    |new_value| {
+                        *icon_slider_value.lock().unwrap() = new_value;
+                    }
+                ));
                 slider(
                     SliderArgsBuilder::default()
                         .value(*state_for_icon_slider.icon_slider_value.lock().unwrap())

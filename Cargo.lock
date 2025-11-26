@@ -849,6 +849,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "closure"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6173fd61b610d15a7566dd7b7620775627441c4ab9dac8906e17cb93a24b782"
+
+[[package]]
 name = "codespan-reporting"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1471,6 +1477,7 @@ version = "0.1.0"
 dependencies = [
  "android_logger",
  "bytemuck",
+ "closure",
  "dashmap",
  "image",
  "parking_lot",
@@ -4054,6 +4061,7 @@ name = "tessera-ui-basic-components"
 version = "2.7.0"
 dependencies = [
  "bytemuck",
+ "closure",
  "derive_builder",
  "earcutr",
  "encase",
