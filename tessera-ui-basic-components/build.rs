@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     writeln!(generated, "use crate::material_icons::load_icon_bytes;")?;
     writeln!(
         generated,
-        "use crate::pipelines::image_vector::ImageVectorData;"
+        "use crate::pipelines::image_vector::command::ImageVectorData;"
     )?;
 
     writeln!(

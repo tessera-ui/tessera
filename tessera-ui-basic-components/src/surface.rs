@@ -15,9 +15,10 @@ use tessera_ui::{
 };
 
 use crate::{
+    RippleProps, ShadowProps,
     material_color::global_material_scheme,
     padding_utils::remove_padding_from_dimension,
-    pipelines::{RippleProps, ShadowProps, ShapeCommand, SimpleRectCommand},
+    pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
     shape_def::{ResolvedShape, RoundedCorner, Shape},

@@ -22,9 +22,9 @@ use usvg::{
     PaintOrder, Path, Stroke, Tree, tiny_skia_path::PathSegment,
 };
 
-use crate::pipelines::image_vector::{ImageVectorCommand, ImageVectorVertex, VectorTintMode};
+use crate::pipelines::image_vector::command::{ImageVectorCommand, ImageVectorVertex};
 
-pub use crate::pipelines::image_vector::{ImageVectorData, VectorTintMode as TintMode};
+pub use crate::pipelines::image_vector::command::{ImageVectorData, VectorTintMode as TintMode};
 
 /// Source for loading SVG vector data.
 #[derive(Clone, Debug)]
@@ -100,7 +100,7 @@ pub struct ImageVectorArgs {
     pub tint: Color,
     /// How the tint is applied.
     #[builder(default)]
-    pub tint_mode: VectorTintMode,
+    pub tint_mode: TintMode,
 }
 
 impl From<ImageVectorData> for ImageVectorArgs {

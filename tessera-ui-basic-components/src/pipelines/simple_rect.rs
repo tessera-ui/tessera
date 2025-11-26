@@ -1,5 +1,4 @@
-mod command;
-mod pipeline;
+//! Simple rectangle pipeline used for solid fills.
 
-pub use command::SimpleRectCommand;
-pub use pipeline::SimpleRectPipeline;
+pub mod command;
+pub mod pipeline;

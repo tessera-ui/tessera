@@ -1,5 +1,4 @@
-mod command;
-mod pipeline;
+//! Shape pipeline for filled, outlined, and ripple-animated primitives.
 
-pub use command::{RippleProps, ShadowProps, ShapeCommand};
-pub use pipeline::ShapePipeline;
+pub mod command;
+pub mod pipeline;

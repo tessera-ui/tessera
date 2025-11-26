@@ -10,11 +10,11 @@ use tessera_ui::{
 };
 
 use crate::{
+    ShadowProps,
     alignment::CrossAxisAlignment,
     checkmark::{CheckmarkArgsBuilder, checkmark},
     column::{ColumnArgsBuilder, column},
     material_color::{blend_over, global_material_scheme},
-    pipelines::ShadowProps,
     pos_misc::is_position_in_rect,
     ripple_state::RippleState,
     row::{RowArgsBuilder, row},

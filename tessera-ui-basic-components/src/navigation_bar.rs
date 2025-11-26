@@ -14,13 +14,12 @@ use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, tessera};
 
 use crate::{
-    RippleState,
+    RippleState, ShadowProps,
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     animation,
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
     material_color::{MaterialColorScheme, global_material_scheme},
-    pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
     shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},

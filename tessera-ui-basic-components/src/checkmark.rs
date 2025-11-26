@@ -20,7 +20,7 @@
 use derive_builder::Builder;
 use tessera_ui::{Color, ComputedData, Dp, Px, tessera};
 
-use crate::pipelines::CheckmarkCommand;
+use crate::pipelines::checkmark::command::CheckmarkCommand;
 
 /// Arguments for the `checkmark` component.
 #[derive(Builder, Clone)]

@@ -1,5 +1,4 @@
-mod command;
-mod pipeline;
+//! Image pipeline for raster assets.
 
-pub use command::{ImageCommand, ImageData};
-pub use pipeline::ImagePipeline;
+pub mod command;
+pub mod pipeline;

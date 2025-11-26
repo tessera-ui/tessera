@@ -7,7 +7,7 @@ use tessera_ui::{
     shard, tessera,
 };
 use tessera_ui_basic_components::{
-    RippleState,
+    RippleState, ShadowProps,
     alignment::{Alignment, CrossAxisAlignment},
     bottom_sheet::{
         BottomSheetProviderArgsBuilder, BottomSheetProviderState, BottomSheetStyle,
@@ -22,7 +22,6 @@ use tessera_ui_basic_components::{
     material_color::global_material_scheme,
     material_icons::filled,
     navigation_bar::{NavigationBarItemBuilder, NavigationBarState, navigation_bar},
-    pipelines::ShadowProps,
     row::{RowArgsBuilder, row},
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,

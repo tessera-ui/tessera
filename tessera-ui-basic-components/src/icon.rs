@@ -11,8 +11,8 @@ use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, tesser
 use crate::{
     image_vector::TintMode,
     pipelines::{
-        image::{ImageCommand, ImageData},
-        image_vector::{ImageVectorCommand, ImageVectorData},
+        image::command::{ImageCommand, ImageData},
+        image_vector::command::{ImageVectorCommand, ImageVectorData},
     },
 };
 

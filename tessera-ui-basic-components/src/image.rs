@@ -9,9 +9,9 @@ use derive_builder::Builder;
 use image::GenericImageView;
 use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, tessera};
 
-use crate::pipelines::image::ImageCommand;
+use crate::pipelines::image::command::ImageCommand;
 
-pub use crate::pipelines::image::ImageData;
+pub use crate::pipelines::image::command::ImageData;
 
 /// Specifies the source for image data, which can be either a file path or raw bytes.
 ///

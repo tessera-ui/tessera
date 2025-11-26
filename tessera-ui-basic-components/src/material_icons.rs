@@ -9,7 +9,8 @@ use std::{collections::HashMap, sync::Arc};
 use parking_lot::RwLock;
 
 use crate::{
-    icon::IconContent, image_vector::ImageVectorSource, pipelines::image_vector::ImageVectorData,
+    icon::IconContent, image_vector::ImageVectorSource,
+    pipelines::image_vector::command::ImageVectorData,
 };
 
 pub use generated::{ICON_BLOB, filled, outlined, round, sharp, two_tone};

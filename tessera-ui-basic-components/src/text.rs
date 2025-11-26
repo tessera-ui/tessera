@@ -6,7 +6,10 @@
 use derive_builder::Builder;
 use tessera_ui::{Color, ComputedData, DimensionValue, Dp, Px, accesskit::Role, tessera};
 
-use crate::pipelines::{TextCommand, TextConstraint, TextData};
+use crate::pipelines::text::{
+    command::{TextCommand, TextConstraint},
+    pipeline::TextData,
+};
 
 /// Configuration arguments for the `text` component.
 #[derive(Debug, Default, Builder, Clone)]

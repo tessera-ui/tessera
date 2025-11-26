@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use tessera_ui::{Color, ComputedData, Dp, Px, tessera};
 
-use crate::pipelines::ShapeCommand;
+use crate::pipelines::shape::command::ShapeCommand;
 
 /// Width of the text cursor in device-independent pixels.
 pub(crate) const CURSOR_WIDRH: Dp = Dp(2.5);

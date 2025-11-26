@@ -13,7 +13,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    pipelines::write_font_system,
+    pipelines::text::pipeline::write_font_system,
     pos_misc::is_position_in_component,
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},

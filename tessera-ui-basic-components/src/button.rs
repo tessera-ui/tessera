@@ -9,7 +9,7 @@ use derive_builder::Builder;
 use tessera_ui::{Color, DimensionValue, Dp, accesskit::Role, tessera};
 
 use crate::{
-    pipelines::ShadowProps,
+    ShadowProps,
     ripple_state::RippleState,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},

@@ -13,11 +13,11 @@ use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, tessera, winit};
 
 use crate::{
+    ShadowProps,
     alignment::Alignment,
     animation,
     boxed::{BoxedArgsBuilder, boxed},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
-    pipelines::ShadowProps,
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
 };

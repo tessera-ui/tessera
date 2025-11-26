@@ -12,7 +12,7 @@ use tessera_ui::{
     PxPosition, focus_state::Focus, tessera,
 };
 
-use crate::{material_color, pipelines::image_vector::VectorTintMode};
+use crate::{material_color, pipelines::image_vector::command::VectorTintMode};
 
 use interaction::{
     apply_range_slider_accessibility, apply_slider_accessibility, handle_range_slider_state,

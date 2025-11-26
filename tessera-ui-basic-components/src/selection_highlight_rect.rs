@@ -5,7 +5,7 @@
 //! multiple highlight rectangles can be composed to cover the desired region.
 use tessera_ui::{Color, ComputedData, Px, tessera};
 
-use crate::pipelines::ShapeCommand;
+use crate::pipelines::shape::command::ShapeCommand;
 
 /// Draws a rectangular highlight, typically used to indicate selected text regions in a text editor.
 ///

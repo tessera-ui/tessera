@@ -75,6 +75,7 @@ pub mod image_vector;
 pub mod lazy_list;
 pub mod material_color;
 pub mod material_icons;
+pub use pipelines::shape::command::{RippleProps, ShadowProps};
 pub use ripple_state::RippleState;
 pub mod menus;
 pub mod navigation_bar;

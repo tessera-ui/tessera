@@ -1,3 +1,1 @@
-mod pipeline;
-
-pub(crate) use pipeline::FluidGlassPipeline;
+pub mod pipeline;

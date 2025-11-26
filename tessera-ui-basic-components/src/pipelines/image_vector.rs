@@ -1,5 +1,4 @@
-mod command;
-mod pipeline;
+//! Image pipeline for vector (SVG) assets.
 
-pub use command::{ImageVectorCommand, ImageVectorData, ImageVectorVertex, VectorTintMode};
-pub use pipeline::ImageVectorPipeline;
+pub mod command;
+pub mod pipeline;

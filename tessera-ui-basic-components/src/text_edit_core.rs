@@ -31,7 +31,10 @@ use tessera_ui::{
 use winit::keyboard::NamedKey;
 
 use crate::{
-    pipelines::{TextCommand, TextConstraint, TextData, write_font_system},
+    pipelines::text::{
+        command::{TextCommand, TextConstraint},
+        pipeline::{TextData, write_font_system},
+    },
     selection_highlight_rect::selection_highlight_rect,
     text_edit_core::cursor::CURSOR_WIDRH,
 };

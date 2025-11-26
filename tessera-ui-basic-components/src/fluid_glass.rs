@@ -17,7 +17,9 @@ use tessera_ui::{
 
 use crate::{
     padding_utils::remove_padding_from_dimension,
-    pipelines::{blur::command::DualBlurCommand, contrast::ContrastCommand, mean::MeanCommand},
+    pipelines::{
+        blur::command::DualBlurCommand, contrast::ContrastCommand, mean::command::MeanCommand,
+    },
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
     shape_def::{RoundedCorner, Shape},

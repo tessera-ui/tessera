@@ -1,6 +1,11 @@
 use tessera_ui::renderer::WgpuApp;
 
-use super::{checkmark, fluid_glass, image, image_vector, shape, simple_rect, text};
+use crate::pipelines::{
+    checkmark::pipeline::CheckmarkPipeline, fluid_glass::pipeline::FluidGlassPipeline,
+    image::pipeline::ImagePipeline, image_vector::pipeline::ImageVectorPipeline,
+    shape::pipeline::ShapePipeline, simple_rect::pipeline::SimpleRectPipeline,
+    text::pipeline::GlyphonTextRender,
+};
 
 pub(super) fn register(app: &mut WgpuApp) {
     register_simple_rect(app);
@@ -13,7 +18,7 @@ pub(super) fn register(app: &mut WgpuApp) {
 }
 
 fn register_simple_rect(app: &mut WgpuApp) {
-    let pipeline = simple_rect::SimpleRectPipeline::new(
+    let pipeline = SimpleRectPipeline::new(
         &app.gpu,
         &app.config,
         app.pipeline_cache.as_ref(),
@@ -23,7 +28,7 @@ fn register_simple_rect(app: &mut WgpuApp) {
 }
 
 fn register_shape(app: &mut WgpuApp) {
-    let pipeline = shape::ShapePipeline::new(
+    let pipeline = ShapePipeline::new(
         &app.gpu,
         &app.config,
         app.pipeline_cache.as_ref(),
@@ -33,7 +38,7 @@ fn register_shape(app: &mut WgpuApp) {
 }
 
 fn register_checkmark(app: &mut WgpuApp) {
-    let pipeline = checkmark::CheckmarkPipeline::new(
+    let pipeline = CheckmarkPipeline::new(
         &app.gpu,
         app.pipeline_cache.as_ref(),
         &app.config,
@@ -43,13 +48,12 @@ fn register_checkmark(app: &mut WgpuApp) {
 }
 
 fn register_text(app: &mut WgpuApp) {
-    let pipeline =
-        text::GlyphonTextRender::new(&app.gpu, &app.queue, &app.config, app.sample_count);
+    let pipeline = GlyphonTextRender::new(&app.gpu, &app.queue, &app.config, app.sample_count);
     app.register_draw_pipeline(pipeline);
 }
 
 fn register_fluid_glass(app: &mut WgpuApp) {
-    let pipeline = fluid_glass::FluidGlassPipeline::new(
+    let pipeline = FluidGlassPipeline::new(
         &app.gpu,
         app.pipeline_cache.as_ref(),
         &app.config,
@@ -59,7 +63,7 @@ fn register_fluid_glass(app: &mut WgpuApp) {
 }
 
 fn register_image(app: &mut WgpuApp) {
-    let pipeline = image::ImagePipeline::new(
+    let pipeline = ImagePipeline::new(
         &app.gpu,
         &app.config,
         app.pipeline_cache.as_ref(),
@@ -69,7 +73,7 @@ fn register_image(app: &mut WgpuApp) {
 }
 
 fn register_image_vector(app: &mut WgpuApp) {
-    let pipeline = image_vector::ImageVectorPipeline::new(
+    let pipeline = ImageVectorPipeline::new(
         &app.gpu,
         &app.config,
         app.pipeline_cache.as_ref(),

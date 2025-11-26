@@ -23,7 +23,7 @@ use crate::{
     animation,
     boxed::{BoxedArgsBuilder, boxed},
     material_color,
-    pipelines::ShapeCommand,
+    pipelines::shape::command::ShapeCommand,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
 };
