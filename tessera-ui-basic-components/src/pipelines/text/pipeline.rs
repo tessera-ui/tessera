@@ -84,7 +84,6 @@ fn init_font_system() -> RwLock<glyphon::FontSystem> {
 /// It costs a lot to create a glyphon font system, so we use a static one
 /// to share it every where and avoid creating it multiple times.
 /// This function returns a read lock of the font system.
-#[allow(unused)]
 pub fn read_font_system() -> RwLockReadGuard<'static, glyphon::FontSystem> {
     FONT_SYSTEM.get_or_init(init_font_system).read()
 }

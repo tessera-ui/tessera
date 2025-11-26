@@ -11,6 +11,8 @@ use crate::pipelines::text::{
     pipeline::TextData,
 };
 
+pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
+
 /// Configuration arguments for the `text` component.
 #[derive(Debug, Default, Builder, Clone)]
 #[builder(pattern = "owned")]

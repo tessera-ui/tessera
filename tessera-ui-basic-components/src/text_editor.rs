@@ -110,7 +110,7 @@ impl Default for TextEditorArgs {
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
 ///     text_editor::{text_editor, TextEditorArgsBuilder, TextEditorState},
-///     pipelines::write_font_system,
+///     text::write_font_system,
 /// };
 ///
 /// // In a real app, you would manage this state.
