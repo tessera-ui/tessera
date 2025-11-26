@@ -15,7 +15,6 @@
 //!
 //! - [`DrawablePipeline<T>`]: The main trait for implementing custom rendering pipelines
 //! - [`PipelineRegistry`]: Manages and dispatches commands to registered pipelines
-//! - [`ErasedDrawablePipeline`]: Internal trait for type erasure and dynamic dispatch
 //!
 //! # Design Philosophy
 //!
@@ -69,8 +68,7 @@
 //! ## Barrier Requirements
 //!
 //! Some rendering effects need to sample from previously rendered content (e.g., blur effects).
-//! Implement [`DrawCommand::barrier()`] to return [`BarrierRequirement::SampleBackground`]
-//! for such commands.
+//! Implement [`DrawCommand::barrier()`] to return `SampleBackground` requirements for such commands.
 //!
 //! ## Multi-Pass Rendering
 //!

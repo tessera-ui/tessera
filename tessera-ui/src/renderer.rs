@@ -2,15 +2,10 @@
 //! [`Renderer`] struct that manages the application lifecycle, event handling, and rendering
 //! pipeline for cross-platform UI applications.
 
-/// WGPU application management and window lifecycle.
 pub mod app;
-/// Unified rendering and compute command types.
 pub mod command;
-/// Compute pipeline orchestration for GPU effects.
 pub mod compute;
-/// Draw pipeline registry and submission helpers.
 pub mod drawer;
-/// Command reordering and batching strategies.
 pub mod reorder;
 
 use std::{any::TypeId, sync::Arc, thread, time::Instant};
