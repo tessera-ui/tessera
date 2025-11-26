@@ -7,7 +7,6 @@
 
 use std::{fs, path::Path as StdPath, sync::Arc};
 
-use derive_builder::Builder;
 use lyon_geom::point;
 use lyon_path::Path as LyonPath;
 use lyon_tessellation::{
@@ -15,14 +14,14 @@ use lyon_tessellation::{
     LineCap as LyonLineCap, LineJoin as LyonLineJoin, StrokeOptions, StrokeTessellator,
     StrokeVertex, VertexBuffers,
 };
-use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Px, tessera};
+use tessera_ui::Color;
 use thiserror::Error;
 use usvg::{
     BlendMode, FillRule, Group, LineCap as SvgLineCap, LineJoin as SvgLineJoin, Node, Paint,
     PaintOrder, Path, Stroke, Tree, tiny_skia_path::PathSegment,
 };
 
-use crate::pipelines::image_vector::command::{ImageVectorCommand, ImageVectorVertex};
+use crate::pipelines::image_vector::command::ImageVectorVertex;
 
 pub use crate::pipelines::image_vector::command::{ImageVectorData, VectorTintMode as TintMode};
 
@@ -80,138 +79,6 @@ pub fn load_image_vector_from_source(
     let tree = Tree::from_data(&bytes, &options)?;
 
     build_vector_data(&tree)
-}
-
-/// Arguments for [`image_vector`].
-#[derive(Debug, Builder, Clone)]
-#[builder(pattern = "owned")]
-pub struct ImageVectorArgs {
-    /// Vector geometry to render.
-    #[builder(setter(into))]
-    pub data: Arc<ImageVectorData>,
-    /// Desired width, defaults to wrapping at intrinsic size.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub width: DimensionValue,
-    /// Desired height, defaults to wrapping at intrinsic size.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub height: DimensionValue,
-    /// Optional tint applied multiplicatively to the SVG colors.
-    #[builder(default = "Color::WHITE")]
-    pub tint: Color,
-    /// How the tint is applied.
-    #[builder(default)]
-    pub tint_mode: TintMode,
-}
-
-impl From<ImageVectorData> for ImageVectorArgs {
-    fn from(data: ImageVectorData) -> Self {
-        ImageVectorArgsBuilder::default()
-            .data(Arc::new(data))
-            .build()
-            .expect("ImageVectorArgsBuilder failed with required fields set")
-    }
-}
-
-/// # image_vector
-///
-/// Renders a scalable vector image with optional tinting.
-///
-/// ## Usage
-///
-/// Display icons or illustrations without losing fidelity at different sizes.
-///
-/// ## Parameters
-///
-/// - `args` — see [`ImageVectorArgs`] for sizing, tint, and source data.
-///
-/// ## Examples
-///
-/// ```
-/// use std::sync::Arc;
-/// use tessera_ui::{Color, DimensionValue};
-/// use tessera_ui_basic_components::{
-///     image_vector::{image_vector, ImageVectorArgs, ImageVectorData},
-///     pipelines::image_vector::ImageVectorVertex,
-/// };
-///
-/// // Simple triangle geometry (clockwise winding).
-/// let vertices = Arc::new(vec![
-///     ImageVectorVertex { position: [0.0, 0.0], color: Color::WHITE },
-///     ImageVectorVertex { position: [1.0, 0.0], color: Color::WHITE },
-///     ImageVectorVertex { position: [0.0, 1.0], color: Color::WHITE },
-/// ]);
-/// let indices = Arc::new(vec![0, 1, 2]);
-/// let data = ImageVectorData::new(1.0, 1.0, vertices, indices);
-///
-/// let args = ImageVectorArgs {
-///     data: Arc::new(data),
-///     width: DimensionValue::WRAP,
-///     height: DimensionValue::WRAP,
-///     tint: Color::from_rgb(1.0, 1.0, 1.0),
-///     tint_mode: Default::default(),
-/// };
-///
-/// image_vector(args.clone());
-/// assert_eq!(args.data.vertices.len(), 3);
-/// ```
-#[tessera]
-pub fn image_vector(args: impl Into<ImageVectorArgs>) {
-    let image_args: ImageVectorArgs = args.into();
-
-    measure(Box::new(move |input| {
-        let intrinsic_width = px_from_f32(image_args.data.viewport_width);
-        let intrinsic_height = px_from_f32(image_args.data.viewport_height);
-
-        let constraint = Constraint::new(image_args.width, image_args.height);
-        let effective_constraint = constraint.merge(input.parent_constraint);
-
-        let width = match effective_constraint.width {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(intrinsic_width)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => {
-                let parent_max = input.parent_constraint.width.get_max().unwrap_or(Px::MAX);
-                max.unwrap_or(parent_max)
-                    .max(min.unwrap_or(Px(0)))
-                    .max(intrinsic_width)
-            }
-        };
-
-        let height = match effective_constraint.height {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(intrinsic_height)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => {
-                let parent_max = input.parent_constraint.height.get_max().unwrap_or(Px::MAX);
-                max.unwrap_or(parent_max)
-                    .max(min.unwrap_or(Px(0)))
-                    .max(intrinsic_height)
-            }
-        };
-
-        let command = ImageVectorCommand {
-            data: image_args.data.clone(),
-            tint: image_args.tint,
-            tint_mode: image_args.tint_mode,
-        };
-
-        input
-            .metadatas
-            .entry(input.current_node_id)
-            .or_default()
-            .push_draw_command(command);
-
-        Ok(ComputedData { width, height })
-    }));
-}
-
-fn px_from_f32(value: f32) -> Px {
-    let clamped = value.max(0.0).min(i32::MAX as f32);
-    Px(clamped.round() as i32)
 }
 
 fn read_source_bytes(
