@@ -309,6 +309,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                 // t is 0 for fill, 1 for border
                 let t = smoothstep(-aa, aa, dist_inner_edge);
                 let blended_color = mix(ripple_mixed_fill_color, instance.border_color.rgb, t);
+                let blended_alpha = mix(primary_color_uniform.a, instance.border_color.a, t);
 
                 // Handle transparency of the whole shape
                 let object_alpha = 1.0 - smoothstep(-aa, aa, dist_object);
@@ -316,8 +317,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                 if (object_alpha <= 0.001) {
                     discard;
                 }
-                // Use the alpha from the primary color for the whole object
-                final_color = vec4f(blended_color, primary_color_uniform.a * object_alpha);
+                // Use the blended alpha for the whole object
+                final_color = vec4f(blended_color, blended_alpha * object_alpha);
             }
         } else {
             // Should not happen with valid render_mode
