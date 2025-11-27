@@ -144,12 +144,13 @@ where
             let row_effective_constraint = row_intrinsic_constraint.merge(input.parent_constraint);
 
             let has_weighted_children = child_weights.iter().any(|w| w.unwrap_or(0.0) > 0.0);
-            let should_use_weight_for_width = has_weighted_children && matches!(
-                row_effective_constraint.width,
-                DimensionValue::Fixed(_)
-                    | DimensionValue::Fill { max: Some(_), .. }
-                    | DimensionValue::Wrap { max: Some(_), .. }
-            );
+            let should_use_weight_for_width = has_weighted_children
+                && matches!(
+                    row_effective_constraint.width,
+                    DimensionValue::Fixed(_)
+                        | DimensionValue::Fill { max: Some(_), .. }
+                        | DimensionValue::Wrap { max: Some(_), .. }
+                );
 
             if should_use_weight_for_width {
                 measure_weighted_row(input, &args, &child_weights, &row_effective_constraint, n)

@@ -123,12 +123,13 @@ where
             let mut max_child_width = Px(0);
 
             let has_weighted_children = child_weights.iter().any(|w| w.unwrap_or(0.0) > 0.0);
-            let should_use_weight_for_height = has_weighted_children && matches!(
-                column_effective_constraint.height,
-                DimensionValue::Fixed(_)
-                    | DimensionValue::Fill { max: Some(_), .. }
-                    | DimensionValue::Wrap { max: Some(_), .. }
-            );
+            let should_use_weight_for_height = has_weighted_children
+                && matches!(
+                    column_effective_constraint.height,
+                    DimensionValue::Fixed(_)
+                        | DimensionValue::Fill { max: Some(_), .. }
+                        | DimensionValue::Wrap { max: Some(_), .. }
+                );
 
             let (final_column_width, final_column_height, total_measured_children_height) =
                 if should_use_weight_for_height {
