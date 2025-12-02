@@ -10,6 +10,7 @@ use tessera_ui::{Color, DimensionValue, Dp, accesskit::Role, tessera};
 
 use crate::{
     ShadowProps,
+    material_color::global_material_scheme,
     ripple_state::RippleState,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -28,10 +29,10 @@ pub struct ButtonArgs {
     )]
     pub hover_color: Option<Color>,
     /// The shape of the button.
-    #[builder(default = "Shape::rounded_rectangle(Dp(25.0))")]
+    #[builder(default = "Shape::rounded_rectangle(Dp(20.0))")]
     pub shape: Shape,
     /// The padding of the button.
-    #[builder(default = "Dp(14.0)")]
+    #[builder(default = "Dp(10.0)")]
     pub padding: Dp,
     /// Optional explicit width behavior for the button.
     #[builder(default = "DimensionValue::WRAP", setter(into))]
@@ -177,42 +178,94 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         .expect("SurfaceArgsBuilder failed with required button fields set")
 }
 
-/// Convenience constructors for common button styles
+/// Convenience constructors for standard Material Design 3 button styles
 impl ButtonArgs {
-    /// Create a primary button with default blue styling
-    pub fn primary(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    /// Create a standard "Filled" button (High emphasis).
+    /// Uses Primary color for container and OnPrimary for content.
+    pub fn filled(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        let scheme = global_material_scheme();
         ButtonArgsBuilder::default()
-            .color(Color::new(0.2, 0.5, 0.8, 1.0)) // Blue
+            .color(scheme.primary)
+            .hover_color(Some(crate::material_color::blend_over(
+                scheme.primary,
+                scheme.on_primary,
+                0.08,
+            )))
+            .ripple_color(scheme.on_primary.with_alpha(0.12))
             .on_click(on_click)
             .build()
-            .expect("ButtonArgsBuilder failed for primary button")
+            .expect("ButtonArgsBuilder failed for filled button")
     }
 
-    /// Create a secondary button with gray styling
-    pub fn secondary(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    /// Create an "Elevated" button (Medium emphasis).
+    /// Uses Surface color (or SurfaceContainerLow if available) with a shadow.
+    pub fn elevated(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        let scheme = global_material_scheme();
         ButtonArgsBuilder::default()
-            .color(Color::new(0.6, 0.6, 0.6, 1.0)) // Gray
+            .color(scheme.surface)
+            .hover_color(Some(crate::material_color::blend_over(
+                scheme.surface,
+                scheme.primary,
+                0.08,
+            )))
+            .ripple_color(scheme.primary.with_alpha(0.12))
+            .shadow(ShadowProps::default())
             .on_click(on_click)
             .build()
-            .expect("ButtonArgsBuilder failed for secondary button")
+            .expect("ButtonArgsBuilder failed for elevated button")
     }
 
-    /// Create a success button with green styling
-    pub fn success(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    /// Create a "Tonal" button (Medium emphasis).
+    /// Uses SecondaryContainer color for container and OnSecondaryContainer for content.
+    pub fn tonal(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        let scheme = global_material_scheme();
         ButtonArgsBuilder::default()
-            .color(Color::new(0.1, 0.7, 0.3, 1.0)) // Green
+            .color(scheme.secondary_container)
+            .hover_color(Some(crate::material_color::blend_over(
+                scheme.secondary_container,
+                scheme.on_secondary_container,
+                0.08,
+            )))
+            .ripple_color(scheme.on_secondary_container.with_alpha(0.12))
             .on_click(on_click)
             .build()
-            .expect("ButtonArgsBuilder failed for success button")
+            .expect("ButtonArgsBuilder failed for tonal button")
     }
 
-    /// Create a danger button with red styling
-    pub fn danger(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    /// Create an "Outlined" button (Medium emphasis).
+    /// Transparent container with an Outline border.
+    pub fn outlined(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        let scheme = global_material_scheme();
         ButtonArgsBuilder::default()
-            .color(Color::new(0.8, 0.2, 0.2, 1.0)) // Red
+            .color(Color::TRANSPARENT)
+            .hover_color(Some(crate::material_color::blend_over(
+                Color::TRANSPARENT,
+                scheme.primary,
+                0.08,
+            )))
+            .ripple_color(scheme.primary.with_alpha(0.12))
+            .border_width(Dp(1.0))
+            .border_color(Some(scheme.outline))
             .on_click(on_click)
             .build()
-            .expect("ButtonArgsBuilder failed for danger button")
+            .expect("ButtonArgsBuilder failed for outlined button")
+    }
+
+    /// Create a "Text" button (Low emphasis).
+    /// Transparent container and no border.
+    pub fn text(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        let scheme = global_material_scheme();
+        ButtonArgsBuilder::default()
+            .color(Color::TRANSPARENT)
+            .hover_color(Some(crate::material_color::blend_over(
+                Color::TRANSPARENT,
+                scheme.primary,
+                0.08,
+            )))
+            .ripple_color(scheme.primary.with_alpha(0.12))
+            .on_click(on_click)
+            .build()
+            .expect("ButtonArgsBuilder failed for text button")
     }
 }
 

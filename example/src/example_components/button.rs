@@ -5,14 +5,16 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     RippleState,
     alignment::CrossAxisAlignment,
-    button::{ButtonArgsBuilder, button},
+    button::{ButtonArgs, ButtonArgsBuilder, button},
     column::{ColumnArgsBuilder, column},
     icon::{IconArgsBuilder, IconContent},
     icon_button::{IconButtonArgsBuilder, icon_button},
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
     material_color::global_material_scheme,
+    row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     shape_def::Shape,
+    spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -25,10 +27,12 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
 #[derive(Clone)]
 struct ButtonShowcaseState {
     scrollable_state: ScrollableState,
-    button1_ripple: RippleState,
-    button2_ripple: RippleState,
-    button3_ripple: RippleState,
     icon_button_ripple: RippleState,
+    filled_ripple: RippleState,
+    elevated_ripple: RippleState,
+    tonal_ripple: RippleState,
+    outlined_ripple: RippleState,
+    text_ripple: RippleState,
     counter: Arc<Mutex<i32>>,
     icon_data: Arc<ImageVectorData>,
 }
@@ -42,10 +46,12 @@ impl ButtonShowcaseState {
 
         Self {
             scrollable_state: Default::default(),
-            button1_ripple: RippleState::new(),
-            button2_ripple: RippleState::new(),
-            button3_ripple: RippleState::new(),
             icon_button_ripple: RippleState::new(),
+            filled_ripple: RippleState::new(),
+            elevated_ripple: RippleState::new(),
+            tonal_ripple: RippleState::new(),
+            outlined_ripple: RippleState::new(),
+            text_ripple: RippleState::new(),
             counter: Default::default(),
             icon_data,
         }
@@ -60,9 +66,7 @@ impl Default for ButtonShowcaseState {
 
 #[tessera]
 #[shard]
-pub fn button_showcase(
-    #[state(default_with = "ButtonShowcaseState::new")] state: ButtonShowcaseState,
-) {
+pub fn button_showcase(#[state] state: ButtonShowcaseState) {
     let scrollable_state = state.scrollable_state.clone();
     surface(
         SurfaceArgsBuilder::default()
@@ -103,100 +107,6 @@ pub fn button_showcase(
                                         )
                                     });
 
-                                    let state_clone = state.clone();
-                                    scope.child(move || {
-                                        let button_args = ButtonArgsBuilder::default()
-                                            .on_click(Arc::new(closure!(
-                                                clone state_clone.counter,
-                                                || {
-                                                    let mut count = counter.lock().unwrap();
-                                                    *count += 1;
-                                                    println!("Button clicked! Count: {}", *count);
-                                                }
-                                            )))
-                                            .build()
-                                            .unwrap();
-
-                                        button(
-                                            button_args,
-                                            state_clone.button1_ripple.clone(),
-                                            || {
-                                                text("Click Me!");
-                                            },
-                                        );
-                                    });
-
-                                    let state_clone = state.clone();
-                                    scope.child(move || {
-                                        let count = state_clone.counter.lock().unwrap();
-                                        text(format!("Click count: {}", *count));
-                                    });
-
-                                    scope.child(|| {
-                                        text(
-                                            TextArgsBuilder::default()
-                                                .text("Disabled Button")
-                                                .size(Dp(16.0))
-                                                .build()
-                                                .unwrap(),
-                                        )
-                                    });
-
-                                    let state_clone = state.clone();
-                                    scope.child(move || {
-                                        // A button without an on_click handler is disabled by default.
-                                        let button_args =
-                                            ButtonArgsBuilder::default().build().unwrap();
-
-                                        button(
-                                            button_args,
-                                            state_clone.button2_ripple.clone(),
-                                            || {
-                                                text("You can't click me");
-                                            },
-                                        );
-                                    });
-
-                                    scope.child(|| {
-                                        text(
-                                            TextArgsBuilder::default()
-                                                .text("Styled Button")
-                                                .size(Dp(16.0))
-                                                .build()
-                                                .unwrap(),
-                                        )
-                                    });
-
-                                    let state_clone = state.clone();
-                                    scope.child(move || {
-                                        let button_args = ButtonArgsBuilder::default()
-                                            .shape(Shape::rounded_rectangle(Dp(12.0)))
-                                            .color(global_material_scheme().primary)
-                                            .hover_color(Some(
-                                                global_material_scheme().primary_container,
-                                            ))
-                                            .on_click(Arc::new(|| {
-                                                println!("Styled button clicked!");
-                                            }))
-                                            .padding(Dp(15.0))
-                                            .build()
-                                            .unwrap();
-
-                                        button(
-                                            button_args,
-                                            state_clone.button3_ripple.clone(),
-                                            || {
-                                                text(
-                                                    TextArgsBuilder::default()
-                                                        .text("Styled")
-                                                        .color(global_material_scheme().on_primary)
-                                                        .build()
-                                                        .unwrap(),
-                                                );
-                                            },
-                                        );
-                                    });
-
                                     scope.child(|| {
                                         text(
                                             TextArgsBuilder::default()
@@ -207,11 +117,10 @@ pub fn button_showcase(
                                         )
                                     });
 
-                                    let state_clone = state.clone();
-                                    scope.child(move || {
+                                    scope.child(closure!(clone state, || {
                                         let icon = IconArgsBuilder::default()
                                             .content(IconContent::from(
-                                                state_clone.icon_data.clone(),
+                                                state.icon_data.clone(),
                                             ))
                                             .size(Dp(24.0))
                                             .build()
@@ -226,7 +135,7 @@ pub fn button_showcase(
                                                         global_material_scheme().surface,
                                                     ))
                                                     .on_click(Arc::new(closure!(
-                                                        clone state_clone.counter,
+                                                        clone state.counter,
                                                         || {
                                                             let mut count =
                                                                 counter.lock().unwrap();
@@ -244,9 +153,104 @@ pub fn button_showcase(
 
                                         icon_button(
                                             button_args,
-                                            state_clone.icon_button_ripple.clone(),
+                                            state.icon_button_ripple.clone(),
+                                        );
+                                    }));
+
+                                    scope.child(|| {
+                                        spacer(
+                                            SpacerArgsBuilder::default()
+                                                .height(Dp(20.0))
+                                                .build()
+                                                .unwrap(),
                                         );
                                     });
+
+                                    scope.child(|| {
+                                        text(
+                                            TextArgsBuilder::default()
+                                                .text("Button Styles")
+                                                .size(Dp(20.0))
+                                                .build()
+                                                .unwrap(),
+                                        )
+                                    });
+
+                                    scope.child(closure!(clone state, || {
+                                        row(
+                                            RowArgsBuilder::default().build().unwrap(),
+                                            move |scope| {
+                                                scope.child(closure!(clone state, || {
+                                                    button(
+                                                        ButtonArgs::filled(Arc::new(|| println!("Filled clicked"))),
+                                                        state.filled_ripple.clone(),
+                                                        || {
+                                                            text(TextArgsBuilder::default().text("Filled").color(global_material_scheme().on_primary).build().unwrap());
+                                                        },
+                                                    );
+                                                }));
+                                                scope.child(|| spacer(SpacerArgsBuilder::default().width(Dp(8.0)).build().unwrap()));
+
+                                                scope.child(closure!(clone state, || {
+                                                    button(
+                                                        ButtonArgs::elevated(Arc::new(|| println!("Elevated clicked"))),
+                                                        state.elevated_ripple.clone(),
+                                                        || {
+                                                            text(TextArgsBuilder::default().text("Elevated").color(global_material_scheme().primary).build().unwrap());
+                                                        },
+                                                    );
+                                                }));
+                                                scope.child(|| spacer(SpacerArgsBuilder::default().width(Dp(8.0)).build().unwrap()));
+
+                                                scope.child(closure!(clone state, || {
+                                                    button(
+                                                        ButtonArgs::tonal(Arc::new(|| println!("Tonal clicked"))),
+                                                        state.tonal_ripple.clone(),
+                                                        || {
+                                                            text(TextArgsBuilder::default().text("Tonal").color(global_material_scheme().on_secondary_container).build().unwrap());
+                                                        },
+                                                    );
+                                                }));
+                                            },
+                                        );
+                                    }));
+
+                                    scope.child(|| {
+                                        spacer(
+                                            SpacerArgsBuilder::default()
+                                                .height(Dp(8.0))
+                                                .build()
+                                                .unwrap(),
+                                        )
+                                    });
+
+                                    scope.child(closure!(clone state, || {
+                                        row(
+                                            RowArgsBuilder::default().build().unwrap(),
+                                            move |scope| {
+                                                scope.child(closure!(clone state, || {
+                                                    button(
+                                                        ButtonArgs::outlined(Arc::new(|| println!("Outlined clicked"))),
+                                                        state.outlined_ripple.clone(),
+                                                        || {
+                                                            text(TextArgsBuilder::default().text("Outlined").color(global_material_scheme().primary).build().unwrap());
+                                                        },
+                                                    );
+                                                }));
+                                                scope.child(|| spacer(SpacerArgsBuilder::default().width(Dp(8.0)).build().unwrap()));
+
+                                                scope.child(closure!(clone state, || {
+                                                    button(
+                                                        ButtonArgs::text(Arc::new(|| println!("Text clicked"))),
+                                                        state.text_ripple.clone(),
+                                                        || {
+                                                            text(TextArgsBuilder::default().text("Text").color(global_material_scheme().primary).build().unwrap());
+                                                        },
+                                                    );
+                                                }));
+                                            },
+                                        );
+                                    }));
                                 },
                             )
                         },
