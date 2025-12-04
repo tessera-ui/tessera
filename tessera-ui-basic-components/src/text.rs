@@ -14,7 +14,7 @@ use crate::pipelines::text::{
 pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 
 /// Configuration arguments for the `text` component.
-#[derive(Debug, Default, Builder, Clone)]
+#[derive(Debug, Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TextArgs {
     /// The text content to be rendered.
@@ -40,6 +40,15 @@ pub struct TextArgs {
     /// Optional description announced by assistive technologies.
     #[builder(default, setter(strip_option, into))]
     pub accessibility_description: Option<String>,
+}
+
+impl Default for TextArgs {
+    fn default() -> Self {
+        TextArgsBuilder::default()
+            .text("")
+            .build()
+            .expect("builder construction failed")
+    }
 }
 
 impl From<String> for TextArgs {
