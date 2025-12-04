@@ -772,7 +772,6 @@ fn measure_range_slider(
 
     let segments = layout.segments(start, end);
 
-    // 1. Left Inactive
     input.measure_child(
         left_inactive_id,
         &Constraint::new(
@@ -785,7 +784,6 @@ fn measure_range_slider(
         PxPosition::new(segments.left_inactive.0, track_y),
     );
 
-    // 2. Active
     input.measure_child(
         active_id,
         &Constraint::new(
@@ -795,7 +793,6 @@ fn measure_range_slider(
     )?;
     input.place_child(active_id, PxPosition::new(segments.active.0, track_y));
 
-    // 3. Right Inactive
     input.measure_child(
         right_inactive_id,
         &Constraint::new(
@@ -819,7 +816,6 @@ fn measure_range_slider(
     let focus_offset = layout.base.center_child_offset(layout.base.focus_width);
     let handle_offset = layout.base.center_child_offset(layout.base.handle_width);
 
-    // 4. Start Focus & Handle
     input.measure_child(focus_start_id, &focus_constraint)?;
     input.place_child(
         focus_start_id,
@@ -838,7 +834,6 @@ fn measure_range_slider(
         ),
     );
 
-    // 5. End Focus & Handle
     input.measure_child(focus_end_id, &focus_constraint)?;
     input.place_child(
         focus_end_id,
@@ -858,7 +853,6 @@ fn measure_range_slider(
     );
 
     if layout.base.show_stop_indicator {
-        // 6. Start Stop
         let stop_size = layout.base.stop_indicator_diameter;
         let stop_constraint = Constraint::new(
             DimensionValue::Fixed(stop_size),
@@ -881,7 +875,6 @@ fn measure_range_slider(
             ),
         );
 
-        // 7. End Stop
         input.measure_child(stop_end_id, &stop_constraint)?;
         let end_stop_x = Px(self_width.0 - padding.0);
 
