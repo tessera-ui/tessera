@@ -119,22 +119,6 @@ impl MaterialColorScheme {
     }
 }
 
-/// Backward-compatible alias for the previous material naming.
-#[deprecated(note = "Use MaterialColorScheme instead.")]
-pub type Md3ColorScheme = MaterialColorScheme;
-
-/// Backward-compatible global getter using the previous material naming.
-#[deprecated(note = "Use global_material_scheme instead.")]
-pub fn global_md3_scheme() -> MaterialColorScheme {
-    global_material_scheme()
-}
-
-/// Backward-compatible global setter using the previous material naming.
-#[deprecated(note = "Use set_global_material_scheme instead.")]
-pub fn set_global_md3_scheme(seed: Color, is_dark: bool) {
-    set_global_material_scheme(seed, is_dark);
-}
-
 fn scheme_from_seed(seed: Color, is_dark: bool) -> MaterialColorScheme {
     let scheme = DynamicSchemeBuilder::default()
         .source_color_hct(Hct::from_int(color_to_argb(seed)))
