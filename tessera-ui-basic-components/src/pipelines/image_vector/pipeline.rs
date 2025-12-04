@@ -471,16 +471,16 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 None => continue,
             };
 
-            let uniforms = compute_sample_uniforms(
-                *start_pos,
-                *size,
-                command.tint,
-                command.tint_mode,
-                command.rotation,
-                entry.uv_origin,
-                entry.uv_scale,
-                context.config,
-            );
+            let uniforms = compute_sample_uniforms(SampleUniformParams {
+                start_pos: *start_pos,
+                size: *size,
+                tint: command.tint,
+                tint_mode: command.tint_mode,
+                rotation: command.rotation,
+                uv_origin: entry.uv_origin,
+                uv_scale: entry.uv_scale,
+                config: context.config,
+            });
             let mut buffer = UniformBuffer::new(Vec::new());
             buffer
                 .write(&uniforms)
@@ -540,7 +540,8 @@ fn raster_uniforms() -> ImageVectorUniforms {
     }
 }
 
-fn compute_sample_uniforms(
+#[derive(Clone, Copy)]
+struct SampleUniformParams<'a> {
     start_pos: PxPosition,
     size: PxSize,
     tint: Color,
@@ -548,8 +549,21 @@ fn compute_sample_uniforms(
     rotation: f32,
     uv_origin: [f32; 2],
     uv_scale: [f32; 2],
-    config: &wgpu::SurfaceConfiguration,
-) -> AtlasSampleUniforms {
+    config: &'a wgpu::SurfaceConfiguration,
+}
+
+fn compute_sample_uniforms(params: SampleUniformParams<'_>) -> AtlasSampleUniforms {
+    let SampleUniformParams {
+        start_pos,
+        size,
+        tint,
+        tint_mode,
+        rotation,
+        uv_origin,
+        uv_scale,
+        config,
+    } = params;
+
     let left = (start_pos.x.0 as f32 / config.width as f32) * 2.0 - 1.0;
     let right = ((start_pos.x.0 + size.width.0) as f32 / config.width as f32) * 2.0 - 1.0;
     let top = 1.0 - (start_pos.y.0 as f32 / config.height as f32) * 2.0;
