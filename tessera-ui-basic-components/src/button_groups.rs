@@ -25,7 +25,7 @@ use crate::{
     button::{ButtonArgs, button},
     material_color::global_material_scheme,
     row::{RowArgs, row},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     spacer::{SpacerArgs, spacer},
 };
 
@@ -129,6 +129,8 @@ struct ButtonGroupsLayout {
     between_space: Dp,
     active_button_shape: Shape,
     inactive_button_shape: Shape,
+    inactive_button_shape_start: Shape,
+    inactive_button_shape_end: Shape,
 }
 
 impl ButtonGroupsLayout {
@@ -157,11 +159,31 @@ impl ButtonGroupsLayout {
             ButtonGroupsStyle::Standard => Shape::capsule(),
             ButtonGroupsStyle::Connected => Shape::rounded_rectangle(Dp(16.0)),
         };
+        let inactive_button_shape_start = match style {
+            ButtonGroupsStyle::Standard => active_button_shape,
+            ButtonGroupsStyle::Connected => Shape::RoundedRectangle {
+                top_left: RoundedCorner::Capsule,
+                top_right: RoundedCorner::manual(Dp(16.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(16.0), 3.0),
+                bottom_left: RoundedCorner::Capsule,
+            },
+        };
+        let inactive_button_shape_end = match style {
+            ButtonGroupsStyle::Standard => active_button_shape,
+            ButtonGroupsStyle::Connected => Shape::RoundedRectangle {
+                top_left: RoundedCorner::manual(Dp(16.0), 3.0),
+                top_right: RoundedCorner::Capsule,
+                bottom_right: RoundedCorner::Capsule,
+                bottom_left: RoundedCorner::manual(Dp(16.0), 3.0),
+            },
+        };
         Self {
             container_height,
             between_space,
             active_button_shape,
             inactive_button_shape,
+            inactive_button_shape_start,
+            inactive_button_shape_end,
         }
     }
 }
@@ -315,7 +337,13 @@ pub fn button_groups<F>(
                                     })
                                 );
                                 button_args.color = global_material_scheme().secondary_container;
-                                button_args.shape = layout.inactive_button_shape;
+                                if index == 0 {
+                                    button_args.shape = layout.inactive_button_shape_start;
+                                } else if index == child_len - 1 {
+                                    button_args.shape = layout.inactive_button_shape_end;
+                                } else {
+                                    button_args.shape = layout.inactive_button_shape;
+                                }
 
                                 button(button_args, ripple_state, move || elastic_container(
                                     elastic_state,
