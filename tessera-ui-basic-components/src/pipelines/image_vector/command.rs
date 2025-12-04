@@ -87,6 +87,8 @@ pub struct ImageVectorCommand {
     pub tint: Color,
     /// How to apply the tint.
     pub tint_mode: VectorTintMode,
+    /// Rotation in degrees.
+    pub rotation: f32,
 }
 
 impl DrawCommand for ImageVectorCommand {}

@@ -10,6 +10,7 @@ struct SampleUniforms {
     uv_scale: vec2<f32>,
     tint: vec4<f32>,
     tint_mode: u32,
+    rotation: f32,
 }
 
 @group(0) @binding(0)
@@ -34,7 +35,17 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
     var out: VertexOutput;
     let quad_pos = positions[vertex_index];
-    out.clip_position = vec4<f32>(uniforms.origin + quad_pos * uniforms.scale, 0.0, 1.0);
+
+    let centered = quad_pos - vec2<f32>(0.5, 0.5);
+    let c = cos(uniforms.rotation);
+    let s = sin(uniforms.rotation);
+    let rotated = vec2<f32>(
+        centered.x * c - centered.y * s,
+        centered.x * s + centered.y * c
+    );
+    let pos = rotated + vec2<f32>(0.5, 0.5);
+
+    out.clip_position = vec4<f32>(uniforms.origin + pos * uniforms.scale, 0.0, 1.0);
     out.uv = uniforms.uv_origin + quad_pos * uniforms.uv_scale;
     return out;
 }

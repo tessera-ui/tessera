@@ -41,8 +41,7 @@ impl AtlasKey {
 struct AtlasCacheEntry {
     uv_origin: [f32; 2],
     uv_scale: [f32; 2],
-    uniform_buffer: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
+    page_index: usize,
 }
 
 #[derive(ShaderType, Clone, Copy)]
@@ -60,6 +59,7 @@ struct AtlasSampleUniforms {
     uv_scale: Vec2,
     tint: Vec4,
     tint_mode: u32,
+    rotation: f32,
 }
 
 /// Render pipeline that rasterizes SVG vector meshes into an atlas for sampling.
@@ -321,34 +321,6 @@ impl ImageVectorPipeline {
             .expect("geometry must exist");
         self.rasterize_into_allocation(device, queue, geometry, &allocation, width, height);
 
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("image_vector_sample_uniform_buffer"),
-            size: AtlasSampleUniforms::min_size().get(),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.sample_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(
-                        self.atlas.page_view(allocation.page_index),
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.atlas_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-            ],
-            label: Some("image_vector_sample_bind_group"),
-        });
-
         let uv_origin = [
             allocation.inner_rect.x as f32 / allocation.page_size.0 as f32,
             allocation.inner_rect.y as f32 / allocation.page_size.1 as f32,
@@ -363,8 +335,7 @@ impl ImageVectorPipeline {
             AtlasCacheEntry {
                 uv_origin,
                 uv_scale,
-                uniform_buffer,
-                bind_group,
+                page_index: allocation.page_index,
             },
         );
     }
@@ -505,6 +476,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 *size,
                 command.tint,
                 command.tint_mode,
+                command.rotation,
                 entry.uv_origin,
                 entry.uv_scale,
                 context.config,
@@ -513,13 +485,40 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
             buffer
                 .write(&uniforms)
                 .expect("sample uniform serialization failed");
-            context
-                .queue
-                .write_buffer(&entry.uniform_buffer, 0, &buffer.into_inner());
 
-            context
-                .render_pass
-                .set_bind_group(0, &entry.bind_group, &[]);
+            let uniform_buffer =
+                context
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("image_vector_sample_uniform_buffer"),
+                        contents: &buffer.into_inner(),
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+
+            let bind_group = context
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &self.sample_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(
+                                self.atlas.page_view(entry.page_index),
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&self.atlas_sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: uniform_buffer.as_entire_binding(),
+                        },
+                    ],
+                    label: Some("image_vector_sample_bind_group"),
+                });
+
+            context.render_pass.set_bind_group(0, &bind_group, &[]);
             context.render_pass.draw(0..6, 0..1);
         }
     }
@@ -546,6 +545,7 @@ fn compute_sample_uniforms(
     size: PxSize,
     tint: Color,
     tint_mode: VectorTintMode,
+    rotation: f32,
     uv_origin: [f32; 2],
     uv_scale: [f32; 2],
     config: &wgpu::SurfaceConfiguration,
@@ -565,6 +565,7 @@ fn compute_sample_uniforms(
             VectorTintMode::Multiply => 0,
             VectorTintMode::Solid => 1,
         },
+        rotation: rotation.to_radians(),
     }
 }
 

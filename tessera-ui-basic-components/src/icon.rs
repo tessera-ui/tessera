@@ -75,6 +75,9 @@ pub struct IconArgs {
     /// How the tint is applied to vector icons.
     #[builder(default)]
     pub tint_mode: TintMode,
+    /// Rotation angle in degrees.
+    #[builder(default = "0.0")]
+    pub rotation: f32,
 }
 
 impl From<IconContent> for IconArgs {
@@ -195,6 +198,7 @@ pub fn icon(args: impl Into<IconArgs>) {
                     data: data.clone(),
                     tint: icon_args.tint,
                     tint_mode: icon_args.tint_mode,
+                    rotation: icon_args.rotation,
                 };
                 input
                     .metadatas
