@@ -90,7 +90,6 @@ pub mod shape_def;
 pub mod side_bar;
 pub mod slider;
 pub mod spacer;
-pub mod split_button;
 pub mod surface;
 pub mod switch;
 pub mod tabs;
