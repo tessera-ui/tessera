@@ -416,7 +416,7 @@ fn ensure_build_phase() {
                 "remember must not be called inside input_handler; move state to component render"
             )
         }
-        None => panic!("remember must be called inside a tessera component"),
+        None => panic!("remember must be called inside a tessera component. Ensure you're calling this from within a function annotated with #[tessera]."),
     }
 }
 
