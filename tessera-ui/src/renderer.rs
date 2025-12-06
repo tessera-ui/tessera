@@ -30,7 +30,7 @@ use crate::{
     dp::SCALE_FACTOR,
     keyboard_state::KeyboardState,
     px::PxSize,
-    runtime::TesseraRuntime,
+    runtime::{TesseraRuntime, begin_frame_slots},
     thread_utils,
 };
 
@@ -535,6 +535,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     fn build_component_tree(entry_point: &F) -> std::time::Duration {
         let tree_timer = Instant::now();
         debug!("Building component tree...");
+        begin_frame_slots();
         entry_wrapper(entry_point);
         let build_tree_cost = tree_timer.elapsed();
         debug!("Component tree built in {build_tree_cost:?}");
@@ -1071,6 +1072,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> ApplicationHandler<AccessKi
             runtime.window_minimized = false;
             runtime.window_size = [0, 0];
         });
+        crate::runtime::reset_slots();
     }
 
     /// Handles window-specific events from the windowing system.
