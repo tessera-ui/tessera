@@ -13,6 +13,7 @@ use crate::{
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
     renderer::Command,
+    runtime::{RuntimePhase, push_current_node, push_phase},
 };
 
 pub use constraint::{Constraint, DimensionValue};
@@ -103,7 +104,7 @@ impl ComponentTree {
     /// Add a new node to the tree
     /// Nodes now store their intrinsic constraints in their metadata.
     /// The `node_component` itself primarily holds the measure_fn.
-    pub fn add_node(&mut self, node_component: ComponentNode) {
+    pub fn add_node(&mut self, node_component: ComponentNode) -> indextree::NodeId {
         let new_node_id = self.tree.new_node(node_component);
         if let Some(current_node_id) = self.node_queue.last_mut() {
             current_node_id.append(new_node_id, &mut self.tree);
@@ -111,6 +112,7 @@ impl ComponentTree {
         let metadata = ComponentNodeMetaData::none();
         self.metadatas.insert(new_node_id, metadata);
         self.node_queue.push(new_node_id);
+        new_node_id
     }
 
     /// Pop the last node from the queue
@@ -256,6 +258,13 @@ impl ComponentTree {
             let current_cursor_position = cursor_position_ref.map(|pos| pos - abs_pos);
 
             if let Some(node_computed_data) = node_computed_data {
+                let logic_id = self
+                    .tree
+                    .get(node_id)
+                    .map(|n| n.get().logic_id)
+                    .unwrap_or_default();
+                let _node_ctx_guard = push_current_node(node_id, logic_id);
+                let _phase_guard = push_phase(RuntimePhase::Input);
                 let input = InputHandlerInput {
                     computed_data: node_computed_data,
                     cursor_position_rel: current_cursor_position,

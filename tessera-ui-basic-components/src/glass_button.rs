@@ -10,7 +10,6 @@ use tessera_ui::{Color, DimensionValue, Dp, tessera};
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
-    ripple_state::RippleState,
     shape_def::{RoundedCorner, Shape},
 };
 
@@ -139,7 +138,6 @@ impl GlassButtonArgs {
 /// ## Parameters
 ///
 /// - `args` — configures the button's glass appearance and `on_click` handler; see [`GlassButtonArgs`].
-/// - `ripple_state` — a clonable [`RippleState`] to manage the ripple animation.
 /// - `child` — a closure that renders the button's content (e.g., text or an icon).
 ///
 /// ## Examples
@@ -149,11 +147,8 @@ impl GlassButtonArgs {
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
 ///     glass_button::{glass_button, GlassButtonArgs},
-///     ripple_state::RippleState,
 ///     text::{text, TextArgsBuilder},
 /// };
-///
-/// let ripple_state = RippleState::new();
 ///
 /// glass_button(
 ///     GlassButtonArgs {
@@ -161,28 +156,17 @@ impl GlassButtonArgs {
 ///         tint_color: Color::new(0.2, 0.3, 0.8, 0.3),
 ///         ..Default::default()
 ///     },
-///     ripple_state,
 ///     || text(TextArgsBuilder::default().text("Click Me".to_string()).build().expect("builder construction failed")),
 /// );
 /// ```
 #[tessera]
 pub fn glass_button(
     args: impl Into<GlassButtonArgs>,
-    ripple_state: RippleState,
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
     let args: GlassButtonArgs = args.into();
 
     let mut glass_args_builder = FluidGlassArgsBuilder::default();
-    if let Some((progress, center)) = ripple_state.get_animation_progress() {
-        let ripple_alpha = (1.0 - progress) * 0.3; // Fade out
-        glass_args_builder = glass_args_builder
-            .ripple_center(center)
-            .ripple_radius(progress)
-            .ripple_alpha(ripple_alpha)
-            .ripple_strength(progress);
-    }
-
     if let Some(contrast) = args.contrast {
         glass_args_builder = glass_args_builder.contrast(contrast);
     }
@@ -224,5 +208,5 @@ pub fn glass_button(
 
     let glass_args = glass_args.build().expect("builder construction failed");
 
-    fluid_glass(glass_args, Some(ripple_state), child);
+    fluid_glass(glass_args, child);
 }

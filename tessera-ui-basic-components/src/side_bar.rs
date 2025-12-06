@@ -216,7 +216,6 @@ fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) 
             .noise_amount(0.0)
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -239,7 +238,6 @@ fn render_material_scrim(args: &SideBarProviderArgs, progress: f32, is_open: boo
             .block_input(true)
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -405,7 +403,6 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                     .block_input(true)
                     .build()
                     .expect("builder construction failed"),
-                None,
                 content,
             );
         }
@@ -428,7 +425,6 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                     .block_input(true)
                     .build()
                     .expect("builder construction failed"),
-                None,
                 content,
             );
         }

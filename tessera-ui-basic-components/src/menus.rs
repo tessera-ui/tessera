@@ -17,7 +17,6 @@ use crate::{
     column::{ColumnArgsBuilder, column},
     material_color::{blend_over, global_material_scheme},
     pos_misc::is_position_in_rect,
-    ripple_state::RippleState,
     row::{RowArgsBuilder, row},
     shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},
@@ -363,7 +362,6 @@ fn apply_close_action(state: &MenuState, on_dismiss: &Option<Arc<dyn Fn() + Send
 ///         menu_item, menu_provider, MenuAnchor, MenuItemArgsBuilder, MenuPlacement,
 ///         MenuProviderArgsBuilder, MenuScope, MenuState,
 ///     },
-///     ripple_state::RippleState,
 ///     text::text,
 /// };
 ///
@@ -392,7 +390,6 @@ fn apply_close_action(state: &MenuState, on_dismiss: &Option<Arc<dyn Fn() + Send
 ///                     .build()
 ///                     .unwrap(),
 ///                 Some(menu_state.clone()),
-///                 RippleState::new(),
 ///             );
 ///         });
 ///     },
@@ -433,7 +430,6 @@ pub fn menu_provider(
             .block_input(true)
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 
@@ -460,7 +456,6 @@ pub fn menu_provider(
 
             builder.build().expect("builder construction failed")
         },
-        None,
         || {
             column(
                 ColumnArgsBuilder::default()
@@ -772,7 +767,6 @@ fn render_trailing(args: &MenuItemArgs, enabled: bool) {
 ///
 /// - `args` — configures the item label, icons, selection state, and callbacks; see [`MenuItemArgs`].
 /// - `menu_state` — optional [`MenuState`] to auto-close the menu when activated.
-/// - `ripple_state` — a clonable [`RippleState`] used for hover and press feedback.
 ///
 /// ## Examples
 ///
@@ -780,11 +774,9 @@ fn render_trailing(args: &MenuItemArgs, enabled: bool) {
 /// use std::sync::Arc;
 /// use tessera_ui_basic_components::{
 ///     menus::{menu_item, MenuItemArgsBuilder, MenuState},
-///     ripple_state::RippleState,
 /// };
 ///
 /// let state = MenuState::new();
-/// let ripple = RippleState::new();
 /// menu_item(
 ///     MenuItemArgsBuilder::default()
 ///         .label("Copy")
@@ -792,12 +784,11 @@ fn render_trailing(args: &MenuItemArgs, enabled: bool) {
 ///         .build()
 ///         .unwrap(),
 ///     Some(state.clone()),
-///     ripple,
 /// );
 /// assert!(!state.is_open());
 /// ```
 #[tessera]
-pub fn menu_item(args: MenuItemArgs, menu_state: Option<MenuState>, ripple_state: RippleState) {
+pub fn menu_item(args: MenuItemArgs, menu_state: Option<MenuState>) {
     let is_enabled = args.enabled && args.on_click.is_some();
     let on_click = args.on_click.clone();
     let close_on_click = args.close_on_click;
@@ -849,7 +840,6 @@ pub fn menu_item(args: MenuItemArgs, menu_state: Option<MenuState>, ripple_state
         surface_builder
             .build()
             .expect("builder construction failed"),
-        Some(ripple_state),
         || {
             row(
                 RowArgsBuilder::default()

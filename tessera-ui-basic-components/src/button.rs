@@ -11,7 +11,6 @@ use tessera_ui::{Color, DimensionValue, Dp, accesskit::Role, tessera};
 use crate::{
     ShadowProps,
     material_color::global_material_scheme,
-    ripple_state::RippleState,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
 };
@@ -85,7 +84,6 @@ impl Default for ButtonArgs {
 /// ## Parameters
 ///
 /// - `args` — configures the button's appearance and `on_click` handler; see [`ButtonArgs`].
-/// - `ripple_state` — a clonable [`RippleState`] to manage the ripple animation.
 /// - `child` — a closure that renders the button's content (e.g., text or an icon).
 ///
 /// ## Examples
@@ -95,26 +93,24 @@ impl Default for ButtonArgs {
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
 ///     button::{button, ButtonArgsBuilder},
-///     ripple_state::RippleState,
 ///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// let ripple = RippleState::new();
 /// let args = ButtonArgsBuilder::default()
 ///     .on_click(Arc::new(|| {}))
 ///     .build()
 ///     .unwrap();
 ///
-/// button(args, ripple, || {
+/// button(args, || {
 ///     text(TextArgsBuilder::default().text("Click Me".to_string()).build().expect("builder construction failed"));
 /// });
 /// ```
 #[tessera]
-pub fn button(args: impl Into<ButtonArgs>, ripple_state: RippleState, child: impl FnOnce()) {
+pub fn button(args: impl Into<ButtonArgs>, child: impl FnOnce()) {
     let button_args: ButtonArgs = args.into();
 
     // Create interactive surface for button
-    surface(create_surface_args(&button_args), Some(ripple_state), child);
+    surface(create_surface_args(&button_args), child);
 }
 
 /// Create surface arguments based on button configuration

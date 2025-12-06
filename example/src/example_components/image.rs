@@ -58,7 +58,6 @@ pub fn image_showcase(#[state] state: ImageShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -73,7 +72,6 @@ pub fn image_showcase(#[state] state: ImageShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(state);
                         },
@@ -153,7 +151,6 @@ pub fn icon_showcase(#[state] state: ImageShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -168,7 +165,6 @@ pub fn icon_showcase(#[state] state: ImageShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             column(
                                 ColumnArgsBuilder::default()

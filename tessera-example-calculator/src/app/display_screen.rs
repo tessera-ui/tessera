@@ -21,7 +21,6 @@ pub fn display_screen(app_state: Arc<AppState>, style: CalStyle) {
             .padding(Dp(5.0))
             .build()
             .unwrap(),
-        None,
         || match style {
             CalStyle::Glass => render_glass_display(app_state.clone()),
             CalStyle::Material => render_material_display(app_state.clone()),
@@ -38,7 +37,6 @@ fn render_glass_display(app_state: Arc<AppState>) {
             .contrast(1.5)
             .build()
             .unwrap(),
-        None,
         || {
             content(app_state.clone());
         },
@@ -59,7 +57,6 @@ fn render_material_display(app_state: Arc<AppState>) {
             .style(Color::GREY.into())
             .build()
             .unwrap(),
-        None,
         move || {
             content(app_state.clone());
         },

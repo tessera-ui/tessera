@@ -51,7 +51,6 @@ pub fn slider_showcase(#[state] state: SliderShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -66,7 +65,6 @@ pub fn slider_showcase(#[state] state: SliderShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(state);
                         },

@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 use closure::closure;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
-    RippleState,
     alignment::CrossAxisAlignment,
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgsBuilder, column},
@@ -21,8 +20,6 @@ use tessera_ui_basic_components::{
 #[derive(Clone)]
 struct MenusShowcaseState {
     menu_state: MenuState,
-    open_button_ripple: RippleState,
-    item_ripples: [RippleState; 4],
     selected_label: Arc<Mutex<String>>,
     pinned: Arc<Mutex<bool>>,
 }
@@ -31,13 +28,6 @@ impl MenusShowcaseState {
     fn new() -> Self {
         Self {
             menu_state: MenuState::new(),
-            open_button_ripple: RippleState::new(),
-            item_ripples: [
-                RippleState::new(),
-                RippleState::new(),
-                RippleState::new(),
-                RippleState::new(),
-            ],
             selected_label: Arc::new(Mutex::new("None".to_string())),
             pinned: Arc::new(Mutex::new(false)),
         }
@@ -60,12 +50,10 @@ pub fn menus_showcase(
     // Anchor near the trigger button (padding 20dp + title/subtitle + spacer).
     let anchor = MenuAnchor::from_dp((Dp(20.0), Dp(72.0)), (Dp(180.0), Dp(48.0)));
     let menu_state = state.menu_state.clone();
-    let item_ripples = state.item_ripples.clone();
     let selection_for_edit = selected_label.clone();
     let selection_for_share = selected_label.clone();
     let pin_state = pinned.clone();
     let pin_selection = selected_label.clone();
-    let open_button_ripple = state.open_button_ripple.clone();
 
     surface(
         SurfaceArgsBuilder::default()
@@ -74,7 +62,6 @@ pub fn menus_showcase(
             .padding(Dp(20.0))
             .build()
             .expect("builder construction failed"),
-        None,
         move || {
             menu_provider(
                 MenuProviderArgsBuilder::default()
@@ -137,7 +124,6 @@ pub fn menus_showcase(
                                             .build()
                                             .expect("builder construction failed"),
                                         |row_scope| {
-                                            let ripple = open_button_ripple.clone();
                                             row_scope.child(move || {
                                                 button(
                                                     ButtonArgsBuilder::default()
@@ -153,7 +139,6 @@ pub fn menus_showcase(
                                                         )))
                                                         .build()
                                                         .expect("builder construction failed"),
-                                                    ripple.clone(),
                                                     || {
                                                         text("Open anchored menu");
                                                     },
@@ -191,10 +176,6 @@ pub fn menus_showcase(
                     }
                 },
                 move |menu_scope| {
-                    let ripple_edit = item_ripples[0].clone();
-                    let ripple_share = item_ripples[1].clone();
-                    let ripple_pin = item_ripples[2].clone();
-                    let ripple_disabled = item_ripples[3].clone();
                     let menu_state_edit = menu_state.clone();
                     let menu_state_share = menu_state.clone();
                     let menu_state_pin = menu_state.clone();
@@ -203,7 +184,6 @@ pub fn menus_showcase(
                     menu_scope.item(move || {
                         let menu_state = menu_state_edit.clone();
                         let selection_for_edit = selection_for_edit.clone();
-                        let ripple = ripple_edit.clone();
                         menu_item(
                             MenuItemArgsBuilder::default()
                                 .label("Revert")
@@ -217,14 +197,12 @@ pub fn menus_showcase(
                                 .build()
                                 .expect("builder construction failed"),
                             Some(menu_state),
-                            ripple,
                         );
                     });
 
                     menu_scope.item(move || {
                         let menu_state = menu_state_share.clone();
                         let selection_for_share = selection_for_share.clone();
-                        let ripple = ripple_share.clone();
                         menu_item(
                             MenuItemArgsBuilder::default()
                                 .label("Settings")
@@ -238,7 +216,6 @@ pub fn menus_showcase(
                                 .build()
                                 .expect("builder construction failed"),
                             Some(menu_state),
-                            ripple,
                         );
                     });
 
@@ -246,7 +223,6 @@ pub fn menus_showcase(
                         let menu_state = menu_state_pin.clone();
                         let pin_state = pin_state.clone();
                         let pin_selection = pin_selection.clone();
-                        let ripple = ripple_pin.clone();
                         let is_pinned = *pin_state.lock().unwrap();
                         menu_item(
                             MenuItemArgsBuilder::default()
@@ -268,20 +244,17 @@ pub fn menus_showcase(
                                 .build()
                                 .expect("builder construction failed"),
                             Some(menu_state),
-                            ripple,
                         );
                     });
 
                     menu_scope.item(move || {
                         let menu_state = menu_state_disabled.clone();
-                        let ripple = ripple_disabled.clone();
                         menu_item(
                             MenuItemArgsBuilder::default()
                                 .label("Help")
                                 .build()
                                 .expect("builder construction failed"),
                             Some(menu_state),
-                            ripple,
                         );
                     });
                 },

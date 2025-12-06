@@ -182,7 +182,6 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -202,7 +201,6 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
             .style(color.into())
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -222,7 +220,6 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -242,7 +239,6 @@ fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
             .style(color.into())
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }

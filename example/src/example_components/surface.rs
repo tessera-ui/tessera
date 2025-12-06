@@ -4,7 +4,6 @@ use closure::closure;
 use parking_lot::RwLock;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
-    RippleState,
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{ColumnArgsBuilder, column},
     material_color::global_material_scheme,
@@ -32,7 +31,6 @@ impl Display for CornerRadius {
 }
 
 struct ExampleSurfaceState {
-    ripple_state: RippleState,
     width: ConfigSliderState<Dp>,
     height: ConfigSliderState<Dp>,
     border_width: ConfigSliderState<Dp>,
@@ -66,7 +64,6 @@ impl Display for ExampleSurfaceState {
 impl Default for ExampleSurfaceState {
     fn default() -> Self {
         Self {
-            ripple_state: RippleState::new(),
             width: ConfigSliderState::new(Dp(100.0)),
             height: ConfigSliderState::new(Dp(100.0)),
             border_width: ConfigSliderState::new(Dp(0.0)),
@@ -85,7 +82,6 @@ pub fn surface_showcase(#[state] state: SurfaceShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -100,7 +96,6 @@ pub fn surface_showcase(#[state] state: SurfaceShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(example_surface_state);
                         },
@@ -129,7 +124,6 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                 let height = state.height.value;
                 let border_width = state.border_width.value;
                 let state_string = (*state).to_string();
-                let ripple_state = state.ripple_state.clone();
 
                 row(
                     RowArgsBuilder::default()
@@ -167,7 +161,6 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                                     }))
                                     .build()
                                     .unwrap(),
-                                Some(ripple_state),
                                 || {},
                             );
                         });

@@ -281,7 +281,6 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
             .padding(args.track_border_width)
             .build()
             .expect("builder construction failed"),
-        None,
         move || {
             // Internal progress fill - capsule shape using surface
             let progress_width_px =
@@ -298,7 +297,6 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
                     .refraction_amount(0.0)
                     .build()
                     .expect("builder construction failed"),
-                None,
                 || {},
             );
         },

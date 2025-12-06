@@ -193,7 +193,6 @@ pub fn background(child: impl FnOnce(), style: CalStyle) {
                     .height(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                None,
                 || {
                     child();
                 },

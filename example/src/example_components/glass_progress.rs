@@ -39,7 +39,6 @@ pub fn glass_progress_showcase(#[state] state: GlassProgressShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -54,7 +53,6 @@ pub fn glass_progress_showcase(#[state] state: GlassProgressShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(state);
                         },

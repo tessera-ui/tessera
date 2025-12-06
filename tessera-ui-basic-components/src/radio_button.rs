@@ -16,7 +16,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    RippleState,
     alignment::Alignment,
     animation,
     boxed::{BoxedArgsBuilder, boxed},
@@ -29,10 +28,9 @@ const RADIO_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 const HOVER_STATE_LAYER_OPACITY: f32 = 0.08;
 const RIPPLE_OPACITY: f32 = 0.1;
 
-/// Shared state for the `radio_button` component, including ripple feedback and selection animation.
+/// Shared state for the `radio_button` component, including selection animation.
 #[derive(Clone)]
 pub struct RadioButtonState {
-    ripple: RippleState,
     selection: Arc<RwLock<RadioSelectionState>>,
 }
 
@@ -46,7 +44,6 @@ impl RadioButtonState {
     /// Creates a new radio button state with the given initial selection.
     pub fn new(selected: bool) -> Self {
         Self {
-            ripple: RippleState::new(),
             selection: Arc::new(RwLock::new(RadioSelectionState::new(selected))),
         }
     }
@@ -97,10 +94,6 @@ impl RadioButtonState {
 
     fn animation_progress(&self) -> f32 {
         self.selection.read().progress
-    }
-
-    fn ripple_state(&self) -> RippleState {
-        self.ripple.clone()
     }
 }
 
@@ -354,7 +347,6 @@ pub fn radio_button(args: impl Into<RadioButtonArgs>, state: RadioButtonState) {
 
     surface(
         root_builder.build().expect("builder construction failed"),
-        args.enabled.then(|| state.ripple_state()),
         {
             let args = args.clone();
             move || {
@@ -366,7 +358,6 @@ pub fn radio_button(args: impl Into<RadioButtonArgs>, state: RadioButtonState) {
                         .style(ring_style)
                         .build()
                         .expect("builder construction failed"),
-                    None,
                     {
                         let dot_size_px = args.dot_size.to_px();
                         move || {
@@ -398,7 +389,6 @@ pub fn radio_button(args: impl Into<RadioButtonArgs>, state: RadioButtonState) {
                                                         })
                                                         .build()
                                                         .expect("builder construction failed"),
-                                                    None,
                                                     || {},
                                                 );
                                             }

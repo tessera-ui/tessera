@@ -100,7 +100,6 @@ fn render_track_and_fill(args: GlassProgressArgs, width_px: Px) {
             .padding(args.track_border_width)
             .build()
             .expect("builder construction failed"),
-        None,
         move || {
             // Internal progress fill - capsule shape
             if let Some((progress_px, effective_height)) = compute_progress_dims(&args, width_px) {
@@ -118,7 +117,6 @@ fn render_track_and_fill(args: GlassProgressArgs, width_px: Px) {
                         .refraction_amount(0.0)
                         .build()
                         .expect("builder construction failed"),
-                    None,
                     || {},
                 );
             }

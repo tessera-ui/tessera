@@ -80,7 +80,6 @@ pub fn progress(args: impl Into<ProgressArgs>) {
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 
@@ -99,7 +98,6 @@ pub fn progress(args: impl Into<ProgressArgs>) {
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 

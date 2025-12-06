@@ -30,17 +30,14 @@
 //!     button::{button, ButtonArgs},
 //!     text::text,
 //!     text_editor::{text_editor, TextEditorArgs, TextEditorState},
-//!     RippleState,
 //! };
 //!
 //! // Button example
-//! let ripple_state = RippleState::new();
 //! button(
 //!     ButtonArgs {
 //!         on_click: Some(Arc::new(|| { /* Handle click */ })),
 //!         ..Default::default()
 //!     },
-//!     ripple_state.clone(),
 //!     || text("Click me".to_string()),
 //! );
 //!

@@ -20,6 +20,7 @@ use crate::{
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
     renderer::Command,
+    runtime::{RuntimePhase, push_current_node, push_phase},
 };
 
 use super::constraint::{Constraint, DimensionValue};
@@ -139,6 +140,8 @@ impl Drop for AccessibilityBuilderGuard<'_> {
 pub struct ComponentNode {
     /// Component function's name, for debugging purposes.
     pub fn_name: String,
+    /// Stable logic identifier for the component function.
+    pub logic_id: u64,
     /// Describes the component in layout.
     /// None means using default measure policy which places children at the top-left corner
     /// of the parent node, with no offset.
@@ -544,6 +547,10 @@ pub(crate) fn measure_node(
         children.len(),
         parent_constraint
     );
+
+    // Ensure thread-local current node context for nested control-flow instrumentation.
+    let _node_ctx_guard = push_current_node(node_id, node_data.logic_id);
+    let _phase_guard = push_phase(RuntimePhase::Measure);
 
     let size = if let Some(measure_fn) = &node_data.measure_fn {
         measure_fn(&MeasureInput {

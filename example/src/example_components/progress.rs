@@ -38,7 +38,6 @@ pub fn progress_showcase(#[state] state: ProgressShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -53,7 +52,6 @@ pub fn progress_showcase(#[state] state: ProgressShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(state);
                         },

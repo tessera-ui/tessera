@@ -4,7 +4,6 @@
 //!
 //! Use for bottom navigation between a small set of top-level destinations.
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -15,7 +14,7 @@ use parking_lot::RwLock;
 use tessera_ui::{Color, DimensionValue, Dp, tessera};
 
 use crate::{
-    RippleState, ShadowProps,
+    ShadowProps,
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     animation,
     boxed::{BoxedArgsBuilder, boxed},
@@ -145,7 +144,6 @@ where
             .block_input(true)
             .build()
             .expect("SurfaceArgsBuilder failed with required fields set"),
-        None,
         move || {
             let separator_color = scheme.outline_variant.with_alpha(0.12);
             column(
@@ -164,7 +162,6 @@ where
                                 .style(separator_color.into())
                                 .build()
                                 .expect("SurfaceArgsBuilder failed for divider"),
-                            None,
                             || {},
                         );
                     });
@@ -252,7 +249,6 @@ fn render_navigation_item(
     let icon_closure = item.icon.clone();
     let indicator_color = scheme.secondary_container.with_alpha(indicator_alpha);
 
-    let ripple_state = state.ripple_state(index);
     let icon_only_indicator_color = indicator_color;
     let on_click = item.on_click.clone();
 
@@ -276,7 +272,6 @@ fn render_navigation_item(
             })))
             .build()
             .expect("SurfaceArgsBuilder failed with required fields set"),
-        Some(ripple_state),
         move || {
             let label_for_text = label_text.clone();
             let label_color_for_text = label_color;
@@ -321,7 +316,6 @@ fn render_navigation_item(
                                                     .height(INDICATOR_HEIGHT)
                                                     .build()
                                                     .expect("SurfaceArgsBuilder failed for indicator"),
-                                                None,
                                                 || {},
                                             );
                                         });
@@ -370,14 +364,10 @@ fn render_navigation_item(
     );
 }
 
-/// Holds selection & per-item ripple state for the navigation bar.
-///
-/// `selected` tracks the currently active item index, while `ripple_states` lazily initializes
-/// per-item ripple data on first access.
+/// Holds selection state for the navigation bar.
 struct NavigationBarStateInner {
     selected: usize,
     previous_selected: usize,
-    ripple_states: HashMap<usize, RippleState>,
     anim_start_time: Option<Instant>,
 }
 
@@ -386,7 +376,6 @@ impl NavigationBarStateInner {
         Self {
             selected,
             previous_selected: selected,
-            ripple_states: HashMap::new(),
             anim_start_time: None,
         }
     }
@@ -413,10 +402,6 @@ impl NavigationBarStateInner {
         } else {
             None
         }
-    }
-
-    fn ripple_state(&mut self, index: usize) -> RippleState {
-        self.ripple_states.entry(index).or_default().clone()
     }
 }
 
@@ -467,10 +452,6 @@ impl NavigationBarState {
 
     fn animation_progress(&self) -> Option<f32> {
         self.inner.write().animation_progress()
-    }
-
-    fn ripple_state(&self, index: usize) -> RippleState {
-        self.inner.write().ripple_state(index)
     }
 }
 
