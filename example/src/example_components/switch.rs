@@ -28,7 +28,6 @@ pub fn switch_showcase(#[state] state: SwitchShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -43,7 +42,6 @@ pub fn switch_showcase(#[state] state: SwitchShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(state);
                         },

@@ -28,7 +28,6 @@ pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
             .width(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             lazy_column(
                 LazyColumnArgs {
@@ -112,7 +111,6 @@ fn vertical_list(state: LazyListState) {
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
             .unwrap(),
-        None,
         move || {
             lazy_column(
                 LazyColumnArgsBuilder::default()
@@ -151,7 +149,6 @@ fn horizontal_gallery(state: LazyListState) {
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
             .unwrap(),
-        None,
         move || {
             lazy_row(
                 LazyRowArgsBuilder::default()
@@ -189,7 +186,6 @@ fn contact_card(index: usize) {
             .style(color_for_index(index).with_alpha(0.15).into())
             .build()
             .unwrap(),
-        None,
         move || {
             column(
                 ColumnArgsBuilder::default()
@@ -238,7 +234,6 @@ fn gallery_card(index: usize) {
             .style(color_for_index(index).into())
             .build()
             .unwrap(),
-        None,
         move || {
             text(
                 TextArgsBuilder::default()

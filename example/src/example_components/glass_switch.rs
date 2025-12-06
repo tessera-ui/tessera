@@ -26,7 +26,6 @@ pub fn glass_switch_showcase(#[state] state: GlassSwitchShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -41,7 +40,6 @@ pub fn glass_switch_showcase(#[state] state: GlassSwitchShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(state);
                         },

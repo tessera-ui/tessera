@@ -4,7 +4,6 @@
 //!
 //! Use to organize content into separate pages that can be switched between.
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -17,7 +16,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    RippleState,
     alignment::Alignment,
     animation,
     boxed::{BoxedArgs, boxed},
@@ -80,7 +78,6 @@ struct TabsStateInner {
     indicator_to_x: Px,
     content_scroll_offset: Px,
     target_content_scroll_offset: Px,
-    ripple_states: HashMap<usize, RippleState>,
 }
 
 impl TabsStateInner {
@@ -96,7 +93,6 @@ impl TabsStateInner {
             indicator_to_x: Px(0),
             content_scroll_offset: Px(0),
             target_content_scroll_offset: Px(0),
-            ripple_states: Default::default(),
         }
     }
 
@@ -122,10 +118,6 @@ impl TabsStateInner {
                     * eased_progress) as i32);
             self.progress = 0.0;
         }
-    }
-
-    fn ripple_state(&mut self, index: usize) -> RippleState {
-        self.ripple_states.entry(index).or_default().clone()
     }
 }
 
@@ -212,11 +204,6 @@ impl TabsState {
             inner.indicator_from_x,
             inner.indicator_to_x,
         )
-    }
-
-    /// Retrieves or initializes the ripple state for the given tab.
-    fn ripple_state(&self, index: usize) -> RippleState {
-        self.inner.write().ripple_state(index)
     }
 }
 
@@ -465,7 +452,6 @@ where
             },
             ..Default::default()
         },
-        None,
         || {},
     );
 
@@ -476,8 +462,6 @@ where
     );
 
     for (index, child) in title_closures.into_iter().enumerate() {
-        let ripple_state = state.ripple_state(index);
-
         let label_color = if index == active_tab {
             args.active_content_color
         } else {
@@ -497,7 +481,6 @@ where
                 .shape(Shape::RECTANGLE)
                 .build()
                 .expect("builder construction failed"),
-            ripple_state,
             move || {
                 boxed(
                     BoxedArgs {

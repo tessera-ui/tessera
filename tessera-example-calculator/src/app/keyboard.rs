@@ -327,13 +327,6 @@ fn num_key(key: &'static str, app_state: Arc<AppState>, style: CalStyle) {
         return;
     }
 
-    let key_str = key.to_string();
-    let ripple_state = app_state
-        .ripple_states
-        .entry(key_str.clone())
-        .or_default()
-        .clone();
-
     let on_click = make_on_click(key, app_state.clone());
 
     let content_closure = move || {
@@ -352,7 +345,6 @@ fn num_key(key: &'static str, app_state: Arc<AppState>, style: CalStyle) {
                     .on_click(on_click)
                     .build()
                     .unwrap(),
-                ripple_state,
                 content_closure,
             );
         }
@@ -366,7 +358,6 @@ fn num_key(key: &'static str, app_state: Arc<AppState>, style: CalStyle) {
                     .on_click(on_click)
                     .build()
                     .unwrap(),
-                ripple_state,
                 content_closure,
             );
         }

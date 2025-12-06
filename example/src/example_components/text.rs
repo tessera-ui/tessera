@@ -14,7 +14,6 @@ pub fn text_showcase(#[state] scrollable_state: ScrollableState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -29,7 +28,6 @@ pub fn text_showcase(#[state] scrollable_state: ScrollableState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         || {
                             test_content();
                         },

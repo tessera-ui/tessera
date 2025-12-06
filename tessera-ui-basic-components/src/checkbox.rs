@@ -18,7 +18,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    RippleState,
     alignment::Alignment,
     boxed::{BoxedArgsBuilder, boxed},
     checkmark::{CheckmarkArgsBuilder, checkmark},
@@ -26,10 +25,9 @@ use crate::{
     surface::{SurfaceArgsBuilder, surface},
 };
 
-/// Shared state for the `checkbox` component, including ripple feedback.
+/// Shared state for the `checkbox` component.
 #[derive(Clone, Default)]
 pub struct CheckboxState {
-    ripple: RippleState,
     checkmark: Arc<RwLock<CheckmarkState>>,
 }
 
@@ -37,7 +35,6 @@ impl CheckboxState {
     /// Creates a new checkbox state with the provided initial value.
     pub fn new(initial_state: bool) -> Self {
         Self {
-            ripple: RippleState::new(),
             checkmark: Arc::new(RwLock::new(CheckmarkState::new(initial_state))),
         }
     }
@@ -194,7 +191,7 @@ impl CheckmarkState {
 /// ## Parameters
 ///
 /// - `args` — configures the checkbox's appearance and `on_toggle` callback; see [`CheckboxArgs`].
-/// - `state` — a clonable [`CheckboxState`] that manages the checkmark and ripple animations.
+/// - `state` — a clonable [`CheckboxState`] that manages the checkmark animation.
 ///
 /// ## Examples
 ///
@@ -246,8 +243,6 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
     }));
     let on_click_for_surface = on_click.clone();
 
-    let ripple_state = state.ripple.clone();
-
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(args.size.to_px()))
@@ -265,7 +260,6 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
             .on_click(on_click_for_surface)
             .build()
             .expect("builder construction failed"),
-        Some(ripple_state),
         closure!(
             clone state,
             clone args.checkmark_color,
@@ -280,7 +274,6 @@ pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
                         .style(Color::TRANSPARENT.into())
                         .build()
                         .expect("builder construction failed"),
-                    None,
                     move || {
                         boxed(
                             BoxedArgsBuilder::default()

@@ -24,7 +24,6 @@ pub(super) fn render_active_segment(layout: SliderLayout, colors: &SliderColors)
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -46,7 +45,6 @@ pub(super) fn render_inactive_segment(layout: SliderLayout, colors: &SliderColor
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -60,7 +58,6 @@ pub(super) fn render_focus(layout: SliderLayout, colors: &SliderColors) {
             .shape(Shape::capsule())
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -74,7 +71,6 @@ pub(super) fn render_handle(layout: SliderLayout, colors: &SliderColors) {
             .shape(Shape::capsule())
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -88,7 +84,6 @@ pub(super) fn render_stop_indicator(layout: SliderLayout, colors: &SliderColors)
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -114,7 +109,6 @@ pub(super) fn render_centered_tracks(
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 
@@ -135,7 +129,6 @@ pub(super) fn render_centered_tracks(
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 
@@ -156,7 +149,6 @@ pub(super) fn render_centered_tracks(
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -174,7 +166,6 @@ pub(super) fn render_centered_stops(
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 
@@ -187,7 +178,6 @@ pub(super) fn render_centered_stops(
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -205,7 +195,6 @@ pub(super) fn render_range_stops(
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 
@@ -218,7 +207,6 @@ pub(super) fn render_range_stops(
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }
@@ -244,7 +232,6 @@ pub(super) fn render_range_tracks(
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 
@@ -265,7 +252,6 @@ pub(super) fn render_range_tracks(
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 
@@ -286,7 +272,6 @@ pub(super) fn render_range_tracks(
             })
             .build()
             .expect("builder construction failed"),
-        None,
         || {},
     );
 }

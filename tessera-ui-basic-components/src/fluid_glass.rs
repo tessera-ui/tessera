@@ -10,6 +10,7 @@ use tessera_ui::{
     BarrierRequirement, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
     GestureState, PressKeyEventType, Px, PxPosition,
     accesskit::{Action, Role},
+    remember,
     renderer::DrawCommand,
     tessera,
     winit::window::CursorIcon,
@@ -204,7 +205,7 @@ impl DrawCommand for FluidGlassCommand {
 // These helpers operate on the injected InputHandlerInput type from the core crate.
 fn handle_click_state(
     args: &FluidGlassArgs,
-    ripple_state: Option<RippleState>,
+    ripple_state: Option<&RippleState>,
     on_click: Arc<dyn Fn() + Send + Sync>,
     input: &mut tessera_ui::InputHandlerInput,
 ) {
@@ -224,9 +225,7 @@ fn handle_click_state(
                     CursorEventContent::Released(PressKeyEventType::Left)
                 )
         }) {
-            if let Some(ripple_state) = &ripple_state
-                && let Some(pos) = input.cursor_position_rel
-            {
+            if let (Some(ripple_state), Some(pos)) = (ripple_state, input.cursor_position_rel) {
                 let size = input.computed_data;
                 let normalized_pos = [
                     pos.x.to_f32() / size.width.to_f32(),
@@ -316,7 +315,6 @@ fn apply_fluid_glass_accessibility(
 /// ## Parameters
 ///
 /// - `args` — configures the glass effect's appearance; see [`FluidGlassArgs`].
-/// - `ripple_state` — an optional [`RippleState`] to manage a ripple animation on interaction.
 /// - `child` — a closure that renders content on top of the glass surface.
 ///
 /// ## Examples
@@ -327,18 +325,17 @@ fn apply_fluid_glass_accessibility(
 ///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// fluid_glass(FluidGlassArgs::default(), None, || {
+/// fluid_glass(FluidGlassArgs::default(), || {
 ///     text(TextArgsBuilder::default().text("Content on glass".to_string()).build().expect("builder construction failed"));
 /// });
 /// ```
 #[tessera]
-pub fn fluid_glass(
-    mut args: FluidGlassArgs,
-    ripple_state: Option<RippleState>,
-    child: impl FnOnce(),
-) {
-    if let Some(ripple_state) = &ripple_state
-        && let Some((progress, center)) = ripple_state.get_animation_progress()
+pub fn fluid_glass(mut args: FluidGlassArgs, child: impl FnOnce()) {
+    let ripple_state = args.on_click.as_ref().map(|_| remember(RippleState::new));
+
+    if let Some((progress, center)) = ripple_state
+        .as_ref()
+        .and_then(|state| state.get_animation_progress())
     {
         args.ripple_center = Some(center);
         args.ripple_radius = Some(progress);
@@ -439,7 +436,6 @@ pub fn fluid_glass(
     }));
 
     if let Some(ref on_click) = args.on_click {
-        let ripple_state = ripple_state.clone();
         let on_click_arc = on_click.clone();
         let args_for_handler = args.clone();
         input_handler(Box::new(move |mut input: tessera_ui::InputHandlerInput| {
@@ -452,7 +448,7 @@ pub fn fluid_glass(
             // Then handle click state (which includes block_input logic)
             handle_click_state(
                 &args_for_handler,
-                ripple_state.clone(),
+                ripple_state.as_deref(),
                 on_click_arc.clone(),
                 &mut input,
             );

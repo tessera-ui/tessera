@@ -4,7 +4,6 @@ use closure::closure;
 use parking_lot::RwLock;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
-    RippleState,
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
@@ -39,7 +38,6 @@ impl Display for CornerRadius {
 }
 
 struct ExampleGlassState {
-    ripple_state: RippleState,
     width: ConfigSliderState<Dp>,
     height: ConfigSliderState<Dp>,
     border_width: ConfigSliderState<Dp>,
@@ -88,7 +86,6 @@ impl Default for ExampleGlassState {
         );
 
         Self {
-            ripple_state: RippleState::new(),
             width: ConfigSliderState::new(Dp(100.0)),
             height: ConfigSliderState::new(Dp(100.0)),
             border_width: ConfigSliderState::new(Dp(1.0)),
@@ -111,7 +108,6 @@ pub fn fluid_glass_showcase(#[state] state: FluidGlassShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -126,7 +122,6 @@ pub fn fluid_glass_showcase(#[state] state: FluidGlassShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(example_surface_state);
                         },
@@ -155,7 +150,6 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                 let height = state.height.value;
                 let border_width = state.border_width.value;
                 let state_string = (*state).to_string();
-                let ripple_state = state.ripple_state.clone();
                 let refraction_amount = state.refraction_amount.value;
                 let refraction_height = state.refraction_height.value;
                 let blur_radius = state.blur_radius.value;
@@ -220,7 +214,6 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                                                 .refraction_height(refraction_height)
                                                 .build()
                                                 .unwrap(),
-                                            Some(ripple_state),
                                             || {},
                                         );
                                     });

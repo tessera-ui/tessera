@@ -27,7 +27,6 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .expect("builder construction failed"),
-        None,
         move || {
             lazy_column(
                 LazyColumnArgs {

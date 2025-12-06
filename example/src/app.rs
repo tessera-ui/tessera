@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
 use closure::closure;
-use dashmap::DashMap;
 use tessera_ui::{
     Color, DimensionValue, Dp,
     router::{Router, router_root},
     shard, tessera,
 };
 use tessera_ui_basic_components::{
-    RippleState, ShadowProps,
+    ShadowProps,
     alignment::{Alignment, CrossAxisAlignment},
     bottom_sheet::{
         BottomSheetProviderArgsBuilder, BottomSheetProviderState, BottomSheetStyle,
@@ -221,7 +220,6 @@ Side bars are bars at side, side at bars, bars side at, at side bars..."#,
 #[derive(Default)]
 struct HomeState {
     lazy_list_state: LazyListState,
-    example_cards_ripple_state: DashMap<usize, RippleState>,
 }
 
 #[derive(Clone)]
@@ -465,9 +463,7 @@ fn home(
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
-            let state_clone = home_state.clone();
             let examples_clone = examples.clone();
 
             lazy_column(
@@ -488,16 +484,11 @@ fn home(
                     .unwrap(),
                 home_state.lazy_list_state.clone(),
                 move |scope| {
-                    let ripple_map = state_clone.example_cards_ripple_state.clone();
-                    scope.items_from_iter(examples_clone.iter().cloned(), move |index, example| {
+                    scope.items_from_iter(examples_clone.iter().cloned(), move |_, example| {
                         let on_click = example.on_click.clone();
-                        let surface_ripple_state = ripple_map
-                            .entry(index)
-                            .or_insert_with(RippleState::default)
-                            .clone();
                         let title = example.title.clone();
                         let description = example.desription.clone();
-                        component_card(&title, &description, surface_ripple_state, on_click);
+                        component_card(&title, &description, on_click);
                     });
                 },
             );
@@ -506,12 +497,7 @@ fn home(
 }
 
 #[tessera]
-fn component_card(
-    title: &str,
-    description: &str,
-    surface_ripple_state: RippleState,
-    on_click: Arc<dyn Fn() + Send + Sync>,
-) {
+fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send + Sync>) {
     let title = title.to_string();
     let description = description.to_string();
     surface(
@@ -526,7 +512,6 @@ fn component_card(
             .shadow(ShadowProps::default())
             .build()
             .unwrap(),
-        Some(surface_ripple_state),
         || {
             column(ColumnArgs::default(), |scope| {
                 scope.child(move || {
@@ -553,14 +538,8 @@ fn component_card(
     );
 }
 
-#[derive(Default)]
-struct TopAppBarState {
-    back_button_ripple_state: RippleState,
-}
-
 #[tessera]
-#[shard]
-fn top_app_bar(#[state] state: TopAppBarState) {
+fn top_app_bar() {
     surface(
         SurfaceArgsBuilder::default()
             .shadow(ShadowProps::default())
@@ -570,7 +549,6 @@ fn top_app_bar(#[state] state: TopAppBarState) {
             .block_input(true)
             .build()
             .unwrap(),
-        None,
         move || {
             row(
                 RowArgsBuilder::default()
@@ -596,31 +574,27 @@ fn top_app_bar(#[state] state: TopAppBarState) {
                             }));
                         }
 
-                        button(
-                            button_args.build().unwrap(),
-                            state.back_button_ripple_state.clone(),
-                            || {
-                                boxed(
-                                    BoxedArgsBuilder::default()
-                                        .width(DimensionValue::FILLED)
-                                        .height(DimensionValue::FILLED)
-                                        .alignment(Alignment::Center)
-                                        .build()
-                                        .unwrap(),
-                                    |scope| {
-                                        scope.child(|| {
-                                            text(
-                                                TextArgsBuilder::default()
-                                                    .text("←".to_string())
-                                                    .size(Dp(25.0))
-                                                    .build()
-                                                    .unwrap(),
-                                            );
-                                        });
-                                    },
-                                );
-                            },
-                        );
+                        button(button_args.build().unwrap(), || {
+                            boxed(
+                                BoxedArgsBuilder::default()
+                                    .width(DimensionValue::FILLED)
+                                    .height(DimensionValue::FILLED)
+                                    .alignment(Alignment::Center)
+                                    .build()
+                                    .unwrap(),
+                                |scope| {
+                                    scope.child(|| {
+                                        text(
+                                            TextArgsBuilder::default()
+                                                .text("←".to_string())
+                                                .size(Dp(25.0))
+                                                .build()
+                                                .unwrap(),
+                                        );
+                                    });
+                                },
+                            );
+                        });
                     });
                 },
             );
@@ -638,7 +612,6 @@ fn about() {
             .padding(Dp(16.0))
             .build()
             .unwrap(),
-        None,
         || {
             boxed(
                 BoxedArgsBuilder::default()

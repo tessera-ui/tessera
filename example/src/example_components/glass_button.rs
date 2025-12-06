@@ -2,7 +2,6 @@ use std::sync::{Arc, Mutex};
 
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
-    RippleState,
     alignment::{Alignment, CrossAxisAlignment},
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgs, ColumnArgsBuilder, column},
@@ -31,8 +30,6 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
 struct GlassButtonShowcaseState {
     scrollable_state: ScrollableState,
     counter: Arc<Mutex<i32>>,
-    ripple_state: RippleState,
-    icon_ripple_state: RippleState,
     image_data: Arc<ImageData>,
     icon_data: Arc<ImageVectorData>,
 }
@@ -51,8 +48,6 @@ impl Default for GlassButtonShowcaseState {
         Self {
             scrollable_state: Default::default(),
             counter: Default::default(),
-            ripple_state: RippleState::new(),
-            icon_ripple_state: RippleState::new(),
             image_data,
             icon_data,
         }
@@ -68,7 +63,6 @@ pub fn glass_button_showcase(#[state] state: GlassButtonShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -83,7 +77,6 @@ pub fn glass_button_showcase(#[state] state: GlassButtonShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(state.clone());
                         },
@@ -153,7 +146,6 @@ fn test_content(state: Arc<GlassButtonShowcaseState>) {
                                                 .shape(Shape::rounded_rectangle(Dp(25.0)))
                                                 .build()
                                                 .unwrap(),
-                                            glass_state.ripple_state.clone(),
                                             || text("Click Me!"),
                                         );
                                     });
@@ -196,10 +188,7 @@ fn test_content(state: Arc<GlassButtonShowcaseState>) {
                                             .build()
                                             .unwrap();
 
-                                        glass_icon_button(
-                                            args,
-                                            icon_state.icon_ripple_state.clone(),
-                                        );
+                                        glass_icon_button(args);
                                     });
                                 },
                             );

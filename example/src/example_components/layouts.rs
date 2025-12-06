@@ -19,7 +19,6 @@ pub fn layouts_showcase(#[state] scrollable_state: ScrollableState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -34,7 +33,6 @@ pub fn layouts_showcase(#[state] scrollable_state: ScrollableState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         || {
                             column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
                                 scope.child(row_showcase);
@@ -58,7 +56,6 @@ fn showcase_box(color: Color) {
             .height(DimensionValue::from(Dp(50.0)))
             .build()
             .unwrap(),
-        None,
         || {},
     );
 }
@@ -83,7 +80,6 @@ fn row_showcase() {
                     .style(global_material_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
-                None,
                 || {
                     row(
                         RowArgsBuilder::default()
@@ -122,7 +118,6 @@ fn column_showcase() {
                     .style(global_material_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
-                None,
                 || {
                     column(
                         ColumnArgsBuilder::default()
@@ -161,7 +156,6 @@ fn boxed_showcase() {
                     .style(global_material_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
-                None,
                 || {
                     boxed(
                         BoxedArgsBuilder::default()

@@ -335,7 +335,6 @@ fn switch_inner(
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
-        None,
         {
             move || {
                 if let Some(child) = child {

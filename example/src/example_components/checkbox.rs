@@ -30,7 +30,6 @@ pub fn checkbox_showcase(#[state] state: CheckboxShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -45,7 +44,6 @@ pub fn checkbox_showcase(#[state] state: CheckboxShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             column(
                                 ColumnArgsBuilder::default()

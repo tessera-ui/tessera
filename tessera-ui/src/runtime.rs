@@ -5,8 +5,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
     hash::{Hash, Hasher},
-    sync::Arc,
-    sync::OnceLock,
+    sync::{Arc, OnceLock},
 };
 
 use parking_lot::{Mutex, RwLock};
@@ -15,13 +14,13 @@ use crate::{NodeId, component_tree::ComponentTree};
 
 thread_local! {
     /// Stack of currently executing component node ids for the current thread.
-    static NODE_CONTEXT_STACK: RefCell<Vec<NodeId>> = RefCell::new(Vec::new());
+    static NODE_CONTEXT_STACK: RefCell<Vec<NodeId>> = const { RefCell::new(Vec::new()) };
     /// Control-flow grouping path for the current thread.
-    static GROUP_PATH_STACK: RefCell<Vec<u64>> = RefCell::new(Vec::new());
+    static GROUP_PATH_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
     /// Component logic identifier stack (one per component invocation).
-    static LOGIC_ID_STACK: RefCell<Vec<u64>> = RefCell::new(Vec::new());
+    static LOGIC_ID_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
     /// Current execution phase stack for the thread.
-    static PHASE_STACK: RefCell<Vec<RuntimePhase>> = RefCell::new(Vec::new());
+    static PHASE_STACK: RefCell<Vec<RuntimePhase>> = const { RefCell::new(Vec::new()) };
 }
 
 #[derive(Clone)]
@@ -416,7 +415,9 @@ fn ensure_build_phase() {
                 "remember must not be called inside input_handler; move state to component render"
             )
         }
-        None => panic!("remember must be called inside a tessera component. Ensure you're calling this from within a function annotated with #[tessera]."),
+        None => panic!(
+            "remember must be called inside a tessera component. Ensure you're calling this from within a function annotated with #[tessera]."
+        ),
     }
 }
 

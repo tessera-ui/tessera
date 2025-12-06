@@ -24,7 +24,6 @@ pub fn tabs_showcase(#[state] state: TabsShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -39,7 +38,6 @@ pub fn tabs_showcase(#[state] state: TabsShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(state);
                         },

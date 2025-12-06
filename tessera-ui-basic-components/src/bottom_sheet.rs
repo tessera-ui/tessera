@@ -224,7 +224,6 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
             .noise_amount(0.0)
             .build()
             .expect("FluidGlassArgsBuilder failed with required fields set"),
-        None,
         || {},
     );
 }
@@ -247,7 +246,6 @@ fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open:
             .block_input(true)
             .build()
             .expect("SurfaceArgsBuilder failed with required fields set"),
-        None,
         || {},
     );
 }
@@ -331,7 +329,6 @@ fn render_content(
                     .block_input(true)
                     .build()
                     .expect("FluidGlassArgsBuilder failed with required fields set"),
-                None,
                 bottom_sheet_content,
             );
         }
@@ -353,7 +350,6 @@ fn render_content(
                     .block_input(true)
                     .build()
                     .expect("SurfaceArgsBuilder failed with required fields set"),
-                None,
                 bottom_sheet_content,
             );
         }

@@ -145,7 +145,6 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorState) {
         let args_for_surface = editor_args.clone();
         surface(
             create_surface_args(&args_for_surface, &state_for_surface),
-            None, // text editors are not interactive at surface level
             move || {
                 // Core layer - handles text rendering and editing logic
                 text_edit_core(state_for_surface.clone());

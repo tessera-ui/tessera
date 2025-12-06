@@ -191,7 +191,6 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                     .noise_amount(0.0)
                     .build()
                     .expect("builder construction failed"),
-                None,
                 || {},
             );
         }
@@ -212,7 +211,6 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                     .block_input(true)
                     .build()
                     .expect("builder construction failed"),
-                None,
                 || {},
             );
         }
@@ -266,7 +264,6 @@ fn dialog_content_wrapper(
                             .padding(padding)
                             .build()
                             .expect("builder construction failed"),
-                        None,
                         content,
                     );
                 }
@@ -288,7 +285,6 @@ fn dialog_content_wrapper(
                             .block_input(true)
                             .build()
                             .expect("builder construction failed"),
-                        None,
                         content,
                     );
                 }

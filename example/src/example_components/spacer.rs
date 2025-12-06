@@ -22,7 +22,6 @@ pub fn spacer_showcase(#[state] state: SpacerShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -37,7 +36,6 @@ pub fn spacer_showcase(#[state] state: SpacerShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         || {
                             test_content();
                         },
@@ -128,7 +126,6 @@ fn colored_box(color: Color) {
             .height(Dp(50.0))
             .build()
             .unwrap(),
-        None,
         || {},
     );
 }

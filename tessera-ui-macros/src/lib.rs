@@ -175,7 +175,7 @@ impl ControlFlowInstrumenter {
 
 impl VisitMut for ControlFlowInstrumenter {
     fn visit_expr_if_mut(&mut self, i: &mut syn::ExprIf) {
-        self.visit_expr_mut(&mut *i.cond);
+        self.visit_expr_mut(&mut i.cond);
         self.wrap_block_in_group(&mut i.then_branch);
         if let Some((_, else_branch)) = &mut i.else_branch {
             match &mut **else_branch {
@@ -193,19 +193,19 @@ impl VisitMut for ControlFlowInstrumenter {
     }
 
     fn visit_expr_match_mut(&mut self, m: &mut syn::ExprMatch) {
-        self.visit_expr_mut(&mut *m.expr);
+        self.visit_expr_mut(&mut m.expr);
         for arm in &mut m.arms {
             self.wrap_expr_in_group(&mut arm.body);
         }
     }
 
     fn visit_expr_for_loop_mut(&mut self, f: &mut syn::ExprForLoop) {
-        self.visit_expr_mut(&mut *f.expr);
+        self.visit_expr_mut(&mut f.expr);
         self.wrap_block_in_group(&mut f.body);
     }
 
     fn visit_expr_while_mut(&mut self, w: &mut syn::ExprWhile) {
-        self.visit_expr_mut(&mut *w.cond);
+        self.visit_expr_mut(&mut w.cond);
         self.wrap_block_in_group(&mut w.body);
     }
 

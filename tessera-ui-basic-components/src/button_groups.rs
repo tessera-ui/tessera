@@ -19,7 +19,6 @@ use parking_lot::RwLock;
 use tessera_ui::{Color, ComputedData, Dp, Px, PxPosition, tessera};
 
 use crate::{
-    RippleState,
     alignment::MainAxisAlignment,
     animation,
     button::{ButtonArgs, button},
@@ -190,7 +189,6 @@ impl ButtonGroupsLayout {
 
 #[derive(Default, Clone)]
 struct ButtonItemState {
-    ripple_state: RippleState,
     actived: Arc<AtomicBool>,
     elastic_state: Arc<RwLock<ElasticState>>,
 }
@@ -306,7 +304,6 @@ pub fn button_groups<F>(
 
                     scope.child(
                         closure!(clone state, clone layout, || {
-                            let ripple_state = item_state.ripple_state.clone();
                             let actived = item_state.actived.load(Ordering::Acquire);
                             let elastic_state = item_state.elastic_state.clone();
                             if actived {
@@ -318,7 +315,7 @@ pub fn button_groups<F>(
                                     })
                                 );
                                 button_args.shape = layout.active_button_shape;
-                                button(button_args, ripple_state, || elastic_container(elastic_state, move || child_closure(global_material_scheme().on_primary)));
+                                button(button_args, || elastic_container(elastic_state, move || child_closure(global_material_scheme().on_primary)));
                             } else {
                                 let mut button_args = ButtonArgs::filled(
                                     Arc::new(move || {
@@ -345,7 +342,7 @@ pub fn button_groups<F>(
                                     button_args.shape = layout.inactive_button_shape;
                                 }
 
-                                button(button_args, ripple_state, move || elastic_container(
+                                button(button_args, move || elastic_container(
                                     elastic_state,
                                     move || child_closure(global_material_scheme().on_secondary_container))
                                 );

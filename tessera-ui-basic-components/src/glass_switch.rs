@@ -354,7 +354,6 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
     }
     fluid_glass(
         track_builder.build().expect("builder construction failed"),
-        None,
         || {},
     );
 
@@ -373,7 +372,6 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
     }
     fluid_glass(
         thumb_builder.build().expect("builder construction failed"),
-        None,
         || {},
     );
 

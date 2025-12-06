@@ -49,7 +49,6 @@ pub fn radio_button_showcase(#[state] state: RadioButtonShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
@@ -65,7 +64,6 @@ pub fn radio_button_showcase(#[state] state: RadioButtonShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             content(state.clone());
                         },
