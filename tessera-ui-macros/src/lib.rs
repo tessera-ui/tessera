@@ -4,9 +4,11 @@
 //! The main export is the `#[tessera]` attribute macro, which transforms
 //! regular Rust functions into Tessera UI components.
 
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{ItemFn, parse_macro_input};
+use syn::{Block, Expr, ItemFn, parse_macro_input, parse_quote, visit_mut::VisitMut};
 
 /// Helper: parse crate path from attribute TokenStream
 fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Path {
@@ -23,17 +25,18 @@ fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Path {
 fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_macro2::TokenStream {
     quote! {
         {
-            use #crate_path::{TesseraRuntime, ComponentNode};
+            use #crate_path::{ComponentNode, TesseraRuntime};
 
             TesseraRuntime::with_mut(|runtime| {
                 runtime.component_tree.add_node(
                     ComponentNode {
                         fn_name: stringify!(#fn_name).to_string(),
+                        logic_id: __tessera_logic_id,
                         measure_fn: None,
                         input_handler_fn: None,
                     }
                 )
-            });
+            })
         }
     }
 }
@@ -98,14 +101,116 @@ fn on_close_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     }
 }
 
-/// Helper: tokens to cleanup (pop node)
-fn cleanup_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
+/// Helper: tokens to compute a stable logic id based on module path + function name.
+fn logic_id_tokens(fn_name: &syn::Ident) -> proc_macro2::TokenStream {
     quote! {
         {
-            use #crate_path::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| runtime.component_tree.pop_node());
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            module_path!().hash(&mut hasher);
+            stringify!(#fn_name).hash(&mut hasher);
+            hasher.finish()
         }
+    }
+}
+
+struct ControlFlowInstrumenter {
+    /// counter to generate unique IDs in current function
+    counter: usize,
+    /// seed to prevent ID collisions across functions
+    seed: u64,
+}
+
+impl ControlFlowInstrumenter {
+    fn new(seed: u64) -> Self {
+        Self { counter: 0, seed }
+    }
+
+    /// Generate the next unique group ID
+    fn next_group_id(&mut self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.seed.hash(&mut hasher);
+        self.counter.hash(&mut hasher);
+        self.counter += 1;
+        hasher.finish()
+    }
+
+    /// Wrap an expression in a GroupGuard block
+    ///
+    /// Before transform: expr
+    /// After transform: { let _group_guard = ::tessera_ui::runtime::GroupGuard::new(#id); expr }
+    fn wrap_expr_in_group(&mut self, expr: &mut Expr) {
+        // Recursively visit sub-expressions (depth-first) to ensure nested structures are wrapped
+        self.visit_expr_mut(expr);
+        let group_id = self.next_group_id();
+        // Use fully-qualified path ::tessera_ui to avoid relying on a crate alias
+        let original_expr = &expr;
+        let new_expr: Expr = parse_quote! {
+            {
+                let _group_guard = ::tessera_ui::runtime::GroupGuard::new(#group_id);
+                #original_expr
+            }
+        };
+        *expr = new_expr;
+    }
+
+    /// Wrap a block in a GroupGuard block
+    fn wrap_block_in_group(&mut self, block: &mut Block) {
+        // Recursively instrument nested expressions before wrapping the block
+        self.visit_block_mut(block);
+
+        let group_id = self.next_group_id();
+        let original_stmts = &block.stmts;
+
+        let new_block: Block = parse_quote! {
+            {
+                let _group_guard = ::tessera_ui::runtime::GroupGuard::new(#group_id);
+                #(#original_stmts)*
+            }
+        };
+
+        *block = new_block;
+    }
+}
+
+impl VisitMut for ControlFlowInstrumenter {
+    fn visit_expr_if_mut(&mut self, i: &mut syn::ExprIf) {
+        self.visit_expr_mut(&mut *i.cond);
+        self.wrap_block_in_group(&mut i.then_branch);
+        if let Some((_, else_branch)) = &mut i.else_branch {
+            match &mut **else_branch {
+                Expr::Block(block_expr) => {
+                    self.wrap_block_in_group(&mut block_expr.block);
+                }
+                Expr::If(_) => {
+                    self.visit_expr_mut(else_branch);
+                }
+                _ => {
+                    self.wrap_expr_in_group(else_branch);
+                }
+            }
+        }
+    }
+
+    fn visit_expr_match_mut(&mut self, m: &mut syn::ExprMatch) {
+        self.visit_expr_mut(&mut *m.expr);
+        for arm in &mut m.arms {
+            self.wrap_expr_in_group(&mut arm.body);
+        }
+    }
+
+    fn visit_expr_for_loop_mut(&mut self, f: &mut syn::ExprForLoop) {
+        self.visit_expr_mut(&mut *f.expr);
+        self.wrap_block_in_group(&mut f.body);
+    }
+
+    fn visit_expr_while_mut(&mut self, w: &mut syn::ExprWhile) {
+        self.visit_expr_mut(&mut *w.cond);
+        self.wrap_block_in_group(&mut w.body);
+    }
+
+    fn visit_expr_loop_mut(&mut self, l: &mut syn::ExprLoop) {
+        self.wrap_block_in_group(&mut l.body);
     }
 }
 
@@ -146,12 +251,21 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let crate_path: syn::Path = parse_crate_path(attr);
 
     // Parse the input function that will be transformed into a component
-    let input_fn = parse_macro_input!(item as ItemFn);
+    let mut input_fn = parse_macro_input!(item as ItemFn);
     let fn_name = &input_fn.sig.ident; // Function name for component identification
     let fn_vis = &input_fn.vis; // Visibility (pub, pub(crate), etc.)
     let fn_attrs = &input_fn.attrs; // Attributes like #[doc], #[allow], etc.
     let fn_sig = &input_fn.sig; // Function signature (parameters, return type)
-    let fn_block = &input_fn.block; // Original function body
+
+    // Generate a stable hash seed based on function name in order to avoid ID collisions
+    let mut hasher = DefaultHasher::new();
+    input_fn.sig.ident.to_string().hash(&mut hasher);
+    let seed = hasher.finish();
+
+    // Modify the function body to instrument control flow with GroupGuard
+    let mut instrumenter = ControlFlowInstrumenter::new(seed);
+    instrumenter.visit_block_mut(&mut input_fn.block);
+    let fn_block = &input_fn.block;
 
     // Prepare token fragments using helpers to keep function small and readable
     let register_tokens = register_node_tokens(&crate_path, fn_name);
@@ -159,31 +273,45 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let state_tokens = input_handler_inject_tokens(&crate_path);
     let on_minimize_tokens = on_minimize_inject_tokens(&crate_path);
     let on_close_tokens = on_close_inject_tokens(&crate_path);
-    let cleanup = cleanup_tokens(&crate_path);
+    let logic_id_tokens = logic_id_tokens(fn_name);
 
     // Generate the transformed function with Tessera runtime integration
     let expanded = quote! {
         #(#fn_attrs)*
         #fn_vis #fn_sig {
-            #register_tokens
+            let __tessera_logic_id: u64 = #logic_id_tokens;
+            let __tessera_phase_guard = {
+                use #crate_path::runtime::{RuntimePhase, push_phase};
+                push_phase(RuntimePhase::Build)
+            };
+            let __tessera_node_id = #register_tokens;
 
-            #measure_tokens
-
-            #state_tokens
-
-            #on_minimize_tokens
-
-            #on_close_tokens
-
-            // Execute the original function body within a closure to avoid early-return issues
-            let result = {
-                let closure = || #fn_block;
-                closure()
+            // Inject guard to pop component node on function exit
+            let _component_scope_guard = {
+                struct ComponentScopeGuard;
+                impl Drop for ComponentScopeGuard {
+                    fn drop(&mut self) {
+                        use #crate_path::TesseraRuntime;
+                        TesseraRuntime::with_mut(|runtime| runtime.component_tree.pop_node());
+                    }
+                }
+                ComponentScopeGuard
             };
 
-            #cleanup
+            // Track current node for control-flow instrumentation
+            let _node_ctx_guard = {
+                use #crate_path::runtime::push_current_node;
+                push_current_node(__tessera_node_id, __tessera_logic_id)
+            };
 
-            result
+            // Inject helper tokens
+            #measure_tokens
+            #state_tokens
+            #on_minimize_tokens
+            #on_close_tokens
+
+            // Execute user's function body
+            #fn_block
         }
     };
 
