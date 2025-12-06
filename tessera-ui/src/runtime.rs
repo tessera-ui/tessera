@@ -430,7 +430,36 @@ pub fn reset_slots() {
     slot_table().lock().reset();
 }
 
-/// Remember a value based on logical component id + control-flow path + custom key.
+/// Remember a value across frames with an explicit key.
+///
+/// This function allows a component to "remember" state between frames, using
+/// a user-provided key to identify the state. This is particularly useful for
+/// state generated inside loops or dynamic collections where the execution
+/// order might change.
+///
+/// The `init` closure is executed only once — when the key is first encountered.
+/// On subsequent updates with the same key, the stored value is returned and
+/// `init` is not called.
+///
+/// # Interior mutability
+///
+/// This function returns an `Arc<T>`, which is shared and immutable by default.
+/// This design supports multi-threaded measurement. If you need a value that can
+/// be modified across frames (for example a counter or input buffer), use a
+/// type that provides interior mutability (e.g., `Mutex`, `RwLock`, or atomic
+/// types). If you need to mutate the value during measurement or input
+/// handling, it must also be `Send + Sync`.
+///
+/// # Comparison with [`remember`]
+///
+/// Use this function when the state is generated inside a loop or dynamic
+/// collection where the execution order might change. In other cases,
+/// [`remember`] is sufficient.
+///
+/// # Panics
+///
+/// This function must be called during a component's build/render phase.
+/// Calling it during the measure or input handling phases will panic.
 pub fn remember_with_key<K, F, T>(key: K, init: F) -> Arc<T>
 where
     K: Hash,
@@ -458,7 +487,33 @@ where
     table.allocate_slot(slot_key, init)
 }
 
-/// Remember a value keyed only by logical id + control-flow path.
+/// Remember a value across frames.
+///
+/// This function allows a component to "remember" state between frames.
+/// The `init` closure is executed only once — when the component first runs.
+/// On subsequent updates, the stored value is returned and `init` is not called.
+///
+/// # Interior mutability
+///
+/// This function returns an `Arc<T>`, which is shared and immutable by default.
+/// This design supports multi-threaded measurement. If you need a value that can
+/// be modified across frames (for example a counter or input buffer), use a
+/// type that provides interior mutability (e.g., `Mutex`, `RwLock`, or atomic
+/// types). If you need to mutate the value during measurement or input
+/// handling, it must also be `Send + Sync`.
+///
+/// # Comparison with [`remember_with_key`]
+///
+/// `remember` identifies stored state based on the component's call order and
+/// control-flow path. It associates state by position within a component, but
+/// this does not work reliably for dynamically generated state inside loops.
+/// For state that is allocated dynamically in loops, consider using
+/// [`remember_with_key`] to explicitly provide a unique key.
+///
+/// # Panics
+///
+/// This function must be called during a component's build/render phase.
+/// Calling it during the measure or input handling phases will panic.
 pub fn remember<F, T>(init: F) -> Arc<T>
 where
     F: FnOnce() -> T,
