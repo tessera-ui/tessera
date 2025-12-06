@@ -16,7 +16,7 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, ComputedData, Dp, Px, PxPosition, tessera};
+use tessera_ui::{Color, ComputedData, Dp, Px, PxPosition, remember, tessera};
 
 use crate::{
     alignment::MainAxisAlignment,
@@ -193,10 +193,10 @@ struct ButtonItemState {
     elastic_state: Arc<RwLock<ElasticState>>,
 }
 
-/// State of a button group.
-#[derive(Clone, Default)]
-pub struct ButtonGroupsState {
-    item_states: Arc<RwLock<HashMap<usize, ButtonItemState>>>,
+/// Internal state of a button group.
+#[derive(Default)]
+struct ButtonGroupsState {
+    item_states: RwLock<HashMap<usize, ButtonItemState>>,
 }
 
 /// # button_groups
@@ -207,25 +207,25 @@ pub struct ButtonGroupsState {
 ///
 /// Used for grouping related actions.
 ///
-/// ## Arguments
+/// State for selection and animations is managed internally via `remember`; no external state
+/// handle is required.
 ///
-/// - `args` - Arguments for configuring the button group.
-/// - `state` - State of the button group.
-/// - `scope_config` - A closure that configures the children of the button group using
+/// ## Parameters
+///
+/// - `args` — configures size, style, and selection mode; see [`ButtonGroupsArgs`].
+/// - `scope_config` — closure that configures the children of the button group using
 ///   a [`ButtonGroupsScope`].
 ///
 /// # Example
 ///
 /// ```
 /// use tessera_ui_basic_components::{
-///    button_groups::{ButtonGroupsArgs, ButtonGroupsState, button_groups},
+///    button_groups::{ButtonGroupsArgs, button_groups},
 ///    text::{TextArgs, text},
 /// };
 ///
-/// let button_groups_state = ButtonGroupsState::default();
 /// button_groups(
 ///     ButtonGroupsArgs::default(),
-///     button_groups_state.clone(),
 ///     |scope| {
 ///         scope.child(
 ///             |color| {
@@ -269,13 +269,11 @@ pub struct ButtonGroupsState {
 /// );
 /// ```
 #[tessera]
-pub fn button_groups<F>(
-    args: impl Into<ButtonGroupsArgs>,
-    state: ButtonGroupsState,
-    scope_config: F,
-) where
+pub fn button_groups<F>(args: impl Into<ButtonGroupsArgs>, scope_config: F)
+where
     F: FnOnce(&mut ButtonGroupsScope),
 {
+    let state = remember(ButtonGroupsState::default);
     let args = args.into();
     let mut child_closures = Vec::new();
     let mut on_click_closures = Vec::new();

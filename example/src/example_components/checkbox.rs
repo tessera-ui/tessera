@@ -6,7 +6,7 @@ use std::sync::{
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
-    checkbox::{CheckboxArgsBuilder, CheckboxState, checkbox},
+    checkbox::{CheckboxArgsBuilder, checkbox},
     column::{ColumnArgsBuilder, column},
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
@@ -18,7 +18,6 @@ use tessera_ui_basic_components::{
 struct CheckboxShowcaseState {
     scrollable_state: ScrollableState,
     is_checked: Arc<AtomicBool>,
-    checkbox_state: CheckboxState,
 }
 
 #[tessera]
@@ -71,7 +70,6 @@ pub fn checkbox_showcase(#[state] state: CheckboxShowcaseState) {
                                                 .unwrap(),
                                             |scope| {
                                                 let state = state_clone.clone();
-                                                let checkbox_state = state.checkbox_state.clone();
                                                 scope.child(move || {
                                                     let on_toggle = Arc::new({
                                                         move |new_value| {
@@ -83,10 +81,10 @@ pub fn checkbox_showcase(#[state] state: CheckboxShowcaseState) {
                                                     });
                                                     checkbox(
                                                         CheckboxArgsBuilder::default()
+                                                            .checked(true)
                                                             .on_toggle(on_toggle)
                                                             .build()
                                                             .unwrap(),
-                                                        checkbox_state.clone(),
                                                     );
                                                 });
                                                 let state = state_clone.clone();

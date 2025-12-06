@@ -14,7 +14,7 @@ use parking_lot::RwLock;
 use tessera_ui::{
     Color, DimensionValue, Dp,
     accesskit::{Action, Role, Toggled},
-    tessera,
+    remember, tessera,
 };
 
 use crate::{
@@ -25,15 +25,13 @@ use crate::{
     surface::{SurfaceArgsBuilder, surface},
 };
 
-/// Shared state for the `checkbox` component.
 #[derive(Clone, Default)]
-pub struct CheckboxState {
+struct CheckboxState {
     checkmark: Arc<RwLock<CheckmarkState>>,
 }
 
 impl CheckboxState {
-    /// Creates a new checkbox state with the provided initial value.
-    pub fn new(initial_state: bool) -> Self {
+    fn new(initial_state: bool) -> Self {
         Self {
             checkmark: Arc::new(RwLock::new(CheckmarkState::new(initial_state))),
         }
@@ -47,6 +45,9 @@ pub struct CheckboxArgs {
     /// Callback invoked when the checkbox is toggled.
     #[builder(default = "Arc::new(|_| {})")]
     pub on_toggle: Arc<dyn Fn(bool) + Send + Sync>,
+    /// Initial checked state for the checkbox.
+    #[builder(default = "false")]
+    pub checked: bool,
     /// Size of the checkbox (width and height).
     ///
     /// Expressed in `Dp` (density-independent pixels). The checkbox will use
@@ -190,21 +191,19 @@ impl CheckmarkState {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the checkbox's appearance and `on_toggle` callback; see [`CheckboxArgs`].
-/// - `state` — a clonable [`CheckboxState`] that manages the checkmark animation.
+/// - `args` — configures the checkbox's appearance, initial state, and `on_toggle` callback; see [`CheckboxArgs`].
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 /// use tessera_ui::{tessera, Color, Dp};
-/// use tessera_ui_basic_components::checkbox::{checkbox, CheckboxArgsBuilder, CheckboxState};
+/// use tessera_ui_basic_components::checkbox::{checkbox, CheckboxArgsBuilder};
 ///
 /// // A tiny UI demo that shows a checkbox and a text label that reflects its state.
 /// #[derive(Clone, Default)]
 /// struct DemoState {
 ///     is_checked: Arc<AtomicBool>,
-///     checkbox_state: CheckboxState,
 /// }
 ///
 /// #[tessera]
@@ -220,23 +219,24 @@ impl CheckmarkState {
 ///     // Render the checkbox; the example shows a minimal pattern for interactive demos.
 ///     checkbox(
 ///         CheckboxArgsBuilder::default()
+///             .checked(true)
 ///             .on_toggle(on_toggle)
 ///             .build()
 ///             .unwrap(),
-///         state.checkbox_state.clone(),
 ///     );
 /// }
 /// ```
 #[tessera]
-pub fn checkbox(args: impl Into<CheckboxArgs>, state: CheckboxState) {
+pub fn checkbox(args: impl Into<CheckboxArgs>) {
     let args: CheckboxArgs = args.into();
+    let state = remember(|| CheckboxState::new(args.checked));
 
-    // If a state is provided, set up an updater to advance the animation each frame
+    // Advance the animation each frame
     input_handler(Box::new(closure!(clone state.checkmark, |_input| {
         checkmark.write().update_progress();
     })));
 
-    // Click handler: toggle animation state if present, otherwise simply forward toggle callback
+    // Click handler: toggle animation state and forward toggle callback
     let on_click = Arc::new(closure!(clone state, clone args.on_toggle, || {
         state.checkmark.write().toggle();
         on_toggle(state.checkmark.read().checked);
