@@ -453,18 +453,6 @@ impl NavigationBarStateInner {
 }
 
 /// Controller for the `navigation_bar` component.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_ui_basic_components::navigation_bar::NavigationBarController;
-///
-/// let controller = NavigationBarController::new(0);
-/// assert_eq!(controller.selected(), 0);
-/// controller.select(2);
-/// assert_eq!(controller.selected(), 2);
-/// assert_eq!(controller.previous_selected(), 0);
-/// ```
 #[derive(Clone)]
 pub struct NavigationBarController {
     inner: Arc<RwLock<NavigationBarStateInner>>,
