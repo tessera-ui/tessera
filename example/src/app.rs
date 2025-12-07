@@ -18,7 +18,7 @@ use tessera_ui_basic_components::{
     column::{ColumnArgs, column},
     dialog::{DialogProviderArgsBuilder, DialogProviderState, DialogStyle, dialog_provider},
     icon::{IconArgsBuilder, icon},
-    lazy_list::{LazyColumnArgsBuilder, LazyListState, lazy_column},
+    lazy_list::{LazyColumnArgsBuilder, lazy_column},
     material_color::global_material_scheme,
     material_icons::filled,
     navigation_bar::{NavigationBarItemBuilder, NavigationBarState, navigation_bar},
@@ -217,11 +217,6 @@ Side bars are bars at side, side at bars, bars side at, at side bars..."#,
     );
 }
 
-#[derive(Default)]
-struct HomeState {
-    lazy_list_state: LazyListState,
-}
-
 #[derive(Clone)]
 struct ComponentExampleDesc {
     title: String,
@@ -242,7 +237,6 @@ impl ComponentExampleDesc {
 #[tessera]
 #[shard]
 fn home(
-    #[state] home_state: HomeState,
     bottom_sheet_state: BottomSheetProviderState,
     side_bar_state: SideBarProviderState,
     dialog_state: DialogProviderState,
@@ -482,7 +476,6 @@ fn home(
                     .content_padding(Dp(16.0))
                     .build()
                     .unwrap(),
-                home_state.lazy_list_state.clone(),
                 move |scope| {
                     scope.items_from_iter(examples_clone.iter().cloned(), move |_, example| {
                         let on_click = example.on_click.clone();

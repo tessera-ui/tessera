@@ -6,7 +6,7 @@ use tessera_ui_basic_components::{
     icon::{IconArgsBuilder, icon},
     image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::text,
@@ -22,8 +22,6 @@ const VECTOR_BYTES: &[u8] = include_bytes!(concat!(
 ));
 
 pub struct ImageShowcaseState {
-    scrollable_state: ScrollableState,
-    vector_scrollable_state: ScrollableState,
     image_data: Arc<ImageData>,
     image_vector_data: Arc<ImageVectorData>,
 }
@@ -41,8 +39,6 @@ impl Default for ImageShowcaseState {
         );
 
         Self {
-            scrollable_state: ScrollableState::default(),
-            vector_scrollable_state: ScrollableState::default(),
             image_data,
             image_vector_data,
         }
@@ -64,7 +60,6 @@ pub fn image_showcase(#[state] state: ImageShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.vector_scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
@@ -157,7 +152,6 @@ pub fn icon_showcase(#[state] state: ImageShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

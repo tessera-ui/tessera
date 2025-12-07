@@ -5,19 +5,14 @@ use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
     glass_switch::{GlassSwitchArgsBuilder, glass_switch},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Clone, Default)]
-struct GlassSwitchShowcaseState {
-    scrollable_state: ScrollableState,
-}
-
 #[tessera]
 #[shard]
-pub fn glass_switch_showcase(#[state] state: GlassSwitchShowcaseState) {
+pub fn glass_switch_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -30,7 +25,6 @@ pub fn glass_switch_showcase(#[state] state: GlassSwitchShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

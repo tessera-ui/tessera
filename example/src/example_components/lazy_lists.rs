@@ -2,10 +2,7 @@ use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
-    lazy_list::{
-        LazyColumnArgs, LazyColumnArgsBuilder, LazyListState, LazyRowArgsBuilder, lazy_column,
-        lazy_row,
-    },
+    lazy_list::{LazyColumnArgs, LazyColumnArgsBuilder, LazyRowArgsBuilder, lazy_column, lazy_row},
     material_color::global_material_scheme,
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
@@ -13,16 +10,9 @@ use tessera_ui_basic_components::{
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Default, Clone)]
-pub struct LazyListsShowcaseState {
-    showcase: LazyListState,
-    vertical: LazyListState,
-    horizontal: LazyListState,
-}
-
 #[tessera]
 #[shard]
-pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
+pub fn lazy_lists_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -34,11 +24,8 @@ pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
                     content_padding: Dp(24.0),
                     ..Default::default()
                 },
-                state.showcase.clone(),
                 move |scope| {
                     scope.item(move || {
-                        let state = state.clone();
-
                         column(
                             ColumnArgsBuilder::default()
                                 .width(DimensionValue::FILLED)
@@ -75,10 +62,7 @@ pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
                                             .unwrap(),
                                     );
                                 });
-                                let vertical_state = state.vertical.clone();
-                                scope.child(move || {
-                                    vertical_list(vertical_state.clone());
-                                });
+                                scope.child(vertical_list);
                                 scope.child(|| {
                                     text(
                                         TextArgsBuilder::default()
@@ -88,10 +72,7 @@ pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
                                             .unwrap(),
                                     );
                                 });
-                                let horizontal_state = state.horizontal.clone();
-                                scope.child(move || {
-                                    horizontal_gallery(horizontal_state.clone());
-                                });
+                                scope.child(horizontal_gallery);
                             },
                         );
                     });
@@ -102,7 +83,7 @@ pub fn lazy_lists_showcase(#[state] state: LazyListsShowcaseState) {
 }
 
 #[tessera]
-fn vertical_list(state: LazyListState) {
+fn vertical_list() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -127,7 +108,6 @@ fn vertical_list(state: LazyListState) {
                     .overscan(3)
                     .build()
                     .unwrap(),
-                state,
                 |scope| {
                     let indices: Vec<usize> = (0..500).collect();
                     scope.items_from_iter(indices, |_, idx| {
@@ -140,7 +120,7 @@ fn vertical_list(state: LazyListState) {
 }
 
 #[tessera]
-fn horizontal_gallery(state: LazyListState) {
+fn horizontal_gallery() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -165,7 +145,6 @@ fn horizontal_gallery(state: LazyListState) {
                     .overscan(4)
                     .build()
                     .unwrap(),
-                state,
                 |scope| {
                     scope.items(240, |index| {
                         gallery_card(index);

@@ -11,7 +11,7 @@ use tessera_ui_basic_components::{
     glass_slider::{GlassSliderArgsBuilder, glass_slider},
     image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
     row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     shape_def::{RoundedCorner, Shape},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
@@ -25,7 +25,6 @@ const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
 
 #[derive(Default)]
 struct FluidGlassShowcaseState {
-    scrollable_state: ScrollableState,
     example_glass_state: Arc<RwLock<ExampleGlassState>>,
 }
 
@@ -112,7 +111,6 @@ pub fn fluid_glass_showcase(#[state] state: FluidGlassShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

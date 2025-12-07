@@ -1,13 +1,13 @@
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };
 
 #[tessera]
 #[shard]
-pub fn text_showcase(#[state] scrollable_state: ScrollableState) {
+pub fn text_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -20,7 +20,6 @@ pub fn text_showcase(#[state] scrollable_state: ScrollableState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                scrollable_state.as_ref().clone(),
                 || {
                     surface(
                         SurfaceArgsBuilder::default()

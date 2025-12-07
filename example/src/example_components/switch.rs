@@ -6,7 +6,7 @@ use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     icon::{IconArgsBuilder, icon},
     material_icons::round::check_icon,
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     switch::{
         SwitchArgsBuilder, SwitchController, switch, switch_with_child_and_controller,
@@ -15,14 +15,9 @@ use tessera_ui_basic_components::{
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Default)]
-struct SwitchShowcaseState {
-    scrollable_state: ScrollableState,
-}
-
 #[tessera]
 #[shard]
-pub fn switch_showcase(#[state] state: SwitchShowcaseState) {
+pub fn switch_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -35,7 +30,6 @@ pub fn switch_showcase(#[state] state: SwitchShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

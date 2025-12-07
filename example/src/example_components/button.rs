@@ -11,7 +11,7 @@ use tessera_ui_basic_components::{
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
     material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
@@ -25,7 +25,6 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
 
 #[derive(Clone)]
 struct ButtonShowcaseState {
-    scrollable_state: ScrollableState,
     counter: Arc<Mutex<i32>>,
     icon_data: Arc<ImageVectorData>,
 }
@@ -38,7 +37,6 @@ impl ButtonShowcaseState {
         );
 
         Self {
-            scrollable_state: Default::default(),
             counter: Default::default(),
             icon_data,
         }
@@ -54,7 +52,6 @@ impl Default for ButtonShowcaseState {
 #[tessera]
 #[shard]
 pub fn button_showcase(#[state] state: ButtonShowcaseState) {
-    let scrollable_state = state.scrollable_state.clone();
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -67,7 +64,6 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                scrollable_state,
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

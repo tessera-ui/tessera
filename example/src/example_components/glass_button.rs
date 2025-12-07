@@ -10,7 +10,7 @@ use tessera_ui_basic_components::{
     icon_button::{GlassIconButtonArgsBuilder, glass_icon_button},
     image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     shape_def::Shape,
     spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgsBuilder, surface},
@@ -28,7 +28,6 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
 
 #[derive(Clone)]
 struct GlassButtonShowcaseState {
-    scrollable_state: ScrollableState,
     counter: Arc<Mutex<i32>>,
     image_data: Arc<ImageData>,
     icon_data: Arc<ImageVectorData>,
@@ -46,7 +45,6 @@ impl Default for GlassButtonShowcaseState {
         );
 
         Self {
-            scrollable_state: Default::default(),
             counter: Default::default(),
             image_data,
             icon_data,
@@ -69,7 +67,6 @@ pub fn glass_button_showcase(#[state] state: GlassButtonShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

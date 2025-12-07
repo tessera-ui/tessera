@@ -2,20 +2,15 @@ use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Default, Clone)]
-pub struct SpacerShowcaseState {
-    scrollable_state: ScrollableState,
-}
-
 #[tessera]
 #[shard]
-pub fn spacer_showcase(#[state] state: SpacerShowcaseState) {
+pub fn spacer_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -28,7 +23,6 @@ pub fn spacer_showcase(#[state] state: SpacerShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

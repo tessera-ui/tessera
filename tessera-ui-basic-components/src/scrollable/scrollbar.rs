@@ -8,7 +8,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    scrollable::{ScrollBarBehavior, ScrollableStateInner},
+    scrollable::{ScrollBarBehavior, ScrollableControllerInner},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
 };
@@ -30,7 +30,7 @@ pub struct ScrollBarArgs {
     /// The thickness of the scrollbar
     pub thickness: Dp,
     /// The scrollable's state, used for interaction.
-    pub state: Arc<RwLock<ScrollableStateInner>>,
+    pub state: Arc<RwLock<ScrollableControllerInner>>,
     /// The behavior of the scrollbar visibility.
     pub scrollbar_behavior: ScrollBarBehavior,
     /// The color of the scrollbar track.

@@ -10,7 +10,7 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
-    tessera,
+    remember, tessera,
 };
 
 use crate::{
@@ -94,17 +94,17 @@ impl Default for ScrollableArgs {
 ///
 /// The scroll position is smoothly interpolated over time to create a fluid scrolling effect.
 #[derive(Clone, Default)]
-pub struct ScrollableState {
+pub struct ScrollableController {
     /// The inner state containing scroll position, size
-    inner: Arc<RwLock<ScrollableStateInner>>,
+    inner: Arc<RwLock<ScrollableControllerInner>>,
     /// The state for vertical scrollbar
     scrollbar_state_v: ScrollBarState,
     /// The state for horizontal scrollbar
     scrollbar_state_h: ScrollBarState,
 }
 
-impl ScrollableState {
-    /// Creates a new `ScrollableState` with default values.
+impl ScrollableController {
+    /// Creates a new `ScrollableController` with default values.
     pub fn new() -> Self {
         Self::default()
     }
@@ -136,7 +136,7 @@ impl ScrollableState {
 }
 
 #[derive(Clone, Debug)]
-struct ScrollableStateInner {
+struct ScrollableControllerInner {
     /// The current position of the child component (for rendering)
     child_position: PxPosition,
     /// The target position of the child component (scrolling destination)
@@ -151,14 +151,14 @@ struct ScrollableStateInner {
     last_frame_time: Option<Instant>,
 }
 
-impl Default for ScrollableStateInner {
+impl Default for ScrollableControllerInner {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ScrollableStateInner {
-    /// Creates a new ScrollableState with default values.
+impl ScrollableControllerInner {
+    /// Creates a new ScrollableController with default values.
     pub fn new() -> Self {
         Self {
             child_position: PxPosition::ZERO,
@@ -237,55 +237,115 @@ impl ScrollableStateInner {
 /// ## Parameters
 ///
 /// - `args` — configures the scrollable area's dimensions, direction, and scrollbar appearance; see [`ScrollableArgs`].
-/// - `state` — a clonable [`ScrollableState`] to manage the scroll position.
 /// - `child` — a closure that renders the content to be scrolled.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui::{DimensionValue, Dp};
+/// use tessera_ui::{DimensionValue, Dp, tessera};
 /// use tessera_ui_basic_components::{
-///     scrollable::{scrollable, ScrollableArgs, ScrollableState},
+///     scrollable::{scrollable, ScrollableArgs},
 ///     column::{column, ColumnArgs},
 ///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// // In a real app, you would manage this state.
-/// let scrollable_state = ScrollableState::new();
-///
-/// scrollable(
-///     ScrollableArgs {
-///         height: DimensionValue::Fixed(Dp(100.0).into()),
-///         ..Default::default()
-///     },
-///     scrollable_state,
-///     || {
-///         column(ColumnArgs::default(), |scope| {
-///             for i in 0..20 {
-///                 let text_content = format!("Item #{}", i + 1);
-///                 scope.child(|| {
-///                     text(TextArgsBuilder::default().text(text_content).build().expect("builder construction failed"));
-///                 });
-///             }
-///         });
-///     },
-/// );
+/// #[tessera]
+/// fn demo() {
+///     scrollable(
+///         ScrollableArgs {
+///             height: DimensionValue::Fixed(Dp(100.0).into()),
+///             ..Default::default()
+///         },
+///         || {
+///             column(ColumnArgs::default(), |scope| {
+///                 for i in 0..20 {
+///                     let text_content = format!("Item #{}", i + 1);
+///                     scope.child(|| {
+///                         text(
+///                             TextArgsBuilder::default()
+///                                 .text(text_content)
+///                                 .build()
+///                                 .expect("builder construction failed"),
+///                         );
+///                     });
+///                 }
+///             });
+///         },
+///     );
+/// }
 /// ```
 #[tessera]
-pub fn scrollable(
+pub fn scrollable(args: impl Into<ScrollableArgs>, child: impl FnOnce() + Send + Sync + 'static) {
+    let controller = remember(ScrollableController::new);
+    scrollable_with_controller(args, controller, child);
+}
+
+/// # scrollable_with_controller
+///
+/// Scrollable container variant that accepts an explicit controller.
+///
+/// ## Usage
+///
+/// Use when you need to observe or drive scroll position externally (e.g., synchronize multiple scroll areas).
+///
+/// ## Parameters
+///
+/// - `args` — configures the scrollable area's dimensions, direction, and scrollbar appearance; see [`ScrollableArgs`].
+/// - `controller` — a [`ScrollableController`] that stores the scroll offsets and viewport data.
+/// - `child` — a closure that renders the content to be scrolled.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui::{DimensionValue, Dp, remember, tessera};
+/// use tessera_ui_basic_components::{
+///     scrollable::{scrollable_with_controller, ScrollableArgs, ScrollableController},
+///     column::{column, ColumnArgs},
+///     text::{text, TextArgsBuilder},
+/// };
+///
+/// #[tessera]
+/// fn demo() {
+///     let controller = remember(ScrollableController::new);
+///     scrollable_with_controller(
+///         ScrollableArgs {
+///             height: DimensionValue::Fixed(Dp(120.0).into()),
+///             ..Default::default()
+///         },
+///         controller,
+///         || {
+///             column(ColumnArgs::default(), |scope| {
+///                 for i in 0..10 {
+///                     let text_content = format!("Row #{i}");
+///                     scope.child(|| {    
+///                         text(
+///                             TextArgsBuilder::default()
+///                                 .text(text_content)
+///                                 .build()
+///                                 .expect("builder construction failed"),
+///                         );
+///                     });
+///                 }
+///             });
+///         },
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn scrollable_with_controller(
     args: impl Into<ScrollableArgs>,
-    state: ScrollableState,
+    controller: Arc<ScrollableController>,
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
     let args: ScrollableArgs = args.into();
 
     // Create separate ScrollBarArgs for vertical and horizontal scrollbars
     let scrollbar_args_v = ScrollBarArgs {
-        total: state.inner.read().child_size.height,
-        visible: state.inner.read().visible_size.height,
-        offset: state.inner.read().child_position.y,
+        total: controller.inner.read().child_size.height,
+        visible: controller.inner.read().visible_size.height,
+        offset: controller.inner.read().child_position.y,
         thickness: Dp(8.0), // Default scrollbar thickness
-        state: state.inner.clone(),
+        state: controller.inner.clone(),
         scrollbar_behavior: args.scrollbar_behavior.clone(),
         track_color: args.scrollbar_track_color,
         thumb_color: args.scrollbar_thumb_color,
@@ -293,11 +353,11 @@ pub fn scrollable(
     };
 
     let scrollbar_args_h = ScrollBarArgs {
-        total: state.inner.read().child_size.width,
-        visible: state.inner.read().visible_size.width,
-        offset: state.inner.read().child_position.x,
+        total: controller.inner.read().child_size.width,
+        visible: controller.inner.read().visible_size.width,
+        offset: controller.inner.read().child_position.x,
         thickness: Dp(8.0), // Default scrollbar thickness
-        state: state.inner.clone(),
+        state: controller.inner.clone(),
         scrollbar_behavior: args.scrollbar_behavior.clone(),
         track_color: args.scrollbar_track_color,
         thumb_color: args.scrollbar_thumb_color,
@@ -307,7 +367,7 @@ pub fn scrollable(
     match args.scrollbar_layout {
         ScrollBarLayout::Alongside => {
             scrollable_with_alongside_scrollbar(
-                state,
+                controller,
                 args,
                 scrollbar_args_v,
                 scrollbar_args_h,
@@ -316,7 +376,7 @@ pub fn scrollable(
         }
         ScrollBarLayout::Overlay => {
             scrollable_with_overlay_scrollbar(
-                state,
+                controller,
                 args,
                 scrollbar_args_v,
                 scrollbar_args_h,
@@ -328,7 +388,7 @@ pub fn scrollable(
 
 #[tessera]
 fn scrollable_with_alongside_scrollbar(
-    state: ScrollableState,
+    controller: Arc<ScrollableController>,
     args: ScrollableArgs,
     scrollbar_args_v: ScrollBarArgs,
     scrollbar_args_h: ScrollBarArgs,
@@ -336,18 +396,18 @@ fn scrollable_with_alongside_scrollbar(
 ) {
     scrollable_inner(
         args.clone(),
-        state.inner.clone(),
-        state.scrollbar_state_v.clone(),
-        state.scrollbar_state_h.clone(),
+        controller.inner.clone(),
+        controller.scrollbar_state_v.clone(),
+        controller.scrollbar_state_h.clone(),
         child,
     );
 
     if args.vertical {
-        scrollbar_v(scrollbar_args_v, state.scrollbar_state_v.clone());
+        scrollbar_v(scrollbar_args_v, controller.scrollbar_state_v.clone());
     }
 
     if args.horizontal {
-        scrollbar_h(scrollbar_args_h, state.scrollbar_state_h.clone());
+        scrollbar_h(scrollbar_args_h, controller.scrollbar_state_h.clone());
     }
 
     measure(Box::new(move |input| {
@@ -413,7 +473,7 @@ fn scrollable_with_alongside_scrollbar(
 
 #[tessera]
 fn scrollable_with_overlay_scrollbar(
-    state: ScrollableState,
+    controller: Arc<ScrollableController>,
     args: ScrollableArgs,
     scrollbar_args_v: ScrollBarArgs,
     scrollbar_args_h: ScrollBarArgs,
@@ -428,14 +488,14 @@ fn scrollable_with_overlay_scrollbar(
             .expect("builder construction failed"),
         |scope| {
             scope.child({
-                let state = state.clone();
+                let controller = controller.clone();
                 let args = args.clone();
                 move || {
                     scrollable_inner(
                         args,
-                        state.inner.clone(),
-                        state.scrollbar_state_v.clone(),
-                        state.scrollbar_state_h.clone(),
+                        controller.inner.clone(),
+                        controller.scrollbar_state_v.clone(),
+                        controller.scrollbar_state_h.clone(),
                         child,
                     );
                 }
@@ -443,20 +503,20 @@ fn scrollable_with_overlay_scrollbar(
             scope.child({
                 let scrollbar_args_v = scrollbar_args_v.clone();
                 let args = args.clone();
-                let state = state.clone();
+                let controller = controller.clone();
                 move || {
                     if args.vertical {
-                        scrollbar_v(scrollbar_args_v, state.scrollbar_state_v.clone());
+                        scrollbar_v(scrollbar_args_v, controller.scrollbar_state_v.clone());
                     }
                 }
             });
             scope.child({
                 let scrollbar_args_h = scrollbar_args_h.clone();
                 let args = args.clone();
-                let state = state.clone();
+                let controller = controller.clone();
                 move || {
                     if args.horizontal {
-                        scrollbar_h(scrollbar_args_h, state.scrollbar_state_h.clone());
+                        scrollbar_h(scrollbar_args_h, controller.scrollbar_state_h.clone());
                     }
                 }
             });
@@ -489,7 +549,7 @@ fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
 #[tessera]
 fn scrollable_inner(
     args: impl Into<ScrollableArgs>,
-    state: Arc<RwLock<ScrollableStateInner>>,
+    state: Arc<RwLock<ScrollableControllerInner>>,
     scrollbar_state_v: ScrollBarState,
     scrollbar_state_h: ScrollBarState,
     child: impl FnOnce(),

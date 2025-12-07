@@ -8,7 +8,7 @@ use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     shape_def::{RoundedCorner, Shape},
     slider::{SliderArgsBuilder, slider},
     spacer::{SpacerArgsBuilder, spacer},
@@ -18,7 +18,6 @@ use tessera_ui_basic_components::{
 
 #[derive(Default)]
 struct SurfaceShowcaseState {
-    scrollable_state: ScrollableState,
     example_surface_state: Arc<RwLock<ExampleSurfaceState>>,
 }
 
@@ -86,7 +85,6 @@ pub fn surface_showcase(#[state] state: SurfaceShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

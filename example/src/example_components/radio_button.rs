@@ -9,14 +9,13 @@ use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     radio_button::{RadioButtonArgsBuilder, RadioButtonState, radio_button},
     row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
 #[derive(Clone)]
 struct RadioButtonShowcaseState {
-    scrollable_state: ScrollableState,
     selected_index: Arc<AtomicUsize>,
     radio_a: RadioButtonState,
     radio_b: RadioButtonState,
@@ -29,7 +28,6 @@ impl Default for RadioButtonShowcaseState {
     fn default() -> Self {
         let selected_index = Arc::new(AtomicUsize::new(0));
         Self {
-            scrollable_state: ScrollableState::default(),
             selected_index,
             radio_a: RadioButtonState::new(true),
             radio_b: RadioButtonState::new(false),
@@ -55,7 +53,6 @@ pub fn radio_button_showcase(#[state] state: RadioButtonShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     let state = state.clone();
                     surface(

@@ -5,14 +5,13 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     glass_slider::{GlassSliderArgsBuilder, GlassSliderController, glass_slider_with_controller},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
 #[derive(Clone)]
 struct GlassSliderShowcaseState {
-    scrollable_state: ScrollableState,
     value: Arc<Mutex<f32>>,
     slider_controller: Arc<GlassSliderController>,
 }
@@ -20,7 +19,6 @@ struct GlassSliderShowcaseState {
 impl Default for GlassSliderShowcaseState {
     fn default() -> Self {
         Self {
-            scrollable_state: Default::default(),
             value: Arc::new(Mutex::new(0.5)),
             slider_controller: Arc::new(GlassSliderController::new()),
         }
@@ -42,7 +40,6 @@ pub fn glass_slider_showcase(#[state] state: GlassSliderShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

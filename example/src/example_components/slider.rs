@@ -5,14 +5,13 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     material_icons::filled,
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     slider::{RangeSliderArgsBuilder, SliderArgsBuilder, centered_slider, range_slider, slider},
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };
 
 struct SliderShowcaseState {
-    scrollable_state: ScrollableState,
     value: Arc<Mutex<f32>>,
     centered_value: Arc<Mutex<f32>>,
     range_value: Arc<Mutex<(f32, f32)>>,
@@ -22,7 +21,6 @@ struct SliderShowcaseState {
 impl Default for SliderShowcaseState {
     fn default() -> Self {
         Self {
-            scrollable_state: Default::default(),
             value: Arc::new(Mutex::new(0.5)),
             centered_value: Arc::new(Mutex::new(0.5)),
             range_value: Arc::new(Mutex::new((0.2, 0.8))),
@@ -46,7 +44,6 @@ pub fn slider_showcase(#[state] state: SliderShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

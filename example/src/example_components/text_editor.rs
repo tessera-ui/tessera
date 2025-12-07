@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -12,14 +12,12 @@ use tessera_ui_basic_components::{
 
 #[derive(Clone)]
 struct TextEditorShowcaseState {
-    scrollable_state: ScrollableState,
     editor_state: TextEditorState,
 }
 
 impl Default for TextEditorShowcaseState {
     fn default() -> Self {
         Self {
-            scrollable_state: Default::default(),
             editor_state: TextEditorState::new(Dp(22.0), None),
         }
     }
@@ -40,7 +38,6 @@ pub fn text_editor_showcase(#[state] state: TextEditorShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

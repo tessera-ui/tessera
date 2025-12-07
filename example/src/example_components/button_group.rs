@@ -1,22 +1,15 @@
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     button_groups::{ButtonGroupsArgs, ButtonGroupsStyle, button_groups},
-    lazy_list::{LazyColumnArgs, LazyListState, lazy_column},
+    lazy_list::{LazyColumnArgs, lazy_column},
     spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgs, text},
 };
 
-#[derive(Default)]
-struct ButtonGroupShowcaseState {
-    lazy_list_state: LazyListState,
-}
-
 #[tessera]
 #[shard]
-pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
-    let lazy_list_state = state.lazy_list_state.clone();
-
+pub fn button_group_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -29,7 +22,6 @@ pub fn button_group_showcase(#[state] state: ButtonGroupShowcaseState) {
                     content_padding: Dp::new(16.0),
                     ..Default::default()
                 },
-                lazy_list_state,
                 move |scope| {
                     scope.item(move || {
                         text("Button Groups");

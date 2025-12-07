@@ -9,14 +9,13 @@ use tessera_ui_basic_components::{
     checkbox::{CheckboxArgsBuilder, checkbox},
     column::{ColumnArgsBuilder, column},
     row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
 #[derive(Default, Clone)]
 struct CheckboxShowcaseState {
-    scrollable_state: ScrollableState,
     is_checked: Arc<AtomicBool>,
 }
 
@@ -35,7 +34,6 @@ pub fn checkbox_showcase(#[state] state: CheckboxShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

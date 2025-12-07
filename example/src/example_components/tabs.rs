@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     tabs::{TabsArgsBuilder, TabsState, tabs},
     text::{TextArgsBuilder, text},
@@ -11,7 +11,6 @@ use tessera_ui_basic_components::{
 
 #[derive(Default)]
 struct TabsShowcaseState {
-    scrollable_state: ScrollableState,
     tabs_state: TabsState,
 }
 
@@ -30,7 +29,6 @@ pub fn tabs_showcase(#[state] state: TabsShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

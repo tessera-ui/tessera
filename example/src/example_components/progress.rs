@@ -5,7 +5,7 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     progress::{ProgressArgsBuilder, progress},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     slider::{SliderArgsBuilder, slider},
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
@@ -14,14 +14,12 @@ use tessera_ui_basic_components::{
 
 #[derive(Clone)]
 struct ProgressShowcaseState {
-    scrollable_state: ScrollableState,
     progress: Arc<Mutex<f32>>,
 }
 
 impl Default for ProgressShowcaseState {
     fn default() -> Self {
         Self {
-            scrollable_state: Default::default(),
             progress: Arc::new(Mutex::new(0.5)),
         }
     }
@@ -42,7 +40,6 @@ pub fn progress_showcase(#[state] state: ProgressShowcaseState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()

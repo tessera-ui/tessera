@@ -5,14 +5,14 @@ use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
 #[tessera]
 #[shard]
-pub fn layouts_showcase(#[state] scrollable_state: ScrollableState) {
+pub fn layouts_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -25,7 +25,6 @@ pub fn layouts_showcase(#[state] scrollable_state: ScrollableState) {
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                scrollable_state.as_ref().clone(),
                 || {
                     surface(
                         SurfaceArgsBuilder::default()
