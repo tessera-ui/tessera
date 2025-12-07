@@ -9,8 +9,8 @@
 
 The version number consists of three parts: `major.minor.patch`, e.g., `1.0.0`.
 
-- **Major**: Incremented when the roadmap is fully completed. This must be done manually via the `--major` flag.
-- **Minor**: Incremented for any feature updates (`feat:`) or breaking changes (`BREAKING CHANGE:`).
+- **Major**: Incremented for breaking changes (`BREAKING CHANGE:`) or when the roadmap is fully completed (manually via `--major`).
+- **Minor**: Incremented for any feature updates (`feat:`).
 - **Patch**: Incremented for any bug fixes or minor improvements.
 
 ## Release Process
@@ -20,7 +20,8 @@ You must use the `scripts/release-package.rs` script to publish. It will automat
 ### How it Works
 
 1. **Automatic Version Analysis**: The script analyzes Git history since the last tag for all publishable packages (`tessera-ui`, `tessera-ui-basic-components`, `tessera-ui-macros`).
-   - A `feat:` commit or a commit with `BREAKING CHANGE` in its body will result in a **minor** version bump.
+   - A commit with `BREAKING CHANGE` in its body will result in a **major** version bump.
+   - A `feat:` commit will result in a **minor** version bump.
    - Any other commit type (`fix:`, `refactor:`, etc.) will result in a **patch** version bump.
 2. **Dependency Propagation**: If a base package is updated, any publishable packages that depend on it will also receive a **patch** version bump to ensure consistency. The release order is determined by a topological sort of the dependency graph.
 3. **Manual Major Bump**: To perform a major version bump, you must use the `--major <package-name>` flag. This is reserved for roadmap milestones.
