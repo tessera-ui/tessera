@@ -4,7 +4,6 @@
 //!
 //! Use for bottom navigation between a small set of top-level destinations.
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -12,10 +11,10 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, tessera};
+use tessera_ui::{Color, DimensionValue, Dp, remember, tessera};
 
 use crate::{
-    RippleState, ShadowProps,
+    ShadowProps,
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     animation,
     boxed::{BoxedArgsBuilder, boxed},
@@ -84,38 +83,86 @@ pub struct NavigationBarItem {
 ///
 /// ## Parameters
 ///
-/// - `state` — see [`NavigationBarState`] to track which destination is active.
 /// - `scope_config` — closure that registers items via [`NavigationBarScope`].
 ///
 /// ## Examples
 ///
 /// ```
+/// use tessera_ui::tessera;
 /// use tessera_ui_basic_components::navigation_bar::{
-///     NavigationBarItemBuilder, NavigationBarState, navigation_bar,
+///     NavigationBarItemBuilder, navigation_bar,
 /// };
 ///
-/// let state = NavigationBarState::new(0);
-/// navigation_bar(state.clone(), |scope| {
-///     scope.item(
-///         NavigationBarItemBuilder::default()
-///             .label("Home")
-///             .build()
-///             .unwrap(),
+/// #[tessera]
+/// fn demo() {
+///     navigation_bar(
+///         |scope| {
+///             scope.item(
+///                 NavigationBarItemBuilder::default()
+///                     .label("Home")
+///                     .build()
+///                     .unwrap(),
+///             );
+///             scope.item(
+///                 NavigationBarItemBuilder::default()
+///                     .label("Search")
+///                     .build()
+///                     .unwrap(),
+///             );
+///         },
 ///     );
-///     scope.item(
-///         NavigationBarItemBuilder::default()
-///             .label("Search")
-///             .build()
-///             .unwrap(),
-///     );
-/// });
-/// assert_eq!(state.selected(), 0);
-/// state.select(1);
-/// assert_eq!(state.selected(), 1);
-/// assert_eq!(state.previous_selected(), 0);
+/// }
 /// ```
 #[tessera]
-pub fn navigation_bar<F>(state: NavigationBarState, scope_config: F)
+pub fn navigation_bar<F>(scope_config: F)
+where
+    F: FnOnce(&mut NavigationBarScope),
+{
+    let controller = remember(|| NavigationBarController::new(0));
+    navigation_bar_with_controller(controller, scope_config);
+}
+
+/// # navigation_bar_with_controller
+///
+/// Controlled variant that accepts an explicit controller.
+///
+/// ## Parameters
+///
+/// - `controller` — explicit controller to manage selection.
+/// - `scope_config` — closure that registers items via [`NavigationBarScope`].
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui::{remember, tessera};
+/// use tessera_ui_basic_components::navigation_bar::{
+///     NavigationBarController, NavigationBarItemBuilder, navigation_bar_with_controller,
+/// };
+///
+/// #[tessera]
+/// fn controlled_demo() {
+///     let controller = remember(|| NavigationBarController::new(0));
+///     navigation_bar_with_controller(
+///         controller,
+///         |scope| {
+///             scope.item(
+///                 NavigationBarItemBuilder::default()
+///                     .label("Home")
+///                     .build()
+///                     .unwrap(),
+///             );
+///             scope.item(
+///                 NavigationBarItemBuilder::default()
+///                     .label("Search")
+///                     .build()
+///                     .unwrap(),
+///             );
+///         },
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn navigation_bar_with_controller<F>(controller: Arc<NavigationBarController>, scope_config: F)
 where
     F: FnOnce(&mut NavigationBarScope),
 {
@@ -124,7 +171,6 @@ where
         let mut scope = NavigationBarScope { items: &mut items };
         scope_config(&mut scope);
     }
-
     let scheme = global_material_scheme();
     let container_shadow = ShadowProps {
         color: scheme.shadow.with_alpha(0.16),
@@ -132,9 +178,9 @@ where
         smoothness: 10.0,
     };
 
-    let animation_progress = state.animation_progress().unwrap_or(1.0);
-    let selected_index = state.selected();
-    let previous_index = state.previous_selected();
+    let animation_progress = controller.animation_progress().unwrap_or(1.0);
+    let selected_index = controller.selected();
+    let previous_index = controller.previous_selected();
 
     surface(
         SurfaceArgsBuilder::default()
@@ -145,7 +191,6 @@ where
             .block_input(true)
             .build()
             .expect("SurfaceArgsBuilder failed with required fields set"),
-        None,
         move || {
             let separator_color = scheme.outline_variant.with_alpha(0.12);
             column(
@@ -164,7 +209,6 @@ where
                                 .style(separator_color.into())
                                 .build()
                                 .expect("SurfaceArgsBuilder failed for divider"),
-                            None,
                             || {},
                         );
                     });
@@ -181,12 +225,12 @@ where
                                     .expect("RowArgsBuilder failed with required fields set"),
                                 move |row_scope| {
                                     for (index, item) in items.into_iter().enumerate() {
-                                        let state_clone = state.clone();
+                                        let controller_clone = controller.clone();
                                         let scheme_for_item = scheme.clone();
                                         row_scope.child_weighted(
                                             move || {
                                                 render_navigation_item(
-                                                    &state_clone,
+                                                    &controller_clone,
                                                     index,
                                                     item,
                                                     selected_index,
@@ -210,7 +254,7 @@ where
 }
 
 fn render_navigation_item(
-    state: &NavigationBarState,
+    controller: &NavigationBarController,
     index: usize,
     item: NavigationBarItem,
     selected_index: usize,
@@ -252,7 +296,6 @@ fn render_navigation_item(
     let icon_closure = item.icon.clone();
     let indicator_color = scheme.secondary_container.with_alpha(indicator_alpha);
 
-    let ripple_state = state.ripple_state(index);
     let icon_only_indicator_color = indicator_color;
     let on_click = item.on_click.clone();
 
@@ -268,15 +311,14 @@ fn render_navigation_item(
             .ripple_color(ripple_color)
             .hover_style(None)
             .accessibility_label(label_text.clone())
-            .on_click(Arc::new(closure!(clone state, clone on_click, || {
-                if index != state.selected() {
-                    state.set_selected(index);
+            .on_click(Arc::new(closure!(clone controller, clone on_click, || {
+                if index != controller.selected() {
+                    controller.set_selected(index);
                     on_click();
                 }
             })))
             .build()
             .expect("SurfaceArgsBuilder failed with required fields set"),
-        Some(ripple_state),
         move || {
             let label_for_text = label_text.clone();
             let label_color_for_text = label_color;
@@ -321,7 +363,6 @@ fn render_navigation_item(
                                                     .height(INDICATOR_HEIGHT)
                                                     .build()
                                                     .expect("SurfaceArgsBuilder failed for indicator"),
-                                                None,
                                                 || {},
                                             );
                                         });
@@ -370,14 +411,10 @@ fn render_navigation_item(
     );
 }
 
-/// Holds selection & per-item ripple state for the navigation bar.
-///
-/// `selected` tracks the currently active item index, while `ripple_states` lazily initializes
-/// per-item ripple data on first access.
+/// Holds selection state for the navigation bar.
 struct NavigationBarStateInner {
     selected: usize,
     previous_selected: usize,
-    ripple_states: HashMap<usize, RippleState>,
     anim_start_time: Option<Instant>,
 }
 
@@ -386,7 +423,6 @@ impl NavigationBarStateInner {
         Self {
             selected,
             previous_selected: selected,
-            ripple_states: HashMap::new(),
             anim_start_time: None,
         }
     }
@@ -414,31 +450,15 @@ impl NavigationBarStateInner {
             None
         }
     }
-
-    fn ripple_state(&mut self, index: usize) -> RippleState {
-        self.ripple_states.entry(index).or_default().clone()
-    }
 }
 
-/// Shared state for the `navigation_bar` component.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_ui_basic_components::navigation_bar::NavigationBarState;
-///
-/// let state = NavigationBarState::new(0);
-/// assert_eq!(state.selected(), 0);
-/// state.select(2);
-/// assert_eq!(state.selected(), 2);
-/// assert_eq!(state.previous_selected(), 0);
-/// ```
+/// Controller for the `navigation_bar` component.
 #[derive(Clone)]
-pub struct NavigationBarState {
+pub struct NavigationBarController {
     inner: Arc<RwLock<NavigationBarStateInner>>,
 }
 
-impl NavigationBarState {
+impl NavigationBarController {
     /// Create a new state with an initial selected index.
     pub fn new(selected: usize) -> Self {
         Self {
@@ -452,7 +472,7 @@ impl NavigationBarState {
     }
 
     /// Returns the index of the previously selected navigation item.
-    pub fn previous_selected(&self) -> usize {
+    pub(crate) fn previous_selected(&self) -> usize {
         self.inner.read().previous_selected
     }
 
@@ -468,13 +488,9 @@ impl NavigationBarState {
     fn animation_progress(&self) -> Option<f32> {
         self.inner.write().animation_progress()
     }
-
-    fn ripple_state(&self, index: usize) -> RippleState {
-        self.inner.write().ripple_state(index)
-    }
 }
 
-impl Default for NavigationBarState {
+impl Default for NavigationBarController {
     fn default() -> Self {
         Self::new(0)
     }

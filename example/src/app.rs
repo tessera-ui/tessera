@@ -1,32 +1,36 @@
 use std::sync::Arc;
 
 use closure::closure;
-use dashmap::DashMap;
 use tessera_ui::{
     Color, DimensionValue, Dp,
     router::{Router, router_root},
     shard, tessera,
 };
 use tessera_ui_basic_components::{
-    RippleState, ShadowProps,
+    ShadowProps,
     alignment::{Alignment, CrossAxisAlignment},
     bottom_sheet::{
-        BottomSheetProviderArgsBuilder, BottomSheetProviderState, BottomSheetStyle,
-        bottom_sheet_provider,
+        BottomSheetController, BottomSheetProviderArgsBuilder, BottomSheetStyle,
+        bottom_sheet_provider_with_controller,
     },
     boxed::{BoxedArgsBuilder, boxed},
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgs, column},
-    dialog::{DialogProviderArgsBuilder, DialogProviderState, DialogStyle, dialog_provider},
+    dialog::{
+        DialogController, DialogProviderArgsBuilder, DialogStyle, dialog_provider_with_controller,
+    },
     icon::{IconArgsBuilder, icon},
-    lazy_list::{LazyColumnArgsBuilder, LazyListState, lazy_column},
+    lazy_list::{LazyColumnArgsBuilder, lazy_column},
     material_color::global_material_scheme,
     material_icons::filled,
-    navigation_bar::{NavigationBarItemBuilder, NavigationBarState, navigation_bar},
+    navigation_bar::{NavigationBarItemBuilder, navigation_bar},
     row::{RowArgsBuilder, row},
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
-    side_bar::{SideBarProviderArgsBuilder, SideBarProviderState, SideBarStyle, side_bar_provider},
+    side_bar::{
+        SideBarController, SideBarProviderArgsBuilder, SideBarStyle,
+        side_bar_provider_with_controller,
+    },
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
 };
@@ -57,65 +61,70 @@ use crate::example_components::{
 
 #[derive(Default)]
 struct AppState {
-    navigation_bar_state: NavigationBarState,
-    bottom_sheet_state: BottomSheetProviderState,
-    side_bar_state: SideBarProviderState,
-    dialog_state: DialogProviderState,
+    bottom_sheet_controller: Arc<BottomSheetController>,
+    side_bar_controller: Arc<SideBarController>,
+    dialog_controller: Arc<DialogController>,
 }
 
 #[tessera]
 #[shard]
 pub fn app(#[state] app_state: AppState) {
-    side_bar_provider(
+    side_bar_provider_with_controller(
         SideBarProviderArgsBuilder::default()
-            .on_close_request(Arc::new(closure!(clone app_state.side_bar_state, || {
-                side_bar_state.close();
+            .on_close_request(Arc::new(closure!(clone app_state.side_bar_controller, || {
+                side_bar_controller.close();
             })))
             .style(SideBarStyle::Glass)
             .build()
             .unwrap(),
-        app_state.side_bar_state.clone(),
+        app_state.side_bar_controller.clone(),
         move || {
-            bottom_sheet_provider(
+            bottom_sheet_provider_with_controller(
                 BottomSheetProviderArgsBuilder::default()
-                    .on_close_request(Arc::new(closure!(clone app_state.bottom_sheet_state, || {
-                        bottom_sheet_state.close();
-                    })))
+                    .on_close_request(Arc::new(
+                        closure!(clone app_state.bottom_sheet_controller, || {
+                            bottom_sheet_controller.close();
+                        }),
+                    ))
                     .style(BottomSheetStyle::Glass)
                     .build()
                     .unwrap(),
-                app_state.bottom_sheet_state.clone(),
+                app_state.bottom_sheet_controller.clone(),
                 move || {
-                    dialog_provider(
+                    dialog_provider_with_controller(
                         DialogProviderArgsBuilder::default()
-                            .on_close_request(Arc::new(closure!(clone app_state.dialog_state, || {
-                                dialog_state.close();
-                            })))
+                            .on_close_request(Arc::new(
+                                closure!(clone app_state.dialog_controller, || {
+                                    dialog_controller.close();
+                                }),
+                            ))
                             .style(DialogStyle::Glass)
                             .build()
                             .unwrap(),
-                        app_state.dialog_state.clone(),
+                        app_state.dialog_controller.clone(),
                         move || {
                             column(ColumnArgs::default(), |scope| {
                                 scope.child(|| {
                                     top_app_bar();
                                 });
-                                let bottom_sheet_state = app_state.bottom_sheet_state.clone();
-                                let side_bar_state = app_state.side_bar_state.clone();
-                                let dialog_state = app_state.dialog_state.clone();
+                                let bottom_sheet_controller =
+                                    app_state.bottom_sheet_controller.clone();
+                                let side_bar_controller = app_state.side_bar_controller.clone();
+                                let dialog_controller = app_state.dialog_controller.clone();
                                 scope.child_weighted(
                                     move || {
                                         router_root(HomeDestination {
-                                            bottom_sheet_state,
-                                            side_bar_state,
-                                            dialog_state,
+                                            bottom_sheet_controller,
+                                            side_bar_controller,
+                                            dialog_controller,
                                         });
                                     },
                                     1.0,
                                 );
-                                let bottom_sheet_state = app_state.bottom_sheet_state.clone();
-                                let side_bar_state = app_state.side_bar_state.clone();
-                                let dialog_state = app_state.dialog_state.clone();
+                                let bottom_sheet_controller =
+                                    app_state.bottom_sheet_controller.clone();
+                                let side_bar_controller = app_state.side_bar_controller.clone();
+                                let dialog_controller = app_state.dialog_controller.clone();
                                 scope.child(move || {
                                     let home_icon_content = filled::home_icon();
                                     let home_icon_args = IconArgsBuilder::default()
@@ -128,61 +137,58 @@ pub fn app(#[state] app_state: AppState) {
                                         .build()
                                         .unwrap();
 
-                                    navigation_bar(
-                                        app_state.navigation_bar_state.clone(),
-                                        |scope| {
-                                            scope.item(
-                                                NavigationBarItemBuilder::default()
-                                                    .label("Home")
-                                                    .icon(Arc::new(closure!(
-                                                        clone home_icon_args,
-                                                        || {
-                                                            icon(home_icon_args.clone());
-                                                        }
-                                                    )))
-                                                    .on_click(Arc::new(closure!(
-                                                        clone bottom_sheet_state,
-                                                        clone side_bar_state,
-                                                        clone dialog_state,
-                                                        || {
-                                                            Router::with_mut(|router| {
-                                                                router.reset_with(
-                                                                    HomeDestination {
-                                                                        bottom_sheet_state:
-                                                                            bottom_sheet_state
-                                                                                .clone(),
-                                                                        side_bar_state:
-                                                                            side_bar_state.clone(),
-                                                                        dialog_state:
-                                                                            dialog_state.clone(),
-                                                                    },
-                                                                );
-                                                            });
-                                                        }
-                                                    )))
-                                                    .build()
-                                                    .unwrap(),
-                                            );
-
-                                            scope.item(
-                                                NavigationBarItemBuilder::default()
-                                                    .label("About")
-                                                    .icon(Arc::new(closure!(
-                                                        clone about_icon_args,
-                                                        || {
-                                                            icon(about_icon_args.clone());
-                                                        }
-                                                    )))
-                                                    .on_click(Arc::new(|| {
+                                    navigation_bar(|scope| {
+                                        scope.item(
+                                            NavigationBarItemBuilder::default()
+                                                .label("Home")
+                                                .icon(Arc::new(closure!(
+                                                    clone home_icon_args,
+                                                    || {
+                                                        icon(home_icon_args.clone());
+                                                    }
+                                                )))
+                                                .on_click(Arc::new(closure!(
+                                                    clone bottom_sheet_controller,
+                                                    clone side_bar_controller,
+                                                    clone dialog_controller,
+                                                    || {
                                                         Router::with_mut(|router| {
-                                                            router.reset_with(AboutDestination {});
+                                                            router.reset_with(
+                                                                HomeDestination {
+                                                                    bottom_sheet_controller:
+                                                                        bottom_sheet_controller
+                                                                            .clone(),
+                                                                    side_bar_controller:
+                                                                        side_bar_controller.clone(),
+                                                                    dialog_controller:
+                                                                        dialog_controller.clone(),
+                                                                },
+                                                            );
                                                         });
-                                                    }))
-                                                    .build()
-                                                    .unwrap(),
-                                            );
-                                        },
-                                    );
+                                                    }
+                                                )))
+                                                .build()
+                                                .unwrap(),
+                                        );
+
+                                        scope.item(
+                                            NavigationBarItemBuilder::default()
+                                                .label("About")
+                                                .icon(Arc::new(closure!(
+                                                    clone about_icon_args,
+                                                    || {
+                                                        icon(about_icon_args.clone());
+                                                    }
+                                                )))
+                                                .on_click(Arc::new(|| {
+                                                    Router::with_mut(|router| {
+                                                        router.reset_with(AboutDestination {});
+                                                    });
+                                                }))
+                                                .build()
+                                                .unwrap(),
+                                        );
+                                    });
                                 });
                             });
                         },
@@ -218,12 +224,6 @@ Side bars are bars at side, side at bars, bars side at, at side bars..."#,
     );
 }
 
-#[derive(Default)]
-struct HomeState {
-    lazy_list_state: LazyListState,
-    example_cards_ripple_state: DashMap<usize, RippleState>,
-}
-
 #[derive(Clone)]
 struct ComponentExampleDesc {
     title: String,
@@ -244,10 +244,9 @@ impl ComponentExampleDesc {
 #[tessera]
 #[shard]
 fn home(
-    #[state] home_state: HomeState,
-    bottom_sheet_state: BottomSheetProviderState,
-    side_bar_state: SideBarProviderState,
-    dialog_state: DialogProviderState,
+    bottom_sheet_controller: Arc<BottomSheetController>,
+    side_bar_controller: Arc<SideBarController>,
+    dialog_controller: Arc<DialogController>,
 ) {
     let examples = Arc::new(vec![
         ComponentExampleDesc::new(
@@ -359,7 +358,7 @@ fn home(
             "Dialog",
             "A modal window that appears on top of the main content.",
             move || {
-                dialog_state.open();
+                dialog_controller.open();
             },
         ),
         ComponentExampleDesc::new(
@@ -447,14 +446,14 @@ fn home(
             "Bottom Sheet",
             "bottom sheet displays content sliding up from the bottom of the screen.",
             move || {
-                bottom_sheet_state.open();
+                bottom_sheet_controller.open();
             },
         ),
         ComponentExampleDesc::new(
             "Side Bar",
             "side bar displays content sliding in from the left side of the screen.",
             move || {
-                side_bar_state.open();
+                side_bar_controller.open();
             },
         ),
     ]);
@@ -465,9 +464,7 @@ fn home(
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
-            let state_clone = home_state.clone();
             let examples_clone = examples.clone();
 
             lazy_column(
@@ -486,18 +483,12 @@ fn home(
                     .content_padding(Dp(16.0))
                     .build()
                     .unwrap(),
-                home_state.lazy_list_state.clone(),
                 move |scope| {
-                    let ripple_map = state_clone.example_cards_ripple_state.clone();
-                    scope.items_from_iter(examples_clone.iter().cloned(), move |index, example| {
+                    scope.items_from_iter(examples_clone.iter().cloned(), move |_, example| {
                         let on_click = example.on_click.clone();
-                        let surface_ripple_state = ripple_map
-                            .entry(index)
-                            .or_insert_with(RippleState::default)
-                            .clone();
                         let title = example.title.clone();
                         let description = example.desription.clone();
-                        component_card(&title, &description, surface_ripple_state, on_click);
+                        component_card(&title, &description, on_click);
                     });
                 },
             );
@@ -506,12 +497,7 @@ fn home(
 }
 
 #[tessera]
-fn component_card(
-    title: &str,
-    description: &str,
-    surface_ripple_state: RippleState,
-    on_click: Arc<dyn Fn() + Send + Sync>,
-) {
+fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send + Sync>) {
     let title = title.to_string();
     let description = description.to_string();
     surface(
@@ -526,7 +512,6 @@ fn component_card(
             .shadow(ShadowProps::default())
             .build()
             .unwrap(),
-        Some(surface_ripple_state),
         || {
             column(ColumnArgs::default(), |scope| {
                 scope.child(move || {
@@ -553,14 +538,8 @@ fn component_card(
     );
 }
 
-#[derive(Default)]
-struct TopAppBarState {
-    back_button_ripple_state: RippleState,
-}
-
 #[tessera]
-#[shard]
-fn top_app_bar(#[state] state: TopAppBarState) {
+fn top_app_bar() {
     surface(
         SurfaceArgsBuilder::default()
             .shadow(ShadowProps::default())
@@ -570,7 +549,6 @@ fn top_app_bar(#[state] state: TopAppBarState) {
             .block_input(true)
             .build()
             .unwrap(),
-        None,
         move || {
             row(
                 RowArgsBuilder::default()
@@ -596,31 +574,27 @@ fn top_app_bar(#[state] state: TopAppBarState) {
                             }));
                         }
 
-                        button(
-                            button_args.build().unwrap(),
-                            state.back_button_ripple_state.clone(),
-                            || {
-                                boxed(
-                                    BoxedArgsBuilder::default()
-                                        .width(DimensionValue::FILLED)
-                                        .height(DimensionValue::FILLED)
-                                        .alignment(Alignment::Center)
-                                        .build()
-                                        .unwrap(),
-                                    |scope| {
-                                        scope.child(|| {
-                                            text(
-                                                TextArgsBuilder::default()
-                                                    .text("←".to_string())
-                                                    .size(Dp(25.0))
-                                                    .build()
-                                                    .unwrap(),
-                                            );
-                                        });
-                                    },
-                                );
-                            },
-                        );
+                        button(button_args.build().unwrap(), || {
+                            boxed(
+                                BoxedArgsBuilder::default()
+                                    .width(DimensionValue::FILLED)
+                                    .height(DimensionValue::FILLED)
+                                    .alignment(Alignment::Center)
+                                    .build()
+                                    .unwrap(),
+                                |scope| {
+                                    scope.child(|| {
+                                        text(
+                                            TextArgsBuilder::default()
+                                                .text("←".to_string())
+                                                .size(Dp(25.0))
+                                                .build()
+                                                .unwrap(),
+                                        );
+                                    });
+                                },
+                            );
+                        });
                     });
                 },
             );
@@ -638,7 +612,6 @@ fn about() {
             .padding(Dp(16.0))
             .build()
             .unwrap(),
-        None,
         || {
             boxed(
                 BoxedArgsBuilder::default()

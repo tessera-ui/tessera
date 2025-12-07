@@ -1,52 +1,33 @@
 use std::sync::{Arc, Mutex};
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     glass_progress::{GlassProgressArgsBuilder, glass_progress},
     material_color::global_material_scheme,
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
-    slider::{SliderArgsBuilder, SliderState, slider},
+    scrollable::{ScrollableArgsBuilder, scrollable},
+    slider::{SliderArgsBuilder, slider},
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Clone)]
-struct GlassProgressShowcaseState {
-    scrollable_state: ScrollableState,
-    progress: Arc<Mutex<f32>>,
-    slider_state: SliderState,
-}
-
-impl Default for GlassProgressShowcaseState {
-    fn default() -> Self {
-        Self {
-            scrollable_state: Default::default(),
-            progress: Arc::new(Mutex::new(0.5)),
-            slider_state: SliderState::new(),
-        }
-    }
-}
-
 #[tessera]
 #[shard]
-pub fn glass_progress_showcase(#[state] state: GlassProgressShowcaseState) {
+pub fn glass_progress_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
@@ -54,9 +35,8 @@ pub fn glass_progress_showcase(#[state] state: GlassProgressShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
-                            test_content(state);
+                            test_content();
                         },
                     );
                 },
@@ -66,7 +46,9 @@ pub fn glass_progress_showcase(#[state] state: GlassProgressShowcaseState) {
 }
 
 #[tessera]
-fn test_content(state: Arc<GlassProgressShowcaseState>) {
+fn test_content() {
+    let progress = remember(|| Mutex::new(0.5));
+
     column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -88,9 +70,9 @@ fn test_content(state: Arc<GlassProgressShowcaseState>) {
                     .unwrap());
             });
 
-            let state_clone = state.clone();
+            let progress_clone = progress.clone();
             scope.child(move || {
-                let progress_val = *state_clone.progress.lock().unwrap();
+                let progress_val = *progress_clone.lock().unwrap();
                 glass_progress(
                     GlassProgressArgsBuilder::default()
                         .value(progress_val)
@@ -104,19 +86,18 @@ fn test_content(state: Arc<GlassProgressShowcaseState>) {
                 spacer(Dp(20.0));
             });
 
-            let state_clone = state.clone();
+            let progress_clone = progress.clone();
             scope.child(move || {
-                let on_change = Arc::new(closure!(clone state_clone.progress, |new_value| {
-                    *progress.lock().unwrap() = new_value;
+                let on_change = Arc::new(closure!(clone progress_clone, |new_value| {
+                    *progress_clone.lock().unwrap() = new_value;
                 }));
                 slider(
                     SliderArgsBuilder::default()
-                        .value(*state_clone.progress.lock().unwrap())
+                        .value(*progress_clone.lock().unwrap())
                         .on_change(on_change)
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
                         .unwrap(),
-                    state_clone.slider_state.clone(),
                 );
             });
         },

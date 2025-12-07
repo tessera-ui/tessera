@@ -1,49 +1,30 @@
 use std::sync::{Arc, Mutex};
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
-    glass_slider::{GlassSliderArgsBuilder, GlassSliderState, glass_slider},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    glass_slider::{GlassSliderArgsBuilder, GlassSliderController, glass_slider_with_controller},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Clone)]
-struct GlassSliderShowcaseState {
-    scrollable_state: ScrollableState,
-    value: Arc<Mutex<f32>>,
-    slider_state: GlassSliderState,
-}
-
-impl Default for GlassSliderShowcaseState {
-    fn default() -> Self {
-        Self {
-            scrollable_state: Default::default(),
-            value: Arc::new(Mutex::new(0.5)),
-            slider_state: Default::default(),
-        }
-    }
-}
-
 #[tessera]
 #[shard]
-pub fn glass_slider_showcase(#[state] state: GlassSliderShowcaseState) {
+pub fn glass_slider_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
@@ -51,9 +32,8 @@ pub fn glass_slider_showcase(#[state] state: GlassSliderShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
-                            test_content(state);
+                            test_content();
                         },
                     );
                 },
@@ -63,7 +43,10 @@ pub fn glass_slider_showcase(#[state] state: GlassSliderShowcaseState) {
 }
 
 #[tessera]
-fn test_content(state: Arc<GlassSliderShowcaseState>) {
+fn test_content() {
+    let value = remember(|| Mutex::new(0.5));
+    let slider_controller = remember(GlassSliderController::new);
+
     column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -72,24 +55,26 @@ fn test_content(state: Arc<GlassSliderShowcaseState>) {
         move |scope| {
             scope.child(|| text("Glass Slider Showcase"));
 
-            let state_clone = state.clone();
+            let value_clone = value.clone();
+            let slider_controller_clone = slider_controller.clone();
             scope.child(move || {
-                let on_change = Arc::new(closure!(clone state_clone.value, |new_value| {
-                    *value.lock().unwrap() = new_value;
+                let on_change = Arc::new(closure!(clone value_clone, |new_value| {
+                    *value_clone.lock().unwrap() = new_value;
                 }));
-                glass_slider(
+                glass_slider_with_controller(
                     GlassSliderArgsBuilder::default()
-                        .value(*state_clone.value.lock().unwrap())
+                        .value(*value_clone.lock().unwrap())
                         .on_change(on_change)
                         .width(Dp(250.0))
                         .build()
                         .unwrap(),
-                    state_clone.slider_state.clone(),
+                    slider_controller_clone,
                 );
             });
 
+            let value_clone = value.clone();
             scope.child(move || {
-                let value = *state.value.lock().unwrap();
+                let value = *value_clone.lock().unwrap();
                 text(
                     TextArgsBuilder::default()
                         .text(format!("Value: {:.2}", value))

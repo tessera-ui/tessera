@@ -14,7 +14,7 @@ use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
     PxPosition,
     accesskit::{Action, Role, Toggled},
-    tessera,
+    remember, tessera,
     winit::window::CursorIcon,
 };
 
@@ -33,7 +33,7 @@ const THUMB_OFF_SCALE: f32 = 0.72;
 
 /// Represents the state for the `switch` component, including checked status and animation progress.
 ///
-/// This struct can be shared between multiple switches or managed externally to control the checked state and animation.
+/// This struct is used internally by [`SwitchController`].
 pub(crate) struct SwitchStateInner {
     checked: bool,
     progress: f32,
@@ -63,54 +63,73 @@ impl SwitchStateInner {
     }
 }
 
-/// External state handle for the `switch` component.
-#[derive(Clone)]
-pub struct SwitchState {
-    inner: Arc<RwLock<SwitchStateInner>>,
+/// Controller for the `switch` component.
+pub struct SwitchController {
+    inner: RwLock<SwitchStateInner>,
 }
 
-impl SwitchState {
-    /// Creates a new state handle with the given initial value.
+impl SwitchController {
+    /// Creates a new controller with the given initial value.
     pub fn new(initial_state: bool) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(SwitchStateInner::new(initial_state))),
+            inner: RwLock::new(SwitchStateInner::new(initial_state)),
         }
     }
 
-    pub(crate) fn read(&self) -> RwLockReadGuard<'_, SwitchStateInner> {
+    fn read(&self) -> RwLockReadGuard<'_, SwitchStateInner> {
         self.inner.read()
     }
 
-    pub(crate) fn write(&self) -> RwLockWriteGuard<'_, SwitchStateInner> {
+    fn write(&self) -> RwLockWriteGuard<'_, SwitchStateInner> {
         self.inner.write()
     }
 
     /// Returns whether the switch is currently checked.
     pub fn is_checked(&self) -> bool {
-        self.inner.read().checked
+        self.read().checked
     }
 
     /// Sets the checked state directly, resetting animation progress.
     pub fn set_checked(&self, checked: bool) {
-        if self.inner.read().checked != checked {
-            self.inner.write().checked = checked;
-            self.inner.write().progress = if checked { 1.0 } else { 0.0 };
-            self.inner.write().last_toggle_time = None;
+        let mut state = self.write();
+        if state.checked != checked {
+            state.checked = checked;
+            state.progress = if checked { 1.0 } else { 0.0 };
+            state.last_toggle_time = None;
         }
     }
 
     /// Toggles the switch and kicks off the animation timeline.
     pub fn toggle(&self) {
-        self.inner.write().toggle();
+        self.write().toggle();
     }
 
     /// Returns the current animation progress (0.0..1.0).
     pub fn animation_progress(&self) -> f32 {
-        self.inner.read().progress
+        self.read().progress
+    }
+
+    /// Advances the animation timeline based on elapsed time.
+    fn update_progress(&self) {
+        let last_toggle_time = self.read().last_toggle_time;
+        if let Some(last_toggle_time) = last_toggle_time {
+            let elapsed = last_toggle_time.elapsed();
+            let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
+            let checked = self.read().checked;
+            let target = if checked { 1.0 } else { 0.0 };
+            let progress = if checked { fraction } else { 1.0 - fraction };
+
+            self.write().progress = progress;
+
+            if (progress - target).abs() < f32::EPSILON || fraction >= 1.0 {
+                self.write().progress = target;
+                self.write().last_toggle_time = None;
+            }
+        }
     }
 }
 
-impl Default for SwitchState {
+impl Default for SwitchController {
     fn default() -> Self {
         Self::new(false)
     }
@@ -123,6 +142,9 @@ pub struct SwitchArgs {
     /// Optional callback invoked when the switch toggles.
     #[builder(default, setter(strip_option))]
     pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
+    /// Initial checked state.
+    #[builder(default = "false")]
+    pub checked: bool,
     /// Total width of the switch track.
     #[builder(default = "Dp(52.0)")]
     pub width: Dp,
@@ -172,24 +194,6 @@ impl Default for SwitchArgs {
     }
 }
 
-fn update_progress_from_state(state: &SwitchState) {
-    let last_toggle_time = state.read().last_toggle_time;
-    if let Some(last_toggle_time) = last_toggle_time {
-        let elapsed = last_toggle_time.elapsed();
-        let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
-        let checked = state.read().checked;
-        let target = if checked { 1.0 } else { 0.0 };
-        let progress = if checked { fraction } else { 1.0 - fraction };
-
-        state.write().progress = progress;
-
-        if (progress - target).abs() < f32::EPSILON || fraction >= 1.0 {
-            state.write().progress = target;
-            state.write().last_toggle_time = None;
-        }
-    }
-}
-
 fn is_cursor_in_component(size: ComputedData, pos_option: Option<tessera_ui::PxPosition>) -> bool {
     pos_option
         .map(|pos| {
@@ -199,11 +203,11 @@ fn is_cursor_in_component(size: ComputedData, pos_option: Option<tessera_ui::PxP
 }
 
 fn handle_input_events_switch(
-    state: &SwitchState,
+    controller: &Arc<SwitchController>,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
     input: &mut tessera_ui::InputHandlerInput,
 ) {
-    update_progress_from_state(state);
+    controller.update_progress();
 
     let size = input.computed_data;
     let is_cursor_in = is_cursor_in_component(size, input.cursor_position_rel);
@@ -218,33 +222,33 @@ fn handle_input_events_switch(
             CursorEventContent::Pressed(PressKeyEventType::Left)
         ) && is_cursor_in
         {
-            toggle_switch_state(state, on_toggle);
+            toggle_switch_state(controller, on_toggle);
         }
     }
 }
 
 fn toggle_switch_state(
-    state: &SwitchState,
+    controller: &Arc<SwitchController>,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
 ) -> bool {
     let Some(on_toggle) = on_toggle else {
         return false;
     };
 
-    state.write().toggle();
-    let checked = state.read().checked;
+    controller.toggle();
+    let checked = controller.is_checked();
     on_toggle(checked);
     true
 }
 
 fn apply_switch_accessibility(
     input: &mut tessera_ui::InputHandlerInput<'_>,
-    state: &SwitchState,
+    controller: &Arc<SwitchController>,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
     label: Option<&String>,
     description: Option<&String>,
 ) {
-    let checked = state.read().checked;
+    let checked = controller.is_checked();
     let mut builder = input.accessibility().role(Role::Switch);
 
     if let Some(label) = label {
@@ -269,11 +273,11 @@ fn apply_switch_accessibility(
     builder.commit();
 
     if on_toggle.is_some() {
-        let state = state.clone();
+        let controller = controller.clone();
         let on_toggle = on_toggle.clone();
         input.set_accessibility_action_handler(move |action| {
             if action == Action::Click {
-                toggle_switch_state(&state, &on_toggle);
+                toggle_switch_state(&controller, &on_toggle);
             }
         });
     }
@@ -291,13 +295,13 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 #[tessera]
 fn switch_inner(
     args: SwitchArgs,
-    state: SwitchState,
+    controller: Arc<SwitchController>,
     child: Option<Box<dyn FnOnce() + Send + Sync>>,
 ) {
-    update_progress_from_state(&state);
+    controller.update_progress();
 
     let thumb_size = Dp(args.height.0 - (args.thumb_padding.0 * 2.0));
-    let progress = state.read().progress;
+    let progress = controller.animation_progress();
     let eased_progress = animation::easing(progress);
     let thumb_scale = THUMB_OFF_SCALE + (1.0 - THUMB_OFF_SCALE) * eased_progress;
     let scheme = material_color::global_material_scheme();
@@ -335,7 +339,6 @@ fn switch_inner(
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
-        None,
         {
             move || {
                 if let Some(child) = child {
@@ -370,13 +373,13 @@ fn switch_inner(
     let width = args.width;
     let height = args.height;
 
-    let state_for_handler = state.clone();
+    let controller_for_handler = controller.clone();
     input_handler(Box::new(move |mut input| {
         // Delegate input handling to the extracted helper.
-        handle_input_events_switch(&state_for_handler, &on_toggle, &mut input);
+        handle_input_events_switch(&controller_for_handler, &on_toggle, &mut input);
         apply_switch_accessibility(
             &mut input,
-            &state_for_handler,
+            &controller_for_handler,
             &accessibility_on_toggle,
             accessibility_label.as_ref(),
             accessibility_description.as_ref(),
@@ -444,15 +447,12 @@ fn switch_inner(
 /// ## Parameters
 ///
 /// - `args` — configures sizing, colors, and callbacks; see [`SwitchArgs`].
-/// - `state` — a clonable [`SwitchState`] that owns the checked state and animation.
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::switch::{switch, SwitchArgsBuilder, SwitchState};
-///
-/// let switch_state = SwitchState::new(false);
+/// use tessera_ui_basic_components::switch::{switch, SwitchArgsBuilder};
 ///
 /// switch(
 ///     SwitchArgsBuilder::default()
@@ -461,11 +461,13 @@ fn switch_inner(
 ///         }))
 ///         .build()
 ///         .unwrap(),
-///     switch_state,
 /// );
 /// ```
-pub fn switch(args: impl Into<SwitchArgs>, state: SwitchState) {
-    switch_inner(args.into(), state, None);
+#[tessera]
+pub fn switch(args: impl Into<SwitchArgs>) {
+    let args: SwitchArgs = args.into();
+    let controller = remember(|| SwitchController::new(args.checked));
+    switch_with_controller(args, controller);
 }
 
 /// # switch_with_child
@@ -479,17 +481,15 @@ pub fn switch(args: impl Into<SwitchArgs>, state: SwitchState) {
 /// ## Parameters
 ///
 /// - `args` — configures sizing, colors, and callbacks; see [`SwitchArgs`].
-/// - `state` — a clonable [`SwitchState`] that owns the checked state and animation.
+/// - `controller` — an `Arc<SwitchController>` to drive and observe state.
 /// - `child` — closure rendered at the thumb center.
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::switch::{switch_with_child, SwitchArgsBuilder, SwitchState};
+/// use tessera_ui_basic_components::switch::{switch_with_child, SwitchArgsBuilder};
 /// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
-///
-/// let switch_state = SwitchState::new(false);
 ///
 /// switch_with_child(
 ///     SwitchArgsBuilder::default()
@@ -498,7 +498,6 @@ pub fn switch(args: impl Into<SwitchArgs>, state: SwitchState) {
 ///         }))
 ///         .build()
 ///         .unwrap(),
-///     switch_state,
 ///     || {
 ///         text(
 ///             TextArgsBuilder::default()
@@ -509,10 +508,70 @@ pub fn switch(args: impl Into<SwitchArgs>, state: SwitchState) {
 ///     },
 /// );
 /// ```
+#[tessera]
 pub fn switch_with_child(
     args: impl Into<SwitchArgs>,
-    state: SwitchState,
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
-    switch_inner(args.into(), state, Some(Box::new(child)));
+    let args = args.into();
+    let controller = remember(|| SwitchController::new(args.checked));
+    switch_inner(args, controller, Some(Box::new(child)));
+}
+
+/// # switch_with_child_and_controller
+///
+/// Controlled switch variant with custom thumb content.
+///
+/// # Usage
+///
+/// Use when you need to sync the switch state with external application state and want custom thumb content.
+///
+/// # Parameters
+///
+/// - `args` — configures sizing, colors, and callbacks; see [`SwitchArgs`].
+/// - `controller` — an `Arc<SwitchController>` to drive and observe state.
+/// - `child` — closure rendered at the thumb center.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::{remember, tessera};
+/// use std::sync::Arc;
+/// use tessera_ui_basic_components::switch::{switch_with_child_and_controller, SwitchArgsBuilder, SwitchController};
+/// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
+///
+/// #[tessera]
+/// fn controlled_switch_example() {
+///     let controller = remember(|| SwitchController::new(false));
+///     switch_with_child_and_controller(
+///         SwitchArgsBuilder::default()
+///             .on_toggle(Arc::new(|checked| {
+///                 println!("Switch is now: {}", checked);
+///             }))
+///            .build()
+///            .unwrap(),
+///        controller,
+///        || {
+///            text(
+///                 TextArgsBuilder::default()
+///                     .text("✓".to_string())
+///                     .build()
+///                     .unwrap(),
+///           );
+///        }
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn switch_with_child_and_controller(
+    args: impl Into<SwitchArgs>,
+    controller: Arc<SwitchController>,
+    child: impl FnOnce() + Send + Sync + 'static,
+) {
+    switch_inner(args.into(), controller, Some(Box::new(child)));
+}
+
+/// Controlled switch variant without thumb content customization.
+pub fn switch_with_controller(args: impl Into<SwitchArgs>, controller: Arc<SwitchController>) {
+    switch_inner(args.into(), controller, None);
 }

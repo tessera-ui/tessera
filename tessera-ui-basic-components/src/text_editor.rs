@@ -9,7 +9,7 @@ use derive_builder::Builder;
 use glyphon::{Action as GlyphonAction, Edit};
 use tessera_ui::{
     Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, accesskit::Role,
-    tessera, winit,
+    remember, tessera, winit,
 };
 
 use crate::{
@@ -21,7 +21,7 @@ use crate::{
 };
 
 /// State structure for the text editor, managing text content, cursor, selection, and editing logic.
-pub use crate::text_edit_core::{TextEditorState, TextEditorStateInner};
+pub use crate::text_edit_core::{TextEditorController, TextEditorControllerInner};
 
 /// Arguments for configuring the [`text_editor`] component.
 #[derive(Builder, Clone)]
@@ -79,6 +79,15 @@ pub struct TextEditorArgs {
     /// Optional description announced by assistive technologies.
     #[builder(default, setter(strip_option, into))]
     pub accessibility_description: Option<String>,
+    /// Initial text content.
+    #[builder(default, setter(strip_option, into))]
+    pub initial_text: Option<String>,
+    /// Font size in Dp. Defaults to 14.0.
+    #[builder(default = "Dp(14.0)")]
+    pub font_size: Dp,
+    /// Line height in Dp. Defaults to None (1.2x font size).
+    #[builder(default = "None")]
+    pub line_height: Option<Dp>,
 }
 
 impl Default for TextEditorArgs {
@@ -93,59 +102,105 @@ impl Default for TextEditorArgs {
 ///
 /// Renders a multi-line, editable text field.
 ///
-/// ## Usage
+/// # Usage
 ///
 /// Create an interactive text editor for forms, note-taking, or other text input scenarios.
 ///
-/// ## Parameters
+/// # Parameters
 ///
 /// - `args` — configures the editor's appearance and layout; see [`TextEditorArgs`].
-/// - `state` — a `TextEditorStateHandle` to manage the editor's content, cursor, and selection.
 ///
-/// ## Examples
+/// # Examples
+///
+/// ```
+/// use tessera_ui::Dp;
+/// use tessera_ui_basic_components::text_editor::{text_editor, TextEditorArgsBuilder};
+///
+/// text_editor(
+///     TextEditorArgsBuilder::default()
+///         .padding(Dp(8.0))
+///         .initial_text("Hello World")
+///         .build()
+///         .unwrap(),
+/// );
+/// ```
+#[tessera]
+pub fn text_editor(args: impl Into<TextEditorArgs>) {
+    let args: TextEditorArgs = args.into();
+    let controller = remember(|| {
+        let c = TextEditorController::new(args.font_size, args.line_height);
+        if let Some(text) = &args.initial_text {
+            c.write().editor_mut().set_text_reactive(
+                text,
+                &mut write_font_system(),
+                &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
+            );
+        }
+        c
+    });
+
+    text_editor_with_controller(args, controller);
+}
+
+/// # text_editor_with_controller
+///
+/// Renders a multi-line, editable text field with an external controller.
+///
+/// # Usage
+///
+/// Use this component when you need to control the text editor state externally,
+/// for example to synchronize text with other components or to programmatically
+/// modify the text content or selection.
+///
+/// # Parameters
+///
+/// - `args` — configures the editor's appearance and layout; see [`TextEditorArgs`].
+/// - `controller` — a `TextEditorController` to manage the editor's content, cursor, and selection.
+///
+/// # Examples
 ///
 /// ```
 /// use std::sync::Arc;
-/// use parking_lot::RwLock;
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
-///     text_editor::{text_editor, TextEditorArgsBuilder, TextEditorState},
+///     text_editor::{text_editor_with_controller, TextEditorArgsBuilder, TextEditorController},
 ///     text::write_font_system,
 /// };
 ///
-/// // In a real app, you would manage this state.
-/// let editor_state = TextEditorState::new(Dp(14.0), None);
-/// editor_state.write().editor_mut().set_text_reactive(
+/// let controller = Arc::new(TextEditorController::new(Dp(14.0), None));
+/// controller.write().editor_mut().set_text_reactive(
 ///     "Initial text",
 ///     &mut write_font_system(),
 ///     &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
 /// );
 ///
-/// text_editor(
+/// text_editor_with_controller(
 ///     TextEditorArgsBuilder::default()
 ///         .padding(Dp(8.0))
 ///         .build()
 ///         .unwrap(),
-///     editor_state.clone(),
+///     controller,
 /// );
 /// ```
 #[tessera]
-pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorState) {
+pub fn text_editor_with_controller(
+    args: impl Into<TextEditorArgs>,
+    controller: Arc<TextEditorController>,
+) {
     let editor_args: TextEditorArgs = args.into();
     let on_change = editor_args.on_change.clone();
 
     // Update the state with the selection color from args
     if let Some(selection_color) = editor_args.selection_color {
-        state.write().set_selection_color(selection_color);
+        controller.write().set_selection_color(selection_color);
     }
 
     // surface layer - provides visual container and minimum size guarantee
     {
-        let state_for_surface = state.clone();
+        let state_for_surface = controller.clone();
         let args_for_surface = editor_args.clone();
         surface(
             create_surface_args(&args_for_surface, &state_for_surface),
-            None, // text editors are not interactive at surface level
             move || {
                 // Core layer - handles text rendering and editing logic
                 text_edit_core(state_for_surface.clone());
@@ -156,7 +211,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorState) {
     // Event handling at the outermost layer - can access full surface area
 
     let args_for_handler = editor_args.clone();
-    let state_for_handler = state.clone();
+    let state_for_handler = controller.clone();
     input_handler(Box::new(move |mut input| {
         let size = input.computed_data; // This is the full surface size
         let cursor_pos_option = input.cursor_position_rel;
@@ -434,7 +489,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>, state: TextEditorState) {
 }
 
 fn handle_action(
-    state: &TextEditorState,
+    state: &TextEditorController,
     action: GlyphonAction,
     on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
 ) {
@@ -476,7 +531,7 @@ fn handle_action(
 /// Create surface arguments based on editor configuration and state
 fn create_surface_args(
     args: &TextEditorArgs,
-    state: &TextEditorState,
+    state: &TextEditorController,
 ) -> crate::surface::SurfaceArgs {
     let style = if args.border_width.to_pixels_f32() > 0.0 {
         crate::surface::SurfaceStyle::FilledOutlined {
@@ -502,7 +557,7 @@ fn create_surface_args(
 }
 
 /// Determine background color based on focus state
-fn determine_background_color(args: &TextEditorArgs, state: &TextEditorState) -> Color {
+fn determine_background_color(args: &TextEditorArgs, state: &TextEditorController) -> Color {
     if state.read().focus_handler().is_focused() {
         args.focus_background_color
             .or(args.background_color)
@@ -514,7 +569,7 @@ fn determine_background_color(args: &TextEditorArgs, state: &TextEditorState) ->
 }
 
 /// Determine border color based on focus state
-fn determine_border_color(args: &TextEditorArgs, state: &TextEditorState) -> Option<Color> {
+fn determine_border_color(args: &TextEditorArgs, state: &TextEditorController) -> Option<Color> {
     if state.read().focus_handler().is_focused() {
         args.focus_border_color.or(args.border_color).or(Some(
             crate::material_color::global_material_scheme().primary,
@@ -789,7 +844,7 @@ fn get_editor_content(editor: &glyphon::Editor) -> String {
 fn apply_text_editor_accessibility(
     input: &mut tessera_ui::InputHandlerInput<'_>,
     args: &TextEditorArgs,
-    state: &TextEditorState,
+    state: &TextEditorController,
 ) {
     let mut builder = input.accessibility().role(Role::MultilineTextInput);
 

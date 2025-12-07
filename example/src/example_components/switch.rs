@@ -1,41 +1,35 @@
 use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
     icon::{IconArgsBuilder, icon},
     material_icons::round::check_icon,
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
-    switch::{SwitchArgsBuilder, SwitchState, switch, switch_with_child},
+    switch::{
+        SwitchArgsBuilder, SwitchController, switch, switch_with_child_and_controller,
+        switch_with_controller,
+    },
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Default)]
-struct SwitchShowcaseState {
-    scrollable_state: ScrollableState,
-    switch_state: SwitchState,
-    switch2_state: SwitchState,
-}
-
 #[tessera]
 #[shard]
-pub fn switch_showcase(#[state] state: SwitchShowcaseState) {
+pub fn switch_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
@@ -43,9 +37,8 @@ pub fn switch_showcase(#[state] state: SwitchShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
-                            test_content(state);
+                            test_content();
                         },
                     );
                 },
@@ -55,7 +48,7 @@ pub fn switch_showcase(#[state] state: SwitchShowcaseState) {
 }
 
 #[tessera]
-fn test_content(state: Arc<SwitchShowcaseState>) {
+fn test_content() {
     column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -73,39 +66,36 @@ fn test_content(state: Arc<SwitchShowcaseState>) {
                 )
             });
 
-            let state_clone = state.clone();
             scope.child(move || {
-                let icon_state = state_clone.switch_state.clone();
-                if icon_state.is_checked() {
-                    switch_with_child(
+                let controller = remember(|| SwitchController::new(false));
+                if controller.is_checked() {
+                    switch_with_child_and_controller(
                         SwitchArgsBuilder::default()
                             .on_toggle(Arc::new(|value| {
                                 println!("Switch toggled to: {}", value);
                             }))
                             .build()
                             .unwrap(),
-                        state_clone.switch_state.clone(),
+                        controller.clone(),
                         move || {
-                            if icon_state.is_checked() {
-                                icon(
-                                    IconArgsBuilder::default()
-                                        .content(check_icon())
-                                        .size(Dp(16.0))
-                                        .build()
-                                        .unwrap(),
-                                );
-                            }
+                            icon(
+                                IconArgsBuilder::default()
+                                    .content(check_icon())
+                                    .size(Dp(16.0))
+                                    .build()
+                                    .unwrap(),
+                            );
                         },
                     );
                 } else {
-                    switch(
+                    switch_with_controller(
                         SwitchArgsBuilder::default()
                             .on_toggle(Arc::new(|value| {
                                 println!("Switch toggled to: {}", value);
                             }))
                             .build()
                             .unwrap(),
-                        state_clone.switch_state.clone(),
+                        controller.clone(),
                     );
                 }
             });
@@ -121,10 +111,7 @@ fn test_content(state: Arc<SwitchShowcaseState>) {
             });
             scope.child(move || {
                 // Disabled by not providing on_change
-                switch(
-                    SwitchArgsBuilder::default().build().unwrap(),
-                    state.switch2_state.clone(),
-                );
+                switch(SwitchArgsBuilder::default().build().unwrap());
             });
         },
     )

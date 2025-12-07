@@ -1,17 +1,16 @@
 use std::sync::{Arc, Mutex};
 
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
-    RippleState,
     alignment::{Alignment, CrossAxisAlignment},
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgs, ColumnArgsBuilder, column},
     glass_button::{GlassButtonArgsBuilder, glass_button},
     icon::{IconArgsBuilder, IconContent},
     icon_button::{GlassIconButtonArgsBuilder, glass_icon_button},
-    image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
-    image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    image::{ImageArgsBuilder, ImageSource, image, load_image_from_source},
+    image_vector::{ImageVectorSource, load_image_vector_from_source},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     shape_def::Shape,
     spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgsBuilder, surface},
@@ -27,55 +26,21 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
     "/../assets/emoji_u1f416.svg"
 ));
 
-#[derive(Clone)]
-struct GlassButtonShowcaseState {
-    scrollable_state: ScrollableState,
-    counter: Arc<Mutex<i32>>,
-    ripple_state: RippleState,
-    icon_ripple_state: RippleState,
-    image_data: Arc<ImageData>,
-    icon_data: Arc<ImageVectorData>,
-}
-
-impl Default for GlassButtonShowcaseState {
-    fn default() -> Self {
-        let image_data = Arc::new(
-            load_image_from_source(&ImageSource::Bytes(Arc::from(IMAGE_BYTES)))
-                .expect("Failed to load image from embedded bytes"),
-        );
-        let icon_data = Arc::new(
-            load_image_vector_from_source(&ImageVectorSource::Bytes(Arc::from(ICON_BYTES)))
-                .expect("Failed to load icon SVG"),
-        );
-
-        Self {
-            scrollable_state: Default::default(),
-            counter: Default::default(),
-            ripple_state: RippleState::new(),
-            icon_ripple_state: RippleState::new(),
-            image_data,
-            icon_data,
-        }
-    }
-}
-
 #[tessera]
 #[shard]
-pub fn glass_button_showcase(#[state] state: GlassButtonShowcaseState) {
+pub fn glass_button_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
@@ -83,9 +48,8 @@ pub fn glass_button_showcase(#[state] state: GlassButtonShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
-                            test_content(state.clone());
+                            test_content();
                         },
                     );
                 },
@@ -95,14 +59,24 @@ pub fn glass_button_showcase(#[state] state: GlassButtonShowcaseState) {
 }
 
 #[tessera]
-fn test_content(state: Arc<GlassButtonShowcaseState>) {
+fn test_content() {
+    let counter = remember(|| Mutex::new(0));
+    let image_data = remember(|| {
+        load_image_from_source(&ImageSource::Bytes(Arc::from(IMAGE_BYTES)))
+            .expect("Failed to load image from embedded bytes")
+    });
+    let icon_data = remember(|| {
+        load_image_vector_from_source(&ImageVectorSource::Bytes(Arc::from(ICON_BYTES)))
+            .expect("Failed to load icon SVG")
+    });
+
     column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .build()
             .unwrap(),
-        |scope| {
+        move |scope| {
             scope.child(|| text("Glass Button Showcase"));
 
             scope.child(|| {
@@ -110,15 +84,17 @@ fn test_content(state: Arc<GlassButtonShowcaseState>) {
             });
 
             // Glass Button on top
-            let state_clone = state.clone();
+            let image_data = image_data.clone();
+            let counter_btn = counter.clone();
+            let icon_data = icon_data.clone();
             scope.child(move || {
-                let image_data = state_clone.image_data.clone();
+                let image_data = image_data.clone();
                 boxed(
                     BoxedArgsBuilder::default()
                         .alignment(Alignment::Center)
                         .build()
                         .unwrap(),
-                    |scope| {
+                    move |scope| {
                         scope.child(move || {
                             image(
                                 ImageArgsBuilder::default()
@@ -130,7 +106,8 @@ fn test_content(state: Arc<GlassButtonShowcaseState>) {
                             );
                         });
 
-                        let glass_state = state_clone.clone();
+                        let counter = counter_btn.clone();
+                        let icon_data = icon_data.clone();
                         scope.child(move || {
                             column(
                                 ColumnArgs {
@@ -139,7 +116,7 @@ fn test_content(state: Arc<GlassButtonShowcaseState>) {
                                 },
                                 move |scope| {
                                     let on_click = Arc::new({
-                                        let counter_clone = glass_state.counter.clone();
+                                        let counter_clone = counter.clone();
                                         move || {
                                             let mut count = counter_clone.lock().unwrap();
                                             *count += 1;
@@ -153,7 +130,6 @@ fn test_content(state: Arc<GlassButtonShowcaseState>) {
                                                 .shape(Shape::rounded_rectangle(Dp(25.0)))
                                                 .build()
                                                 .unwrap(),
-                                            glass_state.ripple_state.clone(),
                                             || text("Click Me!"),
                                         );
                                     });
@@ -165,18 +141,17 @@ fn test_content(state: Arc<GlassButtonShowcaseState>) {
                                         });
                                     });
 
-                                    let icon_state = state_clone.clone();
+                                    let counter = counter.clone();
+                                    let icon_data = icon_data.clone();
                                     scope.child(move || {
                                         let icon = IconArgsBuilder::default()
-                                            .content(IconContent::from(
-                                                icon_state.icon_data.clone(),
-                                            ))
+                                            .content(IconContent::from(icon_data.clone()))
                                             .size(Dp(28.0))
                                             .build()
                                             .unwrap();
 
                                         let on_click = Arc::new({
-                                            let counter_clone = icon_state.counter.clone();
+                                            let counter_clone = counter.clone();
                                             move || {
                                                 let mut count = counter_clone.lock().unwrap();
                                                 *count += 1;
@@ -196,10 +171,7 @@ fn test_content(state: Arc<GlassButtonShowcaseState>) {
                                             .build()
                                             .unwrap();
 
-                                        glass_icon_button(
-                                            args,
-                                            icon_state.icon_ripple_state.clone(),
-                                        );
+                                        glass_icon_button(args);
                                     });
                                 },
                             );
@@ -212,9 +184,9 @@ fn test_content(state: Arc<GlassButtonShowcaseState>) {
                 spacer(Dp(20.0));
             });
 
-            let state_clone = state.clone();
+            let counter = counter.clone();
             scope.child(move || {
-                let count = state_clone.counter.lock().unwrap();
+                let count = counter.lock().unwrap();
                 text(format!("Click count: {}", *count));
             });
         },

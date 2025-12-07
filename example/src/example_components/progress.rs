@@ -5,8 +5,8 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     progress::{ProgressArgsBuilder, progress},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
-    slider::{SliderArgsBuilder, SliderState, slider},
+    scrollable::{ScrollableArgsBuilder, scrollable},
+    slider::{SliderArgsBuilder, slider},
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::text,
@@ -14,17 +14,13 @@ use tessera_ui_basic_components::{
 
 #[derive(Clone)]
 struct ProgressShowcaseState {
-    scrollable_state: ScrollableState,
     progress: Arc<Mutex<f32>>,
-    slider_state: SliderState,
 }
 
 impl Default for ProgressShowcaseState {
     fn default() -> Self {
         Self {
-            scrollable_state: Default::default(),
             progress: Arc::new(Mutex::new(0.5)),
-            slider_state: SliderState::new(),
         }
     }
 }
@@ -38,14 +34,12 @@ pub fn progress_showcase(#[state] state: ProgressShowcaseState) {
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                state.scrollable_state.clone(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
@@ -53,7 +47,6 @@ pub fn progress_showcase(#[state] state: ProgressShowcaseState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         move || {
                             test_content(state);
                         },
@@ -104,7 +97,6 @@ fn test_content(state: Arc<ProgressShowcaseState>) {
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
                         .unwrap(),
-                    state_clone.slider_state.clone(),
                 );
             });
         },

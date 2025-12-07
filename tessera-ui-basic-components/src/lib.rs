@@ -29,24 +29,20 @@
 //! use tessera_ui_basic_components::{
 //!     button::{button, ButtonArgs},
 //!     text::text,
-//!     text_editor::{text_editor, TextEditorArgs, TextEditorState},
-//!     RippleState,
+//!     text_editor::{text_editor, TextEditorArgs, TextEditorController},
 //! };
 //!
 //! // Button example
-//! let ripple_state = RippleState::new();
 //! button(
 //!     ButtonArgs {
 //!         on_click: Some(Arc::new(|| { /* Handle click */ })),
 //!         ..Default::default()
 //!     },
-//!     ripple_state.clone(),
 //!     || text("Click me".to_string()),
 //! );
 //!
 //! // Text editor example
-//! let editor_state = TextEditorState::new(Dp(16.0), None);
-//! text_editor(TextEditorArgs::default(), editor_state.clone());
+//! text_editor(TextEditorArgs::default());
 //! ```
 #![deny(missing_docs, clippy::unwrap_used)]
 

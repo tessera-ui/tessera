@@ -11,7 +11,7 @@ use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
     accesskit::{Action, Role},
     focus_state::Focus,
-    tessera,
+    remember, tessera,
     winit::window::CursorIcon,
 };
 
@@ -45,25 +45,16 @@ impl GlassSliderStateInner {
     }
 }
 
-/// External state handle for the `glass_slider` component.
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui_basic_components::glass_slider::GlassSliderState;
-///
-/// let slider_state = GlassSliderState::new();
-/// ```
-#[derive(Clone)]
-pub struct GlassSliderState {
-    inner: Arc<RwLock<GlassSliderStateInner>>,
+/// Controller for the `glass_slider` component.
+pub struct GlassSliderController {
+    inner: RwLock<GlassSliderStateInner>,
 }
 
-impl GlassSliderState {
-    /// Creates a new slider state handle.
+impl GlassSliderController {
+    /// Creates a new slider controller.
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(GlassSliderStateInner::new())),
+            inner: RwLock::new(GlassSliderStateInner::new()),
         }
     }
 
@@ -77,31 +68,31 @@ impl GlassSliderState {
 
     /// Returns whether the slider thumb is currently being dragged.
     pub fn is_dragging(&self) -> bool {
-        self.inner.read().is_dragging
+        self.read().is_dragging
     }
 
     /// Sets the dragging state manually. This allows custom gesture handling.
     pub fn set_dragging(&self, dragging: bool) {
-        self.inner.write().is_dragging = dragging;
+        self.write().is_dragging = dragging;
     }
 
     /// Requests focus for this slider instance.
     pub fn request_focus(&self) {
-        self.inner.write().focus.request_focus();
+        self.write().focus.request_focus();
     }
 
     /// Clears focus from this slider.
     pub fn clear_focus(&self) {
-        self.inner.write().focus.unfocus();
+        self.write().focus.unfocus();
     }
 
     /// Returns `true` if the slider currently has focus.
     pub fn is_focused(&self) -> bool {
-        self.inner.read().focus.is_focused()
+        self.read().focus.is_focused()
     }
 }
 
-impl Default for GlassSliderState {
+impl Default for GlassSliderController {
     fn default() -> Self {
         Self::new()
     }
@@ -185,7 +176,7 @@ fn compute_progress_width(total_width: Px, value: f32, border_padding_px: f32) -
 /// Process cursor events and update the slider state accordingly.
 /// Returns the new value (0.0..1.0) if a change should be emitted.
 fn process_cursor_events(
-    state: &GlassSliderState,
+    controller: &Arc<GlassSliderController>,
     input: &tessera_ui::InputHandlerInput,
     width_f: f32,
 ) -> Option<f32> {
@@ -195,7 +186,7 @@ fn process_cursor_events(
         match &event.content {
             CursorEventContent::Pressed(_) => {
                 {
-                    let mut inner = state.write();
+                    let mut inner = controller.write();
                     inner.focus.request_focus();
                     inner.is_dragging = true;
                 }
@@ -204,13 +195,13 @@ fn process_cursor_events(
                 }
             }
             CursorEventContent::Released(_) => {
-                state.write().is_dragging = false;
+                controller.write().is_dragging = false;
             }
             _ => {}
         }
     }
 
-    if state.read().is_dragging
+    if controller.read().is_dragging
         && let Some(v) = cursor_progress(input.cursor_position_rel, width_f)
     {
         new_value = Some(v);
@@ -230,19 +221,19 @@ fn process_cursor_events(
 /// ## Parameters
 ///
 /// - `args` — configures the slider's value, appearance, and `on_change` callback; see [`GlassSliderArgs`].
-/// - `state` — a clonable [`GlassSliderState`] to manage interaction state like dragging and focus.
+/// - `controller` — optional controller; use [`glass_slider_with_controller`] to provide your own.
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui_basic_components::glass_slider::{
-///     glass_slider, GlassSliderArgsBuilder, GlassSliderState,
+///     glass_slider, glass_slider_with_controller, GlassSliderArgsBuilder, GlassSliderController,
 /// };
 ///
 /// // In a real app, this would be part of your application's state.
 /// let slider_value = Arc::new(Mutex::new(0.5));
-/// let slider_state = GlassSliderState::new();
+/// let slider_controller = Arc::new(GlassSliderController::new());
 ///
 /// let on_change = {
 ///     let slider_value = slider_value.clone();
@@ -258,14 +249,61 @@ fn process_cursor_events(
 ///     .unwrap();
 ///
 /// // The component would be called in the UI like this:
-/// // glass_slider(args, slider_state);
+/// // glass_slider_with_controller(args, slider_controller.clone());
 ///
 /// // For the doctest, we can simulate the callback.
 /// (args.on_change)(0.75);
 /// assert_eq!(*slider_value.lock().unwrap(), 0.75);
 /// ```
 #[tessera]
-pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
+pub fn glass_slider(args: impl Into<GlassSliderArgs>) {
+    let args: GlassSliderArgs = args.into();
+    let controller = remember(GlassSliderController::new);
+    glass_slider_with_controller(args, controller);
+}
+
+/// # glass_slider_with_controller
+///
+/// Controlled glass slider variant.
+///
+/// # Usage
+///
+/// Use when you need a slider with a glassmorphic style and explicit control over its state.
+///
+/// # Parameters
+///
+/// - `args` — configures the slider's value, appearance, and `on_change` callback; see [`GlassSliderArgs`].
+/// - `controller` — an explicit [`GlassSliderController`] to manage the slider's state
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui::{remember, tessera};
+/// use tessera_ui_basic_components::glass_slider::{
+///    glass_slider_with_controller, GlassSliderArgsBuilder, GlassSliderController,
+/// };
+///
+/// #[tessera]
+/// fn foo() {
+///     let controller = remember(|| GlassSliderController::new());
+///     glass_slider_with_controller(
+///         GlassSliderArgsBuilder::default()
+///             .value(0.3)
+///             .on_change(Arc::new(|v| {
+///                 println!("Slider value changed to {}", v);
+///             }))
+///             .build()
+///             .unwrap(),
+///         controller.clone(),
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn glass_slider_with_controller(
+    args: impl Into<GlassSliderArgs>,
+    controller: Arc<GlassSliderController>,
+) {
     let args: GlassSliderArgs = args.into();
     let border_padding_px = args.track_border_width.to_px().to_f32() * 2.0;
 
@@ -281,7 +319,6 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
             .padding(args.track_border_width)
             .build()
             .expect("builder construction failed"),
-        None,
         move || {
             // Internal progress fill - capsule shape using surface
             let progress_width_px =
@@ -298,7 +335,6 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
                     .refraction_amount(0.0)
                     .build()
                     .expect("builder construction failed"),
-                None,
                 || {},
             );
         },
@@ -306,7 +342,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
 
     let on_change = args.on_change.clone();
     let args_for_handler = args.clone();
-    let state_for_handler = state.clone();
+    let controller_for_handler = controller.clone();
     input_handler(Box::new(move |mut input| {
         if !args_for_handler.disabled {
             let is_in_component =
@@ -316,10 +352,10 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>, state: GlassSliderState) {
                 input.requests.cursor_icon = CursorIcon::Pointer;
             }
 
-            if is_in_component || state_for_handler.read().is_dragging {
+            if is_in_component || controller_for_handler.read().is_dragging {
                 let width_f = input.computed_data.width.0 as f32;
 
-                if let Some(v) = process_cursor_events(&state_for_handler, &input, width_f)
+                if let Some(v) = process_cursor_events(&controller_for_handler, &input, width_f)
                     && (v - args_for_handler.value).abs() > f32::EPSILON
                 {
                     on_change(v);

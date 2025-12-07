@@ -6,7 +6,7 @@ use tessera_ui::{
     winit::window::CursorIcon,
 };
 
-use super::{ACCESSIBILITY_STEP, SliderArgs, SliderLayout, SliderState};
+use super::{ACCESSIBILITY_STEP, SliderArgs, SliderController, SliderLayout};
 
 /// Helper: check if a cursor position is within the bounds of a component.
 pub(super) fn cursor_within_component(
@@ -36,7 +36,7 @@ pub(super) fn cursor_progress(
 
 pub(super) fn handle_slider_state(
     input: &mut InputHandlerInput,
-    state: &SliderState,
+    state: &Arc<SliderController>,
     args: &SliderArgs,
     layout: &SliderLayout,
 ) {
@@ -71,7 +71,7 @@ pub(super) fn handle_slider_state(
 
 fn handle_cursor_events(
     input: &mut InputHandlerInput,
-    state: &SliderState,
+    state: &Arc<SliderController>,
     new_value: &mut Option<f32>,
     layout: &SliderLayout,
 ) {
@@ -97,7 +97,7 @@ fn handle_cursor_events(
 
 fn update_value_on_drag(
     input: &InputHandlerInput,
-    state: &SliderState,
+    state: &Arc<SliderController>,
     new_value: &mut Option<f32>,
     layout: &SliderLayout,
 ) {
@@ -187,23 +187,22 @@ impl Default for RangeSliderStateInner {
     }
 }
 
-/// External state for the `range_slider` component.
-#[derive(Clone)]
-pub struct RangeSliderState {
-    inner: Arc<parking_lot::RwLock<RangeSliderStateInner>>,
+/// Controller for the `range_slider` component.
+pub struct RangeSliderController {
+    inner: parking_lot::RwLock<RangeSliderStateInner>,
 }
 
-impl Default for RangeSliderState {
+impl Default for RangeSliderController {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RangeSliderState {
-    /// Creates a new range slider state handle.
+impl RangeSliderController {
+    /// Creates a new range slider controller.
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(parking_lot::RwLock::new(RangeSliderStateInner::default())),
+            inner: parking_lot::RwLock::new(RangeSliderStateInner::default()),
         }
     }
 
@@ -218,7 +217,7 @@ impl RangeSliderState {
 
 pub(super) fn handle_range_slider_state(
     input: &mut InputHandlerInput,
-    state: &RangeSliderState,
+    state: &Arc<RangeSliderController>,
     args: &super::RangeSliderArgs,
     layout: &SliderLayout,
 ) {

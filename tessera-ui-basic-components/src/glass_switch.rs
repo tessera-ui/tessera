@@ -14,7 +14,7 @@ use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
     PxPosition,
     accesskit::{Action, Role, Toggled},
-    tessera,
+    remember, tessera,
     winit::window::CursorIcon,
 };
 
@@ -56,47 +56,35 @@ impl GlassSwitchStateInner {
     }
 }
 
-/// External state handle for the `glass_switch` component.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui_basic_components::glass_switch::GlassSwitchState;
-///
-/// let switch_state = GlassSwitchState::new(false);
-/// assert!(!switch_state.is_checked());
-/// switch_state.toggle();
-/// assert!(switch_state.is_checked());
-/// ```
-#[derive(Clone)]
-pub struct GlassSwitchState {
-    inner: Arc<RwLock<GlassSwitchStateInner>>,
+/// Controller for the `glass_switch` component.
+pub struct GlassSwitchController {
+    inner: RwLock<GlassSwitchStateInner>,
 }
 
-impl GlassSwitchState {
-    /// Creates a new state handle with the given initial value.
+impl GlassSwitchController {
+    /// Creates a new controller with the given initial value.
     pub fn new(initial_state: bool) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(GlassSwitchStateInner::new(initial_state))),
+            inner: RwLock::new(GlassSwitchStateInner::new(initial_state)),
         }
     }
 
-    pub(crate) fn read(&self) -> RwLockReadGuard<'_, GlassSwitchStateInner> {
+    fn read(&self) -> RwLockReadGuard<'_, GlassSwitchStateInner> {
         self.inner.read()
     }
 
-    pub(crate) fn write(&self) -> RwLockWriteGuard<'_, GlassSwitchStateInner> {
+    fn write(&self) -> RwLockWriteGuard<'_, GlassSwitchStateInner> {
         self.inner.write()
     }
 
     /// Returns whether the switch is currently checked.
     pub fn is_checked(&self) -> bool {
-        self.inner.read().checked
+        self.read().checked
     }
 
     /// Sets the checked state directly, resetting animation progress.
     pub fn set_checked(&self, checked: bool) {
-        let mut inner = self.inner.write();
+        let mut inner = self.write();
         if inner.checked != checked {
             inner.checked = checked;
             inner.progress = if checked { 1.0 } else { 0.0 };
@@ -106,16 +94,16 @@ impl GlassSwitchState {
 
     /// Toggles the switch and starts the animation timeline.
     pub fn toggle(&self) {
-        self.inner.write().toggle();
+        self.write().toggle();
     }
 
     /// Returns the current animation progress (0.0..1.0).
     pub fn animation_progress(&self) -> f32 {
-        self.inner.read().progress
+        self.read().progress
     }
 }
 
-impl Default for GlassSwitchState {
+impl Default for GlassSwitchController {
     fn default() -> Self {
         Self::new(false)
     }
@@ -128,6 +116,9 @@ pub struct GlassSwitchArgs {
     /// Optional callback invoked when the switch toggles.
     #[builder(default, setter(strip_option))]
     pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
+    /// Initial checked state.
+    #[builder(default = "false")]
+    pub checked: bool,
 
     /// Total width of the switch track.
     #[builder(default = "Dp(52.0)")]
@@ -187,7 +178,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
     }
 }
 
-fn update_progress_from_state(state: GlassSwitchState) {
+fn update_progress_from_state(state: Arc<GlassSwitchController>) {
     let last_toggle_time = state.read().last_toggle_time;
     if let Some(last_toggle_time) = last_toggle_time {
         let elapsed = last_toggle_time.elapsed();
@@ -217,7 +208,7 @@ fn was_pressed_left(input: &tessera_ui::InputHandlerInput) -> bool {
 }
 
 fn handle_input_events(
-    state: GlassSwitchState,
+    state: Arc<GlassSwitchController>,
     on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
     input: &mut tessera_ui::InputHandlerInput,
 ) {
@@ -237,12 +228,12 @@ fn handle_input_events(
     let pressed = was_pressed_left(input);
 
     if pressed && is_cursor_in {
-        toggle_glass_switch_state(&state, &on_toggle);
+        toggle_glass_switch_state(state, &on_toggle);
     }
 }
 
 fn toggle_glass_switch_state(
-    state: &GlassSwitchState,
+    state: Arc<GlassSwitchController>,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
 ) -> bool {
     let Some(on_toggle) = on_toggle else {
@@ -256,7 +247,7 @@ fn toggle_glass_switch_state(
 
 fn apply_glass_switch_accessibility(
     input: &mut tessera_ui::InputHandlerInput<'_>,
-    state: &GlassSwitchState,
+    state: Arc<GlassSwitchController>,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
     label: Option<&String>,
     description: Option<&String>,
@@ -286,7 +277,7 @@ fn apply_glass_switch_accessibility(
         let on_toggle = on_toggle.clone();
         input.set_accessibility_action_handler(move |action| {
             if action == Action::Click {
-                toggle_glass_switch_state(&state, &on_toggle);
+                toggle_glass_switch_state(state.clone(), &on_toggle);
             }
         });
     }
@@ -294,43 +285,78 @@ fn apply_glass_switch_accessibility(
 
 /// # glass_switch
 ///
-/// Renders an interactive switch with a customizable glass effect and smooth animation.
+/// An interactive switch with glass effect.
 ///
 /// ## Usage
 ///
-/// Use to toggle a boolean state (on/off) with a visually distinct, modern look.
+/// Use when you need a toggle switch with a glassmorphic style.
 ///
 /// ## Parameters
 ///
 /// - `args` — configures the switch's appearance and `on_toggle` callback; see [`GlassSwitchArgs`].
-/// - `state` — a clonable [`GlassSwitchState`] to manage the component's checked and animation state.
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::Arc;
 /// use tessera_ui_basic_components::glass_switch::{
-///     glass_switch, GlassSwitchArgsBuilder, GlassSwitchState,
+///     glass_switch_with_controller, GlassSwitchArgsBuilder, GlassSwitchController,
 /// };
 ///
-/// let state = GlassSwitchState::new(false);
-/// assert!(!state.is_checked());
+/// let controller = Arc::new(GlassSwitchController::new(false));
+/// assert!(!controller.is_checked());
 ///
-/// // The on_toggle callback would be passed to the component.
-/// let on_toggle = Arc::new({
-///     let state = state.clone();
-///     move |_is_checked: bool| {
-///         state.toggle();
-///     }
-/// });
+/// glass_switch_with_controller(
+///     GlassSwitchArgsBuilder::default().build().unwrap(),
+///     controller.clone(),
+/// );
 ///
-/// // In a real app, a click would trigger the callback, which toggles the state.
-/// // For this test, we can call toggle directly to simulate this.
-/// state.toggle();
-/// assert!(state.is_checked());
+/// controller.toggle();
+/// assert!(controller.is_checked());
 /// ```
 #[tessera]
-pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
+pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
+    let args: GlassSwitchArgs = args.into();
+    let controller = remember(|| GlassSwitchController::new(args.checked));
+    glass_switch_with_controller(args, controller);
+}
+
+/// # glass_switch_with_controller
+///
+/// Controlled glass switch variant.
+///
+/// # Usage
+///
+/// Use when you need a toggle switch with a glassmorphic style and explicit state control.
+///
+/// # Parameters
+///
+/// - `args` — configures the switch's appearance and `on_toggle` callback; see [`GlassSwitchArgs`].
+/// - `controller` manage the component's checked and animation state; see [`GlassSwitchController`].
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui_basic_components::glass_switch::{
+///    glass_switch_with_controller, GlassSwitchArgsBuilder, GlassSwitchController,
+/// };
+/// use tessera_ui::{remember, tessera};
+///
+/// #[tessera]
+/// fn foo() {
+///     let controller = remember(|| GlassSwitchController::new(false));
+///     glass_switch_with_controller(
+///         GlassSwitchArgsBuilder::default().build().unwrap(),
+///         controller.clone(),
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn glass_switch_with_controller(
+    args: impl Into<GlassSwitchArgs>,
+    controller: Arc<GlassSwitchController>,
+) {
     let args: GlassSwitchArgs = args.into();
     // Precompute pixel sizes to avoid repeated conversions
     let width_px = args.width.to_px();
@@ -339,7 +365,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
     let thumb_px = thumb_dp.to_px();
 
     // Track tint color interpolation based on progress
-    let progress = state.read().progress;
+    let progress = controller.animation_progress();
     let track_color = interpolate_color(args.track_off_color, args.track_on_color, progress);
 
     // Build and render track
@@ -354,7 +380,6 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
     }
     fluid_glass(
         track_builder.build().expect("builder construction failed"),
-        None,
         || {},
     );
 
@@ -373,20 +398,23 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
     }
     fluid_glass(
         thumb_builder.build().expect("builder construction failed"),
-        None,
         || {},
     );
 
-    let state_for_handler = state.clone();
+    let controller_for_handler = controller.clone();
     let on_toggle = args.on_toggle.clone();
     let accessibility_on_toggle = on_toggle.clone();
     let accessibility_label = args.accessibility_label.clone();
     let accessibility_description = args.accessibility_description.clone();
     input_handler(Box::new(move |mut input| {
-        handle_input_events(state_for_handler.clone(), on_toggle.clone(), &mut input);
+        handle_input_events(
+            controller_for_handler.clone(),
+            on_toggle.clone(),
+            &mut input,
+        );
         apply_glass_switch_accessibility(
             &mut input,
-            &state_for_handler,
+            controller_for_handler.clone(),
             &accessibility_on_toggle,
             accessibility_label.as_ref(),
             accessibility_description.as_ref(),
@@ -429,7 +457,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>, state: GlassSwitchState) {
         let thumb_padding_px = args.thumb_padding.to_px();
 
         // Use eased progress for placement
-        let eased_progress = animation::easing(state.read().progress);
+        let eased_progress = animation::easing(controller.read().progress);
 
         input.place_child(
             track_id,

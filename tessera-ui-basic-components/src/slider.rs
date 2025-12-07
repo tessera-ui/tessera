@@ -9,7 +9,7 @@ use derive_builder::Builder;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasureInput, MeasurementError, Px,
-    PxPosition, focus_state::Focus, tessera,
+    PxPosition, focus_state::Focus, remember, tessera,
 };
 
 use crate::{material_color, pipelines::image_vector::command::VectorTintMode};
@@ -28,7 +28,7 @@ use render::{
     render_stop_indicator,
 };
 
-pub use interaction::RangeSliderState;
+pub use interaction::RangeSliderController;
 
 mod interaction;
 mod layout;
@@ -40,7 +40,6 @@ const HANDLE_GAP: Dp = Dp(6.0);
 const STOP_INDICATOR_DIAMETER: Dp = Dp(4.0);
 
 /// Stores the interactive state for the [`slider`] component, such as whether the slider is currently being dragged by the user.
-/// The [`SliderState`] handle owns the necessary locking internally, so callers can simply clone and pass it between components.
 pub(crate) struct SliderStateInner {
     /// True if the user is currently dragging the slider.
     pub is_dragging: bool,
@@ -66,25 +65,16 @@ impl SliderStateInner {
     }
 }
 
-/// External state for the `slider` component.
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui_basic_components::slider::SliderState;
-///
-/// let slider_state = SliderState::new();
-/// ```
-#[derive(Clone)]
-pub struct SliderState {
-    inner: Arc<RwLock<SliderStateInner>>,
+/// Controller for the `slider` component.
+pub struct SliderController {
+    inner: RwLock<SliderStateInner>,
 }
 
-impl SliderState {
-    /// Creates a new slider state handle.
+impl SliderController {
+    /// Creates a new slider controller.
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(SliderStateInner::new())),
+            inner: RwLock::new(SliderStateInner::new()),
         }
     }
 
@@ -98,36 +88,36 @@ impl SliderState {
 
     /// Returns whether the slider handle is currently being dragged.
     pub fn is_dragging(&self) -> bool {
-        self.inner.read().is_dragging
+        self.read().is_dragging
     }
 
     /// Manually sets the dragging flag. Useful for custom gesture integrations.
     pub fn set_dragging(&self, dragging: bool) {
-        self.inner.write().is_dragging = dragging;
+        self.write().is_dragging = dragging;
     }
 
     /// Requests focus for the slider.
     pub fn request_focus(&self) {
-        self.inner.write().focus.request_focus();
+        self.write().focus.request_focus();
     }
 
     /// Clears focus from the slider if it is currently focused.
     pub fn clear_focus(&self) {
-        self.inner.write().focus.unfocus();
+        self.write().focus.unfocus();
     }
 
     /// Returns `true` if this slider currently holds focus.
     pub fn is_focused(&self) -> bool {
-        self.inner.read().focus.is_focused()
+        self.read().focus.is_focused()
     }
 
     /// Returns `true` if the cursor is hovering over this slider.
     pub fn is_hovered(&self) -> bool {
-        self.inner.read().is_hovered
+        self.read().is_hovered
     }
 }
 
-impl Default for SliderState {
+impl Default for SliderController {
     fn default() -> Self {
         Self::new()
     }
@@ -437,17 +427,14 @@ fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> Slid
 /// ## Parameters
 ///
 /// - `args` — configures the slider's value, appearance, and callbacks; see [`SliderArgs`].
-/// - `state` — a clonable [`SliderState`] to manage interaction state like dragging and focus.
+/// - `controller` — optional; use [`slider_with_controller`] to provide your own controller.
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::Arc;
 /// use tessera_ui::{DimensionValue, Dp};
-/// use tessera_ui_basic_components::slider::{slider, SliderArgsBuilder, SliderState};
-///
-/// // In a real application, you would manage this state.
-/// let slider_state = SliderState::new();
+/// use tessera_ui_basic_components::slider::{slider, SliderArgsBuilder};
 ///
 /// slider(
 ///     SliderArgsBuilder::default()
@@ -459,16 +446,57 @@ fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> Slid
 ///         }))
 ///         .build()
 ///         .unwrap(),
-///     slider_state,
 /// );
 /// ```
 #[tessera]
-pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
+pub fn slider(args: impl Into<SliderArgs>) {
+    let args: SliderArgs = args.into();
+    let controller = remember(SliderController::new);
+    slider_with_controller(args, controller);
+}
+
+/// # slider_with_controller
+///
+/// Controlled slider variant
+///
+/// # Usage
+///
+/// Use when you need to manage the slider's interactive state externally.
+///
+/// # Parameters
+///
+/// - `args` — configures the slider's value, appearance, and callbacks; see [`SliderArgs`].
+/// - `controller` — the slider controller to manage interactive state.
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui::{DimensionValue, Dp, remember, tessera};
+/// use tessera_ui_basic_components::slider::{slider_with_controller, SliderArgsBuilder, SliderController};
+///
+/// #[tessera]
+/// fn foo() {
+///     let controller = remember(|| SliderController::new());
+///     slider_with_controller(
+///        SliderArgsBuilder::default()
+///            .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///            .value(0.5)
+///            .on_change(Arc::new(|new_value| {
+///                println!("Slider value changed to: {}", new_value);
+///            }))
+///           .build()
+///           .unwrap(),
+///        controller.clone(),
+///    );
+/// }
+#[tessera]
+pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: Arc<SliderController>) {
     let args: SliderArgs = args.into();
     let initial_width = fallback_component_width(&args);
     let layout = slider_layout(&args, initial_width);
     let clamped_value = args.value.clamp(0.0, 1.0);
-    let state_snapshot = state.read();
+    let state_snapshot = controller.read();
     let colors = slider_colors(&args, state_snapshot.is_hovered, state_snapshot.is_dragging);
     drop(state_snapshot);
 
@@ -503,11 +531,16 @@ pub fn slider(args: impl Into<SliderArgs>, state: SliderState) {
     }
 
     let cloned_args = args.clone();
-    let state_clone = state.clone();
+    let controller_clone = controller.clone();
     let clamped_value_for_accessibility = clamped_value;
     input_handler(Box::new(move |mut input| {
         let resolved_layout = slider_layout(&cloned_args, input.computed_data.width);
-        handle_slider_state(&mut input, &state_clone, &cloned_args, &resolved_layout);
+        handle_slider_state(
+            &mut input,
+            &controller_clone,
+            &cloned_args,
+            &resolved_layout,
+        );
         apply_slider_accessibility(
             &mut input,
             &cloned_args,
@@ -667,16 +700,14 @@ fn measure_centered_slider(
 /// ## Parameters
 ///
 /// - `args` — configures the slider's value, appearance, and callbacks; see [`SliderArgs`].
-/// - `state` — a clonable [`SliderState`] to manage interaction state like dragging and focus.
+/// - `controller` — optional controller; use [`centered_slider_with_controller`] to supply one.
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui::{DimensionValue, Dp};
-/// use tessera_ui_basic_components::slider::{centered_slider, SliderArgsBuilder, SliderState};
-///
-/// let slider_state = SliderState::new();
+/// use tessera_ui_basic_components::slider::{centered_slider, SliderArgsBuilder};
 /// let current_value = Arc::new(Mutex::new(0.5));
 ///
 /// // Simulate a value change
@@ -697,7 +728,6 @@ fn measure_centered_slider(
 ///         }))
 ///         .build()
 ///         .unwrap(),
-///     slider_state.clone(),
 /// );
 ///
 /// // Simulate another value change and check the state
@@ -708,12 +738,57 @@ fn measure_centered_slider(
 /// }
 /// ```
 #[tessera]
-pub fn centered_slider(args: impl Into<SliderArgs>, state: SliderState) {
+pub fn centered_slider(args: impl Into<SliderArgs>) {
+    let args: SliderArgs = args.into();
+    let controller = remember(SliderController::new);
+    centered_slider_with_controller(args, controller);
+}
+
+/// # centered_slider_with_controller
+///
+/// Controlled centered slider variant
+///
+/// # Usage
+///
+/// Use when you need to manage the slider's interactive state externally.
+///
+/// # Parameters
+///
+/// - `args` — configures the slider's value, appearance, and callbacks; see [`SliderArgs`].
+/// - `controller` — the slider controller to manage interactive state.
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui::{DimensionValue, Dp, remember, tessera};
+/// use tessera_ui_basic_components::slider::{centered_slider_with_controller, SliderArgsBuilder, SliderController};
+///
+/// #[tessera]
+/// fn foo() {
+///     let controller = remember(|| SliderController::new());
+///     centered_slider_with_controller(
+///         SliderArgsBuilder::default()
+///            .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///            .value(0.5)
+///            .on_change(Arc::new(|new_value| {
+///                 println!("Centered slider value changed to: {}", new_value);
+///         }))
+///         .build()
+///         .unwrap(),
+///        controller.clone(),
+///     );
+/// }
+#[tessera]
+pub fn centered_slider_with_controller(
+    args: impl Into<SliderArgs>,
+    controller: Arc<SliderController>,
+) {
     let args: SliderArgs = args.into();
     let initial_width = fallback_component_width(&args);
     let layout = centered_slider_layout(&args, initial_width);
     let clamped_value = args.value.clamp(0.0, 1.0);
-    let state_snapshot = state.read();
+    let state_snapshot = controller.read();
     let colors = slider_colors(&args, state_snapshot.is_hovered, state_snapshot.is_dragging);
     drop(state_snapshot);
 
@@ -725,13 +800,13 @@ pub fn centered_slider(args: impl Into<SliderArgs>, state: SliderState) {
     }
 
     let cloned_args = args.clone();
-    let state_clone = state.clone();
+    let controller_clone = controller.clone();
     let clamped_value_for_accessibility = clamped_value;
     input_handler(Box::new(move |mut input| {
         let resolved_layout = centered_slider_layout(&cloned_args, input.computed_data.width);
         handle_slider_state(
             &mut input,
-            &state_clone,
+            &controller_clone,
             &cloned_args,
             &resolved_layout.base,
         );
@@ -905,16 +980,14 @@ fn measure_range_slider(
 /// ## Parameters
 ///
 /// - `args` — configures the slider's range, appearance, and callbacks; see [`RangeSliderArgs`].
-/// - `state` — a clonable [`RangeSliderState`] to manage interaction state for both handles.
+/// - `controller` — optional controller; use [`range_slider_with_controller`] to supply one.
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui::{DimensionValue, Dp};
-/// use tessera_ui_basic_components::slider::{range_slider, RangeSliderArgsBuilder, RangeSliderState};
-///
-/// let slider_state = RangeSliderState::new();
+/// use tessera_ui_basic_components::slider::{range_slider, RangeSliderArgsBuilder};
 /// let range_value = Arc::new(Mutex::new((0.2, 0.8)));
 ///
 /// range_slider(
@@ -926,11 +999,21 @@ fn measure_range_slider(
 ///         }))
 ///         .build()
 ///         .unwrap(),
-///     slider_state,
 /// );
 /// ```
 #[tessera]
-pub fn range_slider(args: impl Into<RangeSliderArgs>, state: RangeSliderState) {
+pub fn range_slider(args: impl Into<RangeSliderArgs>) {
+    let args: RangeSliderArgs = args.into();
+    let state = remember(RangeSliderController::new);
+    range_slider_with_controller(args, state);
+}
+
+/// Controlled range slider variant.
+#[tessera]
+pub fn range_slider_with_controller(
+    args: impl Into<RangeSliderArgs>,
+    state: Arc<RangeSliderController>,
+) {
     let args: RangeSliderArgs = args.into();
     // Convert RangeSliderArgs to SliderArgs for layout helpers where possible,
     // or rely on the dedicated range_slider_layout which handles this.

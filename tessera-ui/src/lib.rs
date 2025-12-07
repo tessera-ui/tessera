@@ -143,6 +143,7 @@ mod keyboard_state;
 pub(crate) mod pipeline_cache;
 pub mod px;
 pub mod renderer;
+#[doc(hidden)]
 pub mod runtime;
 mod thread_utils;
 
@@ -176,7 +177,7 @@ pub use crate::{
         },
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
     },
-    runtime::TesseraRuntime,
+    runtime::{GroupGuard, TesseraRuntime, remember, remember_with_key},
 };
 
 use ime_state::ImeState;

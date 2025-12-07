@@ -7,7 +7,6 @@ use derive_builder::Builder;
 use tessera_ui::tessera;
 
 use crate::{
-    RippleState,
     button::{ButtonArgs, button},
     glass_button::{GlassButtonArgs, glass_button},
     icon::{IconArgs, icon},
@@ -64,7 +63,6 @@ impl GlassIconButtonArgsBuilder {
 /// ## Parameters
 ///
 /// - `args` — configures the underlying button and the icon; see [`IconButtonArgs`].
-/// - `ripple_state` — a clonable [`RippleState`] to manage the ripple animation.
 ///
 /// ## Examples
 ///
@@ -75,10 +73,8 @@ impl GlassIconButtonArgsBuilder {
 ///     button::ButtonArgsBuilder,
 ///     icon::IconArgsBuilder,
 ///     image_vector::{ImageVectorSource, load_image_vector_from_source},
-///     ripple_state::RippleState,
 /// };
 ///
-/// let ripple_state = RippleState::new();
 /// let svg_path = "../assets/emoji_u1f416.svg";
 /// let vector_data = load_image_vector_from_source(
 ///     &ImageVectorSource::Path(svg_path.to_string())
@@ -95,15 +91,14 @@ impl GlassIconButtonArgsBuilder {
 ///         .icon(IconArgsBuilder::default().content(vector_data.clone()).build().expect("builder construction failed"))
 ///         .build()
 ///         .unwrap(),
-///     ripple_state,
 /// );
 /// ```
 #[tessera]
-pub fn icon_button(args: impl Into<IconButtonArgs>, ripple_state: RippleState) {
+pub fn icon_button(args: impl Into<IconButtonArgs>) {
     let args: IconButtonArgs = args.into();
     let icon_args = args.icon.clone();
 
-    button(args.button, ripple_state, move || {
+    button(args.button, move || {
         icon(icon_args.clone());
     });
 }
@@ -119,7 +114,6 @@ pub fn icon_button(args: impl Into<IconButtonArgs>, ripple_state: RippleState) {
 /// ## Parameters
 ///
 /// - `args` — configures the underlying glass button and the icon; see [`GlassIconButtonArgs`].
-/// - `ripple_state` — a clonable [`RippleState`] to manage the ripple animation.
 ///
 /// ## Examples
 ///
@@ -130,10 +124,8 @@ pub fn icon_button(args: impl Into<IconButtonArgs>, ripple_state: RippleState) {
 ///     glass_button::GlassButtonArgsBuilder,
 ///     icon::IconArgsBuilder,
 ///     image_vector::{ImageVectorSource, load_image_vector_from_source},
-///     ripple_state::RippleState,
 /// };
 ///
-/// let ripple_state = RippleState::new();
 /// let svg_path = "../assets/emoji_u1f416.svg";
 /// let vector_data = load_image_vector_from_source(
 ///     &ImageVectorSource::Path(svg_path.to_string())
@@ -150,15 +142,14 @@ pub fn icon_button(args: impl Into<IconButtonArgs>, ripple_state: RippleState) {
 ///         .icon(IconArgsBuilder::default().content(vector_data).build().expect("builder construction failed"))
 ///         .build()
 ///         .unwrap(),
-///     ripple_state,
 /// );
 /// ```
 #[tessera]
-pub fn glass_icon_button(args: impl Into<GlassIconButtonArgs>, ripple_state: RippleState) {
+pub fn glass_icon_button(args: impl Into<GlassIconButtonArgs>) {
     let args: GlassIconButtonArgs = args.into();
     let icon_args = args.icon.clone();
 
-    glass_button(args.button, ripple_state, move || {
+    glass_button(args.button, move || {
         icon(icon_args.clone());
     });
 }

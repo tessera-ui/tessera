@@ -8,31 +8,35 @@ use std::{ops::Range, sync::Arc};
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, Px, PxPosition, tessera,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, Px, PxPosition,
+    remember, tessera,
 };
 
 use crate::{
     alignment::CrossAxisAlignment,
-    scrollable::{ScrollableArgs, ScrollableState, scrollable},
+    scrollable::{ScrollableArgs, ScrollableController, scrollable_with_controller},
 };
 
 const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 
 /// Persistent state shared by lazy list components.
 #[derive(Default, Clone)]
-pub struct LazyListState {
-    scrollable_state: ScrollableState,
+pub struct LazyListController {
+    scrollable_controller: Arc<ScrollableController>,
     cache: Arc<RwLock<LazyListCache>>,
 }
 
-impl LazyListState {
+impl LazyListController {
     /// Creates a new lazy list state with default scroll offsets and caches.
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            scrollable_controller: Arc::new(ScrollableController::default()),
+            cache: Arc::new(RwLock::new(LazyListCache::default())),
+        }
     }
 
-    fn scrollable_state(&self) -> ScrollableState {
-        self.scrollable_state.clone()
+    fn scrollable_controller(&self) -> Arc<ScrollableController> {
+        self.scrollable_controller.clone()
     }
 
     fn cache(&self) -> Arc<RwLock<LazyListCache>> {
@@ -41,7 +45,7 @@ impl LazyListState {
 
     fn override_scroll_extent(&self, axis: LazyListAxis, main: Px, cross: Px) {
         let size = axis.pack_size(main, cross);
-        self.scrollable_state.override_child_size(size);
+        self.scrollable_controller.override_child_size(size);
     }
 }
 
@@ -193,30 +197,86 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 /// ## Parameters
 ///
 /// - `args` — configures the list's layout and scrolling behavior; see [`LazyColumnArgs`].
-/// - `state` — a clonable [`LazyListState`] to manage scroll position and item measurement caching.
 /// - `configure` — a closure that receives a [`LazyColumnScope`] for adding items to the list.
 ///
 /// ## Examples
 ///
 /// ```
-/// // No Arc wrapper; `LazyListState` encapsulates internal Arc/RwLock state.
+/// use tessera_ui::tessera;
 /// use tessera_ui_basic_components::{
-///     lazy_list::{lazy_column, LazyColumnArgs, LazyListState},
+///     lazy_list::{lazy_column, LazyColumnArgs},
 ///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// let list_state = LazyListState::new();
-///
-/// lazy_column(LazyColumnArgs::default(), list_state, |scope| {
-///     scope.items(1000, |i| {
-///         let text_content = format!("Item #{}", i);
-///         text(TextArgsBuilder::default().text(text_content).build().expect("builder construction failed"));
+/// #[tessera]
+/// fn demo() {
+///     lazy_column(LazyColumnArgs::default(), |scope| {
+///         scope.items(1000, |i| {
+///             let text_content = format!("Item #{i}");
+///             text(
+///                 TextArgsBuilder::default()
+///                     .text(text_content)
+///                     .build()
+///                     .expect("builder construction failed"),
+///             );
+///         });
 ///     });
-/// });
+/// }
 /// ```
 #[tessera]
-pub fn lazy_column<F>(args: LazyColumnArgs, state: LazyListState, configure: F)
+pub fn lazy_column<F>(args: LazyColumnArgs, configure: F)
 where
+    F: FnOnce(&mut LazyColumnScope),
+{
+    let controller = remember(LazyListController::new);
+    lazy_column_with_controller(args, controller, configure);
+}
+
+/// # lazy_column_with_controller
+///
+/// Controlled lazy column variant that accepts an explicit controller.
+///
+/// ## Usage
+///
+/// Use when you need to share scroll/cache state across component boundaries (e.g., restoring position when remounting).
+///
+/// ## Parameters
+///
+/// - `args` — configures the list's layout and scrolling behavior; see [`LazyColumnArgs`].
+/// - `controller` — a [`LazyListController`] that holds scroll offsets and item measurement cache.
+/// - `configure` — a closure that receives a [`LazyColumnScope`] for adding items to the list.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui::{remember, tessera};
+/// use tessera_ui_basic_components::{
+///     lazy_list::{lazy_column_with_controller, LazyColumnArgs, LazyListController},
+///     text::{text, TextArgsBuilder},
+/// };
+///
+/// #[tessera]
+/// fn demo() {
+///     let controller = remember(LazyListController::new);
+///     lazy_column_with_controller(LazyColumnArgs::default(), controller, |scope| {
+///         scope.items(5, |i| {
+///             let text_content = format!("Row #{i}");
+///             text(
+///                 TextArgsBuilder::default()
+///                     .text(text_content)
+///                     .build()
+///                     .expect("builder construction failed"),
+///             );
+///         });
+///     });
+/// }
+/// ```
+#[tessera]
+pub fn lazy_column_with_controller<F>(
+    args: LazyColumnArgs,
+    controller: Arc<LazyListController>,
+    configure: F,
+) where
     F: FnOnce(&mut LazyColumnScope),
 {
     let mut slots = Vec::new();
@@ -240,10 +300,14 @@ where
         padding_cross: sanitize_spacing(Px::from(args.content_padding)),
     };
 
-    let state_for_child = state.clone();
-    scrollable(scrollable_args, state.scrollable_state(), move || {
-        lazy_list_view(view_args, state_for_child.clone(), slots.clone());
-    });
+    let controller_for_child = controller.clone();
+    scrollable_with_controller(
+        scrollable_args,
+        controller.scrollable_controller(),
+        move || {
+            lazy_list_view(view_args, controller_for_child.clone(), slots.clone());
+        },
+    );
 }
 
 /// # lazy_row
@@ -257,29 +321,86 @@ where
 /// ## Parameters
 ///
 /// - `args` — configures the list's layout and scrolling behavior; see [`LazyRowArgs`].
-/// - `state` — a clonable [`LazyListState`] to manage scroll position and item measurement caching.
 /// - `configure` — a closure that receives a [`LazyRowScope`] for adding items to the list.
 ///
 /// ## Examples
 ///
 /// ```
+/// use tessera_ui::tessera;
 /// use tessera_ui_basic_components::{
-///     lazy_list::{lazy_row, LazyRowArgs, LazyListState},
+///     lazy_list::{lazy_row, LazyRowArgs},
 ///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// let list_state = LazyListState::new();
-///
-/// lazy_row(LazyRowArgs::default(), list_state, |scope| {
-///     scope.items(100, |i| {
-///         let text_content = format!("Item {}", i);
-///         text(TextArgsBuilder::default().text(text_content).build().expect("builder construction failed"));
+/// #[tessera]
+/// fn demo() {
+///     lazy_row(LazyRowArgs::default(), |scope| {
+///         scope.items(100, |i| {
+///             let text_content = format!("Item {i}");
+///             text(
+///                 TextArgsBuilder::default()
+///                     .text(text_content)
+///                     .build()
+///                     .expect("builder construction failed"),
+///             );
+///         });
 ///     });
-/// });
+/// }
 /// ```
 #[tessera]
-pub fn lazy_row<F>(args: LazyRowArgs, state: LazyListState, configure: F)
+pub fn lazy_row<F>(args: LazyRowArgs, configure: F)
 where
+    F: FnOnce(&mut LazyRowScope),
+{
+    let controller = remember(LazyListController::new);
+    lazy_row_with_controller(args, controller, configure);
+}
+
+/// # lazy_row_with_controller
+///
+/// Controlled lazy row variant that accepts an explicit controller.
+///
+/// ## Usage
+///
+/// Use when you need to synchronize scroll state with other components or restore position after remounts.
+///
+/// ## Parameters
+///
+/// - `args` — configures the list's layout and scrolling behavior; see [`LazyRowArgs`].
+/// - `controller` — a [`LazyListController`] that holds scroll offsets and item measurement cache.
+/// - `configure` — a closure that receives a [`LazyRowScope`] for adding items to the list.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui::{remember, tessera};
+/// use tessera_ui_basic_components::{
+///     lazy_list::{lazy_row_with_controller, LazyListController, LazyRowArgs},
+///     text::{text, TextArgsBuilder},
+/// };
+///
+/// #[tessera]
+/// fn demo() {
+///     let controller = remember(LazyListController::new);
+///     lazy_row_with_controller(LazyRowArgs::default(), controller, |scope| {
+///         scope.items(3, |i| {
+///             let text_content = format!("Card {i}");
+///             text(
+///                 TextArgsBuilder::default()
+///                     .text(text_content)
+///                     .build()
+///                     .expect("builder construction failed"),
+///             );
+///         });
+///     });
+/// }
+/// ```
+#[tessera]
+pub fn lazy_row_with_controller<F>(
+    args: LazyRowArgs,
+    controller: Arc<LazyListController>,
+    configure: F,
+) where
     F: FnOnce(&mut LazyRowScope),
 {
     let mut slots = Vec::new();
@@ -303,10 +424,14 @@ where
         padding_cross: sanitize_spacing(Px::from(args.content_padding)),
     };
 
-    let state_for_child = state.clone();
-    scrollable(scrollable_args, state.scrollable_state(), move || {
-        lazy_list_view(view_args, state_for_child.clone(), slots.clone());
-    });
+    let controller_for_child = controller.clone();
+    scrollable_with_controller(
+        scrollable_args,
+        controller.scrollable_controller(),
+        move || {
+            lazy_list_view(view_args, controller_for_child.clone(), slots.clone());
+        },
+    );
 }
 
 #[derive(Clone)]
@@ -322,11 +447,15 @@ struct LazyListViewArgs {
 }
 
 #[tessera]
-fn lazy_list_view(view_args: LazyListViewArgs, state: LazyListState, slots: Vec<LazySlot>) {
+fn lazy_list_view(
+    view_args: LazyListViewArgs,
+    controller: Arc<LazyListController>,
+    slots: Vec<LazySlot>,
+) {
     let plan = LazySlotPlan::new(slots);
     let total_count = plan.total_count();
 
-    let cache = state.cache();
+    let cache = controller.cache();
     {
         let mut guard = cache.write();
         guard.set_item_count(total_count);
@@ -334,12 +463,12 @@ fn lazy_list_view(view_args: LazyListViewArgs, state: LazyListState, slots: Vec<
 
     let scroll_offset = view_args
         .axis
-        .scroll_offset(state.scrollable_state().child_position());
+        .scroll_offset(controller.scrollable_controller().child_position());
     let padding_main = view_args.padding_main;
     let viewport_span = resolve_viewport_span(
         view_args
             .axis
-            .visible_span(state.scrollable_state().visible_size()),
+            .visible_span(controller.scrollable_controller().visible_size()),
         view_args.estimated_item_main,
         view_args.item_spacing,
     );
@@ -366,7 +495,7 @@ fn lazy_list_view(view_args: LazyListViewArgs, state: LazyListState, slots: Vec<
 
     let cache_for_measure = cache.clone();
     let viewport_limit = viewport_span + padding_main + padding_main;
-    let state_for_measure = state.clone();
+    let controller_for_measure = controller.clone();
     let child_constraint_axis = view_args.axis;
     let estimated_item_main = view_args.estimated_item_main;
     let spacing = view_args.item_spacing;
@@ -417,7 +546,7 @@ fn lazy_list_view(view_args: LazyListViewArgs, state: LazyListState, slots: Vec<
             let inner_cross = max_cross;
             let total_main_with_padding = total_main + padding_main + padding_main;
             let cross_with_padding = inner_cross + padding_cross + padding_cross;
-            state_for_measure.override_scroll_extent(
+            controller_for_measure.override_scroll_extent(
                 child_constraint_axis,
                 total_main_with_padding,
                 cross_with_padding,

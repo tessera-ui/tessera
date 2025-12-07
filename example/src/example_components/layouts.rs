@@ -5,28 +5,26 @@ use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
+    scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
 
 #[tessera]
 #[shard]
-pub fn layouts_showcase(#[state] scrollable_state: ScrollableState) {
+pub fn layouts_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        None,
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
                     .width(DimensionValue::FILLED)
                     .build()
                     .unwrap(),
-                scrollable_state.as_ref().clone(),
                 || {
                     surface(
                         SurfaceArgsBuilder::default()
@@ -34,7 +32,6 @@ pub fn layouts_showcase(#[state] scrollable_state: ScrollableState) {
                             .width(DimensionValue::FILLED)
                             .build()
                             .unwrap(),
-                        None,
                         || {
                             column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
                                 scope.child(row_showcase);
@@ -58,7 +55,6 @@ fn showcase_box(color: Color) {
             .height(DimensionValue::from(Dp(50.0)))
             .build()
             .unwrap(),
-        None,
         || {},
     );
 }
@@ -83,7 +79,6 @@ fn row_showcase() {
                     .style(global_material_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
-                None,
                 || {
                     row(
                         RowArgsBuilder::default()
@@ -122,7 +117,6 @@ fn column_showcase() {
                     .style(global_material_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
-                None,
                 || {
                     column(
                         ColumnArgsBuilder::default()
@@ -161,7 +155,6 @@ fn boxed_showcase() {
                     .style(global_material_scheme().surface_variant.into())
                     .build()
                     .unwrap(),
-                None,
                 || {
                     boxed(
                         BoxedArgsBuilder::default()

@@ -10,7 +10,7 @@ use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
     InputHandlerInput, PressKeyEventType, Px, PxPosition, PxSize,
     accesskit::{Action, Role},
-    tessera,
+    remember, tessera,
     winit::window::CursorIcon,
 };
 
@@ -96,10 +96,10 @@ pub struct SurfaceArgs {
     ///
     /// * Cursor changes to pointer when hovered
     /// * Press / release events are captured
-    /// * Ripple animation starts on press if a `RippleState` is provided
+    /// * Ripple animation starts on press
     #[builder(default, setter(strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
-    /// Color of the ripple effect (if interactive & ripple state provided).
+    /// Color of the ripple effect (used when interactive).
     #[builder(
         default = "crate::material_color::global_material_scheme().on_surface.with_alpha(0.12)"
     )]
@@ -131,9 +131,11 @@ impl Default for SurfaceArgs {
 }
 
 fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<&RippleState>) -> RippleProps {
-    if let Some(state) = ripple_state
-        && let Some((progress, click_pos)) = state.get_animation_progress()
-    {
+    let Some(ripple_state) = ripple_state else {
+        return RippleProps::default();
+    };
+
+    if let Some((progress, click_pos)) = ripple_state.get_animation_progress() {
         let radius = progress;
         let alpha = (1.0 - progress) * 0.3;
         return RippleProps {
@@ -152,11 +154,11 @@ fn build_rounded_rectangle_command(
     ripple_props: RippleProps,
     corner_radii: [f32; 4],
     corner_g2: [f32; 4],
-    interactive: bool,
+    use_ripple: bool,
 ) -> ShapeCommand {
     match style {
         SurfaceStyle::Filled { color } => {
-            if interactive {
+            if use_ripple {
                 ShapeCommand::RippleRect {
                     color: *color,
                     corner_radii,
@@ -174,7 +176,7 @@ fn build_rounded_rectangle_command(
             }
         }
         SurfaceStyle::Outlined { color, width } => {
-            if interactive {
+            if use_ripple {
                 ShapeCommand::RippleOutlinedRect {
                     color: *color,
                     corner_radii,
@@ -198,7 +200,7 @@ fn build_rounded_rectangle_command(
             border_color,
             border_width,
         } => {
-            if interactive {
+            if use_ripple {
                 ShapeCommand::RippleFilledOutlinedRect {
                     color: *fill_color,
                     border_color: *border_color,
@@ -226,12 +228,12 @@ fn build_ellipse_command(
     args: &SurfaceArgs,
     style: &SurfaceStyle,
     ripple_props: RippleProps,
-    interactive: bool,
+    use_ripple: bool,
 ) -> ShapeCommand {
     let corner_marker = [-1.0, -1.0, -1.0, -1.0];
     match style {
         SurfaceStyle::Filled { color } => {
-            if interactive {
+            if use_ripple {
                 ShapeCommand::RippleRect {
                     color: *color,
                     corner_radii: corner_marker,
@@ -247,7 +249,7 @@ fn build_ellipse_command(
             }
         }
         SurfaceStyle::Outlined { color, width } => {
-            if interactive {
+            if use_ripple {
                 ShapeCommand::RippleOutlinedRect {
                     color: *color,
                     corner_radii: corner_marker,
@@ -286,7 +288,7 @@ fn build_shape_command(
     ripple_props: RippleProps,
     size: PxSize,
 ) -> ShapeCommand {
-    let interactive = args.on_click.is_some();
+    let use_ripple = args.on_click.is_some();
 
     match args.shape.resolve_for_size(size) {
         ResolvedShape::Rounded {
@@ -298,9 +300,9 @@ fn build_shape_command(
             ripple_props,
             corner_radii,
             corner_g2,
-            interactive,
+            use_ripple,
         ),
-        ResolvedShape::Ellipse => build_ellipse_command(args, style, ripple_props, interactive),
+        ResolvedShape::Ellipse => build_ellipse_command(args, style, ripple_props, use_ripple),
     }
 }
 
@@ -325,8 +327,9 @@ fn try_build_simple_rect_command(
     if args.on_click.is_some() {
         return None;
     }
-    if let Some(state) = ripple_state
-        && state.get_animation_progress().is_some()
+    if ripple_state
+        .and_then(|state| state.get_animation_progress())
+        .is_some()
     {
         return None;
     }
@@ -412,21 +415,17 @@ fn compute_surface_size(
 /// ## Parameters
 ///
 /// - `args` — configures the surface's appearance, layout, and interaction; see [`SurfaceArgs`].
-/// - `ripple_state` — an optional, clonable [`RippleState`] to enable and manage the ripple animation on click.
 /// - `child` — a closure that renders the content inside the surface.
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui::{Dp, Color};
+/// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
 ///     surface::{surface, SurfaceArgsBuilder},
-///     ripple_state::RippleState,
 ///     text::{text, TextArgsBuilder},
 /// };
-///
-/// let ripple = RippleState::new();
 ///
 /// surface(
 ///     SurfaceArgsBuilder::default()
@@ -434,15 +433,15 @@ fn compute_surface_size(
 ///         .on_click(Arc::new(|| println!("Surface was clicked!")))
 ///         .build()
 ///         .unwrap(),
-///     Some(ripple),
 ///     || {
 ///         text(TextArgsBuilder::default().text("Click me".to_string()).build().expect("builder construction failed"));
 ///     },
 /// );
 /// ```
 #[tessera]
-pub fn surface(args: SurfaceArgs, ripple_state: Option<RippleState>, child: impl FnOnce()) {
+pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
     (child)();
+    let ripple_state = args.on_click.as_ref().map(|_| remember(RippleState::new));
     let ripple_state_for_measure = ripple_state.clone();
     let args_measure_clone = args.clone();
     let args_for_handler = args.clone();
@@ -511,14 +510,14 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<RippleState>, child: impl
         if let Some(simple) = try_build_simple_rect_command(
             &args_measure_clone,
             effective_style,
-            ripple_state_for_measure.as_ref(),
+            ripple_state_for_measure.as_deref(),
         ) {
             input.metadata_mut().push_draw_command(simple);
         } else {
             let drawable = make_surface_drawable(
                 &args_measure_clone,
                 effective_style,
-                ripple_state_for_measure.as_ref(),
+                ripple_state_for_measure.as_deref(),
                 PxSize::new(width, height),
             );
 
@@ -580,8 +579,8 @@ pub fn surface(args: SurfaceArgs, ripple_state: Option<RippleState>, child: impl
                     .collect();
 
                 if !press_events.is_empty()
-                    && let (Some(cursor_pos), Some(state)) =
-                        (cursor_pos_option, state_for_handler.as_ref())
+                    && let Some(cursor_pos) = cursor_pos_option
+                    && let Some(state) = state_for_handler.as_ref()
                 {
                     let normalized_x = (cursor_pos.x.to_f32() / size.width.to_f32()) - 0.5;
                     let normalized_y = (cursor_pos.y.to_f32() / size.height.to_f32()) - 0.5;
