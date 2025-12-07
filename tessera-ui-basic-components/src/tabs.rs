@@ -12,7 +12,8 @@ use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, PxPosition, tessera,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, PxPosition,
+    remember, tessera,
 };
 
 use crate::{
@@ -66,8 +67,8 @@ fn blend_state_layer(base: Color, layer: Color, opacity: f32) -> Color {
 /// Clone this handle to share it across UI parts. The state tracks the
 /// active tab index, previous index, animation progress and cached values used to animate the
 /// indicator and content scrolling. The component mutates parts of this state when a tab is
-/// switched; callers may also read the active tab via [`TabsState::active_tab`].
-struct TabsStateInner {
+/// switched; callers may also read the active tab via [`TabsController::active_tab`].
+struct TabsControllerInner {
     active_tab: usize,
     prev_active_tab: usize,
     progress: f32,
@@ -80,7 +81,7 @@ struct TabsStateInner {
     target_content_scroll_offset: Px,
 }
 
-impl TabsStateInner {
+impl TabsControllerInner {
     fn new(initial_tab: usize) -> Self {
         Self {
             active_tab: initial_tab,
@@ -121,24 +122,16 @@ impl TabsStateInner {
     }
 }
 
-/// State handle for the `tabs` component, tracking selection and indicator animation.
-///
-/// ```
-/// use tessera_ui_basic_components::tabs::TabsState;
-///
-/// let tabs_state = TabsState::new(0); // Start with the first tab active
-/// assert_eq!(tabs_state.active_tab(), 0);
-/// ```
-#[derive(Clone)]
-pub struct TabsState {
-    inner: Arc<RwLock<TabsStateInner>>,
+/// Controller for the `tabs` component.
+pub struct TabsController {
+    inner: RwLock<TabsControllerInner>,
 }
 
-impl TabsState {
+impl TabsController {
     /// Create a new state with the specified initial active tab.
     pub fn new(initial_tab: usize) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(TabsStateInner::new(initial_tab))),
+            inner: RwLock::new(TabsControllerInner::new(initial_tab)),
         }
     }
 
@@ -152,27 +145,18 @@ impl TabsState {
         self.inner.read().active_tab
     }
 
-    /// Returns the previously active tab index (useful during animated transitions).
-    pub fn prev_active_tab(&self) -> usize {
-        self.inner.read().prev_active_tab
-    }
-
-    /// Returns the time of the last tab switch, when available.
-    pub fn last_switch_time(&self) -> Option<Instant> {
+    fn last_switch_time(&self) -> Option<Instant> {
         self.inner.read().last_switch_time
     }
 
-    /// Sets the indicator animation progress (0.0..1.0).
     fn set_progress(&self, progress: f32) {
         self.inner.write().progress = progress;
     }
 
-    /// Current indicator animation progress (0.0..1.0).
     fn progress(&self) -> f32 {
         self.inner.read().progress
     }
 
-    /// Returns the current and target scroll offsets for tab content.
     fn content_offsets(&self) -> (Px, Px) {
         let inner = self.inner.read();
         (
@@ -181,21 +165,18 @@ impl TabsState {
         )
     }
 
-    /// Updates the current and target content offsets, typically during animations.
     fn update_content_offsets(&self, current: Px, target: Px) {
         let mut inner = self.inner.write();
         inner.content_scroll_offset = current;
         inner.target_content_scroll_offset = target;
     }
 
-    /// Sets the indicator's target width and X offset for the active tab.
     fn set_indicator_targets(&self, width: Px, x: Px) {
         let mut inner = self.inner.write();
         inner.indicator_to_width = width;
         inner.indicator_to_x = x;
     }
 
-    /// Returns indicator start/target width and X positions.
     fn indicator_metrics(&self) -> (Px, Px, Px, Px) {
         let inner = self.inner.read();
         (
@@ -207,7 +188,7 @@ impl TabsState {
     }
 }
 
-impl Default for TabsState {
+impl Default for TabsController {
     fn default() -> Self {
         Self::new(0)
     }
@@ -217,6 +198,9 @@ impl Default for TabsState {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TabsArgs {
+    /// Initial active tab index (0-based). Ignored if a controller is provided with its own state.
+    #[builder(default = "0")]
+    pub initial_active_tab: usize,
     /// Color of the active tab indicator.
     #[builder(default = "crate::material_color::global_material_scheme().primary")]
     // Material primary tone
@@ -357,72 +341,156 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the tabs' layout and indicator color; see [`TabsArgs`].
-/// - `state` — a clonable [`TabsState`] to manage the active tab and animation.
+/// - `args` — configures the tabs' layout, initial active tab, and indicator color; see [`TabsArgs`].
 /// - `scope_config` — a closure that receives a [`TabsScope`] for defining each tab's title and content.
 ///   Use [`TabsScope::child_with_color`] to let the component supply Material-compliant active/inactive colors.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui::Dp;
+/// use tessera_ui::{Dp, tessera};
 /// use tessera_ui_basic_components::{
-///     tabs::{tabs, TabsArgsBuilder, TabsState},
+///     tabs::{tabs, TabsArgsBuilder},
 ///     text::{text, TextArgsBuilder},
 /// };
 ///
-/// let tabs_state = TabsState::new(0);
-/// assert_eq!(tabs_state.active_tab(), 0);
-///
-/// tabs(
-///     TabsArgsBuilder::default().build().expect("builder construction failed"),
-///     tabs_state,
-///     |scope| {
-///         scope.child_with_color(
-///             |color| {
-///                 text(
-///                     TextArgsBuilder::default()
-///                         .text("Flights".to_string())
-///                         .color(color)
-///                         .size(Dp(14.0))
-///                         .build()
-///                         .expect("builder construction failed"),
-///                 )
-///             },
-///             || {
-///                 text(
-///                     TextArgsBuilder::default()
-///                         .text("Content for Flights")
-///                         .build()
-///                         .expect("builder construction failed"),
-///                 )
-///             },
-///         );
-///         scope.child_with_color(
-///             |color| {
-///                 text(
-///                     TextArgsBuilder::default()
-///                         .text("Hotel".to_string())
-///                         .color(color)
-///                         .size(Dp(14.0))
-///                         .build()
-///                         .expect("builder construction failed"),
-///                 )
-///             },
-///             || {
-///                 text(
-///                     TextArgsBuilder::default()
-///                         .text("Content for Hotel")
-///                         .build()
-///                         .expect("builder construction failed"),
-///                 )
-///             },
-///         );
-///     },
-/// );
+/// #[tessera]
+/// fn demo() {
+///     tabs(
+///         TabsArgsBuilder::default()
+///             .initial_active_tab(1)
+///             .build()
+///             .expect("builder construction failed"),
+///         |scope| {
+///             scope.child_with_color(
+///                 |color| {
+///                     text(
+///                         TextArgsBuilder::default()
+///                             .text("Flights".to_string())
+///                             .color(color)
+///                             .size(Dp(14.0))
+///                             .build()
+///                             .expect("builder construction failed"),
+///                     )
+///                 },
+///                 || {
+///                     text(
+///                         TextArgsBuilder::default()
+///                             .text("Content for Flights")
+///                             .build()
+///                             .expect("builder construction failed"),
+///                     )
+///                 },
+///             );
+///             scope.child_with_color(
+///                 |color| {
+///                     text(
+///                         TextArgsBuilder::default()
+///                             .text("Hotel".to_string())
+///                             .color(color)
+///                             .size(Dp(14.0))
+///                             .build()
+///                             .expect("builder construction failed"),
+///                     )
+///                 },
+///                 || {
+///                     text(
+///                         TextArgsBuilder::default()
+///                             .text("Content for Hotel")
+///                             .build()
+///                             .expect("builder construction failed"),
+///                     )
+///                 },
+///             );
+///         },
+///     );
+/// }
 /// ```
 #[tessera]
-pub fn tabs<F>(args: TabsArgs, state: TabsState, scope_config: F)
+pub fn tabs<F>(args: TabsArgs, scope_config: F)
+where
+    F: FnOnce(&mut TabsScope),
+{
+    let controller = remember(|| TabsController::new(args.initial_active_tab));
+    tabs_with_controller(args, controller, scope_config);
+}
+
+/// # tabs_with_controller
+///
+/// Controlled variant that accepts an explicit controller.
+///
+/// ## Usage
+///
+/// Use when you need to synchronize active tab selection across components or restore selection after remounts.
+///
+/// ## Parameters
+///
+/// - `args` — configures the tabs' layout and indicator color; see [`TabsArgs`].
+/// - `controller` — a [`TabsController`] storing the active tab index and animation progress.
+/// - `scope_config` — a closure that receives a [`TabsScope`] for defining each tab's title and content.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui::{remember, tessera};
+/// use tessera_ui_basic_components::{
+///     tabs::{tabs_with_controller, TabsArgsBuilder, TabsController},
+///     text::{text, TextArgsBuilder},
+/// };
+///
+/// #[tessera]
+/// fn demo() {
+///     let controller = remember(|| TabsController::new(0));
+///     tabs_with_controller(
+///         TabsArgsBuilder::default()
+///             .build()
+///             .expect("builder construction failed"),
+///         controller,
+///         |scope| {
+///             scope.child_with_color(
+///                 |color| {
+///                     text(
+///                         TextArgsBuilder::default()
+///                             .text("A".to_string())
+///                             .color(color)
+///                             .build()
+///                             .expect("builder construction failed"),
+///                     )
+///                 },
+///                 || {
+///                     text(
+///                         TextArgsBuilder::default()
+///                             .text("Tab A")
+///                             .build()
+///                             .expect("builder construction failed"),
+///                     )
+///                 },
+///             );
+///             scope.child_with_color(
+///                 |color| {
+///                     text(
+///                         TextArgsBuilder::default()
+///                             .text("B".to_string())
+///                             .color(color)
+///                             .build()
+///                             .expect("builder construction failed"),
+///                     )
+///                 },
+///                 || {
+///                     text(
+///                         TextArgsBuilder::default()
+///                             .text("Tab B")
+///                             .build()
+///                             .expect("builder construction failed"),
+///                     )
+///                 },
+///             );
+///         },
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn tabs_with_controller<F>(args: TabsArgs, controller: Arc<TabsController>, scope_config: F)
 where
     F: FnOnce(&mut TabsScope),
 {
@@ -434,7 +502,7 @@ where
     if num_tabs == 0 {
         return;
     }
-    let active_tab = state.active_tab().min(num_tabs.saturating_sub(1));
+    let active_tab = controller.active_tab().min(num_tabs.saturating_sub(1));
 
     let (title_closures, content_closures): (Vec<_>, Vec<_>) =
         tabs.into_iter().map(|def| (def.title, def.content)).unzip();
@@ -474,8 +542,8 @@ where
                 .hover_color(Some(hover_color))
                 .padding(args.tab_padding)
                 .ripple_color(args.state_layer_color)
-                .on_click(Arc::new(closure!(clone state, || {
-                    state.set_active_tab(index);
+                .on_click(Arc::new(closure!(clone controller, || {
+                    controller.set_active_tab(index);
                 })))
                 .width(DimensionValue::FILLED)
                 .shape(Shape::RECTANGLE)
@@ -500,8 +568,8 @@ where
     }
 
     let scroll_offset = {
-        let eased_progress = animation::easing(state.progress());
-        let (content_offset, target_offset) = state.content_offsets();
+        let eased_progress = animation::easing(controller.progress());
+        let (content_offset, target_offset) = controller.content_offsets();
         let offset =
             content_offset.0 as f32 + (target_offset.0 - content_offset.0) as f32 * eased_progress;
         Px(offset as i32)
@@ -509,7 +577,7 @@ where
 
     tabs_content_container(scroll_offset, content_closures);
 
-    let state_clone = state.clone();
+    let state_clone = controller.clone();
     input_handler(Box::new(move |_| {
         if let Some(last_switch_time) = state_clone.last_switch_time() {
             let elapsed = last_switch_time.elapsed();
@@ -519,6 +587,7 @@ where
     }));
 
     let tabs_args = args.clone();
+    let controller_for_measure = controller.clone();
 
     measure(Box::new(
         move |input| -> Result<ComputedData, MeasurementError> {
@@ -580,9 +649,10 @@ where
             let final_width = titles_total_width;
             let page_width = content_container_size.width;
             let target_offset = -Px(active_tab as i32 * page_width.0);
-            let (_, target_content_scroll_offset) = state.content_offsets();
+            let (_, target_content_scroll_offset) = controller_for_measure.content_offsets();
             if target_content_scroll_offset != target_offset {
-                state.update_content_offsets(target_content_scroll_offset, target_offset);
+                controller_for_measure
+                    .update_content_offsets(target_content_scroll_offset, target_offset);
             }
 
             let (indicator_width, indicator_x) = {
@@ -600,10 +670,11 @@ where
                 );
                 let centered_x = active_title_x + Px((active_title_width.0 - clamped_width.0) / 2);
 
-                state.set_indicator_targets(clamped_width, centered_x);
+                controller_for_measure.set_indicator_targets(clamped_width, centered_x);
 
-                let (from_width, to_width, from_x, to_x) = state.indicator_metrics();
-                let eased_progress = animation::easing(state.progress());
+                let (from_width, to_width, from_x, to_x) =
+                    controller_for_measure.indicator_metrics();
+                let eased_progress = animation::easing(controller_for_measure.progress());
                 let width = Px((from_width.0 as f32
                     + (to_width.0 - from_width.0) as f32 * eased_progress)
                     as i32);

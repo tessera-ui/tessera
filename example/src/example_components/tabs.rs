@@ -1,22 +1,15 @@
-use std::sync::Arc;
-
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
-    tabs::{TabsArgsBuilder, TabsState, tabs},
+    tabs::{TabsArgsBuilder, tabs},
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Default)]
-struct TabsShowcaseState {
-    tabs_state: TabsState,
-}
-
 #[tessera]
 #[shard]
-pub fn tabs_showcase(#[state] state: TabsShowcaseState) {
+pub fn tabs_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -37,7 +30,7 @@ pub fn tabs_showcase(#[state] state: TabsShowcaseState) {
                             .build()
                             .unwrap(),
                         move || {
-                            test_content(state);
+                            test_content();
                         },
                     );
                 },
@@ -47,8 +40,7 @@ pub fn tabs_showcase(#[state] state: TabsShowcaseState) {
 }
 
 #[tessera]
-fn test_content(state: Arc<TabsShowcaseState>) {
-    let tabs_state = state.tabs_state.clone();
+fn test_content() {
     column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -71,7 +63,6 @@ fn test_content(state: Arc<TabsShowcaseState>) {
                         .width(DimensionValue::FILLED)
                         .build()
                         .unwrap(),
-                    tabs_state,
                     |scope| {
                         scope.child_with_color(
                             |color| {
