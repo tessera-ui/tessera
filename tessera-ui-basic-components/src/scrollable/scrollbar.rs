@@ -8,7 +8,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    scrollable::{ScrollBarBehavior, ScrollableControllerInner},
+    scrollable::{ScrollBarBehavior, ScrollableController},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
 };
@@ -19,7 +19,7 @@ enum ScrollOrientation {
     Horizontal,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ScrollBarArgs {
     /// The total size of the scrollable content.
     pub total: Px,
@@ -30,7 +30,7 @@ pub struct ScrollBarArgs {
     /// The thickness of the scrollbar
     pub thickness: Dp,
     /// The scrollable's state, used for interaction.
-    pub state: Arc<RwLock<ScrollableControllerInner>>,
+    pub state: Arc<ScrollableController>,
     /// The behavior of the scrollbar visibility.
     pub scrollbar_behavior: ScrollBarBehavior,
     /// The color of the scrollbar track.
@@ -474,7 +474,7 @@ fn handle_state_v(
     handle_autohide_if_needed(args, state);
 
     // Capture current target position once to avoid locking inside helper on every call.
-    let fallback_pos = args.state.read().target_position;
+    let fallback_pos = args.state.target_position();
     let calculate_target_pos = |cursor_y: Px| -> PxPosition {
         calculate_target_pos_v(
             cursor_y,
@@ -561,7 +561,7 @@ fn handle_state_h(
     handle_autohide_if_needed(args, state);
 
     // Capture current target position once to avoid locking inside helper on every call.
-    let fallback_pos = args.state.read().target_position;
+    let fallback_pos = args.state.target_position();
     let calculate_target_pos = |cursor_x: Px| -> PxPosition {
         calculate_target_pos_h(
             cursor_x,
