@@ -10,7 +10,7 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, tessera, winit};
+use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, remember, tessera, winit};
 
 use crate::{
     animation,
@@ -45,45 +45,48 @@ pub struct BottomSheetProviderArgs {
     /// The visual style of the scrim. See [`BottomSheetStyle`].
     #[builder(default)]
     pub style: BottomSheetStyle,
+    /// Whether the sheet is initially open (for declarative usage).
+    #[builder(default = "false")]
+    pub is_open: bool,
 }
 
 #[derive(Default)]
-struct BottomSheetProviderStateInner {
+struct BottomSheetStateInner {
     is_open: bool,
     timer: Option<Instant>,
 }
 
-/// Manages the open/closed state of a [`bottom_sheet_provider`].
+/// Controller for [`bottom_sheet_provider`], managing open/closed state.
 ///
-/// This state object must be created by the application and passed to the
-/// [`bottom_sheet_provider`]. It is used to control the visibility of the sheet
+/// This controller can be created by the application and passed to the
+/// [`bottom_sheet_provider_with_controller`]. It is used to control the visibility of the sheet
 /// programmatically.
-///
-/// For safe shared access across different parts of your UI (e.g., a button that opens
-/// the sheet and the provider itself), clone the handle freely—the locking is handled
-/// internally so clones stay lightweight.
 ///
 /// # Example
 ///
 /// ```
-/// use tessera_ui_basic_components::bottom_sheet::BottomSheetProviderState;
+/// use tessera_ui_basic_components::bottom_sheet::BottomSheetController;
 ///
-/// let sheet_state = BottomSheetProviderState::new();
-/// assert!(!sheet_state.is_open());
-/// sheet_state.open();
-/// assert!(sheet_state.is_open());
-/// sheet_state.close();
-/// assert!(!sheet_state.is_open());
+/// let controller = BottomSheetController::new(false);
+/// assert!(!controller.is_open());
+/// controller.open();
+/// assert!(controller.is_open());
+/// controller.close();
+/// assert!(!controller.is_open());
 /// ```
-#[derive(Clone, Default)]
-pub struct BottomSheetProviderState {
-    inner: Arc<RwLock<BottomSheetProviderStateInner>>,
+pub struct BottomSheetController {
+    inner: RwLock<BottomSheetStateInner>,
 }
 
-impl BottomSheetProviderState {
-    /// Creates a new provider state handle.
-    pub fn new() -> Self {
-        Self::default()
+impl BottomSheetController {
+    /// Creates a new controller.
+    pub fn new(initial_open: bool) -> Self {
+        Self {
+            inner: RwLock::new(BottomSheetStateInner {
+                is_open: initial_open,
+                timer: None,
+            }),
+        }
     }
 
     /// Initiates the animation to open the bottom sheet.
@@ -140,6 +143,12 @@ impl BottomSheetProviderState {
     fn snapshot(&self) -> (bool, Option<Instant>) {
         let inner = self.inner.read();
         (inner.is_open, inner.timer)
+    }
+}
+
+impl Default for BottomSheetController {
+    fn default() -> Self {
+        Self::new(false)
     }
 }
 
@@ -261,8 +270,8 @@ fn render_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
 }
 
 /// Snapshot provider state to reduce lock duration and centralize access.
-fn snapshot_state(state: &BottomSheetProviderState) -> (bool, Option<Instant>) {
-    state.snapshot()
+fn snapshot_state(controller: &BottomSheetController) -> (bool, Option<Instant>) {
+    controller.snapshot()
 }
 
 /// Create the keyboard handler closure used to close the sheet on Escape.
@@ -284,7 +293,7 @@ fn make_keyboard_closure(
 /// Place bottom sheet if present. Extracted to reduce complexity of the parent function.
 fn place_bottom_sheet_if_present(
     input: &tessera_ui::MeasureInput<'_>,
-    state_for_measure: &BottomSheetProviderState,
+    controller_for_measure: &BottomSheetController,
     progress: f32,
 ) {
     if input.children_ids.len() <= 2 {
@@ -299,7 +308,7 @@ fn place_bottom_sheet_if_present(
     };
 
     let parent_height = input.parent_constraint.height.get_max().unwrap_or(Px(0));
-    let current_is_open = state_for_measure.is_open();
+    let current_is_open = controller_for_measure.is_open();
     let y = compute_bottom_sheet_y(parent_height, child_size.height, progress, current_is_open);
     input.place_child(bottom_sheet_id, PxPosition::new(Px(0), Px(y)));
 }
@@ -360,43 +369,80 @@ fn render_content(
 ///
 /// Provides a modal bottom sheet for contextual actions or information.
 ///
-/// ## Usage
+/// # Usage
 ///
 /// Show contextual menus, supplemental information, or simple forms without navigating away from the main screen.
 ///
 /// ## Parameters
 ///
 /// - `args` — configuration for the sheet's appearance and behavior; see [`BottomSheetProviderArgs`].
-/// - `state` — a clonable [`BottomSheetProviderState`] used to open and close the sheet.
 /// - `main_content` — closure that renders the always-visible base UI.
 /// - `bottom_sheet_content` — closure that renders the content of the sheet itself.
 ///
-/// ## Examples
+/// # Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::bottom_sheet::BottomSheetProviderState;
+/// use tessera_ui_basic_components::bottom_sheet::{bottom_sheet_provider, BottomSheetProviderArgsBuilder};
 ///
-/// let state = BottomSheetProviderState::new();
-/// assert!(!state.is_open());
-///
-/// state.open();
-/// assert!(state.is_open());
-///
-/// state.close();
-/// assert!(!state.is_open());
+/// bottom_sheet_provider(
+///     BottomSheetProviderArgsBuilder::default()
+///         .is_open(true)
+///         .on_close_request(std::sync::Arc::new(|| {}))
+///         .build()
+///         .unwrap(),
+///     || { /* main content */ },
+///     || { /* bottom sheet content */ },
+/// );
 /// ```
 #[tessera]
 pub fn bottom_sheet_provider(
-    args: BottomSheetProviderArgs,
-    state: BottomSheetProviderState,
+    args: impl Into<BottomSheetProviderArgs>,
     main_content: impl FnOnce() + Send + Sync + 'static,
     bottom_sheet_content: impl FnOnce() + Send + Sync + 'static,
 ) {
+    let args: BottomSheetProviderArgs = args.into();
+    let controller = remember(|| BottomSheetController::new(args.is_open));
+
+    if args.is_open != controller.is_open() {
+        if args.is_open {
+            controller.open();
+        } else {
+            controller.close();
+        }
+    }
+
+    bottom_sheet_provider_with_controller(args, controller, main_content, bottom_sheet_content);
+}
+
+/// # bottom_sheet_provider_with_controller
+///
+/// Controlled version of [`bottom_sheet_provider`] that accepts an external controller.
+///
+/// # Usage
+///
+/// Show contextual menus, supplemental information, or simple forms without navigating away from the main screen.
+/// And also need to control the sheet's open/closed state programmatically via a controller.
+///
+/// # Parameters
+///
+/// - `args` — configuration for the sheet's appearance and behavior; see [`BottomSheetProviderArgs`].
+/// - `controller` — a [`BottomSheetController`] used to open and close the sheet.
+/// - `main_content` — closure that renders the always-visible base UI.
+/// - `bottom_sheet_content` — closure that renders the content of the sheet itself.
+#[tessera]
+pub fn bottom_sheet_provider_with_controller(
+    args: impl Into<BottomSheetProviderArgs>,
+    controller: Arc<BottomSheetController>,
+    main_content: impl FnOnce() + Send + Sync + 'static,
+    bottom_sheet_content: impl FnOnce() + Send + Sync + 'static,
+) {
+    let args: BottomSheetProviderArgs = args.into();
+
     // Render main content first.
     main_content();
 
     // Snapshot state once to minimize locking overhead.
-    let (is_open, timer_opt) = snapshot_state(&state);
+    let (is_open, timer_opt) = snapshot_state(&controller);
 
     // Fast exit when nothing to render.
     if !(is_open || timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME)) {
@@ -418,7 +464,7 @@ pub fn bottom_sheet_provider(
     render_content(args.style, bottom_sheet_content);
 
     // Measurement: place main content, scrim and bottom sheet.
-    let state_for_measure = state.clone();
+    let controller_for_measure = controller.clone();
     let measure_closure = Box::new(move |input: &tessera_ui::MeasureInput<'_>| {
         // Place main content at origin.
         let main_content_id = input.children_ids[0];
@@ -433,7 +479,7 @@ pub fn bottom_sheet_provider(
         }
 
         // Place bottom sheet (if present) using extracted helper.
-        place_bottom_sheet_if_present(input, &state_for_measure, progress);
+        place_bottom_sheet_if_present(input, &controller_for_measure, progress);
 
         // Return the main content size (best-effort; unwrap used above to satisfy closure type).
         Ok(main_content_size)

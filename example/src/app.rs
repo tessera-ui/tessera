@@ -10,8 +10,8 @@ use tessera_ui_basic_components::{
     ShadowProps,
     alignment::{Alignment, CrossAxisAlignment},
     bottom_sheet::{
-        BottomSheetProviderArgsBuilder, BottomSheetProviderState, BottomSheetStyle,
-        bottom_sheet_provider,
+        BottomSheetController, BottomSheetProviderArgsBuilder, BottomSheetStyle,
+        bottom_sheet_provider_with_controller,
     },
     boxed::{BoxedArgsBuilder, boxed},
     button::{ButtonArgsBuilder, button},
@@ -58,7 +58,7 @@ use crate::example_components::{
 
 #[derive(Default)]
 struct AppState {
-    bottom_sheet_state: BottomSheetProviderState,
+    bottom_sheet_controller: Arc<BottomSheetController>,
     side_bar_state: SideBarProviderState,
     dialog_controller: Arc<DialogController>,
 }
@@ -76,15 +76,17 @@ pub fn app(#[state] app_state: AppState) {
             .unwrap(),
         app_state.side_bar_state.clone(),
         move || {
-            bottom_sheet_provider(
+            bottom_sheet_provider_with_controller(
                 BottomSheetProviderArgsBuilder::default()
-                    .on_close_request(Arc::new(closure!(clone app_state.bottom_sheet_state, || {
-                        bottom_sheet_state.close();
-                    })))
+                    .on_close_request(Arc::new(
+                        closure!(clone app_state.bottom_sheet_controller, || {
+                            bottom_sheet_controller.close();
+                        }),
+                    ))
                     .style(BottomSheetStyle::Glass)
                     .build()
                     .unwrap(),
-                app_state.bottom_sheet_state.clone(),
+                app_state.bottom_sheet_controller.clone(),
                 move || {
                     dialog_provider_with_controller(
                         DialogProviderArgsBuilder::default()
@@ -102,20 +104,22 @@ pub fn app(#[state] app_state: AppState) {
                                 scope.child(|| {
                                     top_app_bar();
                                 });
-                                let bottom_sheet_state = app_state.bottom_sheet_state.clone();
+                                let bottom_sheet_controller =
+                                    app_state.bottom_sheet_controller.clone();
                                 let side_bar_state = app_state.side_bar_state.clone();
                                 let dialog_controller = app_state.dialog_controller.clone();
                                 scope.child_weighted(
                                     move || {
                                         router_root(HomeDestination {
-                                            bottom_sheet_state,
+                                            bottom_sheet_controller,
                                             side_bar_state,
                                             dialog_controller,
                                         });
                                     },
                                     1.0,
                                 );
-                                let bottom_sheet_state = app_state.bottom_sheet_state.clone();
+                                let bottom_sheet_controller =
+                                    app_state.bottom_sheet_controller.clone();
                                 let side_bar_state = app_state.side_bar_state.clone();
                                 let dialog_controller = app_state.dialog_controller.clone();
                                 scope.child(move || {
@@ -141,15 +145,15 @@ pub fn app(#[state] app_state: AppState) {
                                                     }
                                                 )))
                                                 .on_click(Arc::new(closure!(
-                                                    clone bottom_sheet_state,
+                                                    clone bottom_sheet_controller,
                                                     clone side_bar_state,
                                                     clone dialog_controller,
                                                     || {
                                                         Router::with_mut(|router| {
                                                             router.reset_with(
                                                                 HomeDestination {
-                                                                    bottom_sheet_state:
-                                                                        bottom_sheet_state
+                                                                    bottom_sheet_controller:
+                                                                        bottom_sheet_controller
                                                                             .clone(),
                                                                     side_bar_state:
                                                                         side_bar_state.clone(),
@@ -237,7 +241,7 @@ impl ComponentExampleDesc {
 #[tessera]
 #[shard]
 fn home(
-    bottom_sheet_state: BottomSheetProviderState,
+    bottom_sheet_controller: Arc<BottomSheetController>,
     side_bar_state: SideBarProviderState,
     dialog_controller: Arc<DialogController>,
 ) {
@@ -439,7 +443,7 @@ fn home(
             "Bottom Sheet",
             "bottom sheet displays content sliding up from the bottom of the screen.",
             move || {
-                bottom_sheet_state.open();
+                bottom_sheet_controller.open();
             },
         ),
         ComponentExampleDesc::new(
