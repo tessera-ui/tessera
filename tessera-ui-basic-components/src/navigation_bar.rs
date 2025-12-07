@@ -83,7 +83,6 @@ pub struct NavigationBarItem {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the navigation bar; see [`NavigationBarArgs`].
 /// - `scope_config` — closure that registers items via [`NavigationBarScope`].
 ///
 /// ## Examples
@@ -129,7 +128,6 @@ where
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the navigation bar; see [`NavigationBarArgs`].
 /// - `controller` — explicit controller to manage selection.
 /// - `scope_config` — closure that registers items via [`NavigationBarScope`].
 ///
@@ -486,7 +484,7 @@ impl NavigationBarController {
     }
 
     /// Returns the index of the previously selected navigation item.
-    pub fn previous_selected(&self) -> usize {
+    pub(crate) fn previous_selected(&self) -> usize {
         self.inner.read().previous_selected
     }
 

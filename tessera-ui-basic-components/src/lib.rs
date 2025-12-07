@@ -29,7 +29,7 @@
 //! use tessera_ui_basic_components::{
 //!     button::{button, ButtonArgs},
 //!     text::text,
-//!     text_editor::{text_editor, TextEditorArgs, TextEditorState},
+//!     text_editor::{text_editor, TextEditorArgs, TextEditorController},
 //! };
 //!
 //! // Button example
@@ -42,8 +42,7 @@
 //! );
 //!
 //! // Text editor example
-//! let editor_state = TextEditorState::new(Dp(16.0), None);
-//! text_editor(TextEditorArgs::default(), editor_state.clone());
+//! text_editor(TextEditorArgs::default());
 //! ```
 #![deny(missing_docs, clippy::unwrap_used)]
 

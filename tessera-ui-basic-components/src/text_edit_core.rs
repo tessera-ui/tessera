@@ -2,7 +2,7 @@
 //!
 //! This module provides the foundational structures and functions for building text editing components,
 //! including text buffer management, selection and cursor handling, rendering logic, and keyboard event mapping.
-//! It is designed to be shared across UI components via the `TextEditorStateHandle` wrapper,
+//! It is designed to be shared across UI components via the `TextEditorController` wrapper,
 //! enabling consistent and thread-safe access to editor state.
 //! and efficient text editing experiences.
 //!
@@ -12,7 +12,7 @@
 //! The module integrates with the Tessera component system and rendering pipelines, supporting selection
 //! highlighting, cursor blinking, clipboard operations, and extensible keyboard shortcuts.
 //!
-//! Most applications should interact with [`TextEditorState`] for state management and [`text_edit_core()`]
+//! Most applications should interact with [`TextEditorController`] for state management and [`text_edit_core()`]
 //! for rendering and layout within a component tree.
 
 mod cursor;
@@ -73,8 +73,8 @@ pub enum ClickType {
 /// Core state for text editing, including content, selection, cursor, and interaction state.
 ///
 /// This struct manages the text buffer, selection, cursor position, focus, and user interaction state.
-/// It is designed to be shared between UI components via a `TextEditorStateHandle`.
-pub struct TextEditorStateInner {
+/// It is designed to be shared between UI components via a `TextEditorController`.
+pub struct TextEditorControllerInner {
     line_height: Px,
     pub(crate) editor: glyphon::Editor<'static>,
     blink_timer: Instant,
@@ -90,33 +90,36 @@ pub struct TextEditorStateInner {
     pub(crate) preedit_string: Option<String>,
 }
 
-/// Thin handle wrapping an internal `Arc<RwLock<TextEditorState>>` and exposing `read()`/`write()`.
+/// Thin handle wrapping an internal `Arc<RwLock<TextEditorController>>` and exposing `read()`/`write()`.
 #[derive(Clone)]
-pub struct TextEditorState {
-    inner: Arc<RwLock<TextEditorStateInner>>,
+pub struct TextEditorController {
+    inner: Arc<RwLock<TextEditorControllerInner>>,
 }
 
-impl TextEditorState {
+impl TextEditorController {
     /// Creates a new text editor state with the given font size and optional line height.
     pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(TextEditorStateInner::new(size, line_height))),
+            inner: Arc::new(RwLock::new(TextEditorControllerInner::new(
+                size,
+                line_height,
+            ))),
         }
     }
 
     /// Returns a read guard for inspecting the underlying editor state.
-    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, TextEditorStateInner> {
+    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, TextEditorControllerInner> {
         self.inner.read()
     }
 
     /// Returns a write guard for mutating the underlying editor state.
-    pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, TextEditorStateInner> {
+    pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, TextEditorControllerInner> {
         self.inner.write()
     }
 }
 
-impl TextEditorStateInner {
-    /// Creates a new `TextEditorState` with the given font size and optional line height.
+impl TextEditorControllerInner {
+    /// Creates a new `TextEditorController` with the given font size and optional line height.
     ///
     /// # Arguments
     ///
@@ -126,7 +129,7 @@ impl TextEditorStateInner {
         Self::with_selection_color(size, line_height, Color::new(0.5, 0.7, 1.0, 0.4))
     }
 
-    /// Creates a new `TextEditorState` with a custom selection highlight color.
+    /// Creates a new `TextEditorController` with a custom selection highlight color.
     ///
     /// # Arguments
     ///
@@ -505,13 +508,13 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
 ///
 /// This component is responsible for rendering the text buffer, selection highlights, and cursor.
 /// It does not handle user events directly; instead, it is intended to be used inside a container
-/// that manages user interaction and passes state updates via `TextEditorState`.
+/// that manages user interaction and passes state updates via `TextEditorController`.
 ///
 /// # Arguments
 ///
 /// * `state` - Shared state for the text editor, typically wrapped in `Arc<RwLock<...>>`.
 #[tessera]
-pub fn text_edit_core(state: TextEditorState) {
+pub fn text_edit_core(state: TextEditorController) {
     // text rendering with constraints from parent container
     {
         let state_clone = state.clone();

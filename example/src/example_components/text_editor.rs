@@ -7,18 +7,18 @@ use tessera_ui_basic_components::{
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
-    text_editor::{TextEditorArgsBuilder, TextEditorState, text_editor},
+    text_editor::{TextEditorArgsBuilder, TextEditorController, text_editor_with_controller},
 };
 
 #[derive(Clone)]
 struct TextEditorShowcaseState {
-    editor_state: TextEditorState,
+    editor_state: TextEditorController,
 }
 
 impl Default for TextEditorShowcaseState {
     fn default() -> Self {
         Self {
-            editor_state: TextEditorState::new(Dp(22.0), None),
+            editor_state: TextEditorController::new(Dp(22.0), None),
         }
     }
 }
@@ -76,7 +76,7 @@ fn test_content(state: Arc<TextEditorShowcaseState>) {
             scope.child(|| spacer(Dp(10.0)));
 
             scope.child(move || {
-                text_editor(
+                text_editor_with_controller(
                     TextEditorArgsBuilder::default()
                         .width(DimensionValue::FILLED)
                         .height(Dp(200.0))
