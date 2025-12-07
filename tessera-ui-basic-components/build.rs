@@ -107,26 +107,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "    ///\n    /// ## Usage\n    ///\n    /// Use with [`crate::icon::IconArgs`] and [`crate::icon::icon`]."
             )?;
             writeln!(generated, "    ///")?;
-            writeln!(generated, "    /// ## Examples")?;
-            writeln!(generated, "    ///")?;
-            writeln!(generated, "    /// ```ignore")?;
-            writeln!(
-                generated,
-                "    /// use tessera_ui_basic_components::icon::IconArgsBuilder;"
-            )?;
-            writeln!(
-                generated,
-                "    /// use tessera_ui_basic_components::material_icons;"
-            )?;
-            writeln!(generated, "    ///")?;
-            writeln!(generated, "    /// let args = IconArgsBuilder::default()")?;
-            writeln!(
-                generated,
-                "    ///     .content(material_icons::{module}::{func}())"
-            )?;
-            writeln!(generated, "    ///     .build()")?;
-            writeln!(generated, "    ///     .unwrap();")?;
-            writeln!(generated, "    /// ```")?;
             writeln!(generated, "    #[inline]")?;
             writeln!(generated, "    pub fn {func}() -> IconContent {{")?;
             writeln!(
