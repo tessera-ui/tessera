@@ -11,7 +11,7 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, tessera};
+use tessera_ui::{Color, DimensionValue, Dp, remember, tessera};
 
 use crate::{
     ShadowProps,
@@ -73,6 +73,26 @@ pub struct NavigationBarItem {
     pub label_behavior: NavigationBarLabelBehavior,
 }
 
+/// Arguments for `navigation_bar`
+#[derive(Clone, Builder)]
+#[builder(pattern = "owned")]
+pub struct NavigationBarArgs {
+    /// Initial selected index (0-based). Defaults to 0.
+    #[builder(default = "0")]
+    pub initial_index: usize,
+    /// Material color scheme used for container, indicator, and label colors.
+    #[builder(default = "global_material_scheme()")]
+    pub scheme: MaterialColorScheme,
+}
+
+impl Default for NavigationBarArgs {
+    fn default() -> Self {
+        NavigationBarArgsBuilder::default()
+            .build()
+            .expect("builder construction failed")
+    }
+}
+
 /// # navigation_bar
 ///
 /// Material navigation bar with active indicator and icon/label pairs.
@@ -83,57 +103,117 @@ pub struct NavigationBarItem {
 ///
 /// ## Parameters
 ///
-/// - `state` — see [`NavigationBarState`] to track which destination is active.
+/// - `args` — configures the navigation bar; see [`NavigationBarArgs`].
 /// - `scope_config` — closure that registers items via [`NavigationBarScope`].
 ///
 /// ## Examples
 ///
 /// ```
+/// use tessera_ui::tessera;
 /// use tessera_ui_basic_components::navigation_bar::{
-///     NavigationBarItemBuilder, NavigationBarState, navigation_bar,
+///     NavigationBarArgsBuilder, NavigationBarItemBuilder, navigation_bar,
 /// };
 ///
-/// let state = NavigationBarState::new(0);
-/// navigation_bar(state.clone(), |scope| {
-///     scope.item(
-///         NavigationBarItemBuilder::default()
-///             .label("Home")
+/// #[tessera]
+/// fn demo() {
+///     navigation_bar(
+///         NavigationBarArgsBuilder::default()
+///             .initial_index(0)
 ///             .build()
 ///             .unwrap(),
+///         |scope| {
+///             scope.item(
+///                 NavigationBarItemBuilder::default()
+///                     .label("Home")
+///                     .build()
+///                     .unwrap(),
+///             );
+///             scope.item(
+///                 NavigationBarItemBuilder::default()
+///                     .label("Search")
+///                     .build()
+///                     .unwrap(),
+///             );
+///         },
 ///     );
-///     scope.item(
-///         NavigationBarItemBuilder::default()
-///             .label("Search")
-///             .build()
-///             .unwrap(),
-///     );
-/// });
-/// assert_eq!(state.selected(), 0);
-/// state.select(1);
-/// assert_eq!(state.selected(), 1);
-/// assert_eq!(state.previous_selected(), 0);
+/// }
 /// ```
 #[tessera]
-pub fn navigation_bar<F>(state: NavigationBarState, scope_config: F)
+pub fn navigation_bar<F>(args: impl Into<NavigationBarArgs>, scope_config: F)
 where
     F: FnOnce(&mut NavigationBarScope),
 {
+    let args: NavigationBarArgs = args.into();
+    let controller = remember(|| NavigationBarController::new(args.initial_index));
+    navigation_bar_with_controller(args, controller, scope_config);
+}
+
+/// # navigation_bar_with_controller
+///
+/// Controlled variant that accepts an explicit controller.
+///
+/// ## Parameters
+///
+/// - `args` — configures the navigation bar; see [`NavigationBarArgs`].
+/// - `controller` — explicit controller to manage selection.
+/// - `scope_config` — closure that registers items via [`NavigationBarScope`].
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui::{remember, tessera};
+/// use tessera_ui_basic_components::navigation_bar::{
+///     NavigationBarArgsBuilder, NavigationBarController, NavigationBarItemBuilder, navigation_bar_with_controller,
+/// };
+///
+/// #[tessera]
+/// fn controlled_demo() {
+///     let controller = remember(|| NavigationBarController::new(0));
+///     navigation_bar_with_controller(
+///         NavigationBarArgsBuilder::default().build().unwrap(),
+///         controller,
+///         |scope| {
+///             scope.item(
+///                 NavigationBarItemBuilder::default()
+///                     .label("Home")
+///                     .build()
+///                     .unwrap(),
+///             );
+///             scope.item(
+///                 NavigationBarItemBuilder::default()
+///                     .label("Search")
+///                     .build()
+///                     .unwrap(),
+///             );
+///         },
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn navigation_bar_with_controller<F>(
+    args: impl Into<NavigationBarArgs>,
+    controller: Arc<NavigationBarController>,
+    scope_config: F,
+) where
+    F: FnOnce(&mut NavigationBarScope),
+{
+    let args: NavigationBarArgs = args.into();
     let mut items = Vec::new();
     {
         let mut scope = NavigationBarScope { items: &mut items };
         scope_config(&mut scope);
     }
 
-    let scheme = global_material_scheme();
+    let scheme = args.scheme;
     let container_shadow = ShadowProps {
         color: scheme.shadow.with_alpha(0.16),
         offset: [0.0, 3.0],
         smoothness: 10.0,
     };
 
-    let animation_progress = state.animation_progress().unwrap_or(1.0);
-    let selected_index = state.selected();
-    let previous_index = state.previous_selected();
+    let animation_progress = controller.animation_progress().unwrap_or(1.0);
+    let selected_index = controller.selected();
+    let previous_index = controller.previous_selected();
 
     surface(
         SurfaceArgsBuilder::default()
@@ -178,12 +258,12 @@ where
                                     .expect("RowArgsBuilder failed with required fields set"),
                                 move |row_scope| {
                                     for (index, item) in items.into_iter().enumerate() {
-                                        let state_clone = state.clone();
+                                        let controller_clone = controller.clone();
                                         let scheme_for_item = scheme.clone();
                                         row_scope.child_weighted(
                                             move || {
                                                 render_navigation_item(
-                                                    &state_clone,
+                                                    &controller_clone,
                                                     index,
                                                     item,
                                                     selected_index,
@@ -207,7 +287,7 @@ where
 }
 
 fn render_navigation_item(
-    state: &NavigationBarState,
+    controller: &NavigationBarController,
     index: usize,
     item: NavigationBarItem,
     selected_index: usize,
@@ -264,9 +344,9 @@ fn render_navigation_item(
             .ripple_color(ripple_color)
             .hover_style(None)
             .accessibility_label(label_text.clone())
-            .on_click(Arc::new(closure!(clone state, clone on_click, || {
-                if index != state.selected() {
-                    state.set_selected(index);
+            .on_click(Arc::new(closure!(clone controller, clone on_click, || {
+                if index != controller.selected() {
+                    controller.set_selected(index);
                     on_click();
                 }
             })))
@@ -405,25 +485,25 @@ impl NavigationBarStateInner {
     }
 }
 
-/// Shared state for the `navigation_bar` component.
+/// Controller for the `navigation_bar` component.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::navigation_bar::NavigationBarState;
+/// use tessera_ui_basic_components::navigation_bar::NavigationBarController;
 ///
-/// let state = NavigationBarState::new(0);
-/// assert_eq!(state.selected(), 0);
-/// state.select(2);
-/// assert_eq!(state.selected(), 2);
-/// assert_eq!(state.previous_selected(), 0);
+/// let controller = NavigationBarController::new(0);
+/// assert_eq!(controller.selected(), 0);
+/// controller.select(2);
+/// assert_eq!(controller.selected(), 2);
+/// assert_eq!(controller.previous_selected(), 0);
 /// ```
 #[derive(Clone)]
-pub struct NavigationBarState {
+pub struct NavigationBarController {
     inner: Arc<RwLock<NavigationBarStateInner>>,
 }
 
-impl NavigationBarState {
+impl NavigationBarController {
     /// Create a new state with an initial selected index.
     pub fn new(selected: usize) -> Self {
         Self {
@@ -455,11 +535,12 @@ impl NavigationBarState {
     }
 }
 
-impl Default for NavigationBarState {
+impl Default for NavigationBarController {
     fn default() -> Self {
         Self::new(0)
     }
 }
+
 
 /// Scope passed to the closure for defining children of the NavigationBar.
 pub struct NavigationBarScope<'a> {

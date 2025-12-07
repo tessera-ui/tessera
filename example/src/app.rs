@@ -21,7 +21,7 @@ use tessera_ui_basic_components::{
     lazy_list::{LazyColumnArgsBuilder, lazy_column},
     material_color::global_material_scheme,
     material_icons::filled,
-    navigation_bar::{NavigationBarItemBuilder, NavigationBarState, navigation_bar},
+    navigation_bar::{NavigationBarArgsBuilder, NavigationBarItemBuilder, navigation_bar},
     row::{RowArgsBuilder, row},
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
@@ -56,7 +56,6 @@ use crate::example_components::{
 
 #[derive(Default)]
 struct AppState {
-    navigation_bar_state: NavigationBarState,
     bottom_sheet_state: BottomSheetProviderState,
     side_bar_state: SideBarProviderState,
     dialog_state: DialogProviderState,
@@ -128,7 +127,7 @@ pub fn app(#[state] app_state: AppState) {
                                         .unwrap();
 
                                     navigation_bar(
-                                        app_state.navigation_bar_state.clone(),
+                                        NavigationBarArgsBuilder::default().build().unwrap(),
                                         |scope| {
                                             scope.item(
                                                 NavigationBarItemBuilder::default()
