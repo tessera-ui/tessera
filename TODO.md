@@ -2,7 +2,7 @@
 
 - [ ] Better IME support on Android
 - [x] Performance improvement
-- [ ] Switch to Semver for versioning
+- [x] Switch to Semver for versioning
 - [ ] New components:
   - [x] image_vector
   - [x] icon
