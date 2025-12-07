@@ -143,14 +143,6 @@ impl DialogController {
         self.inner.read().is_open
     }
 
-    /// Returns whether the dialog is mid-animation.
-    pub fn is_animating(&self) -> bool {
-        self.inner
-            .read()
-            .timer
-            .is_some_and(|t| t.elapsed() < ANIM_TIME)
-    }
-
     fn snapshot(&self) -> (bool, Option<Instant>) {
         let inner = self.inner.read();
         (inner.is_open, inner.timer)
