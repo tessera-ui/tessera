@@ -7,7 +7,7 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEvent, CursorEventContent, DimensionValue, Dp, Px,
-    PxPosition, PxSize, accesskit::Role, tessera, winit,
+    PxPosition, PxSize, accesskit::Role, remember, tessera, winit,
 };
 
 use crate::{
@@ -73,6 +73,7 @@ fn default_scrim_color() -> Color {
 /// Scope for adding items inside a [`menu`].
 pub struct MenuScope<'a, 'b> {
     scope: &'a mut crate::column::ColumnScope<'b>,
+    controller: Arc<MenuController>,
 }
 
 impl<'a, 'b> MenuScope<'a, 'b> {
@@ -82,6 +83,24 @@ impl<'a, 'b> MenuScope<'a, 'b> {
         F: FnOnce() + Send + Sync + 'static,
     {
         self.scope.child(child);
+    }
+
+    /// Adds a [`menu_item`] to the menu.
+    pub fn menu_item(&mut self, args: impl Into<MenuItemArgs>) {
+        let mut args = args.into();
+        if args.close_on_click {
+            let prev = args.on_click;
+            let controller = self.controller.clone();
+            args.on_click = Some(Arc::new(move || {
+                if let Some(f) = &prev {
+                    f();
+                }
+                controller.close();
+            }));
+        }
+        self.scope.child(move || {
+            menu_item(args);
+        });
     }
 }
 
@@ -123,22 +142,25 @@ impl Default for MenuAnchor {
 #[derive(Default)]
 struct MenuStateInner {
     is_open: bool,
-    anchor: MenuAnchor,
+    anchor: Option<MenuAnchor>,
 }
 
 /// Shared state for controlling menu visibility and anchor placement.
-#[derive(Clone, Default)]
-pub struct MenuState {
-    inner: Arc<RwLock<MenuStateInner>>,
+#[derive(Default)]
+pub struct MenuController {
+    inner: RwLock<MenuStateInner>,
 }
 
-impl MenuState {
+impl MenuController {
     /// Creates a new closed menu state.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Opens the menu using the previously remembered anchor.
+    /// Opens the menu.
+    ///
+    /// If an anchor was previously set via [`open_at`](Self::open_at), it is reused.
+    /// Otherwise, the menu defaults to anchoring to the provider's content.
     pub fn open(&self) {
         self.inner.write().is_open = true;
     }
@@ -146,7 +168,7 @@ impl MenuState {
     /// Opens the menu at the provided anchor rectangle.
     pub fn open_at(&self, anchor: MenuAnchor) {
         let mut inner = self.inner.write();
-        inner.anchor = anchor;
+        inner.anchor = Some(anchor);
         inner.is_open = true;
     }
 
@@ -166,7 +188,7 @@ impl MenuState {
         self.inner.read().is_open
     }
 
-    fn snapshot(&self) -> (bool, MenuAnchor) {
+    fn snapshot(&self) -> (bool, Option<MenuAnchor>) {
         let inner = self.inner.read();
         (inner.is_open, inner.anchor)
     }
@@ -223,6 +245,9 @@ pub struct MenuProviderArgs {
     /// Optional callback invoked before the menu closes (background or Escape).
     #[builder(default, setter(strip_option))]
     pub on_dismiss: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// Whether the menu is currently open.
+    #[builder(default = "false")]
+    pub is_open: bool,
 }
 
 impl Default for MenuProviderArgs {
@@ -330,79 +355,145 @@ fn should_close_on_click(
     })
 }
 
-fn apply_close_action(state: &MenuState, on_dismiss: &Option<Arc<dyn Fn() + Send + Sync>>) {
+fn apply_close_action(
+    controller: &MenuController,
+    on_dismiss: &Option<Arc<dyn Fn() + Send + Sync>>,
+) {
     if let Some(callback) = on_dismiss {
         callback();
     }
-    state.close();
+    controller.close();
 }
 
 /// # menu_provider
 ///
 /// Provides a Material Design 3 menu overlay anchored to a rectangle.
 ///
-/// ## Usage
+/// # Usage
 ///
 /// Wrap page content and show contextual or overflow actions aligned to a trigger element.
 ///
-/// ## Parameters
+/// # Parameters
 ///
 /// - `args` — configures placement, styling, and dismissal behavior; see [`MenuProviderArgs`].
-/// - `state` — a clonable [`MenuState`] controlling open/close and anchor position.
 /// - `main_content` — closure rendering the underlying page UI.
 /// - `menu_content` — closure that receives a [`MenuScope`] to register menu items.
 ///
-/// ## Examples
+/// # Examples
 ///
 /// ```
 /// use std::sync::Arc;
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
 ///     menus::{
-///         menu_item, menu_provider, MenuAnchor, MenuItemArgsBuilder, MenuPlacement,
-///         MenuProviderArgsBuilder, MenuScope, MenuState,
+///         menu_provider, MenuAnchor, MenuItemArgsBuilder, MenuPlacement,
+///         MenuProviderArgsBuilder, MenuScope,
 ///     },
 ///     text::text,
 /// };
 ///
-/// let state = MenuState::new();
-/// state.open_at(MenuAnchor::from_dp((Dp(8.0), Dp(24.0)), (Dp(120.0), Dp(36.0))));
-/// let state_for_menu = state.clone();
-///
 /// let args = MenuProviderArgsBuilder::default()
 ///     .placement(MenuPlacement::BelowStart)
+///     .is_open(true)
 ///     .build()
 ///     .unwrap();
 ///
 /// menu_provider(
 ///     args,
-///     state.clone(),
 ///     || {
 ///         text("Main content");
 ///     },
 ///     move |menu_scope: &mut MenuScope<'_, '_>| {
-///         let menu_state = state_for_menu.clone();
-///         menu_scope.item(move || {
-///             menu_item(
-///                 MenuItemArgsBuilder::default()
-///                     .label("Edit")
-///                     .on_click(Arc::new(|| {}))
-///                     .build()
-///                     .unwrap(),
-///                 Some(menu_state.clone()),
-///             );
-///         });
+///         menu_scope.menu_item(
+///             MenuItemArgsBuilder::default()
+///                 .label("Edit")
+///                 .on_click(Arc::new(|| {}))
+///                 .build()
+///                 .unwrap(),
+///         );
 ///     },
 /// );
-///
-/// assert!(state.is_open());
-/// state.close();
-/// assert!(!state.is_open());
 /// ```
 #[tessera]
 pub fn menu_provider(
     args: impl Into<MenuProviderArgs>,
-    state: MenuState,
+    main_content: impl FnOnce() + Send + Sync + 'static,
+    menu_content: impl FnOnce(&mut MenuScope<'_, '_>) + Send + Sync + 'static,
+) {
+    let args: MenuProviderArgs = args.into();
+    let controller = remember(MenuController::new);
+
+    if controller.is_open() != args.is_open {
+        if args.is_open {
+            controller.open();
+        } else {
+            controller.close();
+        }
+    }
+
+    menu_provider_with_controller(args, controller, main_content, menu_content);
+}
+
+/// # menu_provider_with_controller
+///
+/// Provides a Material Design 3 menu overlay anchored to a rectangle with an external controller.
+///
+/// # Usage
+///
+/// Wrap page content and show contextual or overflow actions aligned to a trigger element,
+/// controlled via a shared [`MenuController`].
+///
+/// # Parameters
+///
+/// - `args` — configures placement, styling, and dismissal behavior; see [`MenuProviderArgs`].
+/// - `controller` — A [`MenuController`] controlling open/close and anchor position.
+/// - `main_content` — closure rendering the underlying page UI.
+/// - `menu_content` — closure that receives a [`MenuScope`] to register menu items.
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui::{Dp, tessera, remember};
+/// use tessera_ui_basic_components::{
+///     menus::{
+///         menu_provider_with_controller, MenuAnchor, MenuController,
+///         MenuItemArgsBuilder, MenuPlacement, MenuProviderArgsBuilder, MenuScope,
+///     },
+///     text::text,
+/// };
+///
+/// #[tessera]
+/// fn foo() {
+///     let menu_controller = remember(MenuController::new);
+///     let args = MenuProviderArgsBuilder::default()
+///         .placement(MenuPlacement::BelowStart)
+///         .build()
+///         .unwrap();
+///     menu_provider_with_controller(
+///         args,
+///         menu_controller,
+///         || {
+///             /* Main content */
+///         },
+///         move |menu_scope| {
+///             menu_scope.menu_item(
+///                 MenuItemArgsBuilder::default()
+///                     .label("Edit")
+///                     .on_click(Arc::new(|| {
+///                         // Handle edit action
+///                     }))
+///                     .build()
+///                     .unwrap(),
+///             );
+///         },
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn menu_provider_with_controller(
+    args: impl Into<MenuProviderArgs>,
+    controller: Arc<MenuController>,
     main_content: impl FnOnce() + Send + Sync + 'static,
     menu_content: impl FnOnce(&mut MenuScope<'_, '_>) + Send + Sync + 'static,
 ) {
@@ -411,7 +502,7 @@ pub fn menu_provider(
     // Render underlying content first.
     main_content();
 
-    let (is_open, anchor) = state.snapshot();
+    let (is_open, anchor) = controller.snapshot();
     if !is_open {
         return;
     }
@@ -463,9 +554,12 @@ pub fn menu_provider(
                     .cross_axis_alignment(CrossAxisAlignment::Start)
                     .build()
                     .expect("builder construction failed"),
-                |scope| {
-                    let mut menu_scope = MenuScope { scope };
-                    menu_content(&mut menu_scope);
+                {
+                    let controller = controller.clone();
+                    move |scope| {
+                        let mut menu_scope = MenuScope { scope, controller };
+                        menu_content(&mut menu_scope);
+                    }
                 },
             );
         },
@@ -476,7 +570,7 @@ pub fn menu_provider(
     let on_dismiss_for_handler = args.on_dismiss.clone();
     let close_on_escape = args.close_on_escape;
     let close_on_background = args.close_on_background;
-    let state_for_handler = state.clone();
+    let controller_for_handler = controller.clone();
     input_handler(Box::new(move |mut input| {
         let mut cursor_events: Vec<_> = Vec::new();
         std::mem::swap(&mut cursor_events, input.cursor_events);
@@ -502,7 +596,7 @@ pub fn menu_provider(
             });
 
         if should_close_click || should_close_escape {
-            apply_close_action(&state_for_handler, &on_dismiss_for_handler);
+            apply_close_action(&controller_for_handler, &on_dismiss_for_handler);
         }
     }));
 
@@ -538,6 +632,12 @@ pub fn menu_provider(
         } else {
             extract_available_size(input.parent_constraint)
         };
+        let anchor = anchor.unwrap_or_else(|| {
+            MenuAnchor::new(
+                PxPosition::ZERO,
+                PxSize::new(main_size.width, main_size.height),
+            )
+        });
         let menu_position = resolve_menu_position(
             anchor,
             args_for_measure.placement,
@@ -564,10 +664,19 @@ pub fn menu_provider(
 #[tessera]
 pub fn menu(
     args: impl Into<MenuProviderArgs>,
-    state: MenuState,
     content: impl FnOnce(&mut MenuScope<'_, '_>) + Send + Sync + 'static,
 ) {
-    menu_provider(args, state, || {}, content);
+    menu_provider(args, || {}, content);
+}
+
+/// Convenience wrapper for rendering only the menu overlay without extra main content with an external controller.
+#[tessera]
+pub fn menu_with_controller(
+    args: impl Into<MenuProviderArgs>,
+    controller: Arc<MenuController>,
+    content: impl FnOnce(&mut MenuScope<'_, '_>) + Send + Sync + 'static,
+) {
+    menu_provider_with_controller(args, controller, || {}, content);
 }
 
 /// Defines the configuration for an individual menu item.
@@ -755,51 +864,16 @@ fn render_trailing(args: &MenuItemArgs, enabled: bool) {
     }
 }
 
-/// # menu_item
-///
-/// Renders a single Material-styled menu item with hover and ripple feedback.
-///
-/// ## Usage
-///
-/// Use inside [`menu`] to show actions, shortcuts, or toggles.
-///
-/// ## Parameters
-///
-/// - `args` — configures the item label, icons, selection state, and callbacks; see [`MenuItemArgs`].
-/// - `menu_state` — optional [`MenuState`] to auto-close the menu when activated.
-///
-/// ## Examples
-///
-/// ```
-/// use std::sync::Arc;
-/// use tessera_ui_basic_components::{
-///     menus::{menu_item, MenuItemArgsBuilder, MenuState},
-/// };
-///
-/// let state = MenuState::new();
-/// menu_item(
-///     MenuItemArgsBuilder::default()
-///         .label("Copy")
-///         .on_click(Arc::new(|| {}))
-///         .build()
-///         .unwrap(),
-///     Some(state.clone()),
-/// );
-/// assert!(!state.is_open());
-/// ```
 #[tessera]
-pub fn menu_item(args: MenuItemArgs, menu_state: Option<MenuState>) {
+fn menu_item(args: impl Into<MenuItemArgs>) {
+    let args: MenuItemArgs = args.into();
     let is_enabled = args.enabled && args.on_click.is_some();
     let on_click = args.on_click.clone();
-    let close_on_click = args.close_on_click;
 
     let interactive_click = if is_enabled {
-        Some(Arc::new(closure!(clone on_click, clone menu_state, || {
+        Some(Arc::new(closure!(clone on_click, || {
             if let Some(handler) = &on_click {
                 handler();
-            }
-            if close_on_click && let Some(state) = &menu_state {
-                state.close();
             }
         })) as Arc<dyn Fn() + Send + Sync>)
     } else {

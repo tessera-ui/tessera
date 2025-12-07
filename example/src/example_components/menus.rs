@@ -8,8 +8,8 @@ use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     material_color::global_material_scheme,
     menus::{
-        MenuAnchor, MenuItemArgsBuilder, MenuPlacement, MenuProviderArgsBuilder, MenuState,
-        menu_item, menu_provider,
+        MenuAnchor, MenuController, MenuItemArgsBuilder, MenuPlacement, MenuProviderArgsBuilder,
+        menu_provider_with_controller,
     },
     row::{RowArgsBuilder, row},
     spacer::{SpacerArgsBuilder, spacer},
@@ -19,7 +19,7 @@ use tessera_ui_basic_components::{
 
 #[derive(Clone)]
 struct MenusShowcaseState {
-    menu_state: MenuState,
+    menu_controller: Arc<MenuController>,
     selected_label: Arc<Mutex<String>>,
     pinned: Arc<Mutex<bool>>,
 }
@@ -27,7 +27,7 @@ struct MenusShowcaseState {
 impl MenusShowcaseState {
     fn new() -> Self {
         Self {
-            menu_state: MenuState::new(),
+            menu_controller: Arc::new(MenuController::new()),
             selected_label: Arc::new(Mutex::new("None".to_string())),
             pinned: Arc::new(Mutex::new(false)),
         }
@@ -42,14 +42,12 @@ impl Default for MenusShowcaseState {
 
 #[tessera]
 #[shard]
-pub fn menus_showcase(
-    #[state(default_with = "MenusShowcaseState::new")] state: MenusShowcaseState,
-) {
+pub fn menus_showcase(#[state] state: MenusShowcaseState) {
     let selected_label = state.selected_label.clone();
     let pinned = state.pinned.clone();
     // Anchor near the trigger button (padding 20dp + title/subtitle + spacer).
     let anchor = MenuAnchor::from_dp((Dp(20.0), Dp(72.0)), (Dp(180.0), Dp(48.0)));
-    let menu_state = state.menu_state.clone();
+    let menu_controller = state.menu_controller.clone();
     let selection_for_edit = selected_label.clone();
     let selection_for_share = selected_label.clone();
     let pin_state = pinned.clone();
@@ -63,17 +61,17 @@ pub fn menus_showcase(
             .build()
             .expect("builder construction failed"),
         move || {
-            menu_provider(
+            menu_provider_with_controller(
                 MenuProviderArgsBuilder::default()
                     .placement(MenuPlacement::BelowStart)
                     .offset([Dp(0.0), Dp(6.0)])
                     .build()
                     .expect("builder construction failed"),
-                menu_state.clone(),
+                menu_controller.clone(),
                 {
                     let selected_label = selected_label.clone();
                     let pinned = pinned.clone();
-                    let menu_state_for_button = menu_state.clone();
+                    let menu_controller_for_button = menu_controller.clone();
                     move || {
                         column(
                             ColumnArgsBuilder::default()
@@ -131,9 +129,9 @@ pub fn menus_showcase(
                                                             Dp(180.0).into(),
                                                         ))
                                                         .on_click(Arc::new(closure!(
-                                                            clone menu_state_for_button,
+                                                            clone menu_controller_for_button,
                                                             || {
-                                                                menu_state_for_button
+                                                                menu_controller_for_button
                                                                     .open_at(anchor);
                                                             }
                                                         )))
@@ -176,87 +174,67 @@ pub fn menus_showcase(
                     }
                 },
                 move |menu_scope| {
-                    let menu_state_edit = menu_state.clone();
-                    let menu_state_share = menu_state.clone();
-                    let menu_state_pin = menu_state.clone();
-                    let menu_state_disabled = menu_state.clone();
+                    let selection_for_edit = selection_for_edit.clone();
+                    let selection_for_share = selection_for_share.clone();
+                    let pin_state = pin_state.clone();
+                    let pin_selection = pin_selection.clone();
 
-                    menu_scope.item(move || {
-                        let menu_state = menu_state_edit.clone();
-                        let selection_for_edit = selection_for_edit.clone();
-                        menu_item(
-                            MenuItemArgsBuilder::default()
-                                .label("Revert")
-                                .on_click(Arc::new(closure!(
-                                    clone selection_for_edit,
-                                    || {
-                                        *selection_for_edit.lock().unwrap() =
-                                            "Revert".to_string();
-                                    }
-                                )))
-                                .build()
-                                .expect("builder construction failed"),
-                            Some(menu_state),
-                        );
-                    });
+                    menu_scope.menu_item(
+                        MenuItemArgsBuilder::default()
+                            .label("Revert")
+                            .on_click(Arc::new(closure!(
+                                clone selection_for_edit,
+                                || {
+                                    *selection_for_edit.lock().unwrap() =
+                                        "Revert".to_string();
+                                }
+                            )))
+                            .build()
+                            .expect("builder construction failed"),
+                    );
 
-                    menu_scope.item(move || {
-                        let menu_state = menu_state_share.clone();
-                        let selection_for_share = selection_for_share.clone();
-                        menu_item(
-                            MenuItemArgsBuilder::default()
-                                .label("Settings")
-                                .on_click(Arc::new(closure!(
-                                    clone selection_for_share,
-                                    || {
-                                        *selection_for_share.lock().unwrap() =
-                                            "Settings".to_string();
-                                    }
-                                )))
-                                .build()
-                                .expect("builder construction failed"),
-                            Some(menu_state),
-                        );
-                    });
+                    menu_scope.menu_item(
+                        MenuItemArgsBuilder::default()
+                            .label("Settings")
+                            .on_click(Arc::new(closure!(
+                                clone selection_for_share,
+                                || {
+                                    *selection_for_share.lock().unwrap() =
+                                        "Settings".to_string();
+                                }
+                            )))
+                            .build()
+                            .expect("builder construction failed"),
+                    );
 
-                    menu_scope.item(move || {
-                        let menu_state = menu_state_pin.clone();
-                        let pin_state = pin_state.clone();
-                        let pin_selection = pin_selection.clone();
-                        let is_pinned = *pin_state.lock().unwrap();
-                        menu_item(
-                            MenuItemArgsBuilder::default()
-                                .label("Send Feedback")
-                                .selected(is_pinned)
-                                .on_click(Arc::new(closure!(
-                                    clone pin_state,
-                                    clone pin_selection,
-                                    || {
-                                        let mut flag = pin_state.lock().unwrap();
-                                        *flag = !*flag;
-                                        *pin_selection.lock().unwrap() = if *flag {
-                                            "Send Feedback".to_string()
-                                        } else {
-                                            "Unpinned".to_string()
-                                        };
-                                    }
-                                )))
-                                .build()
-                                .expect("builder construction failed"),
-                            Some(menu_state),
-                        );
-                    });
+                    let is_pinned = *pin_state.lock().unwrap();
+                    menu_scope.menu_item(
+                        MenuItemArgsBuilder::default()
+                            .label("Send Feedback")
+                            .selected(is_pinned)
+                            .on_click(Arc::new(closure!(
+                                clone pin_state,
+                                clone pin_selection,
+                                || {
+                                    let mut flag = pin_state.lock().unwrap();
+                                    *flag = !*flag;
+                                    *pin_selection.lock().unwrap() = if *flag {
+                                        "Send Feedback".to_string()
+                                    } else {
+                                        "Unpinned".to_string()
+                                    };
+                                }
+                            )))
+                            .build()
+                            .expect("builder construction failed"),
+                    );
 
-                    menu_scope.item(move || {
-                        let menu_state = menu_state_disabled.clone();
-                        menu_item(
-                            MenuItemArgsBuilder::default()
-                                .label("Help")
-                                .build()
-                                .expect("builder construction failed"),
-                            Some(menu_state),
-                        );
-                    });
+                    menu_scope.menu_item(
+                        MenuItemArgsBuilder::default()
+                            .label("Help")
+                            .build()
+                            .expect("builder construction failed"),
+                    );
                 },
             );
         },
