@@ -27,7 +27,10 @@ use tessera_ui_basic_components::{
     row::{RowArgsBuilder, row},
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
-    side_bar::{SideBarProviderArgsBuilder, SideBarProviderState, SideBarStyle, side_bar_provider},
+    side_bar::{
+        SideBarController, SideBarProviderArgsBuilder, SideBarStyle,
+        side_bar_provider_with_controller,
+    },
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
 };
@@ -59,22 +62,22 @@ use crate::example_components::{
 #[derive(Default)]
 struct AppState {
     bottom_sheet_controller: Arc<BottomSheetController>,
-    side_bar_state: SideBarProviderState,
+    side_bar_controller: Arc<SideBarController>,
     dialog_controller: Arc<DialogController>,
 }
 
 #[tessera]
 #[shard]
 pub fn app(#[state] app_state: AppState) {
-    side_bar_provider(
+    side_bar_provider_with_controller(
         SideBarProviderArgsBuilder::default()
-            .on_close_request(Arc::new(closure!(clone app_state.side_bar_state, || {
-                side_bar_state.close();
+            .on_close_request(Arc::new(closure!(clone app_state.side_bar_controller, || {
+                side_bar_controller.close();
             })))
             .style(SideBarStyle::Glass)
             .build()
             .unwrap(),
-        app_state.side_bar_state.clone(),
+        app_state.side_bar_controller.clone(),
         move || {
             bottom_sheet_provider_with_controller(
                 BottomSheetProviderArgsBuilder::default()
@@ -106,13 +109,13 @@ pub fn app(#[state] app_state: AppState) {
                                 });
                                 let bottom_sheet_controller =
                                     app_state.bottom_sheet_controller.clone();
-                                let side_bar_state = app_state.side_bar_state.clone();
+                                let side_bar_controller = app_state.side_bar_controller.clone();
                                 let dialog_controller = app_state.dialog_controller.clone();
                                 scope.child_weighted(
                                     move || {
                                         router_root(HomeDestination {
                                             bottom_sheet_controller,
-                                            side_bar_state,
+                                            side_bar_controller,
                                             dialog_controller,
                                         });
                                     },
@@ -120,7 +123,7 @@ pub fn app(#[state] app_state: AppState) {
                                 );
                                 let bottom_sheet_controller =
                                     app_state.bottom_sheet_controller.clone();
-                                let side_bar_state = app_state.side_bar_state.clone();
+                                let side_bar_controller = app_state.side_bar_controller.clone();
                                 let dialog_controller = app_state.dialog_controller.clone();
                                 scope.child(move || {
                                     let home_icon_content = filled::home_icon();
@@ -146,7 +149,7 @@ pub fn app(#[state] app_state: AppState) {
                                                 )))
                                                 .on_click(Arc::new(closure!(
                                                     clone bottom_sheet_controller,
-                                                    clone side_bar_state,
+                                                    clone side_bar_controller,
                                                     clone dialog_controller,
                                                     || {
                                                         Router::with_mut(|router| {
@@ -155,8 +158,8 @@ pub fn app(#[state] app_state: AppState) {
                                                                     bottom_sheet_controller:
                                                                         bottom_sheet_controller
                                                                             .clone(),
-                                                                    side_bar_state:
-                                                                        side_bar_state.clone(),
+                                                                    side_bar_controller:
+                                                                        side_bar_controller.clone(),
                                                                     dialog_controller:
                                                                         dialog_controller.clone(),
                                                                 },
@@ -242,7 +245,7 @@ impl ComponentExampleDesc {
 #[shard]
 fn home(
     bottom_sheet_controller: Arc<BottomSheetController>,
-    side_bar_state: SideBarProviderState,
+    side_bar_controller: Arc<SideBarController>,
     dialog_controller: Arc<DialogController>,
 ) {
     let examples = Arc::new(vec![
@@ -450,7 +453,7 @@ fn home(
             "Side Bar",
             "side bar displays content sliding in from the left side of the screen.",
             move || {
-                side_bar_state.open();
+                side_bar_controller.open();
             },
         ),
     ]);

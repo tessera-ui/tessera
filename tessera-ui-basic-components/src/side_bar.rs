@@ -10,7 +10,7 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, tessera, winit};
+use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, remember, tessera, winit};
 
 use crate::{
     animation,
@@ -45,41 +45,48 @@ pub struct SideBarProviderArgs {
     /// The visual style used by the provider. See [`SideBarStyle`].
     #[builder(default)]
     pub style: SideBarStyle,
+    /// Whether the side bar is initially open (for declarative usage).
+    #[builder(default = "false")]
+    pub is_open: bool,
 }
 
 #[derive(Default)]
-struct SideBarProviderStateInner {
+struct SideBarStateInner {
     is_open: bool,
     timer: Option<Instant>,
 }
 
-/// Manages the open/closed state of a [`side_bar_provider`].
+/// Controller for [`side_bar_provider`], managing open/closed state.
 ///
-/// This state object must be created by the application and passed to the
-/// [`side_bar_provider`]. It is used to control the visibility of the side bar
-/// programmatically. Clone the handle freely to share it across UI parts.
+/// This controller can be created by the application and passed to the
+/// [`side_bar_provider_with_controller`]. It is used to control the visibility of the side bar
+/// programmatically.
 ///
 /// # Example
 ///
 /// ```
-/// use tessera_ui_basic_components::side_bar::SideBarProviderState;
+/// use tessera_ui_basic_components::side_bar::SideBarController;
 ///
-/// let state = SideBarProviderState::new();
-/// assert!(!state.is_open()); // Initially closed
-/// state.open();
-/// assert!(state.is_open()); // Now open
-/// state.close();
-/// assert!(!state.is_open()); // Closed again
+/// let controller = SideBarController::new(false);
+/// assert!(!controller.is_open()); // Initially closed
+/// controller.open();
+/// assert!(controller.is_open()); // Now open
+/// controller.close();
+/// assert!(!controller.is_open()); // Closed again
 /// ```
-#[derive(Clone, Default)]
-pub struct SideBarProviderState {
-    inner: Arc<RwLock<SideBarProviderStateInner>>,
+pub struct SideBarController {
+    inner: RwLock<SideBarStateInner>,
 }
 
-impl SideBarProviderState {
-    /// Creates a new handle. Equivalent to `Default::default()`.
-    pub fn new() -> Self {
-        Self::default()
+impl SideBarController {
+    /// Creates a new controller.
+    pub fn new(initial_open: bool) -> Self {
+        Self {
+            inner: RwLock::new(SideBarStateInner {
+                is_open: initial_open,
+                timer: None,
+            }),
+        }
     }
 
     /// Initiates the animation to open the side bar.
@@ -138,6 +145,12 @@ impl SideBarProviderState {
     fn snapshot(&self) -> (bool, Option<Instant>) {
         let inner = self.inner.read();
         (inner.is_open, inner.timer)
+    }
+}
+
+impl Default for SideBarController {
+    fn default() -> Self {
+        Self::new(false)
     }
 }
 
@@ -253,8 +266,8 @@ fn render_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) {
 }
 
 /// Snapshot provider state to reduce lock duration and centralize access.
-fn snapshot_state(state: &SideBarProviderState) -> (bool, Option<Instant>) {
-    state.snapshot()
+fn snapshot_state(controller: &SideBarController) -> (bool, Option<Instant>) {
+    controller.snapshot()
 }
 
 /// Create the keyboard handler closure used to close the sheet on Escape.
@@ -276,7 +289,7 @@ fn make_keyboard_closure(
 /// Place side bar if present. Extracted to reduce complexity of the parent function.
 fn place_side_bar_if_present(
     input: &tessera_ui::MeasureInput<'_>,
-    state_for_measure: &SideBarProviderState,
+    controller_for_measure: &SideBarController,
     progress: f32,
 ) {
     if input.children_ids.len() <= 2 {
@@ -290,7 +303,7 @@ fn place_side_bar_if_present(
         Err(_) => return,
     };
 
-    let current_is_open = state_for_measure.is_open();
+    let current_is_open = controller_for_measure.is_open();
     let x = compute_side_bar_x(child_size.width, progress, current_is_open);
     input.place_child(side_bar_id, PxPosition::new(Px(x), Px(0)));
 }
@@ -299,43 +312,103 @@ fn place_side_bar_if_present(
 ///
 /// Provides a side bar that slides in from the left, with a scrim overlay.
 ///
-/// ## Usage
+/// # Usage
 ///
 /// Use as a top-level provider to display a navigation drawer or other contextual side content.
 ///
-/// ## Parameters
+/// # Parameters
 ///
 /// - `args` — configures the side bar's style and `on_close_request` callback; see [`SideBarProviderArgs`].
-/// - `state` — a clonable [`SideBarProviderState`] to manage the open/closed state.
 /// - `main_content` — a closure that renders the main UI, which is visible behind the side bar.
 /// - `side_bar_content` — a closure that renders the content of the side bar itself.
 ///
-/// ## Examples
+/// # Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::side_bar::SideBarProviderState;
+/// use tessera_ui_basic_components::side_bar::{side_bar_provider, SideBarProviderArgsBuilder};
 ///
-/// let state = SideBarProviderState::new();
-/// assert!(!state.is_open());
-///
-/// state.open();
-/// assert!(state.is_open());
-///
-/// state.close();
-/// assert!(!state.is_open());
+/// side_bar_provider(
+///     SideBarProviderArgsBuilder::default()
+///         .is_open(true)
+///         .on_close_request(std::sync::Arc::new(|| {}))
+///         .build()
+///         .unwrap(),
+///     || { /* main content */ },
+///     || { /* side bar content */ },
+/// );
 /// ```
 #[tessera]
 pub fn side_bar_provider(
-    args: SideBarProviderArgs,
-    state: SideBarProviderState,
+    args: impl Into<SideBarProviderArgs>,
     main_content: impl FnOnce() + Send + Sync + 'static,
     side_bar_content: impl FnOnce() + Send + Sync + 'static,
 ) {
+    let args: SideBarProviderArgs = args.into();
+    let controller = remember(|| SideBarController::new(args.is_open));
+
+    if args.is_open != controller.is_open() {
+        if args.is_open {
+            controller.open();
+        } else {
+            controller.close();
+        }
+    }
+
+    side_bar_provider_with_controller(args, controller, main_content, side_bar_content);
+}
+
+/// # side_bar_provider_with_controller
+///
+/// Controlled version of [`side_bar_provider`] that accepts an external controller.
+///
+/// # Usage
+///
+/// Use when you need to control the side bar's open/closed state programmatically via a controller.
+///
+/// # Parameters
+///
+/// - `args` — configures the side bar's style and `on_close_request` callback; see [`SideBarProviderArgs`].
+/// - `controller` — a [`SideBarController`] to manage the open/closed state.
+/// - `main_content` — a closure that renders the main UI, which is visible behind the side bar.
+/// - `side_bar_content` — a closure that renders the content of the side bar itself.
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui_basic_components::side_bar::{
+///     side_bar_provider_with_controller, SideBarProviderArgsBuilder, SideBarController,
+/// };
+/// use tessera_ui::{tessera, remember};
+///
+/// #[tessera]
+/// fn foo() {
+///     let controller = remember(|| SideBarController::new(false));
+///     side_bar_provider_with_controller(
+///         SideBarProviderArgsBuilder::default()
+///             .on_close_request(Arc::new(|| {}))
+///             .build()
+///             .unwrap(),
+///         controller.clone(),
+///         || { /* main content */ },
+///         || { /* side bar content */ },
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn side_bar_provider_with_controller(
+    args: impl Into<SideBarProviderArgs>,
+    controller: Arc<SideBarController>,
+    main_content: impl FnOnce() + Send + Sync + 'static,
+    side_bar_content: impl FnOnce() + Send + Sync + 'static,
+) {
+    let args: SideBarProviderArgs = args.into();
+
     // Render main content first.
     main_content();
 
     // Snapshot state once to minimize locking overhead.
-    let (is_open, timer_opt) = snapshot_state(&state);
+    let (is_open, timer_opt) = snapshot_state(&controller);
 
     // Fast exit when nothing to render.
     if !(is_open || timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME)) {
@@ -357,7 +430,7 @@ pub fn side_bar_provider(
     side_bar_content_wrapper(args.style, side_bar_content);
 
     // Measurement: place main content, scrim and side bar.
-    let state_for_measure = state.clone();
+    let controller_for_measure = controller.clone();
     let measure_closure = Box::new(move |input: &tessera_ui::MeasureInput<'_>| {
         // Place main content at origin.
         let main_content_id = input.children_ids[0];
@@ -372,7 +445,7 @@ pub fn side_bar_provider(
         }
 
         // Place side bar (if present) using extracted helper.
-        place_side_bar_if_present(input, &state_for_measure, progress);
+        place_side_bar_if_present(input, &controller_for_measure, progress);
 
         // Return the main content size (best-effort; unwrap used above to satisfy closure type).
         Ok(main_content_size)
