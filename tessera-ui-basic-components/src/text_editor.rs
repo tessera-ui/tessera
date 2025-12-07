@@ -437,7 +437,10 @@ pub fn text_editor_with_controller(
                 match event {
                     winit::event::Ime::Commit(text) => {
                         // Clear preedit string if it exists
-                        if let Some(preedit_text) = state.preedit_string.take() {
+                        let preedit_text = state.preedit_string.take();
+                        drop(state);
+
+                        if let Some(preedit_text) = preedit_text {
                             for _ in 0..preedit_text.chars().count() {
                                 handle_action(
                                     &state_for_handler,
@@ -457,7 +460,10 @@ pub fn text_editor_with_controller(
                     }
                     winit::event::Ime::Preedit(text, _cursor_offset) => {
                         // Remove the old preedit text if it exists
-                        if let Some(old_preedit) = state.preedit_string.take() {
+                        let old_preedit = state.preedit_string.take();
+                        drop(state);
+
+                        if let Some(old_preedit) = old_preedit {
                             for _ in 0..old_preedit.chars().count() {
                                 handle_action(
                                     &state_for_handler,
@@ -474,7 +480,7 @@ pub fn text_editor_with_controller(
                                 on_change.clone(),
                             );
                         }
-                        state.preedit_string = Some(text.to_string());
+                        state_for_handler.write().preedit_string = Some(text.to_string());
                     }
                     _ => {}
                 }
