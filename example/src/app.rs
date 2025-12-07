@@ -21,7 +21,7 @@ use tessera_ui_basic_components::{
     lazy_list::{LazyColumnArgsBuilder, lazy_column},
     material_color::global_material_scheme,
     material_icons::filled,
-    navigation_bar::{NavigationBarArgsBuilder, NavigationBarItemBuilder, navigation_bar},
+    navigation_bar::{NavigationBarItemBuilder, navigation_bar},
     row::{RowArgsBuilder, row},
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
@@ -126,61 +126,58 @@ pub fn app(#[state] app_state: AppState) {
                                         .build()
                                         .unwrap();
 
-                                    navigation_bar(
-                                        NavigationBarArgsBuilder::default().build().unwrap(),
-                                        |scope| {
-                                            scope.item(
-                                                NavigationBarItemBuilder::default()
-                                                    .label("Home")
-                                                    .icon(Arc::new(closure!(
-                                                        clone home_icon_args,
-                                                        || {
-                                                            icon(home_icon_args.clone());
-                                                        }
-                                                    )))
-                                                    .on_click(Arc::new(closure!(
-                                                        clone bottom_sheet_state,
-                                                        clone side_bar_state,
-                                                        clone dialog_state,
-                                                        || {
-                                                            Router::with_mut(|router| {
-                                                                router.reset_with(
-                                                                    HomeDestination {
-                                                                        bottom_sheet_state:
-                                                                            bottom_sheet_state
-                                                                                .clone(),
-                                                                        side_bar_state:
-                                                                            side_bar_state.clone(),
-                                                                        dialog_state:
-                                                                            dialog_state.clone(),
-                                                                    },
-                                                                );
-                                                            });
-                                                        }
-                                                    )))
-                                                    .build()
-                                                    .unwrap(),
-                                            );
-
-                                            scope.item(
-                                                NavigationBarItemBuilder::default()
-                                                    .label("About")
-                                                    .icon(Arc::new(closure!(
-                                                        clone about_icon_args,
-                                                        || {
-                                                            icon(about_icon_args.clone());
-                                                        }
-                                                    )))
-                                                    .on_click(Arc::new(|| {
+                                    navigation_bar(|scope| {
+                                        scope.item(
+                                            NavigationBarItemBuilder::default()
+                                                .label("Home")
+                                                .icon(Arc::new(closure!(
+                                                    clone home_icon_args,
+                                                    || {
+                                                        icon(home_icon_args.clone());
+                                                    }
+                                                )))
+                                                .on_click(Arc::new(closure!(
+                                                    clone bottom_sheet_state,
+                                                    clone side_bar_state,
+                                                    clone dialog_state,
+                                                    || {
                                                         Router::with_mut(|router| {
-                                                            router.reset_with(AboutDestination {});
+                                                            router.reset_with(
+                                                                HomeDestination {
+                                                                    bottom_sheet_state:
+                                                                        bottom_sheet_state
+                                                                            .clone(),
+                                                                    side_bar_state:
+                                                                        side_bar_state.clone(),
+                                                                    dialog_state:
+                                                                        dialog_state.clone(),
+                                                                },
+                                                            );
                                                         });
-                                                    }))
-                                                    .build()
-                                                    .unwrap(),
-                                            );
-                                        },
-                                    );
+                                                    }
+                                                )))
+                                                .build()
+                                                .unwrap(),
+                                        );
+
+                                        scope.item(
+                                            NavigationBarItemBuilder::default()
+                                                .label("About")
+                                                .icon(Arc::new(closure!(
+                                                    clone about_icon_args,
+                                                    || {
+                                                        icon(about_icon_args.clone());
+                                                    }
+                                                )))
+                                                .on_click(Arc::new(|| {
+                                                    Router::with_mut(|router| {
+                                                        router.reset_with(AboutDestination {});
+                                                    });
+                                                }))
+                                                .build()
+                                                .unwrap(),
+                                        );
+                                    });
                                 });
                             });
                         },

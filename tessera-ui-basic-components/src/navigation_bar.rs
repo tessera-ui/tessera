@@ -73,26 +73,6 @@ pub struct NavigationBarItem {
     pub label_behavior: NavigationBarLabelBehavior,
 }
 
-/// Arguments for `navigation_bar`
-#[derive(Clone, Builder)]
-#[builder(pattern = "owned")]
-pub struct NavigationBarArgs {
-    /// Initial selected index (0-based). Defaults to 0.
-    #[builder(default = "0")]
-    pub initial_index: usize,
-    /// Material color scheme used for container, indicator, and label colors.
-    #[builder(default = "global_material_scheme()")]
-    pub scheme: MaterialColorScheme,
-}
-
-impl Default for NavigationBarArgs {
-    fn default() -> Self {
-        NavigationBarArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
-    }
-}
-
 /// # navigation_bar
 ///
 /// Material navigation bar with active indicator and icon/label pairs.
@@ -111,16 +91,12 @@ impl Default for NavigationBarArgs {
 /// ```
 /// use tessera_ui::tessera;
 /// use tessera_ui_basic_components::navigation_bar::{
-///     NavigationBarArgsBuilder, NavigationBarItemBuilder, navigation_bar,
+///     NavigationBarItemBuilder, navigation_bar,
 /// };
 ///
 /// #[tessera]
 /// fn demo() {
 ///     navigation_bar(
-///         NavigationBarArgsBuilder::default()
-///             .initial_index(0)
-///             .build()
-///             .unwrap(),
 ///         |scope| {
 ///             scope.item(
 ///                 NavigationBarItemBuilder::default()
@@ -139,13 +115,12 @@ impl Default for NavigationBarArgs {
 /// }
 /// ```
 #[tessera]
-pub fn navigation_bar<F>(args: impl Into<NavigationBarArgs>, scope_config: F)
+pub fn navigation_bar<F>(scope_config: F)
 where
     F: FnOnce(&mut NavigationBarScope),
 {
-    let args: NavigationBarArgs = args.into();
-    let controller = remember(|| NavigationBarController::new(args.initial_index));
-    navigation_bar_with_controller(args, controller, scope_config);
+    let controller = remember(|| NavigationBarController::new(0));
+    navigation_bar_with_controller(controller, scope_config);
 }
 
 /// # navigation_bar_with_controller
@@ -163,14 +138,13 @@ where
 /// ```
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::navigation_bar::{
-///     NavigationBarArgsBuilder, NavigationBarController, NavigationBarItemBuilder, navigation_bar_with_controller,
+///     NavigationBarController, NavigationBarItemBuilder, navigation_bar_with_controller,
 /// };
 ///
 /// #[tessera]
 /// fn controlled_demo() {
 ///     let controller = remember(|| NavigationBarController::new(0));
 ///     navigation_bar_with_controller(
-///         NavigationBarArgsBuilder::default().build().unwrap(),
 ///         controller,
 ///         |scope| {
 ///             scope.item(
@@ -190,21 +164,16 @@ where
 /// }
 /// ```
 #[tessera]
-pub fn navigation_bar_with_controller<F>(
-    args: impl Into<NavigationBarArgs>,
-    controller: Arc<NavigationBarController>,
-    scope_config: F,
-) where
+pub fn navigation_bar_with_controller<F>(controller: Arc<NavigationBarController>, scope_config: F)
+where
     F: FnOnce(&mut NavigationBarScope),
 {
-    let args: NavigationBarArgs = args.into();
     let mut items = Vec::new();
     {
         let mut scope = NavigationBarScope { items: &mut items };
         scope_config(&mut scope);
     }
-
-    let scheme = args.scheme;
+    let scheme = global_material_scheme();
     let container_shadow = ShadowProps {
         color: scheme.shadow.with_alpha(0.16),
         offset: [0.0, 3.0],
@@ -540,7 +509,6 @@ impl Default for NavigationBarController {
         Self::new(0)
     }
 }
-
 
 /// Scope passed to the closure for defining children of the NavigationBar.
 pub struct NavigationBarScope<'a> {
