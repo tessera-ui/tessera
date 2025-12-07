@@ -8,7 +8,6 @@
   - [x] icon_button (and it's glass variant)
   - [x] lazy_column
   - [x] lazy_row
-  - [ ] [radio_button](https://github.com/tessera-ui/tessera/issues/28)
   - [ ] [material design components](https://m3.material.io/components)
 - [ ] Documentation of pluggable graphics rendering pipelines
 - [x] CLI tool (`cargo-tessera`):
