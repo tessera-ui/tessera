@@ -10,7 +10,7 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, tessera, winit};
+use tessera_ui::{Color, DimensionValue, Dp, remember, tessera, winit};
 
 use crate::{
     ShadowProps,
@@ -79,35 +79,31 @@ pub struct DialogProviderArgs {
     /// The visual style of the dialog's scrim.
     #[builder(default)]
     pub style: DialogStyle,
+    /// Whether the dialog is initially open (for declarative usage).
+    #[builder(default = "false")]
+    pub is_open: bool,
 }
 
 #[derive(Default)]
-struct DialogProviderStateInner {
+struct DialogStateInner {
     is_open: bool,
     timer: Option<Instant>,
 }
 
-/// Shared state for [`dialog_provider`], controlling visibility and animation.
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui_basic_components::dialog::DialogProviderState;
-///
-/// let state = DialogProviderState::new();
-/// assert!(!state.is_open()); // Initially closed
-/// state.open();
-/// assert!(state.is_open()); // Now opened
-/// ```
-#[derive(Clone, Default)]
-pub struct DialogProviderState {
-    inner: Arc<RwLock<DialogProviderStateInner>>,
+/// Controller for [`dialog_provider`], controlling visibility and animation.
+pub struct DialogController {
+    inner: RwLock<DialogStateInner>,
 }
 
-impl DialogProviderState {
-    /// Creates a new dialog provider state handle.
-    pub fn new() -> Self {
-        Self::default()
+impl DialogController {
+    /// Creates a new dialog controller.
+    pub fn new(initial_open: bool) -> Self {
+        Self {
+            inner: RwLock::new(DialogStateInner {
+                is_open: initial_open,
+                timer: None,
+            }),
+        }
     }
 
     /// Opens the dialog, starting the animation if necessary.
@@ -158,6 +154,12 @@ impl DialogProviderState {
     fn snapshot(&self) -> (bool, Option<Instant>) {
         let inner = self.inner.read();
         (inner.is_open, inner.timer)
+    }
+}
+
+impl Default for DialogController {
+    fn default() -> Self {
+        Self::new(false)
     }
 }
 
@@ -297,41 +299,110 @@ fn dialog_content_wrapper(
 ///
 /// Provide a modal dialog at the top level of an application.
 ///
-/// ## Usage
+/// # Usage
 ///
 /// Show modal content for alerts, confirmation dialogs, multi-step forms, or onboarding steps that require blocking user interaction with the main UI.
 ///
-/// ## Parameters
+/// # Parameters
 ///
 /// - `args` — configuration for dialog appearance and the `on_close_request` callback; see [`DialogProviderArgs`].
-/// - `state` — a clonable [`DialogProviderState`] handle; use `DialogProviderState::new()` to create one.
 /// - `main_content` — closure that renders the always-visible base UI.
 /// - `dialog_content` — closure that renders dialog content; receives a `f32` alpha for animation.
 ///
-/// ## Examples
+/// # Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::dialog::DialogProviderState;
-/// let state = DialogProviderState::new();
-/// assert!(!state.is_open());
-/// state.open();
-/// assert!(state.is_open());
-/// state.close();
-/// assert!(!state.is_open());
+/// use tessera_ui_basic_components::dialog::{dialog_provider, DialogProviderArgsBuilder};
+///
+/// dialog_provider(
+///     DialogProviderArgsBuilder::default()
+///         .is_open(true)
+///         .on_close_request(std::sync::Arc::new(|| {}))
+///         .build()
+///         .unwrap(),
+///     || { /* main content */ },
+///     |alpha| { /* dialog content */ },
+/// );
 /// ```
 #[tessera]
 pub fn dialog_provider(
-    args: DialogProviderArgs,
-    state: DialogProviderState,
+    args: impl Into<DialogProviderArgs>,
     main_content: impl FnOnce(),
     dialog_content: impl FnOnce(f32) + Send + Sync + 'static,
 ) {
-    // 1. Render the main application content unconditionally.
+    let args: DialogProviderArgs = args.into();
+    let controller = remember(|| DialogController::new(args.is_open));
+
+    if args.is_open != controller.is_open() {
+        if args.is_open {
+            controller.open();
+        } else {
+            controller.close();
+        }
+    }
+
+    dialog_provider_with_controller(args, controller, main_content, dialog_content);
+}
+
+/// # dialog_provider_with_controller
+///
+/// Controlled version of [`dialog_provider`] that accepts an external controller.
+///
+/// # Usage
+///
+/// Use when you need to manage dialog state externally, for example from a global app state or view model.
+/// And also need to toggle dialog explicitly.
+///
+/// # Parameters
+///
+/// - `args` — configuration for dialog appearance; see [`DialogProviderArgs`].
+/// - `controller` — a [`DialogController`] to manage the dialog state.
+/// - `main_content` — closure that renders the always-visible base UI.
+/// - `dialog_content` — closure that renders dialog content.
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use tessera_ui::{tessera, remember};
+/// use tessera_ui_basic_components::dialog::{dialog_provider_with_controller, DialogProviderArgsBuilder, DialogController};
+///
+/// #[tessera]
+/// fn foo() {
+///     let dialog_controller = remember(|| DialogController::new(false));
+///
+///     dialog_provider_with_controller(
+///         DialogProviderArgsBuilder::default()
+///             .on_close_request(Arc::new(|| {
+///                 // Handle close request
+///             }))
+///             .build()
+///             .unwrap(),
+///         dialog_controller.clone(),
+///         || {
+///             /* main content */
+///         },
+///         |alpha| {
+///             /* dialog content */
+///         },
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn dialog_provider_with_controller(
+    args: impl Into<DialogProviderArgs>,
+    controller: Arc<DialogController>,
+    main_content: impl FnOnce(),
+    dialog_content: impl FnOnce(f32) + Send + Sync + 'static,
+) {
+    let args: DialogProviderArgs = args.into();
+
+    // Render the main application content unconditionally.
     main_content();
 
-    // 2. If the dialog is open, render the modal overlay.
+    // If the dialog is open, render the modal overlay.
     // Sample state once to avoid repeated locks and improve readability.
-    let (is_open, timer_opt) = state.snapshot();
+    let (is_open, timer_opt) = controller.snapshot();
 
     let is_animating = timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME);
 
@@ -344,15 +415,10 @@ pub fn dialog_provider(
             1.0 * (1.0 - progress) // Transition from 1 to 0 alpha
         };
 
-        // 2a. Scrim (delegated)
         render_scrim(&args, is_open, progress);
-
-        // 2b. Input Handler for intercepting keyboard events (delegated)
         let handler = make_keyboard_input_handler(args.on_close_request.clone());
         input_handler(handler);
 
-        // 2c. Dialog Content
-        // The user-defined dialog content is rendered on top of everything.
         dialog_content_wrapper(args.style, content_alpha, args.padding, move || {
             dialog_content(content_alpha);
         });

@@ -16,7 +16,9 @@ use tessera_ui_basic_components::{
     boxed::{BoxedArgsBuilder, boxed},
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgs, column},
-    dialog::{DialogProviderArgsBuilder, DialogProviderState, DialogStyle, dialog_provider},
+    dialog::{
+        DialogController, DialogProviderArgsBuilder, DialogStyle, dialog_provider_with_controller,
+    },
     icon::{IconArgsBuilder, icon},
     lazy_list::{LazyColumnArgsBuilder, lazy_column},
     material_color::global_material_scheme,
@@ -58,7 +60,7 @@ use crate::example_components::{
 struct AppState {
     bottom_sheet_state: BottomSheetProviderState,
     side_bar_state: SideBarProviderState,
-    dialog_state: DialogProviderState,
+    dialog_controller: Arc<DialogController>,
 }
 
 #[tessera]
@@ -84,15 +86,17 @@ pub fn app(#[state] app_state: AppState) {
                     .unwrap(),
                 app_state.bottom_sheet_state.clone(),
                 move || {
-                    dialog_provider(
+                    dialog_provider_with_controller(
                         DialogProviderArgsBuilder::default()
-                            .on_close_request(Arc::new(closure!(clone app_state.dialog_state, || {
-                                dialog_state.close();
-                            })))
+                            .on_close_request(Arc::new(
+                                closure!(clone app_state.dialog_controller, || {
+                                    dialog_controller.close();
+                                }),
+                            ))
                             .style(DialogStyle::Glass)
                             .build()
                             .unwrap(),
-                        app_state.dialog_state.clone(),
+                        app_state.dialog_controller.clone(),
                         move || {
                             column(ColumnArgs::default(), |scope| {
                                 scope.child(|| {
@@ -100,20 +104,20 @@ pub fn app(#[state] app_state: AppState) {
                                 });
                                 let bottom_sheet_state = app_state.bottom_sheet_state.clone();
                                 let side_bar_state = app_state.side_bar_state.clone();
-                                let dialog_state = app_state.dialog_state.clone();
+                                let dialog_controller = app_state.dialog_controller.clone();
                                 scope.child_weighted(
                                     move || {
                                         router_root(HomeDestination {
                                             bottom_sheet_state,
                                             side_bar_state,
-                                            dialog_state,
+                                            dialog_controller,
                                         });
                                     },
                                     1.0,
                                 );
                                 let bottom_sheet_state = app_state.bottom_sheet_state.clone();
                                 let side_bar_state = app_state.side_bar_state.clone();
-                                let dialog_state = app_state.dialog_state.clone();
+                                let dialog_controller = app_state.dialog_controller.clone();
                                 scope.child(move || {
                                     let home_icon_content = filled::home_icon();
                                     let home_icon_args = IconArgsBuilder::default()
@@ -139,7 +143,7 @@ pub fn app(#[state] app_state: AppState) {
                                                 .on_click(Arc::new(closure!(
                                                     clone bottom_sheet_state,
                                                     clone side_bar_state,
-                                                    clone dialog_state,
+                                                    clone dialog_controller,
                                                     || {
                                                         Router::with_mut(|router| {
                                                             router.reset_with(
@@ -149,8 +153,8 @@ pub fn app(#[state] app_state: AppState) {
                                                                             .clone(),
                                                                     side_bar_state:
                                                                         side_bar_state.clone(),
-                                                                    dialog_state:
-                                                                        dialog_state.clone(),
+                                                                    dialog_controller:
+                                                                        dialog_controller.clone(),
                                                                 },
                                                             );
                                                         });
@@ -235,7 +239,7 @@ impl ComponentExampleDesc {
 fn home(
     bottom_sheet_state: BottomSheetProviderState,
     side_bar_state: SideBarProviderState,
-    dialog_state: DialogProviderState,
+    dialog_controller: Arc<DialogController>,
 ) {
     let examples = Arc::new(vec![
         ComponentExampleDesc::new(
@@ -347,7 +351,7 @@ fn home(
             "Dialog",
             "A modal window that appears on top of the main content.",
             move || {
-                dialog_state.open();
+                dialog_controller.open();
             },
         ),
         ComponentExampleDesc::new(
