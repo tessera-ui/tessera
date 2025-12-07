@@ -7,7 +7,7 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
-    radio_button::{RadioButtonArgsBuilder, RadioButtonState, radio_button},
+    radio_button::{RadioButtonArgsBuilder, RadioButtonController, radio_button_with_controller},
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
@@ -17,11 +17,11 @@ use tessera_ui_basic_components::{
 #[derive(Clone)]
 struct RadioButtonShowcaseState {
     selected_index: Arc<AtomicUsize>,
-    radio_a: RadioButtonState,
-    radio_b: RadioButtonState,
-    radio_c: RadioButtonState,
-    disabled_selected: RadioButtonState,
-    disabled_unselected: RadioButtonState,
+    radio_a: Arc<RadioButtonController>,
+    radio_b: Arc<RadioButtonController>,
+    radio_c: Arc<RadioButtonController>,
+    disabled_selected: Arc<RadioButtonController>,
+    disabled_unselected: Arc<RadioButtonController>,
 }
 
 impl Default for RadioButtonShowcaseState {
@@ -29,11 +29,11 @@ impl Default for RadioButtonShowcaseState {
         let selected_index = Arc::new(AtomicUsize::new(0));
         Self {
             selected_index,
-            radio_a: RadioButtonState::new(true),
-            radio_b: RadioButtonState::new(false),
-            radio_c: RadioButtonState::new(false),
-            disabled_selected: RadioButtonState::new(true),
-            disabled_unselected: RadioButtonState::new(false),
+            radio_a: Arc::new(RadioButtonController::new(true)),
+            radio_b: Arc::new(RadioButtonController::new(false)),
+            radio_c: Arc::new(RadioButtonController::new(false)),
+            disabled_selected: Arc::new(RadioButtonController::new(true)),
+            disabled_unselected: Arc::new(RadioButtonController::new(false)),
         }
     }
 }
@@ -216,7 +216,7 @@ fn content(state: Arc<RadioButtonShowcaseState>) {
 
 fn option_row(
     label: String,
-    radio_state: RadioButtonState,
+    controller: Arc<RadioButtonController>,
     is_selected: bool,
     on_select: impl Fn(bool) + Clone + Send + Sync + 'static,
     enabled: bool,
@@ -230,15 +230,15 @@ fn option_row(
             let on_select = Arc::new(on_select);
             scope.child({
                 let on_select = on_select.clone();
-                let radio_state = radio_state.clone();
+                let controller = controller.clone();
                 move || {
-                    radio_button(
+                    radio_button_with_controller(
                         RadioButtonArgsBuilder::default()
                             .on_select(on_select)
                             .enabled(enabled)
                             .build()
                             .unwrap(),
-                        radio_state.clone(),
+                        controller.clone(),
                     );
                 }
             });

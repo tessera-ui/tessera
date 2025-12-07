@@ -12,7 +12,7 @@ use parking_lot::RwLock;
 use tessera_ui::{
     Color, DimensionValue, Dp, Px,
     accesskit::{Action, Role, Toggled},
-    tessera,
+    remember, tessera,
 };
 
 use crate::{
@@ -29,22 +29,21 @@ const HOVER_STATE_LAYER_OPACITY: f32 = 0.08;
 const RIPPLE_OPACITY: f32 = 0.1;
 
 /// Shared state for the `radio_button` component, including selection animation.
-#[derive(Clone)]
-pub struct RadioButtonState {
-    selection: Arc<RwLock<RadioSelectionState>>,
+pub struct RadioButtonController {
+    selection: RwLock<RadioSelectionState>,
 }
 
-impl Default for RadioButtonState {
+impl Default for RadioButtonController {
     fn default() -> Self {
         Self::new(false)
     }
 }
 
-impl RadioButtonState {
+impl RadioButtonController {
     /// Creates a new radio button state with the given initial selection.
     pub fn new(selected: bool) -> Self {
         Self {
-            selection: Arc::new(RwLock::new(RadioSelectionState::new(selected))),
+            selection: RwLock::new(RadioSelectionState::new(selected)),
         }
     }
 
@@ -123,6 +122,9 @@ pub struct RadioButtonArgs {
     /// Callback invoked when the radio transitions to the selected state.
     #[builder(default = "Arc::new(|_| {})")]
     pub on_select: Arc<dyn Fn(bool) + Send + Sync>,
+    /// Whether the radio button is currently selected.
+    #[builder(default = "false")]
+    pub selected: bool,
     /// Visual diameter of the radio glyph (outer ring) in density-independent pixels.
     #[builder(default = "Dp(20.0)")]
     pub size: Dp,
@@ -187,57 +189,59 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 /// ## Parameters
 ///
 /// - `args` — configures sizing, colors, and callbacks; see [`RadioButtonArgs`].
-/// - `state` — a clonable [`RadioButtonState`] that manages selection animation and ripple feedback.
 ///
 /// ## Examples
 ///
 /// ```
-/// use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 /// use tessera_ui::tessera;
-/// use tessera_ui_basic_components::radio_button::{radio_button, RadioButtonArgsBuilder, RadioButtonState};
-///
-/// #[derive(Clone, Default)]
-/// struct DemoState {
-///     selected: Arc<AtomicBool>,
-///     radio: RadioButtonState,
-/// }
+/// use tessera_ui_basic_components::radio_button::{radio_button, RadioButtonArgsBuilder};
 ///
 /// #[tessera]
-/// fn radio_demo(state: DemoState) {
-///     let on_select = Arc::new({
-///         let selected = state.selected.clone();
-///         move |is_selected| {
-///             selected.store(is_selected, Ordering::SeqCst);
-///         }
-///     });
-///
+/// fn radio_demo() {
 ///     radio_button(
 ///         RadioButtonArgsBuilder::default()
-///             .on_select(on_select)
+///             .selected(true)
 ///             .build()
 ///             .unwrap(),
-///         state.radio.clone(),
 ///     );
-///
-///     state.radio.set_selected(true);
-///     assert!(state.radio.is_selected());
-///     state.radio.set_selected(false);
-///     assert!(!state.radio.is_selected());
 /// }
 /// ```
 #[tessera]
-pub fn radio_button(args: impl Into<RadioButtonArgs>, state: RadioButtonState) {
+pub fn radio_button(args: impl Into<RadioButtonArgs>) {
+    let args: RadioButtonArgs = args.into();
+    let controller = remember(|| RadioButtonController::new(args.selected));
+
+    if controller.is_selected() != args.selected {
+        controller.set_selected(args.selected);
+    }
+
+    radio_button_with_controller(args, controller);
+}
+
+/// # radio_button_with_controller
+///
+/// Render a Material Design 3 radio button with an external controller.
+///
+/// ## Parameters
+///
+/// - `args` — configures sizing, colors, and callbacks; see [`RadioButtonArgs`].
+/// - `controller` — a clonable [`RadioButtonController`] that manages selection animation.
+#[tessera]
+pub fn radio_button_with_controller(
+    args: impl Into<RadioButtonArgs>,
+    controller: Arc<RadioButtonController>,
+) {
     let args: RadioButtonArgs = args.into();
 
-    let state_for_accessibility = state.clone();
-    let state_for_animation = state.clone();
+    let controller_for_accessibility = controller.clone();
+    let controller_for_animation = controller.clone();
     let accessibility_label = args.accessibility_label.clone();
     let accessibility_description = args.accessibility_description.clone();
     let on_select_for_accessibility = args.on_select.clone();
     let enabled_for_accessibility = args.enabled;
     input_handler(Box::new(move |input| {
-        state_for_animation.update_animation();
-        let selected = state_for_animation.is_selected();
+        controller_for_animation.update_animation();
+        let selected = controller_for_animation.is_selected();
 
         let mut builder = input.accessibility().role(Role::RadioButton);
 
@@ -263,20 +267,20 @@ pub fn radio_button(args: impl Into<RadioButtonArgs>, state: RadioButtonState) {
         builder.commit();
 
         if enabled_for_accessibility {
-            let state = state_for_accessibility.clone();
+            let controller = controller_for_accessibility.clone();
             let on_select = on_select_for_accessibility.clone();
             input.set_accessibility_action_handler(move |action| {
-                if action == Action::Click && state.select() {
+                if action == Action::Click && controller.select() {
                     on_select(true);
                 }
             });
         }
     }));
 
-    state.update_animation();
-    let progress = state.animation_progress();
+    controller.update_animation();
+    let progress = controller.animation_progress();
     let eased_progress = animation::easing(progress);
-    let is_selected = state.is_selected();
+    let is_selected = controller.is_selected();
 
     let target_size = Dp(args.touch_target_size.0.max(args.size.0));
     let padding_dp = Dp(((target_size.0 - args.size.0) / 2.0).max(0.0));
@@ -320,11 +324,13 @@ pub fn radio_button(args: impl Into<RadioButtonArgs>, state: RadioButtonState) {
     };
 
     let on_click = if args.enabled {
-        Some(Arc::new(closure!(clone args.on_select, clone state, || {
-            if state.select() {
-                on_select(true);
-            }
-        })) as Arc<dyn Fn() + Send + Sync>)
+        Some(
+            Arc::new(closure!(clone args.on_select, clone controller, || {
+                if controller.select() {
+                    on_select(true);
+                }
+            })) as Arc<dyn Fn() + Send + Sync>,
+        )
     } else {
         None
     };
