@@ -40,7 +40,7 @@ pub struct SideBarProviderArgs {
     /// A callback that is invoked when the user requests to close the side bar.
     ///
     /// This can be triggered by clicking the scrim or pressing the `Escape` key.
-    /// The callback is expected to call [`SideBarProviderState::close()`].
+    /// The callback is expected to close the side bar.
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
     /// The visual style used by the provider. See [`SideBarStyle`].
     #[builder(default)]

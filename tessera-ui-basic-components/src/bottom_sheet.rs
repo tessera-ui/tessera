@@ -40,7 +40,7 @@ pub struct BottomSheetProviderArgs {
     /// A callback that is invoked when the user requests to close the sheet.
     ///
     /// This can be triggered by clicking the scrim or pressing the `Escape` key.
-    /// The callback is responsible for calling [`BottomSheetProviderState::close()`].
+    /// The callback is responsible for closing the sheet.
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
     /// The visual style of the scrim. See [`BottomSheetStyle`].
     #[builder(default)]

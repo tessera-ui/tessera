@@ -77,7 +77,7 @@ pub struct MenuScope<'a, 'b> {
 }
 
 impl<'a, 'b> MenuScope<'a, 'b> {
-    /// Adds a menu child (typically a [`menu_item`]).
+    /// Adds a menu child (typically a menu item).
     pub fn item<F>(&mut self, child: F)
     where
         F: FnOnce() + Send + Sync + 'static,
@@ -85,7 +85,7 @@ impl<'a, 'b> MenuScope<'a, 'b> {
         self.scope.child(child);
     }
 
-    /// Adds a [`menu_item`] to the menu.
+    /// Adds a menu item to the menu.
     pub fn menu_item(&mut self, args: impl Into<MenuItemArgs>) {
         let mut args = args.into();
         if args.close_on_click {
