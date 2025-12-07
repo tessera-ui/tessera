@@ -432,6 +432,7 @@ fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> Slid
 /// ## Examples
 ///
 /// ```
+/// use std::sync::Arc;
 /// use tessera_ui::{DimensionValue, Dp};
 /// use tessera_ui_basic_components::slider::{slider, SliderArgsBuilder};
 ///
@@ -471,7 +472,7 @@ pub fn slider(args: impl Into<SliderArgs>) {
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui::{DimensionValue, Dp, remember};
+/// use tessera_ui::{DimensionValue, Dp, remember, tessera};
 /// use tessera_ui_basic_components::slider::{slider_with_controller, SliderArgsBuilder, SliderController};
 ///
 /// #[tessera]
@@ -760,7 +761,7 @@ pub fn centered_slider(args: impl Into<SliderArgs>) {
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui::{DimensionValue, Dp, remember};
+/// use tessera_ui::{DimensionValue, Dp, remember, tessera};
 /// use tessera_ui_basic_components::slider::{centered_slider_with_controller, SliderArgsBuilder, SliderController};
 ///
 /// #[tessera]

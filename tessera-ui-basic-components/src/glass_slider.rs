@@ -278,6 +278,12 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>) {
 /// # Examples
 ///
 /// ```
+/// use std::sync::Arc;
+/// use tessera_ui::{remember, tessera};
+/// use tessera_ui_basic_components::glass_slider::{
+///    glass_slider_with_controller, GlassSliderArgsBuilder, GlassSliderController,
+/// };
+///
 /// #[tessera]
 /// fn foo() {
 ///     let controller = remember(|| GlassSliderController::new());

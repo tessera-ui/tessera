@@ -451,6 +451,7 @@ fn switch_inner(
 /// ## Examples
 ///
 /// ```
+/// use std::sync::Arc;
 /// use tessera_ui_basic_components::switch::{switch, SwitchArgsBuilder};
 ///
 /// switch(
@@ -487,10 +488,8 @@ pub fn switch(args: impl Into<SwitchArgs>) {
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::switch::{switch_with_child, SwitchArgsBuilder, switch_controller};
+/// use tessera_ui_basic_components::switch::{switch_with_child, SwitchArgsBuilder};
 /// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
-///
-/// let switch_state = switch_controller(false);
 ///
 /// switch_with_child(
 ///     SwitchArgsBuilder::default()
@@ -499,7 +498,6 @@ pub fn switch(args: impl Into<SwitchArgs>) {
 ///         }))
 ///         .build()
 ///         .unwrap(),
-///     switch_state,
 ///     || {
 ///         text(
 ///             TextArgsBuilder::default()
@@ -537,8 +535,9 @@ pub fn switch_with_child(
 /// # Examples
 ///
 /// ```
+/// use tessera_ui::{remember, tessera};
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::switch::{switch_with_child_and_controller, SwitchArgsBuilder};
+/// use tessera_ui_basic_components::switch::{switch_with_child_and_controller, SwitchArgsBuilder, SwitchController};
 /// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
 ///
 /// #[tessera]
@@ -553,13 +552,14 @@ pub fn switch_with_child(
 ///            .unwrap(),
 ///        controller,
 ///        || {
-///         text(
-///             TextArgsBuilder::default()
-///                 .text("✓".to_string())
-///                 .build()
-///                 .unwrap(),
-///         );
-///     },
+///            text(
+///                 TextArgsBuilder::default()
+///                     .text("✓".to_string())
+///                     .build()
+///                     .unwrap(),
+///           );
+///        }
+///     );
 /// }
 /// ```
 #[tessera]
