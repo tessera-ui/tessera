@@ -8,7 +8,7 @@ use tessera_ui_basic_components::{
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
-    glass_slider::{GlassSliderArgsBuilder, GlassSliderState, glass_slider},
+    glass_slider::{GlassSliderArgsBuilder, glass_slider},
     image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
@@ -50,14 +50,12 @@ struct ExampleGlassState {
 
 struct ConfigSliderState<T: Display> {
     value: T,
-    slider_state: GlassSliderState,
 }
 
 impl<T: Display> ConfigSliderState<T> {
     fn new(initial_value: T) -> Self {
         Self {
             value: initial_value,
-            slider_state: GlassSliderState::default(),
         }
     }
 }
@@ -260,7 +258,6 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().width.value = Dp(f64::from(value) * 500.0);
                     })),
-                    state.read().width.slider_state.clone(),
                 );
             });
 
@@ -282,7 +279,6 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().height.value = Dp(f64::from(value) * 500.0);
                     })),
-                    state.read().height.slider_state.clone(),
                 );
             });
 
@@ -303,7 +299,6 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().corner_radius.value = CornerRadius(value * 100.0);
                     })),
-                    state.read().corner_radius.slider_state.clone(),
                 );
             });
 
@@ -324,7 +319,6 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().border_width.value = Dp(f64::from(value) * 20.0);
                     })),
-                    state.read().border_width.slider_state.clone(),
                 );
             });
 
@@ -345,7 +339,6 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().refraction_amount.value = value * 100.0;
                     })),
-                    state.read().refraction_amount.slider_state.clone(),
                 );
             });
 
@@ -366,7 +359,6 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().refraction_height.value = Dp(f64::from(value * 50.0));
                     })),
-                    state.read().refraction_height.slider_state.clone(),
                 );
             });
 
@@ -387,7 +379,6 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().blur_radius.value = Dp(f64::from(value * 100.0));
                     })),
-                    state.read().blur_radius.slider_state.clone(),
                 );
             });
         },
@@ -395,12 +386,7 @@ fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
 }
 
 #[tessera]
-fn glass_config_slider(
-    label: &str,
-    value: f32,
-    on_change: Arc<dyn Fn(f32) + Send + Sync>,
-    state: GlassSliderState,
-) {
+fn glass_config_slider(label: &str, value: f32, on_change: Arc<dyn Fn(f32) + Send + Sync>) {
     let label = label.to_string();
     column(
         ColumnArgsBuilder::default()
@@ -432,7 +418,6 @@ fn glass_config_slider(
                     });
 
                     scope.child({
-                        let state = state.clone();
                         move || {
                             glass_slider(
                                 GlassSliderArgsBuilder::default()
@@ -441,7 +426,6 @@ fn glass_config_slider(
                                     .width(Dp(300.0))
                                     .build()
                                     .unwrap(),
-                                state,
                             );
                         }
                     });

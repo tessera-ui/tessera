@@ -4,7 +4,7 @@ use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
-    glass_switch::{GlassSwitchArgsBuilder, GlassSwitchState, glass_switch},
+    glass_switch::{GlassSwitchArgsBuilder, glass_switch},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -13,8 +13,6 @@ use tessera_ui_basic_components::{
 #[derive(Clone, Default)]
 struct GlassSwitchShowcaseState {
     scrollable_state: ScrollableState,
-    glass_switch_state: GlassSwitchState,
-    glass_switch_state2: GlassSwitchState,
 }
 
 #[tessera]
@@ -41,7 +39,7 @@ pub fn glass_switch_showcase(#[state] state: GlassSwitchShowcaseState) {
                             .build()
                             .unwrap(),
                         move || {
-                            test_content(state);
+                            test_content();
                         },
                     );
                 },
@@ -51,9 +49,7 @@ pub fn glass_switch_showcase(#[state] state: GlassSwitchShowcaseState) {
 }
 
 #[tessera]
-fn test_content(state: Arc<GlassSwitchShowcaseState>) {
-    let glass_switch_state = state.glass_switch_state.clone();
-    let glass_switch_state2 = state.glass_switch_state2.clone();
+fn test_content() {
     column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -71,7 +67,6 @@ fn test_content(state: Arc<GlassSwitchShowcaseState>) {
                         }))
                         .build()
                         .unwrap(),
-                    glass_switch_state,
                 );
             });
 
@@ -86,10 +81,7 @@ fn test_content(state: Arc<GlassSwitchShowcaseState>) {
             });
             scope.child(|| {
                 // Disabled by not providing on_change
-                glass_switch(
-                    GlassSwitchArgsBuilder::default().build().unwrap(),
-                    glass_switch_state2,
-                );
+                glass_switch(GlassSwitchArgsBuilder::default().build().unwrap());
             });
         },
     )

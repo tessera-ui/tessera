@@ -4,7 +4,7 @@ use closure::closure;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
-    glass_slider::{GlassSliderArgsBuilder, GlassSliderState, glass_slider},
+    glass_slider::{GlassSliderArgsBuilder, GlassSliderController, glass_slider_with_controller},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -14,7 +14,7 @@ use tessera_ui_basic_components::{
 struct GlassSliderShowcaseState {
     scrollable_state: ScrollableState,
     value: Arc<Mutex<f32>>,
-    slider_state: GlassSliderState,
+    slider_controller: Arc<GlassSliderController>,
 }
 
 impl Default for GlassSliderShowcaseState {
@@ -22,7 +22,7 @@ impl Default for GlassSliderShowcaseState {
         Self {
             scrollable_state: Default::default(),
             value: Arc::new(Mutex::new(0.5)),
-            slider_state: Default::default(),
+            slider_controller: Arc::new(GlassSliderController::new()),
         }
     }
 }
@@ -75,14 +75,14 @@ fn test_content(state: Arc<GlassSliderShowcaseState>) {
                 let on_change = Arc::new(closure!(clone state_clone.value, |new_value| {
                     *value.lock().unwrap() = new_value;
                 }));
-                glass_slider(
+                glass_slider_with_controller(
                     GlassSliderArgsBuilder::default()
                         .value(*state_clone.value.lock().unwrap())
                         .on_change(on_change)
                         .width(Dp(250.0))
                         .build()
                         .unwrap(),
-                    state_clone.slider_state.clone(),
+                    state_clone.slider_controller.clone(),
                 );
             });
 
