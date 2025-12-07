@@ -1,132 +1,110 @@
-//! # Tessera UI Framework
+//! tessera is a cross-platform UI library focused on performance and extensibility.
 //!
-//! Tessera is a declarative, immediate-mode UI framework for Rust that emphasizes performance,
-//! flexibility, and extensibility through a functional approach and pluggable shader system.
+//! # Guide
 //!
-//! ## Architecture Overview
+//! We recommend reading the [Quick Start](https://tessera-ui.github.io/guide/getting-started.html) to learn how to use tessera.
 //!
-//! Tessera's architecture is built around several core concepts:
+//! # Component Library
 //!
-//! - **Declarative Components**: UI components are defined as functions with the `#[tessera]` macro
-//! - **Immediate Mode**: The UI is rebuilt every frame, ensuring consistency and simplicity
-//! - **Pluggable Shaders**: Custom WGPU shaders are first-class citizens for advanced visual effects
-//! - **Parallel Processing**: Core operations like measurement utilize parallel computation
-//! - **Explicit State Management**: Components are stateless with explicit state passing
+//! The tessera-ui crate itself does not contain built-in components, but the official project provides a [basic component library](https://crates.io/crates/tessera-ui-basic-components).
 //!
-//! ## Getting Started by Developer Level
+//! It contains commonly used UI components such as buttons, text boxes, labels, etc., which help developers quickly build user interfaces.
 //!
-//! ### 🟢 **Beginner Users** - Building Basic Applications
+//! # Components
 //!
-//! If you're new to Tessera and want to build applications using existing components:
-//!
-//! **Start with these modules:**
-//! - [`renderer`] - Core renderer and application lifecycle management
-//! - [`Dp`], [`Px`] - Basic measurement units for layouts
-//! - [`Color`] - Color system for styling components
-//!
-//! **Key concepts to understand:**
-//! - How to set up a [`Renderer`] and run your application
-//! - Using [`tessera-ui-basic-components`](https://docs.rs/tessera-ui-basic-components/latest/tessera_ui_basic_components/) for common UI elements
-//! - Basic layout with `row`, `column`, and `surface` components
-//!
-//! ### 🟡 **Intermediate Users** - Custom Layout and Interaction
-//!
-//! For developers who want to create custom components and handle complex layouts:
-//!
-//! **Essential functions and types:**
-//! - [`MeasureInput::measure_child`] - Measure child component sizes with constraints
-//! - [`MeasureInput::place_child`] - Position child components in the layout
-//! - [`InputHandlerFn`] - Handle user interactions and state changes
-//! - [`Constraint`], [`DimensionValue`] - Layout constraint system
-//! - [`ComputedData`] - Return computed size and layout information
-//!
-//! **Key concepts:**
-//! - Understanding the measurement and placement phase
-//! - Creating custom layout algorithms
-//! - Managing component state through explicit input handlers
-//! - Working with the constraint-based layout system
+//! To define a component in tessera, write it like this:
 //!
 //! ```
-//! use tessera_ui::{ComputedData, Constraint, PxPosition, tessera};
+//! use tessera_ui::tessera;
 //!
 //! #[tessera]
-//! fn custom_layout(child: impl FnOnce()) {
+//! fn my_component() {
+//!     // component implementation
+//! }
+//! ```
+//!
+//! Functions marked with the `#[tessera]` macro are tessera components.
+//!
+//! Component functions may contain other component functions, enabling nesting and composition.
+//!
+//! ```
+//! use tessera_ui::tessera;
+//!
+//! #[tessera]
+//! fn child() {
+//!     // child component implementation
+//! }
+//!
+//! #[tessera]
+//! fn parent() {
 //!     child();
+//! }
+//! ```
 //!
+//! # Memoized State
+//!
+//! The `remember` and `remember_with_key` functions can be used to create persistent state across frames within a component.
+//!
+//! ```
+//! use std::sync::atomic::AtomicUsize;
+//! use tessera_ui::{tessera, remember};
+//!
+//! #[tessera]
+//! fn counter() {
+//!     let mut count = remember(|| AtomicUsize::new(0));
+//! }
+//! ```
+//!
+//! Memoized state is implemented via macro-based control-flow analysis and cannot be used outside of functions marked with `#[tessera]`. It also must not be used inside measurement closures or event handler implementations.
+//!
+//! `remember` handles most control flow situations, but it cannot guarantee stable identity inside loops. If you need to use memoized state within a loop, use `remember_with_key` and provide a stable key.
+//!
+//! ```
+//! use std::sync::atomic::AtomicUsize;
+//! use tessera_ui::{tessera, remember_with_key};
+//!
+//! struct User {
+//!     id: i32,
+//!     name: String,
+//! }
+//!
+//! #[tessera]
+//! fn user_list() {
+//!     let users = vec![
+//!         User { id: 101, name: "Alice".to_string() },
+//!         User { id: 205, name: "Bob".to_string() },
+//!         User { id: 33,  name: "Charlie".to_string() },
+//!     ];
+//!
+//!     for user in users.iter() {
+//!         // Regardless of the user's position in the list, this `likes` state will follow the user.id
+//!         let likes = remember_with_key(user.id, || AtomicUsize::new(0));
+//!
+//!         /* component implementation */
+//!     }
+//! }
+//! ```
+//!
+//! # Layout
+//!
+//! Implement a measure closure to define a component's layout behavior.
+//!
+//! ```
+//! use tessera_ui::tessera;
+//!
+//! #[tessera]
+//! fn component() {
 //!     measure(Box::new(|input| {
-//!         // Custom measurement logic here
-//! #        Ok(ComputedData::ZERO) // Make doc tests happy
-//!     }));
-//!
-//!     input_handler(Box::new(|input| {
-//!         // Handle user interactions here
+//!         // measurement and layout implementation
+//!         # Ok(tessera_ui::ComputedData {
+//!         #     width: tessera_ui::Px::ZERO,
+//!         #       height: tessera_ui::Px::ZERO,
+//!         # })
 //!     }));
 //! }
 //! ```
 //!
-//! ### 🔴 **Advanced Users** - Custom Rendering Pipelines
-//!
-//! For developers building custom visual effects and rendering pipelines:
-//!
-//! **Advanced rendering modules:**
-//!
-//! - [`renderer::drawer`] - Custom drawable pipelines and draw commands
-//! - [`renderer::compute`] - GPU compute pipelines for advanced effects
-//! - [`DrawCommand`], [`ComputeCommand`] - Low-level rendering commands
-//! - [`DrawablePipeline`], [`ComputablePipeline`] - Pipeline trait implementations
-//! - [`PipelineRegistry`], [`ComputePipelineRegistry`] - Pipeline management
-//!
-//! **Key concepts:**
-//!
-//! - Creating custom WGPU shaders and pipelines
-//! - Managing GPU resources and compute operations
-//! - Understanding the rendering command system
-//! - Implementing advanced visual effects like lighting, shadows, and particles
-//!
-//! ## Core Modules
-//!
-//! ### Essential Types and Functions
-//!
-//! - [`Renderer`] - Main application renderer and lifecycle manager
-//! - [`MeasureInput`] - Context for layout measurement and placement
-//! - [`Constraint`], [`DimensionValue`] - Layout constraint system
-//! - [`Dp`], [`Px`] - Measurement units (device-independent and pixel units)
-//! - [`Color`] - Color representation and utilities
-//!
-//! ### Component System
-//!
-//! - [`ComponentTree`] - Component tree management
-//! - [`ComponentNode`] - Individual component node representation
-//! - [`ComputedData`] - Layout computation results
-//! - [`InputHandlerFn`] - State management and event handling
-//!
-//! ### Event Handling
-//!
-//! - [`CursorEvent`] - Mouse and touch input events
-//! - [`Focus`] - Focus management system
-//! - [`PressKeyEventType`] - Keyboard input handling
-//!
-//! ### Rendering System
-//!
-//! - [`renderer::drawer`] - Drawing pipeline system
-//! - [`renderer::compute`] - Compute pipeline system
-//! - [`DrawCommand`], [`ComputeCommand`] - Rendering commands
-//!
-//! ## Examples
-//!
-//! Check out the `example` crate in the workspace for comprehensive examples demonstrating:
-//! - Basic component usage
-//! - Custom layouts and interactions
-//! - Advanced shader effects
-//! - Cross-platform deployment (Windows, Linux, macOS, Android)
-//!
-//! ## Performance Considerations
-//!
-//! Tessera is designed for high performance through:
-//! - Parallel measurement computation using Rayon
-//! - Efficient GPU utilization through custom shaders
-//! - Minimal allocations in hot paths
-//! - Optimized component tree traversal
+//! For more details, see the [Layout Guide](https://tessera-ui.github.io/guide/component.html#measure-place).
 #![deny(missing_docs, clippy::unwrap_used)]
 
 pub mod accessibility;
