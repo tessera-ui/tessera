@@ -116,6 +116,7 @@ All code, including documentation within the code (like `rustdoc` comments) and 
 
 - Please ensure your commit messages are clear, concise, and describe the changes made.
 - The commit format must follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) specification. We have no special requirements for the scope; you can omit it, but it is recommended to identify the scope or feature of the change.
+- **Breaking Changes**: If your commit introduces a breaking change, you **MUST** include `BREAKING CHANGE:` in the commit body or footer. This is required because our release script relies on this flag to automatically trigger a **Major** version bump.
 - Before pushing, please ensure:
   - Your code passes all tests (`cargo test`).
   - You have updated relevant documentation (if applicable).

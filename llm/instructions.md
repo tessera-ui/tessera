@@ -97,6 +97,7 @@ This document defines how You should assist in the Tessera project to ensure cod
   - All code, comments, and documentation comments must be in English (except for rare functional clarifications)
 - **Commit Guidelines**:
   - Follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) specification
+  - **Breaking Changes**: If a commit introduces a breaking change of public api, you MUST include `BREAKING CHANGE:` in the commit body or footer. This is required to trigger a Major version bump.
   - Ensure all tests pass, documentation is updated, and formatting checks are clean before committing
 - **Documentation**:
   - Main documentation must be in English. Other language versions, if any, should be placed in the docs/ directory and kept in sync with the English version.

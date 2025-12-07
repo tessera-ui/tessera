@@ -361,10 +361,10 @@ fn determine_bump_type(
     let mut bump_type = BumpType::Patch;
     for commit in commits {
         if let Some(msg) = commit.split_once(' ').map(|(_, m)| m) {
-            if msg.starts_with("feat") {
-                bump_type = BumpType::Minor;
-            }
             if msg.contains("BREAKING CHANGE") {
+                return Ok(Some(BumpType::Major));
+            }
+            if msg.starts_with("feat") {
                 bump_type = BumpType::Minor;
             }
         }
