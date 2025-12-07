@@ -124,8 +124,7 @@ impl ScrollableController {
         self.inner.read().visible_size
     }
 
-    /// Returns the measured size of the scrollable content.
-    pub fn child_size(&self) -> ComputedData {
+    fn child_size(&self) -> ComputedData {
         self.inner.read().child_size
     }
 
@@ -134,23 +133,19 @@ impl ScrollableController {
         self.inner.write().override_child_size = Some(size);
     }
 
-    pub fn target_position(&self) -> PxPosition {
+    fn target_position(&self) -> PxPosition {
         self.inner.read().target_position
     }
 
-    pub fn set_target_position(&self, target: PxPosition) {
+    fn set_target_position(&self, target: PxPosition) {
         self.inner.write().set_target_position(target);
     }
 
-    pub fn update_scroll_position(&self, smoothing: f32) -> bool {
+    fn update_scroll_position(&self, smoothing: f32) -> bool {
         self.inner.write().update_scroll_position(smoothing)
     }
 
-    pub(crate) fn read(&self) -> parking_lot::RwLockReadGuard<'_, ScrollableControllerInner> {
-        self.inner.read()
-    }
-
-    pub(crate) fn write(&self) -> parking_lot::RwLockWriteGuard<'_, ScrollableControllerInner> {
+    fn write(&self) -> parking_lot::RwLockWriteGuard<'_, ScrollableControllerInner> {
         self.inner.write()
     }
 }
