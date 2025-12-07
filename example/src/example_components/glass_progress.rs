@@ -7,7 +7,7 @@ use tessera_ui_basic_components::{
     glass_progress::{GlassProgressArgsBuilder, glass_progress},
     material_color::global_material_scheme,
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
-    slider::{SliderArgsBuilder, SliderState, slider},
+    slider::{SliderArgsBuilder, slider},
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -17,7 +17,6 @@ use tessera_ui_basic_components::{
 struct GlassProgressShowcaseState {
     scrollable_state: ScrollableState,
     progress: Arc<Mutex<f32>>,
-    slider_state: SliderState,
 }
 
 impl Default for GlassProgressShowcaseState {
@@ -25,7 +24,6 @@ impl Default for GlassProgressShowcaseState {
         Self {
             scrollable_state: Default::default(),
             progress: Arc::new(Mutex::new(0.5)),
-            slider_state: SliderState::new(),
         }
     }
 }
@@ -114,7 +112,6 @@ fn test_content(state: Arc<GlassProgressShowcaseState>) {
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
                         .unwrap(),
-                    state_clone.slider_state.clone(),
                 );
             });
         },

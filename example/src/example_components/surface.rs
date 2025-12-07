@@ -10,7 +10,7 @@ use tessera_ui_basic_components::{
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
     shape_def::{RoundedCorner, Shape},
-    slider::{SliderArgsBuilder, SliderState, slider},
+    slider::{SliderArgsBuilder, slider},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
@@ -39,14 +39,12 @@ struct ExampleSurfaceState {
 
 struct ConfigSliderState<T: Display> {
     value: T,
-    slider_state: SliderState,
 }
 
 impl<T: Display> ConfigSliderState<T> {
     fn new(initial_value: T) -> Self {
         Self {
             value: initial_value,
-            slider_state: SliderState::new(),
         }
     }
 }
@@ -204,7 +202,6 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().width.value = Dp(f64::from(value) * 500.0);
                     })),
-                    state.read().width.slider_state.clone(),
                 );
             });
 
@@ -226,7 +223,6 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().height.value = Dp(f64::from(value) * 500.0);
                     })),
-                    state.read().height.slider_state.clone(),
                 );
             });
 
@@ -247,7 +243,6 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().corner_radius.value = CornerRadius(value * 100.0);
                     })),
-                    state.read().corner_radius.slider_state.clone(),
                 );
             });
 
@@ -268,7 +263,6 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                     Arc::new(closure!(clone state, |value| {
                         state.write().border_width.value = Dp(f64::from(value) * 20.0);
                     })),
-                    state.read().border_width.slider_state.clone(),
                 );
             });
         },
@@ -276,12 +270,7 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
 }
 
 #[tessera]
-fn surface_config_slider(
-    label: &str,
-    value: f32,
-    on_change: Arc<dyn Fn(f32) + Send + Sync>,
-    state: SliderState,
-) {
+fn surface_config_slider(label: &str, value: f32, on_change: Arc<dyn Fn(f32) + Send + Sync>) {
     let label = label.to_string();
     column(
         ColumnArgsBuilder::default()
@@ -320,7 +309,6 @@ fn surface_config_slider(
                                 .width(DimensionValue::Fixed(Dp(300.0).to_px()))
                                 .build()
                                 .unwrap(),
-                            state,
                         );
                     });
                 });

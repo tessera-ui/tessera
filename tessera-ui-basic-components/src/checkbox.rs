@@ -25,15 +25,54 @@ use crate::{
     surface::{SurfaceArgsBuilder, surface},
 };
 
-#[derive(Clone, Default)]
-struct CheckboxState {
-    checkmark: Arc<RwLock<CheckmarkState>>,
+/// Controller for [`checkbox`] state.
+pub struct CheckboxController {
+    checkmark: RwLock<CheckmarkState>,
 }
 
-impl CheckboxState {
-    fn new(initial_state: bool) -> Self {
+impl CheckboxController {
+    /// Creates a new controller with the provided initial checked state.
+    pub fn new(initial_state: bool) -> CheckboxController {
         Self {
-            checkmark: Arc::new(RwLock::new(CheckmarkState::new(initial_state))),
+            checkmark: RwLock::new(CheckmarkState::new(initial_state)),
+        }
+    }
+
+    /// Returns whether the checkbox is currently checked.
+    pub fn is_checked(&self) -> bool {
+        self.checkmark.read().checked
+    }
+
+    /// Sets the checked state directly and resets animation progress.
+    pub fn set_checked(&self, checked: bool) {
+        let mut state = self.checkmark.write();
+        if state.checked != checked {
+            state.checked = checked;
+            state.progress = if checked { 1.0 } else { 0.0 };
+            state.last_toggle_time = None;
+        }
+    }
+
+    /// Toggles the checked state and starts the animation timeline.
+    pub fn toggle(&self) {
+        self.checkmark.write().toggle();
+    }
+
+    /// Advances the checkmark animation progress based on elapsed time.
+    fn update_progress(&self) {
+        self.checkmark.write().update_progress();
+    }
+
+    /// Returns current animation progress (0.0..1.0).
+    fn progress(&self) -> f32 {
+        self.checkmark.read().progress()
+    }
+}
+
+impl Default for CheckboxController {
+    fn default() -> Self {
+        Self {
+            checkmark: RwLock::new(CheckmarkState::default()),
         }
     }
 }
@@ -192,13 +231,16 @@ impl CheckmarkState {
 /// ## Parameters
 ///
 /// - `args` — configures the checkbox's appearance, initial state, and `on_toggle` callback; see [`CheckboxArgs`].
+/// - `controller` — optional external controller; use [`checkbox_with_controller`] for a controlled checkbox.
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 /// use tessera_ui::{tessera, Color, Dp};
-/// use tessera_ui_basic_components::checkbox::{checkbox, CheckboxArgsBuilder};
+/// use tessera_ui_basic_components::checkbox::{
+///     checkbox, CheckboxArgsBuilder,
+/// };
 ///
 /// // A tiny UI demo that shows a checkbox and a text label that reflects its state.
 /// #[derive(Clone, Default)]
@@ -216,7 +258,6 @@ impl CheckmarkState {
 ///         }
 ///     });
 ///
-///     // Render the checkbox; the example shows a minimal pattern for interactive demos.
 ///     checkbox(
 ///         CheckboxArgsBuilder::default()
 ///             .checked(true)
@@ -229,17 +270,62 @@ impl CheckmarkState {
 #[tessera]
 pub fn checkbox(args: impl Into<CheckboxArgs>) {
     let args: CheckboxArgs = args.into();
-    let state = remember(|| CheckboxState::new(args.checked));
+    let controller = remember(|| CheckboxController::new(args.checked));
+    checkbox_with_controller(args, controller);
+}
+
+/// # checkbox_with_controller
+///
+/// Controlled checkbox variant that accepts an explicit controller.
+///
+/// ## Usage
+///
+/// Use when you need to drive or observe the checked state from outside the component.
+///
+/// ## Parameters
+///
+/// - `args` — configures the checkbox appearance and callbacks; see [`CheckboxArgs`].
+/// - `controller` — a [`CheckboxController`] that owns the checked state and animation timeline.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui::{tessera, Dp, remember};
+/// use tessera_ui_basic_components::checkbox::{
+///     CheckboxArgsBuilder, CheckboxController, checkbox_with_controller,
+/// };
+///
+/// #[tessera]
+/// fn controlled_demo() {
+///     let controller = remember(|| CheckboxController::new(false));
+///     checkbox_with_controller(
+///         CheckboxArgsBuilder::default()
+///             .size(Dp(20.0))
+///             .build()
+///             .unwrap(),
+///         controller,
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn checkbox_with_controller(
+    args: impl Into<CheckboxArgs>,
+    controller: Arc<CheckboxController>,
+) {
+    let args: CheckboxArgs = args.into();
 
     // Advance the animation each frame
-    input_handler(Box::new(closure!(clone state.checkmark, |_input| {
-        checkmark.write().update_progress();
-    })));
+    input_handler(Box::new({
+        let controller = controller.clone();
+        move |_input| {
+            controller.update_progress();
+        }
+    }));
 
     // Click handler: toggle animation state and forward toggle callback
-    let on_click = Arc::new(closure!(clone state, clone args.on_toggle, || {
-        state.checkmark.write().toggle();
-        on_toggle(state.checkmark.read().checked);
+    let on_click = Arc::new(closure!(clone controller, clone args.on_toggle, || {
+        controller.toggle();
+        on_toggle(controller.is_checked());
     }));
     let on_click_for_surface = on_click.clone();
 
@@ -248,7 +334,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
             .width(DimensionValue::Fixed(args.size.to_px()))
             .height(DimensionValue::Fixed(args.size.to_px()))
             .style(
-                if state.checkmark.read().checked {
+                if controller.is_checked() {
                     args.checked_color
                 } else {
                     args.color
@@ -261,12 +347,12 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
             .build()
             .expect("builder construction failed"),
         closure!(
-            clone state,
+            clone controller,
             clone args.checkmark_color,
             clone args.checkmark_stroke_width,
             clone args.size,
             || {
-            let progress = state.checkmark.read().progress();
+            let progress = controller.progress();
             if progress > 0.0 {
                 surface(
                     SurfaceArgsBuilder::default()
@@ -304,7 +390,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
 
     let accessibility_label = args.accessibility_label.clone();
     let accessibility_description = args.accessibility_description.clone();
-    let accessibility_state = state.clone();
+    let accessibility_state = controller.clone();
     let on_click_for_accessibility = on_click.clone();
     input_handler(Box::new(closure!(
         clone accessibility_state,
@@ -312,7 +398,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
         clone accessibility_description,
         clone on_click_for_accessibility,
         |input| {
-            let checked = accessibility_state.checkmark.read().checked;
+            let checked = accessibility_state.is_checked();
             let mut builder = input.accessibility().role(Role::CheckBox);
 
             if let Some(label) = accessibility_label.as_ref() {

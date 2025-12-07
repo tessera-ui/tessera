@@ -6,10 +6,7 @@ use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     material_icons::filled,
     scrollable::{ScrollableArgsBuilder, ScrollableState, scrollable},
-    slider::{
-        RangeSliderArgsBuilder, RangeSliderState, SliderArgsBuilder, SliderState, centered_slider,
-        range_slider, slider,
-    },
+    slider::{RangeSliderArgsBuilder, SliderArgsBuilder, centered_slider, range_slider, slider},
     surface::{SurfaceArgsBuilder, surface},
     text::text,
 };
@@ -17,13 +14,9 @@ use tessera_ui_basic_components::{
 struct SliderShowcaseState {
     scrollable_state: ScrollableState,
     value: Arc<Mutex<f32>>,
-    slider_state: SliderState,
     centered_value: Arc<Mutex<f32>>,
-    centered_slider_state: SliderState,
     range_value: Arc<Mutex<(f32, f32)>>,
-    range_slider_state: RangeSliderState,
     icon_slider_value: Arc<Mutex<f32>>,
-    icon_slider_state: SliderState,
 }
 
 impl Default for SliderShowcaseState {
@@ -31,13 +24,9 @@ impl Default for SliderShowcaseState {
         Self {
             scrollable_state: Default::default(),
             value: Arc::new(Mutex::new(0.5)),
-            slider_state: SliderState::new(),
             centered_value: Arc::new(Mutex::new(0.5)),
-            centered_slider_state: SliderState::new(),
             range_value: Arc::new(Mutex::new((0.2, 0.8))),
-            range_slider_state: RangeSliderState::new(),
             icon_slider_value: Arc::new(Mutex::new(0.5)),
-            icon_slider_state: SliderState::new(),
         }
     }
 }
@@ -97,7 +86,6 @@ fn test_content(state: Arc<SliderShowcaseState>) {
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
                         .unwrap(),
-                    state_for_slider.slider_state.clone(),
                 );
             });
 
@@ -125,7 +113,6 @@ fn test_content(state: Arc<SliderShowcaseState>) {
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
                         .unwrap(),
-                    state_for_centered_slider.centered_slider_state.clone(),
                 );
             });
 
@@ -156,7 +143,6 @@ fn test_content(state: Arc<SliderShowcaseState>) {
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
                         .unwrap(),
-                    state_for_range_slider.range_slider_state.clone(),
                 );
             });
 
@@ -186,7 +172,6 @@ fn test_content(state: Arc<SliderShowcaseState>) {
                         .inset_icon(filled::volume_up_icon())
                         .build()
                         .unwrap(),
-                    state_for_icon_slider.icon_slider_state.clone(),
                 );
             });
 
