@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     button::{ButtonArgsBuilder, button},
@@ -17,37 +17,18 @@ use tessera_ui_basic_components::{
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Clone)]
-struct MenusShowcaseState {
-    menu_controller: Arc<MenuController>,
-    selected_label: Arc<Mutex<String>>,
-    pinned: Arc<Mutex<bool>>,
-}
-
-impl MenusShowcaseState {
-    fn new() -> Self {
-        Self {
-            menu_controller: Arc::new(MenuController::new()),
-            selected_label: Arc::new(Mutex::new("None".to_string())),
-            pinned: Arc::new(Mutex::new(false)),
-        }
-    }
-}
-
-impl Default for MenusShowcaseState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[tessera]
 #[shard]
-pub fn menus_showcase(#[state] state: MenusShowcaseState) {
-    let selected_label = state.selected_label.clone();
-    let pinned = state.pinned.clone();
+pub fn menus_showcase() {
+    let menu_controller = remember(MenuController::new);
+    let selected_label = remember(|| Mutex::new("None".to_string()));
+    let pinned = remember(|| Mutex::new(false));
+
+    let selected_label = selected_label.clone();
+    let pinned = pinned.clone();
     // Anchor near the trigger button (padding 20dp + title/subtitle + spacer).
     let anchor = MenuAnchor::from_dp((Dp(20.0), Dp(72.0)), (Dp(180.0), Dp(48.0)));
-    let menu_controller = state.menu_controller.clone();
+    let menu_controller = menu_controller.clone();
     let selection_for_edit = selected_label.clone();
     let selection_for_share = selected_label.clone();
     let pin_state = pinned.clone();

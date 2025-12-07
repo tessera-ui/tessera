@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
@@ -14,33 +14,9 @@ use tessera_ui_basic_components::{
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Clone)]
-struct RadioButtonShowcaseState {
-    selected_index: Arc<AtomicUsize>,
-    radio_a: Arc<RadioButtonController>,
-    radio_b: Arc<RadioButtonController>,
-    radio_c: Arc<RadioButtonController>,
-    disabled_selected: Arc<RadioButtonController>,
-    disabled_unselected: Arc<RadioButtonController>,
-}
-
-impl Default for RadioButtonShowcaseState {
-    fn default() -> Self {
-        let selected_index = Arc::new(AtomicUsize::new(0));
-        Self {
-            selected_index,
-            radio_a: Arc::new(RadioButtonController::new(true)),
-            radio_b: Arc::new(RadioButtonController::new(false)),
-            radio_c: Arc::new(RadioButtonController::new(false)),
-            disabled_selected: Arc::new(RadioButtonController::new(true)),
-            disabled_unselected: Arc::new(RadioButtonController::new(false)),
-        }
-    }
-}
-
 #[tessera]
 #[shard]
-pub fn radio_button_showcase(#[state] state: RadioButtonShowcaseState) {
+pub fn radio_button_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -54,7 +30,6 @@ pub fn radio_button_showcase(#[state] state: RadioButtonShowcaseState) {
                     .build()
                     .unwrap(),
                 move || {
-                    let state = state.clone();
                     surface(
                         SurfaceArgsBuilder::default()
                             .padding(Dp(25.0))
@@ -62,7 +37,7 @@ pub fn radio_button_showcase(#[state] state: RadioButtonShowcaseState) {
                             .build()
                             .unwrap(),
                         move || {
-                            content(state.clone());
+                            content();
                         },
                     );
                 },
@@ -72,14 +47,24 @@ pub fn radio_button_showcase(#[state] state: RadioButtonShowcaseState) {
 }
 
 #[tessera]
-fn content(state: Arc<RadioButtonShowcaseState>) {
+fn content() {
+    let selected_index = remember(|| AtomicUsize::new(0));
+    let radio_a = remember(|| RadioButtonController::new(true));
+    let radio_b = remember(|| RadioButtonController::new(false));
+    let radio_c = remember(|| RadioButtonController::new(false));
+    let disabled_selected = remember(|| RadioButtonController::new(true));
+    let disabled_unselected = remember(|| RadioButtonController::new(false));
+
     let select = Arc::new({
-        let state = state.clone();
+        let selected_index = selected_index.clone();
+        let radio_a = radio_a.clone();
+        let radio_b = radio_b.clone();
+        let radio_c = radio_c.clone();
         move |index: usize| {
-            state.selected_index.store(index, Ordering::SeqCst);
-            state.radio_a.set_selected(index == 0);
-            state.radio_b.set_selected(index == 1);
-            state.radio_c.set_selected(index == 2);
+            selected_index.store(index, Ordering::SeqCst);
+            radio_a.set_selected(index == 0);
+            radio_b.set_selected(index == 1);
+            radio_c.set_selected(index == 2);
         }
     });
 
@@ -90,7 +75,12 @@ fn content(state: Arc<RadioButtonShowcaseState>) {
             .build()
             .unwrap(),
         {
-            let state = state.clone();
+            let selected_index = selected_index.clone();
+            let radio_a = radio_a.clone();
+            let radio_b = radio_b.clone();
+            let radio_c = radio_c.clone();
+            let disabled_selected = disabled_selected.clone();
+            let disabled_unselected = disabled_unselected.clone();
             let select = select.clone();
             move |scope| {
                 scope.child(|| {
@@ -103,7 +93,7 @@ fn content(state: Arc<RadioButtonShowcaseState>) {
                     )
                 });
 
-                let selected = state.selected_index.load(Ordering::Acquire);
+                let selected = selected_index.load(Ordering::Acquire);
                 scope.child(|| {
                     text(
                         TextArgsBuilder::default()
@@ -116,11 +106,11 @@ fn content(state: Arc<RadioButtonShowcaseState>) {
 
                 scope.child({
                     let select = select.clone();
-                    let state = state.clone();
+                    let radio_a = radio_a.clone();
                     move || {
                         option_row(
                             "Cat".to_string(),
-                            state.radio_a.clone(),
+                            radio_a.clone(),
                             selected == 0,
                             {
                                 let select = select.clone();
@@ -133,11 +123,11 @@ fn content(state: Arc<RadioButtonShowcaseState>) {
 
                 scope.child({
                     let select = select.clone();
-                    let state = state.clone();
+                    let radio_b = radio_b.clone();
                     move || {
                         option_row(
                             "Dog".to_string(),
-                            state.radio_b.clone(),
+                            radio_b.clone(),
                             selected == 1,
                             move |_| select(1),
                             true,
@@ -146,12 +136,12 @@ fn content(state: Arc<RadioButtonShowcaseState>) {
                 });
 
                 scope.child({
-                    let state = state.clone();
+                    let radio_c = radio_c.clone();
                     let select = select.clone();
                     move || {
                         option_row(
                             "Red Panda".to_string(),
-                            state.radio_c.clone(),
+                            radio_c.clone(),
                             selected == 2,
                             move |_| select(2),
                             true,
@@ -185,11 +175,11 @@ fn content(state: Arc<RadioButtonShowcaseState>) {
                 });
 
                 scope.child({
-                    let state = state.clone();
+                    let disabled_selected = disabled_selected.clone();
                     move || {
                         option_row(
                             "Selected (disabled)".to_string(),
-                            state.disabled_selected.clone(),
+                            disabled_selected.clone(),
                             true,
                             |_| {},
                             false,
@@ -198,11 +188,11 @@ fn content(state: Arc<RadioButtonShowcaseState>) {
                 });
 
                 scope.child({
-                    let state = state.clone();
+                    let disabled_unselected = disabled_unselected.clone();
                     move || {
                         option_row(
                             "Unselected (disabled)".to_string(),
-                            state.disabled_unselected.clone(),
+                            disabled_unselected.clone(),
                             false,
                             |_| {},
                             false,

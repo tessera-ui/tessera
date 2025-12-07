@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{self, AtomicBool},
 };
 
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     checkbox::{CheckboxArgsBuilder, checkbox},
@@ -14,14 +14,9 @@ use tessera_ui_basic_components::{
     text::{TextArgsBuilder, text},
 };
 
-#[derive(Default, Clone)]
-struct CheckboxShowcaseState {
-    is_checked: Arc<AtomicBool>,
-}
-
 #[tessera]
 #[shard]
-pub fn checkbox_showcase(#[state] state: CheckboxShowcaseState) {
+pub fn checkbox_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -59,19 +54,19 @@ pub fn checkbox_showcase(#[state] state: CheckboxShowcaseState) {
                                     });
 
                                     // Interactive Checkbox
-                                    let state_clone = state.clone();
                                     scope.child(move || {
+                                        let is_checked = remember(|| AtomicBool::new(true));
                                         row(
                                             RowArgsBuilder::default()
                                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                                 .build()
                                                 .unwrap(),
                                             |scope| {
-                                                let state = state_clone.clone();
+                                                let is_checked_clone = is_checked.clone();
                                                 scope.child(move || {
                                                     let on_toggle = Arc::new({
                                                         move |new_value| {
-                                                            state.is_checked.store(
+                                                            is_checked_clone.store(
                                                                 new_value,
                                                                 atomic::Ordering::SeqCst,
                                                             );
@@ -85,10 +80,9 @@ pub fn checkbox_showcase(#[state] state: CheckboxShowcaseState) {
                                                             .unwrap(),
                                                     );
                                                 });
-                                                let state = state_clone.clone();
+                                                let is_checked_clone = is_checked.clone();
                                                 scope.child(move || {
-                                                    let checked_str = if state
-                                                        .is_checked
+                                                    let checked_str = if is_checked_clone
                                                         .load(atomic::Ordering::Acquire)
                                                     {
                                                         "Checked"

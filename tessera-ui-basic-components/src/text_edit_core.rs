@@ -90,20 +90,16 @@ pub struct TextEditorControllerInner {
     pub(crate) preedit_string: Option<String>,
 }
 
-/// Thin handle wrapping an internal `Arc<RwLock<TextEditorController>>` and exposing `read()`/`write()`.
-#[derive(Clone)]
+/// Thin handle wrapping an internal `RwLock<TextEditorController>` and exposing `read()`/`write()`.
 pub struct TextEditorController {
-    inner: Arc<RwLock<TextEditorControllerInner>>,
+    inner: RwLock<TextEditorControllerInner>,
 }
 
 impl TextEditorController {
     /// Creates a new text editor state with the given font size and optional line height.
     pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(TextEditorControllerInner::new(
-                size,
-                line_height,
-            ))),
+            inner: RwLock::new(TextEditorControllerInner::new(size, line_height)),
         }
     }
 
@@ -514,7 +510,7 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
 ///
 /// * `state` - Shared state for the text editor, typically wrapped in `Arc<RwLock<...>>`.
 #[tessera]
-pub fn text_edit_core(state: TextEditorController) {
+pub fn text_edit_core(state: Arc<TextEditorController>) {
     // text rendering with constraints from parent container
     {
         let state_clone = state.clone();

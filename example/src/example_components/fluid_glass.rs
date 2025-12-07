@@ -2,7 +2,7 @@ use std::{fmt::Display, sync::Arc};
 
 use closure::closure;
 use parking_lot::RwLock;
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{BoxedArgsBuilder, boxed},
@@ -22,11 +22,6 @@ const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/assets/grid_background.png",
 ));
-
-#[derive(Default)]
-struct FluidGlassShowcaseState {
-    example_glass_state: Arc<RwLock<ExampleGlassState>>,
-}
 
 struct CornerRadius(f32);
 
@@ -97,8 +92,7 @@ impl Default for ExampleGlassState {
 
 #[tessera]
 #[shard]
-pub fn fluid_glass_showcase(#[state] state: FluidGlassShowcaseState) {
-    let example_surface_state = state.example_glass_state.clone();
+pub fn fluid_glass_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -119,7 +113,7 @@ pub fn fluid_glass_showcase(#[state] state: FluidGlassShowcaseState) {
                             .build()
                             .unwrap(),
                         move || {
-                            test_content(example_surface_state);
+                            test_content();
                         },
                     );
                 },
@@ -129,7 +123,8 @@ pub fn fluid_glass_showcase(#[state] state: FluidGlassShowcaseState) {
 }
 
 #[tessera]
-fn test_content(state: Arc<RwLock<ExampleGlassState>>) {
+fn test_content() {
+    let state = remember(|| RwLock::new(ExampleGlassState::default()));
     let state_for_glass = state.clone();
     let image_data = state.read().background_image_data.clone();
     column(

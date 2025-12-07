@@ -139,7 +139,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
         c
     });
 
-    text_editor_with_controller(args, (*controller).clone());
+    text_editor_with_controller(args, controller);
 }
 
 /// # text_editor_with_controller
@@ -167,7 +167,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
 ///     text::write_font_system,
 /// };
 ///
-/// let controller = TextEditorController::new(Dp(14.0), None);
+/// let controller = Arc::new(TextEditorController::new(Dp(14.0), None));
 /// controller.write().editor_mut().set_text_reactive(
 ///     "Initial text",
 ///     &mut write_font_system(),
@@ -185,7 +185,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
 #[tessera]
 pub fn text_editor_with_controller(
     args: impl Into<TextEditorArgs>,
-    controller: TextEditorController,
+    controller: Arc<TextEditorController>,
 ) {
     let editor_args: TextEditorArgs = args.into();
     let on_change = editor_args.on_change.clone();

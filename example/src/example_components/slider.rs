@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     material_icons::filled,
@@ -11,27 +11,9 @@ use tessera_ui_basic_components::{
     text::text,
 };
 
-struct SliderShowcaseState {
-    value: Arc<Mutex<f32>>,
-    centered_value: Arc<Mutex<f32>>,
-    range_value: Arc<Mutex<(f32, f32)>>,
-    icon_slider_value: Arc<Mutex<f32>>,
-}
-
-impl Default for SliderShowcaseState {
-    fn default() -> Self {
-        Self {
-            value: Arc::new(Mutex::new(0.5)),
-            centered_value: Arc::new(Mutex::new(0.5)),
-            range_value: Arc::new(Mutex::new((0.2, 0.8))),
-            icon_slider_value: Arc::new(Mutex::new(0.5)),
-        }
-    }
-}
-
 #[tessera]
 #[shard]
-pub fn slider_showcase(#[state] state: SliderShowcaseState) {
+pub fn slider_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -52,7 +34,7 @@ pub fn slider_showcase(#[state] state: SliderShowcaseState) {
                             .build()
                             .unwrap(),
                         move || {
-                            test_content(state);
+                            test_content();
                         },
                     );
                 },
@@ -62,7 +44,12 @@ pub fn slider_showcase(#[state] state: SliderShowcaseState) {
 }
 
 #[tessera]
-fn test_content(state: Arc<SliderShowcaseState>) {
+fn test_content() {
+    let value = remember(|| Mutex::new(0.5));
+    let centered_value = remember(|| Mutex::new(0.5));
+    let range_value = remember(|| Mutex::new((0.2, 0.8)));
+    let icon_slider_value = remember(|| Mutex::new(0.5));
+
     column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -71,14 +58,14 @@ fn test_content(state: Arc<SliderShowcaseState>) {
         move |scope| {
             scope.child(|| text("Slider Showcase"));
 
-            let state_for_slider = state.clone();
+            let value_clone = value.clone();
             scope.child(move || {
-                let on_change = Arc::new(closure!(clone state_for_slider.value, |new_value| {
-                    *value.lock().unwrap() = new_value;
+                let on_change = Arc::new(closure!(clone value_clone, |new_value| {
+                    *value_clone.lock().unwrap() = new_value;
                 }));
                 slider(
                     SliderArgsBuilder::default()
-                        .value(*state_for_slider.value.lock().unwrap())
+                        .value(*value_clone.lock().unwrap())
                         .on_change(on_change)
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
@@ -86,26 +73,26 @@ fn test_content(state: Arc<SliderShowcaseState>) {
                 );
             });
 
-            let state_for_value_display = state.clone();
+            let value_clone = value.clone();
             scope.child(move || {
-                let value = *state_for_value_display.value.lock().unwrap();
+                let value = *value_clone.lock().unwrap();
                 text(format!("Current value: {:.2}", value));
             });
 
             // Centered Slider Showcase
             scope.child(|| text("Centered Slider Showcase"));
 
-            let state_for_centered_slider = state.clone();
+            let centered_value_clone = centered_value.clone();
             scope.child(move || {
                 let on_change = Arc::new(closure!(
-                    clone state_for_centered_slider.centered_value,
+                    clone centered_value_clone,
                     |new_value| {
-                        *centered_value.lock().unwrap() = new_value;
+                        *centered_value_clone.lock().unwrap() = new_value;
                     }
                 ));
                 centered_slider(
                     SliderArgsBuilder::default()
-                        .value(*state_for_centered_slider.centered_value.lock().unwrap())
+                        .value(*centered_value_clone.lock().unwrap())
                         .on_change(on_change)
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
@@ -113,29 +100,26 @@ fn test_content(state: Arc<SliderShowcaseState>) {
                 );
             });
 
-            let state_for_centered_value_display = state.clone();
+            let centered_value_clone = centered_value.clone();
             scope.child(move || {
-                let centered_value = *state_for_centered_value_display
-                    .centered_value
-                    .lock()
-                    .unwrap();
+                let centered_value = *centered_value_clone.lock().unwrap();
                 text(format!("Centered value: {:.2}", centered_value));
             });
 
             // Range Slider Showcase
             scope.child(|| text("Range Slider Showcase"));
 
-            let state_for_range_slider = state.clone();
+            let range_value_clone = range_value.clone();
             scope.child(move || {
                 let on_change = Arc::new(closure!(
-                    clone state_for_range_slider.range_value,
+                    clone range_value_clone,
                     |new_value| {
-                        *range_value.lock().unwrap() = new_value;
+                        *range_value_clone.lock().unwrap() = new_value;
                     }
                 ));
                 range_slider(
                     RangeSliderArgsBuilder::default()
-                        .value(*state_for_range_slider.range_value.lock().unwrap())
+                        .value(*range_value_clone.lock().unwrap())
                         .on_change(on_change)
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
@@ -143,26 +127,26 @@ fn test_content(state: Arc<SliderShowcaseState>) {
                 );
             });
 
-            let state_for_range_value_display = state.clone();
+            let range_value_clone = range_value.clone();
             scope.child(move || {
-                let (start, end) = *state_for_range_value_display.range_value.lock().unwrap();
+                let (start, end) = *range_value_clone.lock().unwrap();
                 text(format!("Range value: {:.2} - {:.2}", start, end));
             });
 
             // Slider with Inset Icon Showcase
             scope.child(|| text("Slider with Inset Icon Showcase"));
 
-            let state_for_icon_slider = state.clone();
+            let icon_slider_value_clone = icon_slider_value.clone();
             scope.child(move || {
                 let on_change = Arc::new(closure!(
-                    clone state_for_icon_slider.icon_slider_value,
+                    clone icon_slider_value_clone,
                     |new_value| {
-                        *icon_slider_value.lock().unwrap() = new_value;
+                        *icon_slider_value_clone.lock().unwrap() = new_value;
                     }
                 ));
                 slider(
                     SliderArgsBuilder::default()
-                        .value(*state_for_icon_slider.icon_slider_value.lock().unwrap())
+                        .value(*icon_slider_value_clone.lock().unwrap())
                         .on_change(on_change)
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .size(tessera_ui_basic_components::slider::SliderSize::Medium)
@@ -172,12 +156,9 @@ fn test_content(state: Arc<SliderShowcaseState>) {
                 );
             });
 
-            let state_for_icon_value_display = state.clone();
+            let icon_slider_value_clone = icon_slider_value.clone();
             scope.child(move || {
-                let value = *state_for_icon_value_display
-                    .icon_slider_value
-                    .lock()
-                    .unwrap();
+                let value = *icon_slider_value_clone.lock().unwrap();
                 text(format!("Icon Slider value: {:.2}", value));
             });
         },
