@@ -17,7 +17,8 @@ use tessera_ui_basic_components::{
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgs, column},
     dialog::{
-        DialogController, DialogProviderArgsBuilder, DialogStyle, dialog_provider_with_controller,
+        BasicDialogArgsBuilder, DialogController, DialogProviderArgsBuilder, DialogStyle,
+        basic_dialog, dialog_provider_with_controller,
     },
     icon::{IconArgsBuilder, icon},
     lazy_list::{LazyColumnArgsBuilder, lazy_column},
@@ -91,17 +92,16 @@ pub fn app(#[state] app_state: AppState) {
                     .unwrap(),
                 app_state.bottom_sheet_controller.clone(),
                 move || {
+                    let dialog_controller = app_state.dialog_controller.clone();
                     dialog_provider_with_controller(
                         DialogProviderArgsBuilder::default()
-                            .on_close_request(Arc::new(
-                                closure!(clone app_state.dialog_controller, || {
-                                    dialog_controller.close();
-                                }),
-                            ))
+                            .on_close_request(Arc::new(closure!(clone dialog_controller, || {
+                                dialog_controller.close();
+                            })))
                             .style(DialogStyle::Glass)
                             .build()
                             .unwrap(),
-                        app_state.dialog_controller.clone(),
+                        dialog_controller.clone(),
                         move || {
                             column(ColumnArgs::default(), |scope| {
                                 scope.child(|| {
@@ -192,17 +192,41 @@ pub fn app(#[state] app_state: AppState) {
                                 });
                             });
                         },
-                        move |alpha| {
-                            let scheme = global_material_scheme();
-                            text(
-                                TextArgsBuilder::default()
-                                    .text("Hello from Dialog!")
-                                    .size(Dp(20.0))
-                                    .color(scheme.on_surface.with_alpha(alpha))
+                        closure!(clone dialog_controller, |_alpha| {
+                            basic_dialog(
+                                BasicDialogArgsBuilder::default()
+                                    .headline("Basic Dialog")
+                                    .supporting_text("This is a basic dialog component following Material Design 3 specifications.")
+                                    .icon(Arc::new(|| {
+                                        let icon_content = filled::info_icon();
+                                        icon(IconArgsBuilder::default().content(icon_content).build().unwrap());
+                                    }))
+                                    .confirm_button(closure!(clone dialog_controller, || {
+                                        button(
+                                            ButtonArgsBuilder::default()
+                                                .on_click(Arc::new(closure!(clone dialog_controller, || {
+                                                    dialog_controller.close();
+                                                })))
+                                                .build()
+                                                .unwrap(),
+                                            || text("Confirm"),
+                                        );
+                                    }))
+                                    .dismiss_button(closure!(clone dialog_controller, || {
+                                        button(
+                                            ButtonArgsBuilder::default()
+                                                .on_click(Arc::new(closure!(clone dialog_controller, || {
+                                                    dialog_controller.close();
+                                                })))
+                                                .build()
+                                                .unwrap(),
+                                            || text("Dismiss"),
+                                        );
+                                    }))
                                     .build()
                                     .unwrap(),
                             );
-                        },
+                        }),
                     );
                 },
                 || {

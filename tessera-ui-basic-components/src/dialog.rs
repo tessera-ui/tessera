@@ -14,12 +14,17 @@ use tessera_ui::{Color, DimensionValue, Dp, remember, tessera, winit};
 
 use crate::{
     ShadowProps,
-    alignment::Alignment,
+    alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     animation,
     boxed::{BoxedArgsBuilder, boxed},
+    column::{ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    material_color::global_material_scheme,
+    row::{RowArgsBuilder, row},
     shape_def::{RoundedCorner, Shape},
+    spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
+    text::{TextArgsBuilder, text},
 };
 
 /// The duration of the full dialog animation.
@@ -74,7 +79,7 @@ pub struct DialogProviderArgs {
     /// clicking the scrim or pressing the `ESC` key.
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
     /// Padding around the dialog content.
-    #[builder(default = "Dp(16.0)")]
+    #[builder(default = "Dp(24.0)")]
     pub padding: Dp,
     /// The visual style of the dialog's scrim.
     #[builder(default)]
@@ -241,47 +246,58 @@ fn dialog_content_wrapper(
             .build()
             .expect("builder construction failed"),
         |scope| {
-            scope.child(move || match style {
-                DialogStyle::Glass => {
-                    fluid_glass(
-                        FluidGlassArgsBuilder::default()
-                            .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
-                            .blur_radius(Dp(5.0 * alpha as f64))
-                            .shape(Shape::RoundedRectangle {
-                                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
-                                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
-                                bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
-                                bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
-                            })
-                            .refraction_amount(32.0 * alpha)
-                            .block_input(true)
-                            .padding(padding)
-                            .build()
-                            .expect("builder construction failed"),
-                        content,
-                    );
-                }
-                DialogStyle::Material => {
-                    surface(
-                        SurfaceArgsBuilder::default()
-                            .style(Color::WHITE.with_alpha(alpha).into())
-                            .shadow(ShadowProps {
-                                color: Color::BLACK.with_alpha(alpha / 4.0),
-                                ..Default::default()
-                            })
-                            .shape(Shape::RoundedRectangle {
-                                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
-                                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
-                                bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
-                                bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
-                            })
-                            .padding(padding)
-                            .block_input(true)
-                            .build()
-                            .expect("builder construction failed"),
-                        content,
-                    );
-                }
+            scope.child(move || {
+                surface(
+                    SurfaceArgsBuilder::default()
+                        .style(Color::TRANSPARENT.into())
+                        .padding(Dp(24.0))
+                        .width(DimensionValue::WRAP)
+                        .height(DimensionValue::WRAP)
+                        .build()
+                        .expect("builder construction failed"),
+                    move || match style {
+                        DialogStyle::Glass => {
+                            fluid_glass(
+                                FluidGlassArgsBuilder::default()
+                                    .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
+                                    .blur_radius(Dp(5.0 * alpha as f64))
+                                    .shape(Shape::RoundedRectangle {
+                                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                    })
+                                    .refraction_amount(32.0 * alpha)
+                                    .block_input(true)
+                                    .padding(padding)
+                                    .build()
+                                    .expect("builder construction failed"),
+                                content,
+                            );
+                        }
+                        DialogStyle::Material => {
+                            surface(
+                                SurfaceArgsBuilder::default()
+                                    .style(Color::WHITE.with_alpha(alpha).into())
+                                    .shadow(ShadowProps {
+                                        color: Color::BLACK.with_alpha(alpha / 4.0),
+                                        ..Default::default()
+                                    })
+                                    .shape(Shape::RoundedRectangle {
+                                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                    })
+                                    .padding(padding)
+                                    .block_input(true)
+                                    .build()
+                                    .expect("builder construction failed"),
+                                content,
+                            );
+                        }
+                    },
+                );
             });
         },
     );
@@ -304,7 +320,7 @@ fn dialog_content_wrapper(
 /// # Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::dialog::{dialog_provider, DialogProviderArgsBuilder};
+/// use tessera_ui_basic_components::dialog::{dialog_provider, DialogProviderArgsBuilder, basic_dialog, BasicDialogArgsBuilder};
 ///
 /// dialog_provider(
 ///     DialogProviderArgsBuilder::default()
@@ -313,7 +329,15 @@ fn dialog_content_wrapper(
 ///         .build()
 ///         .unwrap(),
 ///     || { /* main content */ },
-///     |alpha| { /* dialog content */ },
+///     |alpha| {
+///         basic_dialog(
+///             BasicDialogArgsBuilder::default()
+///                 .headline("Dialog Title")
+///                 .supporting_text("This is the dialog body text.")
+///                 .build()
+///                 .unwrap()
+///         );
+///     },
 /// );
 /// ```
 #[tessera]
@@ -357,7 +381,7 @@ pub fn dialog_provider(
 /// ```
 /// use std::sync::Arc;
 /// use tessera_ui::{tessera, remember};
-/// use tessera_ui_basic_components::dialog::{dialog_provider_with_controller, DialogProviderArgsBuilder, DialogController};
+/// use tessera_ui_basic_components::dialog::{dialog_provider_with_controller, DialogProviderArgsBuilder, DialogController, basic_dialog, BasicDialogArgsBuilder};
 ///
 /// #[tessera]
 /// fn foo() {
@@ -375,7 +399,13 @@ pub fn dialog_provider(
 ///             /* main content */
 ///         },
 ///         |alpha| {
-///             /* dialog content */
+///             basic_dialog(
+///                 BasicDialogArgsBuilder::default()
+///                     .headline("Dialog Title")
+///                     .supporting_text("This is the dialog body text.")
+///                     .build()
+///                     .unwrap()
+///             );
 ///         },
 ///     );
 /// }
@@ -415,4 +445,196 @@ pub fn dialog_provider_with_controller(
             dialog_content(content_alpha);
         });
     }
+}
+
+/// Arguments for the [`basic_dialog`] component.
+#[derive(Builder)]
+#[builder(pattern = "owned")]
+pub struct BasicDialogArgs {
+    /// Optional icon to display at the top of the dialog.
+    #[builder(default, setter(strip_option))]
+    pub icon: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// Optional headline text.
+    #[builder(default, setter(strip_option, into))]
+    pub headline: Option<String>,
+    /// The supporting text of the dialog.
+    #[builder(setter(into))]
+    pub supporting_text: String,
+    /// The button used to confirm a proposed action, thus resolving what triggered the dialog.
+    #[builder(default, setter(custom))]
+    pub confirm_button: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// The button used to dismiss a proposed action, thus resolving what triggered the dialog.
+    #[builder(default, setter(custom))]
+    pub dismiss_button: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl BasicDialogArgsBuilder {
+    /// Sets the confirm button content.
+    pub fn confirm_button<F>(mut self, f: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.confirm_button = Some(Some(Arc::new(f)));
+        self
+    }
+
+    /// Sets the dismiss button content.
+    pub fn dismiss_button<F>(mut self, f: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.dismiss_button = Some(Some(Arc::new(f)));
+        self
+    }
+}
+
+/// # basic_dialog
+///
+/// A Material Design 3 basic dialog component.
+///
+/// # Usage
+///
+/// Use inside the `dialog_content` closure of [`dialog_provider`].
+///
+/// # Parameters
+///
+/// - `args` — configuration for the dialog content; see [`BasicDialogArgs`].
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui_basic_components::dialog::{basic_dialog, BasicDialogArgsBuilder};
+/// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
+/// use tessera_ui_basic_components::button::{button, ButtonArgsBuilder};
+/// use std::sync::Arc;
+///
+/// basic_dialog(
+///     BasicDialogArgsBuilder::default()
+///         .headline("Dialog Title")
+///         .supporting_text("This is the dialog body text.")
+///         .confirm_button(|| {
+///             button(ButtonArgsBuilder::default().build().unwrap(), || text("Confirm"));
+///         })
+///         .build()
+///         .unwrap()
+/// );
+/// ```
+#[tessera]
+pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
+    let args = args.into();
+    let scheme = global_material_scheme();
+    let alignment = if args.icon.is_some() {
+        CrossAxisAlignment::Center
+    } else {
+        CrossAxisAlignment::Start
+    };
+
+    column(
+        ColumnArgsBuilder::default()
+            .width(DimensionValue::Wrap {
+                min: Some(Dp(280.0).into()),
+                max: Some(Dp(560.0).into()),
+            })
+            .height(DimensionValue::WRAP)
+            .cross_axis_alignment(alignment)
+            .build()
+            .expect("builder construction failed"),
+        move |scope| {
+            // Icon
+            if let Some(icon) = args.icon {
+                scope.child(move || {
+                    icon();
+                });
+                scope.child(|| {
+                    spacer(
+                        SpacerArgsBuilder::default()
+                            .height(Dp(16.0))
+                            .build()
+                            .unwrap(),
+                    );
+                });
+            }
+
+            // Headline
+            if let Some(headline) = args.headline {
+                scope.child(move || {
+                    text(
+                        TextArgsBuilder::default()
+                            .text(headline)
+                            .size(Dp(24.0))
+                            .color(scheme.on_surface)
+                            .build()
+                            .unwrap(),
+                    );
+                });
+                scope.child(|| {
+                    spacer(
+                        SpacerArgsBuilder::default()
+                            .height(Dp(16.0))
+                            .build()
+                            .unwrap(),
+                    );
+                });
+            }
+
+            // Supporting Text
+            scope.child(move || {
+                text(
+                    TextArgsBuilder::default()
+                        .text(args.supporting_text)
+                        .size(Dp(14.0))
+                        .color(scheme.on_surface_variant)
+                        .build()
+                        .unwrap(),
+                );
+            });
+
+            // Actions
+            let confirm_button = args.confirm_button;
+            let dismiss_button = args.dismiss_button;
+
+            if confirm_button.is_some() || dismiss_button.is_some() {
+                scope.child(|| {
+                    spacer(
+                        SpacerArgsBuilder::default()
+                            .height(Dp(24.0))
+                            .build()
+                            .unwrap(),
+                    );
+                });
+                scope.child(move || {
+                    row(
+                        RowArgsBuilder::default()
+                            .width(DimensionValue::FILLED)
+                            .main_axis_alignment(MainAxisAlignment::End)
+                            .build()
+                            .unwrap(),
+                        |s| {
+                            let has_dismiss = dismiss_button.is_some();
+                            let has_confirm = confirm_button.is_some();
+
+                            if let Some(dismiss) = dismiss_button {
+                                s.child(move || dismiss());
+                            }
+
+                            if has_dismiss && has_confirm {
+                                s.child(|| {
+                                    spacer(
+                                        SpacerArgsBuilder::default()
+                                            .width(Dp(8.0))
+                                            .build()
+                                            .unwrap(),
+                                    );
+                                });
+                            }
+
+                            if let Some(confirm) = confirm_button {
+                                s.child(move || confirm());
+                            }
+                        },
+                    );
+                });
+            }
+        },
+    );
 }
