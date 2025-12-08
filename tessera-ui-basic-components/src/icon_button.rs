@@ -189,9 +189,14 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
     icon_args.size = Dp(24.0);
     icon_args.tint = content_color;
 
-    button(button_builder.build().unwrap(), move || {
-        icon(icon_args);
-    });
+    button(
+        button_builder
+            .build()
+            .expect("failed to build icon button args"),
+        move || {
+            icon(icon_args);
+        },
+    );
 }
 
 /// # glass_icon_button

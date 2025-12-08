@@ -550,7 +550,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                         SpacerArgsBuilder::default()
                             .height(Dp(16.0))
                             .build()
-                            .unwrap(),
+                            .expect("failed to build spacer args for icon"),
                     );
                 });
             }
@@ -564,7 +564,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                             .size(Dp(24.0))
                             .color(scheme.on_surface)
                             .build()
-                            .unwrap(),
+                            .expect("failed to build headline text args"),
                     );
                 });
                 scope.child(|| {
@@ -572,7 +572,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                         SpacerArgsBuilder::default()
                             .height(Dp(16.0))
                             .build()
-                            .unwrap(),
+                            .expect("failed to build headline spacer args"),
                     );
                 });
             }
@@ -585,7 +585,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                         .size(Dp(14.0))
                         .color(scheme.on_surface_variant)
                         .build()
-                        .unwrap(),
+                        .expect("failed to build supporting text args"),
                 );
             });
 
@@ -599,7 +599,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                         SpacerArgsBuilder::default()
                             .height(Dp(24.0))
                             .build()
-                            .unwrap(),
+                            .expect("failed to build actions spacer args"),
                     );
                 });
                 scope.child(move || {
@@ -608,7 +608,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                             .width(DimensionValue::FILLED)
                             .main_axis_alignment(MainAxisAlignment::End)
                             .build()
-                            .unwrap(),
+                            .expect("failed to build actions row args"),
                         |s| {
                             let has_dismiss = dismiss_button.is_some();
                             let has_confirm = confirm_button.is_some();
@@ -623,7 +623,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                                         SpacerArgsBuilder::default()
                                             .width(Dp(8.0))
                                             .build()
-                                            .unwrap(),
+                                            .expect("failed to build action gap spacer args"),
                                     );
                                 });
                             }
