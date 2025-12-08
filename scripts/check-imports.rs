@@ -21,7 +21,6 @@
 //! [dependencies]
 //! syn = { version = "2.0", features = ["full", "extra-traits", "parsing"] }
 //! anyhow = "1.0"
-//! colored = "2.1"
 //! proc-macro2 = { version = "1.0", features = ["proc-macro", "span-locations"] }
 //! itertools = "0.10"
 //! quote = "1.0"
@@ -33,7 +32,6 @@
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
-    io::{self, Write},
     path::{Path, PathBuf},
     process::Command,
     sync::{Arc, Mutex},
@@ -41,7 +39,6 @@ use std::{
 
 use anyhow::{Result, bail};
 use clap::Parser;
-use colored::Colorize;
 use ignore::WalkBuilder;
 use itertools::Itertools;
 use proc_macro2::Span;
@@ -53,12 +50,12 @@ use syn::{Expr, File, Item, Lit, Meta, UseTree, Visibility, spanned::Spanned};
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None, bin_name = "rust-script scripts/check-imports.rs")]
 struct Cli {
-    /// Automatically fixes formatting issues.
-    #[arg(short, long)]
-    fix: bool,
+    /// Run in check mode (do not modify files).
+    #[arg(long)]
+    check: bool,
 
     /// The list of files and/or directories to check or fix.
-    #[arg(required = true)]
+    #[arg(default_value = ".")]
     paths: Vec<PathBuf>,
 }
 
@@ -145,33 +142,15 @@ fn main() -> Result<()> {
     let files_to_process = collect_rs_files(&cli.paths);
 
     let failed_items = Arc::new(Mutex::new(Vec::new()));
-    let print_mutex = Arc::new(Mutex::new(()));
 
     // Collect all file paths that need rustfmt
     let mut fmt_targets = Vec::new();
 
     for file_path in &files_to_process {
-        match process_file(
-            file_path,
-            cli.fix,
-            &mut fmt_targets,
-            &failed_items,
-            &print_mutex,
-        ) {
-            Ok(result) => {
-                let _lock = print_mutex.lock().unwrap();
-                let icon = if result.contains("Fixed") {
-                    "🔧"
-                } else {
-                    "✅"
-                };
-                println!("{} {} - {}", icon, result, file_path.display());
-                io::stdout().flush().unwrap();
-            }
+        match process_file(file_path, !cli.check, &mut fmt_targets) {
+            Ok(_) => {}
             Err(e) => {
-                drop(print_mutex.lock().unwrap());
-                println!("❌ {} - {}: {}", "Error".red(), file_path.display(), e);
-                io::stdout().flush().unwrap();
+                println!("{}: {}", file_path.display(), e);
                 failed_items.lock().unwrap().push(file_path.clone());
                 continue;
             }
@@ -184,7 +163,7 @@ fn main() -> Result<()> {
     }
 
     // Batch format all files that need it
-    run_rustfmt_if_needed(cli.fix, &fmt_targets)?;
+    run_rustfmt_if_needed(!cli.check, &fmt_targets)?;
 
     Ok(())
 }
@@ -204,30 +183,17 @@ fn run_rustfmt_if_needed(cli_fix: bool, fmt_targets: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
-fn process_file(
-    file_path: &Path,
-    cli_fix: bool,
-    fmt_targets: &mut Vec<PathBuf>,
-    _failed_items: &Arc<Mutex<Vec<PathBuf>>>,
-    _print_mutex: &Arc<Mutex<()>>,
-) -> Result<String> {
+fn process_file(file_path: &Path, cli_fix: bool, fmt_targets: &mut Vec<PathBuf>) -> Result<()> {
     if cli_fix {
         match fix_file(file_path) {
-            Ok(changed) => {
+            Ok(_) => {
                 fmt_targets.push(file_path.to_path_buf());
-                if changed {
-                    Ok("Fixed".cyan().to_string())
-                } else {
-                    Ok("Correctly formatted".green().to_string())
-                }
+                Ok(())
             }
             Err(e) => Err(e),
         }
     } else {
-        match check_file(file_path) {
-            Ok(_) => Ok("Check passed".green().to_string()),
-            Err(e) => Err(e),
-        }
+        check_file(file_path)
     }
 }
 
