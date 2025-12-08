@@ -22,7 +22,7 @@ use crate::{
     boxed::{BoxedArgsBuilder, boxed},
     checkmark::{CheckmarkArgsBuilder, checkmark},
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
 };
 
 /// Controller for [`checkbox`] state.
@@ -90,15 +90,14 @@ pub struct CheckboxArgs {
     /// Size of the checkbox (width and height).
     ///
     /// Expressed in `Dp` (density-independent pixels). The checkbox will use
-    /// the same value for width and height; default is `Dp(24.0)`.
-    #[builder(default = "Dp(24.0)")]
+    /// the same value for width and height; default is `Dp(18.0)`.
+    #[builder(default = "Dp(18.0)")]
     pub size: Dp,
 
-    #[builder(default = "crate::material_color::global_material_scheme().surface_variant")]
-    /// Background color when the checkbox is not checked.
+    #[builder(default = "crate::material_color::global_material_scheme().on_surface_variant")]
+    /// Outline color when the checkbox is not checked.
     ///
-    /// This sets the surface color shown for the unchecked state and is typically
-    /// a subtle neutral color.
+    /// This sets the border color shown for the unchecked state.
     pub color: Color,
 
     #[builder(default = "crate::material_color::global_material_scheme().primary")]
@@ -114,23 +113,15 @@ pub struct CheckboxArgs {
     /// This is applied on top of the `checked_color` surface.
     pub checkmark_color: Color,
 
-    #[builder(default = "5.0")]
+    #[builder(default = "2.5")]
     /// Stroke width in physical pixels used to render the checkmark path.
     ///
     /// Higher values produce a thicker checkmark. The default value is tuned for
     /// the default `size`.
     pub checkmark_stroke_width: f32,
 
-    #[builder(default = "1.0")]
-    /// Initial animation progress of the checkmark (0.0 ..= 1.0).
-    ///
-    /// Used to drive the checkmark animation when toggling. `0.0` means not
-    /// visible; `1.0` means fully drawn. Values in-between show the intermediate
-    /// animation state.
-    pub checkmark_animation_progress: f32,
-
     #[builder(
-        default = "Shape::RoundedRectangle{ top_left: RoundedCorner::manual(Dp(4.0), 3.0), top_right: RoundedCorner::manual(Dp(4.0), 3.0), bottom_right: RoundedCorner::manual(Dp(4.0), 3.0), bottom_left: RoundedCorner::manual(Dp(4.0), 3.0) }"
+        default = "Shape::RoundedRectangle{ top_left: RoundedCorner::manual(Dp(2.0), 2.0), top_right: RoundedCorner::manual(Dp(2.0), 2.0), bottom_right: RoundedCorner::manual(Dp(2.0), 2.0), bottom_left: RoundedCorner::manual(Dp(2.0), 2.0) }"
     )]
     /// Shape used for the outer checkbox surface (rounded rectangle, etc.).
     ///
@@ -139,11 +130,23 @@ pub struct CheckboxArgs {
 
     /// Optional surface color to apply when the pointer hovers over the control.
     ///
-    /// If `None`, the control does not apply a hover style by default.
-    #[builder(
-        default = "Some(crate::material_color::blend_over(crate::material_color::global_material_scheme().surface_variant, crate::material_color::global_material_scheme().on_surface, 0.08))"
-    )]
+    /// If `None`, the control uses the default Material 3 state layer behavior.
+    #[builder(default)]
     pub hover_color: Option<Color>,
+
+    /// Whether the checkbox is disabled.
+    #[builder(default = "false")]
+    pub disabled: bool,
+
+    #[builder(
+        default = "crate::material_color::global_material_scheme().on_surface.with_alpha(0.38)"
+    )]
+    /// Color used for the checkbox border/background when disabled.
+    pub disabled_color: Color,
+
+    #[builder(default = "crate::material_color::global_material_scheme().surface")]
+    /// Color used for the checkmark icon when disabled.
+    pub disabled_checkmark_color: Color,
 
     /// Optional accessibility label read by assistive technologies.
     ///
@@ -314,77 +317,181 @@ pub fn checkbox_with_controller(
 ) {
     let args: CheckboxArgs = args.into();
 
-    // Advance the animation each frame
-    input_handler(Box::new({
-        let controller = controller.clone();
-        move |_input| {
-            controller.update_progress();
-        }
-    }));
-
     // Click handler: toggle animation state and forward toggle callback
-    let on_click = Arc::new(closure!(clone controller, clone args.on_toggle, || {
-        controller.toggle();
-        on_toggle(controller.is_checked());
-    }));
+    let on_click = if args.disabled {
+        None
+    } else {
+        Some(Arc::new(
+            closure!(clone controller, clone args.on_toggle, || {
+                controller.toggle();
+                on_toggle(controller.is_checked());
+            }),
+        ))
+    };
     let on_click_for_surface = on_click.clone();
 
-    surface(
-        SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(args.size.to_px()))
-            .height(DimensionValue::Fixed(args.size.to_px()))
-            .style(
-                if controller.is_checked() {
-                    args.checked_color
-                } else {
-                    args.color
-                }
-                .into(),
+    // Determine colors based on state
+    let scheme = crate::material_color::global_material_scheme();
+    let (checkbox_style, icon_color) = if args.disabled {
+        if controller.is_checked() {
+            (
+                SurfaceStyle::Filled {
+                    color: args.disabled_color,
+                },
+                args.disabled_checkmark_color,
             )
-            .hover_style(args.hover_color.map(|c| c.into()))
-            .shape(args.shape)
-            .on_click(on_click_for_surface)
+        } else {
+            (
+                SurfaceStyle::Outlined {
+                    color: args.disabled_color,
+                    width: Dp(2.0),
+                },
+                Color::TRANSPARENT,
+            )
+        }
+    } else if controller.is_checked() {
+        (
+            SurfaceStyle::Filled {
+                color: args.checked_color,
+            },
+            args.checkmark_color,
+        )
+    } else {
+        (
+            SurfaceStyle::Outlined {
+                color: args.color,
+                width: Dp(2.0),
+            },
+            Color::TRANSPARENT,
+        )
+    };
+
+    // State Layer Color
+    let state_layer_color = if args.disabled {
+        Color::TRANSPARENT
+    } else if let Some(c) = args.hover_color {
+        c
+    } else {
+        let base = if controller.is_checked() {
+            args.checked_color
+        } else {
+            scheme.on_surface
+        };
+        base.with_alpha(0.08)
+    };
+
+    // Checkmark
+    let render_checkmark = closure!(
+        clone controller,
+        clone args,
+        clone icon_color,
+        || {
+            let progress = controller.progress();
+            if progress > 0.0 {
+                boxed(
+                    BoxedArgsBuilder::default()
+                        .alignment(Alignment::Center)
+                        .width(DimensionValue::FILLED)
+                        .height(DimensionValue::FILLED)
+                        .build()
+                        .expect("builder construction failed"),
+                    |scope| {
+                        scope.child(move || {
+                            checkmark(
+                                CheckmarkArgsBuilder::default()
+                                    .color(icon_color)
+                                    .stroke_width(args.checkmark_stroke_width)
+                                    .progress(progress)
+                                    .size(Dp(args.size.0 * 0.8))
+                                    .padding([0.0, 0.0])
+                                    .build()
+                                    .expect("builder construction failed"),
+                            )
+                        });
+                    },
+                );
+            }
+        }
+    );
+
+    // Checkbox Surface (18x18)
+    let render_checkbox_surface = closure!(
+        clone args,
+        clone checkbox_style,
+        clone render_checkmark,
+        || {
+            surface(
+                SurfaceArgsBuilder::default()
+                    .width(DimensionValue::Fixed(args.size.to_px()))
+                    .height(DimensionValue::Fixed(args.size.to_px()))
+                    .shape(args.shape)
+                    .style(checkbox_style)
+                    .build()
+                    .expect("builder construction failed"),
+                render_checkmark,
+            );
+        }
+    );
+
+    // Checkbox Container (centering the 18x18 surface)
+    let render_checkbox_container = closure!(
+        clone render_checkbox_surface,
+        || {
+            boxed(
+                BoxedArgsBuilder::default()
+                    .alignment(Alignment::Center)
+                    .width(DimensionValue::FILLED)
+                    .height(DimensionValue::FILLED)
+                    .build()
+                    .expect("builder construction failed"),
+                |scope| {
+                    scope.child(render_checkbox_surface);
+                },
+            );
+        }
+    );
+
+    // State Layer Surface (40x40)
+    let render_state_layer = closure!(
+        clone state_layer_color,
+        clone on_click_for_surface,
+        clone render_checkbox_container,
+        || {
+            let mut builder = SurfaceArgsBuilder::default()
+                .width(DimensionValue::Fixed(Dp(40.0).to_px()))
+                .height(DimensionValue::Fixed(Dp(40.0).to_px()))
+                .shape(Shape::Ellipse)
+                .style(SurfaceStyle::Filled {
+                    color: Color::TRANSPARENT,
+                })
+                .hover_style(Some(SurfaceStyle::Filled {
+                    color: state_layer_color,
+                }));
+
+            if let Some(handler) = on_click_for_surface.clone() {
+                builder = builder.on_click(handler);
+            }
+
+            surface(
+                builder.build().expect("builder construction failed"),
+                render_checkbox_container,
+            );
+        }
+    );
+
+    // Outer Box (Layout 48x48)
+    boxed(
+        BoxedArgsBuilder::default()
+            .width(DimensionValue::Fixed(Dp(48.0).to_px()))
+            .height(DimensionValue::Fixed(Dp(48.0).to_px()))
+            .alignment(Alignment::Center)
             .build()
             .expect("builder construction failed"),
         closure!(
-            clone controller,
-            clone args.checkmark_color,
-            clone args.checkmark_stroke_width,
-            clone args.size,
-            || {
-            let progress = controller.progress();
-            if progress > 0.0 {
-                surface(
-                    SurfaceArgsBuilder::default()
-                        .padding(Dp(2.0))
-                        .style(Color::TRANSPARENT.into())
-                        .build()
-                        .expect("builder construction failed"),
-                    move || {
-                        boxed(
-                            BoxedArgsBuilder::default()
-                                .alignment(Alignment::Center)
-                                .build()
-                                .expect("builder construction failed"),
-                            |scope| {
-                                scope.child(move || {
-                                    checkmark(
-                                        CheckmarkArgsBuilder::default()
-                                            .color(checkmark_color)
-                                            .stroke_width(checkmark_stroke_width)
-                                            .progress(progress)
-                                            .size(Dp(size.0 * 0.8))
-                                            .padding([2.0, 2.0])
-                                            .build()
-                                            .expect("builder construction failed"),
-                                    )
-                                });
-                            },
-                        );
-                    },
-                )
+            clone render_state_layer,
+            |scope| {
+                scope.child(render_state_layer);
             }
-        }
         ),
     );
 
@@ -392,12 +499,16 @@ pub fn checkbox_with_controller(
     let accessibility_description = args.accessibility_description.clone();
     let accessibility_state = controller.clone();
     let on_click_for_accessibility = on_click.clone();
+    let disabled = args.disabled;
     input_handler(Box::new(closure!(
         clone accessibility_state,
         clone accessibility_label,
         clone accessibility_description,
         clone on_click_for_accessibility,
         |input| {
+            // Update animation progress
+            accessibility_state.update_progress();
+
             let checked = accessibility_state.is_checked();
             let mut builder = input.accessibility().role(Role::CheckBox);
 
@@ -406,6 +517,10 @@ pub fn checkbox_with_controller(
             }
             if let Some(description) = accessibility_description.as_ref() {
                 builder = builder.description(description.clone());
+            }
+
+            if disabled {
+                builder = builder.disabled();
             }
 
             builder = builder
@@ -419,14 +534,18 @@ pub fn checkbox_with_controller(
 
             builder.commit();
 
-            input.set_accessibility_action_handler(closure!(
-                clone on_click_for_accessibility,
-                |action| {
-                    if action == Action::Click {
-                        on_click_for_accessibility();
-                    }
+            if !disabled
+                && let Some(handler) = on_click_for_accessibility.as_ref() {
+                    let handler = handler.clone();
+                    input.set_accessibility_action_handler(closure!(
+                        clone handler,
+                        |action| {
+                            if action == Action::Click {
+                                handler();
+                            }
+                        }
+                    ));
                 }
-            ));
         }
     )));
 }
