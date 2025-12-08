@@ -349,10 +349,32 @@ fn determine_bump_type(
     }
 
     let latest_tag = find_latest_tag(&package.name)?;
-    let commits = collect_commits_since_tag(
-        latest_tag.as_deref().unwrap_or(""),
-        &package.path.to_string_lossy(),
-    )?;
+    let tag_str = latest_tag.as_deref().unwrap_or("");
+    let pkg_path_str = package.path.to_string_lossy();
+
+    // Check for BREAKING CHANGE footer or body using git log --grep
+    let range = if tag_str.is_empty() {
+        "HEAD".to_string()
+    } else {
+        format!("{}..HEAD", tag_str)
+    };
+
+    let grep_output = Command::new("git")
+        .args([
+            "log",
+            &range,
+            "--grep=BREAKING CHANGE",
+            "--oneline",
+            "--",
+            &pkg_path_str,
+        ])
+        .output()?;
+
+    if !grep_output.stdout.is_empty() {
+        return Ok(Some(BumpType::Major));
+    }
+
+    let commits = collect_commits_since_tag(tag_str, &pkg_path_str)?;
 
     if commits.is_empty() {
         return Ok(None);
@@ -361,6 +383,10 @@ fn determine_bump_type(
     let mut bump_type = BumpType::Patch;
     for commit in commits {
         if let Some(msg) = commit.split_once(' ').map(|(_, m)| m) {
+            // Check for !: in subject (e.g. feat!: or feat(scope)!:)
+            if msg.contains("!:") {
+                return Ok(Some(BumpType::Major));
+            }
             if msg.contains("BREAKING CHANGE") {
                 return Ok(Some(BumpType::Major));
             }
