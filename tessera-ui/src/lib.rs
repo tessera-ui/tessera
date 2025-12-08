@@ -111,6 +111,7 @@ pub mod accessibility;
 pub mod clipboard;
 pub mod color;
 mod component_tree;
+pub mod context;
 mod cursor;
 pub mod dp;
 pub mod dyn_eq;
@@ -143,6 +144,7 @@ pub use crate::{
         ComponentTree, ComputedData, Constraint, DimensionValue, ImeRequest, InputHandlerFn,
         InputHandlerInput, MeasureFn, MeasureInput, MeasurementError,
     },
+    context::{provide_context, use_context},
     cursor::{CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent},
     dp::Dp,
     focus_state::Focus,

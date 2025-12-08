@@ -404,7 +404,7 @@ fn compute_slot_key<K: Hash>(key: &K) -> (u64, u64) {
     (logic_id, group_path_hash ^ key_hash)
 }
 
-fn ensure_build_phase() {
+pub(crate) fn ensure_build_phase() {
     match current_phase() {
         Some(RuntimePhase::Build) => {}
         Some(RuntimePhase::Measure) => {

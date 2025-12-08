@@ -30,6 +30,7 @@ accesskit = "0.21.1"
 accesskit_winit = "0.29.2"
 smallvec = "1.15.1"
 dirs = "6.0.0"
+im = "15.1.0"
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = "0.2.178"
