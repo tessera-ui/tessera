@@ -4,15 +4,14 @@ use closure::closure;
 use tessera_ui::{DimensionValue, Dp, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
-    button::{ButtonArgs, ButtonArgsBuilder, button},
+    button::{ButtonArgs, button},
     column::{ColumnArgsBuilder, column},
     icon::{IconArgsBuilder, IconContent},
-    icon_button::{IconButtonArgsBuilder, icon_button},
+    icon_button::{IconButtonArgsBuilder, IconButtonVariant, icon_button},
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
     material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, scrollable},
-    shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
@@ -106,26 +105,17 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                             .unwrap();
 
                                         let button_args = IconButtonArgsBuilder::default()
-                                            .button(
-                                                ButtonArgsBuilder::default()
-                                                    .shape(Shape::Ellipse)
-                                                    .color(global_material_scheme().surface_variant)
-                                                    .hover_color(Some(
-                                                        global_material_scheme().surface,
-                                                    ))
-                                                    .on_click(Arc::new(closure!(
-                                                        clone state.counter,
-                                                        || {
-                                                            let mut count =
-                                                                counter.lock().unwrap();
-                                                            *count += 1;
-                                                            println!("Icon button clicked!");
-                                                        }
-                                                    )))
-                                                    .padding(Dp(12.0))
-                                                    .build()
-                                                    .unwrap(),
-                                            )
+                                            .variant(IconButtonVariant::Filled)
+                                            .color(global_material_scheme().surface_variant)
+                                            .on_click(closure!(
+                                                clone state.counter,
+                                                || {
+                                                    let mut count =
+                                                        counter.lock().unwrap();
+                                                    *count += 1;
+                                                    println!("Icon button clicked!");
+                                                }
+                                            ))
                                             .icon(icon)
                                             .build()
                                             .unwrap();
