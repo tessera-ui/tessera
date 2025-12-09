@@ -3,12 +3,17 @@
 //! ## Usage
 //!
 //! Use `lazy_column` or `lazy_row` to efficiently display large datasets.
-use std::{ops::Range, sync::Arc};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    ops::Range,
+    sync::Arc,
+};
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, Px, PxPosition,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, Px, PxPosition, key,
     remember, tessera,
 };
 
@@ -131,7 +136,24 @@ impl<'a> LazyListScope<'a> {
     where
         F: Fn(usize) + Send + Sync + 'static,
     {
-        self.slots.push(LazySlot::items(count, builder));
+        self.slots.push(LazySlot::items(count, builder, None));
+    }
+
+    /// Adds a batch of lazily generated items with a key provider.
+    pub fn items_with_key<K, KF, F>(&mut self, count: usize, key_provider: KF, builder: F)
+    where
+        K: Hash,
+        KF: Fn(usize) -> K + Send + Sync + 'static,
+        F: Fn(usize) + Send + Sync + 'static,
+    {
+        let key_provider = Arc::new(move |idx| {
+            let key = key_provider(idx);
+            let mut hasher = DefaultHasher::new();
+            key.hash(&mut hasher);
+            hasher.finish()
+        });
+        self.slots
+            .push(LazySlot::items(count, builder, Some(key_provider)));
     }
 
     /// Add a single lazily generated item.
@@ -159,15 +181,72 @@ impl<'a> LazyListScope<'a> {
         }
         let builder = Arc::new(builder);
         let count = items.len();
-        self.slots.push(LazySlot::items(count, {
+        self.slots.push(LazySlot::items(
+            count,
+            {
+                let items = items.clone();
+                let builder = builder.clone();
+                move |idx| {
+                    if let Some(item) = items.get(idx) {
+                        builder(idx, item);
+                    }
+                }
+            },
+            None,
+        ));
+    }
+
+    /// Adds lazily generated items from an iterator with a key provider.
+    pub fn items_from_iter_with_key<I, T, K, KF, F>(
+        &mut self,
+        iter: I,
+        key_provider: KF,
+        builder: F,
+    ) where
+        I: IntoIterator<Item = T>,
+        T: Send + Sync + 'static,
+        K: Hash,
+        KF: Fn(usize, &T) -> K + Send + Sync + 'static,
+        F: Fn(usize, &T) + Send + Sync + 'static,
+    {
+        let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
+        if items.is_empty() {
+            return;
+        }
+        let builder = Arc::new(builder);
+        let key_provider = Arc::new(key_provider);
+        let count = items.len();
+
+        let slot_builder = {
             let items = items.clone();
             let builder = builder.clone();
-            move |idx| {
+            move |idx: usize| {
                 if let Some(item) = items.get(idx) {
                     builder(idx, item);
                 }
             }
-        }));
+        };
+
+        let slot_key_provider = {
+            let items = items.clone();
+            let key_provider = key_provider.clone();
+            move |idx: usize| -> u64 {
+                if let Some(item) = items.get(idx) {
+                    let key = key_provider(idx, item);
+                    let mut hasher = DefaultHasher::new();
+                    key.hash(&mut hasher);
+                    hasher.finish()
+                } else {
+                    0
+                }
+            }
+        };
+
+        self.slots.push(LazySlot::items(
+            count,
+            slot_builder,
+            Some(Arc::new(slot_key_provider)),
+        ));
     }
 
     /// Convenience helper for iterators when only the element is needed.
@@ -577,8 +656,10 @@ fn lazy_list_view(
         },
     ));
 
-    for child in build_child_closures(&visible_children) {
-        child();
+    for child in visible_children {
+        key(child.key_hash, || {
+            (child.builder)(child.local_index);
+        });
     }
 }
 
@@ -738,13 +819,18 @@ enum LazySlot {
 }
 
 impl LazySlot {
-    fn items<F>(count: usize, builder: F) -> Self
+    fn items<F>(
+        count: usize,
+        builder: F,
+        key_provider: Option<Arc<dyn Fn(usize) -> u64 + Send + Sync>>,
+    ) -> Self
     where
         F: Fn(usize) + Send + Sync + 'static,
     {
         Self::Items(LazyItemsSlot {
             count,
             builder: Arc::new(builder),
+            key_provider,
         })
     }
 
@@ -759,6 +845,7 @@ impl LazySlot {
 struct LazyItemsSlot {
     count: usize,
     builder: Arc<dyn Fn(usize) + Send + Sync>,
+    key_provider: Option<Arc<dyn Fn(usize) -> u64 + Send + Sync>>,
 }
 
 #[derive(Clone)]
@@ -794,10 +881,19 @@ impl LazySlotPlan {
         let mut result = Vec::new();
         for index in range {
             if let Some((slot, local_index)) = self.resolve(index) {
+                let key_hash = if let Some(provider) = &slot.key_provider {
+                    provider(local_index)
+                } else {
+                    let mut hasher = DefaultHasher::new();
+                    index.hash(&mut hasher);
+                    hasher.finish()
+                };
+
                 result.push(VisibleChild {
                     item_index: index,
                     local_index,
                     builder: slot.builder.clone(),
+                    key_hash,
                 });
             }
         }
@@ -830,17 +926,7 @@ struct VisibleChild {
     item_index: usize,
     local_index: usize,
     builder: Arc<dyn Fn(usize) + Send + Sync>,
-}
-
-fn build_child_closures(children: &[VisibleChild]) -> Vec<Box<dyn FnOnce()>> {
-    children
-        .iter()
-        .map(|child| {
-            let builder = child.builder.clone();
-            let local_index = child.local_index;
-            Box::new(move || (builder)(local_index)) as Box<dyn FnOnce()>
-        })
-        .collect()
+    key_hash: u64,
 }
 
 #[derive(Default)]

@@ -157,7 +157,7 @@ pub use crate::{
         },
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
     },
-    runtime::{GroupGuard, TesseraRuntime, remember, remember_with_key},
+    runtime::{GroupGuard, TesseraRuntime, key, remember, remember_with_key},
 };
 
 use ime_state::ImeState;

@@ -522,3 +522,33 @@ where
 {
     remember_with_key((), init)
 }
+
+/// Groups the execution of a block of code with a stable key.
+///
+/// This is useful for maintaining state identity in dynamic lists or loops where
+/// the order of items might change.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::{key, tessera};
+///
+/// #[tessera]
+/// fn my_list(items: Vec<String>) {
+///     for item in items {
+///         key(item.clone(), || {
+///             // Components called here will have their state associated with `item`
+///             // regardless of the iteration order.
+///         });
+///     }
+/// }
+/// ```
+pub fn key<K, F, R>(key: K, block: F) -> R
+where
+    K: Hash,
+    F: FnOnce() -> R,
+{
+    let key_hash = hash_components(&[&key]);
+    let _guard = GroupGuard::new(key_hash);
+    block()
+}
