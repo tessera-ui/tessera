@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, tessera};
+use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, tessera, use_context};
 
 use crate::{
     image_vector::TintMode,
@@ -14,6 +14,7 @@ use crate::{
         image::command::{ImageCommand, ImageData},
         image_vector::command::{ImageVectorCommand, ImageVectorData},
     },
+    theme::ContentColor,
 };
 
 /// Icon content can be provided either as vector geometry or raster pixels.
@@ -70,7 +71,7 @@ pub struct IconArgs {
     pub height: Option<DimensionValue>,
     /// Tint color applied to vector icons. Defaults to white so it preserves the original
     /// colors (multiplying by white is a no-op). Raster icons ignore this field.
-    #[builder(default = "Color::WHITE")]
+    #[builder(default = "use_context::<ContentColor>().current")]
     pub tint: Color,
     /// How the tint is applied to vector icons.
     #[builder(default)]

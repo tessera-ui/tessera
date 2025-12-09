@@ -1,4 +1,4 @@
-//! An interactive button that displays an icon, following Material Design 3 specifications.
+//! An interactive button that displays an icon.
 //!
 //! ## Usage
 //!

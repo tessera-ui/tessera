@@ -196,7 +196,7 @@ pub fn app(#[state] app_state: AppState) {
                             basic_dialog(
                                 BasicDialogArgsBuilder::default()
                                     .headline("Basic Dialog")
-                                    .supporting_text("This is a basic dialog component following Material Design 3 specifications.")
+                                    .supporting_text("This is a basic dialog component.")
                                     .icon(Arc::new(|| {
                                         let icon_content = filled::info_icon();
                                         icon(IconArgsBuilder::default().content(icon_content).build().unwrap());

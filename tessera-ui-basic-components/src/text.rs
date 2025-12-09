@@ -13,7 +13,7 @@ use crate::{
         command::{TextCommand, TextConstraint},
         pipeline::TextData,
     },
-    theme::MaterialColorScheme,
+    theme::ContentColor,
 };
 
 pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
@@ -27,7 +27,7 @@ pub struct TextArgs {
     pub text: String,
 
     /// The color of the text.
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface")]
+    #[builder(default = "use_context::<ContentColor>().current")]
     pub color: Color,
 
     /// The font size in density-independent pixels (dp).

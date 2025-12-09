@@ -1,6 +1,4 @@
-//! Material Design color utilities for HCT and dynamic scheme generation.
-//! ## Usage Provide `MaterialColorScheme` via context and read with `use_context` for consistent theming.
-
+//! Provide theme contexts
 use material_color_utilities::{
     dynamiccolor::{DynamicSchemeBuilder, MaterialDynamicColors, SpecVersion, Variant},
     hct::Hct,
@@ -9,16 +7,64 @@ use tessera_ui::{Color, provide_context, tessera};
 
 const DEFAULT_COLOR: Color = Color::from_rgb(0.4039, 0.3137, 0.6431); // #6750A4
 
+/// Ambient content color used by text and icons when no explicit tint is provided.
+#[derive(Clone, Copy, Debug)]
+pub struct ContentColor {
+    /// Current content color used by text/icons when no explicit tint is provided.
+    pub current: Color,
+}
+
+impl Default for ContentColor {
+    fn default() -> Self {
+        ContentColor {
+            current: Color::BLACK,
+        }
+    }
+}
+
+/// Maps a container color to an appropriate foreground color from the scheme.
+pub fn content_color_for(container: Color, scheme: &MaterialColorScheme) -> Color {
+    if container == scheme.primary {
+        scheme.on_primary
+    } else if container == scheme.primary_container {
+        scheme.on_primary_container
+    } else if container == scheme.secondary {
+        scheme.on_secondary
+    } else if container == scheme.secondary_container {
+        scheme.on_secondary_container
+    } else if container == scheme.tertiary {
+        scheme.on_tertiary
+    } else if container == scheme.tertiary_container {
+        scheme.on_tertiary_container
+    } else if container == scheme.error {
+        scheme.on_error
+    } else if container == scheme.error_container {
+        scheme.on_error_container
+    } else if container == scheme.surface_variant {
+        scheme.on_surface_variant
+    } else if container == scheme.inverse_surface {
+        scheme.inverse_on_surface
+    } else {
+        scheme.on_surface
+    }
+}
+
 /// Provides a Material theme to descendants.
 #[tessera]
 pub fn material_theme_provider(scheme: MaterialColorScheme, child: impl FnOnce()) {
-    provide_context(scheme, child);
+    let content_color = ContentColor {
+        current: scheme.on_surface,
+    };
+    provide_context(scheme, || {
+        provide_context(content_color, child);
+    });
 }
 
 /// Generates a Material theme from a seed color and provides it to descendants.
 #[tessera]
 pub fn material_theme_from_seed(seed: Color, is_dark: bool, child: impl FnOnce()) {
-    provide_context(scheme_from_seed(seed, is_dark), child);
+    let scheme = scheme_from_seed(seed, is_dark);
+    material_theme_provider(scheme, child);
 }
 
 /// A Material Design color scheme, which can be light or dark,

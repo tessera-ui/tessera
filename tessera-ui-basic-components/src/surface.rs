@@ -10,7 +10,7 @@ use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
     InputHandlerInput, PressKeyEventType, Px, PxPosition, PxSize,
     accesskit::{Action, Role},
-    remember, tessera, use_context,
+    provide_context, remember, tessera, use_context,
     winit::window::CursorIcon,
 };
 
@@ -21,7 +21,7 @@ use crate::{
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
     shape_def::{ResolvedShape, RoundedCorner, Shape},
-    theme::MaterialColorScheme,
+    theme::{ContentColor, MaterialColorScheme, content_color_for},
 };
 
 /// Defines the visual style of the surface (fill, outline, or both).
@@ -438,7 +438,24 @@ fn compute_surface_size(
 /// ```
 #[tessera]
 pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
-    (child)();
+    let scheme = use_context::<MaterialColorScheme>();
+    let inherited_content_color = use_context::<ContentColor>().current;
+    let content_color = match &args.style {
+        SurfaceStyle::Filled { color } => content_color_for(*color, scheme.as_ref()),
+        SurfaceStyle::FilledOutlined { fill_color, .. } => {
+            content_color_for(*fill_color, scheme.as_ref())
+        }
+        SurfaceStyle::Outlined { .. } => inherited_content_color,
+    };
+
+    provide_context(
+        ContentColor {
+            current: content_color,
+        },
+        || {
+            (child)();
+        },
+    );
     let ripple_state = args.on_click.as_ref().map(|_| remember(RippleState::new));
     let ripple_state_for_measure = ripple_state.clone();
     let args_measure_clone = args.clone();
