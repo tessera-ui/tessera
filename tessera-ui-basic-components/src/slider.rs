@@ -428,6 +428,9 @@ fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> Slid
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use std::sync::Arc;
 /// use tessera_ui::{DimensionValue, Dp};
 /// use tessera_ui_basic_components::slider::{SliderArgsBuilder, slider};
@@ -443,6 +446,8 @@ fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> Slid
 ///         .build()
 ///         .unwrap(),
 /// );
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn slider(args: impl Into<SliderArgs>) {
@@ -467,25 +472,30 @@ pub fn slider(args: impl Into<SliderArgs>) {
 /// # Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use std::sync::Arc;
-/// use tessera_ui::{DimensionValue, Dp, remember, tessera};
-/// use tessera_ui_basic_components::slider::{slider_with_controller, SliderArgsBuilder, SliderController};
+/// use tessera_ui::{DimensionValue, Dp, remember};
+/// use tessera_ui_basic_components::slider::{
+///     SliderArgsBuilder, SliderController, slider_with_controller,
+/// };
 ///
-/// #[tessera]
-/// fn foo() {
-///     let controller = remember(|| SliderController::new());
-///     slider_with_controller(
-///        SliderArgsBuilder::default()
-///            .width(DimensionValue::Fixed(Dp(200.0).to_px()))
-///            .value(0.5)
-///            .on_change(Arc::new(|new_value| {
-///                println!("Slider value changed to: {}", new_value);
-///            }))
-///           .build()
-///           .unwrap(),
-///        controller.clone(),
-///    );
-/// }
+/// let controller = remember(|| SliderController::new());
+/// slider_with_controller(
+///     SliderArgsBuilder::default()
+///         .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///         .value(0.5)
+///         .on_change(Arc::new(|new_value| {
+///             println!("Slider value changed to: {}", new_value);
+///         }))
+///         .build()
+///         .unwrap(),
+///     controller.clone(),
+/// );
+/// # }
+/// # component();
+/// ```
 #[tessera]
 pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: Arc<SliderController>) {
     let args: SliderArgs = args.into();
@@ -701,6 +711,9 @@ fn measure_centered_slider(
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui::{DimensionValue, Dp};
 /// use tessera_ui_basic_components::slider::{SliderArgsBuilder, centered_slider};
@@ -732,6 +745,8 @@ fn measure_centered_slider(
 ///     *value_guard = 0.25;
 ///     assert_eq!(*value_guard, 0.25);
 /// }
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn centered_slider(args: impl Into<SliderArgs>) {
@@ -755,6 +770,8 @@ pub fn centered_slider(args: impl Into<SliderArgs>) {
 ///
 /// # Examples
 ///
+/// # }
+/// # component();
 /// ```
 /// use std::sync::Arc;
 /// use tessera_ui::{DimensionValue, Dp, remember, tessera};
@@ -981,6 +998,9 @@ fn measure_range_slider(
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui::{DimensionValue, Dp};
 /// use tessera_ui_basic_components::slider::{RangeSliderArgsBuilder, range_slider};
@@ -996,6 +1016,8 @@ fn measure_range_slider(
 ///         .build()
 ///         .unwrap(),
 /// );
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn range_slider(args: impl Into<RangeSliderArgs>) {

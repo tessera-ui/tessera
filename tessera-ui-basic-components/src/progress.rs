@@ -54,10 +54,15 @@ pub struct ProgressArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use tessera_ui_basic_components::progress::{ProgressArgsBuilder, progress};
 ///
 /// // Creates a progress bar that is 75% complete.
 /// progress(ProgressArgsBuilder::default().value(0.75).build().unwrap());
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn progress(args: impl Into<ProgressArgs>) {

@@ -5,6 +5,9 @@
 //! First, you need to register the pipelines provided by this crate.
 //!
 //! ```no_run
+//! # use tessera_ui::tessera;
+//! # #[tessera]
+//! # fn component() {
 //! use tessera_ui::renderer::Renderer;
 //! use tessera_ui_basic_components::pipelines::register_pipelines;
 //!
@@ -15,6 +18,8 @@
 //!         tessera_ui_basic_components::pipelines::register_pipelines(app);
 //!     },
 //! );
+//! # }
+//! # component();
 //! ```
 //!
 //! Then you can use the components in your UI.
@@ -22,6 +27,9 @@
 //! # Example
 //!
 //! ```
+//! # use tessera_ui::tessera;
+//! # #[tessera]
+//! # fn component() {
 //! use parking_lot::RwLock;
 //! use std::sync::Arc;
 //!
@@ -43,6 +51,8 @@
 //!
 //! // Text editor example
 //! text_editor(TextEditorArgs::default());
+//! # }
+//! # component();
 //! ```
 #![deny(missing_docs, clippy::unwrap_used)]
 

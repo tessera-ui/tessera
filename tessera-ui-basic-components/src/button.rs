@@ -87,6 +87,9 @@ impl Default for ButtonArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use std::sync::Arc;
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
@@ -107,6 +110,8 @@ impl Default for ButtonArgs {
 ///             .expect("builder construction failed"),
 ///     );
 /// });
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn button(args: impl Into<ButtonArgs>, child: impl FnOnce()) {

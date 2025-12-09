@@ -382,6 +382,9 @@ fn apply_close_action(
 /// # Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use std::sync::Arc;
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
@@ -413,6 +416,8 @@ fn apply_close_action(
 ///         );
 ///     },
 /// );
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn menu_provider(
@@ -453,6 +458,9 @@ pub fn menu_provider(
 /// # Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use std::sync::Arc;
 /// use tessera_ui::{Dp, remember, tessera};
 /// use tessera_ui_basic_components::{
@@ -487,6 +495,8 @@ pub fn menu_provider(
 ///         },
 ///     );
 /// }
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn menu_provider_with_controller(

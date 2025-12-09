@@ -418,6 +418,9 @@ fn compute_surface_size(
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use std::sync::Arc;
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
@@ -440,6 +443,8 @@ fn compute_surface_size(
 ///         );
 ///     },
 /// );
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
