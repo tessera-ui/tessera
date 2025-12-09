@@ -1,13 +1,13 @@
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{Color, DimensionValue, Dp, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
-    material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
+    theme::MaterialColorScheme,
 };
 
 #[tessera]
@@ -76,7 +76,7 @@ fn row_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(global_material_scheme().surface_variant.into())
+                    .style(use_context::<MaterialColorScheme>().surface_variant.into())
                     .build()
                     .unwrap(),
                 || {
@@ -114,7 +114,7 @@ fn column_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(global_material_scheme().surface_variant.into())
+                    .style(use_context::<MaterialColorScheme>().surface_variant.into())
                     .build()
                     .unwrap(),
                 || {
@@ -152,7 +152,7 @@ fn boxed_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(global_material_scheme().surface_variant.into())
+                    .style(use_context::<MaterialColorScheme>().surface_variant.into())
                     .build()
                     .unwrap(),
                 || {

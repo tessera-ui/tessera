@@ -4,7 +4,7 @@ use closure::closure;
 use tessera_ui::{
     Color, DimensionValue, Dp,
     router::{Router, router_root},
-    shard, tessera,
+    shard, tessera, use_context,
 };
 use tessera_ui_basic_components::{
     ShadowProps,
@@ -22,7 +22,6 @@ use tessera_ui_basic_components::{
     },
     icon::{IconArgsBuilder, icon},
     lazy_list::{LazyColumnArgsBuilder, lazy_column},
-    material_color::global_material_scheme,
     material_icons::filled,
     navigation_bar::{NavigationBarItemBuilder, navigation_bar},
     row::{RowArgsBuilder, row},
@@ -34,6 +33,7 @@ use tessera_ui_basic_components::{
     },
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
+    theme::MaterialColorScheme,
 };
 
 use crate::example_components::{
@@ -530,7 +530,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
             .padding(Dp(25.0))
             .on_click(on_click)
             .style(SurfaceStyle::Filled {
-                color: global_material_scheme().primary_container,
+                color: use_context::<MaterialColorScheme>().primary_container,
             })
             .shape(Shape::rounded_rectangle(Dp(25.0)))
             .shadow(ShadowProps::default())
@@ -552,7 +552,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
                         TextArgsBuilder::default()
                             .text(description)
                             .size(Dp(14.0))
-                            .color(global_material_scheme().on_surface_variant)
+                            .color(use_context::<MaterialColorScheme>().on_surface_variant)
                             .build()
                             .unwrap(),
                     );
@@ -587,7 +587,11 @@ fn top_app_bar() {
                             .padding(Dp(5.0))
                             .shape(Shape::Ellipse)
                             .color(Color::TRANSPARENT)
-                            .hover_color(Some(global_material_scheme().on_surface.with_alpha(0.1)))
+                            .hover_color(Some(
+                                use_context::<MaterialColorScheme>()
+                                    .on_surface
+                                    .with_alpha(0.1),
+                            ))
                             .width(DimensionValue::Fixed(Dp(40.0).into()))
                             .height(DimensionValue::Fixed(Dp(40.0).into()));
                         if Router::with(|router| router.len()) > 1 {
@@ -655,7 +659,7 @@ Copyright 2025 Tessera UI Framework Developers
                                     .to_string(),
                                 )
                                 .size(Dp(20.0))
-                                .color(global_material_scheme().on_surface)
+                                .color(use_context::<MaterialColorScheme>().on_surface)
                                 .build()
                                 .unwrap(),
                         );

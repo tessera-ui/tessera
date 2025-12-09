@@ -10,18 +10,18 @@ use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
     InputHandlerInput, PressKeyEventType, Px, PxPosition, PxSize,
     accesskit::{Action, Role},
-    remember, tessera,
+    remember, tessera, use_context,
     winit::window::CursorIcon,
 };
 
 use crate::{
     RippleProps, ShadowProps,
-    material_color::global_material_scheme,
     padding_utils::remove_padding_from_dimension,
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
     shape_def::{ResolvedShape, RoundedCorner, Shape},
+    theme::MaterialColorScheme,
 };
 
 /// Defines the visual style of the surface (fill, outline, or both).
@@ -52,7 +52,7 @@ pub enum SurfaceStyle {
 
 impl Default for SurfaceStyle {
     fn default() -> Self {
-        let scheme = global_material_scheme();
+        let scheme = use_context::<MaterialColorScheme>();
         SurfaceStyle::Filled {
             color: scheme.surface,
         }
@@ -100,9 +100,7 @@ pub struct SurfaceArgs {
     #[builder(default, setter(strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Color of the ripple effect (used when interactive).
-    #[builder(
-        default = "crate::material_color::global_material_scheme().on_surface.with_alpha(0.12)"
-    )]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface.with_alpha(0.12)")]
     pub ripple_color: Color,
     /// If true, all input events inside the surface bounds are blocked (stop propagation),
     /// after (optionally) handling its own click logic.

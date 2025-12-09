@@ -6,13 +6,13 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera_ui::{Color, DimensionValue, Dp, accesskit::Role, tessera};
+use tessera_ui::{Color, DimensionValue, Dp, accesskit::Role, tessera, use_context};
 
 use crate::{
     ShadowProps,
-    material_color::global_material_scheme,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
+    theme::MaterialColorScheme,
 };
 
 /// Arguments for the `button` component.
@@ -20,11 +20,11 @@ use crate::{
 #[builder(pattern = "owned")]
 pub struct ButtonArgs {
     /// The fill color of the button (RGBA).
-    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     pub color: Color,
     /// The hover color of the button (RGBA). If None, no hover effect is applied.
     #[builder(
-        default = "Some(crate::material_color::blend_over(crate::material_color::global_material_scheme().primary, crate::material_color::global_material_scheme().on_primary, 0.08))"
+        default = "Some(use_context::<MaterialColorScheme>().primary.blend_over(use_context::<MaterialColorScheme>().on_primary, 0.08))"
     )]
     pub hover_color: Option<Color>,
     /// The shape of the button.
@@ -43,9 +43,7 @@ pub struct ButtonArgs {
     #[builder(default, setter(strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// The ripple color (RGB) for the button.
-    #[builder(
-        default = "crate::material_color::global_material_scheme().on_primary.with_alpha(0.12)"
-    )]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_primary.with_alpha(0.12)")]
     pub ripple_color: Color,
     /// Width of the border. If > 0, an outline will be drawn.
     #[builder(default = "Dp(0.0)")]
@@ -179,14 +177,10 @@ impl ButtonArgs {
     /// Create a standard "Filled" button (High emphasis).
     /// Uses Primary color for container and OnPrimary for content.
     pub fn filled(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        let scheme = global_material_scheme();
+        let scheme = use_context::<MaterialColorScheme>();
         ButtonArgsBuilder::default()
             .color(scheme.primary)
-            .hover_color(Some(crate::material_color::blend_over(
-                scheme.primary,
-                scheme.on_primary,
-                0.08,
-            )))
+            .hover_color(Some(scheme.primary.blend_over(scheme.on_primary, 0.08)))
             .ripple_color(scheme.on_primary.with_alpha(0.12))
             .on_click(on_click)
             .build()
@@ -196,14 +190,10 @@ impl ButtonArgs {
     /// Create an "Elevated" button (Medium emphasis).
     /// Uses Surface color (or SurfaceContainerLow if available) with a shadow.
     pub fn elevated(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        let scheme = global_material_scheme();
+        let scheme = use_context::<MaterialColorScheme>();
         ButtonArgsBuilder::default()
             .color(scheme.surface)
-            .hover_color(Some(crate::material_color::blend_over(
-                scheme.surface,
-                scheme.primary,
-                0.08,
-            )))
+            .hover_color(Some(scheme.surface.blend_over(scheme.primary, 0.08)))
             .ripple_color(scheme.primary.with_alpha(0.12))
             .shadow(ShadowProps::default())
             .on_click(on_click)
@@ -214,14 +204,14 @@ impl ButtonArgs {
     /// Create a "Tonal" button (Medium emphasis).
     /// Uses SecondaryContainer color for container and OnSecondaryContainer for content.
     pub fn tonal(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        let scheme = global_material_scheme();
+        let scheme = use_context::<MaterialColorScheme>();
         ButtonArgsBuilder::default()
             .color(scheme.secondary_container)
-            .hover_color(Some(crate::material_color::blend_over(
-                scheme.secondary_container,
-                scheme.on_secondary_container,
-                0.08,
-            )))
+            .hover_color(Some(
+                scheme
+                    .secondary_container
+                    .blend_over(scheme.on_secondary_container, 0.08),
+            ))
             .ripple_color(scheme.on_secondary_container.with_alpha(0.12))
             .on_click(on_click)
             .build()
@@ -231,14 +221,10 @@ impl ButtonArgs {
     /// Create an "Outlined" button (Medium emphasis).
     /// Transparent container with an Outline border.
     pub fn outlined(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        let scheme = global_material_scheme();
+        let scheme = use_context::<MaterialColorScheme>();
         ButtonArgsBuilder::default()
             .color(Color::TRANSPARENT)
-            .hover_color(Some(crate::material_color::blend_over(
-                Color::TRANSPARENT,
-                scheme.primary,
-                0.08,
-            )))
+            .hover_color(Some(Color::TRANSPARENT.blend_over(scheme.primary, 0.08)))
             .ripple_color(scheme.primary.with_alpha(0.12))
             .border_width(Dp(1.0))
             .border_color(Some(scheme.outline))
@@ -250,14 +236,10 @@ impl ButtonArgs {
     /// Create a "Text" button (Low emphasis).
     /// Transparent container and no border.
     pub fn text(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        let scheme = global_material_scheme();
+        let scheme = use_context::<MaterialColorScheme>();
         ButtonArgsBuilder::default()
             .color(Color::TRANSPARENT)
-            .hover_color(Some(crate::material_color::blend_over(
-                Color::TRANSPARENT,
-                scheme.primary,
-                0.08,
-            )))
+            .hover_color(Some(Color::TRANSPARENT.blend_over(scheme.primary, 0.08)))
             .ripple_color(scheme.primary.with_alpha(0.12))
             .on_click(on_click)
             .build()

@@ -1,13 +1,13 @@
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{Color, DimensionValue, Dp, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
     lazy_list::{LazyColumnArgs, LazyColumnArgsBuilder, LazyRowArgsBuilder, lazy_column, lazy_row},
-    material_color::global_material_scheme,
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
+    theme::MaterialColorScheme,
 };
 
 #[tessera]
@@ -48,7 +48,7 @@ pub fn lazy_lists_showcase() {
                                                 "Virtualized column/row that only mounts what is visible in the \
                                                 viewport.",
                                             )
-                                            .color(global_material_scheme().on_surface_variant)
+                                            .color(use_context::<MaterialColorScheme>().on_surface_variant)
                                             .build()
                                             .unwrap(),
                                     );
@@ -87,7 +87,7 @@ fn vertical_list() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .style(global_material_scheme().surface_variant.into())
+            .style(use_context::<MaterialColorScheme>().surface_variant.into())
             .padding(Dp(12.0))
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
@@ -124,7 +124,7 @@ fn horizontal_gallery() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .style(global_material_scheme().surface_variant.into())
+            .style(use_context::<MaterialColorScheme>().surface_variant.into())
             .padding(Dp(12.0))
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
@@ -190,7 +190,7 @@ fn contact_card(index: usize) {
                             text(
                                 TextArgsBuilder::default()
                                     .text(format!("{unread_count} unread messages"))
-                                    .color(global_material_scheme().on_surface_variant)
+                                    .color(use_context::<MaterialColorScheme>().on_surface_variant)
                                     .build()
                                     .unwrap(),
                             );

@@ -1,16 +1,16 @@
 use std::sync::{Arc, Mutex};
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     glass_progress::{GlassProgressArgsBuilder, glass_progress},
-    material_color::global_material_scheme,
     scrollable::{ScrollableArgsBuilder, scrollable},
     slider::{SliderArgsBuilder, slider},
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
+    theme::MaterialColorScheme,
 };
 
 #[tessera]
@@ -65,7 +65,7 @@ fn test_content() {
                 text(TextArgsBuilder::default()
                     .text("This is the glass progress, adjust the slider below to change its value.")
                     .size(Dp(20.0))
-                    .color(global_material_scheme().on_surface_variant)
+                    .color(use_context::<MaterialColorScheme>().on_surface_variant)
                     .build()
                     .unwrap());
             });

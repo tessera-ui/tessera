@@ -4,11 +4,14 @@
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, tessera};
+use tessera_ui::{
+    Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, tessera, use_context,
+};
 
 use crate::{
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
+    theme::MaterialColorScheme,
 };
 
 /// Arguments for the `progress` component.
@@ -28,11 +31,11 @@ pub struct ProgressArgs {
     pub height: Dp,
 
     /// The color of the active part of the track.
-    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     pub progress_color: Color,
 
     /// The color of the inactive part of the track.
-    #[builder(default = "crate::material_color::global_material_scheme().surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().surface_variant")]
     pub track_color: Color,
 }
 

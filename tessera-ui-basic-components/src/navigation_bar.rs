@@ -11,7 +11,7 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, remember, tessera};
+use tessera_ui::{Color, DimensionValue, Dp, remember, tessera, use_context};
 
 use crate::{
     ShadowProps,
@@ -19,12 +19,12 @@ use crate::{
     animation,
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
-    material_color::{MaterialColorScheme, global_material_scheme},
     row::{RowArgsBuilder, row},
     shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
+    theme::MaterialColorScheme,
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
@@ -171,7 +171,7 @@ where
         let mut scope = NavigationBarScope { items: &mut items };
         scope_config(&mut scope);
     }
-    let scheme = global_material_scheme();
+    let scheme = use_context::<MaterialColorScheme>();
     let container_shadow = ShadowProps {
         color: scheme.shadow.with_alpha(0.16),
         offset: [0.0, 3.0],
@@ -260,7 +260,7 @@ fn render_navigation_item(
     selected_index: usize,
     previous_index: usize,
     animation_progress: f32,
-    scheme: MaterialColorScheme,
+    scheme: Arc<MaterialColorScheme>,
 ) {
     let is_selected = index == selected_index;
     let was_selected = index == previous_index && selected_index != previous_index;

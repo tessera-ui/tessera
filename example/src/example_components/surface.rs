@@ -2,11 +2,10 @@ use std::{fmt::Display, sync::Arc};
 
 use closure::closure;
 use parking_lot::RwLock;
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{ColumnArgsBuilder, column},
-    material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, scrollable},
     shape_def::{RoundedCorner, Shape},
@@ -14,6 +13,7 @@ use tessera_ui_basic_components::{
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
+    theme::MaterialColorScheme,
 };
 
 #[derive(Default)]
@@ -132,13 +132,14 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                         scope.child(move || {
                             let style = if border_width.to_pixels_f32() > 0.1 {
                                 SurfaceStyle::FilledOutlined {
-                                    fill_color: global_material_scheme().primary_container,
-                                    border_color: global_material_scheme().outline,
+                                    fill_color: use_context::<MaterialColorScheme>()
+                                        .primary_container,
+                                    border_color: use_context::<MaterialColorScheme>().outline,
                                     border_width,
                                 }
                             } else {
                                 SurfaceStyle::Filled {
-                                    color: global_material_scheme().primary_container,
+                                    color: use_context::<MaterialColorScheme>().primary_container,
                                 }
                             };
                             surface(

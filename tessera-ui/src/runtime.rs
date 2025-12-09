@@ -336,7 +336,7 @@ fn pop_phase() {
     });
 }
 
-fn current_phase() -> Option<RuntimePhase> {
+pub(crate) fn current_phase() -> Option<RuntimePhase> {
     PHASE_STACK.with(|stack| stack.borrow().last().copied())
 }
 

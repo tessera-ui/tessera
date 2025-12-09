@@ -7,7 +7,7 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEvent, CursorEventContent, DimensionValue, Dp, Px,
-    PxPosition, PxSize, accesskit::Role, remember, tessera, winit,
+    PxPosition, PxSize, accesskit::Role, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -15,13 +15,13 @@ use crate::{
     alignment::CrossAxisAlignment,
     checkmark::{CheckmarkArgsBuilder, checkmark},
     column::{ColumnArgsBuilder, column},
-    material_color::{blend_over, global_material_scheme},
     pos_misc::is_position_in_rect,
     row::{RowArgsBuilder, row},
     shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
+    theme::MaterialColorScheme,
 };
 
 const MENU_MIN_WIDTH: Dp = Dp(112.0);
@@ -49,7 +49,7 @@ fn default_menu_shape() -> Shape {
 }
 
 fn default_menu_shadow() -> Option<ShadowProps> {
-    let scheme = global_material_scheme();
+    let scheme = use_context::<MaterialColorScheme>();
     Some(ShadowProps {
         color: scheme.shadow.with_alpha(0.12),
         offset: [0.0, 3.0],
@@ -58,12 +58,12 @@ fn default_menu_shadow() -> Option<ShadowProps> {
 }
 
 fn default_menu_color() -> Color {
-    global_material_scheme().surface
+    use_context::<MaterialColorScheme>().surface
 }
 
 fn default_hover_color() -> Color {
-    let scheme = global_material_scheme();
-    blend_over(scheme.surface, scheme.on_surface, 0.08)
+    let scheme = use_context::<MaterialColorScheme>();
+    scheme.surface.blend_over(scheme.on_surface, 0.08)
 }
 
 fn default_scrim_color() -> Color {
@@ -711,15 +711,13 @@ pub struct MenuItemArgs {
     #[builder(default = "MENU_ITEM_HEIGHT")]
     pub height: Dp,
     /// Tint applied to the label text.
-    #[builder(default = "crate::material_color::global_material_scheme().on_surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface")]
     pub label_color: Color,
     /// Tint applied to supporting or trailing text.
-    #[builder(default = "crate::material_color::global_material_scheme().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface_variant")]
     pub supporting_color: Color,
     /// Tint applied when the item is disabled.
-    #[builder(
-        default = "crate::material_color::global_material_scheme().on_surface.with_alpha(0.38)"
-    )]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface.with_alpha(0.38)")]
     pub disabled_color: Color,
     /// Callback invoked when the item is activated.
     #[builder(default, setter(strip_option))]
@@ -897,7 +895,7 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
         .accessibility_label(args.label.clone())
         .block_input(true)
         .ripple_color(
-            crate::material_color::global_material_scheme()
+            use_context::<MaterialColorScheme>()
                 .on_surface
                 .with_alpha(0.12),
         );

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     button::{ButtonArgs, button},
@@ -9,12 +9,12 @@ use tessera_ui_basic_components::{
     icon::{IconArgsBuilder, IconContent},
     icon_button::{IconButtonArgsBuilder, IconButtonVariant, icon_button},
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
-    material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, scrollable},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
+    theme::MaterialColorScheme,
 };
 
 const ICON_BYTES: &[u8] = include_bytes!(concat!(
@@ -106,7 +106,10 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
 
                                         let button_args = IconButtonArgsBuilder::default()
                                             .variant(IconButtonVariant::Filled)
-                                            .color(global_material_scheme().surface_variant)
+                                            .color(
+                                                use_context::<MaterialColorScheme>()
+                                                    .surface_variant,
+                                            )
                                             .on_click(closure!(
                                                 clone state.counter,
                                                 || {
@@ -154,8 +157,11 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                             TextArgsBuilder::default()
                                                                 .text("Filled")
                                                                 .color(
-                                                                    global_material_scheme()
-                                                                        .on_primary,
+                                                                    use_context::<
+                                                                        MaterialColorScheme,
+                                                                    >(
+                                                                    )
+                                                                    .on_primary,
                                                                 )
                                                                 .build()
                                                                 .unwrap(),
@@ -182,8 +188,11 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                             TextArgsBuilder::default()
                                                                 .text("Elevated")
                                                                 .color(
-                                                                    global_material_scheme()
-                                                                        .primary,
+                                                                    use_context::<
+                                                                        MaterialColorScheme,
+                                                                    >(
+                                                                    )
+                                                                    .primary,
                                                                 )
                                                                 .build()
                                                                 .unwrap(),
@@ -210,8 +219,11 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                             TextArgsBuilder::default()
                                                                 .text("Tonal")
                                                                 .color(
-                                                                    global_material_scheme()
-                                                                        .on_secondary_container,
+                                                                    use_context::<
+                                                                        MaterialColorScheme,
+                                                                    >(
+                                                                    )
+                                                                    .on_secondary_container,
                                                                 )
                                                                 .build()
                                                                 .unwrap(),
@@ -245,8 +257,11 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                 TextArgsBuilder::default()
                                                                     .text("Outlined")
                                                                     .color(
-                                                                        global_material_scheme()
-                                                                            .primary,
+                                                                        use_context::<
+                                                                            MaterialColorScheme,
+                                                                        >(
+                                                                        )
+                                                                        .primary,
                                                                     )
                                                                     .build()
                                                                     .unwrap(),
@@ -273,8 +288,11 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                 TextArgsBuilder::default()
                                                                     .text("Text")
                                                                     .color(
-                                                                        global_material_scheme()
-                                                                            .primary,
+                                                                        use_context::<
+                                                                            MaterialColorScheme,
+                                                                        >(
+                                                                        )
+                                                                        .primary,
                                                                     )
                                                                     .build()
                                                                     .unwrap(),

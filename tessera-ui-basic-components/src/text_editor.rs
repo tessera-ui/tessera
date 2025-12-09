@@ -9,7 +9,7 @@ use derive_builder::Builder;
 use glyphon::{Action as GlyphonAction, Edit};
 use tessera_ui::{
     Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, accesskit::Role,
-    remember, tessera, winit,
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -18,6 +18,7 @@ use crate::{
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
     text_edit_core::{ClickType, text_edit_core},
+    theme::MaterialColorScheme,
 };
 
 /// State structure for the text editor, managing text content, cursor, selection, and editing logic.
@@ -43,13 +44,13 @@ pub struct TextEditorArgs {
     #[builder(default = "None")]
     pub min_height: Option<Dp>,
     /// Background color of the text editor (RGBA). Defaults to light gray.
-    #[builder(default = "Some(crate::material_color::global_material_scheme().surface_variant)")]
+    #[builder(default = "Some(use_context::<MaterialColorScheme>().surface_variant)")]
     pub background_color: Option<Color>,
     /// Border width in Dp. Defaults to 1.0 Dp.
     #[builder(default = "Dp(1.0)")]
     pub border_width: Dp,
     /// Border color (RGBA). Defaults to gray.
-    #[builder(default = "Some(crate::material_color::global_material_scheme().outline_variant)")]
+    #[builder(default = "Some(use_context::<MaterialColorScheme>().outline_variant)")]
     pub border_color: Option<Color>,
     /// The shape of the text editor container.
     #[builder(default = "Shape::RoundedRectangle {
@@ -63,15 +64,13 @@ pub struct TextEditorArgs {
     #[builder(default = "Dp(5.0)")]
     pub padding: Dp,
     /// Border color when focused (RGBA). Defaults to blue.
-    #[builder(default = "Some(crate::material_color::global_material_scheme().primary)")]
+    #[builder(default = "Some(use_context::<MaterialColorScheme>().primary)")]
     pub focus_border_color: Option<Color>,
     /// Background color when focused (RGBA). Defaults to white.
-    #[builder(default = "Some(crate::material_color::global_material_scheme().surface)")]
+    #[builder(default = "Some(use_context::<MaterialColorScheme>().surface)")]
     pub focus_background_color: Option<Color>,
     /// Color for text selection highlight (RGBA). Defaults to light blue with transparency.
-    #[builder(
-        default = "Some(crate::material_color::global_material_scheme().primary.with_alpha(0.35))"
-    )]
+    #[builder(default = "Some(use_context::<MaterialColorScheme>().primary.with_alpha(0.35))")]
     pub selection_color: Option<Color>,
     /// Optional label announced by assistive technologies.
     #[builder(default, setter(strip_option, into))]
@@ -567,23 +566,22 @@ fn determine_background_color(args: &TextEditorArgs, state: &TextEditorControlle
     if state.read().focus_handler().is_focused() {
         args.focus_background_color
             .or(args.background_color)
-            .unwrap_or(crate::material_color::global_material_scheme().surface)
+            .unwrap_or(use_context::<MaterialColorScheme>().surface)
     } else {
         args.background_color
-            .unwrap_or(crate::material_color::global_material_scheme().surface_variant)
+            .unwrap_or(use_context::<MaterialColorScheme>().surface_variant)
     }
 }
 
 /// Determine border color based on focus state
 fn determine_border_color(args: &TextEditorArgs, state: &TextEditorController) -> Option<Color> {
     if state.read().focus_handler().is_focused() {
-        args.focus_border_color.or(args.border_color).or(Some(
-            crate::material_color::global_material_scheme().primary,
-        ))
+        args.focus_border_color
+            .or(args.border_color)
+            .or(Some(use_context::<MaterialColorScheme>().primary))
     } else {
-        args.border_color.or(Some(
-            crate::material_color::global_material_scheme().outline_variant,
-        ))
+        args.border_color
+            .or(Some(use_context::<MaterialColorScheme>().outline_variant))
     }
 }
 
@@ -604,13 +602,9 @@ impl TextEditorArgs {
     pub fn simple() -> Self {
         TextEditorArgsBuilder::default()
             .min_width(Some(Dp(120.0)))
-            .background_color(Some(
-                crate::material_color::global_material_scheme().surface_variant,
-            ))
+            .background_color(Some(use_context::<MaterialColorScheme>().surface_variant))
             .border_width(Dp(1.0))
-            .border_color(Some(
-                crate::material_color::global_material_scheme().outline_variant,
-            ))
+            .border_color(Some(use_context::<MaterialColorScheme>().outline_variant))
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(Dp(0.0), 3.0),
                 top_right: RoundedCorner::manual(Dp(0.0), 3.0),

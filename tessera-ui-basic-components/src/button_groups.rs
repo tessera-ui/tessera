@@ -16,16 +16,16 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, ComputedData, Dp, Px, PxPosition, remember, tessera};
+use tessera_ui::{Color, ComputedData, Dp, Px, PxPosition, remember, tessera, use_context};
 
 use crate::{
     alignment::MainAxisAlignment,
     animation,
     button::{ButtonArgs, button},
-    material_color::global_material_scheme,
     row::{RowArgs, row},
     shape_def::{RoundedCorner, Shape},
     spacer::{SpacerArgs, spacer},
+    theme::MaterialColorScheme,
 };
 
 /// According to the [`ButtonGroups-Types`](https://m3.material.io/components/button-groups/specs#3b51d175-cc02-4701-b3f8-c9ffa229123a)
@@ -313,7 +313,8 @@ where
                                     })
                                 );
                                 button_args.shape = layout.active_button_shape;
-                                button(button_args, || elastic_container(elastic_state, move || child_closure(global_material_scheme().on_primary)));
+                                let scheme = use_context::<MaterialColorScheme>();
+                                button(button_args, || elastic_container(elastic_state, move || child_closure(scheme.on_primary)));
                             } else {
                                 let mut button_args = ButtonArgs::filled(
                                     Arc::new(move || {
@@ -331,7 +332,8 @@ where
                                         item_state.elastic_state.write().toggle();
                                     })
                                 );
-                                button_args.color = global_material_scheme().secondary_container;
+                                let scheme = use_context::<MaterialColorScheme>();
+                                button_args.color = scheme.secondary_container;
                                 if index == 0 {
                                     button_args.shape = layout.inactive_button_shape_start;
                                 } else if index == child_len - 1 {
@@ -340,9 +342,15 @@ where
                                     button_args.shape = layout.inactive_button_shape;
                                 }
 
-                                button(button_args, move || elastic_container(
-                                    elastic_state,
-                                    move || child_closure(global_material_scheme().on_secondary_container))
+                                let scheme = use_context::<MaterialColorScheme>();
+                                button(
+                                    button_args,
+                                    move || {
+                                        elastic_container(
+                                            elastic_state,
+                                            move || child_closure(scheme.on_secondary_container),
+                                        )
+                                    },
                                 );
                             }
                         })

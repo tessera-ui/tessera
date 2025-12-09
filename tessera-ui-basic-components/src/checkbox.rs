@@ -14,7 +14,7 @@ use parking_lot::RwLock;
 use tessera_ui::{
     Color, DimensionValue, Dp,
     accesskit::{Action, Role, Toggled},
-    remember, tessera,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -23,6 +23,7 @@ use crate::{
     checkmark::{CheckmarkArgsBuilder, checkmark},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
+    theme::MaterialColorScheme,
 };
 
 /// Controller for [`checkbox`] state.
@@ -94,20 +95,20 @@ pub struct CheckboxArgs {
     #[builder(default = "Dp(18.0)")]
     pub size: Dp,
 
-    #[builder(default = "crate::material_color::global_material_scheme().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface_variant")]
     /// Outline color when the checkbox is not checked.
     ///
     /// This sets the border color shown for the unchecked state.
     pub color: Color,
 
-    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     /// Background color used when the checkbox is checked.
     ///
     /// This color is shown behind the checkmark to indicate an active/selected
     /// state. Choose a higher-contrast color relative to `color`.
     pub checked_color: Color,
 
-    #[builder(default = "crate::material_color::global_material_scheme().on_primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_primary")]
     /// Color used to draw the checkmark icon inside the checkbox.
     ///
     /// This is applied on top of the `checked_color` surface.
@@ -138,13 +139,11 @@ pub struct CheckboxArgs {
     #[builder(default = "false")]
     pub disabled: bool,
 
-    #[builder(
-        default = "crate::material_color::global_material_scheme().on_surface.with_alpha(0.38)"
-    )]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface.with_alpha(0.38)")]
     /// Color used for the checkbox border/background when disabled.
     pub disabled_color: Color,
 
-    #[builder(default = "crate::material_color::global_material_scheme().surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().surface")]
     /// Color used for the checkmark icon when disabled.
     pub disabled_checkmark_color: Color,
 
@@ -331,7 +330,7 @@ pub fn checkbox_with_controller(
     let on_click_for_surface = on_click.clone();
 
     // Determine colors based on state
-    let scheme = crate::material_color::global_material_scheme();
+    let scheme = use_context::<MaterialColorScheme>();
     let (checkbox_style, icon_color) = if args.disabled {
         if controller.is_checked() {
             (

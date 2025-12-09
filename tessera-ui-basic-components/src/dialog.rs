@@ -10,7 +10,7 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, remember, tessera, winit};
+use tessera_ui::{Color, DimensionValue, Dp, remember, tessera, use_context, winit};
 
 use crate::{
     ShadowProps,
@@ -19,12 +19,12 @@ use crate::{
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
-    material_color::global_material_scheme,
     row::{RowArgsBuilder, row},
     shape_def::{RoundedCorner, Shape},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
+    theme::MaterialColorScheme,
 };
 
 /// The duration of the full dialog animation.
@@ -522,7 +522,7 @@ impl BasicDialogArgsBuilder {
 #[tessera]
 pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
     let args = args.into();
-    let scheme = global_material_scheme();
+    let scheme = (*use_context::<MaterialColorScheme>()).clone();
     let alignment = if args.icon.is_some() {
         CrossAxisAlignment::Center
     } else {

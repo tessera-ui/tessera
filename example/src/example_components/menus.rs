@@ -1,12 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgsBuilder, column},
-    material_color::global_material_scheme,
     menus::{
         MenuAnchor, MenuController, MenuItemArgsBuilder, MenuPlacement, MenuProviderArgsBuilder,
         menu_provider_with_controller,
@@ -15,6 +14,7 @@ use tessera_ui_basic_components::{
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
+    theme::MaterialColorScheme,
 };
 
 #[tessera]
@@ -81,7 +81,10 @@ pub fn menus_showcase() {
                                                 if pinned_display { "Yes" } else { "No" }
                                             ))
                                             .size(Dp(14.0))
-                                            .color(global_material_scheme().on_surface_variant)
+                                            .color(
+                                                use_context::<MaterialColorScheme>()
+                                                    .on_surface_variant,
+                                            )
                                             .build()
                                             .expect("builder construction failed"),
                                     );
@@ -142,7 +145,7 @@ pub fn menus_showcase() {
                                                     "Click to open at the button's anchor point.",
                                                 )
                                                 .size(Dp(14.0))
-                                                .color(global_material_scheme().on_surface_variant)
+                                                .color(use_context::<MaterialColorScheme>().on_surface_variant)
                                                 .build()
                                                 .expect("builder construction failed"),
                                         );

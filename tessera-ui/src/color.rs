@@ -278,6 +278,27 @@ impl Color {
             a: alpha,
         }
     }
+
+    /// Blends `overlay` over this base color with the given alpha for the overlay.
+    ///
+    /// # Parameters
+    ///
+    /// * `overlay` - The color to be composited on top of `self`.
+    /// * `overlay_alpha` - Opacity of the overlay in range `[0.0, 1.0]`.
+    ///
+    /// # Returns
+    ///
+    /// A new `Color` representing the blended result.
+    #[inline]
+    #[must_use]
+    pub fn blend_over(self, overlay: Color, overlay_alpha: f32) -> Self {
+        let alpha = overlay_alpha.clamp(0.0, 1.0);
+        let r = overlay.r.mul_add(alpha, self.r * (1.0 - alpha));
+        let g = overlay.g.mul_add(alpha, self.g * (1.0 - alpha));
+        let b = overlay.b.mul_add(alpha, self.b * (1.0 - alpha));
+        let a = overlay.a.mul_add(alpha, self.a * (1.0 - alpha));
+        Self::new(r, g, b, a)
+    }
     /// Linearly interpolates between two colors.
     ///
     /// # Arguments

@@ -6,14 +6,14 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera_ui::{Color, Dp, tessera};
+use tessera_ui::{Color, Dp, tessera, use_context};
 
 use crate::{
     button::{ButtonArgsBuilder, button},
     glass_button::{GlassButtonArgs, glass_button},
     icon::{IconArgs, icon},
-    material_color::{blend_over, global_material_scheme},
     shape_def::Shape,
+    theme::MaterialColorScheme,
 };
 
 /// Variations of the icon button as per Material Design 3.
@@ -123,7 +123,7 @@ impl GlassIconButtonArgsBuilder {
 #[tessera]
 pub fn icon_button(args: impl Into<IconButtonArgs>) {
     let args: IconButtonArgs = args.into();
-    let scheme = global_material_scheme();
+    let scheme = use_context::<MaterialColorScheme>();
 
     // Determine colors based on variant
     let (default_container_color, default_content_color, border_width, border_color) =
@@ -158,7 +158,7 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
     {
         Some(hover_overlay_color.with_alpha(0.08))
     } else {
-        Some(blend_over(container_color, hover_overlay_color, 0.08))
+        Some(container_color.blend_over(hover_overlay_color, 0.08))
     };
 
     let ripple_color = hover_overlay_color.with_alpha(0.12);

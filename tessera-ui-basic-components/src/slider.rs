@@ -9,10 +9,10 @@ use derive_builder::Builder;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasureInput, MeasurementError, Px,
-    PxPosition, focus_state::Focus, remember, tessera,
+    PxPosition, focus_state::Focus, remember, tessera, use_context,
 };
 
-use crate::{material_color, pipelines::image_vector::command::VectorTintMode};
+use crate::{pipelines::image_vector::command::VectorTintMode, theme::MaterialColorScheme};
 
 use interaction::{
     apply_range_slider_accessibility, apply_slider_accessibility, handle_range_slider_state,
@@ -156,24 +156,22 @@ pub struct SliderArgs {
     #[builder(default = "DimensionValue::Fixed(Dp(260.0).to_px())")]
     pub width: DimensionValue,
     /// The color of the active part of the track (progress fill).
-    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     pub active_track_color: Color,
     /// The color of the inactive part of the track (background).
-    #[builder(default = "crate::material_color::global_material_scheme().secondary_container")]
+    #[builder(default = "use_context::<MaterialColorScheme>().secondary_container")]
     pub inactive_track_color: Color,
     /// The thickness of the handle indicator.
     #[builder(default = "Dp(4.0)")]
     pub thumb_diameter: Dp,
     /// Color of the handle indicator.
-    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     pub thumb_color: Color,
     /// Height of the handle focus layer (hover/drag halo).
     #[builder(default = "Dp(18.0)")]
     pub state_layer_diameter: Dp,
     /// Base color for the state layer; alpha will be adjusted per interaction state.
-    #[builder(
-        default = "crate::material_color::global_material_scheme().primary.with_alpha(0.18)"
-    )]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary.with_alpha(0.18)")]
     pub state_layer_color: Color,
     /// Disable interaction.
     #[builder(default = "false")]
@@ -213,11 +211,11 @@ pub struct RangeSliderArgs {
     pub width: DimensionValue,
 
     /// The color of the active part of the track (range fill).
-    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     pub active_track_color: Color,
 
     /// The color of the inactive part of the track (background).
-    #[builder(default = "crate::material_color::global_material_scheme().secondary_container")]
+    #[builder(default = "use_context::<MaterialColorScheme>().secondary_container")]
     pub inactive_track_color: Color,
 
     /// The thickness of the handle indicators.
@@ -225,7 +223,7 @@ pub struct RangeSliderArgs {
     pub thumb_diameter: Dp,
 
     /// Color of the handle indicators.
-    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     pub thumb_color: Color,
 
     /// Height of the handle focus layer.
@@ -233,9 +231,7 @@ pub struct RangeSliderArgs {
     pub state_layer_diameter: Dp,
 
     /// Base color for the state layer.
-    #[builder(
-        default = "crate::material_color::global_material_scheme().primary.with_alpha(0.18)"
-    )]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary.with_alpha(0.18)")]
     pub state_layer_color: Color,
 
     /// Disable interaction.
@@ -389,7 +385,7 @@ struct SliderColors {
 
 fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> SliderColors {
     if args.disabled {
-        let scheme = material_color::global_material_scheme();
+        let scheme = use_context::<MaterialColorScheme>();
         return SliderColors {
             active_track: scheme.on_surface.with_alpha(0.38),
             inactive_track: scheme.on_surface.with_alpha(0.12),
@@ -506,7 +502,7 @@ pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: Arc<Slide
     if let Some(icon_size) = layout.icon_size
         && let Some(inset_icon) = args.inset_icon.as_ref()
     {
-        let scheme = material_color::global_material_scheme();
+        let scheme = use_context::<MaterialColorScheme>();
         let tint = if args.disabled {
             scheme.on_surface.with_alpha(0.38)
         } else {
@@ -1023,6 +1019,7 @@ pub fn range_slider_with_controller(
         .build()
         .expect("Failed to build dummy args");
     let initial_width = fallback_component_width(&dummy_slider_args);
+    let dummy_for_measure = dummy_slider_args.clone();
     let layout = range_slider_layout(&args, initial_width);
 
     let start = args.value.0.clamp(0.0, 1.0);
@@ -1053,7 +1050,7 @@ pub fn range_slider_with_controller(
         Color::new(base_state.r, base_state.g, base_state.b, state_layer_alpha);
 
     let colors = if args.disabled {
-        let scheme = material_color::global_material_scheme();
+        let scheme = use_context::<MaterialColorScheme>();
         SliderColors {
             active_track: scheme.on_surface.with_alpha(0.38),
             inactive_track: scheme.on_surface.with_alpha(0.12),
@@ -1114,13 +1111,7 @@ pub fn range_slider_with_controller(
     }));
 
     measure(Box::new(move |input| {
-        let dummy_args_for_resolve = SliderArgsBuilder::default()
-            .width(args.width)
-            .size(args.size)
-            .build()
-            .expect("Failed to build dummy args");
-        let component_width =
-            resolve_component_width(&dummy_args_for_resolve, input.parent_constraint);
+        let component_width = resolve_component_width(&dummy_for_measure, input.parent_constraint);
         let resolved_layout = range_slider_layout(&args, component_width);
         measure_range_slider(input, resolved_layout, start, end)
     }));

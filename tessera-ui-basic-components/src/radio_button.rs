@@ -12,16 +12,16 @@ use parking_lot::RwLock;
 use tessera_ui::{
     Color, DimensionValue, Dp, Px,
     accesskit::{Action, Role, Toggled},
-    remember, tessera,
+    remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
     animation,
     boxed::{BoxedArgsBuilder, boxed},
-    material_color,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
+    theme::MaterialColorScheme,
 };
 
 const RADIO_ANIMATION_DURATION: Duration = Duration::from_millis(200);
@@ -138,16 +138,16 @@ pub struct RadioButtonArgs {
     #[builder(default = "Dp(10.0)")]
     pub dot_size: Dp,
     /// Ring and dot color when selected.
-    #[builder(default = "material_color::global_material_scheme().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     pub selected_color: Color,
     /// Ring color when not selected.
-    #[builder(default = "material_color::global_material_scheme().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface_variant")]
     pub unselected_color: Color,
     /// Ring and dot color when disabled but selected.
-    #[builder(default = "material_color::global_material_scheme().on_surface.with_alpha(0.38)")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface.with_alpha(0.38)")]
     pub disabled_selected_color: Color,
     /// Ring color when disabled and not selected.
-    #[builder(default = "material_color::global_material_scheme().on_surface.with_alpha(0.38)")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface.with_alpha(0.38)")]
     pub disabled_unselected_color: Color,
     /// Whether the control is interactive.
     #[builder(default = "true")]

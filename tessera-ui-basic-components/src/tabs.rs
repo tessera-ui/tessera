@@ -13,7 +13,7 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, PxPosition,
-    remember, tessera,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -23,6 +23,7 @@ use crate::{
     button::{ButtonArgsBuilder, button},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgs, surface},
+    theme::MaterialColorScheme,
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
@@ -202,17 +203,17 @@ pub struct TabsArgs {
     #[builder(default = "0")]
     pub initial_active_tab: usize,
     /// Color of the active tab indicator.
-    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     // Material primary tone
     pub indicator_color: Color,
     /// Background color for the tab row container.
-    #[builder(default = "crate::material_color::global_material_scheme().surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().surface")]
     pub container_color: Color,
     /// Color applied to active tab titles (Material on-surface).
-    #[builder(default = "crate::material_color::global_material_scheme().on_surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface")]
     pub active_content_color: Color,
     /// Color applied to inactive tab titles (Material on-surface-variant).
-    #[builder(default = "crate::material_color::global_material_scheme().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface_variant")]
     pub inactive_content_color: Color,
     /// Height of the indicator bar in density-independent pixels.
     #[builder(default = "Dp(3.0)")]
@@ -230,7 +231,7 @@ pub struct TabsArgs {
     #[builder(default = "Dp(12.0)")]
     pub tab_padding: Dp,
     /// Color used for hover/pressed state layers.
-    #[builder(default = "crate::material_color::global_material_scheme().on_surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface")]
     pub state_layer_color: Color,
     /// Opacity applied to the state layer on hover.
     #[builder(default = "0.08")]

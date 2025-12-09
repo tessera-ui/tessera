@@ -4,11 +4,16 @@
 //!
 //! Use to display labels, headings, or other static or dynamic text content.
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, DimensionValue, Dp, Px, accesskit::Role, tessera};
+use tessera_ui::{
+    Color, ComputedData, DimensionValue, Dp, Px, accesskit::Role, tessera, use_context,
+};
 
-use crate::pipelines::text::{
-    command::{TextCommand, TextConstraint},
-    pipeline::TextData,
+use crate::{
+    pipelines::text::{
+        command::{TextCommand, TextConstraint},
+        pipeline::TextData,
+    },
+    theme::MaterialColorScheme,
 };
 
 pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
@@ -22,7 +27,7 @@ pub struct TextArgs {
     pub text: String,
 
     /// The color of the text.
-    #[builder(default = "crate::material_color::global_material_scheme().on_surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface")]
     pub color: Color,
 
     /// The font size in density-independent pixels (dp).

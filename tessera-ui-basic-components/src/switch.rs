@@ -14,7 +14,7 @@ use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
     PxPosition,
     accesskit::{Action, Role, Toggled},
-    remember, tessera,
+    remember, tessera, use_context,
     winit::window::CursorIcon,
 };
 
@@ -22,10 +22,10 @@ use crate::{
     alignment::Alignment,
     animation,
     boxed::{BoxedArgsBuilder, boxed},
-    material_color,
     pipelines::shape::command::ShapeCommand,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
+    theme::MaterialColorScheme,
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(150);
@@ -152,25 +152,25 @@ pub struct SwitchArgs {
     #[builder(default = "Dp(32.0)")]
     pub height: Dp,
     /// Track color when the switch is off.
-    #[builder(default = "crate::material_color::global_material_scheme().surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().surface_variant")]
     pub track_color: Color,
     /// Track color when the switch is on.
-    #[builder(default = "crate::material_color::global_material_scheme().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     pub track_checked_color: Color,
     /// Outline color for the track when the switch is off; fades out as the switch turns on.
-    #[builder(default = "crate::material_color::global_material_scheme().outline")]
+    #[builder(default = "use_context::<MaterialColorScheme>().outline")]
     pub track_outline_color: Color,
     /// Border width for the track outline.
     #[builder(default = "Dp(1.5)")]
     pub track_outline_width: Dp,
     /// Thumb color when the switch is off.
-    #[builder(default = "crate::material_color::global_material_scheme().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_surface_variant")]
     pub thumb_color: Color,
     /// Thumb color when the switch is on.
-    #[builder(default = "crate::material_color::global_material_scheme().on_primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().on_primary")]
     pub thumb_checked_color: Color,
     /// Thumb outline color to mirror Material Design's stroked thumb when off.
-    #[builder(default = "crate::material_color::global_material_scheme().outline")]
+    #[builder(default = "use_context::<MaterialColorScheme>().outline")]
     pub thumb_border_color: Color,
     /// Width of the thumb outline stroke.
     #[builder(default = "Dp(1.5)")]
@@ -304,7 +304,7 @@ fn switch_inner(
     let progress = controller.animation_progress();
     let eased_progress = animation::easing(progress);
     let thumb_scale = THUMB_OFF_SCALE + (1.0 - THUMB_OFF_SCALE) * eased_progress;
-    let scheme = material_color::global_material_scheme();
+    let scheme = use_context::<MaterialColorScheme>();
     let interactive = args.on_toggle.is_some();
 
     let mut track_color = interpolate_color(args.track_color, args.track_checked_color, progress);
@@ -315,12 +315,10 @@ fn switch_inner(
         interpolate_color(args.thumb_border_color, args.thumb_checked_color, progress);
 
     if !interactive {
-        track_color = material_color::blend_over(track_color, scheme.on_surface, 0.12);
-        track_outline_color =
-            material_color::blend_over(track_outline_color, scheme.on_surface, 0.12);
-        thumb_color = material_color::blend_over(thumb_color, scheme.on_surface, 0.38);
-        thumb_border_color =
-            material_color::blend_over(thumb_border_color, scheme.on_surface, 0.12);
+        track_color = track_color.blend_over(scheme.on_surface, 0.12);
+        track_outline_color = track_outline_color.blend_over(scheme.on_surface, 0.12);
+        thumb_color = thumb_color.blend_over(scheme.on_surface, 0.38);
+        thumb_border_color = thumb_border_color.blend_over(scheme.on_surface, 0.12);
     }
 
     let thumb_style = SurfaceStyle::FilledOutlined {
