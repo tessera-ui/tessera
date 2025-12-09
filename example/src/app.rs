@@ -31,7 +31,7 @@ use tessera_ui_basic_components::{
         SideBarController, SideBarProviderArgsBuilder, SideBarStyle,
         side_bar_provider_with_controller,
     },
-    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
+    surface::{SurfaceArgs, SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
     theme::MaterialColorScheme,
 };
@@ -230,10 +230,15 @@ pub fn app(#[state] app_state: AppState) {
                     );
                 },
                 || {
-                    text(
-                        r#"Hi, I'm bottom sheet!
-
-Bottom sheets are sheets at bottom, bottom at sheets, sheets bottom at, at bottom sheets..."#,
+                    surface(
+                        SurfaceArgs {
+                            style: Color::TRANSPARENT.into(),
+                            padding: Dp(16.0),
+                            ..Default::default()
+                        },
+                        || {
+                            text("Hello from bottom sheet!");
+                        },
                     );
                 },
             );
