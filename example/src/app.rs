@@ -31,6 +31,7 @@ use tessera_ui_basic_components::{
         SideBarController, SideBarProviderArgsBuilder, SideBarStyle,
         side_bar_provider_with_controller,
     },
+    spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
     theme::MaterialColorScheme,
@@ -87,7 +88,7 @@ pub fn app(#[state] app_state: AppState) {
                             bottom_sheet_controller.close();
                         }),
                     ))
-                    .style(BottomSheetStyle::Glass)
+                    .style(BottomSheetStyle::Material)
                     .build()
                     .unwrap(),
                 app_state.bottom_sheet_controller.clone(),
@@ -237,7 +238,18 @@ pub fn app(#[state] app_state: AppState) {
                             ..Default::default()
                         },
                         || {
-                            text("Hello from bottom sheet!");
+                            column(ColumnArgs::default(), |scope| {
+                                scope.child(|| {
+                                    text("Hello from bottom sheet!");
+                                });
+
+                                scope.child(|| {
+                                    spacer(SpacerArgs {
+                                        height: Dp(250.0).into(),
+                                        ..Default::default()
+                                    });
+                                });
+                            });
                         },
                     );
                 },
