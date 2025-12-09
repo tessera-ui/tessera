@@ -386,8 +386,8 @@ fn apply_close_action(
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
 ///     menus::{
-///         menu_provider, MenuAnchor, MenuItemArgsBuilder, MenuPlacement,
-///         MenuProviderArgsBuilder, MenuScope,
+///         MenuAnchor, MenuItemArgsBuilder, MenuPlacement, MenuProviderArgsBuilder, MenuScope,
+///         menu_provider,
 ///     },
 ///     text::text,
 /// };
@@ -454,11 +454,11 @@ pub fn menu_provider(
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui::{Dp, tessera, remember};
+/// use tessera_ui::{Dp, remember, tessera};
 /// use tessera_ui_basic_components::{
 ///     menus::{
-///         menu_provider_with_controller, MenuAnchor, MenuController,
-///         MenuItemArgsBuilder, MenuPlacement, MenuProviderArgsBuilder, MenuScope,
+///         MenuAnchor, MenuController, MenuItemArgsBuilder, MenuPlacement,
+///         MenuProviderArgsBuilder, MenuScope, menu_provider_with_controller,
 ///     },
 ///     text::text,
 /// };
@@ -473,9 +473,7 @@ pub fn menu_provider(
 ///     menu_provider_with_controller(
 ///         args,
 ///         menu_controller,
-///         || {
-///             /* Main content */
-///         },
+///         || { /* Main content */ },
 ///         move |menu_scope| {
 ///             menu_scope.menu_item(
 ///                 MenuItemArgsBuilder::default()

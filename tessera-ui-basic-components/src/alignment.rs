@@ -33,7 +33,7 @@ impl Default for MainAxisAlignment {
     /// # Example
     ///
     /// ```
-    /// use tessera_ui_basic_components::alignment::MainAxisAlignment;;
+    /// use tessera_ui_basic_components::alignment::MainAxisAlignment;
     /// assert_eq!(MainAxisAlignment::default(), MainAxisAlignment::Start);
     /// ```
     fn default() -> Self {

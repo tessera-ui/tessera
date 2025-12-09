@@ -421,8 +421,8 @@ fn compute_surface_size(
 /// use std::sync::Arc;
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
-///     surface::{surface, SurfaceArgsBuilder},
-///     text::{text, TextArgsBuilder},
+///     surface::{SurfaceArgsBuilder, surface},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// surface(
@@ -432,7 +432,12 @@ fn compute_surface_size(
 ///         .build()
 ///         .unwrap(),
 ///     || {
-///         text(TextArgsBuilder::default().text("Click me".to_string()).build().expect("builder construction failed"));
+///         text(
+///             TextArgsBuilder::default()
+///                 .text("Click me".to_string())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         );
 ///     },
 /// );
 /// ```

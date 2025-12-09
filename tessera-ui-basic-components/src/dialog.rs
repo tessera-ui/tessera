@@ -10,7 +10,9 @@ use std::{
 
 use derive_builder::Builder;
 use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, remember, tessera, use_context, winit};
+use tessera_ui::{
+    Color, DimensionValue, Dp, provide_context, remember, tessera, use_context, winit,
+};
 
 use crate::{
     ShadowProps,
@@ -24,7 +26,7 @@ use crate::{
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
-    theme::MaterialColorScheme,
+    theme::{ContentColor, MaterialColorScheme},
 };
 
 /// The duration of the full dialog animation.
@@ -195,9 +197,10 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
         }
         DialogStyle::Material => {
             let alpha = scrim_alpha_for(progress, is_open);
+            let scrim_color = use_context::<MaterialColorScheme>().scrim;
             surface(
                 SurfaceArgsBuilder::default()
-                    .style(Color::BLACK.with_alpha(alpha).into())
+                    .style(scrim_color.with_alpha(alpha).into())
                     .on_click(args.on_close_request.clone())
                     .width(DimensionValue::Fill {
                         min: None,
@@ -278,7 +281,11 @@ fn dialog_content_wrapper(
                         DialogStyle::Material => {
                             surface(
                                 SurfaceArgsBuilder::default()
-                                    .style(Color::WHITE.with_alpha(alpha).into())
+                                    .style(
+                                        use_context::<MaterialColorScheme>()
+                                            .surface_container_high
+                                            .into(),
+                                    )
                                     .shadow(ShadowProps {
                                         color: Color::BLACK.with_alpha(alpha / 4.0),
                                         ..Default::default()
@@ -320,7 +327,9 @@ fn dialog_content_wrapper(
 /// # Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::dialog::{dialog_provider, DialogProviderArgsBuilder, basic_dialog, BasicDialogArgsBuilder};
+/// use tessera_ui_basic_components::dialog::{
+///     BasicDialogArgsBuilder, DialogProviderArgsBuilder, basic_dialog, dialog_provider,
+/// };
 ///
 /// dialog_provider(
 ///     DialogProviderArgsBuilder::default()
@@ -335,7 +344,7 @@ fn dialog_content_wrapper(
 ///                 .headline("Dialog Title")
 ///                 .supporting_text("This is the dialog body text.")
 ///                 .build()
-///                 .unwrap()
+///                 .unwrap(),
 ///         );
 ///     },
 /// );
@@ -380,8 +389,11 @@ pub fn dialog_provider(
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui::{tessera, remember};
-/// use tessera_ui_basic_components::dialog::{dialog_provider_with_controller, DialogProviderArgsBuilder, DialogController, basic_dialog, BasicDialogArgsBuilder};
+/// use tessera_ui::{remember, tessera};
+/// use tessera_ui_basic_components::dialog::{
+///     BasicDialogArgsBuilder, DialogController, DialogProviderArgsBuilder, basic_dialog,
+///     dialog_provider_with_controller,
+/// };
 ///
 /// #[tessera]
 /// fn foo() {
@@ -395,16 +407,14 @@ pub fn dialog_provider(
 ///             .build()
 ///             .unwrap(),
 ///         dialog_controller.clone(),
-///         || {
-///             /* main content */
-///         },
+///         || { /* main content */ },
 ///         |alpha| {
 ///             basic_dialog(
 ///                 BasicDialogArgsBuilder::default()
 ///                     .headline("Dialog Title")
 ///                     .supporting_text("This is the dialog body text.")
 ///                     .build()
-///                     .unwrap()
+///                     .unwrap(),
 ///             );
 ///         },
 ///     );
@@ -503,20 +513,22 @@ impl BasicDialogArgsBuilder {
 /// # Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::dialog::{basic_dialog, BasicDialogArgsBuilder};
-/// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
-/// use tessera_ui_basic_components::button::{button, ButtonArgsBuilder};
 /// use std::sync::Arc;
+/// use tessera_ui_basic_components::button::{ButtonArgsBuilder, button};
+/// use tessera_ui_basic_components::dialog::{BasicDialogArgsBuilder, basic_dialog};
+/// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
 ///
 /// basic_dialog(
 ///     BasicDialogArgsBuilder::default()
 ///         .headline("Dialog Title")
 ///         .supporting_text("This is the dialog body text.")
 ///         .confirm_button(|| {
-///             button(ButtonArgsBuilder::default().build().unwrap(), || text("Confirm"));
+///             button(ButtonArgsBuilder::default().build().unwrap(), || {
+///                 text("Confirm")
+///             });
 ///         })
 ///         .build()
-///         .unwrap()
+///         .unwrap(),
 /// );
 /// ```
 #[tessera]
@@ -542,8 +554,16 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
         move |scope| {
             // Icon
             if let Some(icon) = args.icon {
+                let icon_color = scheme.secondary;
                 scope.child(move || {
-                    icon();
+                    provide_context(
+                        ContentColor {
+                            current: icon_color,
+                        },
+                        || {
+                            icon();
+                        },
+                    );
                 });
                 scope.child(|| {
                     spacer(
@@ -602,35 +622,45 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                             .expect("failed to build actions spacer args"),
                     );
                 });
+                let action_color = scheme.primary;
                 scope.child(move || {
-                    row(
-                        RowArgsBuilder::default()
-                            .width(DimensionValue::FILLED)
-                            .main_axis_alignment(MainAxisAlignment::End)
-                            .build()
-                            .expect("failed to build actions row args"),
-                        |s| {
-                            let has_dismiss = dismiss_button.is_some();
-                            let has_confirm = confirm_button.is_some();
+                    provide_context(
+                        ContentColor {
+                            current: action_color,
+                        },
+                        || {
+                            row(
+                                RowArgsBuilder::default()
+                                    .width(DimensionValue::FILLED)
+                                    .main_axis_alignment(MainAxisAlignment::End)
+                                    .build()
+                                    .expect("failed to build actions row args"),
+                                |s| {
+                                    let has_dismiss = dismiss_button.is_some();
+                                    let has_confirm = confirm_button.is_some();
 
-                            if let Some(dismiss) = dismiss_button {
-                                s.child(move || dismiss());
-                            }
+                                    if let Some(dismiss) = dismiss_button {
+                                        s.child(move || dismiss());
+                                    }
 
-                            if has_dismiss && has_confirm {
-                                s.child(|| {
-                                    spacer(
-                                        SpacerArgsBuilder::default()
-                                            .width(Dp(8.0))
-                                            .build()
-                                            .expect("failed to build action gap spacer args"),
-                                    );
-                                });
-                            }
+                                    if has_dismiss && has_confirm {
+                                        s.child(|| {
+                                            spacer(
+                                                SpacerArgsBuilder::default()
+                                                    .width(Dp(8.0))
+                                                    .build()
+                                                    .expect(
+                                                        "failed to build action gap spacer args",
+                                                    ),
+                                            );
+                                        });
+                                    }
 
-                            if let Some(confirm) = confirm_button {
-                                s.child(move || confirm());
-                            }
+                                    if let Some(confirm) = confirm_button {
+                                        s.child(move || confirm());
+                                    }
+                                },
+                            );
                         },
                     );
                 });

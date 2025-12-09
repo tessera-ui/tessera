@@ -430,7 +430,7 @@ fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> Slid
 /// ```
 /// use std::sync::Arc;
 /// use tessera_ui::{DimensionValue, Dp};
-/// use tessera_ui_basic_components::slider::{slider, SliderArgsBuilder};
+/// use tessera_ui_basic_components::slider::{SliderArgsBuilder, slider};
 ///
 /// slider(
 ///     SliderArgsBuilder::default()
@@ -703,7 +703,7 @@ fn measure_centered_slider(
 /// ```
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui::{DimensionValue, Dp};
-/// use tessera_ui_basic_components::slider::{centered_slider, SliderArgsBuilder};
+/// use tessera_ui_basic_components::slider::{SliderArgsBuilder, centered_slider};
 /// let current_value = Arc::new(Mutex::new(0.5));
 ///
 /// // Simulate a value change
@@ -983,7 +983,7 @@ fn measure_range_slider(
 /// ```
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui::{DimensionValue, Dp};
-/// use tessera_ui_basic_components::slider::{range_slider, RangeSliderArgsBuilder};
+/// use tessera_ui_basic_components::slider::{RangeSliderArgsBuilder, range_slider};
 /// let range_value = Arc::new(Mutex::new((0.2, 0.8)));
 ///
 /// range_slider(

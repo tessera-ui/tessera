@@ -325,7 +325,7 @@ fn place_side_bar_if_present(
 /// # Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::side_bar::{side_bar_provider, SideBarProviderArgsBuilder};
+/// use tessera_ui_basic_components::side_bar::{SideBarProviderArgsBuilder, side_bar_provider};
 ///
 /// side_bar_provider(
 ///     SideBarProviderArgsBuilder::default()
@@ -376,10 +376,10 @@ pub fn side_bar_provider(
 ///
 /// ```
 /// use std::sync::Arc;
+/// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::side_bar::{
-///     side_bar_provider_with_controller, SideBarProviderArgsBuilder, SideBarController,
+///     SideBarController, SideBarProviderArgsBuilder, side_bar_provider_with_controller,
 /// };
-/// use tessera_ui::{tessera, remember};
 ///
 /// #[tessera]
 /// fn foo() {

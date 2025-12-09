@@ -127,18 +127,28 @@ fn compute_child_offset(
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::boxed::{boxed, BoxedArgs};
-/// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
 /// use tessera_ui_basic_components::alignment::Alignment;
+/// use tessera_ui_basic_components::boxed::{BoxedArgs, boxed};
+/// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
 ///
 /// boxed(BoxedArgs::default(), |scope| {
 ///     // Add a child that will be in the background (rendered first).
 ///     scope.child(|| {
-///         text(TextArgsBuilder::default().text("Background".to_string()).build().expect("builder construction failed"));
+///         text(
+///             TextArgsBuilder::default()
+///                 .text("Background".to_string())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         );
 ///     });
 ///     // Add another child aligned to the center, which will appear on top.
 ///     scope.child_with_alignment(Alignment::Center, || {
-///         text(TextArgsBuilder::default().text("Foreground".to_string()).build().expect("builder construction failed"));
+///         text(
+///             TextArgsBuilder::default()
+///                 .text("Foreground".to_string())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         );
 ///     });
 /// });
 /// ```

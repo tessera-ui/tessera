@@ -85,7 +85,6 @@ impl Default for CheckmarkArgs {
 /// *   `padding`: The padding `[horizontal, vertical]` around the checkmark within its bounds.
 ///     Defaults to `[2.0, 2.0]`.
 /// *   `size`: The size of the checkmark area as a `Dp` value. Defaults to `Dp(20.0)`.
-///
 
 #[tessera]
 pub fn checkmark(args: impl Into<CheckmarkArgs>) {

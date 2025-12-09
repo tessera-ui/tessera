@@ -351,8 +351,8 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
 /// ```
 /// use tessera_ui::{Dp, tessera};
 /// use tessera_ui_basic_components::{
-///     tabs::{tabs, TabsArgsBuilder},
-///     text::{text, TextArgsBuilder},
+///     tabs::{TabsArgsBuilder, tabs},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// #[tessera]
@@ -435,8 +435,8 @@ where
 /// ```
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::{
-///     tabs::{tabs_with_controller, TabsArgsBuilder, TabsController},
-///     text::{text, TextArgsBuilder},
+///     tabs::{TabsArgsBuilder, TabsController, tabs_with_controller},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// #[tessera]

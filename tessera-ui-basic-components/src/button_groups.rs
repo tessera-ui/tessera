@@ -220,53 +220,50 @@ struct ButtonGroupsState {
 ///
 /// ```
 /// use tessera_ui_basic_components::{
-///    button_groups::{ButtonGroupsArgs, button_groups},
-///    text::{TextArgs, text},
+///     button_groups::{ButtonGroupsArgs, button_groups},
+///     text::{TextArgs, text},
 /// };
 ///
-/// button_groups(
-///     ButtonGroupsArgs::default(),
-///     |scope| {
-///         scope.child(
-///             |color| {
-///                 text(TextArgs {
-///                     text: "Button 1".to_string(),
-///                     color,
-///                     ..Default::default()
-///                 })
-///             },
-///             |_| {
-///                 println!("Button 1 clicked");
-///             },
-///         );
+/// button_groups(ButtonGroupsArgs::default(), |scope| {
+///     scope.child(
+///         |color| {
+///             text(TextArgs {
+///                 text: "Button 1".to_string(),
+///                 color,
+///                 ..Default::default()
+///             })
+///         },
+///         |_| {
+///             println!("Button 1 clicked");
+///         },
+///     );
 ///
-///         scope.child(
-///             |color| {
-///                 text(TextArgs {
-///                     text: "Button 2".to_string(),
-///                     color,
-///                     ..Default::default()
-///                 })
-///             },
-///             |actived| {
-///                 println!("Button 2 clicked");
-///             },
-///         );
+///     scope.child(
+///         |color| {
+///             text(TextArgs {
+///                 text: "Button 2".to_string(),
+///                 color,
+///                 ..Default::default()
+///             })
+///         },
+///         |actived| {
+///             println!("Button 2 clicked");
+///         },
+///     );
 ///
-///         scope.child(
-///             |color| {
-///                 text(TextArgs {
-///                     text: "Button 3".to_string(),
-///                     color,
-///                     ..Default::default()
-///                 })
-///             },
-///             |actived| {
-///                 println!("Button 3 clicked");
-///             },
-///         );
-///     },
-/// );
+///     scope.child(
+///         |color| {
+///             text(TextArgs {
+///                 text: "Button 3".to_string(),
+///                 color,
+///                 ..Default::default()
+///             })
+///         },
+///         |actived| {
+///             println!("Button 3 clicked");
+///         },
+///     );
+/// });
 /// ```
 #[tessera]
 pub fn button_groups<F>(args: impl Into<ButtonGroupsArgs>, scope_config: F)

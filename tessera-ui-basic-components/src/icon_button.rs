@@ -101,21 +101,25 @@ impl GlassIconButtonArgsBuilder {
 /// ```no_run
 /// use std::sync::Arc;
 /// use tessera_ui_basic_components::{
-///     icon_button::{icon_button, IconButtonArgsBuilder, IconButtonVariant},
 ///     icon::IconArgsBuilder,
+///     icon_button::{IconButtonArgsBuilder, IconButtonVariant, icon_button},
 ///     image_vector::{ImageVectorSource, load_image_vector_from_source},
 /// };
 ///
 /// let svg_path = "../assets/emoji_u1f416.svg";
-/// let vector_data = load_image_vector_from_source(
-///     &ImageVectorSource::Path(svg_path.to_string())
-/// ).unwrap();
+/// let vector_data =
+///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
 ///
 /// icon_button(
 ///     IconButtonArgsBuilder::default()
 ///         .variant(IconButtonVariant::Filled)
 ///         .on_click(|| println!("Clicked!"))
-///         .icon(IconArgsBuilder::default().content(vector_data.clone()).build().expect("builder construction failed"))
+///         .icon(
+///             IconArgsBuilder::default()
+///                 .content(vector_data.clone())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         )
 ///         .build()
 ///         .unwrap(),
 /// );
@@ -216,16 +220,15 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
 /// ```no_run
 /// use std::sync::Arc;
 /// use tessera_ui_basic_components::{
-///     icon_button::{glass_icon_button, GlassIconButtonArgsBuilder},
 ///     glass_button::GlassButtonArgsBuilder,
 ///     icon::IconArgsBuilder,
+///     icon_button::{GlassIconButtonArgsBuilder, glass_icon_button},
 ///     image_vector::{ImageVectorSource, load_image_vector_from_source},
 /// };
 ///
 /// let svg_path = "../assets/emoji_u1f416.svg";
-/// let vector_data = load_image_vector_from_source(
-///     &ImageVectorSource::Path(svg_path.to_string())
-/// ).unwrap();
+/// let vector_data =
+///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
 ///
 /// glass_icon_button(
 ///     GlassIconButtonArgsBuilder::default()
@@ -233,9 +236,14 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
 ///             GlassButtonArgsBuilder::default()
 ///                 .on_click(Arc::new(|| {}))
 ///                 .build()
-///                 .unwrap()
+///                 .unwrap(),
 ///         )
-///         .icon(IconArgsBuilder::default().content(vector_data).build().expect("builder construction failed"))
+///         .icon(
+///             IconArgsBuilder::default()
+///                 .content(vector_data)
+///                 .build()
+///                 .expect("builder construction failed"),
+///         )
 ///         .build()
 ///         .unwrap(),
 /// );

@@ -34,8 +34,8 @@ pub enum BarrierRequirement {
     /// Simple case (uniform sampling padding):
     ///
     /// ```
-    /// use tessera_ui::renderer::command::{BarrierRequirement, PaddingRect};
     /// use tessera_ui::Px;
+    /// use tessera_ui::renderer::command::{BarrierRequirement, PaddingRect};
     ///
     /// let req = BarrierRequirement::PaddedLocal(PaddingRect::uniform(Px(10)));
     /// let _ = req;
@@ -44,8 +44,8 @@ pub enum BarrierRequirement {
     /// Blur optimization (large sampling area):
     ///
     /// ```
-    /// use tessera_ui::renderer::command::{BarrierRequirement, PaddingRect};
     /// use tessera_ui::Px;
+    /// use tessera_ui::renderer::command::{BarrierRequirement, PaddingRect};
     ///
     /// let req = BarrierRequirement::PaddedLocal(PaddingRect::uniform(Px(75)));
     /// let _ = req;

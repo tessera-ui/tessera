@@ -1,1 +1,3 @@
 edition = "2024"
+format_macro_bodies = true
+format_code_in_doc_comments = true

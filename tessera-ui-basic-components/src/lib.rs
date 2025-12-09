@@ -13,7 +13,7 @@
 //!     # || {}, // Placeholder for root component
 //!     |app| {
 //!         tessera_ui_basic_components::pipelines::register_pipelines(app);
-//!     }
+//!     },
 //! );
 //! ```
 //!
@@ -22,14 +22,14 @@
 //! # Example
 //!
 //! ```
-//! use std::sync::Arc;
 //! use parking_lot::RwLock;
+//! use std::sync::Arc;
 //!
 //! use tessera_ui::Dp;
 //! use tessera_ui_basic_components::{
-//!     button::{button, ButtonArgs},
+//!     button::{ButtonArgs, button},
 //!     text::text,
-//!     text_editor::{text_editor, TextEditorArgs, TextEditorController},
+//!     text_editor::{TextEditorArgs, TextEditorController, text_editor},
 //! };
 //!
 //! // Button example

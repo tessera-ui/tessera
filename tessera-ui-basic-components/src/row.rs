@@ -103,15 +103,29 @@ struct MeasureWeightedChildrenArgs<'a> {
 ///
 /// ```
 /// use tessera_ui_basic_components::{
-///     row::{row, RowArgs},
-///     text::{text, TextArgsBuilder},
-///     spacer::{spacer, SpacerArgs},
+///     row::{RowArgs, row},
+///     spacer::{SpacerArgs, spacer},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// row(RowArgs::default(), |scope| {
-///     scope.child(|| text(TextArgsBuilder::default().text("First".to_string()).build().expect("builder construction failed")));
+///     scope.child(|| {
+///         text(
+///             TextArgsBuilder::default()
+///                 .text("First".to_string())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         )
+///     });
 ///     scope.child_weighted(|| spacer(SpacerArgs::default()), 1.0); // Flexible space
-///     scope.child(|| text(TextArgsBuilder::default().text("Last".to_string()).build().expect("builder construction failed")));
+///     scope.child(|| {
+///         text(
+///             TextArgsBuilder::default()
+///                 .text("Last".to_string())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         )
+///     });
 /// });
 /// ```
 #[tessera]

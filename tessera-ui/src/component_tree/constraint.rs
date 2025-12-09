@@ -33,18 +33,27 @@
 //! # use tessera_ui::Px;
 //! # use tessera_ui::DimensionValue;
 //! // Wrap content with no limits
-//! let wrap_content = DimensionValue::Wrap { min: None, max: None };
+//! let wrap_content = DimensionValue::Wrap {
+//!     min: None,
+//!     max: None,
+//! };
 //!
 //! // Wrap content but ensure at least 50px wide
-//! let wrap_with_min = DimensionValue::Wrap { min: Some(Px(50)), max: None };
+//! let wrap_with_min = DimensionValue::Wrap {
+//!     min: Some(Px(50)),
+//!     max: None,
+//! };
 //!
 //! // Wrap content but never exceed 200px
-//! let wrap_with_max = DimensionValue::Wrap { min: None, max: Some(Px(200)) };
+//! let wrap_with_max = DimensionValue::Wrap {
+//!     min: None,
+//!     max: Some(Px(200)),
+//! };
 //!
 //! // Wrap content within bounds
 //! let wrap_bounded = DimensionValue::Wrap {
 //!     min: Some(Px(50)),
-//!     max: Some(Px(200))
+//!     max: Some(Px(200)),
 //! };
 //! ```
 //!
@@ -55,13 +64,22 @@
 //! # use tessera_ui::Px;
 //! # use tessera_ui::DimensionValue;
 //! // Fill all available space
-//! let fill_all = DimensionValue::Fill { min: None, max: None };
+//! let fill_all = DimensionValue::Fill {
+//!     min: None,
+//!     max: None,
+//! };
 //!
 //! // Fill space but ensure at least 100px
-//! let fill_with_min = DimensionValue::Fill { min: Some(Px(100)), max: None };
+//! let fill_with_min = DimensionValue::Fill {
+//!     min: Some(Px(100)),
+//!     max: None,
+//! };
 //!
 //! // Fill space but never exceed 300px
-//! let fill_with_max = DimensionValue::Fill { min: None, max: Some(Px(300)) };
+//! let fill_with_max = DimensionValue::Fill {
+//!     min: None,
+//!     max: Some(Px(300)),
+//! };
 //! ```
 //!
 //! ## Constraint Merging
@@ -82,21 +100,30 @@
 //! // Parent provides 200px of space
 //! let parent = Constraint::new(
 //!     DimensionValue::Fixed(Px(200)),
-//!     DimensionValue::Fixed(Px(200))
+//!     DimensionValue::Fixed(Px(200)),
 //! );
 //!
 //! // Child wants to fill with minimum 50px
 //! let child = Constraint::new(
-//!     DimensionValue::Fill { min: Some(Px(50)), max: None },
-//!     DimensionValue::Fill { min: Some(Px(50)), max: None }
+//!     DimensionValue::Fill {
+//!         min: Some(Px(50)),
+//!         max: None,
+//!     },
+//!     DimensionValue::Fill {
+//!         min: Some(Px(50)),
+//!         max: None,
+//!     },
 //! );
 //!
 //! // Result: Child fills parent's 200px space, respecting its 50px minimum
 //! let merged = child.merge(&parent);
-//! assert_eq!(merged.width, DimensionValue::Fill {
-//!     min: Some(Px(50)),
-//!     max: Some(Px(200))
-//! });
+//! assert_eq!(
+//!     merged.width,
+//!     DimensionValue::Fill {
+//!         min: Some(Px(50)),
+//!         max: Some(Px(200))
+//!     }
+//! );
 //! ```
 
 use std::ops::Sub;
@@ -141,13 +168,22 @@ pub enum DimensionValue {
     /// # use tessera_ui::Px;
     /// # use tessera_ui::DimensionValue;
     /// // Text that wraps to its content size
-    /// let text_width = DimensionValue::Wrap { min: None, max: None };
+    /// let text_width = DimensionValue::Wrap {
+    ///     min: None,
+    ///     max: None,
+    /// };
     ///
     /// // Text with minimum width to prevent being too narrow
-    /// let min_text_width = DimensionValue::Wrap { min: Some(Px(100)), max: None };
+    /// let min_text_width = DimensionValue::Wrap {
+    ///     min: Some(Px(100)),
+    ///     max: None,
+    /// };
     ///
     /// // Text that wraps but never exceeds container width
-    /// let bounded_text = DimensionValue::Wrap { min: Some(Px(50)), max: Some(Px(300)) };
+    /// let bounded_text = DimensionValue::Wrap {
+    ///     min: Some(Px(50)),
+    ///     max: Some(Px(300)),
+    /// };
     /// ```
     Wrap {
         /// Optional minimum size, the component should never be smaller than this
@@ -173,13 +209,22 @@ pub enum DimensionValue {
     /// # use tessera_ui::Px;
     /// # use tessera_ui::DimensionValue;
     /// // Fill all available space
-    /// let flexible_width = DimensionValue::Fill { min: None, max: None };
+    /// let flexible_width = DimensionValue::Fill {
+    ///     min: None,
+    ///     max: None,
+    /// };
     ///
     /// // Fill space but ensure minimum usability
-    /// let min_fill_width = DimensionValue::Fill { min: Some(Px(200)), max: None };
+    /// let min_fill_width = DimensionValue::Fill {
+    ///     min: Some(Px(200)),
+    ///     max: None,
+    /// };
     ///
     /// // Fill space but cap maximum size for readability
-    /// let capped_fill = DimensionValue::Fill { min: Some(Px(100)), max: Some(Px(800)) };
+    /// let capped_fill = DimensionValue::Fill {
+    ///     min: Some(Px(100)),
+    ///     max: Some(Px(800)),
+    /// };
     /// ```
     Fill {
         /// Optional minimum size, the component should never be smaller than this
@@ -237,10 +282,16 @@ impl DimensionValue {
     /// let fixed = DimensionValue::Fixed(Px(100));
     /// assert_eq!(fixed.get_max(), Some(Px(100)));
     ///
-    /// let wrap_bounded = DimensionValue::Wrap { min: Some(Px(50)), max: Some(Px(200)) };
+    /// let wrap_bounded = DimensionValue::Wrap {
+    ///     min: Some(Px(50)),
+    ///     max: Some(Px(200)),
+    /// };
     /// assert_eq!(wrap_bounded.get_max(), Some(Px(200)));
     ///
-    /// let wrap_unbounded = DimensionValue::Wrap { min: None, max: None };
+    /// let wrap_unbounded = DimensionValue::Wrap {
+    ///     min: None,
+    ///     max: None,
+    /// };
     /// assert_eq!(wrap_unbounded.get_max(), None);
     /// ```
     pub const fn get_max(&self) -> Option<Px> {
@@ -270,10 +321,16 @@ impl DimensionValue {
     /// let fixed = DimensionValue::Fixed(Px(100));
     /// assert_eq!(fixed.get_min(), Some(Px(100)));
     ///
-    /// let fill_bounded = DimensionValue::Fill { min: Some(Px(50)), max: Some(Px(200)) };
+    /// let fill_bounded = DimensionValue::Fill {
+    ///     min: Some(Px(50)),
+    ///     max: Some(Px(200)),
+    /// };
     /// assert_eq!(fill_bounded.get_min(), Some(Px(50)));
     ///
-    /// let fill_unbounded = DimensionValue::Fill { min: None, max: None };
+    /// let fill_unbounded = DimensionValue::Fill {
+    ///     min: None,
+    ///     max: None,
+    /// };
     /// assert_eq!(fill_unbounded.get_min(), None);
     /// ```
     pub fn get_min(&self) -> Option<Px> {
@@ -386,19 +443,31 @@ impl std::ops::SubAssign<Px> for DimensionValue {
 /// // A button with fixed size
 /// let button_constraint = Constraint::new(
 ///     DimensionValue::Fixed(Px(120)),
-///     DimensionValue::Fixed(Px(40))
+///     DimensionValue::Fixed(Px(40)),
 /// );
 ///
 /// // A flexible container that fills width but wraps height
 /// let container_constraint = Constraint::new(
-///     DimensionValue::Fill { min: Some(Px(200)), max: None },
-///     DimensionValue::Wrap { min: None, max: None }
+///     DimensionValue::Fill {
+///         min: Some(Px(200)),
+///         max: None,
+///     },
+///     DimensionValue::Wrap {
+///         min: None,
+///         max: None,
+///     },
 /// );
 ///
 /// // A text component with bounded wrapping
 /// let text_constraint = Constraint::new(
-///     DimensionValue::Wrap { min: Some(Px(100)), max: Some(Px(400)) },
-///     DimensionValue::Wrap { min: None, max: None }
+///     DimensionValue::Wrap {
+///         min: Some(Px(100)),
+///         max: Some(Px(400)),
+///     },
+///     DimensionValue::Wrap {
+///         min: None,
+///         max: None,
+///     },
 /// );
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -421,8 +490,20 @@ impl Constraint {
     /// ```
     /// # use tessera_ui::{Constraint, DimensionValue};
     /// let flexible = Constraint::NONE;
-    /// assert_eq!(flexible.width, DimensionValue::Wrap { min: None, max: None });
-    /// assert_eq!(flexible.height, DimensionValue::Wrap { min: None, max: None });
+    /// assert_eq!(
+    ///     flexible.width,
+    ///     DimensionValue::Wrap {
+    ///         min: None,
+    ///         max: None
+    ///     }
+    /// );
+    /// assert_eq!(
+    ///     flexible.height,
+    ///     DimensionValue::Wrap {
+    ///         min: None,
+    ///         max: None
+    ///     }
+    /// );
     /// ```
     pub const NONE: Self = Self {
         width: DimensionValue::Wrap {
@@ -449,7 +530,10 @@ impl Constraint {
     /// # use tessera_ui::{Constraint, DimensionValue};
     /// let constraint = Constraint::new(
     ///     DimensionValue::Fixed(Px(100)),
-    ///     DimensionValue::Fill { min: Some(Px(50)), max: None }
+    ///     DimensionValue::Fill {
+    ///         min: Some(Px(50)),
+    ///         max: None,
+    ///     },
     /// );
     /// ```
     pub fn new(width: DimensionValue, height: DimensionValue) -> Self {
@@ -502,25 +586,34 @@ impl Constraint {
     /// // Fixed child in fixed parent - child wins
     /// let parent = Constraint::new(
     ///     DimensionValue::Fixed(Px(200)),
-    ///     DimensionValue::Fixed(Px(200))
+    ///     DimensionValue::Fixed(Px(200)),
     /// );
     /// let child = Constraint::new(
     ///     DimensionValue::Fixed(Px(100)),
-    ///     DimensionValue::Fixed(Px(100))
+    ///     DimensionValue::Fixed(Px(100)),
     /// );
     /// let merged = child.merge(&parent);
     /// assert_eq!(merged.width, DimensionValue::Fixed(Px(100)));
     ///
     /// // Fill child in fixed parent - child fills parent's space
     /// let child_fill = Constraint::new(
-    ///     DimensionValue::Fill { min: Some(Px(50)), max: None },
-    ///     DimensionValue::Fill { min: Some(Px(50)), max: None }
+    ///     DimensionValue::Fill {
+    ///         min: Some(Px(50)),
+    ///         max: None,
+    ///     },
+    ///     DimensionValue::Fill {
+    ///         min: Some(Px(50)),
+    ///         max: None,
+    ///     },
     /// );
     /// let merged_fill = child_fill.merge(&parent);
-    /// assert_eq!(merged_fill.width, DimensionValue::Fill {
-    ///     min: Some(Px(50)),
-    ///     max: Some(Px(200))
-    /// });
+    /// assert_eq!(
+    ///     merged_fill.width,
+    ///     DimensionValue::Fill {
+    ///         min: Some(Px(50)),
+    ///         max: Some(Px(200))
+    ///     }
+    /// );
     /// ```
     pub fn merge(&self, parent_constraint: &Constraint) -> Self {
         let new_width = Self::merge_dimension(self.width, parent_constraint.width);

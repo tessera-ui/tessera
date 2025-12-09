@@ -321,12 +321,17 @@ fn apply_fluid_glass_accessibility(
 ///
 /// ```
 /// use tessera_ui_basic_components::{
-///     fluid_glass::{fluid_glass, FluidGlassArgs},
-///     text::{text, TextArgsBuilder},
+///     fluid_glass::{FluidGlassArgs, fluid_glass},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// fluid_glass(FluidGlassArgs::default(), || {
-///     text(TextArgsBuilder::default().text("Content on glass".to_string()).build().expect("builder construction failed"));
+///     text(
+///         TextArgsBuilder::default()
+///             .text("Content on glass".to_string())
+///             .build()
+///             .expect("builder construction failed"),
+///     );
 /// });
 /// ```
 #[tessera]

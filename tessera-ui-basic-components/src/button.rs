@@ -90,8 +90,8 @@ impl Default for ButtonArgs {
 /// use std::sync::Arc;
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
-///     button::{button, ButtonArgsBuilder},
-///     text::{text, TextArgsBuilder},
+///     button::{ButtonArgsBuilder, button},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// let args = ButtonArgsBuilder::default()
@@ -100,7 +100,12 @@ impl Default for ButtonArgs {
 ///     .unwrap();
 ///
 /// button(args, || {
-///     text(TextArgsBuilder::default().text("Click Me".to_string()).build().expect("builder construction failed"));
+///     text(
+///         TextArgsBuilder::default()
+///             .text("Click Me".to_string())
+///             .build()
+///             .expect("builder construction failed"),
+///     );
 /// });
 /// ```
 #[tessera]

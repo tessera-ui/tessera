@@ -44,7 +44,7 @@ fn pop_context_layer() {
 /// # Examples
 ///
 /// ```
-/// use tessera_ui::{provide_context, tessera, Color};
+/// use tessera_ui::{Color, provide_context, tessera};
 ///
 /// #[derive(Default)]
 /// struct Theme {
@@ -53,9 +53,14 @@ fn pop_context_layer() {
 ///
 /// #[tessera]
 /// fn root() {
-///     provide_context(Theme { primary: Color::RED }, || {
-///         leaf();
-///     });
+///     provide_context(
+///         Theme {
+///             primary: Color::RED,
+///         },
+///         || {
+///             leaf();
+///         },
+///     );
 /// }
 ///
 /// #[tessera]
@@ -88,7 +93,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use tessera_ui::{tessera, use_context, Color};
+/// use tessera_ui::{Color, tessera, use_context};
 ///
 /// #[derive(Default)]
 /// struct Theme {

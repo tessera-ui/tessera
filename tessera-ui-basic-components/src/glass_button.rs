@@ -146,8 +146,8 @@ impl GlassButtonArgs {
 /// use std::sync::Arc;
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
-///     glass_button::{glass_button, GlassButtonArgs},
-///     text::{text, TextArgsBuilder},
+///     glass_button::{GlassButtonArgs, glass_button},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// glass_button(
@@ -156,7 +156,14 @@ impl GlassButtonArgs {
 ///         tint_color: Color::new(0.2, 0.3, 0.8, 0.3),
 ///         ..Default::default()
 ///     },
-///     || text(TextArgsBuilder::default().text("Click Me".to_string()).build().expect("builder construction failed")),
+///     || {
+///         text(
+///             TextArgsBuilder::default()
+///                 .text("Click Me".to_string())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         )
+///     },
 /// );
 /// ```
 #[tessera]

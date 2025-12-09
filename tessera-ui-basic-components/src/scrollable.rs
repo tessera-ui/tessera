@@ -259,9 +259,9 @@ impl ScrollableControllerInner {
 /// ```
 /// use tessera_ui::{DimensionValue, Dp, tessera};
 /// use tessera_ui_basic_components::{
-///     scrollable::{scrollable, ScrollableArgs},
-///     column::{column, ColumnArgs},
-///     text::{text, TextArgsBuilder},
+///     column::{ColumnArgs, column},
+///     scrollable::{ScrollableArgs, scrollable},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// #[tessera]
@@ -314,9 +314,9 @@ pub fn scrollable(args: impl Into<ScrollableArgs>, child: impl FnOnce() + Send +
 /// ```
 /// use tessera_ui::{DimensionValue, Dp, remember, tessera};
 /// use tessera_ui_basic_components::{
-///     scrollable::{scrollable_with_controller, ScrollableArgs, ScrollableController},
-///     column::{column, ColumnArgs},
-///     text::{text, TextArgsBuilder},
+///     column::{ColumnArgs, column},
+///     scrollable::{ScrollableArgs, ScrollableController, scrollable_with_controller},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// #[tessera]
@@ -332,7 +332,7 @@ pub fn scrollable(args: impl Into<ScrollableArgs>, child: impl FnOnce() + Send +
 ///             column(ColumnArgs::default(), |scope| {
 ///                 for i in 0..10 {
 ///                     let text_content = format!("Row #{i}");
-///                     scope.child(|| {    
+///                     scope.child(|| {
 ///                         text(
 ///                             TextArgsBuilder::default()
 ///                                 .text(text_content)

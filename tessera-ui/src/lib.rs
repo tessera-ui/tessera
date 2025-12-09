@@ -47,7 +47,7 @@
 //!
 //! ```
 //! use std::sync::atomic::AtomicUsize;
-//! use tessera_ui::{tessera, remember};
+//! use tessera_ui::{remember, tessera};
 //!
 //! #[tessera]
 //! fn counter() {

@@ -204,8 +204,8 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 /// ```
 /// use tessera_ui::tessera;
 /// use tessera_ui_basic_components::{
-///     lazy_list::{lazy_column, LazyColumnArgs},
-///     text::{text, TextArgsBuilder},
+///     lazy_list::{LazyColumnArgs, lazy_column},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// #[tessera]
@@ -251,8 +251,8 @@ where
 /// ```
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::{
-///     lazy_list::{lazy_column_with_controller, LazyColumnArgs, LazyListController},
-///     text::{text, TextArgsBuilder},
+///     lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// #[tessera]
@@ -328,8 +328,8 @@ pub fn lazy_column_with_controller<F>(
 /// ```
 /// use tessera_ui::tessera;
 /// use tessera_ui_basic_components::{
-///     lazy_list::{lazy_row, LazyRowArgs},
-///     text::{text, TextArgsBuilder},
+///     lazy_list::{LazyRowArgs, lazy_row},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// #[tessera]
@@ -375,8 +375,8 @@ where
 /// ```
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::{
-///     lazy_list::{lazy_row_with_controller, LazyListController, LazyRowArgs},
-///     text::{text, TextArgsBuilder},
+///     lazy_list::{LazyListController, LazyRowArgs, lazy_row_with_controller},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// #[tessera]

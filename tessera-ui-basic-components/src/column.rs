@@ -79,14 +79,28 @@ impl<'a> ColumnScope<'a> {
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::column::{column, ColumnArgs};
-/// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
-/// use tessera_ui_basic_components::spacer::{spacer, SpacerArgs};
+/// use tessera_ui_basic_components::column::{ColumnArgs, column};
+/// use tessera_ui_basic_components::spacer::{SpacerArgs, spacer};
+/// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
 ///
 /// column(ColumnArgs::default(), |scope| {
-///     scope.child(|| text(TextArgsBuilder::default().text("First item".to_string()).build().expect("builder construction failed")));
+///     scope.child(|| {
+///         text(
+///             TextArgsBuilder::default()
+///                 .text("First item".to_string())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         )
+///     });
 ///     scope.child_weighted(|| spacer(SpacerArgs::default()), 1.0); // This spacer will be flexible
-///     scope.child(|| text(TextArgsBuilder::default().text("Last item".to_string()).build().expect("builder construction failed")));
+///     scope.child(|| {
+///         text(
+///             TextArgsBuilder::default()
+///                 .text("Last item".to_string())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         )
+///     });
 /// });
 /// ```
 #[tessera]

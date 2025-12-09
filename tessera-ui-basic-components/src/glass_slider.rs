@@ -228,7 +228,7 @@ fn process_cursor_events(
 /// ```
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui_basic_components::glass_slider::{
-///     glass_slider, glass_slider_with_controller, GlassSliderArgsBuilder, GlassSliderController,
+///     GlassSliderArgsBuilder, GlassSliderController, glass_slider, glass_slider_with_controller,
 /// };
 ///
 /// // In a real app, this would be part of your application's state.
@@ -281,7 +281,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>) {
 /// use std::sync::Arc;
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::glass_slider::{
-///    glass_slider_with_controller, GlassSliderArgsBuilder, GlassSliderController,
+///     GlassSliderArgsBuilder, GlassSliderController, glass_slider_with_controller,
 /// };
 ///
 /// #[tessera]

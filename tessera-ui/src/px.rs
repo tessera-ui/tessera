@@ -27,8 +27,8 @@
 //! # Example
 //!
 //! ```
-//! use tessera_ui::px::{Px, PxPosition, PxSize};
 //! use tessera_ui::dp::Dp;
+//! use tessera_ui::px::{Px, PxPosition, PxSize};
 //!
 //! // Create pixel values
 //! let x = Px::new(100);
@@ -145,8 +145,8 @@ impl Px {
     /// # Examples
     ///
     /// ```
-    /// use tessera_ui::px::Px;
     /// use tessera_ui::dp::Dp;
+    /// use tessera_ui::px::Px;
     ///
     /// let dp_value = Dp(16.0);
     /// let px_value = Px::from_dp(dp_value);
@@ -869,7 +869,10 @@ impl PxRect {
     /// let rect1 = PxRect::new(Px::new(0), Px::new(0), Px::new(100), Px::new(100));
     /// let rect2 = PxRect::new(Px::new(50), Px::new(50), Px::new(100), Px::new(100));
     /// let union_rect = rect1.union(&rect2);
-    /// assert_eq!(union_rect, PxRect::new(Px::new(0), Px::new(0), Px::new(150), Px::new(150)));
+    /// assert_eq!(
+    ///     union_rect,
+    ///     PxRect::new(Px::new(0), Px::new(0), Px::new(150), Px::new(150))
+    /// );
     /// ```
     pub fn union(&self, other: &Self) -> Self {
         let x = self.x.0.min(other.x.0);
@@ -917,7 +920,15 @@ impl PxRect {
     /// let rect1 = PxRect::new(Px::new(0), Px::new(0), Px::new(100), Px::new(100));
     /// let rect2 = PxRect::new(Px::new(50), Px::new(50), Px::new(100), Px::new(100));
     /// let intersection = rect1.intersection(&rect2);
-    /// assert_eq!(intersection, Some(PxRect::new(Px::new(50), Px::new(50), Px::new(50), Px::new(50))));
+    /// assert_eq!(
+    ///     intersection,
+    ///     Some(PxRect::new(
+    ///         Px::new(50),
+    ///         Px::new(50),
+    ///         Px::new(50),
+    ///         Px::new(50)
+    ///     ))
+    /// );
     /// ```
     pub fn intersection(&self, other: &Self) -> Option<Self> {
         let x1 = self.x.0.max(other.x.0);

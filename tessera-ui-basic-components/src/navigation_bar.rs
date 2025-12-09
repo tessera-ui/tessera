@@ -89,28 +89,24 @@ pub struct NavigationBarItem {
 ///
 /// ```
 /// use tessera_ui::tessera;
-/// use tessera_ui_basic_components::navigation_bar::{
-///     NavigationBarItemBuilder, navigation_bar,
-/// };
+/// use tessera_ui_basic_components::navigation_bar::{NavigationBarItemBuilder, navigation_bar};
 ///
 /// #[tessera]
 /// fn demo() {
-///     navigation_bar(
-///         |scope| {
-///             scope.item(
-///                 NavigationBarItemBuilder::default()
-///                     .label("Home")
-///                     .build()
-///                     .unwrap(),
-///             );
-///             scope.item(
-///                 NavigationBarItemBuilder::default()
-///                     .label("Search")
-///                     .build()
-///                     .unwrap(),
-///             );
-///         },
-///     );
+///     navigation_bar(|scope| {
+///         scope.item(
+///             NavigationBarItemBuilder::default()
+///                 .label("Home")
+///                 .build()
+///                 .unwrap(),
+///         );
+///         scope.item(
+///             NavigationBarItemBuilder::default()
+///                 .label("Search")
+///                 .build()
+///                 .unwrap(),
+///         );
+///     });
 /// }
 /// ```
 #[tessera]
@@ -142,23 +138,20 @@ where
 /// #[tessera]
 /// fn controlled_demo() {
 ///     let controller = remember(|| NavigationBarController::new(0));
-///     navigation_bar_with_controller(
-///         controller,
-///         |scope| {
-///             scope.item(
-///                 NavigationBarItemBuilder::default()
-///                     .label("Home")
-///                     .build()
-///                     .unwrap(),
-///             );
-///             scope.item(
-///                 NavigationBarItemBuilder::default()
-///                     .label("Search")
-///                     .build()
-///                     .unwrap(),
-///             );
-///         },
-///     );
+///     navigation_bar_with_controller(controller, |scope| {
+///         scope.item(
+///             NavigationBarItemBuilder::default()
+///                 .label("Home")
+///                 .build()
+///                 .unwrap(),
+///         );
+///         scope.item(
+///             NavigationBarItemBuilder::default()
+///                 .label("Search")
+///                 .build()
+///                 .unwrap(),
+///         );
+///     });
 /// }
 /// ```
 #[tessera]

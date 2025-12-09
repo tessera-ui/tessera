@@ -14,7 +14,7 @@ use tessera_ui_basic_components::{
         bottom_sheet_provider_with_controller,
     },
     boxed::{BoxedArgsBuilder, boxed},
-    button::{ButtonArgsBuilder, button},
+    button::{ButtonArgs, ButtonArgsBuilder, button},
     column::{ColumnArgs, column},
     dialog::{
         BasicDialogArgsBuilder, DialogController, DialogProviderArgsBuilder, DialogStyle,
@@ -99,7 +99,7 @@ pub fn app(#[state] app_state: AppState) {
                             .on_close_request(Arc::new(closure!(clone dialog_controller, || {
                                 dialog_controller.close();
                             })))
-                            .style(DialogStyle::Glass)
+                            .style(DialogStyle::Material)
                             .build()
                             .unwrap(),
                         dialog_controller.clone(),
@@ -204,23 +204,17 @@ pub fn app(#[state] app_state: AppState) {
                                     }))
                                     .confirm_button(closure!(clone dialog_controller, || {
                                         button(
-                                            ButtonArgsBuilder::default()
-                                                .on_click(Arc::new(closure!(clone dialog_controller, || {
+                                            ButtonArgs::text(Arc::new(closure!(clone dialog_controller, || {
                                                     dialog_controller.close();
-                                                })))
-                                                .build()
-                                                .unwrap(),
+                                                }))),
                                             || text("Confirm"),
                                         );
                                     }))
                                     .dismiss_button(closure!(clone dialog_controller, || {
                                         button(
-                                            ButtonArgsBuilder::default()
-                                                .on_click(Arc::new(closure!(clone dialog_controller, || {
+                                            ButtonArgs::text(Arc::new(closure!(clone dialog_controller, || {
                                                     dialog_controller.close();
-                                                })))
-                                                .build()
-                                                .unwrap(),
+                                                }))),
                                             || text("Dismiss"),
                                         );
                                     }))

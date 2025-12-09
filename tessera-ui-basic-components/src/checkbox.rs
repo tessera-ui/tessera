@@ -238,11 +238,12 @@ impl CheckmarkState {
 /// ## Examples
 ///
 /// ```
-/// use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-/// use tessera_ui::{tessera, Color, Dp};
-/// use tessera_ui_basic_components::checkbox::{
-///     checkbox, CheckboxArgsBuilder,
+/// use std::sync::{
+///     Arc,
+///     atomic::{AtomicBool, Ordering},
 /// };
+/// use tessera_ui::{Color, Dp, tessera};
+/// use tessera_ui_basic_components::checkbox::{CheckboxArgsBuilder, checkbox};
 ///
 /// // A tiny UI demo that shows a checkbox and a text label that reflects its state.
 /// #[derive(Clone, Default)]
@@ -292,7 +293,7 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui::{tessera, Dp, remember};
+/// use tessera_ui::{Dp, remember, tessera};
 /// use tessera_ui_basic_components::checkbox::{
 ///     CheckboxArgsBuilder, CheckboxController, checkbox_with_controller,
 /// };

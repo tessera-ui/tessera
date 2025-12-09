@@ -21,11 +21,12 @@
 //! fn my_button(label: String) {
 //!     input_handler(Box::new(move |input| {
 //!         // Set accessibility information
-//!         input.accessibility()
+//!         input
+//!             .accessibility()
 //!             .role(Role::Button)
 //!             .label(label.clone())
 //!             .action(Action::Click);
-//!         
+//!
 //!         // Set action handler
 //!         input.set_accessibility_action_handler(|action| {
 //!             if action == Action::Click {

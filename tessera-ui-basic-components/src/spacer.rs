@@ -14,15 +14,18 @@ use tessera_ui::{ComputedData, Constraint, DimensionValue, Dp, Px, tessera};
 ///
 /// # Example
 /// ```
-/// use tessera_ui_basic_components::spacer::{spacer, SpacerArgs};
 /// use tessera_ui::{DimensionValue, Px};
+/// use tessera_ui_basic_components::spacer::{SpacerArgs, spacer};
 ///
 /// // Fixed-size spacer (default)
 /// spacer(SpacerArgs::default());
 ///
 /// // Expanding spacer (fills available width)
 /// spacer(SpacerArgs {
-///     width: DimensionValue::Fill { min: None, max: None },
+///     width: DimensionValue::Fill {
+///         min: None,
+///         max: None,
+///     },
 ///     height: DimensionValue::Fixed(Px(0)),
 /// });
 /// ```
@@ -105,8 +108,8 @@ impl From<Dp> for SpacerArgs {
     ///
     /// # Example
     /// ```
-    /// use tessera_ui_basic_components::spacer::SpacerArgs;
     /// use tessera_ui::Dp;
+    /// use tessera_ui_basic_components::spacer::SpacerArgs;
     /// let args = SpacerArgs::from(Dp(8.0));
     /// ```
     fn from(value: Dp) -> Self {
@@ -123,8 +126,8 @@ impl From<Px> for SpacerArgs {
     ///
     /// # Example
     /// ```
-    /// use tessera_ui_basic_components::spacer::SpacerArgs;
     /// use tessera_ui::Px;
+    /// use tessera_ui_basic_components::spacer::SpacerArgs;
     /// let args = SpacerArgs::from(Px(16));
     /// ```
     fn from(value: Px) -> Self {
@@ -152,16 +155,30 @@ impl From<Px> for SpacerArgs {
 ///
 /// ```
 /// use tessera_ui_basic_components::{
-///     row::{row, RowArgs},
-///     spacer::{spacer, SpacerArgs},
-///     text::{text, TextArgsBuilder},
+///     row::{RowArgs, row},
+///     spacer::{SpacerArgs, spacer},
+///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// row(RowArgs::default(), |scope| {
-///     scope.child(|| text(TextArgsBuilder::default().text("Left".to_string()).build().expect("builder construction failed")));
+///     scope.child(|| {
+///         text(
+///             TextArgsBuilder::default()
+///                 .text("Left".to_string())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         )
+///     });
 ///     // This spacer will fill the available width, pushing "Right" to the end.
 ///     scope.child(|| spacer(SpacerArgs::fill_width()));
-///     scope.child(|| text(TextArgsBuilder::default().text("Right".to_string()).build().expect("builder construction failed")));
+///     scope.child(|| {
+///         text(
+///             TextArgsBuilder::default()
+///                 .text("Right".to_string())
+///                 .build()
+///                 .expect("builder construction failed"),
+///         )
+///     });
 /// });
 /// ```
 #[tessera]

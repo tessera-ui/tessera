@@ -373,7 +373,8 @@ impl From<f64> for Dp {
     /// let dp2 = Dp::from(16.0);
     ///
     /// // In function calls that expect Dp
-    /// fn set_padding(padding: Dp) { /* ... */ }
+    /// fn set_padding(padding: Dp) { /* ... */
+    /// }
     /// set_padding(8.0.into());
     /// ```
     fn from(value: f64) -> Self {

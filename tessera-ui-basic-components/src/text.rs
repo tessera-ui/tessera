@@ -89,8 +89,8 @@ impl From<&str> for TextArgs {
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
 /// use tessera_ui::{Color, Dp};
+/// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
 ///
 /// // Simple text from a string literal
 /// text("Hello, world!");

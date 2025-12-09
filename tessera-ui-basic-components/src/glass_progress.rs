@@ -139,7 +139,7 @@ fn render_track_and_fill(args: GlassProgressArgs, width_px: Px) {
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::glass_progress::{glass_progress, GlassProgressArgsBuilder};
+/// use tessera_ui_basic_components::glass_progress::{GlassProgressArgsBuilder, glass_progress};
 ///
 /// // Render a progress bar at 75% completion.
 /// glass_progress(

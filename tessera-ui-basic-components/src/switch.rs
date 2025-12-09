@@ -450,7 +450,7 @@ fn switch_inner(
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::switch::{switch, SwitchArgsBuilder};
+/// use tessera_ui_basic_components::switch::{SwitchArgsBuilder, switch};
 ///
 /// switch(
 ///     SwitchArgsBuilder::default()
@@ -486,8 +486,8 @@ pub fn switch(args: impl Into<SwitchArgs>) {
 ///
 /// ```
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::switch::{switch_with_child, SwitchArgsBuilder};
-/// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
+/// use tessera_ui_basic_components::switch::{SwitchArgsBuilder, switch_with_child};
+/// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
 ///
 /// switch_with_child(
 ///     SwitchArgsBuilder::default()
@@ -533,10 +533,12 @@ pub fn switch_with_child(
 /// # Examples
 ///
 /// ```
-/// use tessera_ui::{remember, tessera};
 /// use std::sync::Arc;
-/// use tessera_ui_basic_components::switch::{switch_with_child_and_controller, SwitchArgsBuilder, SwitchController};
-/// use tessera_ui_basic_components::text::{text, TextArgsBuilder};
+/// use tessera_ui::{remember, tessera};
+/// use tessera_ui_basic_components::switch::{
+///     SwitchArgsBuilder, SwitchController, switch_with_child_and_controller,
+/// };
+/// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
 ///
 /// #[tessera]
 /// fn controlled_switch_example() {
@@ -546,17 +548,17 @@ pub fn switch_with_child(
 ///             .on_toggle(Arc::new(|checked| {
 ///                 println!("Switch is now: {}", checked);
 ///             }))
-///            .build()
-///            .unwrap(),
-///        controller,
-///        || {
-///            text(
+///             .build()
+///             .unwrap(),
+///         controller,
+///         || {
+///             text(
 ///                 TextArgsBuilder::default()
 ///                     .text("✓".to_string())
 ///                     .build()
 ///                     .unwrap(),
-///           );
-///        }
+///             );
+///         },
 ///     );
 /// }
 /// ```

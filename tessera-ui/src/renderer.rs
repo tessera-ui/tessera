@@ -159,12 +159,13 @@ impl Default for TesseraConfig {
 ///
 /// // Run the application
 /// Renderer::run(
-///     my_app,  // Entry point function
+///     my_app, // Entry point function
 ///     |app| {
 ///         // Register rendering pipelines
 ///         // For example, tessera_ui_basic_components::pipelines::register_pipelines(app);
-///     }
-/// ).unwrap();
+///     },
+/// )
+/// .unwrap();
 /// ```
 ///
 /// ### Android Usage
@@ -182,7 +183,7 @@ impl Default for TesseraConfig {
 ///
 /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
 /// let config = TesseraConfig {
-///     sample_count: 8,  // 8x MSAA
+///     sample_count: 8,                            // 8x MSAA
 ///     window_title: "My Tessera App".to_string(), // Custom window title
 ///     ..Default::default()
 /// };
@@ -190,7 +191,7 @@ impl Default for TesseraConfig {
 /// Renderer::run_with_config(
 ///     || { /* my_app */ },
 ///     |_app| { /* register_pipelines */ },
-///     config
+///     config,
 /// )?;
 /// # Ok(())
 /// # }
@@ -256,13 +257,10 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     /// }
     ///
     /// fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     Renderer::run(
-    ///         my_ui,
-    ///         |_app| {
-    ///             // Register your rendering pipelines here
-    ///             // tessera_ui_basic_components::pipelines::register_pipelines(app);
-    ///         }
-    ///     )?;
+    ///     Renderer::run(my_ui, |_app| {
+    ///         // Register your rendering pipelines here
+    ///         // tessera_ui_basic_components::pipelines::register_pipelines(app);
+    ///     })?;
     ///     Ok(())
     /// }
     /// ```
@@ -295,14 +293,14 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let config = TesseraConfig {
-    ///     sample_count: 8,  // 8x MSAA for higher quality
+    ///     sample_count: 8, // 8x MSAA for higher quality
     ///     ..Default::default()
     /// };
     ///
     /// Renderer::run_with_config(
     ///     || { /* my_ui */ },
     ///     |_app| { /* register_pipelines */ },
-    ///     config
+    ///     config,
     /// )?;
     /// # Ok(())
     /// # }
@@ -365,11 +363,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///
     /// #[unsafe(no_mangle)]
     /// fn android_main(android_app: AndroidApp) {
-    ///     Renderer::run(
-    ///         my_ui,
-    ///         register_pipelines,
-    ///         android_app
-    ///     ).unwrap();
+    ///     Renderer::run(my_ui, register_pipelines, android_app).unwrap();
     /// }
     /// ```
     #[cfg(target_os = "android")]
@@ -415,15 +409,10 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     /// #[unsafe(no_mangle)]
     /// fn android_main(android_app: AndroidApp) {
     ///     let config = TesseraConfig {
-    ///         sample_count: 2,  // Lower MSAA for mobile performance
+    ///         sample_count: 2, // Lower MSAA for mobile performance
     ///     };
-    ///     
-    ///     Renderer::run_with_config(
-    ///         my_ui,
-    ///         register_pipelines,
-    ///         android_app,
-    ///         config
-    ///     ).unwrap();
+    ///
+    ///     Renderer::run_with_config(my_ui, register_pipelines, android_app, config).unwrap();
     /// }
     /// ```
     #[cfg(target_os = "android")]

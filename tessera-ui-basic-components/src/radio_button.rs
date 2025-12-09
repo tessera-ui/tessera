@@ -194,7 +194,7 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 ///
 /// ```
 /// use tessera_ui::tessera;
-/// use tessera_ui_basic_components::radio_button::{radio_button, RadioButtonArgsBuilder};
+/// use tessera_ui_basic_components::radio_button::{RadioButtonArgsBuilder, radio_button};
 ///
 /// #[tessera]
 /// fn radio_demo() {

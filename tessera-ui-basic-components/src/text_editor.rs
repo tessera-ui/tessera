@@ -113,7 +113,7 @@ impl Default for TextEditorArgs {
 ///
 /// ```
 /// use tessera_ui::Dp;
-/// use tessera_ui_basic_components::text_editor::{text_editor, TextEditorArgsBuilder};
+/// use tessera_ui_basic_components::text_editor::{TextEditorArgsBuilder, text_editor};
 ///
 /// text_editor(
 ///     TextEditorArgsBuilder::default()
@@ -162,8 +162,8 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
 /// use std::sync::Arc;
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
-///     text_editor::{text_editor_with_controller, TextEditorArgsBuilder, TextEditorController},
 ///     text::write_font_system,
+///     text_editor::{TextEditorArgsBuilder, TextEditorController, text_editor_with_controller},
 /// };
 ///
 /// let controller = Arc::new(TextEditorController::new(Dp(14.0), None));
@@ -661,8 +661,8 @@ impl TextEditorArgs {
     /// # Example
     ///
     /// ```
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::{DimensionValue, Px};
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_width(DimensionValue::Fixed(Px(200)));
     /// ```
     pub fn with_width(mut self, width: DimensionValue) -> Self {
@@ -675,8 +675,8 @@ impl TextEditorArgs {
     /// # Example
     ///
     /// ```
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::{DimensionValue, Px};
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_height(DimensionValue::Fixed(Px(100)));
     /// ```
     pub fn with_height(mut self, height: DimensionValue) -> Self {
@@ -689,8 +689,8 @@ impl TextEditorArgs {
     /// # Example
     ///
     /// ```
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Dp;
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_min_width(Dp(80.0));
     /// ```
     pub fn with_min_width(mut self, min_width: Dp) -> Self {
@@ -703,8 +703,8 @@ impl TextEditorArgs {
     /// # Example
     ///
     /// ```
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Dp;
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_min_height(Dp(40.0));
     /// ```
     pub fn with_min_height(mut self, min_height: Dp) -> Self {
@@ -716,8 +716,8 @@ impl TextEditorArgs {
     ///
     /// # Example
     /// ```
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Color;
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_background_color(Color::WHITE);
     /// ```
     pub fn with_background_color(mut self, color: Color) -> Self {
@@ -745,8 +745,8 @@ impl TextEditorArgs {
     /// # Example
     ///
     /// ```
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Color;
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_border_color(Color::BLACK);
     /// ```
     pub fn with_border_color(mut self, color: Color) -> Self {
@@ -760,8 +760,8 @@ impl TextEditorArgs {
     ///
     /// ```
     /// use tessera_ui::Dp;
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui_basic_components::shape_def::{RoundedCorner, Shape};
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_shape(Shape::RoundedRectangle {
     ///     top_left: RoundedCorner::manual(Dp(8.0), 3.0),
     ///     top_right: RoundedCorner::manual(Dp(8.0), 3.0),
@@ -779,8 +779,8 @@ impl TextEditorArgs {
     /// # Example
     ///
     /// ```
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Dp;
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_padding(Dp(12.0));
     /// ```
     pub fn with_padding(mut self, padding: Dp) -> Self {
@@ -793,8 +793,8 @@ impl TextEditorArgs {
     /// # Example
     ///
     /// ```
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Color;
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_focus_border_color(Color::new(0.0, 0.5, 1.0, 1.0));
     /// ```
     pub fn with_focus_border_color(mut self, color: Color) -> Self {
@@ -807,8 +807,8 @@ impl TextEditorArgs {
     /// # Example
     ///
     /// ```
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Color;
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_focus_background_color(Color::WHITE);
     /// ```
     pub fn with_focus_background_color(mut self, color: Color) -> Self {
@@ -821,8 +821,8 @@ impl TextEditorArgs {
     /// # Example
     ///
     /// ```
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// use tessera_ui::Color;
+    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     /// let args = TextEditorArgs::simple().with_selection_color(Color::new(0.5, 0.7, 1.0, 0.4));
     /// ```
     pub fn with_selection_color(mut self, color: Color) -> Self {

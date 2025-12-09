@@ -132,16 +132,15 @@ impl From<Arc<ImageData>> for IconArgs {
 /// use std::sync::Arc;
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
-///     icon::{icon, IconArgsBuilder},
+///     icon::{IconArgsBuilder, icon},
 ///     image_vector::{ImageVectorSource, load_image_vector_from_source},
 /// };
 ///
 /// // Load vector data from an SVG file.
 /// // In a real app, this should be done once and the data cached.
 /// let svg_path = "../assets/emoji_u1f416.svg";
-/// let vector_data = load_image_vector_from_source(
-///     &ImageVectorSource::Path(svg_path.to_string())
-/// ).unwrap();
+/// let vector_data =
+///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
 ///
 /// icon(
 ///     IconArgsBuilder::default()

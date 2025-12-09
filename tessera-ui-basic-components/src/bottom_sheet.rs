@@ -595,7 +595,9 @@ fn render_content(
 /// # Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::bottom_sheet::{bottom_sheet_provider, BottomSheetProviderArgsBuilder};
+/// use tessera_ui_basic_components::bottom_sheet::{
+///     BottomSheetProviderArgsBuilder, bottom_sheet_provider,
+/// };
 ///
 /// bottom_sheet_provider(
 ///     BottomSheetProviderArgsBuilder::default()

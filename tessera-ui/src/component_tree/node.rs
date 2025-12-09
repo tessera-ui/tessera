@@ -428,12 +428,13 @@ impl InputHandlerInput<'_> {
     /// #[tessera]
     /// fn accessible_button() {
     ///     input_handler(Box::new(|input| {
-    ///         input.accessibility()
+    ///         input
+    ///             .accessibility()
     ///             .role(Role::Button)
     ///             .label("Click me")
     ///             .focusable()
     ///             .action(Action::Click);
-    ///         
+    ///
     ///         // Handle clicks...
     ///     }));
     /// }
