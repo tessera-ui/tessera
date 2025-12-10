@@ -531,14 +531,14 @@ where
 /// # Examples
 ///
 /// ```
-/// use tessera_ui::{key, tessera};
+/// use std::sync::atomic::AtomicUsize;
+/// use tessera_ui::{key, remember, tessera};
 ///
 /// #[tessera]
 /// fn my_list(items: Vec<String>) {
 ///     for item in items {
 ///         key(item.clone(), || {
-///             // Components called here will have their state associated with `item`
-///             // regardless of the iteration order.
+///             let state = remember(|| AtomicUsize::new(0));
 ///         });
 ///     }
 /// }

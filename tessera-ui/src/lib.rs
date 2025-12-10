@@ -85,6 +85,28 @@
 //! }
 //! ```
 //!
+//! Or use the `key` function to influence the `remember` calls inside it.
+//!
+//! ```
+//! use std::sync::atomic::AtomicUsize;
+//! use tessera_ui::{key, remember, tessera};
+//!
+//! #[tessera]
+//! fn my_list(items: Vec<String>) {
+//!     for item in items {
+//!         key(item.clone(), || {
+//!             let state = remember(|| AtomicUsize::new(0));
+//!         });
+//!     }
+//! }
+//! ```
+//!
+//! This is equivalent to using `remember_with_key(item.clone(), || AtomicUsize::new(0))`, but it
+//! is transparent to child components and necessary for virtual container-like components.
+//!
+//! However, `remember_with_key` is a litte cheaper than `key` + `remember`, so prefer it
+//! in simple cases.
+//!
 //! # Layout
 //!
 //! Implement a measure closure to define a component's layout behavior.
