@@ -9,7 +9,7 @@
 
 ## 开发工具
 
-如果您需要为 `tessera` 做代码贡献，除最新 stable rust 以外，强烈建议安装以下工具:
+如果您需要为 `tessera` 做代码贡献，除最新 nightly rust 以外，强烈建议安装以下工具:
 
 - [`xbuild`](https://github.com/rust-mobile/xbuild) 我们用它来构建和测试 Android 版本。未来也可能用它适配 iOS 版本。
 - [`rust-script`](https://rust-script.org/#installation) 我们用它来运行[一些 rust 脚本](scripts)。对开发有帮助。

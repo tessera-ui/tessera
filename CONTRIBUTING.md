@@ -9,7 +9,7 @@ Thank you for your interest in `tessera`! We welcome all forms of contributions,
 
 ## Development Tools
 
-If you need to contribute code to `tessera`, in addition to the latest stable Rust, it is highly recommended to install the following tools:
+If you need to contribute code to `tessera`, in addition to the latest nightly Rust, it is highly recommended to install the following tools:
 
 - [`xbuild`](https://github.com/rust-mobile/xbuild): We use it to build and test the Android version. In the future, it may also be used for iOS compatibility.
 - [`rust-script`](https://rust-script.org/#installation): We use it to run [some rust scripts](./scripts). It is helpful for development.
