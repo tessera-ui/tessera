@@ -216,12 +216,15 @@ fn process_cursor_events(
 ///
 /// ## Usage
 ///
-/// Allow users to select a value from a continuous range (0.0 to 1.0) by dragging a thumb.
+/// Allow users to select a value from a continuous range (0.0 to 1.0) by
+/// dragging a thumb.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the slider's value, appearance, and `on_change` callback; see [`GlassSliderArgs`].
-/// - `controller` — optional controller; use [`glass_slider_with_controller`] to provide your own.
+/// - `args` — configures the slider's value, appearance, and `on_change`
+///   callback; see [`GlassSliderArgs`].
+/// - `controller` — optional controller; use [`glass_slider_with_controller`]
+///   to provide your own.
 ///
 /// ## Examples
 ///
@@ -268,12 +271,15 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>) {
 ///
 /// # Usage
 ///
-/// Use when you need a slider with a glassmorphic style and explicit control over its state.
+/// Use when you need a slider with a glassmorphic style and explicit control
+/// over its state.
 ///
 /// # Parameters
 ///
-/// - `args` — configures the slider's value, appearance, and `on_change` callback; see [`GlassSliderArgs`].
-/// - `controller` — an explicit [`GlassSliderController`] to manage the slider's state
+/// - `args` — configures the slider's value, appearance, and `on_change`
+///   callback; see [`GlassSliderArgs`].
+/// - `controller` — an explicit [`GlassSliderController`] to manage the
+///   slider's state
 ///
 /// # Examples
 ///

@@ -79,7 +79,8 @@ pub struct GlassButtonArgs {
     /// Optional longer description for assistive technologies.
     #[builder(default, setter(strip_option, into))]
     pub accessibility_description: Option<String>,
-    /// Whether the button should remain focusable even when no click handler is provided.
+    /// Whether the button should remain focusable even when no click handler is
+    /// provided.
     #[builder(default)]
     pub accessibility_focusable: bool,
 }
@@ -129,7 +130,8 @@ impl GlassButtonArgs {
 
 /// # glass_button
 ///
-/// Renders an interactive button with a customizable glass effect and ripple animation.
+/// Renders an interactive button with a customizable glass effect and ripple
+/// animation.
 ///
 /// ## Usage
 ///
@@ -137,8 +139,10 @@ impl GlassButtonArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the button's glass appearance and `on_click` handler; see [`GlassButtonArgs`].
-/// - `child` — a closure that renders the button's content (e.g., text or an icon).
+/// - `args` — configures the button's glass appearance and `on_click` handler;
+///   see [`GlassButtonArgs`].
+/// - `child` — a closure that renders the button's content (e.g., text or an
+///   icon).
 ///
 /// ## Examples
 ///

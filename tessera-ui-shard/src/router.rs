@@ -6,16 +6,19 @@
 //! # Responsibilities
 //!
 //! * Maintain an ordered stack (`route_stack`) of active destinations
-//! * Expose [`Router::push`] / [`Router::pop`] helpers that also manage shard state lifetimes
-//! * Remove per‑shard state from the registry when a destination whose lifecycle is
-//!   `ShardStateLifeCycle::Shard` is popped
+//! * Expose [`Router::push`] / [`Router::pop`] helpers that also manage shard
+//!   state lifetimes
+//! * Remove per‑shard state from the registry when a destination whose
+//!   lifecycle is `ShardStateLifeCycle::Shard` is popped
 //! * Keep routing logic minimal; rendering happens when the top destination's
 //!   `exec_component()` is invoked every frame by `router_root`
 //!
 //! # Related
 //!
-//! * `#[shard]` macro – generates the `*Destination` structs + optional state injection
-//! * `tessera_ui::router::router_root` – executes the current top destination each frame
+//! * `#[shard]` macro – generates the `*Destination` structs + optional state
+//!   injection
+//! * `tessera_ui::router::router_root` – executes the current top destination
+//!   each frame
 use std::sync::OnceLock;
 
 use parking_lot::RwLock;

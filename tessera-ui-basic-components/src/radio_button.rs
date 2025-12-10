@@ -28,7 +28,8 @@ const RADIO_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 const HOVER_STATE_LAYER_OPACITY: f32 = 0.08;
 const RIPPLE_OPACITY: f32 = 0.1;
 
-/// Shared state for the `radio_button` component, including selection animation.
+/// Shared state for the `radio_button` component, including selection
+/// animation.
 pub struct RadioButtonController {
     selection: RwLock<RadioSelectionState>,
 }
@@ -62,7 +63,8 @@ impl RadioButtonController {
         }
     }
 
-    /// Marks the radio button as selected, returning `true` if this triggered a state change.
+    /// Marks the radio button as selected, returning `true` if this triggered a
+    /// state change.
     pub fn select(&self) -> bool {
         let mut selection = self.selection.write();
         if selection.selected {
@@ -125,7 +127,8 @@ pub struct RadioButtonArgs {
     /// Whether the radio button is currently selected.
     #[builder(default = "false")]
     pub selected: bool,
-    /// Visual diameter of the radio glyph (outer ring) in density-independent pixels.
+    /// Visual diameter of the radio glyph (outer ring) in density-independent
+    /// pixels.
     #[builder(default = "Dp(20.0)")]
     pub size: Dp,
     /// Minimum interactive touch target for the control.
@@ -180,7 +183,8 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 
 /// # radio_button
 ///
-/// Render a Material Design 3 radio button with a smooth animated selection dot.
+/// Render a Material Design 3 radio button with a smooth animated selection
+/// dot.
 ///
 /// ## Usage
 ///
@@ -188,7 +192,8 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures sizing, colors, and callbacks; see [`RadioButtonArgs`].
+/// - `args` — configures sizing, colors, and callbacks; see
+///   [`RadioButtonArgs`].
 ///
 /// ## Examples
 ///
@@ -224,8 +229,10 @@ pub fn radio_button(args: impl Into<RadioButtonArgs>) {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures sizing, colors, and callbacks; see [`RadioButtonArgs`].
-/// - `controller` — a clonable [`RadioButtonController`] that manages selection animation.
+/// - `args` — configures sizing, colors, and callbacks; see
+///   [`RadioButtonArgs`].
+/// - `controller` — a clonable [`RadioButtonController`] that manages selection
+///   animation.
 #[tessera]
 pub fn radio_button_with_controller(
     args: impl Into<RadioButtonArgs>,

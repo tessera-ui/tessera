@@ -22,7 +22,8 @@ pub struct ButtonArgs {
     /// The fill color of the button (RGBA).
     #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     pub color: Color,
-    /// The hover color of the button (RGBA). If None, no hover effect is applied.
+    /// The hover color of the button (RGBA). If None, no hover effect is
+    /// applied.
     #[builder(
         default = "Some(use_context::<MaterialColorScheme>().primary.blend_over(use_context::<MaterialColorScheme>().on_primary, 0.08))"
     )]
@@ -48,13 +49,15 @@ pub struct ButtonArgs {
     /// Width of the border. If > 0, an outline will be drawn.
     #[builder(default = "Dp(0.0)")]
     pub border_width: Dp,
-    /// Optional color for the border (RGBA). If None and border_width > 0, `color` will be used.
+    /// Optional color for the border (RGBA). If None and border_width > 0,
+    /// `color` will be used.
     #[builder(default)]
     pub border_color: Option<Color>,
     /// Shadow of the button. If None, no shadow is applied.
     #[builder(default, setter(strip_option))]
     pub shadow: Option<ShadowProps>,
-    /// Optional label announced by assistive technologies (e.g., screen readers).
+    /// Optional label announced by assistive technologies (e.g., screen
+    /// readers).
     #[builder(default, setter(strip_option, into))]
     pub accessibility_label: Option<String>,
     /// Optional longer description or hint for assistive technologies.
@@ -81,8 +84,10 @@ impl Default for ButtonArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the button's appearance and `on_click` handler; see [`ButtonArgs`].
-/// - `child` — a closure that renders the button's content (e.g., text or an icon).
+/// - `args` — configures the button's appearance and `on_click` handler; see
+///   [`ButtonArgs`].
+/// - `child` — a closure that renders the button's content (e.g., text or an
+///   icon).
 ///
 /// ## Examples
 ///
@@ -212,7 +217,8 @@ impl ButtonArgs {
     }
 
     /// Create a "Tonal" button (Medium emphasis).
-    /// Uses SecondaryContainer color for container and OnSecondaryContainer for content.
+    /// Uses SecondaryContainer color for container and OnSecondaryContainer for
+    /// content.
     pub fn tonal(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
         let scheme = use_context::<MaterialColorScheme>();
         ButtonArgsBuilder::default()

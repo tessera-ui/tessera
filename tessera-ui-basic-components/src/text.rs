@@ -38,7 +38,8 @@ pub struct TextArgs {
     #[builder(default, setter(strip_option))]
     pub line_height: Option<Dp>,
 
-    /// Optional label announced by assistive technologies. Defaults to the text content.
+    /// Optional label announced by assistive technologies. Defaults to the text
+    /// content.
     #[builder(default, setter(strip_option, into))]
     pub accessibility_label: Option<String>,
 
@@ -80,11 +81,13 @@ impl From<&str> for TextArgs {
 ///
 /// ## Usage
 ///
-/// Display simple text content. For more complex styling or editing, see other components.
+/// Display simple text content. For more complex styling or editing, see other
+/// components.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the text content and styling; see [`TextArgs`]. Can be converted from a `String` or `&str`.
+/// - `args` — configures the text content and styling; see [`TextArgs`]. Can be
+///   converted from a `String` or `&str`.
 ///
 /// ## Examples
 ///

@@ -1,20 +1,21 @@
 //! Shape rendering pipeline for UI components.
 //!
-//! This module provides the GPU pipeline and associated data structures for rendering
-//! vector-based shapes in Tessera UI components. Supported shapes include rectangles,
-//! rounded rectangles (with G2 curve support), ellipses, and arbitrary polygons.
+//! This module provides the GPU pipeline and associated data structures for
+//! rendering vector-based shapes in Tessera UI components. Supported shapes
+//! include rectangles, rounded rectangles (with G2 curve support), ellipses,
+//! and arbitrary polygons.
 //!
-//! The pipeline supports advanced visual effects such as drop shadows and interactive
-//! ripples, making it suitable for rendering button backgrounds, surfaces, and other
-//! interactive or decorative UI elements.
+//! The pipeline supports advanced visual effects such as drop shadows and
+//! interactive ripples, making it suitable for rendering button backgrounds,
+//! surfaces, and other interactive or decorative UI elements.
 //!
 //! Typical usage scenarios include:
 //! - Drawing backgrounds and outlines for buttons, surfaces, and containers
 //! - Rendering custom-shaped UI elements with smooth corners
 //! - Applying shadow and ripple effects for interactive feedback
 //!
-//! This module is intended to be used internally by basic UI components and registered
-//! as part of the rendering pipeline system.
+//! This module is intended to be used internally by basic UI components and
+//! registered as part of the rendering pipeline system.
 
 use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};
 
@@ -106,7 +107,8 @@ pub struct ShapePipeline {
 }
 
 impl ShapePipeline {
-    /// Creates the shape rendering pipeline, configuring multisampling and caches.
+    /// Creates the shape rendering pipeline, configuring multisampling and
+    /// caches.
     pub fn new(
         gpu: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
@@ -651,7 +653,8 @@ fn build_instances(
     commands: &[(&ShapeCommand, PxSize, PxPosition)],
     config: &wgpu::SurfaceConfiguration,
 ) -> Vec<ShapeUniforms> {
-    // Extracted instance-building logic to simplify `draw` and reduce cognitive complexity.
+    // Extracted instance-building logic to simplify `draw` and reduce cognitive
+    // complexity.
     commands
         .iter()
         .flat_map(|(command, size, start_pos)| {

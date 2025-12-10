@@ -49,7 +49,8 @@ impl GlassBorder {
     }
 }
 
-/// Arguments for the `fluid_glass` component, providing extensive control over its appearance.
+/// Arguments for the `fluid_glass` component, providing extensive control over
+/// its appearance.
 ///
 /// This struct uses the builder pattern for easy construction.
 #[derive(Builder, Clone)]
@@ -61,7 +62,8 @@ pub struct FluidGlassArgs {
     /// `A=1.0` means full tint (100% color visibility).
     #[builder(default = "Color::TRANSPARENT")]
     pub tint_color: Color,
-    /// The shape of the component, an enum that can be `RoundedRectangle` or `Ellipse`.
+    /// The shape of the component, an enum that can be `RoundedRectangle` or
+    /// `Ellipse`.
     #[builder(default = "Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(Dp(25.0), 3.0),
             top_right: RoundedCorner::manual(Dp(25.0), 3.0),
@@ -69,16 +71,19 @@ pub struct FluidGlassArgs {
             bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
         }")]
     pub shape: Shape,
-    /// The radius for the background blur effect. A value of `0.0` disables the blur.
+    /// The radius for the background blur effect. A value of `0.0` disables the
+    /// blur.
     #[builder(default = "Dp(0.0)")]
     pub blur_radius: Dp,
     /// The height of the chromatic dispersion effect.
     #[builder(default = "Dp(25.0)")]
     pub dispersion_height: Dp,
-    /// Multiplier for the chromatic aberration, enhancing the color separation effect.
+    /// Multiplier for the chromatic aberration, enhancing the color separation
+    /// effect.
     #[builder(default = "1.1")]
     pub chroma_multiplier: f32,
-    /// The height of the refraction effect, simulating light bending through the glass.
+    /// The height of the refraction effect, simulating light bending through
+    /// the glass.
     #[builder(default = "Dp(24.0)")]
     pub refraction_height: Dp,
     /// The amount of refraction to apply.
@@ -111,7 +116,8 @@ pub struct FluidGlassArgs {
     /// Optional normalized center (x, y) for the ripple animation on click.
     #[builder(default, setter(strip_option))]
     pub ripple_center: Option<[f32; 2]>,
-    /// Optional ripple radius, expressed in normalized coordinates relative to the surface.
+    /// Optional ripple radius, expressed in normalized coordinates relative to
+    /// the surface.
     #[builder(default, setter(strip_option))]
     pub ripple_radius: Option<f32>,
     /// Optional ripple tint alpha (0.0 = transparent, 1.0 = opaque).
@@ -130,10 +136,12 @@ pub struct FluidGlassArgs {
     pub border: Option<GlassBorder>,
 
     /// Whether to block input events on the glass surface.
-    /// When `true`, the surface will consume all input events, preventing interaction with underlying components.
+    /// When `true`, the surface will consume all input events, preventing
+    /// interaction with underlying components.
     #[builder(default = "false")]
     pub block_input: bool,
-    /// Optional accessibility role override; defaults to `Role::Button` when interactive.
+    /// Optional accessibility role override; defaults to `Role::Button` when
+    /// interactive.
     #[builder(default, setter(strip_option))]
     pub accessibility_role: Option<Role>,
     /// Optional label announced by assistive technologies.
@@ -179,7 +187,8 @@ impl FluidGlassArgsBuilder {
     }
 }
 
-// Manual implementation of Default because derive_builder's default conflicts with our specific defaults
+// Manual implementation of Default because derive_builder's default conflicts
+// with our specific defaults
 impl Default for FluidGlassArgs {
     fn default() -> Self {
         FluidGlassArgsBuilder::default()
@@ -202,7 +211,8 @@ impl DrawCommand for FluidGlassCommand {
 }
 
 // Helper: input handler logic extracted to reduce complexity of `fluid_glass`
-// These helpers operate on the injected InputHandlerInput type from the core crate.
+// These helpers operate on the injected InputHandlerInput type from the core
+// crate.
 fn handle_click_state(
     args: &FluidGlassArgs,
     ripple_state: Option<&RippleState>,
@@ -306,7 +316,8 @@ fn apply_fluid_glass_accessibility(
 
 /// # fluid_glass
 ///
-/// Renders a highly customizable surface with blur, tint, and other glass-like effects.
+/// Renders a highly customizable surface with blur, tint, and other glass-like
+/// effects.
 ///
 /// ## Usage
 ///

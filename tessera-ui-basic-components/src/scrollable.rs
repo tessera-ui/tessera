@@ -74,7 +74,8 @@ pub enum ScrollBarBehavior {
 /// Defines the layout of the scrollbar relative to the scrollable content.
 #[derive(Debug, Clone)]
 pub enum ScrollBarLayout {
-    /// The scrollbar is placed alongside the content (takes up space in the layout).
+    /// The scrollbar is placed alongside the content (takes up space in the
+    /// layout).
     Alongside,
     /// The scrollbar is overlaid on top of the content (doesn't take up space).
     Overlay,
@@ -88,11 +89,14 @@ impl Default for ScrollableArgs {
     }
 }
 
-/// Holds the state for a `scrollable` component, managing scroll position and interaction.
+/// Holds the state for a `scrollable` component, managing scroll position and
+/// interaction.
 ///
-/// It tracks the current and target scroll positions, the size of the scrollable content, and focus state.
+/// It tracks the current and target scroll positions, the size of the
+/// scrollable content, and focus state.
 ///
-/// The scroll position is smoothly interpolated over time to create a fluid scrolling effect.
+/// The scroll position is smoothly interpolated over time to create a fluid
+/// scrolling effect.
 #[derive(Default)]
 pub struct ScrollableController {
     /// The inner state containing scroll position, size
@@ -247,11 +251,13 @@ impl ScrollableControllerInner {
 ///
 /// ## Usage
 ///
-/// Wrap a large component or a long list of items to allow the user to scroll through them.
+/// Wrap a large component or a long list of items to allow the user to scroll
+/// through them.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the scrollable area's dimensions, direction, and scrollbar appearance; see [`ScrollableArgs`].
+/// - `args` — configures the scrollable area's dimensions, direction, and
+///   scrollbar appearance; see [`ScrollableArgs`].
 /// - `child` — a closure that renders the content to be scrolled.
 ///
 /// ## Examples
@@ -301,12 +307,15 @@ pub fn scrollable(args: impl Into<ScrollableArgs>, child: impl FnOnce() + Send +
 ///
 /// ## Usage
 ///
-/// Use when you need to observe or drive scroll position externally (e.g., synchronize multiple scroll areas).
+/// Use when you need to observe or drive scroll position externally (e.g.,
+/// synchronize multiple scroll areas).
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the scrollable area's dimensions, direction, and scrollbar appearance; see [`ScrollableArgs`].
-/// - `controller` — a [`ScrollableController`] that stores the scroll offsets and viewport data.
+/// - `args` — configures the scrollable area's dimensions, direction, and
+///   scrollbar appearance; see [`ScrollableArgs`].
+/// - `controller` — a [`ScrollableController`] that stores the scroll offsets
+///   and viewport data.
 /// - `child` — a closure that renders the content to be scrolled.
 ///
 /// ## Examples
@@ -540,7 +549,8 @@ fn scrollable_with_overlay_scrollbar(
 }
 
 // Helpers to resolve DimensionValue into concrete Px sizes.
-// This reduces duplication in the measurement code and lowers cyclomatic complexity.
+// This reduces duplication in the measurement code and lowers cyclomatic
+// complexity.
 fn clamp_wrap(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
     min.unwrap_or(Px(0))
         .max(measure)
@@ -617,7 +627,8 @@ fn scrollable_inner(
             // Place child at current interpolated position
             input.place_child(child_node_id, current_child_position);
 
-            // Calculate the size of the scrollable area using helpers to reduce inline branching
+            // Calculate the size of the scrollable area using helpers to reduce inline
+            // branching
             let mut width = resolve_dimension(merged_constraint.width, child_measurement.width);
             let mut height = resolve_dimension(merged_constraint.height, child_measurement.height);
 
@@ -715,7 +726,8 @@ fn scrollable_inner(
             input.cursor_events.clear();
         }
 
-        // Update scroll position based on time (only once per frame, after handling events)
+        // Update scroll position based on time (only once per frame, after handling
+        // events)
         controller.update_scroll_position(args.scroll_smoothing);
     }));
 
@@ -725,7 +737,8 @@ fn scrollable_inner(
 
 /// Constrains a position to stay within the scrollable bounds.
 ///
-/// Split per-axis logic into a helper to simplify reasoning and reduce cyclomatic complexity.
+/// Split per-axis logic into a helper to simplify reasoning and reduce
+/// cyclomatic complexity.
 fn constrain_axis(pos: Px, child_len: Px, container_len: Px) -> Px {
     if child_len <= container_len {
         return Px::ZERO;

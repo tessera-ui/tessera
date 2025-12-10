@@ -1,7 +1,10 @@
-//! Ripple state — manage ripple animation and hover state for interactive components.
+//! Ripple state — manage ripple animation and hover state for interactive
+//! components.
 //!
 //! ## Usage
-//! Provide visual ripple feedback for interactive controls in your app (buttons, surfaces, glass buttons) to indicate clicks and hover interactions.
+//! Provide visual ripple feedback for interactive controls in your app
+//! (buttons, surfaces, glass buttons) to indicate clicks and hover
+//! interactions.
 
 use std::sync::{Arc, atomic};
 
@@ -12,7 +15,8 @@ use std::sync::{Arc, atomic};
 ///
 /// ## Parameters
 ///
-/// - This type has no constructor parameters; create it with [`RippleState::new()`].
+/// - This type has no constructor parameters; create it with
+///   [`RippleState::new()`].
 ///
 /// ## Examples
 ///
@@ -29,7 +33,8 @@ pub struct RippleState {
 }
 
 impl Default for RippleState {
-    /// Creates a new `RippleState` with all fields initialized to their default values.
+    /// Creates a new `RippleState` with all fields initialized to their default
+    /// values.
     fn default() -> Self {
         Self::new()
     }
@@ -53,7 +58,8 @@ impl RippleState {
     ///
     /// # Arguments
     ///
-    /// * `click_pos` - The normalized `[x, y]` position (typically in the range [0.0, 1.0]) where the ripple originates.
+    /// * `click_pos` - The normalized `[x, y]` position (typically in the range
+    ///   [0.0, 1.0]) where the ripple originates.
     ///
     /// # Example
     /// ```
@@ -65,10 +71,12 @@ impl RippleState {
         self.inner.start_animation(click_pos);
     }
 
-    /// Returns the current progress of the ripple animation and the origin position.
+    /// Returns the current progress of the ripple animation and the origin
+    /// position.
     ///
     /// Returns `Some((progress, [x, y]))` if the animation is active, where:
-    /// - `progress` is a value in `[0.0, 1.0)` representing the animation progress.
+    /// - `progress` is a value in `[0.0, 1.0)` representing the animation
+    ///   progress.
     /// - `[x, y]` is the normalized origin of the ripple.
     ///
     /// Returns `None` if the animation is not active or has completed.
@@ -90,7 +98,8 @@ impl RippleState {
     ///
     /// # Arguments
     ///
-    /// * `hovered` - `true` if the pointer is over the component, `false` otherwise.
+    /// * `hovered` - `true` if the pointer is over the component, `false`
+    ///   otherwise.
     ///
     /// # Example
     /// ```
@@ -120,9 +129,11 @@ struct RippleStateInner {
     is_animating: atomic::AtomicBool,
     /// The animation start time, stored as milliseconds since the Unix epoch.
     start_time: atomic::AtomicU64,
-    /// The X coordinate of the click position, stored as fixed-point (multiplied by 1000).
+    /// The X coordinate of the click position, stored as fixed-point
+    /// (multiplied by 1000).
     click_pos_x: atomic::AtomicI32,
-    /// The Y coordinate of the click position, stored as fixed-point (multiplied by 1000).
+    /// The Y coordinate of the click position, stored as fixed-point
+    /// (multiplied by 1000).
     click_pos_y: atomic::AtomicI32,
     /// Whether the pointer is currently hovering over the component.
     is_hovered: atomic::AtomicBool,

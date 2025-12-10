@@ -1,4 +1,5 @@
-//! This module provides a workaround for dynamic equality testing of trait objects of the `ComputeCommand` trait.
+//! This module provides a workaround for dynamic equality testing of trait
+//! objects of the `ComputeCommand` trait.
 
 use std::any::Any;
 
@@ -21,14 +22,15 @@ where
 
 /// A trait that allows for dynamic equality testing of trait objects.
 ///
-/// This trait provides a workaround for the fact that `PartialEq` is not object-safe.
-/// It allows types that are `PartialEq` to be compared even when they are behind
-/// a trait object by downcasting them to their concrete types.
+/// This trait provides a workaround for the fact that `PartialEq` is not
+/// object-safe. It allows types that are `PartialEq` to be compared even when
+/// they are behind a trait object by downcasting them to their concrete types.
 pub trait DynPartialEqCompute: DynCloneCompute {
     /// Returns the object as a `&dyn Any`.
     fn as_any(&self) -> &dyn Any;
 
-    /// Performs a dynamic equality check against another `DynPartialEqCompute` trait object.
+    /// Performs a dynamic equality check against another `DynPartialEqCompute`
+    /// trait object.
     fn dyn_eq(&self, other: &dyn DynPartialEqCompute) -> bool;
 }
 
@@ -38,7 +40,8 @@ impl<T: ComputeCommand + PartialEq + 'static> DynPartialEqCompute for T {
     }
 
     fn dyn_eq(&self, other: &dyn DynPartialEqCompute) -> bool {
-        // Attempt to downcast the `other` trait object to the same concrete type as `self`.
+        // Attempt to downcast the `other` trait object to the same concrete type as
+        // `self`.
         if let Some(other_concrete) = other.as_any().downcast_ref::<T>() {
             // If the downcast is successful, perform the actual comparison.
             self == other_concrete

@@ -31,7 +31,8 @@ use crate::{
 const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 const THUMB_OFF_SCALE: f32 = 0.72;
 
-/// Represents the state for the `switch` component, including checked status and animation progress.
+/// Represents the state for the `switch` component, including checked status
+/// and animation progress.
 ///
 /// This struct is used internally by [`SwitchController`].
 pub(crate) struct SwitchStateInner {
@@ -157,7 +158,8 @@ pub struct SwitchArgs {
     /// Track color when the switch is on.
     #[builder(default = "use_context::<MaterialColorScheme>().primary")]
     pub track_checked_color: Color,
-    /// Outline color for the track when the switch is off; fades out as the switch turns on.
+    /// Outline color for the track when the switch is off; fades out as the
+    /// switch turns on.
     #[builder(default = "use_context::<MaterialColorScheme>().outline")]
     pub track_outline_color: Color,
     /// Border width for the track outline.
@@ -475,11 +477,13 @@ pub fn switch(args: impl Into<SwitchArgs>) {
 
 /// # switch_with_child
 ///
-/// Animated Material 3 switch with required custom thumb content; ideal for boolean toggles that show an icon or label.
+/// Animated Material 3 switch with required custom thumb content; ideal for
+/// boolean toggles that show an icon or label.
 ///
 /// ## Usage
 ///
-/// Use for settings or binary preferences; provide a `child` to draw custom content (e.g., an icon) inside the thumb.
+/// Use for settings or binary preferences; provide a `child` to draw custom
+/// content (e.g., an icon) inside the thumb.
 ///
 /// ## Parameters
 ///
@@ -532,7 +536,8 @@ pub fn switch_with_child(
 ///
 /// # Usage
 ///
-/// Use when you need to sync the switch state with external application state and want custom thumb content.
+/// Use when you need to sync the switch state with external application state
+/// and want custom thumb content.
 ///
 /// # Parameters
 ///

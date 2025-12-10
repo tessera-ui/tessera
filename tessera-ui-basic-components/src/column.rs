@@ -53,7 +53,8 @@ impl<'a> ColumnScope<'a> {
         self.child_weights.push(None);
     }
 
-    /// Adds a child component to the column with a specified weight for flexible space distribution.
+    /// Adds a child component to the column with a specified weight for
+    /// flexible space distribution.
     pub fn child_weighted<F>(&mut self, child_closure: F, weight: f32)
     where
         F: FnOnce() + Send + Sync + 'static,
@@ -69,12 +70,15 @@ impl<'a> ColumnScope<'a> {
 ///
 /// ## Usage
 ///
-/// Stack components vertically, with options for alignment and flexible spacing.
+/// Stack components vertically, with options for alignment and flexible
+/// spacing.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the column's dimensions and alignment; see [`ColumnArgs`].
-/// - `scope_config` — a closure that receives a [`ColumnScope`] for adding children.
+/// - `args` — configures the column's dimensions and alignment; see
+///   [`ColumnArgs`].
+/// - `scope_config` — a closure that receives a [`ColumnScope`] for adding
+///   children.
 ///
 /// ## Examples
 ///
@@ -202,7 +206,8 @@ struct PlaceChildrenArgs<'a> {
     child_count: usize,
 }
 
-/// Helper: classify children into weighted / unweighted and compute total weight.
+/// Helper: classify children into weighted / unweighted and compute total
+/// weight.
 fn classify_children(child_weights: &[Option<f32>]) -> (Vec<usize>, Vec<usize>, f32) {
     let mut weighted_indices = Vec::new();
     let mut unweighted_indices = Vec::new();
@@ -265,7 +270,8 @@ fn measure_unweighted_children_for_column(
     Ok(total)
 }
 
-/// Measure weighted children by distributing the remaining height proportionally.
+/// Measure weighted children by distributing the remaining height
+/// proportionally.
 struct WeightedColumnMeasureContext<'a> {
     input: &'a MeasureInput<'a>,
     children_sizes: &'a mut [Option<ComputedData>],
@@ -487,14 +493,17 @@ fn measure_unweighted_column(
     ))
 }
 
-/// Place measured children into the column according to main and cross axis alignment.
+/// Place measured children into the column according to main and cross axis
+/// alignment.
 ///
-/// This helper computes the starting y position and spacing between children based on
-/// `MainAxisAlignment` variants (Start, Center, End, SpaceEvenly, SpaceBetween, SpaceAround)
-/// and aligns each child horizontally using `CrossAxisAlignment`. It calls `place_node` to
-/// record each child's layout position.
+/// This helper computes the starting y position and spacing between children
+/// based on `MainAxisAlignment` variants (Start, Center, End, SpaceEvenly,
+/// SpaceBetween, SpaceAround) and aligns each child horizontally using
+/// `CrossAxisAlignment`. It calls `place_node` to record each child's layout
+/// position.
 ///
-/// `args` contains measured child sizes, node ids, component metadata and final column size.
+/// `args` contains measured child sizes, node ids, component metadata and final
+/// column size.
 fn place_children_with_alignment(args: &PlaceChildrenArgs) {
     let (mut current_y, spacing_between_children) = calculate_main_axis_layout_for_column(
         args.final_column_height,

@@ -122,14 +122,16 @@ impl ComponentTree {
 
     /// Get a reference to the underlying tree structure.
     ///
-    /// This is used for accessibility tree building and other introspection needs.
+    /// This is used for accessibility tree building and other introspection
+    /// needs.
     pub(crate) fn tree(&self) -> &indextree::Arena<ComponentNode> {
         &self.tree
     }
 
     /// Get a reference to the node metadatas.
     ///
-    /// This is used for accessibility tree building and other introspection needs.
+    /// This is used for accessibility tree building and other introspection
+    /// needs.
     pub(crate) fn metadatas(&self) -> &ComponentNodeMetaDatas {
         &self.metadatas
     }
@@ -195,8 +197,9 @@ impl ComponentTree {
 
         let compute_draw_timer = Instant::now();
         debug!("Start computing draw commands...");
-        // compute_draw_commands_parallel expects &ComponentNodeTree and &ComponentNodeMetaDatas
-        // It also uses get_mut on metadatas internally, which is fine for DashMap with &self.
+        // compute_draw_commands_parallel expects &ComponentNodeTree and
+        // &ComponentNodeMetaDatas It also uses get_mut on metadatas internally,
+        // which is fine for DashMap with &self.
         let commands = compute_draw_commands_parallel(
             root_node,
             &self.tree,
@@ -279,7 +282,8 @@ impl ComponentTree {
                     metadatas: &self.metadatas,
                 };
                 input_handler(input);
-                // if input_handler set ime request, it's position must be None, and we set it here
+                // if input_handler set ime request, it's position must be None, and we set it
+                // here
                 if let Some(ref mut ime_request) = window_requests.ime_request
                     && ime_request.position.is_none()
                 {
@@ -304,8 +308,8 @@ impl ComponentTree {
 /// Parallel computation of draw commands from the component tree
 ///
 /// This function traverses the component tree and extracts rendering commands
-/// from each node's metadata. It uses parallel processing for better performance
-/// when dealing with large component trees.
+/// from each node's metadata. It uses parallel processing for better
+/// performance when dealing with large component trees.
 ///
 /// The function maintains thread-safety by using DashMap's concurrent access
 /// capabilities, allowing multiple threads to safely read and modify metadata.

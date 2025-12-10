@@ -49,13 +49,15 @@ pub struct ScrollBarStateInner {
     pub is_hovered: bool,
     /// The instant when the hover state last changed.
     pub hover_instant: Option<std::time::Instant>,
-    /// The instant when the last scroll activity occurred (for AutoHide behavior).
+    /// The instant when the last scroll activity occurred (for AutoHide
+    /// behavior).
     pub last_scroll_activity: Option<std::time::Instant>,
     /// Whether the scrollbar should be visible (for AutoHide behavior).
     pub should_be_visible: bool,
 }
 
-/// Public wrapper for ScrollBarStateInner that stores the internal Arc<RwLock<..>>.
+/// Public wrapper for ScrollBarStateInner that stores the internal
+/// Arc<RwLock<..>>.
 #[derive(Clone)]
 pub struct ScrollBarState {
     inner: Arc<RwLock<ScrollBarStateInner>>,
@@ -83,10 +85,12 @@ impl Default for ScrollBarState {
     }
 }
 
-/// Calculate the target content position for a vertical scrollbar given a cursor Y.
+/// Calculate the target content position for a vertical scrollbar given a
+/// cursor Y.
 ///
-/// This extracts the logic previously embedded in the `input_handler` closure so the
-/// closure becomes smaller and easier to reason about during static analysis.
+/// This extracts the logic previously embedded in the `input_handler` closure
+/// so the closure becomes smaller and easier to reason about during static
+/// analysis.
 /// - `cursor_y`: cursor Y within the scrollbar track (in Px).
 /// - `track_height`: visible track height (in Px).
 /// - `thumb_height`: thumb size (in Px).
@@ -99,7 +103,8 @@ fn calculate_target_pos_v(
     visible: Px,
     fallback: PxPosition,
 ) -> PxPosition {
-    // If the thumb cannot move, return the provided fallback (avoids locking inside this helper).
+    // If the thumb cannot move, return the provided fallback (avoids locking inside
+    // this helper).
     let thumb_scrollable_range = track_height - thumb_height;
     if thumb_scrollable_range <= Px::ZERO {
         return fallback;
@@ -120,8 +125,8 @@ fn calculate_target_pos_v(
     }
 }
 
-/// Calculate the target content position for a horizontal scrollbar given a cursor X.
-/// Mirrors `calculate_target_pos_v` for horizontal axis.
+/// Calculate the target content position for a horizontal scrollbar given a
+/// cursor X. Mirrors `calculate_target_pos_v` for horizontal axis.
 fn calculate_target_pos_h(
     cursor_x: Px,
     track_width: Px,
@@ -130,7 +135,8 @@ fn calculate_target_pos_h(
     visible: Px,
     fallback: PxPosition,
 ) -> PxPosition {
-    // If the thumb cannot move, return the provided fallback (avoids locking inside this helper).
+    // If the thumb cannot move, return the provided fallback (avoids locking inside
+    // this helper).
     let thumb_scrollable_range = track_width - thumb_width;
     if thumb_scrollable_range <= Px::ZERO {
         return fallback;
@@ -152,7 +158,8 @@ fn calculate_target_pos_h(
 }
 
 /// Compute the thumb color with hover interpolation.
-/// Extracted to reduce duplication between vertical and horizontal scrollbar implementations.
+/// Extracted to reduce duplication between vertical and horizontal scrollbar
+/// implementations.
 fn compute_thumb_color(state_lock: &ScrollBarState, args: &ScrollBarArgs) -> Color {
     let state = state_lock.read();
     let (from_color, to_color) = if state.is_hovered {
@@ -243,7 +250,8 @@ fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
     );
 }
 
-/// Decide whether the scrollbar should be shown according to behavior and state.
+/// Decide whether the scrollbar should be shown according to behavior and
+/// state.
 fn should_show_scrollbar(args: &ScrollBarArgs, state: &ScrollBarState) -> bool {
     match args.scrollbar_behavior {
         ScrollBarBehavior::AlwaysVisible => true,
@@ -268,7 +276,8 @@ fn handle_autohide_if_needed(args: &ScrollBarArgs, state: &ScrollBarState) {
     }
 }
 
-/// Mark recent scroll activity and make the scrollbar visible (used by AutoHide behavior).
+/// Mark recent scroll activity and make the scrollbar visible (used by AutoHide
+/// behavior).
 fn mark_scroll_activity(state: &ScrollBarState, behavior: &ScrollBarBehavior) {
     if matches!(*behavior, ScrollBarBehavior::AutoHide) {
         let mut state_guard = state.write();
@@ -290,7 +299,8 @@ fn compute_thumb_progress(offset: Px, total: Px) -> f32 {
 
 /// Compute the thumb size (Px) from visible and total content sizes using the
 /// proportional formula: thumb = visible * visible / total. When `total` is
-/// zero or non-positive, fall back to using `visible` to avoid division by zero.
+/// zero or non-positive, fall back to using `visible` to avoid division by
+/// zero.
 fn compute_thumb_size(visible: Px, total: Px) -> Px {
     if total <= Px::ZERO {
         return visible.max(Px::ZERO);
@@ -299,7 +309,8 @@ fn compute_thumb_size(visible: Px, total: Px) -> Px {
     let total_len = total.to_f32().abs().max(1.0);
     let thumb = (visible_len * visible_len) / total_len;
 
-    // Clamp the thumb size to ensure it's always visible and provides a reasonable drag target.
+    // Clamp the thumb size to ensure it's always visible and provides a reasonable
+    // drag target.
     let min_thumb = (visible_len * 0.05).clamp(8.0, 32.0);
     Px::saturating_from_f32(thumb.max(min_thumb))
 }
@@ -473,7 +484,8 @@ fn handle_state_v(
     // Handle AutoHide behavior - hide scrollbar after inactivity
     handle_autohide_if_needed(args, state);
 
-    // Capture current target position once to avoid locking inside helper on every call.
+    // Capture current target position once to avoid locking inside helper on every
+    // call.
     let fallback_pos = args.state.target_position();
     let calculate_target_pos = |cursor_y: Px| -> PxPosition {
         calculate_target_pos_v(
@@ -487,7 +499,8 @@ fn handle_state_v(
     };
 
     if state.read().is_dragging {
-        // If mouse released, stop dragging (extracted helper reduces branching complexity).
+        // If mouse released, stop dragging (extracted helper reduces branching
+        // complexity).
         if check_and_handle_release(input, state) {
             return;
         }
@@ -560,7 +573,8 @@ fn handle_state_h(
     // Handle AutoHide behavior - hide scrollbar after inactivity
     handle_autohide_if_needed(args, state);
 
-    // Capture current target position once to avoid locking inside helper on every call.
+    // Capture current target position once to avoid locking inside helper on every
+    // call.
     let fallback_pos = args.state.target_position();
     let calculate_target_pos = |cursor_x: Px| -> PxPosition {
         calculate_target_pos_h(

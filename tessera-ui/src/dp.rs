@@ -1,20 +1,21 @@
 //! # Density-Independent Pixels (Dp)
 //!
-//! This module provides the [`Dp`] type for representing density-independent pixels,
-//! a fundamental unit for UI scaling in the Tessera framework.
+//! This module provides the [`Dp`] type for representing density-independent
+//! pixels, a fundamental unit for UI scaling in the Tessera framework.
 //!
 //! ## Overview
 //!
-//! Density-independent pixels (dp) are a virtual pixel unit that provides consistent
-//! visual sizing across different screen densities. Unlike physical pixels, dp units
-//! automatically scale based on the device's screen density, ensuring that UI elements
-//! appear at the same physical size regardless of the display's pixel density.
+//! Density-independent pixels (dp) are a virtual pixel unit that provides
+//! consistent visual sizing across different screen densities. Unlike physical
+//! pixels, dp units automatically scale based on the device's screen density,
+//! ensuring that UI elements appear at the same physical size regardless of the
+//! display's pixel density.
 //!
 //! ## Scale Factor
 //!
-//! The conversion between dp and physical pixels is controlled by a global scale factor
-//! stored in [`SCALE_FACTOR`]. This factor is typically set based on the device's DPI
-//! (dots per inch) and user preferences.
+//! The conversion between dp and physical pixels is controlled by a global
+//! scale factor stored in [`SCALE_FACTOR`]. This factor is typically set based
+//! on the device's DPI (dots per inch) and user preferences.
 //!
 //! ## Usage
 //!
@@ -33,9 +34,9 @@
 //!
 //! ## Relationship with Px
 //!
-//! The [`Dp`] type works closely with the [`Px`] type (physical pixels). You can
-//! convert between them using the provided methods, with the conversion automatically
-//! applying the current scale factor.
+//! The [`Dp`] type works closely with the [`Px`] type (physical pixels). You
+//! can convert between them using the provided methods, with the conversion
+//! automatically applying the current scale factor.
 
 use std::{
     fmt::Display,
@@ -47,22 +48,23 @@ use parking_lot::RwLock;
 
 use crate::Px;
 
-/// Global scale factor for converting between density-independent pixels and physical pixels.
+/// Global scale factor for converting between density-independent pixels and
+/// physical pixels.
 ///
-/// This static variable holds the current scale factor used for dp-to-pixel conversions.
-/// It's typically initialized once during application startup based on the device's
-/// screen density and user scaling preferences.
+/// This static variable holds the current scale factor used for dp-to-pixel
+/// conversions. It's typically initialized once during application startup
+/// based on the device's screen density and user scaling preferences.
 ///
-/// The scale factor represents how many physical pixels correspond to one dp unit.
-/// For example:
+/// The scale factor represents how many physical pixels correspond to one dp
+/// unit. For example:
 /// - Scale factor of 1.0: 1 dp = 1 pixel (standard density)
 /// - Scale factor of 2.0: 1 dp = 2 pixels (high density)
 /// - Scale factor of 0.75: 1 dp = 0.75 pixels (low density)
 ///
 /// # Thread Safety
 ///
-/// This variable uses `OnceLock<RwLock<f64>>` to ensure thread-safe access while
-/// allowing the scale factor to be updated during runtime if needed.
+/// This variable uses `OnceLock<RwLock<f64>>` to ensure thread-safe access
+/// while allowing the scale factor to be updated during runtime if needed.
 pub static SCALE_FACTOR: OnceLock<RwLock<f64>> = OnceLock::new();
 
 /// Density-independent pixels (dp) for UI scaling.
@@ -136,7 +138,8 @@ impl Dp {
 
     /// Creates a new `Dp` instance with the specified value.
     ///
-    /// This is a const function, allowing `Dp` values to be created at compile time.
+    /// This is a const function, allowing `Dp` values to be created at compile
+    /// time.
     ///
     /// # Arguments
     ///
@@ -156,13 +159,15 @@ impl Dp {
 
     /// Converts this dp value to physical pixels as an `f64`.
     ///
-    /// This method applies the current global scale factor to convert density-independent
-    /// pixels to physical pixels. The scale factor is read from [`SCALE_FACTOR`].
+    /// This method applies the current global scale factor to convert
+    /// density-independent pixels to physical pixels. The scale factor is
+    /// read from [`SCALE_FACTOR`].
     ///
     /// # Returns
     ///
-    /// The equivalent value in physical pixels as a 64-bit floating-point number.
-    /// If the scale factor hasn't been initialized, defaults to 1.0 (no scaling).
+    /// The equivalent value in physical pixels as a 64-bit floating-point
+    /// number. If the scale factor hasn't been initialized, defaults to 1.0
+    /// (no scaling).
     ///
     /// # Examples
     ///
@@ -180,9 +185,10 @@ impl Dp {
 
     /// Creates a `Dp` value from physical pixels specified as an `f64`.
     ///
-    /// This method performs the inverse conversion of [`to_pixels_f64`](Self::to_pixels_f64),
-    /// converting physical pixels back to density-independent pixels using the current
-    /// global scale factor.
+    /// This method performs the inverse conversion of
+    /// [`to_pixels_f64`](Self::to_pixels_f64), converting physical pixels
+    /// back to density-independent pixels using the current global scale
+    /// factor.
     ///
     /// # Arguments
     ///
@@ -191,7 +197,8 @@ impl Dp {
     /// # Returns
     ///
     /// A new `Dp` instance representing the equivalent dp value.
-    /// If the scale factor hasn't been initialized, defaults to 1.0 (no scaling).
+    /// If the scale factor hasn't been initialized, defaults to 1.0 (no
+    /// scaling).
     ///
     /// # Examples
     ///
@@ -208,15 +215,16 @@ impl Dp {
 
     /// Converts this dp value to physical pixels as a `u32`.
     ///
-    /// This method applies the current global scale factor and truncates the result
-    /// to an unsigned 32-bit integer. This is commonly used for rendering operations
-    /// that require integer pixel coordinates.
+    /// This method applies the current global scale factor and truncates the
+    /// result to an unsigned 32-bit integer. This is commonly used for
+    /// rendering operations that require integer pixel coordinates.
     ///
     /// # Returns
     ///
     /// The equivalent value in physical pixels as an unsigned 32-bit integer.
-    /// The result is truncated (not rounded) from the floating-point calculation.
-    /// If the scale factor hasn't been initialized, defaults to 1.0 (no scaling).
+    /// The result is truncated (not rounded) from the floating-point
+    /// calculation. If the scale factor hasn't been initialized, defaults
+    /// to 1.0 (no scaling).
     ///
     /// # Examples
     ///
@@ -230,9 +238,9 @@ impl Dp {
     ///
     /// # Note
     ///
-    /// Values are truncated, not rounded. For more precise control over rounding
-    /// behavior, use [`to_pixels_f64`](Self::to_pixels_f64) and apply your preferred
-    /// rounding method.
+    /// Values are truncated, not rounded. For more precise control over
+    /// rounding behavior, use [`to_pixels_f64`](Self::to_pixels_f64) and
+    /// apply your preferred rounding method.
     pub fn to_pixels_u32(&self) -> u32 {
         let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
         (self.0 * scale_factor) as u32
@@ -240,9 +248,9 @@ impl Dp {
 
     /// Creates a `Dp` value from physical pixels specified as a `u32`.
     ///
-    /// This method converts an unsigned 32-bit integer pixel value to density-independent
-    /// pixels using the current global scale factor. The integer is first converted to
-    /// `f64` for the calculation.
+    /// This method converts an unsigned 32-bit integer pixel value to
+    /// density-independent pixels using the current global scale factor.
+    /// The integer is first converted to `f64` for the calculation.
     ///
     /// # Arguments
     ///
@@ -251,7 +259,8 @@ impl Dp {
     /// # Returns
     ///
     /// A new `Dp` instance representing the equivalent dp value.
-    /// If the scale factor hasn't been initialized, defaults to 1.0 (no scaling).
+    /// If the scale factor hasn't been initialized, defaults to 1.0 (no
+    /// scaling).
     ///
     /// # Examples
     ///
@@ -268,14 +277,15 @@ impl Dp {
 
     /// Converts this dp value to physical pixels as an `f32`.
     ///
-    /// This method applies the current global scale factor and converts the result
-    /// to a 32-bit floating-point number. This is commonly used for graphics APIs
-    /// that work with `f32` coordinates.
+    /// This method applies the current global scale factor and converts the
+    /// result to a 32-bit floating-point number. This is commonly used for
+    /// graphics APIs that work with `f32` coordinates.
     ///
     /// # Returns
     ///
-    /// The equivalent value in physical pixels as a 32-bit floating-point number.
-    /// If the scale factor hasn't been initialized, defaults to 1.0 (no scaling).
+    /// The equivalent value in physical pixels as a 32-bit floating-point
+    /// number. If the scale factor hasn't been initialized, defaults to 1.0
+    /// (no scaling).
     ///
     /// # Examples
     ///
@@ -289,8 +299,9 @@ impl Dp {
     ///
     /// # Precision Note
     ///
-    /// Converting from `f64` to `f32` may result in precision loss for very large
-    /// or very precise values. For maximum precision, use [`to_pixels_f64`](Self::to_pixels_f64).
+    /// Converting from `f64` to `f32` may result in precision loss for very
+    /// large or very precise values. For maximum precision, use
+    /// [`to_pixels_f64`](Self::to_pixels_f64).
     pub fn to_pixels_f32(&self) -> f32 {
         let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
         (self.0 * scale_factor) as f32
@@ -298,9 +309,10 @@ impl Dp {
 
     /// Creates a `Dp` value from physical pixels specified as an `f32`.
     ///
-    /// This method converts a 32-bit floating-point pixel value to density-independent
-    /// pixels using the current global scale factor. The `f32` value is first converted
-    /// to `f64` for internal calculations.
+    /// This method converts a 32-bit floating-point pixel value to
+    /// density-independent pixels using the current global scale factor.
+    /// The `f32` value is first converted to `f64` for internal
+    /// calculations.
     ///
     /// # Arguments
     ///
@@ -309,7 +321,8 @@ impl Dp {
     /// # Returns
     ///
     /// A new `Dp` instance representing the equivalent dp value.
-    /// If the scale factor hasn't been initialized, defaults to 1.0 (no scaling).
+    /// If the scale factor hasn't been initialized, defaults to 1.0 (no
+    /// scaling).
     ///
     /// # Examples
     ///
@@ -347,7 +360,8 @@ impl Dp {
     /// # See Also
     ///
     /// * [`Px::to_dp`] - For the inverse conversion
-    /// * [`to_pixels_f32`](Self::to_pixels_f32) - For direct `f32` pixel conversion
+    /// * [`to_pixels_f32`](Self::to_pixels_f32) - For direct `f32` pixel
+    ///   conversion
     pub fn to_px(&self) -> Px {
         Px::from_f32(self.to_pixels_f32())
     }
@@ -409,7 +423,8 @@ impl From<Px> for Dp {
     /// # See Also
     ///
     /// * [`to_px`](Self::to_px) - For the inverse conversion
-    /// * [`from_pixels_f64`](Self::from_pixels_f64) - For direct pixel-to-dp conversion
+    /// * [`from_pixels_f64`](Self::from_pixels_f64) - For direct pixel-to-dp
+    ///   conversion
     fn from(px: Px) -> Self {
         Dp::from_pixels_f64(px.to_dp().0)
     }

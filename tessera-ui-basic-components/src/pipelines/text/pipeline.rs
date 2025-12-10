@@ -1,13 +1,18 @@
 //! Text Rendering Pipeline for UI Components
 //!
-//! This module implements the GPU pipeline and related utilities for efficient text rendering in Tessera UI components.
-//! It leverages the Glyphon engine for font management, shaping, and rasterization, providing high-quality and performant text output.
-//! Typical use cases include rendering static labels, paragraphs, and editable text fields within the UI.
+//! This module implements the GPU pipeline and related utilities for efficient
+//! text rendering in Tessera UI components. It leverages the Glyphon engine for
+//! font management, shaping, and rasterization, providing high-quality and
+//! performant text output. Typical use cases include rendering static labels,
+//! paragraphs, and editable text fields within the UI.
 //!
-//! The pipeline is designed to be reusable and efficient, sharing a static font system across the application to minimize resource usage.
-//! It exposes APIs for preparing, measuring, and rendering text, supporting advanced features such as font fallback, shaping, and multi-line layout.
+//! The pipeline is designed to be reusable and efficient, sharing a static font
+//! system across the application to minimize resource usage. It exposes APIs
+//! for preparing, measuring, and rendering text, supporting advanced features
+//! such as font fallback, shaping, and multi-line layout.
 //!
-//! This module is intended for integration into custom UI components and rendering flows that require flexible and robust text display.
+//! This module is intended for integration into custom UI components and
+//! rendering flows that require flexible and robust text display.
 
 use std::{num::NonZero, sync::OnceLock};
 
@@ -25,7 +30,8 @@ use super::command::{TextCommand, TextConstraint};
 /// to share it every where and avoid creating it multiple times.
 static FONT_SYSTEM: OnceLock<RwLock<glyphon::FontSystem>> = OnceLock::new();
 
-/// Create TextData is a heavy operation, so we provide a lru cache to store recently used TextData.
+/// Create TextData is a heavy operation, so we provide a lru cache to store
+/// recently used TextData.
 static TEXT_DATA_CACHE: OnceLock<RwLock<lru::LruCache<LruKey, TextData>>> = OnceLock::new();
 
 #[derive(PartialEq)]
@@ -98,7 +104,8 @@ pub fn write_font_system() -> RwLockWriteGuard<'static, glyphon::FontSystem> {
 /// A text renderer
 /// Pipeline for rendering text using the Glyphon engine.
 ///
-/// This struct manages font atlas, cache, viewport, and swash cache for efficient text rendering.
+/// This struct manages font atlas, cache, viewport, and swash cache for
+/// efficient text rendering.
 pub struct GlyphonTextRender {
     /// Glyphon font atlas, a heavy-weight, shared resource.
     atlas: glyphon::TextAtlas,

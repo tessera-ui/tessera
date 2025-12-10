@@ -86,7 +86,8 @@ impl CheckmarkPipeline {
     }
 }
 
-/// Small helpers extracted to simplify `draw` and reduce function length/complexity.
+/// Small helpers extracted to simplify `draw` and reduce function
+/// length/complexity.
 impl CheckmarkPipeline {
     fn update_uniforms(&mut self, gpu_queue: &wgpu::Queue, uniforms: &CheckmarkUniforms) {
         let mut buffer = UniformBuffer::new(&mut self.uniform_staging_buffer);

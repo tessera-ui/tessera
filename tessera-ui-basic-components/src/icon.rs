@@ -57,20 +57,22 @@ pub struct IconArgs {
     /// Icon content, provided as either raster pixels or vector geometry.
     #[builder(setter(into))]
     pub content: IconContent,
-    /// Logical size of the icon. Applied to both width and height unless explicit overrides
-    /// are provided through [`width`](IconArgs::width) / [`height`](IconArgs::height).
+    /// Logical size of the icon. Applied to both width and height unless
+    /// explicit overrides are provided through [`width`](IconArgs::width) /
+    /// [`height`](IconArgs::height).
     #[builder(default = "Dp(24.0)")]
     pub size: Dp,
-    /// Optional width override. Handy when the icon should `Fill` or `Wrap` differently from
-    /// the default square sizing.
+    /// Optional width override. Handy when the icon should `Fill` or `Wrap`
+    /// differently from the default square sizing.
     #[builder(default, setter(strip_option))]
     pub width: Option<DimensionValue>,
-    /// Optional height override. Handy when the icon should `Fill` or `Wrap` differently from
-    /// the default square sizing.
+    /// Optional height override. Handy when the icon should `Fill` or `Wrap`
+    /// differently from the default square sizing.
     #[builder(default, setter(strip_option))]
     pub height: Option<DimensionValue>,
-    /// Tint color applied to vector icons. Defaults to white so it preserves the original
-    /// colors (multiplying by white is a no-op). Raster icons ignore this field.
+    /// Tint color applied to vector icons. Defaults to white so it preserves
+    /// the original colors (multiplying by white is a no-op). Raster icons
+    /// ignore this field.
     #[builder(default = "use_context::<ContentColor>().current")]
     pub tint: Color,
     /// How the tint is applied to vector icons.
@@ -120,7 +122,8 @@ impl From<Arc<ImageData>> for IconArgs {
 ///
 /// ## Usage
 ///
-/// Display a vector or raster image with a uniform size, often inside a button or as a status indicator.
+/// Display a vector or raster image with a uniform size, often inside a button
+/// or as a status indicator.
 ///
 /// ## Parameters
 ///

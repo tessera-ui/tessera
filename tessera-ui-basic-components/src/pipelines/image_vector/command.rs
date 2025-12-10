@@ -73,8 +73,8 @@ pub enum VectorTintMode {
     /// Result = Image * Tint
     #[default]
     Multiply,
-    /// Ignores the image's color channels, using only its alpha to mask the tint color.
-    /// Result = Tint * Image.Alpha
+    /// Ignores the image's color channels, using only its alpha to mask the
+    /// tint color. Result = Tint * Image.Alpha
     Solid,
 }
 

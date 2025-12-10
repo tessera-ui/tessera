@@ -117,8 +117,8 @@ pub struct CheckboxArgs {
     #[builder(default = "2.5")]
     /// Stroke width in physical pixels used to render the checkmark path.
     ///
-    /// Higher values produce a thicker checkmark. The default value is tuned for
-    /// the default `size`.
+    /// Higher values produce a thicker checkmark. The default value is tuned
+    /// for the default `size`.
     pub checkmark_stroke_width: f32,
 
     #[builder(
@@ -129,7 +129,8 @@ pub struct CheckboxArgs {
     /// Use this to customize the corner radii or switch to alternate shapes.
     pub shape: Shape,
 
-    /// Optional surface color to apply when the pointer hovers over the control.
+    /// Optional surface color to apply when the pointer hovers over the
+    /// control.
     ///
     /// If `None`, the control uses the default Material 3 state layer behavior.
     #[builder(default)]
@@ -232,8 +233,10 @@ impl CheckmarkState {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the checkbox's appearance, initial state, and `on_toggle` callback; see [`CheckboxArgs`].
-/// - `controller` — optional external controller; use [`checkbox_with_controller`] for a controlled checkbox.
+/// - `args` — configures the checkbox's appearance, initial state, and
+///   `on_toggle` callback; see [`CheckboxArgs`].
+/// - `controller` — optional external controller; use
+///   [`checkbox_with_controller`] for a controlled checkbox.
 ///
 /// ## Examples
 ///
@@ -283,12 +286,15 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
 ///
 /// ## Usage
 ///
-/// Use when you need to drive or observe the checked state from outside the component.
+/// Use when you need to drive or observe the checked state from outside the
+/// component.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the checkbox appearance and callbacks; see [`CheckboxArgs`].
-/// - `controller` — a [`CheckboxController`] that owns the checked state and animation timeline.
+/// - `args` — configures the checkbox appearance and callbacks; see
+///   [`CheckboxArgs`].
+/// - `controller` — a [`CheckboxController`] that owns the checked state and
+///   animation timeline.
 ///
 /// ## Examples
 ///

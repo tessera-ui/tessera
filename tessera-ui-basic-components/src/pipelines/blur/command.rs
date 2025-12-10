@@ -28,15 +28,16 @@ impl BlurCommand {
     }
 }
 
-/// A compute command that runs two directional blur passes (typically horizontal + vertical)
-/// within a single dispatch sequence.
+/// A compute command that runs two directional blur passes (typically
+/// horizontal + vertical) within a single dispatch sequence.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DualBlurCommand {
     /// Ordered blur passes to execute.
     pub passes: [BlurCommand; 2],
 }
 
-/// Choose a downscale factor that balances quality and performance for a blur radius.
+/// Choose a downscale factor that balances quality and performance for a blur
+/// radius.
 pub fn downscale_factor_for_radius(radius: f32) -> u32 {
     if radius <= 6.0 {
         1
@@ -48,7 +49,8 @@ pub fn downscale_factor_for_radius(radius: f32) -> u32 {
 }
 
 impl DualBlurCommand {
-    /// Creates a dual blur command with horizontal and vertical passes using the same radius/padding.
+    /// Creates a dual blur command with horizontal and vertical passes using
+    /// the same radius/padding.
     pub fn horizontal_then_vertical(radius: f32) -> Self {
         Self {
             passes: [
@@ -77,7 +79,8 @@ impl ComputeCommand for DualBlurCommand {
 
         // The sampling padding is the actual padding needed for the blur effect.
         // The renderer still relies on the component bounds for dependency checks,
-        // so orthogonal blur components can batch even if their sampling regions overlap.
+        // so orthogonal blur components can batch even if their sampling regions
+        // overlap.
         BarrierRequirement::uniform_padding_local(Px(sampling_padding))
     }
 }

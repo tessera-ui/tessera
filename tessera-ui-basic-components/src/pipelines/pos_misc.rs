@@ -1,13 +1,16 @@
 //! Miscellaneous position utilities for rendering pipelines.
 //!
-//! This module provides utility functions for coordinate conversion and position calculations,
-//! primarily focused on converting pixel-based UI positions to normalized device coordinates (NDC).
-//! It is intended for use in shape, text, and effect pipelines where consistent coordinate normalization
-//! is required for rendering. The conversion assumes a top-left origin, matching typical UI conventions,
-//! and ensures compatibility with graphics APIs that expect NDC input.
+//! This module provides utility functions for coordinate conversion and
+//! position calculations, primarily focused on converting pixel-based UI
+//! positions to normalized device coordinates (NDC). It is intended for use in
+//! shape, text, and effect pipelines where consistent coordinate normalization
+//! is required for rendering. The conversion assumes a top-left origin,
+//! matching typical UI conventions, and ensures compatibility with graphics
+//! APIs that expect NDC input.
 //!
-//! Typical scenarios include transforming UI element positions for GPU-based rendering, shader pipelines,
-//! and any context where pixel-to-NDC mapping is necessary for visual correctness.
+//! Typical scenarios include transforming UI element positions for GPU-based
+//! rendering, shader pipelines, and any context where pixel-to-NDC mapping is
+//! necessary for visual correctness.
 
 use tessera_ui::PxPosition;
 
@@ -26,7 +29,8 @@ pub fn pixel_to_ndc(pos: PxPosition, screen_size: [u32; 2]) -> [f32; 2] {
     let width = (screen_size[0].max(1)) as f32;
     let height = (screen_size[1].max(1)) as f32;
 
-    // Convert pixel coordinates to floats once for clarity and to avoid repeated casts.
+    // Convert pixel coordinates to floats once for clarity and to avoid repeated
+    // casts.
     let px_x = pos.x.to_f32();
     let px_y = pos.y.to_f32();
 

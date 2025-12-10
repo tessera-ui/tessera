@@ -45,11 +45,13 @@ pub struct ProgressArgs {
 ///
 /// ## Usage
 ///
-/// Display the status of an ongoing operation, such as a download or a setup process.
+/// Display the status of an ongoing operation, such as a download or a setup
+/// process.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the progress bar's value and appearance; see [`ProgressArgs`].
+/// - `args` — configures the progress bar's value and appearance; see
+///   [`ProgressArgs`].
 ///
 /// ## Examples
 ///
@@ -111,7 +113,8 @@ pub fn progress(args: impl Into<ProgressArgs>) {
         let track_id = input.children_ids[0];
         let progress_id = input.children_ids[1];
 
-        // Measure and place the background track to take the full size of the component.
+        // Measure and place the background track to take the full size of the
+        // component.
         let track_constraint = Constraint::new(
             DimensionValue::Fixed(self_width),
             DimensionValue::Fixed(self_height),
@@ -129,7 +132,8 @@ pub fn progress(args: impl Into<ProgressArgs>) {
         input.measure_child(progress_id, &progress_constraint)?;
         input.place_child(progress_id, PxPosition::new(Px(0), Px(0)));
 
-        // The progress component itself is a container, its size is defined by the args.
+        // The progress component itself is a container, its size is defined by the
+        // args.
         Ok(ComputedData {
             width: self_width,
             height: self_height,

@@ -15,7 +15,8 @@ struct Uniforms {
     area_height: u32,
 }
 
-/// Pipeline for applying contrast adjustment to an image using a compute shader.
+/// Pipeline for applying contrast adjustment to an image using a compute
+/// shader.
 pub struct ContrastPipeline {
     pipeline: wgpu::ComputePipeline,
     bind_group_layout: wgpu::BindGroupLayout,

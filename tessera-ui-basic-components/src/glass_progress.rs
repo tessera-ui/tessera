@@ -130,11 +130,13 @@ fn render_track_and_fill(args: GlassProgressArgs, width_px: Px) {
 ///
 /// ## Usage
 ///
-/// Display a value in a continuous range (0.0 to 1.0) with a modern, glass-like appearance.
+/// Display a value in a continuous range (0.0 to 1.0) with a modern, glass-like
+/// appearance.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the progress bar's value and appearance; see [`GlassProgressArgs`].
+/// - `args` — configures the progress bar's value and appearance; see
+///   [`GlassProgressArgs`].
 ///
 /// ## Examples
 ///

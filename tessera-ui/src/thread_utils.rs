@@ -1,7 +1,7 @@
 //! # Thread Utilities
 //!
-//! This module provides cross-platform utilities for thread management and debugging
-//! in the Tessera UI framework.
+//! This module provides cross-platform utilities for thread management and
+//! debugging in the Tessera UI framework.
 
 /// Sets the name of the current thread for debugging and profiling purposes.
 ///
@@ -57,7 +57,8 @@ pub fn set_thread_name(name: &str) {
 ///
 /// # Platform Notes
 ///
-/// - **Linux**: Thread names are limited to 15 characters (plus null terminator)
+/// - **Linux**: Thread names are limited to 15 characters (plus null
+///   terminator)
 /// - **macOS**: Thread names can be up to 63 characters
 /// - Names exceeding the limit may be truncated or cause the operation to fail
 ///
@@ -103,17 +104,19 @@ fn set_thread_name_unix(name: &str) {
 ///
 /// - Available on Windows 10 version 1607 and later
 /// - On older Windows versions, this function will fail silently
-/// - Thread names have no specific length limit but shorter names are recommended
+/// - Thread names have no specific length limit but shorter names are
+///   recommended
 ///
 /// # Error Handling
 ///
-/// Any errors from the Windows API are ignored (the result is discarded with `let _`).
-/// This is intentional as thread naming is a debugging aid and should not cause
-/// application failures.
+/// Any errors from the Windows API are ignored (the result is discarded with
+/// `let _`). This is intentional as thread naming is a debugging aid and should
+/// not cause application failures.
 ///
 /// # Safety
 ///
-/// This function uses unsafe code to call Windows APIs. The safety is ensured by:
+/// This function uses unsafe code to call Windows APIs. The safety is ensured
+/// by:
 /// - Creating a valid UTF-16 null-terminated string
 /// - Using the current thread handle from `GetCurrentThread()`
 /// - Properly constructing the `PCWSTR` parameter

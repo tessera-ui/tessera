@@ -62,7 +62,8 @@ struct AtlasSampleUniforms {
     rotation: f32,
 }
 
-/// Render pipeline that rasterizes SVG vector meshes into an atlas for sampling.
+/// Render pipeline that rasterizes SVG vector meshes into an atlas for
+/// sampling.
 pub struct ImageVectorPipeline {
     raster_pipeline: wgpu::RenderPipeline,
     raster_bind_group: wgpu::BindGroup,

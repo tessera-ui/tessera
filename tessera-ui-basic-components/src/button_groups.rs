@@ -29,7 +29,8 @@ use crate::{
 };
 
 /// According to the [`ButtonGroups-Types`](https://m3.material.io/components/button-groups/specs#3b51d175-cc02-4701-b3f8-c9ffa229123a)
-/// spec, the [`button_groups`] component supports two styles: `Standard` and `Connected`.
+/// spec, the [`button_groups`] component supports two styles: `Standard` and
+/// `Connected`.
 ///
 /// ## Standard
 ///
@@ -37,18 +38,21 @@ use crate::{
 ///
 /// ## Connected
 ///
-/// Buttons are adjacent with no spacing, and each button must be the same width.
+/// Buttons are adjacent with no spacing, and each button must be the same
+/// width.
 #[derive(Debug, Clone, Copy, Default)]
 pub enum ButtonGroupsStyle {
     /// Buttons have spacing between them and do not need to be the same width.
     #[default]
     Standard,
-    /// Buttons are adjacent with no spacing, and each button must be the same width.
+    /// Buttons are adjacent with no spacing, and each button must be the same
+    /// width.
     Connected,
 }
 
 /// According to the [`ButtonGroups-Configurations`](https://m3.material.io/components/button-groups/specs#0d2cf762-275c-4693-9484-fe011501439e)
-/// spec, the [`button_groups`] component supports two selection modes: `Single` and `Multiple`.
+/// spec, the [`button_groups`] component supports two selection modes: `Single`
+/// and `Multiple`.
 ///
 /// ## Single
 ///
@@ -90,14 +94,17 @@ pub struct ButtonGroupsScope<'a> {
 }
 
 impl ButtonGroupsScope<'_> {
-    /// Add a child component to the button group, which will be wrapped by a [`button`] component.
+    /// Add a child component to the button group, which will be wrapped by a
+    /// [`button`] component.
     ///
     /// # Arguments
     ///
-    /// - `child_closure` - A closure that takes a [`Color`] and returns a [`button`] component. The
-    ///   `Color` argument should be used for the content of the child component.
-    /// - `on_click_closure` - A closure that will be called when the button is clicked. The closure
-    ///   takes a `bool` argument indicating whether the button is now active (selected) or not.
+    /// - `child_closure` - A closure that takes a [`Color`] and returns a
+    ///   [`button`] component. The `Color` argument should be used for the
+    ///   content of the child component.
+    /// - `on_click_closure` - A closure that will be called when the button is
+    ///   clicked. The closure takes a `bool` argument indicating whether the
+    ///   button is now active (selected) or not.
     pub fn child<F, C>(&mut self, child: F, on_click: C)
     where
         F: FnOnce(Color) + Send + Sync + 'static,
@@ -207,14 +214,15 @@ struct ButtonGroupsState {
 ///
 /// Used for grouping related actions.
 ///
-/// State for selection and animations is managed internally via `remember`; no external state
-/// handle is required.
+/// State for selection and animations is managed internally via `remember`; no
+/// external state handle is required.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures size, style, and selection mode; see [`ButtonGroupsArgs`].
-/// - `scope_config` — closure that configures the children of the button group using
-///   a [`ButtonGroupsScope`].
+/// - `args` — configures size, style, and selection mode; see
+///   [`ButtonGroupsArgs`].
+/// - `scope_config` — closure that configures the children of the button group
+///   using a [`ButtonGroupsScope`].
 ///
 /// # Example
 ///

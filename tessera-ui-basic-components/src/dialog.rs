@@ -2,7 +2,8 @@
 //!
 //! ## Usage
 //!
-//! Used to show modal dialogs such as alerts, confirmations, wizards and forms; dialogs block interaction with underlying content while active.
+//! Used to show modal dialogs such as alerts, confirmations, wizards and forms;
+//! dialogs block interaction with underlying content while active.
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -316,13 +317,16 @@ fn dialog_content_wrapper(
 ///
 /// # Usage
 ///
-/// Show modal content for alerts, confirmation dialogs, multi-step forms, or onboarding steps that require blocking user interaction with the main UI.
+/// Show modal content for alerts, confirmation dialogs, multi-step forms, or
+/// onboarding steps that require blocking user interaction with the main UI.
 ///
 /// # Parameters
 ///
-/// - `args` — configuration for dialog appearance and the `on_close_request` callback; see [`DialogProviderArgs`].
+/// - `args` — configuration for dialog appearance and the `on_close_request`
+///   callback; see [`DialogProviderArgs`].
 /// - `main_content` — closure that renders the always-visible base UI.
-/// - `dialog_content` — closure that renders dialog content; receives a `f32` alpha for animation.
+/// - `dialog_content` — closure that renders dialog content; receives a `f32`
+///   alpha for animation.
 ///
 /// # Examples
 ///
@@ -371,12 +375,13 @@ pub fn dialog_provider(
 
 /// # dialog_provider_with_controller
 ///
-/// Controlled version of [`dialog_provider`] that accepts an external controller.
+/// Controlled version of [`dialog_provider`] that accepts an external
+/// controller.
 ///
 /// # Usage
 ///
-/// Use when you need to manage dialog state externally, for example from a global app state or view model.
-/// And also need to toggle dialog explicitly.
+/// Use when you need to manage dialog state externally, for example from a
+/// global app state or view model. And also need to toggle dialog explicitly.
 ///
 /// # Parameters
 ///
@@ -470,10 +475,12 @@ pub struct BasicDialogArgs {
     /// The supporting text of the dialog.
     #[builder(setter(into))]
     pub supporting_text: String,
-    /// The button used to confirm a proposed action, thus resolving what triggered the dialog.
+    /// The button used to confirm a proposed action, thus resolving what
+    /// triggered the dialog.
     #[builder(default, setter(custom))]
     pub confirm_button: Option<Arc<dyn Fn() + Send + Sync>>,
-    /// The button used to dismiss a proposed action, thus resolving what triggered the dialog.
+    /// The button used to dismiss a proposed action, thus resolving what
+    /// triggered the dialog.
     #[builder(default, setter(custom))]
     pub dismiss_button: Option<Arc<dyn Fn() + Send + Sync>>,
 }

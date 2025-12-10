@@ -1,16 +1,20 @@
 //! Defines alignment options for layout components.
 
-/// Specifies how children are placed along the main axis (the direction of layout)
-/// in layout containers such as [`crate::row::row`] or [`crate::column::column`].
+/// Specifies how children are placed along the main axis (the direction of
+/// layout) in layout containers such as [`crate::row::row`] or
+/// [`crate::column::column`].
 ///
 /// # Variants
 ///
 /// - `Start`: Place children at the start (left or top).
 /// - `Center`: Center children along the main axis.
 /// - `End`: Place children at the end (right or bottom).
-/// - `SpaceEvenly`: Evenly distribute children, including space at the start and end.
-/// - `SpaceBetween`: Evenly distribute children, with no space at the start and end.
-/// - `SpaceAround`: Evenly distribute children, with half-space at the start and end.
+/// - `SpaceEvenly`: Evenly distribute children, including space at the start
+///   and end.
+/// - `SpaceBetween`: Evenly distribute children, with no space at the start and
+///   end.
+/// - `SpaceAround`: Evenly distribute children, with half-space at the start
+///   and end.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MainAxisAlignment {
     /// Place children at the start (left or top).
@@ -41,8 +45,9 @@ impl Default for MainAxisAlignment {
     }
 }
 
-/// Specifies how children are aligned along the cross axis (perpendicular to the layout direction)
-/// in layout containers such as [`crate::row::row`] or [`crate::column::column`].
+/// Specifies how children are aligned along the cross axis (perpendicular to
+/// the layout direction) in layout containers such as [`crate::row::row`] or
+/// [`crate::column::column`].
 ///
 /// # Variants
 ///
@@ -69,8 +74,9 @@ impl Default for CrossAxisAlignment {
     }
 }
 
-/// Specifies the alignment of a child within its parent container, both vertically and horizontally.
-/// Useful for positioning a single child inside a container, such as in a [`crate::boxed::boxed`] component.
+/// Specifies the alignment of a child within its parent container, both
+/// vertically and horizontally. Useful for positioning a single child inside a
+/// container, such as in a [`crate::boxed::boxed`] component.
 ///
 /// # Variants
 /// - `TopStart`: Top-left corner.

@@ -23,11 +23,13 @@ const ANIM_TIME: Duration = Duration::from_millis(300);
 
 /// Defines the visual style of the side bar and its scrim.
 ///
-/// The scrim is the overlay that appears behind the side bar, covering the main content.
+/// The scrim is the overlay that appears behind the side bar, covering the main
+/// content.
 #[derive(Default, Clone, Copy)]
 pub enum SideBarStyle {
     /// A translucent glass effect that blurs the content behind it.
-    /// This style may be more costly and is suitable when a blurred backdrop is desired.
+    /// This style may be more costly and is suitable when a blurred backdrop is
+    /// desired.
     Glass,
     /// A simple, semi-transparent dark overlay. This is the default style.
     #[default]
@@ -39,8 +41,8 @@ pub enum SideBarStyle {
 pub struct SideBarProviderArgs {
     /// A callback that is invoked when the user requests to close the side bar.
     ///
-    /// This can be triggered by clicking the scrim or pressing the `Escape` key.
-    /// The callback is expected to close the side bar.
+    /// This can be triggered by clicking the scrim or pressing the `Escape`
+    /// key. The callback is expected to close the side bar.
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
     /// The visual style used by the provider. See [`SideBarStyle`].
     #[builder(default)]
@@ -59,8 +61,8 @@ struct SideBarStateInner {
 /// Controller for [`side_bar_provider`], managing open/closed state.
 ///
 /// This controller can be created by the application and passed to the
-/// [`side_bar_provider_with_controller`]. It is used to control the visibility of the side bar
-/// programmatically.
+/// [`side_bar_provider_with_controller`]. It is used to control the visibility
+/// of the side bar programmatically.
 ///
 /// # Example
 ///
@@ -286,7 +288,8 @@ fn make_keyboard_closure(
     })
 }
 
-/// Place side bar if present. Extracted to reduce complexity of the parent function.
+/// Place side bar if present. Extracted to reduce complexity of the parent
+/// function.
 fn place_side_bar_if_present(
     input: &tessera_ui::MeasureInput<'_>,
     controller_for_measure: &SideBarController,
@@ -314,13 +317,17 @@ fn place_side_bar_if_present(
 ///
 /// # Usage
 ///
-/// Use as a top-level provider to display a navigation drawer or other contextual side content.
+/// Use as a top-level provider to display a navigation drawer or other
+/// contextual side content.
 ///
 /// # Parameters
 ///
-/// - `args` — configures the side bar's style and `on_close_request` callback; see [`SideBarProviderArgs`].
-/// - `main_content` — a closure that renders the main UI, which is visible behind the side bar.
-/// - `side_bar_content` — a closure that renders the content of the side bar itself.
+/// - `args` — configures the side bar's style and `on_close_request` callback;
+///   see [`SideBarProviderArgs`].
+/// - `main_content` — a closure that renders the main UI, which is visible
+///   behind the side bar.
+/// - `side_bar_content` — a closure that renders the content of the side bar
+///   itself.
 ///
 /// # Examples
 ///
@@ -359,18 +366,23 @@ pub fn side_bar_provider(
 
 /// # side_bar_provider_with_controller
 ///
-/// Controlled version of [`side_bar_provider`] that accepts an external controller.
+/// Controlled version of [`side_bar_provider`] that accepts an external
+/// controller.
 ///
 /// # Usage
 ///
-/// Use when you need to control the side bar's open/closed state programmatically via a controller.
+/// Use when you need to control the side bar's open/closed state
+/// programmatically via a controller.
 ///
 /// # Parameters
 ///
-/// - `args` — configures the side bar's style and `on_close_request` callback; see [`SideBarProviderArgs`].
+/// - `args` — configures the side bar's style and `on_close_request` callback;
+///   see [`SideBarProviderArgs`].
 /// - `controller` — a [`SideBarController`] to manage the open/closed state.
-/// - `main_content` — a closure that renders the main UI, which is visible behind the side bar.
-/// - `side_bar_content` — a closure that renders the content of the side bar itself.
+/// - `main_content` — a closure that renders the main UI, which is visible
+///   behind the side bar.
+/// - `side_bar_content` — a closure that renders the content of the side bar
+///   itself.
 ///
 /// # Examples
 ///
@@ -447,7 +459,8 @@ pub fn side_bar_provider_with_controller(
         // Place side bar (if present) using extracted helper.
         place_side_bar_if_present(input, &controller_for_measure, progress);
 
-        // Return the main content size (best-effort; unwrap used above to satisfy closure type).
+        // Return the main content size (best-effort; unwrap used above to satisfy
+        // closure type).
         Ok(main_content_size)
     });
     measure(measure_closure);

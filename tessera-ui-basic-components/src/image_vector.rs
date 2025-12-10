@@ -1,8 +1,8 @@
 //! Vector image component built on top of SVG parsing and tessellation.
 //!
-//! This module mirrors the ergonomics of [`crate::image`], but keeps the content
-//! in vector form so it can scale cleanly at any size. SVG data is parsed with
-//! [`usvg`] and tessellated into GPU-friendly triangles using lyon.
+//! This module mirrors the ergonomics of [`crate::image`], but keeps the
+//! content in vector form so it can scale cleanly at any size. SVG data is
+//! parsed with [`usvg`] and tessellated into GPU-friendly triangles using lyon.
 //! The resulting [`ImageVectorData`] can be cached and reused across frames.
 
 use std::{fs, path::Path as StdPath, sync::Arc};

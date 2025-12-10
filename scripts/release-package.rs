@@ -474,8 +474,9 @@ fn perform_publish_with_modified_files(
     package_name: &str,
     tag: &str,
 ) -> Result<()> {
-    // Write modified Cargo.toml files (or preview), commit them temporarily for publish,
-    // publish the target package, and finally reset the workspace to the created tag.
+    // Write modified Cargo.toml files (or preview), commit them temporarily for
+    // publish, publish the target package, and finally reset the workspace to
+    // the created tag.
     if !modified_files.is_empty() {
         for (file, old, new) in modified_files {
             write_or_preview_file(dry_run, file, new, Some(old))?;

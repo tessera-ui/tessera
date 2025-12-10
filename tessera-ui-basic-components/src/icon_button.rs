@@ -75,7 +75,8 @@ pub struct GlassIconButtonArgs {
 }
 
 impl GlassIconButtonArgsBuilder {
-    /// Override the [`GlassButtonArgs`] using either a ready instance or a builder-produced value.
+    /// Override the [`GlassButtonArgs`] using either a ready instance or a
+    /// builder-produced value.
     pub fn button(mut self, button: impl Into<GlassButtonArgs>) -> Self {
         self.button = Some(button.into());
         self
@@ -94,7 +95,8 @@ impl GlassIconButtonArgsBuilder {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the button variant, icon, and behavior; see [`IconButtonArgs`].
+/// - `args` — configures the button variant, icon, and behavior; see
+///   [`IconButtonArgs`].
 ///
 /// ## Examples
 ///
@@ -213,7 +215,8 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the underlying glass button and the icon; see [`GlassIconButtonArgs`].
+/// - `args` — configures the underlying glass button and the icon; see
+///   [`GlassIconButtonArgs`].
 ///
 /// ## Examples
 ///

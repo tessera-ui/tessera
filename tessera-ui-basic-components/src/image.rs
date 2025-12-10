@@ -13,23 +13,26 @@ use crate::pipelines::image::command::ImageCommand;
 
 pub use crate::pipelines::image::command::ImageData;
 
-/// Specifies the source for image data, which can be either a file path or raw bytes.
+/// Specifies the source for image data, which can be either a file path or raw
+/// bytes.
 ///
-/// This enum is used by [`load_image_from_source`] to load image data from different sources.
+/// This enum is used by [`load_image_from_source`] to load image data from
+/// different sources.
 #[derive(Clone, Debug)]
 pub enum ImageSource {
     /// Load image from a file path.
     Path(String),
-    /// Load image from a byte slice. The data is wrapped in an `Arc` for efficient sharing.
+    /// Load image from a byte slice. The data is wrapped in an `Arc` for
+    /// efficient sharing.
     Bytes(Arc<[u8]>),
 }
 
 /// Decodes an image from a given [`ImageSource`].
 ///
-/// This function handles the loading and decoding of the image data into a format
-/// suitable for rendering. It should be called outside of the main UI loop or
-/// a component's `measure` closure to avoid performance degradation from decoding
-/// the image on every frame.
+/// This function handles the loading and decoding of the image data into a
+/// format suitable for rendering. It should be called outside of the main UI
+/// loop or a component's `measure` closure to avoid performance degradation
+/// from decoding the image on every frame.
 ///
 /// # Arguments
 ///
@@ -37,8 +40,8 @@ pub enum ImageSource {
 ///
 /// # Returns
 ///
-/// A `Result` containing the decoded [`ImageData`] on success, or an `image::ImageError`
-/// on failure.
+/// A `Result` containing the decoded [`ImageData`] on success, or an
+/// `image::ImageError` on failure.
 pub fn load_image_from_source(source: &ImageSource) -> Result<ImageData, image::ImageError> {
     let decoded = match source {
         ImageSource::Path(path) => image::open(path)?,
@@ -55,12 +58,13 @@ pub fn load_image_from_source(source: &ImageSource) -> Result<ImageData, image::
 /// Arguments for the `image` component.
 ///
 /// This struct holds the data and layout properties for an `image` component.
-/// It is typically created using the [`ImageArgsBuilder`] or by converting from [`ImageData`].
+/// It is typically created using the [`ImageArgsBuilder`] or by converting from
+/// [`ImageData`].
 #[derive(Debug, Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct ImageArgs {
-    /// The decoded image data, represented by [`ImageData`]. This contains the raw pixel
-    /// buffer and the image's dimensions.
+    /// The decoded image data, represented by [`ImageData`]. This contains the
+    /// raw pixel buffer and the image's dimensions.
     #[builder(setter(into))]
     pub data: Arc<ImageData>,
 
@@ -84,7 +88,8 @@ impl From<ImageData> for ImageArgs {
 
 /// # image
 ///
-/// Renders a raster image, fitting it to the available space or its intrinsic size.
+/// Renders a raster image, fitting it to the available space or its intrinsic
+/// size.
 ///
 /// ## Usage
 ///

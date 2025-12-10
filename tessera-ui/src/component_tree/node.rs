@@ -143,8 +143,8 @@ pub struct ComponentNode {
     /// Stable logic identifier for the component function.
     pub logic_id: u64,
     /// Describes the component in layout.
-    /// None means using default measure policy which places children at the top-left corner
-    /// of the parent node, with no offset.
+    /// None means using default measure policy which places children at the
+    /// top-left corner of the parent node, with no offset.
     pub measure_fn: Option<Box<MeasureFn>>,
     /// Describes the input handler for the component.
     /// This is used to handle state changes.
@@ -164,15 +164,15 @@ pub struct ComponentNodeMetaData {
     /// This will be computed during drawing command's generation.
     /// None if the node is not drawn yet.
     pub abs_position: Option<PxPosition>,
-    /// The effective clipping rectangle for this node, considering all its ancestors.
-    /// This is calculated once per frame before event handling.
+    /// The effective clipping rectangle for this node, considering all its
+    /// ancestors. This is calculated once per frame before event handling.
     pub event_clip_rect: Option<crate::PxRect>,
     /// Commands associated with this node.
     ///
     /// This stores both draw and compute commands in a unified vector using the
     /// new `Command` enum. Commands are collected during the measure phase and
-    /// executed during rendering. The order of commands in this vector determines
-    /// their execution order.
+    /// executed during rendering. The order of commands in this vector
+    /// determines their execution order.
     pub(crate) commands: SmallVec<[(Command, TypeId); 4]>,
     /// Whether this node clips its children.
     pub clips_children: bool,
@@ -199,9 +199,10 @@ impl ComponentNodeMetaData {
 
     /// Pushes a draw command to the node's metadata.
     ///
-    /// Draw commands are responsible for rendering visual content (shapes, text, images).
-    /// This method wraps the command in the unified `Command::Draw` variant and adds it
-    /// to the command queue. Commands are executed in the order they are added.
+    /// Draw commands are responsible for rendering visual content (shapes,
+    /// text, images). This method wraps the command in the unified
+    /// `Command::Draw` variant and adds it to the command queue. Commands
+    /// are executed in the order they are added.
     pub fn push_draw_command<C: DrawCommand + 'static>(&mut self, command: C) {
         let command = Box::new(command);
         let command = command as Box<dyn DrawCommand>;
@@ -232,18 +233,21 @@ pub type ComponentNodeMetaDatas = DashMap<NodeId, ComponentNodeMetaData>;
 pub enum MeasurementError {
     /// Indicates that the specified node was not found in the component tree.
     NodeNotFoundInTree,
-    /// Indicates that metadata for the specified node was not found (currently not a primary error source in measure_node).
+    /// Indicates that metadata for the specified node was not found (currently
+    /// not a primary error source in measure_node).
     NodeNotFoundInMeta,
-    /// Indicates that the custom measure function (`MeasureFn`) for a node failed.
-    /// Contains a string detailing the failure.
+    /// Indicates that the custom measure function (`MeasureFn`) for a node
+    /// failed. Contains a string detailing the failure.
     MeasureFnFailed(String),
-    /// Indicates that the measurement of a child node failed during a parent's layout calculation (e.g., in `DEFAULT_LAYOUT_DESC`).
-    /// Contains the `NodeId` of the child that failed.
+    /// Indicates that the measurement of a child node failed during a parent's
+    /// layout calculation (e.g., in `DEFAULT_LAYOUT_DESC`). Contains the
+    /// `NodeId` of the child that failed.
     ChildMeasurementFailed(NodeId),
 }
 
-/// A `MeasureFn` is a function that takes an input `Constraint` and its children nodes,
-/// finishes placementing inside, and returns its size (`ComputedData`) or an error.
+/// A `MeasureFn` is a function that takes an input `Constraint` and its
+/// children nodes, finishes placementing inside, and returns its size
+/// (`ComputedData`) or an error.
 pub type MeasureFn =
     dyn Fn(&MeasureInput<'_>) -> Result<ComputedData, MeasurementError> + Send + Sync;
 
@@ -253,11 +257,13 @@ pub struct MeasureInput<'a> {
     pub current_node_id: indextree::NodeId,
     /// The component tree containing all nodes.
     pub tree: &'a ComponentNodeTree,
-    /// The effective constraint for this node, merged with its parent's constraint.
+    /// The effective constraint for this node, merged with its parent's
+    /// constraint.
     pub parent_constraint: &'a Constraint,
     /// The children nodes of the current node.
     pub children_ids: &'a [indextree::NodeId],
-    /// Metadata for all component nodes, used to access cached data and constraints.
+    /// Metadata for all component nodes, used to access cached data and
+    /// constraints.
     pub metadatas: &'a ComponentNodeMetaDatas,
     /// Compute resources manager
     pub compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
@@ -268,9 +274,10 @@ pub struct MeasureInput<'a> {
 impl<'a> MeasureInput<'a> {
     /// Returns a mutable reference to the metadata of the current node.
     ///
-    /// This is a convenience method that simplifies accessing the current node's metadata
-    /// from within a `measure` function. It encapsulates the `DashMap::get_mut` call and panics
-    /// if the metadata is not found, as it's an invariant that it must exist.
+    /// This is a convenience method that simplifies accessing the current
+    /// node's metadata from within a `measure` function. It encapsulates
+    /// the `DashMap::get_mut` call and panics if the metadata is not found,
+    /// as it's an invariant that it must exist.
     pub fn metadata_mut(&self) -> dashmap::mapref::one::RefMut<'_, NodeId, ComponentNodeMetaData> {
         self.metadatas
             .get_mut(&self.current_node_id)
@@ -279,7 +286,8 @@ impl<'a> MeasureInput<'a> {
 
     /// Measures all specified child nodes under the given constraint.
     ///
-    /// Returns a map of each child's computed layout data, or the first measurement error encountered.
+    /// Returns a map of each child's computed layout data, or the first
+    /// measurement error encountered.
     pub fn measure_children(
         &self,
         nodes_to_measure: Vec<(NodeId, Constraint)>,
@@ -348,14 +356,15 @@ impl<'a> MeasureInput<'a> {
 /// 1. Children's input handlers are executed earlier than parent's.
 /// 2. Newer components' input handlers are executed earlier than older ones.
 ///
-/// Acutally, rule 2 includes rule 1, because a newer component is always a child of an older component :)
+/// Acutally, rule 2 includes rule 1, because a newer component is always a
+/// child of an older component :)
 pub type InputHandlerFn = dyn Fn(InputHandlerInput) + Send + Sync;
 
 /// Input for the input handler function (`InputHandlerFn`).
 ///
 /// Note that you can modify the `cursor_events` and `keyboard_events` vectors
-/// for exmaple block some keyboard events or cursor events to prevent them from propagating
-/// to parent components and older brother components.
+/// for exmaple block some keyboard events or cursor events to prevent them from
+/// propagating to parent components and older brother components.
 pub struct InputHandlerInput<'a> {
     /// The size of the component node, computed during the measure stage.
     pub computed_data: ComputedData,
@@ -363,8 +372,8 @@ pub struct InputHandlerInput<'a> {
     /// Relative to the root position of the component.
     pub cursor_position_rel: Option<PxPosition>,
     /// The mut ref of absolute position of the cursor in the window.
-    /// Used to block cursor fully if needed, since cursor_position_rel use this.
-    /// Not a public field for now.
+    /// Used to block cursor fully if needed, since cursor_position_rel use
+    /// this. Not a public field for now.
     pub(crate) cursor_position_abs: &'a mut Option<PxPosition>,
     /// Cursor events from the event loop, if any.
     pub cursor_events: &'a mut Vec<CursorEvent>,
@@ -413,11 +422,13 @@ impl InputHandlerInput<'_> {
         self.block_ime();
     }
 
-    /// Provides a fluent API for setting accessibility information for the current component.
+    /// Provides a fluent API for setting accessibility information for the
+    /// current component.
     ///
-    /// This method returns a builder that allows you to set various accessibility properties
-    /// like role, label, actions, and state. The accessibility information is automatically
-    /// committed when the builder is dropped or when `.commit()` is called explicitly.
+    /// This method returns a builder that allows you to set various
+    /// accessibility properties like role, label, actions, and state. The
+    /// accessibility information is automatically committed when the
+    /// builder is dropped or when `.commit()` is called explicitly.
     ///
     /// # Example
     ///
@@ -440,8 +451,9 @@ impl InputHandlerInput<'_> {
     /// }
     /// ```
     ///
-    /// Note: The builder should be committed with `.commit()` or allowed to drop,
-    /// which will automatically store the accessibility information in the metadata.
+    /// Note: The builder should be committed with `.commit()` or allowed to
+    /// drop, which will automatically store the accessibility information
+    /// in the metadata.
     pub fn accessibility(&self) -> AccessibilityBuilderGuard<'_> {
         AccessibilityBuilderGuard {
             node_id: self.current_node_id,
@@ -482,16 +494,19 @@ impl InputHandlerInput<'_> {
     }
 }
 
-/// A collection of requests that components can make to the windowing system for the current frame.
-/// This struct's lifecycle is confined to a single `compute` pass.
+/// A collection of requests that components can make to the windowing system
+/// for the current frame. This struct's lifecycle is confined to a single
+/// `compute` pass.
 #[derive(Default, Debug)]
 pub struct WindowRequests {
-    /// The cursor icon requested by a component. If multiple components request a cursor,
-    /// the last one to make a request in a frame "wins", since it's executed later.
+    /// The cursor icon requested by a component. If multiple components request
+    /// a cursor, the last one to make a request in a frame "wins", since
+    /// it's executed later.
     pub cursor_icon: CursorIcon,
     /// An Input Method Editor (IME) request.
-    /// If multiple components request IME, the one from the "newer" component (which is
-    /// processed later in the state handling pass) will overwrite previous requests.
+    /// If multiple components request IME, the one from the "newer" component
+    /// (which is processed later in the state handling pass) will overwrite
+    /// previous requests.
     pub ime_request: Option<ImeRequest>,
 }
 
@@ -549,7 +564,8 @@ pub(crate) fn measure_node(
         parent_constraint
     );
 
-    // Ensure thread-local current node context for nested control-flow instrumentation.
+    // Ensure thread-local current node context for nested control-flow
+    // instrumentation.
     let _node_ctx_guard = push_current_node(node_id, node_data.logic_id);
     let _phase_guard = push_phase(RuntimePhase::Measure);
 
@@ -600,16 +616,19 @@ pub(crate) fn place_node(
         .rel_position = Some(rel_position);
 }
 
-/// A default layout descriptor (`MeasureFn`) that places children at the top-left corner ([0,0])
-/// of the parent node with no offset. Children are measured concurrently using `measure_nodes`.
+/// A default layout descriptor (`MeasureFn`) that places children at the
+/// top-left corner ([0,0]) of the parent node with no offset. Children are
+/// measured concurrently using `measure_nodes`.
 pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
     if input.children_ids.is_empty() {
         // If there are no children, the size depends on the parent_constraint
-        // For Fixed, it's the fixed size. For Wrap/Fill, it's typically 0 if no content.
-        // This part might need refinement based on how min constraints in Wrap/Fill should behave for empty nodes.
-        // For now, returning ZERO, assuming intrinsic size of an empty node is zero before min constraints are applied.
-        // The actual min size enforcement happens when the parent (or this node itself if it has intrinsic min)
-        // considers its own DimensionValue.
+        // For Fixed, it's the fixed size. For Wrap/Fill, it's typically 0 if no
+        // content. This part might need refinement based on how min constraints
+        // in Wrap/Fill should behave for empty nodes. For now, returning ZERO,
+        // assuming intrinsic size of an empty node is zero before min constraints are
+        // applied. The actual min size enforcement happens when the parent (or
+        // this node itself if it has intrinsic min) considers its own
+        // DimensionValue.
         return Ok(ComputedData::min_from_constraint(input.parent_constraint));
     }
 
@@ -670,25 +689,30 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
         ));
     }
 
-    // For default layout (stacking), the aggregate size is the max of children's sizes.
+    // For default layout (stacking), the aggregate size is the max of children's
+    // sizes.
     for (child_id, child_size) in successful_children_data {
         aggregate_size = aggregate_size.max(child_size);
         place_node(child_id, PxPosition::ZERO, input.metadatas); // All children at [0,0] for simple stacking
     }
 
-    // The aggregate_size is based on children. Now apply current node's own constraints.
-    // If current node is Fixed, its size is fixed.
-    // If current node is Wrap, its size is aggregate_size (clamped by its own min/max).
-    // If current node is Fill, its size is aggregate_size (clamped by its own min/max, and parent's available space if parent was Fill).
-    // This final clamping/adjustment based on `parent_constraint` should ideally happen
-    // when `ComputedData` is returned from `measure_node` itself, or by the caller of `measure_node`.
-    // For DEFAULT_LAYOUT_DESC, it should return the size required by its children,
-    // and then `measure_node` will finalize it based on `parent_constraint`.
+    // The aggregate_size is based on children. Now apply current node's own
+    // constraints. If current node is Fixed, its size is fixed.
+    // If current node is Wrap, its size is aggregate_size (clamped by its own
+    // min/max). If current node is Fill, its size is aggregate_size (clamped by
+    // its own min/max, and parent's available space if parent was Fill).
+    // This final clamping/adjustment based on `parent_constraint` should ideally
+    // happen when `ComputedData` is returned from `measure_node` itself, or by
+    // the caller of `measure_node`. For DEFAULT_LAYOUT_DESC, it should return
+    // the size required by its children, and then `measure_node` will finalize
+    // it based on `parent_constraint`.
 
-    // Let's refine: DEFAULT_LAYOUT_DESC should calculate the "natural" size based on children.
-    // Then, `measure_node` (or its caller) would apply the `parent_constraint` to this natural size.
-    // However, `measure_node` currently directly returns the result of `DEFAULT_LAYOUT_DESC` or custom `measure_fn`.
-    // So, `DEFAULT_LAYOUT_DESC` itself needs to consider `parent_constraint` for its final size.
+    // Let's refine: DEFAULT_LAYOUT_DESC should calculate the "natural" size based
+    // on children. Then, `measure_node` (or its caller) would apply the
+    // `parent_constraint` to this natural size. However, `measure_node`
+    // currently directly returns the result of `DEFAULT_LAYOUT_DESC` or custom
+    // `measure_fn`. So, `DEFAULT_LAYOUT_DESC` itself needs to consider
+    // `parent_constraint` for its final size.
 
     let mut final_width = aggregate_size.width;
     let mut final_height = aggregate_size.height;
@@ -711,9 +735,10 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
             if let Some(max_w) = max {
                 final_width = final_width.min(max_w);
             }
-            // If parent was Fill, this node would have gotten a Fill constraint too.
-            // The actual "filling" happens because children might be Fill.
-            // If children are not Fill, this node wraps them.
+            // If parent was Fill, this node would have gotten a Fill constraint
+            // too. The actual "filling" happens because children
+            // might be Fill. If children are not Fill, this node
+            // wraps them.
         }
     }
     match input.parent_constraint.height {
@@ -772,7 +797,8 @@ pub(crate) fn measure_nodes(
         .collect::<HashMap<NodeId, Result<ComputedData, MeasurementError>>>()
 }
 
-/// Layout information computed at the measure stage, representing the size of a node.
+/// Layout information computed at the measure stage, representing the size of a
+/// node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ComputedData {
     /// The resolved width of the node in physical pixels.
@@ -805,7 +831,8 @@ impl ComputedData {
     };
 
     /// Calculates a "minimum" size based on a constraint.
-    /// For Fixed, it's the fixed value. For Wrap/Fill, it's their 'min' if Some, else 0.
+    /// For Fixed, it's the fixed value. For Wrap/Fill, it's their 'min' if
+    /// Some, else 0.
     pub fn min_from_constraint(constraint: &Constraint) -> Self {
         let width = match constraint.width {
             DimensionValue::Fixed(w) => w,

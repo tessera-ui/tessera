@@ -1,8 +1,9 @@
 //! Cursor state management and event handling system.
 //!
-//! This module provides comprehensive cursor and touch event handling for the Tessera UI framework.
-//! It manages cursor position tracking, event queuing, touch gesture recognition, and inertial
-//! scrolling for smooth user interactions.
+//! This module provides comprehensive cursor and touch event handling for the
+//! Tessera UI framework. It manages cursor position tracking, event queuing,
+//! touch gesture recognition, and inertial scrolling for smooth user
+//! interactions.
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -11,39 +12,47 @@ use std::{
 
 use crate::PxPosition;
 
-/// Maximum number of events to keep in the queue to prevent memory issues during UI jank.
+/// Maximum number of events to keep in the queue to prevent memory issues
+/// during UI jank.
 const KEEP_EVENTS_COUNT: usize = 10;
 
-/// Controls how quickly inertial scrolling decelerates (higher = faster slowdown).
+/// Controls how quickly inertial scrolling decelerates (higher = faster
+/// slowdown).
 const INERTIA_DECAY_CONSTANT: f32 = 5.0;
 
-/// Minimum velocity threshold below which inertial scrolling stops (pixels per second).
+/// Minimum velocity threshold below which inertial scrolling stops (pixels per
+/// second).
 const MIN_INERTIA_VELOCITY: f32 = 10.0;
 
-/// Minimum velocity from a gesture required to start inertial scrolling (pixels per second).
+/// Minimum velocity from a gesture required to start inertial scrolling (pixels
+/// per second).
 const INERTIA_MIN_VELOCITY_THRESHOLD_FOR_START: f32 = 50.0;
 
-/// Multiplier applied to initial inertial velocity (typically 1.0 for natural feel).
+/// Multiplier applied to initial inertial velocity (typically 1.0 for natural
+/// feel).
 const INERTIA_MOMENTUM_FACTOR: f32 = 1.0;
 
 /// Maximum inertial velocity to keep flicks controllable (pixels per second).
 const MAX_INERTIA_VELOCITY: f32 = 6000.0;
 
-/// Tracks the state of a single touch point for gesture recognition and velocity calculation.
+/// Tracks the state of a single touch point for gesture recognition and
+/// velocity calculation.
 ///
-/// This struct maintains the necessary information to track touch movement, calculate
-/// velocities, and determine when to trigger inertial scrolling.
+/// This struct maintains the necessary information to track touch movement,
+/// calculate velocities, and determine when to trigger inertial scrolling.
 #[derive(Debug, Clone)]
 struct TouchPointState {
     /// The last recorded position of this touch point.
     last_position: PxPosition,
     /// Timestamp of the last position update.
     last_update_time: Instant,
-    /// Tracks recent velocity samples and temporal metadata for momentum calculation.
+    /// Tracks recent velocity samples and temporal metadata for momentum
+    /// calculation.
     velocity_tracker: VelocityTracker,
     /// Tracks whether this touch gesture generated a scroll event.
     ///
-    /// When set, the gesture should be treated as a drag/scroll rather than a tap.
+    /// When set, the gesture should be treated as a drag/scroll rather than a
+    /// tap.
     generated_scroll_event: bool,
 }
 
@@ -117,9 +126,10 @@ impl Default for TouchScrollConfig {
 
 /// Central state manager for cursor and touch interactions.
 ///
-/// `CursorState` is the main interface for handling all cursor-related events in the Tessera
-/// UI framework. It manages cursor position tracking, event queuing, multi-touch support,
-/// and provides smooth inertial scrolling for touch gestures.
+/// `CursorState` is the main interface for handling all cursor-related events
+/// in the Tessera UI framework. It manages cursor position tracking, event
+/// queuing, multi-touch support, and provides smooth inertial scrolling for
+/// touch gestures.
 #[derive(Default)]
 pub struct CursorState {
     /// Current cursor position, if any cursor is active.
@@ -147,8 +157,9 @@ impl CursorState {
 
     /// Adds a cursor event to the processing queue.
     ///
-    /// Events are stored in a bounded queue to prevent memory issues during UI performance
-    /// problems. If the queue exceeds [`KEEP_EVENTS_COUNT`], the oldest events are discarded.
+    /// Events are stored in a bounded queue to prevent memory issues during UI
+    /// performance problems. If the queue exceeds [`KEEP_EVENTS_COUNT`],
+    /// the oldest events are discarded.
     ///
     /// # Arguments
     ///
@@ -164,9 +175,9 @@ impl CursorState {
 
     /// Updates the current cursor position.
     ///
-    /// This method accepts any type that can be converted into `Option<PxPosition>`,
-    /// allowing for flexible position updates including clearing the position by
-    /// passing `None`.
+    /// This method accepts any type that can be converted into
+    /// `Option<PxPosition>`, allowing for flexible position updates
+    /// including clearing the position by passing `None`.
     ///
     /// # Arguments
     ///
@@ -177,16 +188,19 @@ impl CursorState {
 
     /// Processes active inertial scrolling and generates scroll events.
     ///
-    /// This method is called internally to update inertial scrolling state and generate
-    /// appropriate scroll events. It handles velocity decay over time and stops inertia
-    /// when velocity falls below the minimum threshold.
+    /// This method is called internally to update inertial scrolling state and
+    /// generate appropriate scroll events. It handles velocity decay over
+    /// time and stops inertia when velocity falls below the minimum
+    /// threshold.
     ///
-    /// The method calculates scroll deltas based on current velocity and elapsed time,
-    /// applies exponential decay to the velocity, and queues scroll events for processing.
+    /// The method calculates scroll deltas based on current velocity and
+    /// elapsed time, applies exponential decay to the velocity, and queues
+    /// scroll events for processing.
     ///
     /// # Implementation Details
     ///
-    /// - Uses exponential decay with [`INERTIA_DECAY_CONSTANT`] for natural deceleration
+    /// - Uses exponential decay with [`INERTIA_DECAY_CONSTANT`] for natural
+    ///   deceleration
     /// - Stops inertia when velocity drops below [`MIN_INERTIA_VELOCITY`]
     /// - Generates scroll events with calculated position deltas
     /// - Handles edge cases like zero delta time gracefully
@@ -238,9 +252,9 @@ impl CursorState {
 
     /// Retrieves and clears all pending cursor events.
     ///
-    /// This method processes any active inertial scrolling, then returns all queued
-    /// cursor events and clears the internal event queue. Events are returned in
-    /// chronological order (oldest first).
+    /// This method processes any active inertial scrolling, then returns all
+    /// queued cursor events and clears the internal event queue. Events are
+    /// returned in chronological order (oldest first).
     ///
     /// This is typically called once per frame by the UI framework to process
     /// all accumulated input events.
@@ -251,7 +265,8 @@ impl CursorState {
     ///
     /// # Note
     ///
-    /// Events are ordered from oldest to newest to ensure proper event processing order.
+    /// Events are ordered from oldest to newest to ensure proper event
+    /// processing order.
     pub fn take_events(&mut self) -> Vec<CursorEvent> {
         self.process_and_queue_inertial_scroll();
         self.events.drain(..).collect()
@@ -272,8 +287,9 @@ impl CursorState {
 
     /// Returns the current cursor position, if any.
     ///
-    /// The position represents the last known location of the cursor or active touch point.
-    /// Returns `None` if no cursor is currently active or if the position has been cleared.
+    /// The position represents the last known location of the cursor or active
+    /// touch point. Returns `None` if no cursor is currently active or if
+    /// the position has been cleared.
     ///
     /// # Returns
     ///
@@ -285,8 +301,9 @@ impl CursorState {
 
     /// Handles the start of a touch gesture.
     ///
-    /// This method registers a new touch point and generates a press event. It also
-    /// stops any active inertial scrolling since a new touch interaction has begun.
+    /// This method registers a new touch point and generates a press event. It
+    /// also stops any active inertial scrolling since a new touch
+    /// interaction has begun.
     ///
     /// # Arguments
     ///
@@ -316,9 +333,10 @@ impl CursorState {
 
     /// Handles touch movement and generates scroll events when appropriate.
     ///
-    /// This method tracks touch movement, calculates velocities for inertial scrolling,
-    /// and generates scroll events when the movement exceeds the minimum threshold.
-    /// It also maintains a velocity history for momentum calculation.
+    /// This method tracks touch movement, calculates velocities for inertial
+    /// scrolling, and generates scroll events when the movement exceeds the
+    /// minimum threshold. It also maintains a velocity history for momentum
+    /// calculation.
     ///
     /// # Arguments
     ///
@@ -327,7 +345,8 @@ impl CursorState {
     ///
     /// # Returns
     ///
-    /// - `Some(CursorEvent)` containing a scroll event if movement exceeds threshold
+    /// - `Some(CursorEvent)` containing a scroll event if movement exceeds
+    ///   threshold
     /// - `None` if movement is below threshold or touch scrolling is disabled
     pub fn handle_touch_move(
         &mut self,
@@ -380,7 +399,8 @@ impl CursorState {
         None
     }
 
-    /// Handles the end of a touch gesture and potentially starts inertial scrolling.
+    /// Handles the end of a touch gesture and potentially starts inertial
+    /// scrolling.
     ///
     /// This method processes the end of a touch interaction by:
     /// - Calculating average velocity from recent touch movement
@@ -519,9 +539,9 @@ impl VelocityTracker {
 
 /// Represents a single cursor or touch event with timing information.
 ///
-/// `CursorEvent` encapsulates all types of cursor interactions including presses,
-/// releases, and scroll actions. Each event includes a timestamp for precise
-/// timing and ordering of input events.
+/// `CursorEvent` encapsulates all types of cursor interactions including
+/// presses, releases, and scroll actions. Each event includes a timestamp for
+/// precise timing and ordering of input events.
 #[derive(Debug, Clone)]
 pub struct CursorEvent {
     /// Timestamp indicating when this event occurred.
@@ -530,8 +550,9 @@ pub struct CursorEvent {
     pub content: CursorEventContent,
     /// Classification of the gesture associated with this event.
     ///
-    /// Events originating from touch scrolling will mark this as [`GestureState::Dragged`],
-    /// allowing downstream components to distinguish tap candidates from scroll gestures.
+    /// Events originating from touch scrolling will mark this as
+    /// [`GestureState::Dragged`], allowing downstream components to
+    /// distinguish tap candidates from scroll gestures.
     pub gesture_state: GestureState,
 }
 
@@ -576,9 +597,10 @@ pub enum GestureState {
 impl CursorEventContent {
     /// Creates a cursor press/release event from winit mouse button events.
     ///
-    /// This method converts winit's mouse button events into Tessera's cursor event format.
-    /// It handles the three standard mouse buttons (left, right, middle) and ignores
-    /// any additional buttons that may be present on some mice.
+    /// This method converts winit's mouse button events into Tessera's cursor
+    /// event format. It handles the three standard mouse buttons (left,
+    /// right, middle) and ignores any additional buttons that may be
+    /// present on some mice.
     ///
     /// # Arguments
     ///
@@ -608,9 +630,10 @@ impl CursorEventContent {
 
     /// Creates a scroll event from winit mouse wheel events.
     ///
-    /// This method converts winit's mouse scroll delta into Tessera's scroll event format.
-    /// It handles both line-based scrolling (typical mouse wheels) and pixel-based
-    /// scrolling (trackpads, precision mice) by applying appropriate scaling.
+    /// This method converts winit's mouse scroll delta into Tessera's scroll
+    /// event format. It handles both line-based scrolling (typical mouse
+    /// wheels) and pixel-based scrolling (trackpads, precision mice) by
+    /// applying appropriate scaling.
     ///
     /// # Arguments
     ///

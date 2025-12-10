@@ -4,18 +4,20 @@
 //!
 //! ## Overview
 //!
-//! Focus is a common requirement in UI frameworks. As a functional UI framework,
-//! `tessera` lacks a stable method for locating specific components by reference.
-//! Treating focus as an independent, shared state aligns better with `tessera`'s
-//! design philosophy and provides greater flexibility.
+//! Focus is a common requirement in UI frameworks. As a functional UI
+//! framework, `tessera` lacks a stable method for locating specific components
+//! by reference. Treating focus as an independent, shared state aligns better
+//! with `tessera`'s design philosophy and provides greater flexibility.
 //!
 //! ## Design Philosophy
 //!
 //! The focus system is designed around the following principles:
 //! - **Decentralized**: Each component can create its own [`Focus`] instance
 //! - **Thread-safe**: Focus state is managed using atomic operations and locks
-//! - **Automatic cleanup**: Focus is automatically cleared when a [`Focus`] instance is dropped
-//! - **Unique identification**: Each focus instance has a unique UUID to prevent conflicts
+//! - **Automatic cleanup**: Focus is automatically cleared when a [`Focus`]
+//!   instance is dropped
+//! - **Unique identification**: Each focus instance has a unique UUID to
+//!   prevent conflicts
 //!
 //! ## Usage
 //!
@@ -50,9 +52,9 @@ use uuid::Uuid;
 
 /// Global focus state storage.
 ///
-/// This static variable holds the shared focus state across the entire application.
-/// It's initialized lazily on first access and protected by a read-write lock
-/// for thread-safe access.
+/// This static variable holds the shared focus state across the entire
+/// application. It's initialized lazily on first access and protected by a
+/// read-write lock for thread-safe access.
 static FOCUS_STATE: OnceLock<RwLock<FocusState>> = OnceLock::new();
 
 /// Internal focus state representation.
@@ -61,7 +63,8 @@ static FOCUS_STATE: OnceLock<RwLock<FocusState>> = OnceLock::new();
 /// (if any) currently has focus through its unique identifier.
 #[derive(Default)]
 struct FocusState {
-    /// The UUID of the currently focused component, or `None` if no component has focus.
+    /// The UUID of the currently focused component, or `None` if no component
+    /// has focus.
     focused: Option<Uuid>,
 }
 

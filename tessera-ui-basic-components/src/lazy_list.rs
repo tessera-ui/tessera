@@ -70,14 +70,15 @@ pub struct LazyColumnArgs {
     /// Number of extra items instantiated before/after the viewport.
     #[builder(default = "2")]
     pub overscan: usize,
-    /// Estimated main-axis size for each item, used before real measurements exist.
+    /// Estimated main-axis size for each item, used before real measurements
+    /// exist.
     #[builder(default = "Dp(48.0)")]
     pub estimated_item_size: Dp,
     /// Symmetric padding applied around the lazy list content.
     #[builder(default = "Dp(0.0)")]
     pub content_padding: Dp,
-    /// Maximum viewport length reported back to parents. Prevents gigantic textures
-    /// when nesting the list inside wrap/auto-sized surfaces.
+    /// Maximum viewport length reported back to parents. Prevents gigantic
+    /// textures when nesting the list inside wrap/auto-sized surfaces.
     #[builder(default = "Some(Px(8192))")]
     pub max_viewport_main: Option<Px>,
 }
@@ -90,7 +91,8 @@ impl Default for LazyColumnArgs {
     }
 }
 
-/// Arguments for `lazy_row`. Identical to [`LazyColumnArgs`] but horizontal scrolling is enforced.
+/// Arguments for `lazy_row`. Identical to [`LazyColumnArgs`] but horizontal
+/// scrolling is enforced.
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct LazyRowArgs {
@@ -106,7 +108,8 @@ pub struct LazyRowArgs {
     /// Number of extra items instantiated before/after the viewport.
     #[builder(default = "2")]
     pub overscan: usize,
-    /// Estimated main-axis size for each item, used before real measurements exist.
+    /// Estimated main-axis size for each item, used before real measurements
+    /// exist.
     #[builder(default = "Dp(48.0)")]
     pub estimated_item_size: Dp,
     /// Symmetric padding applied around the lazy list content.
@@ -166,9 +169,11 @@ impl<'a> LazyListScope<'a> {
         });
     }
 
-    /// Adds lazily generated items from an iterator, providing both index and element reference.
+    /// Adds lazily generated items from an iterator, providing both index and
+    /// element reference.
     ///
-    /// The iterator is eagerly collected so it can be accessed on demand while virtualizing.
+    /// The iterator is eagerly collected so it can be accessed on demand while
+    /// virtualizing.
     pub fn items_from_iter<I, T, F>(&mut self, iter: I, builder: F)
     where
         I: IntoIterator<Item = T>,
@@ -271,12 +276,15 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 ///
 /// ## Usage
 ///
-/// Display a long, vertical list of items without incurring the performance cost of rendering every item at once.
+/// Display a long, vertical list of items without incurring the performance
+/// cost of rendering every item at once.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the list's layout and scrolling behavior; see [`LazyColumnArgs`].
-/// - `configure` — a closure that receives a [`LazyColumnScope`] for adding items to the list.
+/// - `args` — configures the list's layout and scrolling behavior; see
+///   [`LazyColumnArgs`].
+/// - `configure` — a closure that receives a [`LazyColumnScope`] for adding
+///   items to the list.
 ///
 /// ## Examples
 ///
@@ -317,13 +325,17 @@ where
 ///
 /// ## Usage
 ///
-/// Use when you need to share scroll/cache state across component boundaries (e.g., restoring position when remounting).
+/// Use when you need to share scroll/cache state across component boundaries
+/// (e.g., restoring position when remounting).
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the list's layout and scrolling behavior; see [`LazyColumnArgs`].
-/// - `controller` — a [`LazyListController`] that holds scroll offsets and item measurement cache.
-/// - `configure` — a closure that receives a [`LazyColumnScope`] for adding items to the list.
+/// - `args` — configures the list's layout and scrolling behavior; see
+///   [`LazyColumnArgs`].
+/// - `controller` — a [`LazyListController`] that holds scroll offsets and item
+///   measurement cache.
+/// - `configure` — a closure that receives a [`LazyColumnScope`] for adding
+///   items to the list.
 ///
 /// ## Examples
 ///
@@ -391,16 +403,20 @@ pub fn lazy_column_with_controller<F>(
 
 /// # lazy_row
 ///
-/// A horizontally scrolling list that only renders items visible in the viewport.
+/// A horizontally scrolling list that only renders items visible in the
+/// viewport.
 ///
 /// ## Usage
 ///
-/// Display a long, horizontal list of items, such as a gallery or a set of chips.
+/// Display a long, horizontal list of items, such as a gallery or a set of
+/// chips.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the list's layout and scrolling behavior; see [`LazyRowArgs`].
-/// - `configure` — a closure that receives a [`LazyRowScope`] for adding items to the list.
+/// - `args` — configures the list's layout and scrolling behavior; see
+///   [`LazyRowArgs`].
+/// - `configure` — a closure that receives a [`LazyRowScope`] for adding items
+///   to the list.
 ///
 /// ## Examples
 ///
@@ -441,13 +457,17 @@ where
 ///
 /// ## Usage
 ///
-/// Use when you need to synchronize scroll state with other components or restore position after remounts.
+/// Use when you need to synchronize scroll state with other components or
+/// restore position after remounts.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the list's layout and scrolling behavior; see [`LazyRowArgs`].
-/// - `controller` — a [`LazyListController`] that holds scroll offsets and item measurement cache.
-/// - `configure` — a closure that receives a [`LazyRowScope`] for adding items to the list.
+/// - `args` — configures the list's layout and scrolling behavior; see
+///   [`LazyRowArgs`].
+/// - `controller` — a [`LazyListController`] that holds scroll offsets and item
+///   measurement cache.
+/// - `configure` — a closure that receives a [`LazyRowScope`] for adding items
+///   to the list.
 ///
 /// ## Examples
 ///

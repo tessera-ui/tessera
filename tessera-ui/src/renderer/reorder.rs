@@ -51,8 +51,8 @@ impl InstructionInfo {
     ) -> Self {
         let (category, rect) = match &command {
             Command::Compute(command) => {
-                // Compute commands should have proper scoping based on their barrier requirement
-                // instead of always using global scope
+                // Compute commands should have proper scoping based on their barrier
+                // requirement instead of always using global scope
                 let barrier_req = command.barrier();
                 let rect = match barrier_req {
                     BarrierRequirement::Global => PxRect {
@@ -288,7 +288,8 @@ fn build_dependency_graph(instructions: &[InstructionInfo]) -> DiGraph<(), ()> {
             let inst_j = &instructions[j];
 
             // Rule 0: State changes act as fences.
-            // If one of two commands is a state change, their relative order must be preserved.
+            // If one of two commands is a state change, their relative order must be
+            // preserved.
             if inst_i.original_index < inst_j.original_index
                 && (inst_i.category == InstructionCategory::StateChange
                     || inst_j.category == InstructionCategory::StateChange)
@@ -1117,9 +1118,11 @@ mod tests {
         // 0 -> 4 (Compute -> Barrier)
         // 2 -> 3 (Overlapping Draw)
         // Potentials: Compute:1, BarrierDraw:2, ContinuationDraw:2
-        // All categories have different potentials, so batching heuristic won't apply across categories.
-        // Ready queue starts with [0(C), 2(CD)] -> Prio sort -> [0, 2]
-        // 1. Pop 0. Result: [0]. Add 1, 4 to queue. Queue: [1(BD), 4(BD), 2(CD)]. Prio sort: [1,4,2]
+        // All categories have different potentials, so batching heuristic won't apply
+        // across categories. Ready queue starts with [0(C), 2(CD)] -> Prio sort
+        // -> [0, 2]
+        // 1. Pop 0. Result: [0]. Add 1, 4 to queue. Queue: [1(BD), 4(BD), 2(CD)]. Prio
+        //    sort: [1,4,2]
         // 2. Pop 1. Result: [0, 1].
         // 3. Pop 4. Result: [0, 1, 4].
         // 4. Pop 2. Result: [0, 1, 4, 2]. Add 3 to queue. Queue: [3]

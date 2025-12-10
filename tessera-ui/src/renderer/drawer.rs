@@ -1,7 +1,7 @@
 //! Graphics rendering pipeline management.
 //!
-//! This module provides the drawing infrastructure for the unified command system,
-//! handling graphics pipeline registration and command dispatch.
+//! This module provides the drawing infrastructure for the unified command
+//! system, handling graphics pipeline registration and command dispatch.
 
 pub mod command;
 pub mod pipeline;
@@ -13,9 +13,9 @@ pub use pipeline::{DrawablePipeline, ErasedDrawContext, PipelineRegistry};
 
 /// Drawer manages graphics pipelines and processes draw commands.
 ///
-/// The Drawer acts as the central coordinator for all graphics rendering operations,
-/// maintaining a registry of pipelines and dispatching draw commands to the appropriate
-/// pipeline implementations.
+/// The Drawer acts as the central coordinator for all graphics rendering
+/// operations, maintaining a registry of pipelines and dispatching draw
+/// commands to the appropriate pipeline implementations.
 pub struct Drawer {
     /// Registry containing all registered graphics pipelines
     pub pipeline_registry: PipelineRegistry,
@@ -74,9 +74,9 @@ impl Drawer {
 
     /// Submit a draw command to the appropriate pipeline for rendering.
     ///
-    /// This method dispatches the command to the correct pipeline based on its type,
-    /// providing all necessary context including GPU resources, render pass, and
-    /// positioning information.
+    /// This method dispatches the command to the correct pipeline based on its
+    /// type, providing all necessary context including GPU resources,
+    /// render pass, and positioning information.
     ///
     /// # Arguments
     /// * `cmd` - The draw command to execute

@@ -135,7 +135,8 @@ impl ImagePipeline {
         size: PxSize,
         config: &wgpu::SurfaceConfiguration,
     ) -> ImageUniforms {
-        // Convert pixel positions/sizes into normalized device coordinates and size ratios.
+        // Convert pixel positions/sizes into normalized device coordinates and size
+        // ratios.
         let rect = [
             (start_pos.x.0 as f32 / config.width as f32) * 2.0 - 1.0
                 + (size.width.0 as f32 / config.width as f32),
@@ -157,8 +158,8 @@ impl ImagePipeline {
         }
     }
 
-    // Create GPU resources for an image. Kept as a single helper to avoid duplicating
-    // GPU setup logic while keeping `draw` concise.
+    // Create GPU resources for an image. Kept as a single helper to avoid
+    // duplicating GPU setup logic while keeping `draw` concise.
     fn create_image_resources(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -256,7 +257,8 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
                 &command.data,
             );
 
-            // Use the extracted uniforms computation helper (dereference borrowed tuple elements).
+            // Use the extracted uniforms computation helper (dereference borrowed tuple
+            // elements).
             let uniforms = Self::compute_uniforms(*start_pos, *size, context.config);
 
             let mut buffer = UniformBuffer::new(Vec::new());

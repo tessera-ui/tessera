@@ -1,6 +1,7 @@
 //! Render and compute pipelines backing the basic components.
 //!
-//! Register these pipelines once during renderer initialization before rendering components.
+//! Register these pipelines once during renderer initialization before
+//! rendering components.
 
 pub(crate) mod blur;
 pub(crate) mod checkmark;

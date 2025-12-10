@@ -14,7 +14,8 @@ use crate::{CalStyle, app::AppState, cal::evaluate};
 
 #[tessera]
 pub fn display_screen(app_state: Arc<AppState>, style: CalStyle) {
-    // Outer transparent container with padding; delegate inner rendering to small helpers
+    // Outer transparent container with padding; delegate inner rendering to small
+    // helpers
     surface(
         SurfaceArgsBuilder::default()
             .style(Color::TRANSPARENT.into())
@@ -28,7 +29,8 @@ pub fn display_screen(app_state: Arc<AppState>, style: CalStyle) {
     );
 }
 
-/// Render display when using glass style. Extracted to keep `display_screen` short.
+/// Render display when using glass style. Extracted to keep `display_screen`
+/// short.
 fn render_glass_display(app_state: Arc<AppState>) {
     fluid_glass(
         FluidGlassArgsBuilder::default()
@@ -43,7 +45,8 @@ fn render_glass_display(app_state: Arc<AppState>) {
     );
 }
 
-/// Render display when using material style. Extracted to keep `display_screen` short.
+/// Render display when using material style. Extracted to keep `display_screen`
+/// short.
 fn render_material_display(app_state: Arc<AppState>) {
     surface(
         SurfaceArgsBuilder::default()

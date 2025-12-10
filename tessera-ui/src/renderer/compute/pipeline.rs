@@ -1,41 +1,52 @@
 //! GPU compute pipeline system for Tessera UI framework.
 //!
-//! This module provides the infrastructure for GPU compute operations in Tessera,
-//! enabling advanced visual effects and post-processing operations that would be
-//! inefficient or impossible to achieve with traditional CPU-based approaches.
+//! This module provides the infrastructure for GPU compute operations in
+//! Tessera, enabling advanced visual effects and post-processing operations
+//! that would be inefficient or impossible to achieve with traditional
+//! CPU-based approaches.
 //!
 //! # Architecture Overview
 //!
-//! The compute pipeline system is designed to work seamlessly with the rendering
-//! pipeline, using a ping-pong buffer approach for efficient multi-pass operations.
-//! Each compute pipeline processes a specific type of compute command and operates
-//! on texture data using GPU compute shaders.
+//! The compute pipeline system is designed to work seamlessly with the
+//! rendering pipeline, using a ping-pong buffer approach for efficient
+//! multi-pass operations. Each compute pipeline processes a specific type of
+//! compute command and operates on texture data using GPU compute shaders.
 //!
 //! ## Key Components
 //!
-//! - [`ComputablePipeline<C>`]: The main trait for implementing custom compute pipelines
-//! - [`ComputePipelineRegistry`]: Manages and dispatches commands to registered compute pipelines
-//! - [`ComputeResourceManager`]: Manages GPU buffers and resources for compute operations
+//! - [`ComputablePipeline<C>`]: The main trait for implementing custom compute
+//!   pipelines
+//! - [`ComputePipelineRegistry`]: Manages and dispatches commands to registered
+//!   compute pipelines
+//! - [`ComputeResourceManager`]: Manages GPU buffers and resources for compute
+//!   operations
 //!
 //! # Design Philosophy
 //!
-//! The compute pipeline system embraces WGPU's compute shader capabilities to enable:
+//! The compute pipeline system embraces WGPU's compute shader capabilities to
+//! enable:
 //!
-//! - **Advanced Post-Processing**: Blur, contrast adjustment, color grading, and other image effects
-//! - **Parallel Processing**: Leverage GPU parallelism for computationally intensive operations
-//! - **Real-Time Effects**: Achieve complex visual effects at interactive frame rates
+//! - **Advanced Post-Processing**: Blur, contrast adjustment, color grading,
+//!   and other image effects
+//! - **Parallel Processing**: Leverage GPU parallelism for computationally
+//!   intensive operations
+//! - **Real-Time Effects**: Achieve complex visual effects at interactive frame
+//!   rates
 //! - **Memory Efficiency**: Use GPU memory directly without CPU roundtrips
 //!
 //! # Ping-Pong Rendering
 //!
 //! The system uses a ping-pong approach where:
 //!
-//! 1. **Input Texture**: Contains the result from previous rendering or compute pass
-//! 2. **Output Texture**: Receives the processed result from the current compute operation
-//! 3. **Format Convention**: All textures use `wgpu::TextureFormat::Rgba8Unorm` for compatibility
+//! 1. **Input Texture**: Contains the result from previous rendering or compute
+//!    pass
+//! 2. **Output Texture**: Receives the processed result from the current
+//!    compute operation
+//! 3. **Format Convention**: All textures use `wgpu::TextureFormat::Rgba8Unorm`
+//!    for compatibility
 //!
-//! This approach enables efficient chaining of multiple compute operations without
-//! intermediate CPU involvement.
+//! This approach enables efficient chaining of multiple compute operations
+//! without intermediate CPU involvement.
 //!
 //! # Implementation Guide
 //!
@@ -50,17 +61,22 @@
 //!
 //! # Performance Considerations
 //!
-//! - **Workgroup Size**: Choose workgroup sizes that align with GPU architecture (typically 8x8 or 16x16)
-//! - **Memory Access**: Optimize memory access patterns in shaders for better cache utilization
-//! - **Resource Reuse**: Use the [`ComputeResourceManager`] to reuse buffers across frames
+//! - **Workgroup Size**: Choose workgroup sizes that align with GPU
+//!   architecture (typically 8x8 or 16x16)
+//! - **Memory Access**: Optimize memory access patterns in shaders for better
+//!   cache utilization
+//! - **Resource Reuse**: Use the [`ComputeResourceManager`] to reuse buffers
+//!   across frames
 //! - **Batch Operations**: Combine multiple similar operations when possible
 //!
 //! # Texture Format Requirements
 //!
 //! Due to WGPU limitations, compute shaders require specific texture formats:
 //!
-//! - **Input Textures**: Can be any readable format, typically from render passes
-//! - **Output Textures**: Must use `wgpu::TextureFormat::Rgba8Unorm` for storage binding
+//! - **Input Textures**: Can be any readable format, typically from render
+//!   passes
+//! - **Output Textures**: Must use `wgpu::TextureFormat::Rgba8Unorm` for
+//!   storage binding
 //! - **sRGB Limitation**: sRGB formats cannot be used as storage textures
 //!
 //! The framework automatically handles format conversions when necessary.
@@ -99,8 +115,9 @@ pub struct ComputeBatchItem<'a, C: ComputeCommand> {
 
 /// Provides comprehensive context for compute operations within a compute pass.
 ///
-/// This struct bundles essential WGPU resources, configuration, and command-specific data
-/// required for a compute pipeline to process its commands.
+/// This struct bundles essential WGPU resources, configuration, and
+/// command-specific data required for a compute pipeline to process its
+/// commands.
 ///
 /// # Type Parameters
 ///
@@ -109,11 +126,16 @@ pub struct ComputeBatchItem<'a, C: ComputeCommand> {
 /// # Fields
 ///
 /// * `device` - The WGPU device, used for creating and managing GPU resources.
-/// * `queue` - The WGPU queue, used for submitting command buffers and writing buffer data.
-/// * `config` - The current surface configuration, providing information like format and dimensions.
-/// * `compute_pass` - The active `wgpu::ComputePass` encoder, used to record compute commands.
-/// * `items` - A slice of [`ComputeBatchItem`]s, each containing a compute command and its metadata.
-/// * `resource_manager` - A mutable reference to the [`ComputeResourceManager`], used for managing reusable GPU buffers.
+/// * `queue` - The WGPU queue, used for submitting command buffers and writing
+///   buffer data.
+/// * `config` - The current surface configuration, providing information like
+///   format and dimensions.
+/// * `compute_pass` - The active `wgpu::ComputePass` encoder, used to record
+///   compute commands.
+/// * `items` - A slice of [`ComputeBatchItem`]s, each containing a compute
+///   command and its metadata.
+/// * `resource_manager` - A mutable reference to the
+///   [`ComputeResourceManager`], used for managing reusable GPU buffers.
 /// * `input_view` - A view of the input texture for the compute operation.
 /// * `output_view` - A view of the output texture for the compute operation.
 pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
@@ -148,9 +170,10 @@ pub(crate) struct ErasedDispatchContext<'a, 'b> {
 
 /// Core trait for implementing GPU compute pipelines.
 ///
-/// This trait defines the interface for compute pipelines that process specific types
-/// of compute commands using GPU compute shaders. Each pipeline is responsible for
-/// setting up compute resources, managing shader dispatch, and processing texture data.
+/// This trait defines the interface for compute pipelines that process specific
+/// types of compute commands using GPU compute shaders. Each pipeline is
+/// responsible for setting up compute resources, managing shader dispatch, and
+/// processing texture data.
 ///
 /// # Type Parameters
 ///
@@ -158,10 +181,14 @@ pub(crate) struct ErasedDispatchContext<'a, 'b> {
 ///
 /// # Design Principles
 ///
-/// - **Single Responsibility**: Each pipeline handles one specific type of compute operation
-/// - **Stateless Operation**: Pipelines should not maintain state between dispatch calls
-/// - **Resource Efficiency**: Reuse GPU resources when possible through the resource manager
-/// - **Thread Safety**: All implementations must be `Send + Sync` for parallel execution
+/// - **Single Responsibility**: Each pipeline handles one specific type of
+///   compute operation
+/// - **Stateless Operation**: Pipelines should not maintain state between
+///   dispatch calls
+/// - **Resource Efficiency**: Reuse GPU resources when possible through the
+///   resource manager
+/// - **Thread Safety**: All implementations must be `Send + Sync` for parallel
+///   execution
 ///
 /// # Integration with Rendering
 ///
@@ -169,14 +196,16 @@ pub(crate) struct ErasedDispatchContext<'a, 'b> {
 ///
 /// 1. **After Rendering**: Process the rendered scene for post-effects
 /// 2. **Between Passes**: Transform data between different rendering stages
-/// 3. **Before Rendering**: Prepare data or textures for subsequent render operations
+/// 3. **Before Rendering**: Prepare data or textures for subsequent render
+///    operations
 pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     /// Dispatches the compute command within an active compute pass.
     ///
-    /// This method receives one or more compute commands of the same type. Implementations
-    /// may choose to process the batch collectively (e.g., by packing data into a single
-    /// dispatch) or sequentially iterate over the items. It should set up the necessary GPU
-    /// resources, bind them to the compute pipeline, and dispatch the appropriate number of
+    /// This method receives one or more compute commands of the same type.
+    /// Implementations may choose to process the batch collectively (e.g.,
+    /// by packing data into a single dispatch) or sequentially iterate over
+    /// the items. It should set up the necessary GPU resources, bind them
+    /// to the compute pipeline, and dispatch the appropriate number of
     /// workgroups to process the input texture.
     ///
     /// # Parameters
@@ -185,9 +214,11 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     ///
     /// # Texture Format Requirements
     ///
-    /// Due to WGPU limitations, storage textures have specific format requirements:
+    /// Due to WGPU limitations, storage textures have specific format
+    /// requirements:
     ///
-    /// - **Input Texture**: Can be any readable format, typically from render passes
+    /// - **Input Texture**: Can be any readable format, typically from render
+    ///   passes
     /// - **Output Texture**: Must use `wgpu::TextureFormat::Rgba8Unorm` format
     /// - **sRGB Limitation**: sRGB formats cannot be used as storage textures
     ///
@@ -199,8 +230,10 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
     /// When dispatching workgroups, consider:
     ///
     /// - **Workgroup Size**: Match your shader's `@workgroup_size` declaration
-    /// - **Coverage**: Ensure all pixels are processed by calculating appropriate dispatch dimensions
-    /// - **Alignment**: Round up dispatch dimensions to cover the entire texture
+    /// - **Coverage**: Ensure all pixels are processed by calculating
+    ///   appropriate dispatch dimensions
+    /// - **Alignment**: Round up dispatch dimensions to cover the entire
+    ///   texture
     ///
     /// # Resource Management
     ///
@@ -220,12 +253,13 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
 
 /// Internal trait for type erasure of computable pipelines.
 ///
-/// This trait enables dynamic dispatch of compute commands to their corresponding pipelines
-/// without knowing the specific command type at compile time. It's used internally by
-/// the [`ComputePipelineRegistry`] and should not be implemented directly by users.
+/// This trait enables dynamic dispatch of compute commands to their
+/// corresponding pipelines without knowing the specific command type at compile
+/// time. It's used internally by the [`ComputePipelineRegistry`] and should not
+/// be implemented directly by users.
 ///
-/// The type erasure is achieved through the [`AsAny`] trait, which allows downcasting
-/// from `&dyn ComputeCommand` to concrete command types.
+/// The type erasure is achieved through the [`AsAny`] trait, which allows
+/// downcasting from `&dyn ComputeCommand` to concrete command types.
 ///
 /// # Implementation Note
 ///
@@ -240,7 +274,8 @@ pub(crate) trait ErasedComputablePipeline: Send + Sync {
     );
 }
 
-/// A wrapper to implement `ErasedComputablePipeline` for any `ComputablePipeline`.
+/// A wrapper to implement `ErasedComputablePipeline` for any
+/// `ComputablePipeline`.
 struct ComputablePipelineImpl<C: ComputeCommand, P: ComputablePipeline<C>> {
     pipeline: P,
     _command: std::marker::PhantomData<C>,
@@ -286,21 +321,24 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
 
 /// Registry for managing and dispatching compute pipelines.
 ///
-/// The `ComputePipelineRegistry` serves as the central hub for all compute pipelines
-/// in the Tessera framework. It maintains a collection of registered pipelines and
-/// handles the dispatch of compute commands to their appropriate pipelines.
+/// The `ComputePipelineRegistry` serves as the central hub for all compute
+/// pipelines in the Tessera framework. It maintains a collection of registered
+/// pipelines and handles the dispatch of compute commands to their appropriate
+/// pipelines.
 ///
 /// # Architecture
 ///
-/// The registry uses type erasure to store pipelines of different types in a single
-/// collection. When a compute command needs to be processed, the registry attempts
-/// to dispatch it to all registered pipelines until one handles it successfully.
+/// The registry uses type erasure to store pipelines of different types in a
+/// single collection. When a compute command needs to be processed, the
+/// registry attempts to dispatch it to all registered pipelines until one
+/// handles it successfully.
 ///
 /// # Usage Pattern
 ///
 /// 1. Create a new registry
 /// 2. Register all required compute pipelines during application initialization
-/// 3. The renderer uses the registry to dispatch commands during frame rendering
+/// 3. The renderer uses the registry to dispatch commands during frame
+///    rendering
 ///
 /// # Performance Considerations
 ///
@@ -331,8 +369,9 @@ impl ComputePipelineRegistry {
 
     /// Registers a new compute pipeline for a specific command type.
     ///
-    /// This method takes ownership of the pipeline and wraps it in a type-erased
-    /// container that can be stored alongside other pipelines of different types.
+    /// This method takes ownership of the pipeline and wraps it in a
+    /// type-erased container that can be stored alongside other pipelines
+    /// of different types.
     ///
     /// # Type Parameters
     ///
@@ -344,8 +383,8 @@ impl ComputePipelineRegistry {
     ///
     /// # Thread Safety
     ///
-    /// The pipeline must implement `Send + Sync` to be compatible with Tessera's
-    /// parallel rendering architecture.
+    /// The pipeline must implement `Send + Sync` to be compatible with
+    /// Tessera's parallel rendering architecture.
     pub fn register<C: ComputeCommand + 'static>(
         &mut self,
         pipeline: impl ComputablePipeline<C> + 'static,
@@ -357,7 +396,8 @@ impl ComputePipelineRegistry {
         self.pipelines.insert(TypeId::of::<C>(), erased_pipeline);
     }
 
-    /// Dispatches one or more commands to their corresponding registered pipeline.
+    /// Dispatches one or more commands to their corresponding registered
+    /// pipeline.
     pub(crate) fn dispatch_erased(
         &mut self,
         context: ErasedDispatchContext<'_, '_>,

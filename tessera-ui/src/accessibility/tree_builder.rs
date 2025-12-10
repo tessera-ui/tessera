@@ -1,6 +1,7 @@
 //! Accessibility tree building
 //!
-//! This module contains the logic to build AccessKit TreeUpdates from Tessera's component tree.
+//! This module contains the logic to build AccessKit TreeUpdates from Tessera's
+//! component tree.
 
 use accesskit::{Node, NodeId as AccessKitNodeId, Rect, Tree, TreeUpdate};
 use indextree::NodeId as ComponentNodeId;
@@ -28,7 +29,8 @@ use crate::{
 ///
 /// # Returns
 ///
-/// A `TreeUpdate` ready to be sent to AccessKit, or `None` if there are no accessibility nodes.
+/// A `TreeUpdate` ready to be sent to AccessKit, or `None` if there are no
+/// accessibility nodes.
 pub fn build_tree_update(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
@@ -69,8 +71,8 @@ pub fn build_tree_update(
 
 /// Recursively traverses the component tree and collects accessibility nodes.
 ///
-/// Returns `true` if this subtree produced at least one accessibility node (real or synthesized),
-/// `false` otherwise.
+/// Returns `true` if this subtree produced at least one accessibility node
+/// (real or synthesized), `false` otherwise.
 fn traverse_and_collect(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,

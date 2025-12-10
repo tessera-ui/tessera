@@ -21,7 +21,8 @@ use crate::{
     theme::MaterialColorScheme,
 };
 
-/// State structure for the text editor, managing text content, cursor, selection, and editing logic.
+/// State structure for the text editor, managing text content, cursor,
+/// selection, and editing logic.
 pub use crate::text_edit_core::{TextEditorController, TextEditorControllerInner};
 
 /// Arguments for configuring the [`text_editor`] component.
@@ -34,13 +35,16 @@ pub struct TextEditorArgs {
     /// Height constraint for the text editor. Defaults to `Wrap`.
     #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub height: DimensionValue,
-    /// Called when the text content changes. The closure receives the new text content and returns the updated content.
+    /// Called when the text content changes. The closure receives the new text
+    /// content and returns the updated content.
     #[builder(default = "Arc::new(|_| { String::new() })")]
     pub on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
-    /// Minimum width in density-independent pixels. Defaults to 120dp if not specified.
+    /// Minimum width in density-independent pixels. Defaults to 120dp if not
+    /// specified.
     #[builder(default = "None")]
     pub min_width: Option<Dp>,
-    /// Minimum height in density-independent pixels. Defaults to line height + padding if not specified.
+    /// Minimum height in density-independent pixels. Defaults to line height +
+    /// padding if not specified.
     #[builder(default = "None")]
     pub min_height: Option<Dp>,
     /// Background color of the text editor (RGBA). Defaults to light gray.
@@ -69,7 +73,8 @@ pub struct TextEditorArgs {
     /// Background color when focused (RGBA). Defaults to white.
     #[builder(default = "Some(use_context::<MaterialColorScheme>().surface)")]
     pub focus_background_color: Option<Color>,
-    /// Color for text selection highlight (RGBA). Defaults to light blue with transparency.
+    /// Color for text selection highlight (RGBA). Defaults to light blue with
+    /// transparency.
     #[builder(default = "Some(use_context::<MaterialColorScheme>().primary.with_alpha(0.35))")]
     pub selection_color: Option<Color>,
     /// Optional label announced by assistive technologies.
@@ -103,11 +108,13 @@ impl Default for TextEditorArgs {
 ///
 /// # Usage
 ///
-/// Create an interactive text editor for forms, note-taking, or other text input scenarios.
+/// Create an interactive text editor for forms, note-taking, or other text
+/// input scenarios.
 ///
 /// # Parameters
 ///
-/// - `args` — configures the editor's appearance and layout; see [`TextEditorArgs`].
+/// - `args` — configures the editor's appearance and layout; see
+///   [`TextEditorArgs`].
 ///
 /// # Examples
 ///
@@ -152,14 +159,16 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
 ///
 /// # Usage
 ///
-/// Use this component when you need to control the text editor state externally,
-/// for example to synchronize text with other components or to programmatically
-/// modify the text content or selection.
+/// Use this component when you need to control the text editor state
+/// externally, for example to synchronize text with other components or to
+/// programmatically modify the text content or selection.
 ///
 /// # Parameters
 ///
-/// - `args` — configures the editor's appearance and layout; see [`TextEditorArgs`].
-/// - `controller` — a `TextEditorController` to manage the editor's content, cursor, and selection.
+/// - `args` — configures the editor's appearance and layout; see
+///   [`TextEditorArgs`].
+/// - `controller` — a `TextEditorController` to manage the editor's content,
+///   cursor, and selection.
 ///
 /// # Examples
 ///
@@ -267,7 +276,8 @@ pub fn text_editor_with_controller(
                     let text_relative_x_px = cursor_pos.x - padding_px - border_width_px;
                     let text_relative_y_px = cursor_pos.y - padding_px - border_width_px;
 
-                    // Only process if the click is within the text area (non-negative relative coords)
+                    // Only process if the click is within the text area (non-negative relative
+                    // coords)
                     if text_relative_x_px >= Px(0) && text_relative_y_px >= Px(0) {
                         let text_relative_pos =
                             PxPosition::new(text_relative_x_px, text_relative_y_px);
@@ -408,7 +418,8 @@ pub fn text_editor_with_controller(
                 editor.set_selection(glyphon::cosmic_text::Selection::Normal(
                     glyphon::Cursor::new(0, 0),
                 ));
-                // Move cursor to the end, which extends the selection (use BufferEnd for full document)
+                // Move cursor to the end, which extends the selection (use BufferEnd for full
+                // document)
                 editor.action(
                     &mut write_font_system(),
                     GlyphonAction::Motion(glyphon::cosmic_text::Motion::BufferEnd),

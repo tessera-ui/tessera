@@ -14,8 +14,9 @@ const MAX_SAMPLES: usize = 16;
 const WEIGHT_CACHE_CAPACITY: usize = 64;
 const WEIGHT_QUANTIZATION: f32 = 100.0;
 
-/// Compute optimized Gaussian blur weights and offsets using hardware bilinear interpolation.
-/// This reduces the number of texture samples by leveraging the GPU's built-in linear filtering.
+/// Compute optimized Gaussian blur weights and offsets using hardware bilinear
+/// interpolation. This reduces the number of texture samples by leveraging the
+/// GPU's built-in linear filtering.
 ///
 /// Returns (weights, offsets, sample_count) where:
 /// - weights[0] is the center weight
@@ -87,7 +88,8 @@ fn compute_optimized_blur_params(radius: f32) -> WeightCacheEntry {
     }
 
     // Normalize weights so that center + 2 * sum(side_weights) = 1.0
-    // (factor of 2 because shader samples both +offset and -offset for each side weight)
+    // (factor of 2 because shader samples both +offset and -offset for each side
+    // weight)
     let total_weight: f32 = weights[0] + 2.0 * weights[1..].iter().sum::<f32>();
     for w in &mut weights {
         *w /= total_weight;

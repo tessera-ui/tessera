@@ -1,29 +1,35 @@
 //! Graphics rendering pipeline system for Tessera UI framework.
 //!
-//! This module provides the core infrastructure for pluggable graphics rendering pipelines
-//! in Tessera. The design philosophy emphasizes flexibility and extensibility, allowing
-//! developers to create custom rendering effects without being constrained by built-in
-//! drawing primitives.
+//! This module provides the core infrastructure for pluggable graphics
+//! rendering pipelines in Tessera. The design philosophy emphasizes flexibility
+//! and extensibility, allowing developers to create custom rendering effects
+//! without being constrained by built-in drawing primitives.
 //!
 //! # Architecture Overview
 //!
-//! The pipeline system uses a trait-based approach with type erasure to support dynamic
-//! dispatch of rendering commands. Each pipeline is responsible for rendering a specific
-//! type of draw command, such as shapes, text, images, or custom visual effects.
+//! The pipeline system uses a trait-based approach with type erasure to support
+//! dynamic dispatch of rendering commands. Each pipeline is responsible for
+//! rendering a specific type of draw command, such as shapes, text, images, or
+//! custom visual effects.
 //!
 //! ## Key Components
 //!
-//! - [`DrawablePipeline<T>`]: The main trait for implementing custom rendering pipelines
-//! - [`PipelineRegistry`]: Manages and dispatches commands to registered pipelines
+//! - [`DrawablePipeline<T>`]: The main trait for implementing custom rendering
+//!   pipelines
+//! - [`PipelineRegistry`]: Manages and dispatches commands to registered
+//!   pipelines
 //!
 //! # Design Philosophy
 //!
-//! Unlike traditional UI frameworks that provide built-in "brush" or drawing primitives,
-//! Tessera treats shaders as first-class citizens. This approach offers several advantages:
+//! Unlike traditional UI frameworks that provide built-in "brush" or drawing
+//! primitives, Tessera treats shaders as first-class citizens. This approach
+//! offers several advantages:
 //!
-//! - **Modern GPU Utilization**: Leverages WGPU and WGSL for efficient, cross-platform rendering
-//! - **Advanced Visual Effects**: Enables complex effects like neumorphic design, lighting,
-//!   shadows, reflections, and bloom that are difficult to achieve with traditional approaches
+//! - **Modern GPU Utilization**: Leverages WGPU and WGSL for efficient,
+//!   cross-platform rendering
+//! - **Advanced Visual Effects**: Enables complex effects like neumorphic
+//!   design, lighting, shadows, reflections, and bloom that are difficult to
+//!   achieve with traditional approaches
 //! - **Flexibility**: Custom shaders allow for unlimited creative possibilities
 //! - **Performance**: Direct GPU programming eliminates abstraction overhead
 //!
@@ -47,38 +53,48 @@
 //!
 //! # Integration with Basic Components
 //!
-//! The `tessera_basic_components` crate demonstrates real-world pipeline implementations:
+//! The `tessera_basic_components` crate demonstrates real-world pipeline
+//! implementations:
 //!
-//! - **ShapePipeline**: Renders rounded rectangles, circles, and complex shapes with shadows and ripple effects
-//! - **TextPipeline**: Handles text rendering with font management and glyph caching
-//! - **ImagePipeline**: Displays images with various scaling and filtering options
-//! - **FluidGlassPipeline**: Creates advanced glass effects with distortion and transparency
+//! - **ShapePipeline**: Renders rounded rectangles, circles, and complex shapes
+//!   with shadows and ripple effects
+//! - **TextPipeline**: Handles text rendering with font management and glyph
+//!   caching
+//! - **ImagePipeline**: Displays images with various scaling and filtering
+//!   options
+//! - **FluidGlassPipeline**: Creates advanced glass effects with distortion and
+//!   transparency
 //!
-//! These pipelines are registered in `tessera_ui_basic_components::pipelines::register_pipelines()`.
+//! These pipelines are registered in
+//! `tessera_ui_basic_components::pipelines::register_pipelines()`.
 //!
 //! # Performance Considerations
 //!
-//! - **Batch Similar Commands**: Group similar draw commands to minimize pipeline switches
+//! - **Batch Similar Commands**: Group similar draw commands to minimize
+//!   pipeline switches
 //! - **Resource Management**: Reuse buffers and textures when possible
-//! - **Shader Optimization**: Write efficient shaders optimized for your target platforms
+//! - **Shader Optimization**: Write efficient shaders optimized for your target
+//!   platforms
 //! - **State Changes**: Minimize render state changes within the draw method
 //!
 //! # Advanced Features
 //!
 //! ## Barrier Requirements
 //!
-//! Some rendering effects need to sample from previously rendered content (e.g., blur effects).
-//! Implement [`DrawCommand::barrier()`] to return `SampleBackground` requirements for such commands.
+//! Some rendering effects need to sample from previously rendered content
+//! (e.g., blur effects). Implement [`DrawCommand::barrier()`] to return
+//! `SampleBackground` requirements for such commands.
 //!
 //! ## Multi-Pass Rendering
 //!
-//! Use `begin_pass()` and `end_pass()` for pipelines that require multiple rendering passes
-//! or complex setup/teardown operations.
+//! Use `begin_pass()` and `end_pass()` for pipelines that require multiple
+//! rendering passes or complex setup/teardown operations.
 //!
 //! ## Scene Texture Access
 //!
-//! The `scene_texture_view` parameter provides access to the current scene texture,
-//! enabling effects that sample from the background or perform post-processing.
+//! The `scene_texture_view` parameter provides access to the current scene
+//! texture, enabling effects that sample from the background or perform
+//! post-processing.
 
 use std::{any::TypeId, collections::HashMap};
 
@@ -89,8 +105,9 @@ use crate::{
 
 /// Provides context for operations that occur once per frame.
 ///
-/// This struct bundles essential WGPU resources and configuration that are relevant
-/// for the entire rendering frame, but are not specific to a single render pass.
+/// This struct bundles essential WGPU resources and configuration that are
+/// relevant for the entire rendering frame, but are not specific to a single
+/// render pass.
 pub struct FrameContext<'a> {
     /// The WGPU device.
     pub device: &'a wgpu::Device,
@@ -102,8 +119,9 @@ pub struct FrameContext<'a> {
 
 /// Provides context for operations within a single render pass.
 ///
-/// This struct bundles WGPU resources and configuration specific to a render pass,
-/// including the active render pass encoder and the scene texture view for sampling.
+/// This struct bundles WGPU resources and configuration specific to a render
+/// pass, including the active render pass encoder and the scene texture view
+/// for sampling.
 pub struct PassContext<'a, 'b> {
     /// The WGPU device.
     pub device: &'a wgpu::Device,
@@ -119,8 +137,9 @@ pub struct PassContext<'a, 'b> {
 
 /// Provides comprehensive context for drawing operations within a render pass.
 ///
-/// This struct extends `PassContext` with information specific to individual draw calls,
-/// including the commands to be rendered and an optional clipping rectangle.
+/// This struct extends `PassContext` with information specific to individual
+/// draw calls, including the commands to be rendered and an optional clipping
+/// rectangle.
 ///
 /// # Type Parameters
 ///
@@ -129,12 +148,18 @@ pub struct PassContext<'a, 'b> {
 /// # Fields
 ///
 /// * `device` - The WGPU device, used for creating and managing GPU resources.
-/// * `queue` - The WGPU queue, used for submitting command buffers and writing buffer data.
-/// * `config` - The current surface configuration, providing information like format and dimensions.
-/// * `render_pass` - The active `wgpu::RenderPass` encoder, used to record rendering commands.
-/// * `commands` - A slice of tuples, each containing a draw command, its size, and its position.
-/// * `scene_texture_view` - A view of the current scene texture, useful for effects that sample from the background.
-/// * `clip_rect` - An optional rectangle defining the clipping area for the draw call.
+/// * `queue` - The WGPU queue, used for submitting command buffers and writing
+///   buffer data.
+/// * `config` - The current surface configuration, providing information like
+///   format and dimensions.
+/// * `render_pass` - The active `wgpu::RenderPass` encoder, used to record
+///   rendering commands.
+/// * `commands` - A slice of tuples, each containing a draw command, its size,
+///   and its position.
+/// * `scene_texture_view` - A view of the current scene texture, useful for
+///   effects that sample from the background.
+/// * `clip_rect` - An optional rectangle defining the clipping area for the
+///   draw call.
 pub struct DrawContext<'a, 'b, 'c, T> {
     /// The WGPU device.
     pub device: &'a wgpu::Device,
@@ -170,9 +195,10 @@ pub struct ErasedDrawContext<'a, 'b> {
 
 /// Core trait for implementing custom graphics rendering pipelines.
 ///
-/// This trait defines the interface for rendering pipelines that process specific types
-/// of draw commands. Each pipeline is responsible for setting up GPU resources,
-/// managing render state, and executing the actual drawing operations.
+/// This trait defines the interface for rendering pipelines that process
+/// specific types of draw commands. Each pipeline is responsible for setting up
+/// GPU resources, managing render state, and executing the actual drawing
+/// operations.
 ///
 /// # Type Parameters
 ///
@@ -180,20 +206,28 @@ pub struct ErasedDrawContext<'a, 'b> {
 ///
 /// # Lifecycle Methods
 ///
-/// The pipeline system provides five lifecycle hooks, executed in the following order:
+/// The pipeline system provides five lifecycle hooks, executed in the following
+/// order:
 ///
-/// 1. [`begin_frame()`](Self::begin_frame): Called once at the start of a new frame, before any render passes.
-/// 2. [`begin_pass()`](Self::begin_pass): Called at the start of each render pass that involves this pipeline.
-/// 3. [`draw()`](Self::draw): Called for each command of type `T` within a render pass.
-/// 4. [`end_pass()`](Self::end_pass): Called at the end of each render pass that involved this pipeline.
-/// 5. [`end_frame()`](Self::end_frame): Called once at the end of the frame, after all render passes are complete.
+/// 1. [`begin_frame()`](Self::begin_frame): Called once at the start of a new
+///    frame, before any render passes.
+/// 2. [`begin_pass()`](Self::begin_pass): Called at the start of each render
+///    pass that involves this pipeline.
+/// 3. [`draw()`](Self::draw): Called for each command of type `T` within a
+///    render pass.
+/// 4. [`end_pass()`](Self::end_pass): Called at the end of each render pass
+///    that involved this pipeline.
+/// 5. [`end_frame()`](Self::end_frame): Called once at the end of the frame,
+///    after all render passes are complete.
 ///
-/// Typically, `begin_pass`, `draw`, and `end_pass` are used for the core rendering logic within a pass,
-/// while `begin_frame` and `end_frame` are used for setup and teardown that spans the entire frame.
+/// Typically, `begin_pass`, `draw`, and `end_pass` are used for the core
+/// rendering logic within a pass, while `begin_frame` and `end_frame` are used
+/// for setup and teardown that spans the entire frame.
 ///
 /// # Implementation Notes
 ///
-/// - Only the [`draw()`](Self::draw) method is required; others have default empty implementations.
+/// - Only the [`draw()`](Self::draw) method is required; others have default
+///   empty implementations.
 /// - Pipelines should be stateless between frames when possible
 /// - Resource management should prefer reuse over recreation
 /// - Consider batching multiple commands for better performance
@@ -205,15 +239,16 @@ pub struct ErasedDrawContext<'a, 'b> {
 pub trait DrawablePipeline<T: DrawCommand> {
     /// Called once at the beginning of the frame, before any render passes.
     ///
-    /// This method is the first hook in the pipeline's frame lifecycle. It's invoked
-    /// after a new `CommandEncoder` has been created but before any rendering occurs.
-    /// It's ideal for per-frame setup that is not tied to a specific `wgpu::RenderPass`.
+    /// This method is the first hook in the pipeline's frame lifecycle. It's
+    /// invoked after a new `CommandEncoder` has been created but before any
+    /// rendering occurs. It's ideal for per-frame setup that is not tied to
+    /// a specific `wgpu::RenderPass`.
     ///
-    /// Since this method is called outside a render pass, it cannot be used for drawing
-    /// commands. However, it can be used for operations like:
+    /// Since this method is called outside a render pass, it cannot be used for
+    /// drawing commands. However, it can be used for operations like:
     ///
-    /// - Updating frame-global uniform buffers (e.g., with time or resolution data)
-    ///   using [`wgpu::Queue::write_buffer`].
+    /// - Updating frame-global uniform buffers (e.g., with time or resolution
+    ///   data) using [`wgpu::Queue::write_buffer`].
     /// - Preparing or resizing buffers that will be used throughout the frame.
     /// - Performing CPU-side calculations needed for the frame.
     ///
@@ -241,7 +276,8 @@ pub trait DrawablePipeline<T: DrawCommand> {
     ///
     /// # Default Implementation
     ///
-    /// The default implementation does nothing, which is suitable for most pipelines.
+    /// The default implementation does nothing, which is suitable for most
+    /// pipelines.
     fn begin_pass(&mut self, context: &mut PassContext<'_, '_>) {}
 
     /// Renders a batch of draw commands.
@@ -251,28 +287,34 @@ pub trait DrawablePipeline<T: DrawCommand> {
     ///
     /// # Parameters
     ///
-    /// * `context` - The context for drawing, including the render pass and commands.
+    /// * `context` - The context for drawing, including the render pass and
+    ///   commands.
     ///
     /// # Implementation Guidelines
     ///
     /// - Iterate over the `context.commands` slice to process each command.
-    /// - Update buffers (e.g., instance buffers, storage buffers) with data from the command batch.
+    /// - Update buffers (e.g., instance buffers, storage buffers) with data
+    ///   from the command batch.
     /// - Set the appropriate render pipeline.
     /// - Bind necessary resources (textures, buffers, bind groups).
-    /// - Issue one or more draw calls (e.g., an instanced draw call) to render the entire batch.
-    /// - If `context.clip_rect` is `Some`, use `context.render_pass.set_scissor_rect()` to clip rendering.
-    /// - Avoid expensive operations like buffer creation; prefer reusing and updating existing resources.
+    /// - Issue one or more draw calls (e.g., an instanced draw call) to render
+    ///   the entire batch.
+    /// - If `context.clip_rect` is `Some`, use
+    ///   `context.render_pass.set_scissor_rect()` to clip rendering.
+    /// - Avoid expensive operations like buffer creation; prefer reusing and
+    ///   updating existing resources.
     ///
     /// # Scene Texture Usage
     ///
-    /// The `context.scene_texture_view` provides access to the current rendered scene,
-    /// enabling effects that sample from the background.
+    /// The `context.scene_texture_view` provides access to the current rendered
+    /// scene, enabling effects that sample from the background.
     fn draw(&mut self, context: &mut DrawContext<'_, '_, '_, T>);
 
     /// Called once at the end of the render pass.
     ///
     /// Use this method to perform cleanup operations or finalize rendering
-    /// for all draw commands of this type in the current frame. This is useful for:
+    /// for all draw commands of this type in the current frame. This is useful
+    /// for:
     ///
     /// - Cleaning up temporary resources
     /// - Finalizing multi-pass rendering operations
@@ -284,18 +326,22 @@ pub trait DrawablePipeline<T: DrawCommand> {
     ///
     /// # Default Implementation
     ///
-    /// The default implementation does nothing, which is suitable for most pipelines.
+    /// The default implementation does nothing, which is suitable for most
+    /// pipelines.
     fn end_pass(&mut self, context: &mut PassContext<'_, '_>) {}
 
-    /// Called once at the end of the frame, after all render passes are complete.
+    /// Called once at the end of the frame, after all render passes are
+    /// complete.
     ///
-    /// This method is the final hook in the pipeline's frame lifecycle. It's invoked
-    /// after all `begin_pass`, `draw`, and `end_pass` calls for the frame have
-    /// completed, but before the frame's command buffer is submitted to the GPU.
+    /// This method is the final hook in the pipeline's frame lifecycle. It's
+    /// invoked after all `begin_pass`, `draw`, and `end_pass` calls for the
+    /// frame have completed, but before the frame's command buffer is
+    /// submitted to the GPU.
     ///
     /// It's suitable for frame-level cleanup or finalization tasks, such as:
     ///
-    /// - Reading data back from the GPU (though this can be slow and should be used sparingly).
+    /// - Reading data back from the GPU (though this can be slow and should be
+    ///   used sparingly).
     /// - Cleaning up temporary resources created in `begin_frame`.
     /// - Preparing data for the next frame.
     ///
@@ -311,12 +357,13 @@ pub trait DrawablePipeline<T: DrawCommand> {
 
 /// Internal trait for type erasure of drawable pipelines.
 ///
-/// This trait enables dynamic dispatch of draw commands to their corresponding pipelines
-/// without knowing the specific command type at compile time. It's used internally by
-/// the [`PipelineRegistry`] and should not be implemented directly by users.
+/// This trait enables dynamic dispatch of draw commands to their corresponding
+/// pipelines without knowing the specific command type at compile time. It's
+/// used internally by the [`PipelineRegistry`] and should not be implemented
+/// directly by users.
 ///
-/// The type erasure is achieved through the [`AsAny`] trait, which allows downcasting
-/// from `&dyn DrawCommand` to concrete command types.
+/// The type erasure is achieved through the [`AsAny`] trait, which allows
+/// downcasting from `&dyn DrawCommand` to concrete command types.
 ///
 /// # Implementation Note
 ///
@@ -413,21 +460,23 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
 
 /// Registry for managing and dispatching drawable pipelines.
 ///
-/// The `PipelineRegistry` serves as the central hub for all rendering pipelines in the
-/// Tessera framework. It maintains a collection of registered pipelines and handles
-/// the dispatch of draw commands to their appropriate pipelines.
+/// The `PipelineRegistry` serves as the central hub for all rendering pipelines
+/// in the Tessera framework. It maintains a collection of registered pipelines
+/// and handles the dispatch of draw commands to their appropriate pipelines.
 ///
 /// # Architecture
 ///
-/// The registry uses type erasure to store pipelines of different types in a single
-/// collection. When a draw command needs to be rendered, the registry iterates through
-/// all registered pipelines until it finds one that can handle the command type.
+/// The registry uses type erasure to store pipelines of different types in a
+/// single collection. When a draw command needs to be rendered, the registry
+/// iterates through all registered pipelines until it finds one that can handle
+/// the command type.
 ///
 /// # Usage Pattern
 ///
 /// 1. Create a new registry
 /// 2. Register all required pipelines during application initialization
-/// 3. The renderer uses the registry to dispatch commands during frame rendering
+/// 3. The renderer uses the registry to dispatch commands during frame
+///    rendering
 pub struct PipelineRegistry {
     pub(crate) pipelines: HashMap<TypeId, Box<dyn ErasedDrawablePipeline>>,
 }
@@ -456,8 +505,9 @@ impl PipelineRegistry {
 
     /// Registers a new drawable pipeline for a specific command type.
     ///
-    /// This method takes ownership of the pipeline and wraps it in a type-erased
-    /// container that can be stored alongside other pipelines of different types.
+    /// This method takes ownership of the pipeline and wraps it in a
+    /// type-erased container that can be stored alongside other pipelines
+    /// of different types.
     ///
     /// # Type Parameters
     ///

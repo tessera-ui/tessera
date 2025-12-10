@@ -7,10 +7,12 @@ use tessera_ui::{Color, provide_context, tessera};
 
 const DEFAULT_COLOR: Color = Color::from_rgb(0.4039, 0.3137, 0.6431); // #6750A4
 
-/// Ambient content color used by text and icons when no explicit tint is provided.
+/// Ambient content color used by text and icons when no explicit tint is
+/// provided.
 #[derive(Clone, Copy, Debug)]
 pub struct ContentColor {
-    /// Current content color used by text/icons when no explicit tint is provided.
+    /// Current content color used by text/icons when no explicit tint is
+    /// provided.
     pub current: Color,
 }
 

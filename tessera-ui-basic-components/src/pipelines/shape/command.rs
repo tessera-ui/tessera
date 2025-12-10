@@ -158,7 +158,8 @@ impl Default for ShadowProps {
 pub struct RippleProps {
     /// Center position of the ripple in normalized coordinates [-0.5, 0.5]
     pub center: [f32; 2],
-    /// Current radius of the ripple (0.0 to 1.0, where 1.0 covers the entire shape)
+    /// Current radius of the ripple (0.0 to 1.0, where 1.0 covers the entire
+    /// shape)
     pub radius: f32,
     /// Alpha value for the ripple effect (0.0 to 1.0)
     pub alpha: f32,

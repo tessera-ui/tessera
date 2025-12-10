@@ -9,7 +9,8 @@ fn sub_opt_px(value: Option<Px>, padding: Px) -> Option<Px> {
 /// Removes symmetric padding from a `DimensionValue`.
 ///
 /// Subtracts twice the padding from fixed/min/max values and ensures the result
-/// never goes below zero. Useful to compute inner dimensions for padded components.
+/// never goes below zero. Useful to compute inner dimensions for padded
+/// components.
 ///
 /// # Arguments
 ///

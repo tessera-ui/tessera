@@ -1,22 +1,26 @@
 //! Provides a GPU-accelerated, animated checkmark component for UI elements.
 //!
-//! This module defines the [`checkmark`] function and related types for rendering a customizable,
-//! animated checkmark, typically used to visually indicate a "checked" state in controls such as
-//! checkboxes. The checkmark supports smooth animation, color and stroke customization, and is
-//! rendered using Tessera's GPU pipeline for high performance and visual fidelity.
+//! This module defines the [`checkmark`] function and related types for
+//! rendering a customizable, animated checkmark, typically used to visually
+//! indicate a "checked" state in controls such as checkboxes. The checkmark
+//! supports smooth animation, color and stroke customization, and is
+//! rendered using Tessera's GPU pipeline for high performance and visual
+//! fidelity.
 //!
 //! # Typical Usage
 //!
-//! The checkmark is most commonly used within checkbox components, but can be integrated into any
-//! UI element requiring a checkmark indicator. It is suitable for applications needing responsive,
-//! theme-adaptable, and animated visual feedback for selection or confirmation states.
+//! The checkmark is most commonly used within checkbox components, but can be
+//! integrated into any UI element requiring a checkmark indicator. It is
+//! suitable for applications needing responsive, theme-adaptable, and animated
+//! visual feedback for selection or confirmation states.
 //!
 //! # Features
 //! - Customizable color, stroke width, size, and padding
 //! - Smooth animation progress control
 //! - High-performance GPU rendering
 //!
-//! See [`CheckmarkArgs`] for configuration options and usage examples in the [`checkmark`] function documentation.
+//! See [`CheckmarkArgs`] for configuration options and usage examples in the
+//! [`checkmark`] function documentation.
 use derive_builder::Builder;
 use tessera_ui::{Color, ComputedData, Dp, Px, tessera};
 
@@ -67,24 +71,27 @@ impl Default for CheckmarkArgs {
     }
 }
 
-/// Renders a checkmark, a visual indicator that is displayed when in a `checked` state.
+/// Renders a checkmark, a visual indicator that is displayed when in a
+/// `checked` state.
 ///
-/// This component is a GPU-rendered checkmark that provides a smooth, animated alternative
-/// to traditional emoji or icon-based checkmarks. It supports customization of color,
-/// stroke width, and animation progress.
+/// This component is a GPU-rendered checkmark that provides a smooth, animated
+/// alternative to traditional emoji or icon-based checkmarks. It supports
+/// customization of color, stroke width, and animation progress.
 ///
 /// # Arguments
 ///
-/// The `args` parameter accepts any value that can be converted into `CheckmarkArgs`,
-/// including a `CheckmarkArgs` struct or its builder.
+/// The `args` parameter accepts any value that can be converted into
+/// `CheckmarkArgs`, including a `CheckmarkArgs` struct or its builder.
 ///
-/// *   `color`: The `Color` of the checkmark stroke. Defaults to a green color.
-/// *   `stroke_width`: The width of the checkmark stroke in pixels. Defaults to `5.0`.
-/// *   `progress`: The animation progress for drawing the checkmark, from `0.0` (not drawn)
-///     to `1.0` (fully drawn). Defaults to `1.0`.
-/// *   `padding`: The padding `[horizontal, vertical]` around the checkmark within its bounds.
-///     Defaults to `[2.0, 2.0]`.
-/// *   `size`: The size of the checkmark area as a `Dp` value. Defaults to `Dp(20.0)`.
+/// * `color`: The `Color` of the checkmark stroke. Defaults to a green color.
+/// * `stroke_width`: The width of the checkmark stroke in pixels. Defaults to
+///   `5.0`.
+/// * `progress`: The animation progress for drawing the checkmark, from `0.0`
+///   (not drawn) to `1.0` (fully drawn). Defaults to `1.0`.
+/// * `padding`: The padding `[horizontal, vertical]` around the checkmark
+///   within its bounds. Defaults to `[2.0, 2.0]`.
+/// * `size`: The size of the checkmark area as a `Dp` value. Defaults to
+///   `Dp(20.0)`.
 
 #[tessera]
 pub fn checkmark(args: impl Into<CheckmarkArgs>) {

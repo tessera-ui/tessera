@@ -2,8 +2,8 @@
 //!
 //! ## Usage
 //!
-//! Use style modules (e.g., [`filled`]) and functions like `home_icon()` to get an
-//! [`IconContent`] that can be passed to [`crate::icon::IconArgs`].
+//! Use style modules (e.g., [`filled`]) and functions like `home_icon()` to get
+//! an [`IconContent`] that can be passed to [`crate::icon::IconArgs`].
 use std::{collections::HashMap, sync::Arc};
 
 use parking_lot::RwLock;

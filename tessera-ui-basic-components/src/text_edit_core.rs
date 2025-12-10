@@ -1,19 +1,23 @@
 //! Core module for text editing logic and state management in Tessera UI.
 //!
-//! This module provides the foundational structures and functions for building text editing components,
-//! including text buffer management, selection and cursor handling, rendering logic, and keyboard event mapping.
-//! It is designed to be shared across UI components via the `TextEditorController` wrapper,
+//! This module provides the foundational structures and functions for building
+//! text editing components, including text buffer management, selection and
+//! cursor handling, rendering logic, and keyboard event mapping. It is designed
+//! to be shared across UI components via the `TextEditorController` wrapper,
 //! enabling consistent and thread-safe access to editor state.
 //! and efficient text editing experiences.
 //!
-//! Typical use cases include single-line and multi-line text editors, input fields, and any UI element
-//! requiring advanced text manipulation, selection, and IME support.
+//! Typical use cases include single-line and multi-line text editors, input
+//! fields, and any UI element requiring advanced text manipulation, selection,
+//! and IME support.
 //!
-//! The module integrates with the Tessera component system and rendering pipelines, supporting selection
-//! highlighting, cursor blinking, clipboard operations, and extensible keyboard shortcuts.
+//! The module integrates with the Tessera component system and rendering
+//! pipelines, supporting selection highlighting, cursor blinking, clipboard
+//! operations, and extensible keyboard shortcuts.
 //!
-//! Most applications should interact with [`TextEditorController`] for state management and [`text_edit_core()`]
-//! for rendering and layout within a component tree.
+//! Most applications should interact with [`TextEditorController`] for state
+//! management and [`text_edit_core()`] for rendering and layout within a
+//! component tree.
 
 mod cursor;
 
@@ -43,7 +47,8 @@ use crate::{
 #[derive(Clone, Debug)]
 /// Defines a rectangular region for text selection highlighting.
 ///
-/// Used internally to represent the geometry of a selection highlight in pixel coordinates.
+/// Used internally to represent the geometry of a selection highlight in pixel
+/// coordinates.
 pub struct RectDef {
     /// The x-coordinate (in pixels) of the rectangle's top-left corner.
     pub x: Px,
@@ -70,10 +75,12 @@ pub enum ClickType {
 }
 
 /// Core text editing state, shared between components
-/// Core state for text editing, including content, selection, cursor, and interaction state.
+/// Core state for text editing, including content, selection, cursor, and
+/// interaction state.
 ///
-/// This struct manages the text buffer, selection, cursor position, focus, and user interaction state.
-/// It is designed to be shared between UI components via a `TextEditorController`.
+/// This struct manages the text buffer, selection, cursor position, focus, and
+/// user interaction state. It is designed to be shared between UI components
+/// via a `TextEditorController`.
 pub struct TextEditorControllerInner {
     line_height: Px,
     pub(crate) editor: glyphon::Editor<'static>,
@@ -90,13 +97,15 @@ pub struct TextEditorControllerInner {
     pub(crate) preedit_string: Option<String>,
 }
 
-/// Thin handle wrapping an internal `RwLock<TextEditorController>` and exposing `read()`/`write()`.
+/// Thin handle wrapping an internal `RwLock<TextEditorController>` and exposing
+/// `read()`/`write()`.
 pub struct TextEditorController {
     inner: RwLock<TextEditorControllerInner>,
 }
 
 impl TextEditorController {
-    /// Creates a new text editor state with the given font size and optional line height.
+    /// Creates a new text editor state with the given font size and optional
+    /// line height.
     pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
         Self {
             inner: RwLock::new(TextEditorControllerInner::new(size, line_height)),
@@ -115,17 +124,20 @@ impl TextEditorController {
 }
 
 impl TextEditorControllerInner {
-    /// Creates a new `TextEditorController` with the given font size and optional line height.
+    /// Creates a new `TextEditorController` with the given font size and
+    /// optional line height.
     ///
     /// # Arguments
     ///
     /// * `size` - Font size in Dp.
-    /// * `line_height` - Optional line height in Dp. If `None`, uses 1.2x the font size.
+    /// * `line_height` - Optional line height in Dp. If `None`, uses 1.2x the
+    ///   font size.
     pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
         Self::with_selection_color(size, line_height, Color::new(0.5, 0.7, 1.0, 0.4))
     }
 
-    /// Creates a new `TextEditorController` with a custom selection highlight color.
+    /// Creates a new `TextEditorController` with a custom selection highlight
+    /// color.
     ///
     /// # Arguments
     ///
@@ -161,7 +173,8 @@ impl TextEditorControllerInner {
         self.line_height
     }
 
-    /// Returns the current text buffer as `TextData`, applying the given layout constraints.
+    /// Returns the current text buffer as `TextData`, applying the given layout
+    /// constraints.
     ///
     /// # Arguments
     ///
@@ -234,7 +247,8 @@ impl TextEditorControllerInner {
         self.selection_color = color;
     }
 
-    /// Handles a mouse click event and determines the click type (single, double, triple).
+    /// Handles a mouse click event and determines the click type (single,
+    /// double, triple).
     ///
     /// Used for text selection and word/line selection logic.
     ///
@@ -314,14 +328,16 @@ impl TextEditorControllerInner {
     /// Map keyboard events to text editing actions
     /// Maps a keyboard event to a list of text editing actions for the editor.
     ///
-    /// This function translates keyboard input (including modifiers) into editing actions
-    /// such as character insertion, deletion, navigation, and clipboard operations.
+    /// This function translates keyboard input (including modifiers) into
+    /// editing actions such as character insertion, deletion, navigation,
+    /// and clipboard operations.
     ///
     /// # Arguments
     ///
     /// * `key_event` - The keyboard event to map.
     /// * `key_modifiers` - The current keyboard modifier state.
-    /// * `clipboard` - Mutable reference to the clipboard for clipboard operations.
+    /// * `clipboard` - Mutable reference to the clipboard for clipboard
+    ///   operations.
     ///
     /// # Returns
     ///
@@ -502,13 +518,15 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
 
 /// Core text editing component for rendering text, selection, and cursor.
 ///
-/// This component is responsible for rendering the text buffer, selection highlights, and cursor.
-/// It does not handle user events directly; instead, it is intended to be used inside a container
-/// that manages user interaction and passes state updates via `TextEditorController`.
+/// This component is responsible for rendering the text buffer, selection
+/// highlights, and cursor. It does not handle user events directly; instead, it
+/// is intended to be used inside a container that manages user interaction and
+/// passes state updates via `TextEditorController`.
 ///
 /// # Arguments
 ///
-/// * `state` - Shared state for the text editor, typically wrapped in `Arc<RwLock<...>>`.
+/// * `state` - Shared state for the text editor, typically wrapped in
+///   `Arc<RwLock<...>>`.
 #[tessera]
 pub fn text_edit_core(state: Arc<TextEditorController>) {
     // text rendering with constraints from parent container
@@ -538,7 +556,8 @@ pub fn text_edit_core(state: Arc<TextEditorController>) {
                 max_height: max_height_pixels.map(|px| px.to_f32()),
             });
 
-            // Simplified selection rectangle computation using helper functions to reduce complexity.
+            // Simplified selection rectangle computation using helper functions to reduce
+            // complexity.
             let mut selection_rects = compute_selection_rects(state_clone.read().editor());
 
             // Record length before moving (used to place cursor node after rects)

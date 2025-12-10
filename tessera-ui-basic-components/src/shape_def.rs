@@ -1,7 +1,9 @@
-//! Defines the [`Shape`] enum and its variants, used for describing the geometric form of UI components.
+//! Defines the [`Shape`] enum and its variants, used for describing the
+//! geometric form of UI components.
 //!
-//! This module provides a flexible way to define very basic components' shape, including
-//! [`crate::surface::surface`] and [`crate::fluid_glass::fluid_glass`].
+//! This module provides a flexible way to define very basic components' shape,
+//! including [`crate::surface::surface`] and
+//! [`crate::fluid_glass::fluid_glass`].
 
 use tessera_ui::{PxSize, dp::Dp};
 
@@ -11,7 +13,8 @@ pub const CAPSULE_G2_K_VALUE: f32 = 2.0;
 /// Corner definition: capsule or manual radius with per-corner G2.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RoundedCorner {
-    /// Capsule radius derived from `min(width, height) / 2.0`, with `CAPSULE_G2_K_VALUE`.
+    /// Capsule radius derived from `min(width, height) / 2.0`, with
+    /// `CAPSULE_G2_K_VALUE`.
     Capsule,
     /// Manual radius (in `Dp`) with per-corner G2.
     Manual {
@@ -62,11 +65,13 @@ pub enum ResolvedShape {
 
 /// Shape definitions for UI components.
 ///
-/// `Shape` is used by multiple components (`surface`, `fluid_glass`, sliders, progress, buttons)
-/// to define visual outline, hit-testing, and pipeline behavior.
+/// `Shape` is used by multiple components (`surface`, `fluid_glass`, sliders,
+/// progress, buttons) to define visual outline, hit-testing, and pipeline
+/// behavior.
 ///
 /// # Variants
-/// * [`Shape::RoundedRectangle`] – Per-corner capsule or manual radius + per-corner G2
+/// * [`Shape::RoundedRectangle`] – Per-corner capsule or manual radius +
+///   per-corner G2
 /// * [`Shape::Ellipse`] – Ellipse filling the component bounds
 ///
 /// # Example
@@ -149,7 +154,8 @@ impl Shape {
         bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
     };
 
-    /// A helper to create a uniform rounded rectangle shape with manual corners.
+    /// A helper to create a uniform rounded rectangle shape with manual
+    /// corners.
     pub const fn rounded_rectangle(radius: Dp) -> Self {
         Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(radius, 3.0),
@@ -169,7 +175,8 @@ impl Shape {
         }
     }
 
-    /// Resolves a shape into pixel radii and per-corner G2 parameters for a given size.
+    /// Resolves a shape into pixel radii and per-corner G2 parameters for a
+    /// given size.
     pub fn resolve_for_size(self, size: PxSize) -> ResolvedShape {
         match self {
             Shape::RoundedRectangle {

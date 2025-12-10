@@ -6,29 +6,32 @@ use std::collections::VecDeque;
 
 /// Maximum number of IME events to keep in the queue.
 ///
-/// This constant limits the size of the event queue to prevent unbounded memory growth.
-/// When the queue exceeds this size, the oldest events are automatically removed.
-/// The value of 10 provides a reasonable balance between memory usage and ensuring
-/// that recent events are not lost during high-frequency input scenarios.
+/// This constant limits the size of the event queue to prevent unbounded memory
+/// growth. When the queue exceeds this size, the oldest events are
+/// automatically removed. The value of 10 provides a reasonable balance between
+/// memory usage and ensuring that recent events are not lost during
+/// high-frequency input scenarios.
 pub const KEEP_EVENTS_COUNT: usize = 10;
 
 /// Manages the state and event queue for Input Method Editor (IME) operations.
 ///
-/// The `ImeState` struct provides a bounded queue for storing IME events from the
-/// windowing system. It automatically manages memory by discarding old events when
-/// the queue becomes too large, ensuring consistent performance even during
-/// intensive text input sessions.
+/// The `ImeState` struct provides a bounded queue for storing IME events from
+/// the windowing system. It automatically manages memory by discarding old
+/// events when the queue becomes too large, ensuring consistent performance
+/// even during intensive text input sessions.
 ///
 /// ## Thread Safety
 ///
-/// This struct is not thread-safe by itself. If you need to share IME state across
-/// threads, wrap it in appropriate synchronization primitives like `Arc<Mutex<ImeState>>`.
+/// This struct is not thread-safe by itself. If you need to share IME state
+/// across threads, wrap it in appropriate synchronization primitives like
+/// `Arc<Mutex<ImeState>>`.
 ///
 /// ## Memory Management
 ///
-/// The internal queue automatically maintains a maximum size of [`KEEP_EVENTS_COUNT`]
-/// events. When new events are added beyond this limit, the oldest events are
-/// automatically removed to prevent unbounded memory growth.
+/// The internal queue automatically maintains a maximum size of
+/// [`KEEP_EVENTS_COUNT`] events. When new events are added beyond this limit,
+/// the oldest events are automatically removed to prevent unbounded memory
+/// growth.
 #[derive(Default)]
 pub(crate) struct ImeState {
     /// Internal queue storing pending IME events.
@@ -42,15 +45,16 @@ pub(crate) struct ImeState {
 impl ImeState {
     /// Adds a new IME event to the end of the queue.
     ///
-    /// This method appends the provided IME event to the internal queue. If adding
-    /// this event would cause the queue to exceed [`KEEP_EVENTS_COUNT`], the oldest
-    /// event is automatically removed to maintain the size limit.
+    /// This method appends the provided IME event to the internal queue. If
+    /// adding this event would cause the queue to exceed
+    /// [`KEEP_EVENTS_COUNT`], the oldest event is automatically removed to
+    /// maintain the size limit.
     ///
     /// # Arguments
     ///
-    /// * `event` - The IME event to add to the queue. This can be any variant of
-    ///   [`winit::event::Ime`], including composition text, committed text, or
-    ///   IME state changes.
+    /// * `event` - The IME event to add to the queue. This can be any variant
+    ///   of [`winit::event::Ime`], including composition text, committed text,
+    ///   or IME state changes.
     pub fn push_event(&mut self, event: winit::event::Ime) {
         // Add the event to the back of the deque
         self.events.push_back(event);
@@ -73,7 +77,8 @@ impl ImeState {
     /// # Returns
     ///
     /// A `Vec<winit::event::Ime>` containing all events that were in the queue,
-    /// ordered from oldest to newest. If the queue was empty, returns an empty vector.
+    /// ordered from oldest to newest. If the queue was empty, returns an empty
+    /// vector.
     pub fn take_events(&mut self) -> Vec<winit::event::Ime> {
         self.events.drain(..).collect()
     }

@@ -293,7 +293,8 @@ fn apply_glass_switch_accessibility(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the switch's appearance and `on_toggle` callback; see [`GlassSwitchArgs`].
+/// - `args` — configures the switch's appearance and `on_toggle` callback; see
+///   [`GlassSwitchArgs`].
 ///
 /// ## Examples
 ///
@@ -327,12 +328,15 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
 ///
 /// # Usage
 ///
-/// Use when you need a toggle switch with a glassmorphic style and explicit state control.
+/// Use when you need a toggle switch with a glassmorphic style and explicit
+/// state control.
 ///
 /// # Parameters
 ///
-/// - `args` — configures the switch's appearance and `on_toggle` callback; see [`GlassSwitchArgs`].
-/// - `controller` manage the component's checked and animation state; see [`GlassSwitchController`].
+/// - `args` — configures the switch's appearance and `on_toggle` callback; see
+///   [`GlassSwitchArgs`].
+/// - `controller` manage the component's checked and animation state; see
+///   [`GlassSwitchController`].
 ///
 /// # Examples
 ///

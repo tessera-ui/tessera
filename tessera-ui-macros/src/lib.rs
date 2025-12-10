@@ -104,7 +104,8 @@ fn on_close_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     }
 }
 
-/// Helper: tokens to compute a stable logic id based on module path + function name.
+/// Helper: tokens to compute a stable logic id based on module path + function
+/// name.
 fn logic_id_tokens(fn_name: &syn::Ident) -> proc_macro2::TokenStream {
     quote! {
         {
@@ -141,9 +142,11 @@ impl ControlFlowInstrumenter {
     /// Wrap an expression in a GroupGuard block
     ///
     /// Before transform: expr
-    /// After transform: { let _group_guard = ::tessera_ui::runtime::GroupGuard::new(#id); expr }
+    /// After transform: { let _group_guard =
+    /// ::tessera_ui::runtime::GroupGuard::new(#id); expr }
     fn wrap_expr_in_group(&mut self, expr: &mut Expr) {
-        // Recursively visit sub-expressions (depth-first) to ensure nested structures are wrapped
+        // Recursively visit sub-expressions (depth-first) to ensure nested structures
+        // are wrapped
         self.visit_expr_mut(expr);
         let group_id = self.next_group_id();
         // Use fully-qualified path ::tessera_ui to avoid relying on a crate alias
@@ -221,22 +224,26 @@ impl VisitMut for ControlFlowInstrumenter {
 ///
 /// # What It Generates
 ///
-/// The macro rewrites the function body so that on every invocation (every frame in an
-/// immediate‑mode pass) it:
+/// The macro rewrites the function body so that on every invocation (every
+/// frame in an immediate‑mode pass) it:
 /// 1. Registers a new component node (push) into the global `ComponentTree`
 /// 2. Injects helper closures:
 ///    * `measure(Box<MeasureFn>)` – supply layout measuring logic
-///    * `input_handler(Box<InputHandlerFn>)` – supply per‑frame interaction / event handling
-///    * `on_minimize(Box<dyn Fn(bool) + Send + Sync>)` – window minimize life‑cycle hook
+///    * `input_handler(Box<InputHandlerFn>)` – supply per‑frame interaction /
+///      event handling
+///    * `on_minimize(Box<dyn Fn(bool) + Send + Sync>)` – window minimize
+///      life‑cycle hook
 ///    * `on_close(Box<dyn Fn() + Send + Sync>)` – window close life‑cycle hook
-/// 3. Executes the original user code inside an inner closure to prevent early `return`
-///    from skipping cleanup
-/// 4. Pops (removes) the component node (ensuring balanced push/pop even with early return)
+/// 3. Executes the original user code inside an inner closure to prevent early
+///    `return` from skipping cleanup
+/// 4. Pops (removes) the component node (ensuring balanced push/pop even with
+///    early return)
 ///
 /// # Usage
 ///
-/// Annotate a free function (no captured self) with `#[tessera]`. You may then (optionally)
-/// call any of the injected helpers exactly once (last call wins if repeated).
+/// Annotate a free function (no captured self) with `#[tessera]`. You may then
+/// (optionally) call any of the injected helpers exactly once (last call wins
+/// if repeated).
 ///
 /// # Parameters
 ///
@@ -248,7 +255,8 @@ impl VisitMut for ControlFlowInstrumenter {
 ///
 /// # See Also
 ///
-/// * [`#[shard]`](crate::shard) for navigation‑aware components with injectable shard state.
+/// * [`#[shard]`](crate::shard) for navigation‑aware components with injectable
+///   shard state.
 #[proc_macro_attribute]
 pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let crate_path: syn::Path = parse_crate_path(attr);
@@ -260,7 +268,8 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_attrs = &input_fn.attrs; // Attributes like #[doc], #[allow], etc.
     let fn_sig = &input_fn.sig; // Function signature (parameters, return type)
 
-    // Generate a stable hash seed based on function name in order to avoid ID collisions
+    // Generate a stable hash seed based on function name in order to avoid ID
+    // collisions
     let mut hasher = DefaultHasher::new();
     input_fn.sig.ident.to_string().hash(&mut hasher);
     let seed = hasher.finish();
@@ -322,13 +331,14 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[cfg(feature = "shard")]
-/// Transforms a function into a *shard component* that can be navigated to via the routing
-/// system and (optionally) provided with a lazily‑initialized per‑shard state.
+/// Transforms a function into a *shard component* that can be navigated to via
+/// the routing system and (optionally) provided with a lazily‑initialized
+/// per‑shard state.
 ///
 /// # Features
 ///
-/// * Generates a `StructNameDestination` (UpperCamelCase + `Destination`) implementing
-///   `tessera_ui_shard::router::RouterDestination`
+/// * Generates a `StructNameDestination` (UpperCamelCase + `Destination`)
+///   implementing `tessera_ui_shard::router::RouterDestination`
 /// * (Optional) Injects a single `#[state]` parameter whose type:
 ///   - Must implement `Default + Send + Sync + 'static`
 ///   - Is constructed (or reused) and passed to your function body
@@ -337,16 +347,18 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Lifecycle
 /// Controlled by the generated destination (via `#[state(...)]`).
 /// * Default: `Shard` – state is removed when the destination is `pop()`‑ed
-/// * Override: `#[state(app)]` (or `#[state(application)]`) – persist for the entire application
+/// * Override: `#[state(app)]` (or `#[state(application)]`) – persist for the
+///   entire application
 ///
-/// When `pop()` is called and the destination lifecycle is `Shard`, the registry
-/// entry is removed, freeing the state.
+/// When `pop()` is called and the destination lifecycle is `Shard`, the
+/// registry entry is removed, freeing the state.
 ///
 /// # Parameter Transformation
 /// * At most one parameter may be annotated with `#[state]`.
-/// * That parameter is removed from the *generated* function signature and supplied implicitly.
-/// * All other parameters remain explicit and become public fields on the generated
-///   `*Destination` struct.
+/// * That parameter is removed from the *generated* function signature and
+///   supplied implicitly.
+/// * All other parameters remain explicit and become public fields on the
+///   generated `*Destination` struct.
 ///
 /// # Generated Destination (Conceptual)
 ///
@@ -361,7 +373,8 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Limitations
 ///
 /// * No support for multiple `#[state]` params (compile panic if violated)
-/// * Do not manually implement `RouterDestination` for these pages; rely on generation
+/// * Do not manually implement `RouterDestination` for these pages; rely on
+///   generation
 ///
 /// # See Also
 ///
@@ -375,8 +388,8 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Errors / Panics
 ///
-/// * Panics at compile time if multiple `#[state]` parameters are used or unsupported
-///   pattern forms are encountered.
+/// * Panics at compile time if multiple `#[state]` parameters are used or
+///   unsupported pattern forms are encountered.
 #[proc_macro_attribute]
 pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     use heck::ToUpperCamelCase;
@@ -391,8 +404,9 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     // 1. Parse the function marked by the macro
     let mut func = parse_macro_input!(input as ItemFn);
 
-    // 2. Handle #[state] parameters, ensuring it's unique and removing it from the signature
-    //    Also parse optional lifecycle argument: #[state(app)] or #[state(shard)]
+    // 2. Handle #[state] parameters, ensuring it's unique and removing it from the
+    //    signature Also parse optional lifecycle argument: #[state(app)] or
+    //    #[state(shard)]
     let mut state_param = None;
     let mut state_lifecycle: Option<proc_macro2::TokenStream> = None;
     let mut new_inputs = syn::punctuated::Punctuated::new();
@@ -494,8 +508,8 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    // 6. Use quote! to generate the new TokenStream code
-    //    Prepare optional lifecycle override method for RouterDestination impl.
+    // 6. Use quote! to generate the new TokenStream code Prepare optional lifecycle
+    //    override method for RouterDestination impl.
     let lifecycle_method_tokens = if let Some(lc) = state_lifecycle.clone() {
         quote! {
             fn life_cycle(&self) -> #crate_path::tessera_ui_shard::ShardStateLifeCycle {

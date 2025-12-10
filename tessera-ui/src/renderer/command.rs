@@ -1,8 +1,8 @@
 //! Unified command system for rendering and computation.
 //!
-//! This module defines the `Command` enum that unifies draw and compute operations
-//! into a single type, enabling seamless integration of graphics and compute pipelines
-//! in the rendering workflow.
+//! This module defines the `Command` enum that unifies draw and compute
+//! operations into a single type, enabling seamless integration of graphics and
+//! compute pipelines in the rendering workflow.
 
 use std::any::Any;
 
@@ -11,23 +11,27 @@ use crate::{
     px::{Px, PxRect},
 };
 
-/// Defines the sampling requirements for a rendering command that needs a barrier.
+/// Defines the sampling requirements for a rendering command that needs a
+/// barrier.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BarrierRequirement {
     /// The command needs to sample from the entire previously rendered scene.
     /// This will cause a full-screen texture copy.
     Global,
 
-    /// The command needs to sample from a region relative to its own bounding box.
+    /// The command needs to sample from a region relative to its own bounding
+    /// box.
     ///
-    /// - Sampling padding: The region from which pixels are read (e.g., blur needs to read
-    ///   pixels outside the target area). This determines the texture region captured before
-    ///   the command executes, while the write target remains the component's measured size.
+    /// - Sampling padding: The region from which pixels are read (e.g., blur
+    ///   needs to read pixels outside the target area). This determines the
+    ///   texture region captured before the command executes, while the write
+    ///   target remains the component's measured size.
     ///
-    /// For most cases without special batching requirements, set a uniform padding value.
-    /// For effects like blur that need large sampling areas but have small target areas,
-    /// use large sampling padding so enough source pixels are available while batching still
-    /// relies on the component's bounds.
+    /// For most cases without special batching requirements, set a uniform
+    /// padding value. For effects like blur that need large sampling areas
+    /// but have small target areas, use large sampling padding so enough
+    /// source pixels are available while batching still relies on the
+    /// component's bounds.
     ///
     /// # Examples
     ///
@@ -52,7 +56,8 @@ pub enum BarrierRequirement {
     /// ```
     PaddedLocal(PaddingRect),
 
-    /// The command needs to sample from a specific, absolute region of the screen.
+    /// The command needs to sample from a specific, absolute region of the
+    /// screen.
     Absolute(PxRect),
 }
 
@@ -91,10 +96,12 @@ impl PaddingRect {
 }
 
 impl BarrierRequirement {
-    /// A zero-padding local barrier requirement for commands that only sample within their bounds.
+    /// A zero-padding local barrier requirement for commands that only sample
+    /// within their bounds.
     pub const ZERO_PADDING_LOCAL: Self = Self::PaddedLocal(PaddingRect::ZERO);
 
-    /// Creates a `PaddedLocal` barrier requirement with uniform sampling padding on all sides.
+    /// Creates a `PaddedLocal` barrier requirement with uniform sampling
+    /// padding on all sides.
     #[must_use]
     pub const fn uniform_padding_local(padding: Px) -> Self {
         Self::PaddedLocal(PaddingRect::uniform(padding))

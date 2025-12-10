@@ -1,21 +1,23 @@
 //! Provides a cross-platform clipboard manager for text manipulation.
 //!
-//! This module offers a simple, unified interface for interacting with the system clipboard,
-//! allowing applications to easily get and set text content. It abstracts platform-specific
-//! details, providing a consistent API across different operating systems.
+//! This module offers a simple, unified interface for interacting with the
+//! system clipboard, allowing applications to easily get and set text content.
+//! It abstracts platform-specific details, providing a consistent API across
+//! different operating systems.
 //!
 //! # Key Features
 //!
 //! - **Set Text**: Place a string onto the system clipboard.
 //! - **Get Text**: Retrieve the current text content from the system clipboard.
-//! - **Cross-platform**: Uses `arboard` for broad platform support (Windows, macOS, Linux).
-//! - **Graceful Fallback**: On unsupported platforms like Android, operations are no-ops
-//!   that log a warning, preventing crashes.
+//! - **Cross-platform**: Uses `arboard` for broad platform support (Windows,
+//!   macOS, Linux).
+//! - **Graceful Fallback**: On unsupported platforms like Android, operations
+//!   are no-ops that log a warning, preventing crashes.
 //!
 //! # Usage
 //!
-//! The main entry point is the [`Clipboard`] struct, which provides methods to interact
-//! with the system clipboard.
+//! The main entry point is the [`Clipboard`] struct, which provides methods to
+//! interact with the system clipboard.
 //!
 //! ```no_run
 //! use tessera_ui::clipboard::Clipboard;
@@ -38,8 +40,9 @@
 //!
 //! # Note on Android
 //!
-//! Clipboard operations are currently not supported on Android. Any calls to `set_text` or
-//! `get_text` on Android will result in a warning log and will not perform any action.
+//! Clipboard operations are currently not supported on Android. Any calls to
+//! `set_text` or `get_text` on Android will result in a warning log and will
+//! not perform any action.
 #[cfg(target_os = "android")]
 use jni::{
     JNIEnv,
@@ -48,10 +51,12 @@ use jni::{
 #[cfg(target_os = "android")]
 use winit::platform::android::activity::AndroidApp;
 
-/// Manages access to the system clipboard for text-based copy and paste operations.
+/// Manages access to the system clipboard for text-based copy and paste
+/// operations.
 ///
-/// This struct acts as a handle to the platform's native clipboard, abstracting away the
-/// underlying implementation details. It is created using [`Clipboard::new()`].
+/// This struct acts as a handle to the platform's native clipboard, abstracting
+/// away the underlying implementation details. It is created using
+/// [`Clipboard::new()`].
 ///
 /// All interactions are synchronous. For unsupported platforms (e.g., Android),
 /// operations are gracefully handled to prevent runtime errors.
@@ -83,14 +88,17 @@ impl Default for Clipboard {
 
 impl Clipboard {
     #[cfg(not(target_os = "android"))]
-    /// Creates a new clipboard instance, initializing the connection to the system clipboard.
+    /// Creates a new clipboard instance, initializing the connection to the
+    /// system clipboard.
     ///
-    /// This method may fail if the system clipboard is unavailable, in which case it will panic.
+    /// This method may fail if the system clipboard is unavailable, in which
+    /// case it will panic.
     ///
     /// # Panics
     ///
-    /// Panics if the clipboard provider cannot be initialized. This can happen in environments
-    /// without a graphical user interface or due to system-level permission issues.
+    /// Panics if the clipboard provider cannot be initialized. This can happen
+    /// in environments without a graphical user interface or due to
+    /// system-level permission issues.
     ///
     /// # Example
     ///
@@ -107,7 +115,8 @@ impl Clipboard {
     }
 
     #[cfg(target_os = "android")]
-    /// Creates a new clipboard instance, initializing the connection to the system clipboard.
+    /// Creates a new clipboard instance, initializing the connection to the
+    /// system clipboard.
     pub fn new(android_app: AndroidApp) -> Self {
         Self { android_app }
     }
@@ -139,13 +148,15 @@ impl Clipboard {
 
     /// Gets the current text content from the clipboard.
     ///
-    /// This method retrieves text from the clipboard. If the clipboard is empty, contains
-    /// non-text content, or an error occurs, it returns `None`.
+    /// This method retrieves text from the clipboard. If the clipboard is
+    /// empty, contains non-text content, or an error occurs, it returns
+    /// `None`.
     ///
     /// # Returns
     ///
     /// - `Some(String)` if text is successfully retrieved from the clipboard.
-    /// - `None` if the clipboard is empty, contains non-text data, or an error occurs.
+    /// - `None` if the clipboard is empty, contains non-text data, or an error
+    ///   occurs.
     ///
     /// # Example
     ///
@@ -220,7 +231,8 @@ fn get_clipboard_manager<'a>(env: &mut JNIEnv<'a>, activity: &JObject<'a>) -> Op
 ///
 /// ## Returns
 /// - `Some(String)`: If text content is successfully read.
-/// - `None`: If the clipboard is empty, the content is not plain text, or any error occurs during the process.
+/// - `None`: If the clipboard is empty, the content is not plain text, or any
+///   error occurs during the process.
 #[cfg(target_os = "android")]
 fn get_clipboard_text(android_app: &AndroidApp) -> Option<String> {
     // 1. Get JNI environment and Activity object

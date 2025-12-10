@@ -22,8 +22,8 @@ pub(super) fn cursor_within_component(
     }
 }
 
-/// Helper: compute normalized progress (0.0..1.0) from cursor X and overall width.
-/// Returns None when cursor is not available.
+/// Helper: compute normalized progress (0.0..1.0) from cursor X and overall
+/// width. Returns None when cursor is not available.
 pub(super) fn cursor_progress(
     cursor_pos: Option<PxPosition>,
     layout: &SliderLayout,
@@ -313,17 +313,19 @@ pub(super) fn apply_range_slider_accessibility(
     _on_change: &Arc<dyn Fn((f32, f32)) + Send + Sync>,
 ) {
     // For range slider, we ideally need two accessibility nodes.
-    // However, given current limitations, we might just expose one node or the "primary" interaction.
-    // A better approach for accessibility in range sliders is usually multiple children nodes.
-    // For now, let's just make the container focusable but it might be confusing.
-    // To do this properly, we should probably split the accessibility into the two handles in the main component code
-    // by attaching accessibility info to the handle children instead of the container.
-    // But the current structure attaches to the container.
-    // TODO: Improve accessibility for range slider (requires structural changes to expose handles as children).
+    // However, given current limitations, we might just expose one node or the
+    // "primary" interaction. A better approach for accessibility in range
+    // sliders is usually multiple children nodes. For now, let's just make the
+    // container focusable but it might be confusing. To do this properly, we
+    // should probably split the accessibility into the two handles in the main
+    // component code by attaching accessibility info to the handle children
+    // instead of the container. But the current structure attaches to the
+    // container. TODO: Improve accessibility for range slider (requires
+    // structural changes to expose handles as children).
 
     // Minimal implementation: report range as a string? or just focusable?
-    // Let's skip specific numeric value reporting for the container to avoid confusion,
-    // or just report the start value for now.
+    // Let's skip specific numeric value reporting for the container to avoid
+    // confusion, or just report the start value for now.
     let mut builder = input.accessibility().role(Role::Slider);
     if let Some(label) = args.accessibility_label.as_ref() {
         builder = builder.label(label.clone());

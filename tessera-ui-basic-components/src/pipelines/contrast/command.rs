@@ -2,7 +2,8 @@ use tessera_ui::{
     BarrierRequirement, compute::ComputeResourceRef, renderer::compute::command::ComputeCommand,
 };
 
-/// Command to apply a contrast adjustment using a pre-calculated mean luminance.
+/// Command to apply a contrast adjustment using a pre-calculated mean
+/// luminance.
 ///
 /// # Parameters
 ///
@@ -22,7 +23,8 @@ impl ContrastCommand {
     /// # Parameters
     ///
     /// - `contrast`: The contrast adjustment factor.
-    /// - `mean_result_handle`: Handle to the buffer containing mean luminance data.
+    /// - `mean_result_handle`: Handle to the buffer containing mean luminance
+    ///   data.
     pub fn new(contrast: f32, mean_result_handle: ComputeResourceRef) -> Self {
         Self {
             contrast,

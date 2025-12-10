@@ -92,7 +92,8 @@ struct PendingComputeCommand {
     sampling_rect: PxRect,
 }
 
-/// WGPU application container holding device, surface, pipelines, and frame resources.
+/// WGPU application container holding device, surface, pipelines, and frame
+/// resources.
 pub struct WgpuApp {
     /// Avoiding release the window
     #[allow(unused)]
@@ -145,7 +146,8 @@ pub struct WgpuApp {
 impl WgpuApp {
     // Small helper functions extracted from `new` to reduce its complexity.
     //
-    // These helpers keep behavior unchanged but make `new` shorter and easier to analyze.
+    // These helpers keep behavior unchanged but make `new` shorter and easier to
+    // analyze.
     async fn request_adapter_for_surface(
         instance: &wgpu::Instance,
         surface: &wgpu::Surface<'_>,
@@ -226,7 +228,8 @@ impl WgpuApp {
         // Looking for gpus
         let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             /* Currently the renderer's design only supports VULKAN.
-             * Given VULKAN's broad compatibility, this does not affect cross-platform support for now.
+             * Given VULKAN's broad compatibility, this does not affect cross-platform support
+             * for now.
              *
              * TODO: Refactor the renderer to support additional backends.
              */
@@ -395,7 +398,9 @@ impl WgpuApp {
 
     /// Registers a new drawable pipeline for a specific command type.
     ///
-    /// This method takes ownership of the pipeline and wraps it in a type-erased container that can be stored alongside other pipelines of different types.
+    /// This method takes ownership of the pipeline and wraps it in a
+    /// type-erased container that can be stored alongside other pipelines of
+    /// different types.
     pub fn register_draw_pipeline<T, P>(&mut self, pipeline: P)
     where
         T: DrawCommand + 'static,
@@ -406,7 +411,9 @@ impl WgpuApp {
 
     /// Registers a new compute pipeline for a specific command type.
     ///
-    /// This method takes ownership of the pipeline and wraps it in a type-erased container that can be stored alongside other pipelines of different types.
+    /// This method takes ownership of the pipeline and wraps it in a
+    /// type-erased container that can be stored alongside other pipelines of
+    /// different types.
     pub fn register_compute_pipeline<T, P>(&mut self, pipeline: P)
     where
         T: ComputeCommand + 'static,
@@ -474,7 +481,8 @@ impl WgpuApp {
 
     /// Registers draw and compute pipelines through a user-provided callback.
     ///
-    /// Call this during initialization to add all pipelines needed by the application.
+    /// Call this during initialization to add all pipelines needed by the
+    /// application.
     pub fn register_pipelines(&mut self, register_fn: impl FnOnce(&mut Self)) {
         register_fn(self);
     }
@@ -543,8 +551,8 @@ impl WgpuApp {
         result
     }
 
-    // Helper does offscreen copy and optional compute; returns an owned TextureView to avoid
-    // holding mutable borrows on pass targets across the caller scope.
+    // Helper does offscreen copy and optional compute; returns an owned TextureView
+    // to avoid holding mutable borrows on pass targets across the caller scope.
     fn handle_offscreen_and_compute(
         context: WgpuContext<'_>,
         offscreen_texture: &mut wgpu::TextureView,
@@ -595,7 +603,8 @@ impl WgpuApp {
             copy_rect.width.0.max(0) as u32,
             copy_rect.height.0.max(0) as u32,
         );
-        // Draw a single triangle that covers the whole screen. The scissor rect clips it.
+        // Draw a single triangle that covers the whole screen. The scissor rect clips
+        // it.
         rpass.draw(0..3, 0..1);
 
         drop(rpass); // End the blit pass
@@ -625,14 +634,15 @@ impl WgpuApp {
 
     /// Render the surface using the unified command system.
     ///
-    /// This method processes a stream of commands (both draw and compute) and renders
-    /// them to the surface using a multi-pass rendering approach with offscreen texture.
-    /// Commands that require barriers will trigger texture copies between passes.
+    /// This method processes a stream of commands (both draw and compute) and
+    /// renders them to the surface using a multi-pass rendering approach
+    /// with offscreen texture. Commands that require barriers will trigger
+    /// texture copies between passes.
     ///
     /// # Arguments
     ///
-    /// * `commands` - An iterable of (Command, PxSize, PxPosition) tuples representing
-    ///   the rendering operations to perform.
+    /// * `commands` - An iterable of (Command, PxSize, PxPosition) tuples
+    ///   representing the rendering operations to perform.
     ///
     /// # Returns
     ///
@@ -662,7 +672,8 @@ impl WgpuApp {
 
         // Clear any existing compute commands
         if !self.compute_commands.is_empty() {
-            // This is a warning to developers that not all compute commands were used in the last frame.
+            // This is a warning to developers that not all compute commands were used in
+            // the last frame.
             warn!("Not every compute command is used in last frame. This is likely a bug.");
             self.compute_commands.clear();
         }
@@ -817,7 +828,8 @@ impl WgpuApp {
             }
         }
 
-        // After processing all commands, we need to render the last pass if there are any commands left
+        // After processing all commands, we need to render the last pass if there are
+        // any commands left
         if !commands_in_pass.is_empty() {
             let mut draw_target_rects: SmallVec<[PxRect; 8]> = SmallVec::new();
             for rect in commands_in_pass.iter().filter_map(|command| match command {
@@ -1283,7 +1295,8 @@ fn render_current_pass(params: RenderCurrentPassParams<'_>) {
             );
         }
 
-        // Add the command to the buffer and update the current batch rect (extracted merge helper).
+        // Add the command to the buffer and update the current batch rect (extracted
+        // merge helper).
         buffer.push((cmd.command, cmd.size, cmd.start_pos));
         last_command_type_id = Some(cmd.type_id);
         current_batch_draw_rect = Some(merge_batch_rect(current_batch_draw_rect, cmd.draw_rect));
@@ -1324,14 +1337,16 @@ fn submit_buffered_commands(
     clip_stack: &[PxRect],
     current_batch_draw_rect: &mut Option<PxRect>,
 ) {
-    // Take the buffered commands and convert to the transient representation expected by drawer.submit
+    // Take the buffered commands and convert to the transient representation
+    // expected by drawer.submit
     let commands = mem::take(buffer);
     let commands = commands
         .iter()
         .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
         .collect::<Vec<_>>();
 
-    // Apply clipping to the current batch rectangle; if nothing remains, abort early.
+    // Apply clipping to the current batch rectangle; if nothing remains, abort
+    // early.
     let (current_clip_rect, anything_to_submit) =
         apply_clip_to_batch_rect(clip_stack, current_batch_draw_rect);
     if !anything_to_submit {
@@ -1366,10 +1381,11 @@ fn set_scissor_rect_from_pxrect(rpass: &mut wgpu::RenderPass<'_>, rect: PxRect) 
     );
 }
 
-/// Apply clip_stack to current_batch_draw_rect. Returns false if intersection yields nothing
-/// (meaning there is nothing to submit), true otherwise.
+/// Apply clip_stack to current_batch_draw_rect. Returns false if intersection
+/// yields nothing (meaning there is nothing to submit), true otherwise.
 ///
-/// Also returns the current clipping rectangle (if any) for potential use by the caller.
+/// Also returns the current clipping rectangle (if any) for potential use by
+/// the caller.
 fn apply_clip_to_batch_rect(
     clip_stack: &[PxRect],
     current_batch_draw_rect: &mut Option<PxRect>,
@@ -1387,9 +1403,10 @@ fn apply_clip_to_batch_rect(
     (None, true)
 }
 
-/// Determine whether `next_type_id` (with potential clipping) can be merged into the current batch.
-/// Equivalent to the negation of the original flush condition:
-/// merge allowed when last_command_type_id == Some(next_type_id) or last_command_type_id is None.
+/// Determine whether `next_type_id` (with potential clipping) can be merged
+/// into the current batch. Equivalent to the negation of the original flush
+/// condition: merge allowed when last_command_type_id == Some(next_type_id) or
+/// last_command_type_id is None.
 fn can_merge_into_batch(last_command_type_id: &Option<TypeId>, next_type_id: TypeId) -> bool {
     match last_command_type_id {
         Some(l) => *l == next_type_id,

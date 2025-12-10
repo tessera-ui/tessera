@@ -290,8 +290,9 @@ pub(crate) struct FluidGlassPipeline {
 
 impl FluidGlassPipeline {
     /// Construct a new FluidGlassPipeline.
-    /// This constructor delegates sampler, bind group layout and pipeline construction
-    /// to small helpers to keep the top-level function short and easier to reason about.
+    /// This constructor delegates sampler, bind group layout and pipeline
+    /// construction to small helpers to keep the top-level function short
+    /// and easier to reason about.
     pub fn new(
         gpu: &wgpu::Device,
         pipeline_cache: Option<&wgpu::PipelineCache>,
@@ -361,7 +362,8 @@ impl FluidGlassPipeline {
         })
     }
 
-    /// Create the bind group layout for instance buffer + scene texture + sampler.
+    /// Create the bind group layout for instance buffer + scene texture +
+    /// sampler.
     fn create_bind_group_layout(gpu: &wgpu::Device) -> wgpu::BindGroupLayout {
         gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
@@ -700,13 +702,15 @@ impl FluidGlassPipeline {
         }
     }
 
-    /// Create GPU buffer and upload the instance data. Returns the created buffer or an error.
+    /// Create GPU buffer and upload the instance data. Returns the created
+    /// buffer or an error.
     fn create_and_upload_buffer(
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
         instances: &[GlassUniforms],
     ) -> Result<wgpu::Buffer, ()> {
-        // Serialize uniforms first so we can determine exact buffer size (avoids magic numbers).
+        // Serialize uniforms first so we can determine exact buffer size (avoids magic
+        // numbers).
         let uniforms = GlassInstances {
             instances: instances.to_vec(),
         };

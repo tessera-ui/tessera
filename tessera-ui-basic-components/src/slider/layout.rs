@@ -117,11 +117,13 @@ impl CenteredSliderLayout {
         let center_x_track = w / 2.0; // Geometric center of the component, for tracks
 
         // Calculate Handle Center X using base logic.
-        // This maps the 0.0-1.0 value to the physical X position of the handle's center.
+        // This maps the 0.0-1.0 value to the physical X position of the handle's
+        // center.
         let track_total_length = self.base.track_total_width.to_f32();
         let handle_center_x_raw = (value * track_total_length) + h_gap + (h_w / 2.0);
 
-        // Clamp handle center X within component boundaries, considering handle width and its gaps.
+        // Clamp handle center X within component boundaries, considering handle width
+        // and its gaps.
         let min_handle_center_x = h_w / 2.0; // Handle's left edge at 0
         let max_handle_center_x = w - h_w / 2.0; // Handle's right edge at w
         let handle_center_x = handle_center_x_raw.clamp(min_handle_center_x, max_handle_center_x);
@@ -131,12 +133,14 @@ impl CenteredSliderLayout {
 
         let (li_x, li_w, a_x, a_w, ri_x, ri_w): (f32, f32, f32, f32, f32, f32) = if value > 0.5 {
             // Handle is to the right of center_x_track
-            // Left Inactive: From 0 to the start of the active segment, accounting for a single h_gap at the center.
+            // Left Inactive: From 0 to the start of the active segment, accounting for a
+            // single h_gap at the center.
             let li_x_calc = 0.0;
             let li_w_calc = (center_x_track - h_gap / 2.0).max(0.0);
 
             // Active: From end of left inactive to start of handle's left gap.
-            // This segment starts after the h_gap at the center and ends before the handle's left h_gap.
+            // This segment starts after the h_gap at the center and ends before the
+            // handle's left h_gap.
             let a_x_calc = center_x_track + h_gap / 2.0;
             let a_w_calc = (handle_left - h_gap - a_x_calc).max(0.0); // Ensure width is non-negative
 
@@ -345,10 +349,11 @@ pub(super) fn range_slider_layout(
     args: &super::RangeSliderArgs,
     component_width: Px,
 ) -> RangeSliderLayout {
-    // Reuse basic slider layout logic for dimensions, but we need to construct a dummy SliderArgs
-    // or refactor slider_layout. Since slider_layout mainly uses width and style args which exist
-    // in RangeSliderArgs, let's create a temporary adapter or just manually construct if needed.
-    // Better yet, let's extract the common args into a helper or just construct SliderArgs.
+    // Reuse basic slider layout logic for dimensions, but we need to construct a
+    // dummy SliderArgs or refactor slider_layout. Since slider_layout mainly
+    // uses width and style args which exist in RangeSliderArgs, let's create a
+    // temporary adapter or just manually construct if needed. Better yet, let's
+    // extract the common args into a helper or just construct SliderArgs.
 
     // Note: We'll construct a SliderArgs to reuse the layout calculation.
     // This is a bit of a hack but avoids refactoring everything.

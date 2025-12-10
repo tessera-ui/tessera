@@ -39,7 +39,8 @@ const MIN_TOUCH_TARGET: Dp = Dp(40.0);
 const HANDLE_GAP: Dp = Dp(6.0);
 const STOP_INDICATOR_DIAMETER: Dp = Dp(4.0);
 
-/// Stores the interactive state for the [`slider`] component, such as whether the slider is currently being dragged by the user.
+/// Stores the interactive state for the [`slider`] component, such as whether
+/// the slider is currently being dragged by the user.
 pub(crate) struct SliderStateInner {
     /// True if the user is currently dragging the slider.
     pub is_dragging: bool,
@@ -170,7 +171,8 @@ pub struct SliderArgs {
     /// Height of the handle focus layer (hover/drag halo).
     #[builder(default = "Dp(18.0)")]
     pub state_layer_diameter: Dp,
-    /// Base color for the state layer; alpha will be adjusted per interaction state.
+    /// Base color for the state layer; alpha will be adjusted per interaction
+    /// state.
     #[builder(default = "use_context::<MaterialColorScheme>().primary.with_alpha(0.18)")]
     pub state_layer_color: Color,
     /// Disable interaction.
@@ -185,7 +187,8 @@ pub struct SliderArgs {
     /// Whether to show the stop indicators at the ends of the track.
     #[builder(default = "true")]
     pub show_stop_indicator: bool,
-    /// Optional icon content to display at the start of the slider (only for Medium sizes and above).
+    /// Optional icon content to display at the start of the slider (only for
+    /// Medium sizes and above).
     #[builder(default, setter(strip_option, into))]
     pub inset_icon: Option<crate::icon::IconContent>,
 }
@@ -363,7 +366,8 @@ fn measure_slider(
         );
         let icon_measured = input.measure_child(icon_id, &icon_constraint)?;
 
-        // Icon placement: 8dp padding from left edge, vertically centered within the track
+        // Icon placement: 8dp padding from left edge, vertically centered within the
+        // track
         let icon_padding = Dp(8.0).to_px();
         let icon_y = layout.track_y + Px((layout.track_height.0 - icon_measured.height.0) / 2);
         input.place_child(icon_id, PxPosition::new(icon_padding, icon_y));
@@ -414,16 +418,20 @@ fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> Slid
 
 /// # slider
 ///
-/// Renders an interactive slider with a bar-style handle for selecting a value between 0.0 and 1.0.
+/// Renders an interactive slider with a bar-style handle for selecting a value
+/// between 0.0 and 1.0.
 ///
 /// ## Usage
 ///
-/// Use for settings like volume or brightness, or for any user-adjustable value.
+/// Use for settings like volume or brightness, or for any user-adjustable
+/// value.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the slider's value, appearance, and callbacks; see [`SliderArgs`].
-/// - `controller` — optional; use [`slider_with_controller`] to provide your own controller.
+/// - `args` — configures the slider's value, appearance, and callbacks; see
+///   [`SliderArgs`].
+/// - `controller` — optional; use [`slider_with_controller`] to provide your
+///   own controller.
 ///
 /// ## Examples
 ///
@@ -466,7 +474,8 @@ pub fn slider(args: impl Into<SliderArgs>) {
 ///
 /// # Parameters
 ///
-/// - `args` — configures the slider's value, appearance, and callbacks; see [`SliderArgs`].
+/// - `args` — configures the slider's value, appearance, and callbacks; see
+///   [`SliderArgs`].
 /// - `controller` — the slider controller to manage interactive state.
 ///
 /// # Examples
@@ -695,18 +704,22 @@ fn measure_centered_slider(
 
 /// # centered_slider
 ///
-/// Renders an interactive slider that originates from the center (0.5), allowing selection of a value
-/// between 0.0 and 1.0. The active track extends from the center to the handle, while inactive
-/// tracks fill the remaining space.
+/// Renders an interactive slider that originates from the center (0.5),
+/// allowing selection of a value between 0.0 and 1.0. The active track extends
+/// from the center to the handle, while inactive tracks fill the remaining
+/// space.
 ///
 /// ## Usage
 ///
-/// Use for adjustments that have a neutral midpoint, such as balance controls or deviation settings.
+/// Use for adjustments that have a neutral midpoint, such as balance controls
+/// or deviation settings.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the slider's value, appearance, and callbacks; see [`SliderArgs`].
-/// - `controller` — optional controller; use [`centered_slider_with_controller`] to supply one.
+/// - `args` — configures the slider's value, appearance, and callbacks; see
+///   [`SliderArgs`].
+/// - `controller` — optional controller; use
+///   [`centered_slider_with_controller`] to supply one.
 ///
 /// ## Examples
 ///
@@ -765,7 +778,8 @@ pub fn centered_slider(args: impl Into<SliderArgs>) {
 ///
 /// # Parameters
 ///
-/// - `args` — configures the slider's value, appearance, and callbacks; see [`SliderArgs`].
+/// - `args` — configures the slider's value, appearance, and callbacks; see
+///   [`SliderArgs`].
 /// - `controller` — the slider controller to manage interactive state.
 ///
 /// # Examples
@@ -983,17 +997,20 @@ fn measure_range_slider(
 
 /// # range_slider
 ///
-/// Renders an interactive slider with two handles, allowing selection of a range (start, end)
-/// between 0.0 and 1.0.
+/// Renders an interactive slider with two handles, allowing selection of a
+/// range (start, end) between 0.0 and 1.0.
 ///
 /// ## Usage
 ///
-/// Use for filtering by range, setting minimum and maximum values, or defining an interval.
+/// Use for filtering by range, setting minimum and maximum values, or defining
+/// an interval.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the slider's range, appearance, and callbacks; see [`RangeSliderArgs`].
-/// - `controller` — optional controller; use [`range_slider_with_controller`] to supply one.
+/// - `args` — configures the slider's range, appearance, and callbacks; see
+///   [`RangeSliderArgs`].
+/// - `controller` — optional controller; use [`range_slider_with_controller`]
+///   to supply one.
 ///
 /// ## Examples
 ///
@@ -1049,16 +1066,17 @@ pub fn range_slider_with_controller(
 
     let state_snapshot = state.read();
     // Determine colors based on interaction.
-    // We check if *either* handle is interacted with to highlight the active tracks/handles?
-    // Or ideally, we highlight specific handles.
-    // For simplicity, let's use a unified color struct but apply focus colors selectively.
+    // We check if *either* handle is interacted with to highlight the active
+    // tracks/handles? Or ideally, we highlight specific handles.
+    // For simplicity, let's use a unified color struct but apply focus colors
+    // selectively.
 
     let is_dragging_any = state_snapshot.is_dragging_start || state_snapshot.is_dragging_end;
 
     // Override colors from specific RangeSliderArgs
-    // We need a helper to convert RangeSliderArgs colors to SliderColors if they differ
-    // But for now we just reused the dummy args construction above which didn't copy colors.
-    // Let's reconstruct colors properly.
+    // We need a helper to convert RangeSliderArgs colors to SliderColors if they
+    // differ But for now we just reused the dummy args construction above which
+    // didn't copy colors. Let's reconstruct colors properly.
     let mut state_layer_alpha_scale = 0.0;
     if is_dragging_any {
         state_layer_alpha_scale = 1.0;
@@ -1094,8 +1112,8 @@ pub fn range_slider_with_controller(
 
     // Render Start Focus & Handle
     render_focus(layout.base, &colors);
-    // Note: render_focus uses layout.focus_width/height. Position is handled by measure/place.
-    // But we need two focus indicators.
+    // Note: render_focus uses layout.focus_width/height. Position is handled by
+    // measure/place. But we need two focus indicators.
 
     // Render End Focus
     render_focus(layout.base, &colors);

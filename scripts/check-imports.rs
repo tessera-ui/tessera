@@ -12,7 +12,8 @@
 //! 2. There must be exactly one blank line between different groups.
 //! 3. Imports within the same group must be contiguous, with no blank lines.
 //! 4. Imports within each group must be sorted alphabetically.
-//! 5. Imports from the same root path should be merged into a single `use` statement.
+//! 5. Imports from the same root path should be merged into a single `use`
+//!    statement.
 //!
 //! ```cargo
 //! [package]
@@ -46,7 +47,8 @@ use quote::quote;
 use rayon::prelude::*;
 use syn::{Expr, File, Item, Lit, Meta, UseTree, Visibility, spanned::Spanned};
 
-/// Checks and fixes `use` statements in Rust files and directories, respecting .gitignore.
+/// Checks and fixes `use` statements in Rust files and directories, respecting
+/// .gitignore.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None, bin_name = "rust-script scripts/check-imports.rs")]
 struct Cli {
@@ -212,9 +214,9 @@ fn collect_rs_files(paths: &[PathBuf]) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Build a normalized imports string for `ast`, identify the original line numbers
-/// occupied by `use` items, and return the insertion point (first_use_line).
-/// Return value:
+/// Build a normalized imports string for `ast`, identify the original line
+/// numbers occupied by `use` items, and return the insertion point
+/// (first_use_line). Return value:
 ///  - String: the formatted imports block to insert
 ///  - Vec<usize>: original line numbers to remove
 ///  - usize: the first line where `use` items appeared (insertion anchor)
@@ -271,11 +273,12 @@ fn collect_and_format_imports(ast: &syn::File, local_mods: &HashSet<String>) -> 
 ///  - Parses the file to an AST
 ///  - Builds the new imports block and identifies original lines to remove
 ///  - Reconstructs file contents by skipping removed lines and inserting the
-///    new imports block at the original first `use` line (or appending if needed)
+///    new imports block at the original first `use` line (or appending if
+///    needed)
 ///  - Writes the updated file back to disk
 ///
-/// Returns Ok(true) if the file was modified, Ok(false) if there were no imports
-/// to rewrite, or Err on IO / parse errors.
+/// Returns Ok(true) if the file was modified, Ok(false) if there were no
+/// imports to rewrite, or Err on IO / parse errors.
 fn fix_file(path: &Path) -> Result<bool> {
     let content = fs::read_to_string(path)?;
     let ast = syn::parse_file(&content)?;
@@ -324,8 +327,8 @@ fn fix_file(path: &Path) -> Result<bool> {
 /// block string. This implementation delegates two responsibilities to focused
 /// helpers:
 ///  - `format_with_attrs` handles imports that carry attributes (doc/cfg/etc)
-///  - `format_without_attrs` handles the common case: grouping by (category, is_pub)
-///    then merging root paths into `{}` groups via `merge_path_groups`.
+///  - `format_without_attrs` handles the common case: grouping by (category,
+///    is_pub) then merging root paths into `{}` groups via `merge_path_groups`.
 fn format_imports_from_collected(imports: Vec<Import>) -> String {
     // Helper for imports that have attributes (keeps each as its own `use` line).
     fn format_with_attrs(attrs: &str, imports: &[Import]) -> String {
@@ -421,7 +424,8 @@ fn format_use_tree(tree: &UseTree) -> String {
 }
 
 /// Join a prefix of idents into a `::` separated path string.
-/// Extracted to remove duplicated `.iter().map(|s| s.to_string()).join("::")` uses.
+/// Extracted to remove duplicated `.iter().map(|s| s.to_string()).join("::")`
+/// uses.
 fn prefix_to_string(prefix: &Vec<&syn::Ident>) -> String {
     prefix.iter().map(|s| s.to_string()).join("::")
 }
@@ -441,8 +445,8 @@ fn format_visibility(vis: &Visibility) -> String {
 /// Format a slice of attributes into the string representation used by the
 /// import formatting pipeline.
 ///
-/// - `doc` attributes are converted into `///` or `//!` style comments preserving
-///   inner/outer style.
+/// - `doc` attributes are converted into `///` or `//!` style comments
+///   preserving inner/outer style.
 /// - Other attributes are stringified via `quote!(#attr).to_string()`.
 fn format_attrs(attrs: &[syn::Attribute]) -> String {
     attrs
@@ -499,9 +503,10 @@ fn collect_imports(ast: &File, local_mods: &HashSet<String>) -> Result<Vec<Impor
 }
 
 /// Recursively traverse a `UseTree` producing flattened path strings and the
-/// corresponding identifier prefixes. The callback receives (path_string, idents).
-/// Implementation preserves the original behaviour but documents the shape of
-/// recursion and explains why cloning of `prefix` is performed in some branches.
+/// corresponding identifier prefixes. The callback receives (path_string,
+/// idents). Implementation preserves the original behaviour but documents the
+/// shape of recursion and explains why cloning of `prefix` is performed in some
+/// branches.
 fn collect_paths_from_tree<'a>(
     tree: &'a UseTree,
     prefix: Vec<&'a syn::Ident>,
@@ -629,8 +634,9 @@ fn find_local_modules(ast: &File) -> HashSet<String> {
 }
 
 /// Collect all identifier-path vectors from a `use` item's tree.
-/// Returns a Vec of Vecs where each inner Vec is the sequence of idents for a path.
-/// Example: for `use a::{b, c::d};` this returns `[["a","b"], ["a","c","d"]]`.
+/// Returns a Vec of Vecs where each inner Vec is the sequence of idents for a
+/// path. Example: for `use a::{b, c::d};` this returns `[["a","b"],
+/// ["a","c","d"]]`.
 fn collect_use_paths(tree: &UseTree) -> Vec<Vec<&syn::Ident>> {
     let mut paths = Vec::new();
     collect_paths_from_tree(tree, vec![], &mut |_, path_idents| paths.push(path_idents));
@@ -661,7 +667,8 @@ fn collect_use_item_lines(use_items: &[&syn::ItemUse]) -> HashSet<usize> {
     lines
 }
 
-/// Build a single UseItemInfo from the original use item and the collected paths.
+/// Build a single UseItemInfo from the original use item and the collected
+/// paths.
 fn build_use_item_info(
     use_item: &syn::ItemUse,
     paths: Vec<Vec<&syn::Ident>>,

@@ -8,9 +8,9 @@ use winit::keyboard::ModifiersState;
 
 /// Maximum number of keyboard events to keep in the queue.
 ///
-/// This constant limits the size of the keyboard event queue to prevent unbounded
-/// memory growth during rapid key input. When the queue exceeds this size, the
-/// oldest events are automatically removed to make room for new ones.
+/// This constant limits the size of the keyboard event queue to prevent
+/// unbounded memory growth during rapid key input. When the queue exceeds this
+/// size, the oldest events are automatically removed to make room for new ones.
 ///
 /// The value of 10 is chosen to balance between:
 ///
@@ -21,17 +21,18 @@ const KEEP_EVENTS_COUNT: usize = 10;
 
 /// Manages the state and event queue for keyboard input.
 ///
-/// The `KeyboardState` struct provides a bounded queue for storing keyboard events
-/// received from the windowing system. It automatically manages memory by discarding
-/// old events when the queue becomes too large, ensuring consistent performance
-/// even during rapid keyboard input.
+/// The `KeyboardState` struct provides a bounded queue for storing keyboard
+/// events received from the windowing system. It automatically manages memory
+/// by discarding old events when the queue becomes too large, ensuring
+/// consistent performance even during rapid keyboard input.
 #[derive(Default, Debug)]
 pub struct KeyboardState {
     /// Internal queue storing keyboard events in chronological order.
     ///
     /// Events are added to the back of the queue and removed from the front,
-    /// maintaining FIFO (First In, First Out) ordering. The queue is automatically
-    /// bounded by [`KEEP_EVENTS_COUNT`] to prevent memory issues.
+    /// maintaining FIFO (First In, First Out) ordering. The queue is
+    /// automatically bounded by [`KEEP_EVENTS_COUNT`] to prevent memory
+    /// issues.
     events: VecDeque<winit::event::KeyEvent>,
     /// Current state of the keyboard modifiers (e.g., Shift, Ctrl, Alt).
     modifiers: ModifiersState,
@@ -41,8 +42,9 @@ impl KeyboardState {
     /// Adds a new keyboard event to the end of the queue.
     ///
     /// This method appends the provided keyboard event to the internal queue.
-    /// If adding the event would cause the queue to exceed [`KEEP_EVENTS_COUNT`],
-    /// the oldest event is automatically removed to maintain the size limit.
+    /// If adding the event would cause the queue to exceed
+    /// [`KEEP_EVENTS_COUNT`], the oldest event is automatically removed to
+    /// maintain the size limit.
     ///
     /// ## Parameters
     ///

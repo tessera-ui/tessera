@@ -30,11 +30,13 @@ const ANIM_TIME: Duration = Duration::from_millis(300);
 
 /// Defines the visual style of the bottom sheet's scrim.
 ///
-/// The scrim is the overlay that appears behind the bottom sheet, covering the main content.
+/// The scrim is the overlay that appears behind the bottom sheet, covering the
+/// main content.
 #[derive(Default, Clone, Copy)]
 pub enum BottomSheetStyle {
     /// A translucent glass effect that blurs the content behind it.
-    /// This style is more resource-intensive and may not be suitable for all targets.
+    /// This style is more resource-intensive and may not be suitable for all
+    /// targets.
     Glass,
     /// A simple, semi-transparent dark overlay. This is the default style.
     #[default]
@@ -46,8 +48,8 @@ pub enum BottomSheetStyle {
 pub struct BottomSheetProviderArgs {
     /// A callback that is invoked when the user requests to close the sheet.
     ///
-    /// This can be triggered by clicking the scrim or pressing the `Escape` key.
-    /// The callback is responsible for closing the sheet.
+    /// This can be triggered by clicking the scrim or pressing the `Escape`
+    /// key. The callback is responsible for closing the sheet.
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
     /// The visual style of the scrim. See [`BottomSheetStyle`].
     #[builder(default)]
@@ -69,8 +71,8 @@ struct BottomSheetStateInner {
 /// Controller for [`bottom_sheet_provider`], managing open/closed state.
 ///
 /// This controller can be created by the application and passed to the
-/// [`bottom_sheet_provider_with_controller`]. It is used to control the visibility of the sheet
-/// programmatically.
+/// [`bottom_sheet_provider_with_controller`]. It is used to control the
+/// visibility of the sheet programmatically.
 ///
 /// # Example
 ///
@@ -104,8 +106,9 @@ impl BottomSheetController {
 
     /// Initiates the animation to open the bottom sheet.
     ///
-    /// If the sheet is already open, this has no effect. If the sheet is currently
-    /// closing, it will reverse direction and start opening from its current position.
+    /// If the sheet is already open, this has no effect. If the sheet is
+    /// currently closing, it will reverse direction and start opening from
+    /// its current position.
     pub fn open(&self) {
         let mut inner = self.inner.write();
         if !inner.is_open {
@@ -124,8 +127,9 @@ impl BottomSheetController {
 
     /// Initiates the animation to close the bottom sheet.
     ///
-    /// If the sheet is already closed, this has no effect. If the sheet is currently
-    /// opening, it will reverse direction and start closing from its current position.
+    /// If the sheet is already closed, this has no effect. If the sheet is
+    /// currently opening, it will reverse direction and start closing from
+    /// its current position.
     pub fn close(&self) {
         let mut inner = self.inner.write();
         if inner.is_open {
@@ -377,7 +381,8 @@ fn handle_drag_gestures(
     }
 }
 
-/// Place bottom sheet if present. Extracted to reduce complexity of the parent function.
+/// Place bottom sheet if present. Extracted to reduce complexity of the parent
+/// function.
 fn place_bottom_sheet_if_present(
     input: &tessera_ui::MeasureInput<'_>,
     controller_for_measure: &BottomSheetController,
@@ -584,13 +589,16 @@ fn render_content(
 ///
 /// # Usage
 ///
-/// Show contextual menus, supplemental information, or simple forms without navigating away from the main screen.
+/// Show contextual menus, supplemental information, or simple forms without
+/// navigating away from the main screen.
 ///
 /// ## Parameters
 ///
-/// - `args` — configuration for the sheet's appearance and behavior; see [`BottomSheetProviderArgs`].
+/// - `args` — configuration for the sheet's appearance and behavior; see
+///   [`BottomSheetProviderArgs`].
 /// - `main_content` — closure that renders the always-visible base UI.
-/// - `bottom_sheet_content` — closure that renders the content of the sheet itself.
+/// - `bottom_sheet_content` — closure that renders the content of the sheet
+///   itself.
 ///
 /// # Examples
 ///
@@ -631,19 +639,24 @@ pub fn bottom_sheet_provider(
 
 /// # bottom_sheet_provider_with_controller
 ///
-/// Controlled version of [`bottom_sheet_provider`] that accepts an external controller.
+/// Controlled version of [`bottom_sheet_provider`] that accepts an external
+/// controller.
 ///
 /// # Usage
 ///
-/// Show contextual menus, supplemental information, or simple forms without navigating away from the main screen.
-/// And also need to control the sheet's open/closed state programmatically via a controller.
+/// Show contextual menus, supplemental information, or simple forms without
+/// navigating away from the main screen. And also need to control the sheet's
+/// open/closed state programmatically via a controller.
 ///
 /// # Parameters
 ///
-/// - `args` — configuration for the sheet's appearance and behavior; see [`BottomSheetProviderArgs`].
-/// - `controller` — a [`BottomSheetController`] used to open and close the sheet.
+/// - `args` — configuration for the sheet's appearance and behavior; see
+///   [`BottomSheetProviderArgs`].
+/// - `controller` — a [`BottomSheetController`] used to open and close the
+///   sheet.
 /// - `main_content` — closure that renders the always-visible base UI.
-/// - `bottom_sheet_content` — closure that renders the content of the sheet itself.
+/// - `bottom_sheet_content` — closure that renders the content of the sheet
+///   itself.
 #[tessera]
 pub fn bottom_sheet_provider_with_controller(
     args: impl Into<BottomSheetProviderArgs>,

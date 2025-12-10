@@ -53,7 +53,8 @@ impl<'a> RowScope<'a> {
         self.child_weights.push(None);
     }
 
-    /// Adds a child component to the row with a specified weight for flexible space distribution.
+    /// Adds a child component to the row with a specified weight for flexible
+    /// space distribution.
     pub fn child_weighted<F>(&mut self, child_closure: F, weight: f32)
     where
         F: FnOnce() + Send + Sync + 'static,
@@ -92,12 +93,14 @@ struct MeasureWeightedChildrenArgs<'a> {
 ///
 /// ## Usage
 ///
-/// Stack components horizontally, with options for alignment and flexible spacing.
+/// Stack components horizontally, with options for alignment and flexible
+/// spacing.
 ///
 /// ## Parameters
 ///
 /// - `args` — configures the row's dimensions and alignment; see [`RowArgs`].
-/// - `scope_config` — a closure that receives a [`RowScope`] for adding children.
+/// - `scope_config` — a closure that receives a [`RowScope`] for adding
+///   children.
 ///
 /// ## Examples
 ///
@@ -188,8 +191,11 @@ fn measure_weighted_row(
 ) -> Result<ComputedData, MeasurementError> {
     // Prepare buffers and metadata for measurement:
     // - `children_sizes` stores each child's measurement result (width, height).
-    // - `max_child_height` tracks the maximum height among children to compute the row's final height.
-    // - `available_width_for_children` is the total width available to allocate to children under the current constraint (present only for Fill/Fixed/Wrap(max)).
+    // - `max_child_height` tracks the maximum height among children to compute the
+    //   row's final height.
+    // - `available_width_for_children` is the total width available to allocate to
+    //   children under the current constraint (present only for
+    //   Fill/Fixed/Wrap(max)).
     let mut children_sizes = vec![None; n];
     let mut max_child_height = Px(0);
     let available_width_for_children = row_effective_constraint
@@ -306,8 +312,9 @@ fn measure_unweighted_row(
 }
 
 fn classify_children(child_weights: &[Option<f32>]) -> (Vec<usize>, Vec<usize>, f32) {
-    // Split children into weighted and unweighted categories and compute the total weight of weighted children.
-    // Returns: (weighted_indices, unweighted_indices, total_weight)
+    // Split children into weighted and unweighted categories and compute the total
+    // weight of weighted children. Returns: (weighted_indices,
+    // unweighted_indices, total_weight)
     let mut weighted_indices = Vec::new();
     let mut unweighted_indices = Vec::new();
     let mut total_weight = 0.0;
@@ -318,7 +325,8 @@ fn classify_children(child_weights: &[Option<f32>]) -> (Vec<usize>, Vec<usize>, 
                 weighted_indices.push(i);
                 total_weight += w;
             } else {
-                // weight == 0.0 is treated as an unweighted item (it won't participate in remaining-space allocation)
+                // weight == 0.0 is treated as an unweighted item (it won't participate in
+                // remaining-space allocation)
                 unweighted_indices.push(i);
             }
         } else {
@@ -473,9 +481,10 @@ fn calculate_final_row_height(row_effective_constraint: &Constraint, max_child_h
 }
 
 fn place_children_with_alignment(args: &PlaceChildrenArgs) {
-    // Compute the initial x and spacing between children according to the main axis (horizontal),
-    // then iterate measured children:
-    // - use calculate_cross_axis_offset to compute each child's offset on the cross axis (vertical)
+    // Compute the initial x and spacing between children according to the main axis
+    // (horizontal), then iterate measured children:
+    // - use calculate_cross_axis_offset to compute each child's offset on the cross
+    //   axis (vertical)
     // - place each child with place_node at the computed coordinates
     let (mut current_x, spacing) = calculate_main_axis_layout(args);
 
@@ -499,8 +508,8 @@ fn place_children_with_alignment(args: &PlaceChildrenArgs) {
 }
 
 fn calculate_main_axis_layout(args: &PlaceChildrenArgs) -> (Px, Px) {
-    // Calculate the start position on the main axis and the spacing between children:
-    // Returns (start_x, spacing_between_children)
+    // Calculate the start position on the main axis and the spacing between
+    // children: Returns (start_x, spacing_between_children)
     let available_space = (args.final_row_width - args.total_children_width).max(Px(0));
     match args.main_axis_alignment {
         MainAxisAlignment::Start => (Px(0), Px(0)),
@@ -551,7 +560,8 @@ fn calculate_cross_axis_offset(
     // - Start: align to top (0)
     // - Center: center (remaining_height / 2)
     // - End: align to bottom (remaining_height)
-    // - Stretch: no offset (the child will be stretched to fill height; stretching handled in measurement)
+    // - Stretch: no offset (the child will be stretched to fill height; stretching
+    //   handled in measurement)
     match cross_axis_alignment {
         CrossAxisAlignment::Start => Px(0),
         CrossAxisAlignment::Center => (final_row_height - child_actual_size.height).max(Px(0)) / 2,

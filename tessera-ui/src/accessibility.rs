@@ -1,13 +1,17 @@
 //! # Accessibility Support
 //!
-//! This module provides accessibility infrastructure for Tessera UI using AccessKit.
-//! It enables screen readers and other assistive technologies to interact with Tessera applications.
+//! This module provides accessibility infrastructure for Tessera UI using
+//! AccessKit. It enables screen readers and other assistive technologies to
+//! interact with Tessera applications.
 //!
 //! ## Architecture
 //!
-//! - **Stable IDs**: Each component can have a stable accessibility ID that persists across frames
-//! - **Semantic Metadata**: Components provide semantic information (role, label, state, actions)
-//! - **Decentralized**: Component libraries decide their own semantics; the core only provides infrastructure
+//! - **Stable IDs**: Each component can have a stable accessibility ID that
+//!   persists across frames
+//! - **Semantic Metadata**: Components provide semantic information (role,
+//!   label, state, actions)
+//! - **Decentralized**: Component libraries decide their own semantics; the
+//!   core only provides infrastructure
 //!
 //! ## Usage
 //!
@@ -45,8 +49,9 @@ pub(crate) use tree_builder::{build_tree_update, dispatch_action};
 
 /// A stable identifier for accessibility nodes.
 ///
-/// This ID is generated based on the component's position in the tree and optional user-provided keys.
-/// It remains stable across frames as long as the UI structure doesn't change.
+/// This ID is generated based on the component's position in the tree and
+/// optional user-provided keys. It remains stable across frames as long as the
+/// UI structure doesn't change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AccessibilityId(pub u64);
 
@@ -72,14 +77,16 @@ impl AccessibilityId {
     /// - A 1-based index into the arena
     /// - A stamp for detecting node reuse
     ///
-    /// In Tessera's immediate-mode model, the component tree is cleared and rebuilt each frame,
-    /// so there's no node reuse within a frame. This makes the index stable for the current tree state,
-    /// which is exactly what AccessKit requires (IDs only need to be stable within the current tree).
+    /// In Tessera's immediate-mode model, the component tree is cleared and
+    /// rebuilt each frame, so there's no node reuse within a frame. This
+    /// makes the index stable for the current tree state, which is exactly
+    /// what AccessKit requires (IDs only need to be stable within the current
+    /// tree).
     ///
     /// # Stability Guarantee
     ///
-    /// The ID is stable within a single frame as long as the UI structure doesn't change.
-    /// This matches AccessKit's requirement perfectly.
+    /// The ID is stable within a single frame as long as the UI structure
+    /// doesn't change. This matches AccessKit's requirement perfectly.
     pub fn from_component_node_id(node_id: indextree::NodeId) -> Self {
         // NodeId implements Into<usize>, giving us the 1-based index
         let index: usize = node_id.into();

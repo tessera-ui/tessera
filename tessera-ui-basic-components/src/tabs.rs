@@ -66,9 +66,10 @@ fn blend_state_layer(base: Color, layer: Color, opacity: f32) -> Color {
 /// Holds the mutable state used by the [`tabs`] component.
 ///
 /// Clone this handle to share it across UI parts. The state tracks the
-/// active tab index, previous index, animation progress and cached values used to animate the
-/// indicator and content scrolling. The component mutates parts of this state when a tab is
-/// switched; callers may also read the active tab via [`TabsController::active_tab`].
+/// active tab index, previous index, animation progress and cached values used
+/// to animate the indicator and content scrolling. The component mutates parts
+/// of this state when a tab is switched; callers may also read the active tab
+/// via [`TabsController::active_tab`].
 struct TabsControllerInner {
     active_tab: usize,
     prev_active_tab: usize,
@@ -101,8 +102,9 @@ impl TabsControllerInner {
     /// Set the active tab index and initiate the transition animation.
     ///
     /// If the requested index equals the current active tab this is a no-op.
-    /// Otherwise the method updates cached indicator/content positions and resets the animation
-    /// progress so the component will animate to the new active tab.
+    /// Otherwise the method updates cached indicator/content positions and
+    /// resets the animation progress so the component will animate to the
+    /// new active tab.
     fn set_active_tab(&mut self, index: usize) {
         if self.active_tab != index {
             self.prev_active_tab = self.active_tab;
@@ -199,7 +201,8 @@ impl Default for TabsController {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TabsArgs {
-    /// Initial active tab index (0-based). Ignored if a controller is provided with its own state.
+    /// Initial active tab index (0-based). Ignored if a controller is provided
+    /// with its own state.
     #[builder(default = "0")]
     pub initial_active_tab: usize,
     /// Color of the active tab indicator.
@@ -280,7 +283,8 @@ impl<'a> TabsScope<'a> {
         });
     }
 
-    /// Adds a tab whose title closure receives the resolved content color (active/inactive).
+    /// Adds a tab whose title closure receives the resolved content color
+    /// (active/inactive).
     pub fn child_with_color<F1, F2>(&mut self, title: F1, content: F2)
     where
         F1: FnOnce(Color) + Send + Sync + 'static,
@@ -338,13 +342,16 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
 ///
 /// ## Usage
 ///
-/// Display a row of tab titles and a content area that switches between different views.
+/// Display a row of tab titles and a content area that switches between
+/// different views.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the tabs' layout, initial active tab, and indicator color; see [`TabsArgs`].
-/// - `scope_config` — a closure that receives a [`TabsScope`] for defining each tab's title and content.
-///   Use [`TabsScope::child_with_color`] to let the component supply Material-compliant active/inactive colors.
+/// - `args` — configures the tabs' layout, initial active tab, and indicator
+///   color; see [`TabsArgs`].
+/// - `scope_config` — a closure that receives a [`TabsScope`] for defining each
+///   tab's title and content. Use [`TabsScope::child_with_color`] to let the
+///   component supply Material-compliant active/inactive colors.
 ///
 /// ## Examples
 ///
@@ -422,13 +429,17 @@ where
 ///
 /// ## Usage
 ///
-/// Use when you need to synchronize active tab selection across components or restore selection after remounts.
+/// Use when you need to synchronize active tab selection across components or
+/// restore selection after remounts.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the tabs' layout and indicator color; see [`TabsArgs`].
-/// - `controller` — a [`TabsController`] storing the active tab index and animation progress.
-/// - `scope_config` — a closure that receives a [`TabsScope`] for defining each tab's title and content.
+/// - `args` — configures the tabs' layout and indicator color; see
+///   [`TabsArgs`].
+/// - `controller` — a [`TabsController`] storing the active tab index and
+///   animation progress.
+/// - `scope_config` — a closure that receives a [`TabsScope`] for defining each
+///   tab's title and content.
 ///
 /// ## Examples
 ///

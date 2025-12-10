@@ -159,8 +159,9 @@ impl MenuController {
 
     /// Opens the menu.
     ///
-    /// If an anchor was previously set via [`open_at`](Self::open_at), it is reused.
-    /// Otherwise, the menu defaults to anchoring to the provider's content.
+    /// If an anchor was previously set via [`open_at`](Self::open_at), it is
+    /// reused. Otherwise, the menu defaults to anchoring to the provider's
+    /// content.
     pub fn open(&self) {
         self.inner.write().is_open = true;
     }
@@ -218,7 +219,8 @@ pub struct MenuProviderArgs {
     /// Additional x/y offset applied after placement relative to the anchor.
     #[builder(default = "[Dp(0.0), MENU_VERTICAL_GAP]")]
     pub offset: [Dp; 2],
-    /// Width behavior of the menu container. Defaults to the Material 112–280 dp range.
+    /// Width behavior of the menu container. Defaults to the Material 112–280
+    /// dp range.
     #[builder(default = "default_menu_width()")]
     pub width: DimensionValue,
     /// Maximum height of the menu before scrolling is required.
@@ -227,13 +229,15 @@ pub struct MenuProviderArgs {
     /// Shape of the menu container.
     #[builder(default = "default_menu_shape()")]
     pub shape: Shape,
-    /// Optional shadow representing elevation. Defaults to a soft Material shadow.
+    /// Optional shadow representing elevation. Defaults to a soft Material
+    /// shadow.
     #[builder(default = "default_menu_shadow()", setter(strip_option))]
     pub shadow: Option<ShadowProps>,
     /// Background color of the menu container.
     #[builder(default = "default_menu_color()")]
     pub container_color: Color,
-    /// Color of the invisible background layer. Defaults to transparent (menus do not dim content).
+    /// Color of the invisible background layer. Defaults to transparent (menus
+    /// do not dim content).
     #[builder(default = "default_scrim_color()")]
     pub scrim_color: Color,
     /// Whether a background click should dismiss the menu.
@@ -371,13 +375,16 @@ fn apply_close_action(
 ///
 /// # Usage
 ///
-/// Wrap page content and show contextual or overflow actions aligned to a trigger element.
+/// Wrap page content and show contextual or overflow actions aligned to a
+/// trigger element.
 ///
 /// # Parameters
 ///
-/// - `args` — configures placement, styling, and dismissal behavior; see [`MenuProviderArgs`].
+/// - `args` — configures placement, styling, and dismissal behavior; see
+///   [`MenuProviderArgs`].
 /// - `main_content` — closure rendering the underlying page UI.
-/// - `menu_content` — closure that receives a [`MenuScope`] to register menu items.
+/// - `menu_content` — closure that receives a [`MenuScope`] to register menu
+///   items.
 ///
 /// # Examples
 ///
@@ -441,19 +448,23 @@ pub fn menu_provider(
 
 /// # menu_provider_with_controller
 ///
-/// Provides a Material Design 3 menu overlay anchored to a rectangle with an external controller.
+/// Provides a Material Design 3 menu overlay anchored to a rectangle with an
+/// external controller.
 ///
 /// # Usage
 ///
-/// Wrap page content and show contextual or overflow actions aligned to a trigger element,
-/// controlled via a shared [`MenuController`].
+/// Wrap page content and show contextual or overflow actions aligned to a
+/// trigger element, controlled via a shared [`MenuController`].
 ///
 /// # Parameters
 ///
-/// - `args` — configures placement, styling, and dismissal behavior; see [`MenuProviderArgs`].
-/// - `controller` — A [`MenuController`] controlling open/close and anchor position.
+/// - `args` — configures placement, styling, and dismissal behavior; see
+///   [`MenuProviderArgs`].
+/// - `controller` — A [`MenuController`] controlling open/close and anchor
+///   position.
 /// - `main_content` — closure rendering the underlying page UI.
-/// - `menu_content` — closure that receives a [`MenuScope`] to register menu items.
+/// - `menu_content` — closure that receives a [`MenuScope`] to register menu
+///   items.
 ///
 /// # Examples
 ///
@@ -668,7 +679,8 @@ pub fn menu_provider_with_controller(
     }));
 }
 
-/// Convenience wrapper for rendering only the menu overlay without extra main content.
+/// Convenience wrapper for rendering only the menu overlay without extra main
+/// content.
 #[tessera]
 pub fn menu(
     args: impl Into<MenuProviderArgs>,
@@ -677,7 +689,8 @@ pub fn menu(
     menu_provider(args, || {}, content);
 }
 
-/// Convenience wrapper for rendering only the menu overlay without extra main content with an external controller.
+/// Convenience wrapper for rendering only the menu overlay without extra main
+/// content with an external controller.
 #[tessera]
 pub fn menu_with_controller(
     args: impl Into<MenuProviderArgs>,
@@ -706,7 +719,8 @@ pub struct MenuItemArgs {
     /// Trailing icon displayed on the right edge.
     #[builder(default, setter(strip_option))]
     pub trailing_icon: Option<crate::icon::IconArgs>,
-    /// Whether the item is currently selected (renders a checkmark instead of a leading icon).
+    /// Whether the item is currently selected (renders a checkmark instead of a
+    /// leading icon).
     #[builder(default)]
     pub selected: bool,
     /// Whether the item can be interacted with.

@@ -88,7 +88,8 @@ where
     result
 }
 
-/// Reads a typed context value from the current scope, falling back to `T::default()` when missing.
+/// Reads a typed context value from the current scope, falling back to
+/// `T::default()` when missing.
 ///
 /// # Examples
 ///
