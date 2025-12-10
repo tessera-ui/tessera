@@ -25,7 +25,8 @@ fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Path {
 fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_macro2::TokenStream {
     quote! {
         {
-            use #crate_path::{ComponentNode, TesseraRuntime};
+            use #crate_path::ComponentNode;
+            use #crate_path::runtime::TesseraRuntime;
 
             TesseraRuntime::with_mut(|runtime| {
                 runtime.component_tree.add_node(
@@ -45,7 +46,8 @@ fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_ma
 fn measure_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
         let measure = {
-            use #crate_path::{MeasureFn, TesseraRuntime};
+            use #crate_path::MeasureFn;
+            use #crate_path::runtime::TesseraRuntime;
             |fun: Box<MeasureFn>| {
                 TesseraRuntime::with_mut(|runtime| {
                     runtime
@@ -63,7 +65,8 @@ fn measure_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
 fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
         let input_handler = {
-            use #crate_path::{InputHandlerFn, TesseraRuntime};
+            use #crate_path::InputHandlerFn;
+            use #crate_path::runtime::TesseraRuntime;
             |fun: Box<InputHandlerFn>| {
                 TesseraRuntime::with_mut(|runtime| {
                     runtime
@@ -81,7 +84,7 @@ fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStre
 fn on_minimize_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
         let on_minimize = {
-            use #crate_path::TesseraRuntime;
+            use #crate_path::runtime::TesseraRuntime;
             |fun: Box<dyn Fn(bool) + Send + Sync + 'static>| {
                 TesseraRuntime::with_mut(|runtime| runtime.on_minimize(fun));
             }
@@ -93,7 +96,7 @@ fn on_minimize_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream
 fn on_close_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
         let on_close = {
-            use #crate_path::TesseraRuntime;
+            use #crate_path::runtime::TesseraRuntime;
             |fun: Box<dyn Fn() + Send + Sync + 'static>| {
                 TesseraRuntime::with_mut(|runtime| runtime.on_close(fun));
             }
@@ -291,7 +294,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 struct ComponentScopeGuard;
                 impl Drop for ComponentScopeGuard {
                     fn drop(&mut self) {
-                        use #crate_path::TesseraRuntime;
+                        use #crate_path::runtime::TesseraRuntime;
                         TesseraRuntime::with_mut(|runtime| runtime.component_tree.pop_node());
                     }
                 }
