@@ -107,6 +107,70 @@
 //! However, `remember_with_key` is a litte cheaper than `key` + `remember`, so prefer it
 //! in simple cases.
 //!
+//! # Context
+//!
+//! The context mechanism is used to pass data down the component tree, avoiding the need to thread it through parameters.
+//!
+//! ```
+//! use tessera_ui::{Color, provide_context, tessera, use_context};
+//!
+//! #[derive(Default)]
+//! struct Theme {
+//!     color: Color,
+//! }
+//!
+//! #[tessera]
+//! fn parent() {
+//!     provide_context(Theme { color: Color::RED }, || {
+//!         child();
+//!     });
+//! }
+//!
+//! #[tessera]
+//! fn child() {
+//!     let theme = use_context::<Theme>();
+//!     assert_eq!(theme.color, Color::RED);
+//! }
+//! ```
+//!
+//! A context corresponds to a type. In the component tree, a component will receive the nearest parent-provided context of the same type; if none is provided, the type's default value will be used.
+//!
+//! ```
+//! use tessera_ui::{Color, provide_context, tessera, use_context};
+//!
+//! #[derive(Default)]
+//! struct Theme {
+//!     color: Color,
+//! }
+//!
+//! #[tessera]
+//! fn parent() {
+//!     provide_context(Theme { color: Color::RED }, || {
+//!         child();
+//!     });
+//! }
+//!
+//! #[tessera]
+//! fn child() {
+//!     let theme = use_context::<Theme>();
+//!     assert_eq!(theme.color, Color::RED);
+//!     provide_context(
+//!         Theme {
+//!             color: Color::GREEN,
+//!         },
+//!         || {
+//!             grandchild();
+//!         },
+//!     );
+//! }
+//!
+//! #[tessera]
+//! fn grandchild() {
+//!     let theme = use_context::<Theme>();
+//!     assert_eq!(theme.color, Color::GREEN);
+//! }
+//! ```
+//!
 //! # Layout
 //!
 //! Implement a measure closure to define a component's layout behavior.
