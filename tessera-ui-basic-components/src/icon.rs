@@ -210,7 +210,10 @@ pub fn icon(args: impl Into<IconArgs>) {
                     .push_draw_command(command);
             }
             IconContent::Raster(data) => {
-                let command = ImageCommand { data: data.clone() };
+                let command = ImageCommand {
+                    data: data.clone(),
+                    opacity: 1.0,
+                };
                 input
                     .metadatas
                     .entry(input.current_node_id)

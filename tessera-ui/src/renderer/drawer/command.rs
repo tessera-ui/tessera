@@ -44,4 +44,12 @@ pub trait DrawCommand: DynPartialEqDraw + Send + Sync {
     fn barrier(&self) -> Option<BarrierRequirement> {
         None
     }
+
+    /// Applies an opacity multiplier to this command.
+    ///
+    /// The default implementation is a no-op; override to scale internal color
+    /// data when group opacity is applied.
+    fn apply_opacity(&mut self, opacity: f32) {
+        let _ = opacity;
+    }
 }

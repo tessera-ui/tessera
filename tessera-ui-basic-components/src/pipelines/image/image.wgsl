@@ -6,6 +6,7 @@ struct VertexOutput {
 struct Uniforms {
     rect: vec4<f32>,
     is_bgra: u32,
+    opacity: f32,
 };
 @group(0) @binding(2)
 var<uniform> uniforms: Uniforms;
@@ -48,5 +49,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if uniforms.is_bgra == 1u {
         color = color.bgra;
     }
-    return color;
+    let alpha = color.a * uniforms.opacity;
+    let rgb = color.rgb * uniforms.opacity;
+    return vec4<f32>(rgb, alpha);
 }

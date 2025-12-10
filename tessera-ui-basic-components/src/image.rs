@@ -161,6 +161,7 @@ pub fn image(args: impl Into<ImageArgs>) {
 
         let image_command = ImageCommand {
             data: image_args.data.clone(),
+            opacity: 1.0,
         };
 
         input

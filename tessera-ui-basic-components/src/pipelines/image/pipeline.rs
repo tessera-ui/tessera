@@ -14,6 +14,7 @@ use super::command::{ImageCommand, ImageData};
 struct ImageUniforms {
     rect: Vec4,
     is_bgra: u32,
+    opacity: f32,
 }
 
 struct ImageResources {
@@ -134,6 +135,7 @@ impl ImagePipeline {
         start_pos: PxPosition,
         size: PxSize,
         config: &wgpu::SurfaceConfiguration,
+        opacity: f32,
     ) -> ImageUniforms {
         // Convert pixel positions/sizes into normalized device coordinates and size
         // ratios.
@@ -155,6 +157,7 @@ impl ImagePipeline {
         ImageUniforms {
             rect,
             is_bgra: if is_bgra { 1 } else { 0 },
+            opacity,
         }
     }
 
@@ -259,7 +262,8 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
 
             // Use the extracted uniforms computation helper (dereference borrowed tuple
             // elements).
-            let uniforms = Self::compute_uniforms(*start_pos, *size, context.config);
+            let uniforms =
+                Self::compute_uniforms(*start_pos, *size, context.config, command.opacity);
 
             let mut buffer = UniformBuffer::new(Vec::new());
             buffer.write(&uniforms).expect("buffer write failed");

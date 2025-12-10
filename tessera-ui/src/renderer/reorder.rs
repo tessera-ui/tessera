@@ -13,7 +13,10 @@ use petgraph::{
 
 use crate::{
     px::{Px, PxPosition, PxRect, PxSize},
-    renderer::command::{BarrierRequirement, Command},
+    renderer::{
+        RenderCommand,
+        command::{BarrierRequirement, Command},
+    },
 };
 
 /// Instruction category for sorting.
@@ -37,6 +40,7 @@ pub(crate) struct InstructionInfo {
     pub(crate) type_id: TypeId,
     pub(crate) size: PxSize,
     pub(crate) position: PxPosition,
+    pub(crate) opacity: f32,
     pub(crate) category: InstructionCategory,
     pub(crate) rect: PxRect,
 }
@@ -45,10 +49,14 @@ impl InstructionInfo {
     /// Creates a new `InstructionInfo` from a command and its context.
     ///
     /// It calculates the instruction category and the bounding rectangle.
-    pub(crate) fn new(
-        (command, type_id, size, position): (Command, TypeId, PxSize, PxPosition),
-        original_index: usize,
-    ) -> Self {
+    pub(crate) fn new(render_command: RenderCommand, original_index: usize) -> Self {
+        let RenderCommand {
+            command,
+            type_id,
+            size,
+            position,
+            opacity,
+        } = render_command;
         let (category, rect) = match &command {
             Command::Compute(command) => {
                 // Compute commands should have proper scoping based on their barrier
@@ -112,6 +120,7 @@ impl InstructionInfo {
             type_id,
             size,
             position,
+            opacity,
             category,
             rect,
         }
@@ -159,8 +168,8 @@ impl PartialOrd for PriorityNode {
 }
 
 pub(crate) fn reorder_instructions(
-    commands: impl IntoIterator<Item = (Command, TypeId, PxSize, PxPosition)>,
-) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
+    commands: impl IntoIterator<Item = RenderCommand>,
+) -> Vec<RenderCommand> {
     let instructions: Vec<InstructionInfo> = commands
         .into_iter()
         .enumerate()
@@ -186,7 +195,13 @@ pub(crate) fn reorder_instructions(
     for node_index in sorted_node_indices {
         let original_index = node_index.index();
         if let Some(info) = original_infos[original_index].take() {
-            sorted_instructions.push((info.command, info.type_id, info.size, info.position));
+            sorted_instructions.push(RenderCommand {
+                command: info.command,
+                type_id: info.type_id,
+                size: info.size,
+                position: info.position,
+                opacity: info.opacity,
+            });
         }
     }
 
@@ -400,26 +415,28 @@ mod tests {
         pos: PxPosition,
         barrier_req: Option<BarrierRequirement>,
         is_compute: bool,
-    ) -> (Command, TypeId, PxSize, PxPosition) {
+    ) -> RenderCommand {
         let size = PxSize::new(Px(10), Px(10));
         if is_compute {
             let cmd = MockComputeCommand {
                 barrier_req: barrier_req.unwrap_or(BarrierRequirement::Global),
             };
-            (
-                Command::Compute(Box::new(cmd)),
-                TypeId::of::<MockComputeCommand>(),
+            RenderCommand {
+                command: Command::Compute(Box::new(cmd)),
+                type_id: TypeId::of::<MockComputeCommand>(),
                 size,
-                pos,
-            )
+                position: pos,
+                opacity: 1.0,
+            }
         } else {
             let cmd = MockDrawCommand { barrier_req };
-            (
-                Command::Draw(Box::new(cmd)),
-                TypeId::of::<MockDrawCommand>(),
+            RenderCommand {
+                command: Command::Draw(Box::new(cmd)),
+                type_id: TypeId::of::<MockDrawCommand>(),
                 size,
-                pos,
-            )
+                position: pos,
+                opacity: 1.0,
+            }
         }
     }
 
@@ -427,31 +444,33 @@ mod tests {
         pos: PxPosition,
         barrier_req: Option<BarrierRequirement>,
         is_compute: bool,
-    ) -> (Command, TypeId, PxSize, PxPosition) {
+    ) -> RenderCommand {
         let size = PxSize::new(Px(10), Px(10));
         if is_compute {
             let cmd = MockComputeCommand2 {
                 barrier_req: barrier_req.unwrap_or(BarrierRequirement::Global),
             };
-            (
-                Command::Compute(Box::new(cmd)),
-                TypeId::of::<MockComputeCommand2>(),
+            RenderCommand {
+                command: Command::Compute(Box::new(cmd)),
+                type_id: TypeId::of::<MockComputeCommand2>(),
                 size,
-                pos,
-            )
+                position: pos,
+                opacity: 1.0,
+            }
         } else {
             let cmd = MockDrawCommand2 { barrier_req };
-            (
-                Command::Draw(Box::new(cmd)),
-                TypeId::of::<MockDrawCommand2>(),
+            RenderCommand {
+                command: Command::Draw(Box::new(cmd)),
+                type_id: TypeId::of::<MockDrawCommand2>(),
                 size,
-                pos,
-            )
+                position: pos,
+                opacity: 1.0,
+            }
         }
     }
 
-    fn get_positions(commands: &[(Command, TypeId, PxSize, PxPosition)]) -> Vec<PxPosition> {
-        commands.iter().map(|(_, _, _, pos)| *pos).collect()
+    fn get_positions(commands: &[RenderCommand]) -> Vec<PxPosition> {
+        commands.iter().map(|cmd| cmd.position).collect()
     }
 
     #[test]
@@ -550,7 +569,7 @@ mod tests {
         let reordered = reorder_instructions(commands);
         let kinds: Vec<&'static str> = reordered
             .iter()
-            .map(|(cmd, _, _, _)| match cmd {
+            .map(|rc| match rc.command {
                 Command::Compute(_) => "C",
                 Command::Draw(_) => "D",
                 _ => panic!("unexpected command variant"),
@@ -597,23 +616,25 @@ mod tests {
         let clip_rect = PxRect::new(Px(0), Px(0), Px(50), Px(50));
         let clip_size = PxSize::new(Px(50), Px(50));
         let commands = vec![
-            (
-                Command::ClipPush(clip_rect),
-                TypeId::of::<Command>(),
-                clip_size,
-                PxPosition::new(Px(0), Px(0)),
-            ),
+            RenderCommand {
+                command: Command::ClipPush(clip_rect),
+                type_id: TypeId::of::<Command>(),
+                size: clip_size,
+                position: PxPosition::new(Px(0), Px(0)),
+                opacity: 1.0,
+            },
             create_cmd(
                 PxPosition::new(Px(5), Px(5)),
                 Some(BarrierRequirement::Global),
                 false,
             ),
-            (
-                Command::ClipPop,
-                TypeId::of::<Command>(),
-                clip_size,
-                PxPosition::new(Px(0), Px(0)),
-            ),
+            RenderCommand {
+                command: Command::ClipPop,
+                type_id: TypeId::of::<Command>(),
+                size: clip_size,
+                position: PxPosition::new(Px(0), Px(0)),
+                opacity: 1.0,
+            },
             create_cmd2(
                 PxPosition::new(Px(60), Px(60)),
                 Some(BarrierRequirement::Global),
@@ -651,12 +672,13 @@ mod tests {
         let clip_rect = PxRect::new(Px(0), Px(0), Px(400), Px(400));
         let clip_size = PxSize::new(Px(400), Px(400));
         let commands = vec![
-            (
-                Command::ClipPush(clip_rect),
-                TypeId::of::<Command>(),
-                clip_size,
-                PxPosition::ZERO,
-            ),
+            RenderCommand {
+                command: Command::ClipPush(clip_rect),
+                type_id: TypeId::of::<Command>(),
+                size: clip_size,
+                position: PxPosition::ZERO,
+                opacity: 1.0,
+            },
             create_cmd(
                 PxPosition::new(Px(10), Px(10)),
                 Some(BarrierRequirement::Absolute(PxRect::new(
@@ -699,12 +721,13 @@ mod tests {
                 ))),
                 true,
             ),
-            (
-                Command::ClipPop,
-                TypeId::of::<Command>(),
-                clip_size,
-                PxPosition::ZERO,
-            ),
+            RenderCommand {
+                command: Command::ClipPop,
+                type_id: TypeId::of::<Command>(),
+                size: clip_size,
+                position: PxPosition::ZERO,
+                opacity: 1.0,
+            },
         ];
 
         let reordered = reorder_instructions(commands.clone());
@@ -767,7 +790,7 @@ mod tests {
             }
         }
 
-        fn random_commands(seed: u64) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
+        fn random_commands(seed: u64) -> Vec<RenderCommand> {
             let mut rng = Lcg::new(seed);
             let mut commands = Vec::new();
             let len = 5 + rng.next_range(6) as usize; // 5..10 commands before balancing clip stack
@@ -828,24 +851,26 @@ mod tests {
                             height,
                         );
                         let size = PxSize::new(width, height);
-                        commands.push((
-                            Command::ClipPush(rect),
-                            TypeId::of::<Command>(),
+                        commands.push(RenderCommand {
+                            command: Command::ClipPush(rect),
+                            type_id: TypeId::of::<Command>(),
                             size,
-                            PxPosition::new(rect.x, rect.y),
-                        ));
+                            position: PxPosition::new(rect.x, rect.y),
+                            opacity: 1.0,
+                        });
                         clip_depth += 1;
                     }
                     _ => {
                         // Clip pop if possible, otherwise fallback to draw
                         if clip_depth > 0 {
                             clip_depth -= 1;
-                            commands.push((
-                                Command::ClipPop,
-                                TypeId::of::<Command>(),
-                                PxSize::new(Px(0), Px(0)),
-                                PxPosition::new(Px(0), Px(0)),
-                            ));
+                            commands.push(RenderCommand {
+                                command: Command::ClipPop,
+                                type_id: TypeId::of::<Command>(),
+                                size: PxSize::new(Px(0), Px(0)),
+                                position: PxPosition::new(Px(0), Px(0)),
+                                opacity: 1.0,
+                            });
                         } else {
                             let pos = PxPosition::new(
                                 Px(rng.next_range(256) as i32),
@@ -859,12 +884,13 @@ mod tests {
 
             while clip_depth > 0 {
                 clip_depth -= 1;
-                commands.push((
-                    Command::ClipPop,
-                    TypeId::of::<Command>(),
-                    PxSize::new(Px(0), Px(0)),
-                    PxPosition::new(Px(0), Px(0)),
-                ));
+                commands.push(RenderCommand {
+                    command: Command::ClipPop,
+                    type_id: TypeId::of::<Command>(),
+                    size: PxSize::new(Px(0), Px(0)),
+                    position: PxPosition::new(Px(0), Px(0)),
+                    opacity: 1.0,
+                });
             }
 
             commands
@@ -899,15 +925,15 @@ mod tests {
                 expected.iter().zip(&reordered).enumerate()
             {
                 assert_eq!(
-                    expected_item.1, reordered_item.1,
+                    expected_item.type_id, reordered_item.type_id,
                     "TypeId mismatch at position {idx} for seed {seed}"
                 );
                 assert_eq!(
-                    expected_item.2, reordered_item.2,
+                    expected_item.size, reordered_item.size,
                     "Size mismatch at position {idx} for seed {seed}"
                 );
                 assert_eq!(
-                    expected_item.3, reordered_item.3,
+                    expected_item.position, reordered_item.position,
                     "Position mismatch at position {idx} for seed {seed}"
                 );
             }
@@ -1038,14 +1064,14 @@ mod tests {
 
         let mut compute_type_sequence = Vec::new();
         let mut saw_non_compute = false;
-        for (command, type_id, _, _) in &reordered {
-            match command {
+        for rc in &reordered {
+            match &rc.command {
                 Command::Compute(_) => {
                     assert!(
                         !saw_non_compute,
                         "Compute command appeared after non-compute commands"
                     );
-                    compute_type_sequence.push(*type_id);
+                    compute_type_sequence.push(rc.type_id);
                 }
                 _ => saw_non_compute = true,
             }
@@ -1179,7 +1205,7 @@ mod tests {
         // And they should all be consecutive (no reordering needed)
         let kinds: Vec<&'static str> = reordered
             .iter()
-            .map(|(cmd, _, _, _)| match cmd {
+            .map(|rc| match rc.command {
                 Command::Compute(_) => "C",
                 Command::Draw(_) => "D",
                 _ => panic!("unexpected command variant"),

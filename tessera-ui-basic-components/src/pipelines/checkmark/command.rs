@@ -60,4 +60,10 @@ impl DrawCommand for CheckmarkCommand {
         // No specific barrier requirements for checkmark commands
         None
     }
+
+    fn apply_opacity(&mut self, opacity: f32) {
+        self.color = self
+            .color
+            .with_alpha(self.color.a * opacity.clamp(0.0, 1.0));
+    }
 }

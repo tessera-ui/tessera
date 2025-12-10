@@ -12,7 +12,7 @@ use crate::{
     component_tree::node::measure_node,
     cursor::CursorEvent,
     px::{PxPosition, PxSize},
-    renderer::Command,
+    renderer::{Command, RenderCommand},
     runtime::{RuntimePhase, push_current_node, push_phase},
 };
 
@@ -27,6 +27,12 @@ pub use node::{
 struct ScreenSize {
     width: i32,
     height: i32,
+}
+
+struct DrawTraversalContext<'a> {
+    tree: &'a ComponentNodeTree,
+    metadatas: &'a ComponentNodeMetaDatas,
+    screen_size: ScreenSize,
 }
 
 /// Parameters for the compute function
@@ -146,10 +152,7 @@ impl ComponentTree {
     /// Returns a tuple of (commands, window_requests) where commands contain
     /// the rendering instructions with their associated sizes and positions.
     #[tracing::instrument(level = "debug", skip(self, params))]
-    pub fn compute(
-        &mut self,
-        params: ComputeParams<'_>,
-    ) -> (Vec<(Command, TypeId, PxSize, PxPosition)>, WindowRequests) {
+    pub fn compute(&mut self, params: ComputeParams<'_>) -> (Vec<RenderCommand>, WindowRequests) {
         let ComputeParams {
             screen_size,
             mut cursor_position,
@@ -320,35 +323,32 @@ fn compute_draw_commands_parallel(
     metadatas: &ComponentNodeMetaDatas,
     screen_width: i32,
     screen_height: i32,
-) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
-    compute_draw_commands_inner_parallel(
-        PxPosition::ZERO,
-        true,
-        node_id,
+) -> Vec<RenderCommand> {
+    let ctx = DrawTraversalContext {
         tree,
         metadatas,
-        ScreenSize {
+        screen_size: ScreenSize {
             width: screen_width,
             height: screen_height,
         },
-        None,
-    )
+    };
+
+    compute_draw_commands_inner_parallel(PxPosition::ZERO, true, node_id, &ctx, None, 1.0)
 }
 
-#[tracing::instrument(level = "trace", skip(tree, metadatas))]
+#[tracing::instrument(level = "trace", skip(ctx))]
 fn compute_draw_commands_inner_parallel(
     start_pos: PxPosition,
     is_root: bool,
     node_id: indextree::NodeId,
-    tree: &ComponentNodeTree,
-    metadatas: &ComponentNodeMetaDatas,
-    screen_size: ScreenSize,
+    ctx: &DrawTraversalContext<'_>,
     clip_rect: Option<PxRect>,
-) -> Vec<(Command, TypeId, PxSize, PxPosition)> {
+    current_opacity: f32,
+) -> Vec<RenderCommand> {
     let mut local_commands = Vec::new();
 
     // Get metadata and calculate absolute position. This MUST happen for all nodes.
-    let Some(mut metadata) = metadatas.get_mut(&node_id) else {
+    let Some(mut metadata) = ctx.metadatas.get_mut(&node_id) else {
         warn!("Missing metadata for node {node_id:?}; skipping draw computation");
         return local_commands;
     };
@@ -358,6 +358,8 @@ fn compute_draw_commands_inner_parallel(
         _ => return local_commands, // Skip nodes that were not placed at all.
     };
     let self_pos = start_pos + rel_pos;
+    let node_opacity = metadata.opacity;
+    let cumulative_opacity = current_opacity * node_opacity;
     metadata.abs_position = Some(self_pos);
 
     let size = metadata
@@ -393,39 +395,46 @@ fn compute_draw_commands_inner_parallel(
 
         clip_rect = Some(new_clip_rect);
 
-        local_commands.push((
-            Command::ClipPush(new_clip_rect),
-            TypeId::of::<Command>(),
+        local_commands.push(RenderCommand {
+            command: Command::ClipPush(new_clip_rect),
+            type_id: TypeId::of::<Command>(),
             size,
-            self_pos,
-        ));
+            position: self_pos,
+            opacity: cumulative_opacity,
+        });
     }
 
     // Viewport culling check
     let screen_rect = PxRect {
         x: Px(0),
         y: Px(0),
-        width: Px(screen_size.width),
-        height: Px(screen_size.height),
+        width: Px(ctx.screen_size.width),
+        height: Px(ctx.screen_size.height),
     };
 
     // Only drain commands if the node is visible.
     if size.width.0 > 0 && size.height.0 > 0 && !node_rect.is_orthogonal(&screen_rect) {
         for (cmd, type_id) in metadata.commands.drain(..) {
-            local_commands.push((cmd, type_id, size, self_pos));
+            local_commands.push(RenderCommand {
+                command: cmd,
+                type_id,
+                size,
+                position: self_pos,
+                opacity: cumulative_opacity,
+            });
         }
     }
 
     drop(metadata); // Release lock before recursing
 
     // ALWAYS recurse to children to ensure their abs_position is calculated.
-    let children: Vec<_> = node_id.children(tree).collect();
+    let children: Vec<_> = node_id.children(ctx.tree).collect();
     let child_results: Vec<Vec<_>> = children
         .into_par_iter()
         .filter_map(|child| {
             // Grab the parent's absolute position without holding the DashMap guard across recursion.
             let parent_abs_pos = {
-                let Some(parent_meta) = metadatas.get(&node_id) else {
+                let Some(parent_meta) = ctx.metadatas.get(&node_id) else {
                     warn!(
                         "Missing parent metadata for node {node_id:?}; skipping child {child:?}"
                     );
@@ -444,10 +453,9 @@ fn compute_draw_commands_inner_parallel(
                 parent_abs_pos, // Pass the calculated absolute position
                 false,
                 child,
-                tree,
-                metadatas,
-                screen_size,
+                ctx,
                 clip_rect,
+                cumulative_opacity,
             ))
         })
         .collect();
@@ -458,7 +466,13 @@ fn compute_draw_commands_inner_parallel(
 
     // If the node clips its children, we need to pop the clip command
     if clips_children {
-        local_commands.push((Command::ClipPop, TypeId::of::<Command>(), size, self_pos));
+        local_commands.push(RenderCommand {
+            command: Command::ClipPop,
+            type_id: TypeId::of::<Command>(),
+            size,
+            position: self_pos,
+            opacity: cumulative_opacity,
+        });
     }
 
     local_commands

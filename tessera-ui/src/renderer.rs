@@ -46,11 +46,23 @@ use winit::platform::android::{
     ActiveEventLoopExtAndroid, EventLoopBuilderExtAndroid, activity::AndroidApp,
 };
 
-type RenderComputationOutput = (
-    Vec<(Command, TypeId, PxSize, PxPosition)>,
-    WindowRequests,
-    std::time::Duration,
-);
+/// Unified render command type with metadata.
+/// Render command plus layout metadata and accumulated opacity.
+#[derive(Clone)]
+pub struct RenderCommand {
+    /// The draw/compute/clip command to execute.
+    pub command: Command,
+    /// Type identifier of the concrete command, used for batching.
+    pub type_id: TypeId,
+    /// Measured size of the component issuing the command.
+    pub size: PxSize,
+    /// Absolute position of the component issuing the command.
+    pub position: PxPosition,
+    /// Accumulated opacity applied to this command.
+    pub opacity: f32,
+}
+
+type RenderComputationOutput = (Vec<RenderCommand>, WindowRequests, std::time::Duration);
 
 /// Configuration for the Tessera runtime and renderer.
 ///
@@ -228,7 +240,7 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     /// Clipboard manager
     clipboard: Clipboard,
     /// Commands from the previous frame, for dirty rectangle optimization
-    previous_commands: Vec<(Command, TypeId, PxSize, PxPosition)>,
+    previous_commands: Vec<RenderCommand>,
     /// AccessKit adapter for accessibility support
     accessibility_adapter: Option<AccessKitAdapter>,
     /// Event loop proxy for sending accessibility events
@@ -622,7 +634,7 @@ Fps: {:.2}
     #[instrument(level = "debug", skip(args, commands))]
     fn perform_render<'a>(
         args: &mut RenderFrameArgs<'a>,
-        commands: impl IntoIterator<Item = (Command, TypeId, PxSize, PxPosition)>,
+        commands: impl IntoIterator<Item = RenderCommand>,
     ) -> std::time::Duration {
         let render_timer = Instant::now();
 
@@ -658,7 +670,7 @@ Fps: {:.2}
     fn execute_render_frame(
         entry_point: &F,
         args: &mut RenderFrameArgs<'_>,
-        previous_commands: &mut Vec<(Command, TypeId, PxSize, PxPosition)>,
+        previous_commands: &mut Vec<RenderCommand>,
         accessibility_enabled: bool,
         window_label: &str,
     ) -> Option<TreeUpdate> {
@@ -686,8 +698,20 @@ Fps: {:.2}
         } else {
             for (new_cmd_tuple, old_cmd_tuple) in new_commands.iter().zip(previous_commands.iter())
             {
-                let (new_cmd, _, new_size, new_pos) = new_cmd_tuple;
-                let (old_cmd, _, old_size, old_pos) = old_cmd_tuple;
+                let RenderCommand {
+                    command: new_cmd,
+                    size: new_size,
+                    position: new_pos,
+                    opacity: new_opacity,
+                    ..
+                } = new_cmd_tuple;
+                let RenderCommand {
+                    command: old_cmd,
+                    size: old_size,
+                    position: old_pos,
+                    opacity: old_opacity,
+                    ..
+                } = old_cmd_tuple;
 
                 let content_are_equal = match (new_cmd, old_cmd) {
                     (Command::Draw(new_draw_cmd), Command::Draw(old_draw_cmd)) => {
@@ -703,7 +727,11 @@ Fps: {:.2}
                     _ => false, // Mismatched command types
                 };
 
-                if !content_are_equal || new_size != old_size || new_pos != old_pos {
+                if !content_are_equal
+                    || new_size != old_size
+                    || new_pos != old_pos
+                    || (new_opacity - old_opacity).abs() > f32::EPSILON
+                {
                     dirty = true;
                     break;
                 }

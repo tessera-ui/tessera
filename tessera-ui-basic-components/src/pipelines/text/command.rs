@@ -14,6 +14,10 @@ impl DrawCommand for TextCommand {
         // No specific barrier requirements for text commands
         None
     }
+
+    fn apply_opacity(&mut self, opacity: f32) {
+        self.data.apply_opacity(opacity);
+    }
 }
 
 /// Describes size constraints for a text draw

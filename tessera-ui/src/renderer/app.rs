@@ -15,7 +15,10 @@ use crate::{
     dp::SCALE_FACTOR,
     pipeline_cache::{initialize_cache, save_cache},
     px::{PxRect, PxSize},
-    renderer::command::{AsAny, BarrierRequirement, Command},
+    renderer::{
+        RenderCommand,
+        command::{AsAny, BarrierRequirement, Command},
+    },
 };
 
 use super::{
@@ -650,7 +653,7 @@ impl WgpuApp {
     /// * `Err(wgpu::SurfaceError)` if there are issues with the surface
     pub(crate) fn render(
         &mut self,
-        commands: impl IntoIterator<Item = (Command, TypeId, PxSize, PxPosition)>,
+        commands: impl IntoIterator<Item = RenderCommand>,
     ) -> Result<(), wgpu::SurfaceError> {
         // Collect commands into a Vec to allow reordering
         let commands: Vec<_> = commands.into_iter().collect();
@@ -695,7 +698,14 @@ impl WgpuApp {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        for (command, command_type_id, size, start_pos) in commands {
+        for render_command in commands {
+            let RenderCommand {
+                command,
+                type_id: command_type_id,
+                size,
+                position: start_pos,
+                opacity,
+            } = render_command;
             let need_new_pass = commands_in_pass
                 .iter()
                 .rev()
@@ -786,7 +796,8 @@ impl WgpuApp {
             }
 
             match command {
-                Command::Draw(cmd) => {
+                Command::Draw(mut cmd) => {
+                    cmd.apply_opacity(opacity);
                     // Compute sampling area for copy and target rect for drawing
                     if let Some(barrier) = cmd.barrier() {
                         let sampling_rect =

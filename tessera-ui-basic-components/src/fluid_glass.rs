@@ -208,6 +208,17 @@ impl DrawCommand for FluidGlassCommand {
     fn barrier(&self) -> Option<BarrierRequirement> {
         Some(BarrierRequirement::uniform_padding_local(Px(10)))
     }
+
+    fn apply_opacity(&mut self, opacity: f32) {
+        let factor = opacity.clamp(0.0, 1.0);
+        self.args.tint_color = self
+            .args
+            .tint_color
+            .with_alpha(self.args.tint_color.a * factor);
+        if let Some(ripple_alpha) = self.args.ripple_alpha.as_mut() {
+            *ripple_alpha *= factor;
+        }
+    }
 }
 
 // Helper: input handler logic extracted to reduce complexity of `fluid_glass`

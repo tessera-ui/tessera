@@ -152,7 +152,6 @@ pub struct ComponentNode {
 }
 
 /// Contains metadata of the component node.
-#[derive(Default)]
 pub struct ComponentNodeMetaData {
     /// The computed data (size) of the node.
     /// None if the node is not computed yet.
@@ -176,6 +175,8 @@ pub struct ComponentNodeMetaData {
     pub(crate) commands: SmallVec<[(Command, TypeId); 4]>,
     /// Whether this node clips its children.
     pub clips_children: bool,
+    /// Opacity multiplier applied to this node and its descendants.
+    pub opacity: f32,
     /// Accessibility information for this node.
     pub accessibility: Option<AccessibilityNode>,
     /// Handler for accessibility actions on this node.
@@ -192,6 +193,7 @@ impl ComponentNodeMetaData {
             event_clip_rect: None,
             commands: SmallVec::new(),
             clips_children: false,
+            opacity: 1.0,
             accessibility: None,
             accessibility_action_handler: None,
         }
@@ -220,6 +222,12 @@ impl ComponentNodeMetaData {
         let command = command as Box<dyn ComputeCommand>;
         let command = Command::Compute(command);
         self.commands.push((command, TypeId::of::<C>()));
+    }
+}
+
+impl Default for ComponentNodeMetaData {
+    fn default() -> Self {
+        Self::none()
     }
 }
 
@@ -346,6 +354,17 @@ impl<'a> MeasureInput<'a> {
     pub fn disable_clipping(&self) {
         // Set the clipping flag to false for this node.
         self.metadata_mut().clips_children = false;
+    }
+
+    /// Sets the opacity multiplier for the current node.
+    pub fn set_opacity(&self, opacity: f32) {
+        self.metadata_mut().opacity = opacity.clamp(0.0, 1.0);
+    }
+
+    /// Multiplies the current opacity by the provided factor.
+    pub fn multiply_opacity(&self, opacity: f32) {
+        let mut metadata = self.metadata_mut();
+        metadata.opacity = (metadata.opacity * opacity).clamp(0.0, 1.0);
     }
 }
 

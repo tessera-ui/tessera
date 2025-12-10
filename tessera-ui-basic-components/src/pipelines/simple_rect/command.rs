@@ -7,4 +7,10 @@ pub struct SimpleRectCommand {
     pub color: Color,
 }
 
-impl DrawCommand for SimpleRectCommand {}
+impl DrawCommand for SimpleRectCommand {
+    fn apply_opacity(&mut self, opacity: f32) {
+        self.color = self
+            .color
+            .with_alpha(self.color.a * opacity.clamp(0.0, 1.0));
+    }
+}

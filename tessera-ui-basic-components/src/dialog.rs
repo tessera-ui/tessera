@@ -12,7 +12,8 @@ use std::{
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, DimensionValue, Dp, provide_context, remember, tessera, use_context, winit,
+    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, provide_context, remember, tessera,
+    use_context, winit,
 };
 
 use crate::{
@@ -242,6 +243,19 @@ fn dialog_content_wrapper(
     padding: Dp,
     content: impl FnOnce() + Send + Sync + 'static,
 ) {
+    measure(Box::new(move |input| {
+        input.set_opacity(alpha);
+        let Some(child_id) = input.children_ids.first().copied() else {
+            return Ok(ComputedData {
+                width: Px(0),
+                height: Px(0),
+            });
+        };
+        let computed = input.measure_child(child_id, input.parent_constraint)?;
+        input.place_child(child_id, PxPosition::ZERO);
+        Ok(computed)
+    }));
+
     boxed(
         BoxedArgsBuilder::default()
             .width(DimensionValue::FILLED)

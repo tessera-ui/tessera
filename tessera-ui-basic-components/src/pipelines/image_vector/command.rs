@@ -91,4 +91,8 @@ pub struct ImageVectorCommand {
     pub rotation: f32,
 }
 
-impl DrawCommand for ImageVectorCommand {}
+impl DrawCommand for ImageVectorCommand {
+    fn apply_opacity(&mut self, opacity: f32) {
+        self.tint = self.tint.with_alpha(self.tint.a * opacity.clamp(0.0, 1.0));
+    }
+}

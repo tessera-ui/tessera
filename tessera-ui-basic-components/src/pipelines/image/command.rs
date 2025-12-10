@@ -41,15 +41,21 @@ impl PartialEq for ImageData {
 impl Eq for ImageData {}
 
 /// Command for rendering an image in a UI component.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ImageCommand {
     /// Shared image buffer used by the draw pass.
     pub data: Arc<ImageData>,
+    /// Opacity multiplier applied to the sampled image.
+    pub opacity: f32,
 }
 
 impl DrawCommand for ImageCommand {
     fn barrier(&self) -> Option<tessera_ui::BarrierRequirement> {
         // This command does not require any specific barriers.
         None
+    }
+
+    fn apply_opacity(&mut self, opacity: f32) {
+        self.opacity = (self.opacity * opacity).clamp(0.0, 1.0);
     }
 }
