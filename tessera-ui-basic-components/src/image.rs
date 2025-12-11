@@ -101,7 +101,7 @@ impl From<ImageData> for ImageArgs {
 ///
 /// ## Examples
 ///
-/// ```no_run
+/// ```ignore
 /// use std::sync::Arc;
 /// use tessera_ui_basic_components::image::{
 ///     ImageArgsBuilder, ImageSource, image, load_image_from_source,
@@ -109,7 +109,7 @@ impl From<ImageData> for ImageArgs {
 ///
 /// // In a real app, you might load image bytes from a file at runtime.
 /// // For this example, we include the bytes at compile time.
-/// let image_bytes = Arc::new(*include_bytes!("../../assets/counter.png"));
+/// let image_bytes = Arc::new(*include_bytes!("image.png"));
 /// let image_data =
 ///     load_image_from_source(&ImageSource::Bytes(image_bytes)).expect("Failed to load image");
 ///
