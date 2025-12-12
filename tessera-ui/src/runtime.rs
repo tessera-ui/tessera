@@ -82,8 +82,7 @@ fn slot_table() -> &'static RwLock<SlotTable> {
 /// Handle to memoized state created by [`remember`] and [`remember_with_key`].
 ///
 /// `State<T>` is `Copy + Send + Sync` and provides `with`, `with_mut`, `get`,
-/// `set`, and `cloned` to read or update the stored value. Use it anywhere you
-/// previously passed around the `Arc<T>` returned by `remember`.
+/// `set`, and `cloned` to read or update the stored value.
 ///
 /// # Examples
 ///
@@ -721,14 +720,13 @@ where
 /// # Examples
 ///
 /// ```
-/// use std::sync::atomic::AtomicUsize;
 /// use tessera_ui::{key, remember, tessera};
 ///
 /// #[tessera]
 /// fn my_list(items: Vec<String>) {
 ///     for item in items {
 ///         key(item.clone(), || {
-///             let state = remember(|| AtomicUsize::new(0));
+///             let state = remember(|| 0);
 ///         });
 ///     }
 /// }

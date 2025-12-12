@@ -68,7 +68,6 @@
 //! loop, use `remember_with_key` and provide a stable key.
 //!
 //! ```
-//! use std::sync::atomic::AtomicUsize;
 //! use tessera_ui::{tessera, remember_with_key};
 //!
 //! struct User {
@@ -86,7 +85,7 @@
 //!
 //!     for user in users.iter() {
 //!         // Regardless of the user's position in the list, this `likes` state will follow the user.id
-//!         let likes = remember_with_key(user.id, || AtomicUsize::new(0));
+//!         let likes = remember_with_key(user.id, || 0);
 //!
 //!         /* component implementation */
 //!     }
@@ -96,22 +95,21 @@
 //! Or use the `key` function to influence the `remember` calls inside it.
 //!
 //! ```
-//! use std::sync::atomic::AtomicUsize;
 //! use tessera_ui::{key, remember, tessera};
 //!
 //! #[tessera]
 //! fn my_list(items: Vec<String>) {
 //!     for item in items {
 //!         key(item.clone(), || {
-//!             let state = remember(|| AtomicUsize::new(0));
+//!             let state = remember(|| 0);
 //!         });
 //!     }
 //! }
 //! ```
 //!
-//! This is equivalent to using `remember_with_key(item.clone(), ||
-//! AtomicUsize::new(0))`, but it is transparent to child components and
-//! necessary for virtual container-like components.
+//! This is equivalent to using `remember_with_key(item.clone(), || 0)`, but it
+//! is transparent to child components and necessary for virtual container-like
+//! components.
 //!
 //! However, `remember_with_key` is a litte cheaper than `key` + `remember`, so
 //! prefer it in simple cases.
