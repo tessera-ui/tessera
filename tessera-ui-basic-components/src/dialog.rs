@@ -10,10 +10,9 @@ use std::{
 };
 
 use derive_builder::Builder;
-use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, provide_context, remember, tessera,
-    use_context, winit,
+    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, State, provide_context, remember,
+    tessera, use_context, winit,
 };
 
 use crate::{
@@ -93,68 +92,58 @@ pub struct DialogProviderArgs {
     pub is_open: bool,
 }
 
-#[derive(Default)]
-struct DialogStateInner {
-    is_open: bool,
-    timer: Option<Instant>,
-}
-
 /// Controller for [`dialog_provider`], controlling visibility and animation.
 pub struct DialogController {
-    inner: RwLock<DialogStateInner>,
+    is_open: bool,
+    timer: Option<Instant>,
 }
 
 impl DialogController {
     /// Creates a new dialog controller.
     pub fn new(initial_open: bool) -> Self {
         Self {
-            inner: RwLock::new(DialogStateInner {
-                is_open: initial_open,
-                timer: None,
-            }),
+            is_open: initial_open,
+            timer: None,
         }
     }
 
     /// Opens the dialog, starting the animation if necessary.
-    pub fn open(&self) {
-        let mut inner = self.inner.write();
-        if !inner.is_open {
-            inner.is_open = true;
+    pub fn open(&mut self) {
+        if !self.is_open {
+            self.is_open = true;
             let mut timer = Instant::now();
-            if let Some(old_timer) = inner.timer {
+            if let Some(old_timer) = self.timer {
                 let elapsed = old_timer.elapsed();
                 if elapsed < ANIM_TIME {
                     timer += ANIM_TIME - elapsed;
                 }
             }
-            inner.timer = Some(timer);
+            self.timer = Some(timer);
         }
     }
 
     /// Closes the dialog, starting the closing animation if necessary.
-    pub fn close(&self) {
-        let mut inner = self.inner.write();
-        if inner.is_open {
-            inner.is_open = false;
+    pub fn close(&mut self) {
+        if self.is_open {
+            self.is_open = false;
             let mut timer = Instant::now();
-            if let Some(old_timer) = inner.timer {
+            if let Some(old_timer) = self.timer {
                 let elapsed = old_timer.elapsed();
                 if elapsed < ANIM_TIME {
                     timer += ANIM_TIME - elapsed;
                 }
             }
-            inner.timer = Some(timer);
+            self.timer = Some(timer);
         }
     }
 
     /// Returns whether the dialog is currently open.
     pub fn is_open(&self) -> bool {
-        self.inner.read().is_open
+        self.is_open
     }
 
     fn snapshot(&self) -> (bool, Option<Instant>) {
-        let inner = self.inner.read();
-        (inner.is_open, inner.timer)
+        (self.is_open, self.timer)
     }
 }
 
@@ -199,7 +188,7 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
         }
         DialogStyle::Material => {
             let alpha = scrim_alpha_for(progress, is_open);
-            let scrim_color = use_context::<MaterialColorScheme>().scrim;
+            let scrim_color = use_context::<MaterialColorScheme>().get().scrim;
             surface(
                 SurfaceArgsBuilder::default()
                     .style(scrim_color.with_alpha(alpha).into())
@@ -298,6 +287,7 @@ fn dialog_content_wrapper(
                                 SurfaceArgsBuilder::default()
                                     .style(
                                         use_context::<MaterialColorScheme>()
+                                            .get()
                                             .surface_container_high
                                             .into(),
                                     )
@@ -376,11 +366,12 @@ pub fn dialog_provider(
     let args: DialogProviderArgs = args.into();
     let controller = remember(|| DialogController::new(args.is_open));
 
-    if args.is_open != controller.is_open() {
+    let current_open = controller.with(|c| c.is_open());
+    if args.is_open != current_open {
         if args.is_open {
-            controller.open();
+            controller.with_mut(|c| c.open());
         } else {
-            controller.close();
+            controller.with_mut(|c| c.close());
         }
     }
 
@@ -442,7 +433,7 @@ pub fn dialog_provider(
 #[tessera]
 pub fn dialog_provider_with_controller(
     args: impl Into<DialogProviderArgs>,
-    controller: Arc<DialogController>,
+    controller: State<DialogController>,
     main_content: impl FnOnce(),
     dialog_content: impl FnOnce(f32) + Send + Sync + 'static,
 ) {
@@ -453,7 +444,7 @@ pub fn dialog_provider_with_controller(
 
     // If the dialog is open, render the modal overlay.
     // Sample state once to avoid repeated locks and improve readability.
-    let (is_open, timer_opt) = controller.snapshot();
+    let (is_open, timer_opt) = controller.with(|c| c.snapshot());
 
     let is_animating = timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME);
 
@@ -555,7 +546,7 @@ impl BasicDialogArgsBuilder {
 #[tessera]
 pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
     let args = args.into();
-    let scheme = (*use_context::<MaterialColorScheme>()).clone();
+    let scheme = use_context::<MaterialColorScheme>().get();
     let alignment = if args.icon.is_some() {
         CrossAxisAlignment::Center
     } else {

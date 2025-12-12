@@ -6,9 +6,8 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition, State,
     accesskit::{Action, Role},
     focus_state::Focus,
     remember, tessera,
@@ -22,73 +21,44 @@ use crate::{
 
 const ACCESSIBILITY_STEP: f32 = 0.05;
 
-/// State for the `glass_slider` component.
-pub(crate) struct GlassSliderStateInner {
-    /// True if the user is currently dragging the slider.
-    pub is_dragging: bool,
-    /// The focus handler for the slider.
-    pub focus: Focus,
-}
-
-impl Default for GlassSliderStateInner {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl GlassSliderStateInner {
-    pub fn new() -> Self {
-        Self {
-            is_dragging: false,
-            focus: Focus::new(),
-        }
-    }
-}
-
 /// Controller for the `glass_slider` component.
 pub struct GlassSliderController {
-    inner: RwLock<GlassSliderStateInner>,
+    is_dragging: bool,
+    focus: Focus,
 }
 
 impl GlassSliderController {
     /// Creates a new slider controller.
     pub fn new() -> Self {
         Self {
-            inner: RwLock::new(GlassSliderStateInner::new()),
+            is_dragging: false,
+            focus: Focus::new(),
         }
-    }
-
-    pub(crate) fn read(&self) -> RwLockReadGuard<'_, GlassSliderStateInner> {
-        self.inner.read()
-    }
-
-    pub(crate) fn write(&self) -> RwLockWriteGuard<'_, GlassSliderStateInner> {
-        self.inner.write()
     }
 
     /// Returns whether the slider thumb is currently being dragged.
     pub fn is_dragging(&self) -> bool {
-        self.read().is_dragging
+        self.is_dragging
     }
 
     /// Sets the dragging state manually. This allows custom gesture handling.
-    pub fn set_dragging(&self, dragging: bool) {
-        self.write().is_dragging = dragging;
+    pub fn set_dragging(&mut self, dragging: bool) {
+        self.is_dragging = dragging;
     }
 
     /// Requests focus for this slider instance.
-    pub fn request_focus(&self) {
-        self.write().focus.request_focus();
+    pub fn request_focus(&mut self) {
+        self.focus.request_focus();
     }
 
     /// Clears focus from this slider.
-    pub fn clear_focus(&self) {
-        self.write().focus.unfocus();
+    pub fn clear_focus(&mut self) {
+        self.focus.unfocus();
     }
 
     /// Returns `true` if the slider currently has focus.
     pub fn is_focused(&self) -> bool {
-        self.read().focus.is_focused()
+        self.focus.is_focused()
     }
 }
 
@@ -176,7 +146,7 @@ fn compute_progress_width(total_width: Px, value: f32, border_padding_px: f32) -
 /// Process cursor events and update the slider state accordingly.
 /// Returns the new value (0.0..1.0) if a change should be emitted.
 fn process_cursor_events(
-    controller: &Arc<GlassSliderController>,
+    controller: State<GlassSliderController>,
     input: &tessera_ui::InputHandlerInput,
     width_f: f32,
 ) -> Option<f32> {
@@ -185,23 +155,22 @@ fn process_cursor_events(
     for event in input.cursor_events.iter() {
         match &event.content {
             CursorEventContent::Pressed(_) => {
-                {
-                    let mut inner = controller.write();
-                    inner.focus.request_focus();
-                    inner.is_dragging = true;
-                }
+                controller.with_mut(|c| {
+                    c.request_focus();
+                    c.set_dragging(true);
+                });
                 if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
                     new_value = Some(v);
                 }
             }
             CursorEventContent::Released(_) => {
-                controller.write().is_dragging = false;
+                controller.with_mut(|c| c.set_dragging(false));
             }
             _ => {}
         }
     }
 
-    if controller.read().is_dragging
+    if controller.with(|c| c.is_dragging())
         && let Some(v) = cursor_progress(input.cursor_position_rel, width_f)
     {
         new_value = Some(v);
@@ -308,7 +277,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>) {
 #[tessera]
 pub fn glass_slider_with_controller(
     args: impl Into<GlassSliderArgs>,
-    controller: Arc<GlassSliderController>,
+    controller: State<GlassSliderController>,
 ) {
     let args: GlassSliderArgs = args.into();
     let border_padding_px = args.track_border_width.to_px().to_f32() * 2.0;
@@ -348,7 +317,7 @@ pub fn glass_slider_with_controller(
 
     let on_change = args.on_change.clone();
     let args_for_handler = args.clone();
-    let controller_for_handler = controller.clone();
+
     input_handler(Box::new(move |mut input| {
         if !args_for_handler.disabled {
             let is_in_component =
@@ -358,10 +327,10 @@ pub fn glass_slider_with_controller(
                 input.requests.cursor_icon = CursorIcon::Pointer;
             }
 
-            if is_in_component || controller_for_handler.read().is_dragging {
+            if is_in_component || controller.with(|c| c.is_dragging()) {
                 let width_f = input.computed_data.width.0 as f32;
 
-                if let Some(v) = process_cursor_events(&controller_for_handler, &input, width_f)
+                if let Some(v) = process_cursor_events(controller, &input, width_f)
                     && (v - args_for_handler.value).abs() > f32::EPSILON
                 {
                     on_change(v);

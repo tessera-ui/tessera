@@ -76,7 +76,12 @@ fn row_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(use_context::<MaterialColorScheme>().surface_variant.into())
+                    .style(
+                        use_context::<MaterialColorScheme>()
+                            .get()
+                            .surface_variant
+                            .into(),
+                    )
                     .build()
                     .unwrap(),
                 || {
@@ -114,7 +119,12 @@ fn column_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(use_context::<MaterialColorScheme>().surface_variant.into())
+                    .style(
+                        use_context::<MaterialColorScheme>()
+                            .get()
+                            .surface_variant
+                            .into(),
+                    )
                     .build()
                     .unwrap(),
                 || {
@@ -152,7 +162,12 @@ fn boxed_showcase() {
             surface(
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
-                    .style(use_context::<MaterialColorScheme>().surface_variant.into())
+                    .style(
+                        use_context::<MaterialColorScheme>()
+                            .get()
+                            .surface_variant
+                            .into(),
+                    )
                     .build()
                     .unwrap(),
                 || {

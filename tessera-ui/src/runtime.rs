@@ -3,12 +3,13 @@
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     hash::{Hash, Hasher},
+    marker::PhantomData,
     sync::{Arc, OnceLock},
 };
 
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 
 use crate::{NodeId, component_tree::ComponentTree};
 
@@ -21,14 +22,9 @@ thread_local! {
     static LOGIC_ID_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
     /// Current execution phase stack for the thread.
     static PHASE_STACK: RefCell<Vec<RuntimePhase>> = const { RefCell::new(Vec::new()) };
-}
-
-#[derive(Clone)]
-struct SlotEntry {
-    logic_id: u64,
-    slot_hash: u64,
-    type_id: TypeId,
-    value: Arc<dyn Any + Send + Sync>,
+    /// Call counter stack: tracks sequential remember calls within each group.
+    /// Each entry corresponds to a group depth level.
+    static CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
@@ -38,97 +34,160 @@ struct SlotKey {
     type_id: TypeId,
 }
 
+impl Default for SlotKey {
+    fn default() -> Self {
+        Self {
+            logic_id: 0,
+            slot_hash: 0,
+            type_id: TypeId::of::<()>(),
+        }
+    }
+}
+
+#[derive(Default)]
+struct SlotEntry {
+    key: SlotKey,
+    generation: u64,
+    value: Option<Arc<dyn Any + Send + Sync>>,
+    last_alive_epoch: u64,
+}
+
 #[derive(Default)]
 struct SlotTable {
-    prev: Vec<SlotEntry>,
-    curr: Vec<SlotEntry>,
-    read_cursor: usize,
-    stash: HashMap<SlotKey, VecDeque<SlotEntry>>,
+    entries: Vec<SlotEntry>,
+    free_list: Vec<u32>,
+    key_to_slot: HashMap<SlotKey, u32>,
+    epoch: u64,
 }
 
 impl SlotTable {
     fn begin_frame(&mut self) {
-        std::mem::swap(&mut self.prev, &mut self.curr);
-        self.curr.clear();
-        self.read_cursor = 0;
-        self.stash.clear();
+        self.epoch = self.epoch.wrapping_add(1);
     }
 
     fn reset(&mut self) {
-        self.prev.clear();
-        self.curr.clear();
-        self.read_cursor = 0;
-        self.stash.clear();
-    }
-
-    fn take_from_stash<T>(&mut self, slot_key: &SlotKey) -> Option<Arc<T>>
-    where
-        T: Send + Sync + 'static,
-    {
-        let entries = self.stash.get_mut(slot_key)?;
-        let entry = entries.pop_front()?;
-        if entries.is_empty() {
-            self.stash.remove(slot_key);
-        }
-        let value = entry
-            .value
-            .clone()
-            .downcast::<T>()
-            .expect("remember_with_key slot type mismatch");
-        self.curr.push(entry);
-        Some(value)
-    }
-
-    fn scan_prev_for<T>(&mut self, slot_key: &SlotKey) -> Option<Arc<T>>
-    where
-        T: Send + Sync + 'static,
-    {
-        while self.read_cursor < self.prev.len() {
-            let entry = self.prev[self.read_cursor].clone();
-            self.read_cursor += 1;
-
-            let entry_key = SlotKey {
-                logic_id: entry.logic_id,
-                slot_hash: entry.slot_hash,
-                type_id: entry.type_id,
-            };
-
-            if &entry_key == slot_key {
-                let value = entry
-                    .value
-                    .clone()
-                    .downcast::<T>()
-                    .expect("remember_with_key slot type mismatch");
-                self.curr.push(entry);
-                return Some(value);
-            }
-
-            self.stash.entry(entry_key).or_default().push_back(entry);
-        }
-
-        None
-    }
-
-    fn allocate_slot<T, F>(&mut self, slot_key: SlotKey, init: F) -> Arc<T>
-    where
-        F: FnOnce() -> T,
-        T: Send + Sync + 'static,
-    {
-        let value = Arc::new(init());
-        self.curr.push(SlotEntry {
-            logic_id: slot_key.logic_id,
-            slot_hash: slot_key.slot_hash,
-            type_id: slot_key.type_id,
-            value: value.clone(),
-        });
-        value
+        self.entries.clear();
+        self.free_list.clear();
+        self.key_to_slot.clear();
+        self.epoch = 0;
     }
 }
 
-static SLOT_TABLE: OnceLock<Mutex<SlotTable>> = OnceLock::new();
+static SLOT_TABLE: OnceLock<RwLock<SlotTable>> = OnceLock::new();
 
-fn slot_table() -> &'static Mutex<SlotTable> {
-    SLOT_TABLE.get_or_init(|| Mutex::new(SlotTable::default()))
+fn slot_table() -> &'static RwLock<SlotTable> {
+    SLOT_TABLE.get_or_init(|| RwLock::new(SlotTable::default()))
+}
+
+/// Handle to memoized state created by [`remember`] and [`remember_with_key`].
+///
+/// `State<T>` is `Copy + Send + Sync` and provides `with`, `with_mut`, `get`,
+/// `set`, and `cloned` to read or update the stored value. Use it anywhere you
+/// previously passed around the `Arc<T>` returned by `remember`.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::{remember, tessera};
+///
+/// #[tessera]
+/// fn counter() {
+///     let count = remember(|| 0usize);
+///     count.with_mut(|c| *c += 1);
+///     let current = count.get();
+///     assert!(current >= 1);
+/// }
+/// ```
+pub struct State<T> {
+    slot: u32,
+    generation: u64,
+    _marker: PhantomData<T>,
+}
+
+impl<T> Copy for State<T> {}
+
+impl<T> Clone for State<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> State<T> {
+    fn new(slot: u32, generation: u64) -> Self {
+        Self {
+            slot,
+            generation,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> State<T>
+where
+    T: Send + Sync + 'static,
+{
+    fn load_entry(&self) -> Arc<dyn Any + Send + Sync> {
+        let table = slot_table().read();
+        let entry = table
+            .entries
+            .get(self.slot as usize)
+            .unwrap_or_else(|| panic!("State points to freed slot: {}", self.slot));
+
+        if entry.generation != self.generation {
+            panic!(
+                "State is stale (slot {}, generation {}, current generation {})",
+                self.slot, self.generation, entry.generation
+            );
+        }
+
+        if entry.key.type_id != TypeId::of::<T>() {
+            panic!(
+                "State type mismatch for slot {}: expected {}, stored {:?}",
+                self.slot,
+                std::any::type_name::<T>(),
+                entry.key.type_id
+            );
+        }
+
+        entry
+            .value
+            .as_ref()
+            .unwrap_or_else(|| panic!("State slot {} has been cleared", self.slot))
+            .clone()
+    }
+
+    fn load_lock(&self) -> Arc<RwLock<T>> {
+        self.load_entry()
+            .downcast::<RwLock<T>>()
+            .unwrap_or_else(|_| panic!("State slot {} downcast failed", self.slot))
+    }
+
+    /// Execute a closure with a shared reference to the stored value.
+    pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+        let lock = self.load_lock();
+        let guard = lock.read();
+        f(&guard)
+    }
+
+    /// Execute a closure with a mutable reference to the stored value.
+    pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+        let lock = self.load_lock();
+        let mut guard = lock.write();
+        f(&mut guard)
+    }
+
+    /// Get a cloned value. Requires `T: Clone`.
+    pub fn get(&self) -> T
+    where
+        T: Clone,
+    {
+        self.with(Clone::clone)
+    }
+
+    /// Replace the stored value.
+    pub fn set(&self, value: T) {
+        self.with_mut(|slot| *slot = value);
+    }
 }
 
 /// Global singleton instance of the [`TesseraRuntime`].
@@ -284,9 +343,38 @@ impl Drop for NodeContextGuard {
 }
 
 /// Push the given node id as the current executing component for this thread.
-pub fn push_current_node(node_id: NodeId, logic_id: u64) -> NodeContextGuard {
+pub fn push_current_node(node_id: NodeId, base_logic_id: u64) -> NodeContextGuard {
     NODE_CONTEXT_STACK.with(|stack| stack.borrow_mut().push(node_id));
-    LOGIC_ID_STACK.with(|stack| stack.borrow_mut().push(logic_id));
+
+    // Get the parent's call index and increment it
+    // This distinguishes multiple calls to the same component (e.g., foo(1);
+    // foo(2);)
+    let (parent_call_index, parent_logic_id) = CALL_COUNTER_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        let index = stack.last().copied().unwrap_or(0);
+        if let Some(last) = stack.last_mut() {
+            *last += 1;
+        }
+        let parent_id = LOGIC_ID_STACK.with(|s| s.borrow().last().copied().unwrap_or(0));
+        (index, parent_id)
+    });
+
+    // Combine base_logic_id with parent_logic_id and parent_call_index to create a
+    // unique instance ID This ensures:
+    // 1. foo(1) and foo(2) get different logic_ids (via parent_call_index)
+    // 2. Components in different container instances get different logic_ids (via
+    //    parent_logic_id)
+    let instance_logic_id = if parent_call_index == 0 && parent_logic_id == 0 {
+        base_logic_id
+    } else {
+        hash_components(&[&base_logic_id, &parent_logic_id, &parent_call_index])
+    };
+
+    LOGIC_ID_STACK.with(|stack| stack.borrow_mut().push(instance_logic_id));
+
+    // Push a new call counter layer for this component's internal remember calls
+    CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+
     NodeContextGuard {
         popped: false,
         logic_id_popped: false,
@@ -300,6 +388,14 @@ fn pop_current_node() {
         debug_assert!(
             popped.is_some(),
             "Attempted to pop current node from an empty stack"
+        );
+    });
+    // Pop this component's call counter layer
+    CALL_COUNTER_STACK.with(|stack| {
+        let popped = stack.borrow_mut().pop();
+        debug_assert!(
+            popped.is_some(),
+            "CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
         );
     });
 }
@@ -402,7 +498,28 @@ fn compute_slot_key<K: Hash>(key: &K) -> (u64, u64) {
     let group_path = current_group_path();
     let group_path_hash = hash_components(&[&group_path]);
     let key_hash = hash_components(&[key]);
-    (logic_id, group_path_hash ^ key_hash)
+
+    // Get the call counter to distinguish multiple remember calls within the same
+    // component Note: logic_id already distinguishes different component
+    // instances (foo(1) vs foo(2)) and group_path_hash handles nested control
+    // flow (if/loop)
+    let call_counter = CALL_COUNTER_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        debug_assert!(
+            !stack.is_empty(),
+            "CALL_COUNTER_STACK is empty; remember must be called inside a component"
+        );
+        let counter = *stack
+            .last()
+            .expect("CALL_COUNTER_STACK should not be empty");
+        *stack
+            .last_mut()
+            .expect("CALL_COUNTER_STACK should not be empty") += 1;
+        counter
+    });
+
+    let slot_hash = hash_components(&[&group_path_hash, &key_hash, &call_counter]);
+    (logic_id, slot_hash)
 }
 
 pub(crate) fn ensure_build_phase() {
@@ -424,12 +541,35 @@ pub(crate) fn ensure_build_phase() {
 
 /// Swap slot buffers at the beginning of a frame.
 pub fn begin_frame_slots() {
-    slot_table().lock().begin_frame();
+    slot_table().write().begin_frame();
 }
 
 /// Reset all slot buffers (used on suspension).
 pub fn reset_slots() {
-    slot_table().lock().reset();
+    slot_table().write().reset();
+}
+
+/// Recycle state slots that were not touched in the current frame.
+pub fn end_frame_slots() {
+    let mut table = slot_table().write();
+    let epoch = table.epoch;
+    let mut freed: Vec<(u32, SlotKey)> = Vec::new();
+
+    for (slot, entry) in table.entries.iter_mut().enumerate() {
+        if entry.last_alive_epoch == epoch || entry.value.is_none() {
+            continue;
+        }
+
+        freed.push((slot as u32, entry.key));
+        entry.value = None;
+        entry.generation = entry.generation.wrapping_add(1);
+        entry.last_alive_epoch = 0;
+    }
+
+    for (slot, key) in freed {
+        table.key_to_slot.remove(&key);
+        table.free_list.push(slot);
+    }
 }
 
 /// Remember a value across frames with an explicit key.
@@ -445,12 +585,9 @@ pub fn reset_slots() {
 ///
 /// # Interior mutability
 ///
-/// This function returns an `Arc<T>`, which is shared and immutable by default.
-/// This design supports multi-threaded measurement. If you need a value that
-/// can be modified across frames (for example a counter or input buffer), use a
-/// type that provides interior mutability (e.g., `Mutex`, `RwLock`, or atomic
-/// types). If you need to mutate the value during measurement or input
-/// handling, it must also be `Send + Sync`.
+/// This function returns a `State<T>` handle that internally uses an
+/// `Arc<RwLock<T>>`. Use `with`, `with_mut`, `get`, or `set` to read or update
+/// the value without handling synchronization primitives directly.
 ///
 /// # Comparison with [`remember`]
 ///
@@ -462,7 +599,7 @@ pub fn reset_slots() {
 ///
 /// This function must be called during a component's build/render phase.
 /// Calling it during the measure or input handling phases will panic.
-pub fn remember_with_key<K, F, T>(key: K, init: F) -> Arc<T>
+pub fn remember_with_key<K, F, T>(key: K, init: F) -> State<T>
 where
     K: Hash,
     F: FnOnce() -> T,
@@ -477,16 +614,70 @@ where
         type_id,
     };
 
-    let mut table = slot_table().lock();
-    if let Some(value) = table.take_from_stash::<T>(&slot_key) {
-        return value;
-    }
+    let mut table = slot_table().write();
+    let mut init_opt = Some(init);
 
-    if let Some(value) = table.scan_prev_for::<T>(&slot_key) {
-        return value;
-    }
+    if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
+        let epoch = table.epoch;
+        let generation = {
+            let entry = table
+                .entries
+                .get_mut(slot as usize)
+                .expect("slot entry should exist");
 
-    table.allocate_slot(slot_key, init)
+            if entry.key.type_id != slot_key.type_id {
+                panic!(
+                    "remember_with_key type mismatch: expected {}, found {:?}",
+                    std::any::type_name::<T>(),
+                    entry.key.type_id
+                );
+            }
+
+            entry.last_alive_epoch = epoch;
+            if entry.value.is_none() {
+                let init_fn = init_opt
+                    .take()
+                    .expect("remember_with_key init called more than once");
+                entry.value = Some(Arc::new(RwLock::new(init_fn())));
+                entry.generation = entry.generation.wrapping_add(1);
+            }
+
+            entry.generation
+        };
+
+        State::new(slot, generation)
+    } else {
+        let slot = if let Some(slot) = table.free_list.pop() {
+            slot
+        } else {
+            table.entries.push(SlotEntry {
+                key: slot_key,
+                generation: 0,
+                value: None,
+                last_alive_epoch: 0,
+            });
+            (table.entries.len() - 1) as u32
+        };
+
+        let epoch = table.epoch;
+        let generation = {
+            let entry = table
+                .entries
+                .get_mut(slot as usize)
+                .expect("slot entry should exist");
+            entry.key = slot_key;
+            entry.generation = entry.generation.wrapping_add(1);
+            let init_fn = init_opt
+                .take()
+                .expect("remember_with_key init called more than once");
+            entry.value = Some(Arc::new(RwLock::new(init_fn())));
+            entry.last_alive_epoch = epoch;
+            entry.generation
+        };
+
+        table.key_to_slot.insert(slot_key, slot);
+        State::new(slot, generation)
+    }
 }
 
 /// Remember a value across frames.
@@ -498,12 +689,9 @@ where
 ///
 /// # Interior mutability
 ///
-/// This function returns an `Arc<T>`, which is shared and immutable by default.
-/// This design supports multi-threaded measurement. If you need a value that
-/// can be modified across frames (for example a counter or input buffer), use a
-/// type that provides interior mutability (e.g., `Mutex`, `RwLock`, or atomic
-/// types). If you need to mutate the value during measurement or input
-/// handling, it must also be `Send + Sync`.
+/// This function returns a `State<T>` handle that internally uses an
+/// `Arc<RwLock<T>>`. Use `with`, `with_mut`, `get`, or `set` to read or update
+/// the value without handling synchronization primitives directly.
 ///
 /// # Comparison with [`remember_with_key`]
 ///
@@ -517,7 +705,7 @@ where
 ///
 /// This function must be called during a component's build/render phase.
 /// Calling it during the measure or input handling phases will panic.
-pub fn remember<F, T>(init: F) -> Arc<T>
+pub fn remember<F, T>(init: F) -> State<T>
 where
     F: FnOnce() -> T,
     T: Send + Sync + 'static,

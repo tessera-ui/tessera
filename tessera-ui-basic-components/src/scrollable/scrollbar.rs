@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, Constraint, CursorEventContent, Dp, PressKeyEventType, Px, PxPosition,
+    Color, Constraint, CursorEventContent, Dp, PressKeyEventType, Px, PxPosition, State,
     accesskit::{Action, Role},
     tessera,
 };
@@ -30,7 +30,7 @@ pub struct ScrollBarArgs {
     /// The thickness of the scrollbar
     pub thickness: Dp,
     /// The scrollable's state, used for interaction.
-    pub state: Arc<ScrollableController>,
+    pub state: State<ScrollableController>,
     /// The behavior of the scrollbar visibility.
     pub scrollbar_behavior: ScrollBarBehavior,
     /// The color of the scrollbar track.
@@ -418,13 +418,10 @@ fn scroll_accessibility_step(
         }
     };
 
-    {
-        let mut scroll_state = args.state.write();
-        let new_target = scroll_state
-            .target_position
-            .saturating_offset(delta.x, delta.y);
-        scroll_state.set_target_position(new_target);
-    }
+    let new_target = args
+        .state
+        .with(|c| c.target_position().saturating_offset(delta.x, delta.y));
+    args.state.with_mut(|c| c.set_target_position(new_target));
 
     if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
         let mut scroll_state = state.write();
@@ -453,7 +450,8 @@ fn update_drag_vertical(
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
         let new_target_pos = calculate_target(cursor_pos.y);
-        args.state.write().set_target_position(new_target_pos);
+        args.state
+            .with_mut(|c| c.set_target_position(new_target_pos));
         mark_scroll_activity(state, &args.scrollbar_behavior);
     } else {
         // Cursor left window: stop dragging.
@@ -486,7 +484,7 @@ fn handle_state_v(
 
     // Capture current target position once to avoid locking inside helper on every
     // call.
-    let fallback_pos = args.state.target_position();
+    let fallback_pos = args.state.with(|c| c.target_position());
     let calculate_target_pos = |cursor_y: Px| -> PxPosition {
         calculate_target_pos_v(
             cursor_y,
@@ -540,7 +538,8 @@ fn handle_state_v(
         if is_on_track_v(cursor_pos, args.thickness.to_px(), track_height) {
             // Jump to the clicked position
             let new_target_pos = calculate_target_pos(cursor_pos.y);
-            args.state.write().set_target_position(new_target_pos);
+            args.state
+                .with_mut(|c| c.set_target_position(new_target_pos));
         }
     }
 }
@@ -555,7 +554,8 @@ fn update_drag_horizontal(
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
         let new_target_pos = calculate_target(cursor_pos.x);
-        args.state.write().set_target_position(new_target_pos);
+        args.state
+            .with_mut(|c| c.set_target_position(new_target_pos));
         mark_scroll_activity(state, &args.scrollbar_behavior);
     } else {
         // Cursor left window: stop dragging.
@@ -575,7 +575,7 @@ fn handle_state_h(
 
     // Capture current target position once to avoid locking inside helper on every
     // call.
-    let fallback_pos = args.state.target_position();
+    let fallback_pos = args.state.with(|c| c.target_position());
     let calculate_target_pos = |cursor_x: Px| -> PxPosition {
         calculate_target_pos_h(
             cursor_x,
@@ -627,7 +627,8 @@ fn handle_state_h(
         if is_on_track_h(cursor_pos, args.thickness.to_px(), track_width) {
             // Jump to the clicked position
             let new_target_pos = calculate_target_pos(cursor_pos.x);
-            args.state.write().set_target_position(new_target_pos);
+            args.state
+                .with_mut(|c| c.set_target_position(new_target_pos));
         }
     }
 }

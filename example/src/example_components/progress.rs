@@ -1,7 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     progress::{ProgressArgsBuilder, progress},
@@ -12,22 +12,9 @@ use tessera_ui_basic_components::{
     text::text,
 };
 
-#[derive(Clone)]
-struct ProgressShowcaseState {
-    progress: Arc<Mutex<f32>>,
-}
-
-impl Default for ProgressShowcaseState {
-    fn default() -> Self {
-        Self {
-            progress: Arc::new(Mutex::new(0.5)),
-        }
-    }
-}
-
 #[tessera]
 #[shard]
-pub fn progress_showcase(#[state] state: ProgressShowcaseState) {
+pub fn progress_showcase() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -48,7 +35,7 @@ pub fn progress_showcase(#[state] state: ProgressShowcaseState) {
                             .build()
                             .unwrap(),
                         move || {
-                            test_content(state);
+                            test_content();
                         },
                     );
                 },
@@ -58,20 +45,21 @@ pub fn progress_showcase(#[state] state: ProgressShowcaseState) {
 }
 
 #[tessera]
-fn test_content(state: Arc<ProgressShowcaseState>) {
+fn test_content() {
+    let progress_value = remember(|| 0.5);
+
     column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .build()
             .unwrap(),
-        |scope| {
+        move |scope| {
             scope.child(|| {
                 text("This is the progress, adjust the slider below to change its value.")
             });
 
-            let state_clone = state.clone();
             scope.child(move || {
-                let progress_val = *state_clone.progress.lock().unwrap();
+                let progress_val = progress_value.get();
                 progress(
                     ProgressArgsBuilder::default()
                         .value(progress_val)
@@ -85,14 +73,13 @@ fn test_content(state: Arc<ProgressShowcaseState>) {
                 spacer(Dp(10.0));
             });
 
-            let state_clone = state.clone();
             scope.child(move || {
-                let on_change = Arc::new(closure!(clone state_clone.progress, |new_value| {
-                    *progress.lock().unwrap() = new_value;
+                let on_change = Arc::new(closure!(clone progress_value, |new_value| {
+                    progress_value.set(new_value);
                 }));
                 slider(
                     SliderArgsBuilder::default()
-                        .value(*state_clone.progress.lock().unwrap())
+                        .value(progress_value.get())
                         .on_change(on_change)
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()

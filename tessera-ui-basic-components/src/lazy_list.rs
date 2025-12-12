@@ -13,8 +13,8 @@ use std::{
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, Px, PxPosition, key,
-    remember, tessera,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, Px, PxPosition, State,
+    key, remember, tessera,
 };
 
 use crate::{
@@ -25,32 +25,27 @@ use crate::{
 const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 
 /// Persistent state shared by lazy list components.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct LazyListController {
-    scrollable_controller: Arc<ScrollableController>,
     cache: Arc<RwLock<LazyListCache>>,
+}
+
+impl Default for LazyListController {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LazyListController {
     /// Creates a new lazy list state with default scroll offsets and caches.
     pub fn new() -> Self {
         Self {
-            scrollable_controller: Arc::new(ScrollableController::default()),
             cache: Arc::new(RwLock::new(LazyListCache::default())),
         }
     }
 
-    fn scrollable_controller(&self) -> Arc<ScrollableController> {
-        self.scrollable_controller.clone()
-    }
-
     fn cache(&self) -> Arc<RwLock<LazyListCache>> {
         self.cache.clone()
-    }
-
-    fn override_scroll_extent(&self, axis: LazyListAxis, main: Px, cross: Px) {
-        let size = axis.pack_size(main, cross);
-        self.scrollable_controller.override_child_size(size);
     }
 }
 
@@ -365,7 +360,7 @@ where
 #[tessera]
 pub fn lazy_column_with_controller<F>(
     args: LazyColumnArgs,
-    controller: Arc<LazyListController>,
+    controller: State<LazyListController>,
     configure: F,
 ) where
     F: FnOnce(&mut LazyColumnScope),
@@ -391,14 +386,11 @@ pub fn lazy_column_with_controller<F>(
         padding_cross: sanitize_spacing(Px::from(args.content_padding)),
     };
 
-    let controller_for_child = controller.clone();
-    scrollable_with_controller(
-        scrollable_args,
-        controller.scrollable_controller(),
-        move || {
-            lazy_list_view(view_args, controller_for_child.clone(), slots.clone());
-        },
-    );
+    // Create a ScrollableController for this lazy list instance
+    let scroll_controller = remember(ScrollableController::default);
+    scrollable_with_controller(scrollable_args, scroll_controller, move || {
+        lazy_list_view(view_args, controller, slots.clone(), scroll_controller);
+    });
 }
 
 /// # lazy_row
@@ -497,7 +489,7 @@ where
 #[tessera]
 pub fn lazy_row_with_controller<F>(
     args: LazyRowArgs,
-    controller: Arc<LazyListController>,
+    controller: State<LazyListController>,
     configure: F,
 ) where
     F: FnOnce(&mut LazyRowScope),
@@ -523,14 +515,11 @@ pub fn lazy_row_with_controller<F>(
         padding_cross: sanitize_spacing(Px::from(args.content_padding)),
     };
 
-    let controller_for_child = controller.clone();
-    scrollable_with_controller(
-        scrollable_args,
-        controller.scrollable_controller(),
-        move || {
-            lazy_list_view(view_args, controller_for_child.clone(), slots.clone());
-        },
-    );
+    // Create a ScrollableController for this lazy list instance
+    let scroll_controller = remember(ScrollableController::default);
+    scrollable_with_controller(scrollable_args, scroll_controller, move || {
+        lazy_list_view(view_args, controller, slots.clone(), scroll_controller);
+    });
 }
 
 #[derive(Clone)]
@@ -548,13 +537,14 @@ struct LazyListViewArgs {
 #[tessera]
 fn lazy_list_view(
     view_args: LazyListViewArgs,
-    controller: Arc<LazyListController>,
+    controller: State<LazyListController>,
     slots: Vec<LazySlot>,
+    scroll_controller: State<ScrollableController>,
 ) {
     let plan = LazySlotPlan::new(slots);
     let total_count = plan.total_count();
 
-    let cache = controller.cache();
+    let cache = controller.with(|c| c.cache());
     {
         let mut guard = cache.write();
         guard.set_item_count(total_count);
@@ -562,12 +552,12 @@ fn lazy_list_view(
 
     let scroll_offset = view_args
         .axis
-        .scroll_offset(controller.scrollable_controller().child_position());
+        .scroll_offset(scroll_controller.with(|s| s.child_position()));
     let padding_main = view_args.padding_main;
     let viewport_span = resolve_viewport_span(
         view_args
             .axis
-            .visible_span(controller.scrollable_controller().visible_size()),
+            .visible_span(scroll_controller.with(|s| s.visible_size())),
         view_args.estimated_item_main,
         view_args.item_spacing,
     );
@@ -594,7 +584,6 @@ fn lazy_list_view(
 
     let cache_for_measure = cache.clone();
     let viewport_limit = viewport_span + padding_main + padding_main;
-    let controller_for_measure = controller.clone();
     let child_constraint_axis = view_args.axis;
     let estimated_item_main = view_args.estimated_item_main;
     let spacing = view_args.item_spacing;
@@ -645,11 +634,8 @@ fn lazy_list_view(
             let inner_cross = max_cross;
             let total_main_with_padding = total_main + padding_main + padding_main;
             let cross_with_padding = inner_cross + padding_cross + padding_cross;
-            controller_for_measure.override_scroll_extent(
-                child_constraint_axis,
-                total_main_with_padding,
-                cross_with_padding,
-            );
+            let size = child_constraint_axis.pack_size(total_main_with_padding, cross_with_padding);
+            scroll_controller.with_mut(|c| c.override_child_size(size));
 
             let reported_main = clamp_reported_main(
                 child_constraint_axis,

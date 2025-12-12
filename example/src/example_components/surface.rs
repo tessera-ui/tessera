@@ -1,8 +1,6 @@
 use std::{fmt::Display, sync::Arc};
 
-use closure::closure;
-use parking_lot::RwLock;
-use tessera_ui::{DimensionValue, Dp, shard, tessera, use_context};
+use tessera_ui::{DimensionValue, Dp, State, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{ColumnArgsBuilder, column},
@@ -15,11 +13,6 @@ use tessera_ui_basic_components::{
     text::{TextArgsBuilder, text},
     theme::MaterialColorScheme,
 };
-
-#[derive(Default)]
-struct SurfaceShowcaseState {
-    example_surface_state: Arc<RwLock<ExampleSurfaceState>>,
-}
 
 struct CornerRadius(f32);
 
@@ -71,8 +64,8 @@ impl Default for ExampleSurfaceState {
 
 #[tessera]
 #[shard]
-pub fn surface_showcase(#[state] state: SurfaceShowcaseState) {
-    let example_surface_state = state.example_surface_state.clone();
+pub fn surface_showcase() {
+    let example_surface_state = remember(ExampleSurfaceState::default);
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -103,8 +96,7 @@ pub fn surface_showcase(#[state] state: SurfaceShowcaseState) {
 }
 
 #[tessera]
-fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
-    let state_for_surface = state.clone();
+fn test_content(state: State<ExampleSurfaceState>) {
     column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -112,14 +104,16 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
             .build()
             .unwrap(),
         move |scope| {
-            let state = state_for_surface.clone();
             scope.child(move || {
-                let state = state.read();
-                let corner_radius = Dp(state.corner_radius.value.0 as f64);
-                let width = state.width.value;
-                let height = state.height.value;
-                let border_width = state.border_width.value;
-                let state_string = (*state).to_string();
+                let (corner_radius, width, height, border_width, state_string) = state.with(|s| {
+                    (
+                        Dp(s.corner_radius.value.0 as f64),
+                        s.width.value,
+                        s.height.value,
+                        s.border_width.value,
+                        s.to_string(),
+                    )
+                });
 
                 row(
                     RowArgsBuilder::default()
@@ -133,13 +127,18 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                             let style = if border_width.to_pixels_f32() > 0.1 {
                                 SurfaceStyle::FilledOutlined {
                                     fill_color: use_context::<MaterialColorScheme>()
+                                        .get()
                                         .primary_container,
-                                    border_color: use_context::<MaterialColorScheme>().outline,
+                                    border_color: use_context::<MaterialColorScheme>()
+                                        .get()
+                                        .outline,
                                     border_width,
                                 }
                             } else {
                                 SurfaceStyle::Filled {
-                                    color: use_context::<MaterialColorScheme>().primary_container,
+                                    color: use_context::<MaterialColorScheme>()
+                                        .get()
+                                        .primary_container,
                                 }
                             };
                             surface(
@@ -193,14 +192,13 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                 )
             });
 
-            let state = state_for_surface.clone();
             scope.child(move || {
                 surface_config_slider(
                     "Width",
-                    state.read().width.value.0 as f32 / 500.0,
-                    Arc::new(closure!(clone state, |value| {
-                        state.write().width.value = Dp(f64::from(value) * 500.0);
-                    })),
+                    state.with(|s| s.width.value.0 as f32 / 500.0),
+                    Arc::new(move |value| {
+                        state.with_mut(|s| s.width.value = Dp(f64::from(value) * 500.0));
+                    }),
                 );
             });
 
@@ -212,16 +210,14 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                         .unwrap(),
                 )
             });
-
-            let state = state_for_surface.clone();
 
             scope.child(move || {
                 surface_config_slider(
                     "Height",
-                    state.read().height.value.0 as f32 / 500.0,
-                    Arc::new(closure!(clone state, |value| {
-                        state.write().height.value = Dp(f64::from(value) * 500.0);
-                    })),
+                    state.with(|s| s.height.value.0 as f32 / 500.0),
+                    Arc::new(move |value| {
+                        state.with_mut(|s| s.height.value = Dp(f64::from(value) * 500.0));
+                    }),
                 );
             });
 
@@ -234,14 +230,13 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                 )
             });
 
-            let state = state_for_surface.clone();
             scope.child(move || {
                 surface_config_slider(
                     "Corner Radius",
-                    state.read().corner_radius.value.0 / 100.0,
-                    Arc::new(closure!(clone state, |value| {
-                        state.write().corner_radius.value = CornerRadius(value * 100.0);
-                    })),
+                    state.with(|s| s.corner_radius.value.0 / 100.0),
+                    Arc::new(move |value| {
+                        state.with_mut(|s| s.corner_radius.value = CornerRadius(value * 100.0));
+                    }),
                 );
             });
 
@@ -254,14 +249,13 @@ fn test_content(state: Arc<RwLock<ExampleSurfaceState>>) {
                 )
             });
 
-            let state = state_for_surface.clone();
             scope.child(move || {
                 surface_config_slider(
                     "Border Width",
-                    state.read().border_width.value.0 as f32 / 20.0,
-                    Arc::new(closure!(clone state, |value| {
-                        state.write().border_width.value = Dp(f64::from(value) * 20.0);
-                    })),
+                    state.with(|s| s.border_width.value.0 as f32 / 20.0),
+                    Arc::new(move |value| {
+                        state.with_mut(|s| s.border_width.value = Dp(f64::from(value) * 20.0));
+                    }),
                 );
             });
         },

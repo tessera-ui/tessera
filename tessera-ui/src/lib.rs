@@ -50,12 +50,12 @@
 //! persistent state across frames within a component.
 //!
 //! ```
-//! use std::sync::atomic::AtomicUsize;
 //! use tessera_ui::{remember, tessera};
 //!
 //! #[tessera]
 //! fn counter() {
-//!     let mut count = remember(|| AtomicUsize::new(0));
+//!     let count = remember(|| 0);
+//!     count.with_mut(|c| *c += 1);
 //! }
 //! ```
 //!
@@ -124,7 +124,7 @@
 //! ```
 //! use tessera_ui::{Color, provide_context, tessera, use_context};
 //!
-//! #[derive(Default)]
+//! #[derive(Default, Clone)]
 //! struct Theme {
 //!     color: Color,
 //! }
@@ -139,7 +139,7 @@
 //! #[tessera]
 //! fn child() {
 //!     let theme = use_context::<Theme>();
-//!     assert_eq!(theme.color, Color::RED);
+//!     theme.with(|t| assert_eq!(t.color, Color::RED));
 //! }
 //! ```
 //!
@@ -150,7 +150,7 @@
 //! ```
 //! use tessera_ui::{Color, provide_context, tessera, use_context};
 //!
-//! #[derive(Default)]
+//! #[derive(Default, Clone)]
 //! struct Theme {
 //!     color: Color,
 //! }
@@ -165,7 +165,7 @@
 //! #[tessera]
 //! fn child() {
 //!     let theme = use_context::<Theme>();
-//!     assert_eq!(theme.color, Color::RED);
+//!     theme.with(|t| assert_eq!(t.color, Color::RED));
 //!     provide_context(
 //!         Theme {
 //!             color: Color::GREEN,
@@ -179,7 +179,7 @@
 //! #[tessera]
 //! fn grandchild() {
 //!     let theme = use_context::<Theme>();
-//!     assert_eq!(theme.color, Color::GREEN);
+//!     theme.with(|t| assert_eq!(t.color, Color::GREEN));
 //! }
 //! ```
 //!
@@ -242,7 +242,7 @@ pub use crate::{
         ComponentTree, ComputedData, Constraint, DimensionValue, ImeRequest, InputHandlerFn,
         InputHandlerInput, MeasureFn, MeasureInput, MeasurementError,
     },
-    context::{provide_context, use_context},
+    context::{Context, provide_context, use_context},
     cursor::{CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent},
     dp::Dp,
     focus_state::Focus,
@@ -255,7 +255,7 @@ pub use crate::{
         },
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
     },
-    runtime::{key, remember, remember_with_key},
+    runtime::{State, key, remember, remember_with_key},
 };
 
 use ime_state::ImeState;

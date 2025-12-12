@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use tessera_ui::{
-    ComputedData, CursorEventContent, InputHandlerInput, PxPosition,
+    ComputedData, CursorEventContent, Focus, InputHandlerInput, PxPosition, State,
     accesskit::{Action, Role},
     winit::window::CursorIcon,
 };
@@ -36,29 +36,29 @@ pub(super) fn cursor_progress(
 
 pub(super) fn handle_slider_state(
     input: &mut InputHandlerInput,
-    state: &Arc<SliderController>,
+    state: State<SliderController>,
     args: &SliderArgs,
     layout: &SliderLayout,
 ) {
     if args.disabled {
-        let mut inner = state.write();
-        inner.is_hovered = false;
-        inner.is_dragging = false;
+        state.with_mut(|inner| {
+            inner.is_hovered = false;
+            inner.is_dragging = false;
+        });
         return;
     }
 
     let is_in_component = cursor_within_component(input.cursor_position_rel, &input.computed_data);
 
-    {
-        let mut inner = state.write();
+    state.with_mut(|inner| {
         inner.is_hovered = is_in_component;
-    }
+    });
 
     if is_in_component {
         input.requests.cursor_icon = CursorIcon::Pointer;
     }
 
-    if !is_in_component && !state.read().is_dragging {
+    if !is_in_component && !state.with(|s| s.is_dragging) {
         return;
     }
 
@@ -71,24 +71,23 @@ pub(super) fn handle_slider_state(
 
 fn handle_cursor_events(
     input: &mut InputHandlerInput,
-    state: &Arc<SliderController>,
+    state: State<SliderController>,
     new_value: &mut Option<f32>,
     layout: &SliderLayout,
 ) {
     for event in input.cursor_events.iter() {
         match &event.content {
             CursorEventContent::Pressed(_) => {
-                {
-                    let mut inner = state.write();
+                state.with_mut(|inner| {
                     inner.focus.request_focus();
                     inner.is_dragging = true;
-                }
+                });
                 if let Some(v) = cursor_progress(input.cursor_position_rel, layout) {
                     *new_value = Some(v);
                 }
             }
             CursorEventContent::Released(_) => {
-                state.write().is_dragging = false;
+                state.with_mut(|s| s.is_dragging = false);
             }
             _ => {}
         }
@@ -97,11 +96,11 @@ fn handle_cursor_events(
 
 fn update_value_on_drag(
     input: &InputHandlerInput,
-    state: &Arc<SliderController>,
+    state: State<SliderController>,
     new_value: &mut Option<f32>,
     layout: &SliderLayout,
 ) {
-    if state.read().is_dragging
+    if state.with(|s| s.is_dragging)
         && let Some(v) = cursor_progress(input.cursor_position_rel, layout)
     {
         *new_value = Some(v);
@@ -167,29 +166,13 @@ pub(super) fn apply_slider_accessibility(
     });
 }
 
-pub(crate) struct RangeSliderStateInner {
-    pub is_dragging_start: bool,
-    pub is_dragging_end: bool,
-    pub focus_start: tessera_ui::focus_state::Focus,
-    pub focus_end: tessera_ui::focus_state::Focus,
-    pub is_hovered: bool,
-}
-
-impl Default for RangeSliderStateInner {
-    fn default() -> Self {
-        Self {
-            is_dragging_start: false,
-            is_dragging_end: false,
-            focus_start: tessera_ui::focus_state::Focus::new(),
-            focus_end: tessera_ui::focus_state::Focus::new(),
-            is_hovered: false,
-        }
-    }
-}
-
 /// Controller for the `range_slider` component.
 pub struct RangeSliderController {
-    inner: parking_lot::RwLock<RangeSliderStateInner>,
+    pub(crate) is_hovered: bool,
+    pub(crate) is_dragging_start: bool,
+    pub(crate) is_dragging_end: bool,
+    pub(crate) focus_start: Focus,
+    pub(crate) focus_end: Focus,
 }
 
 impl Default for RangeSliderController {
@@ -202,48 +185,41 @@ impl RangeSliderController {
     /// Creates a new range slider controller.
     pub fn new() -> Self {
         Self {
-            inner: parking_lot::RwLock::new(RangeSliderStateInner::default()),
+            is_hovered: false,
+            is_dragging_start: false,
+            is_dragging_end: false,
+            focus_start: Focus::new(),
+            focus_end: Focus::new(),
         }
-    }
-
-    pub(crate) fn read(&self) -> parking_lot::RwLockReadGuard<'_, RangeSliderStateInner> {
-        self.inner.read()
-    }
-
-    pub(crate) fn write(&self) -> parking_lot::RwLockWriteGuard<'_, RangeSliderStateInner> {
-        self.inner.write()
     }
 }
 
 pub(super) fn handle_range_slider_state(
     input: &mut InputHandlerInput,
-    state: &Arc<RangeSliderController>,
+    state: &State<RangeSliderController>,
     args: &super::RangeSliderArgs,
     layout: &SliderLayout,
 ) {
     if args.disabled {
-        let mut inner = state.write();
-        inner.is_hovered = false;
-        inner.is_dragging_start = false;
-        inner.is_dragging_end = false;
+        state.with_mut(|inner| {
+            inner.is_hovered = false;
+            inner.is_dragging_start = false;
+            inner.is_dragging_end = false;
+        });
         return;
     }
 
     let is_in_component = cursor_within_component(input.cursor_position_rel, &input.computed_data);
 
-    {
-        let mut inner = state.write();
+    state.with_mut(|inner| {
         inner.is_hovered = is_in_component;
-    }
+    });
 
     if is_in_component {
         input.requests.cursor_icon = CursorIcon::Pointer;
     }
 
-    let is_dragging = {
-        let r = state.read();
-        r.is_dragging_start || r.is_dragging_end
-    };
+    let is_dragging = state.with(|s| s.is_dragging_start || s.is_dragging_end);
 
     if !is_in_component && !is_dragging {
         return;
@@ -259,39 +235,43 @@ pub(super) fn handle_range_slider_state(
                     let dist_start = (progress - args.value.0).abs();
                     let dist_end = (progress - args.value.1).abs();
 
-                    let mut inner = state.write();
-                    // Determine which handle to drag based on proximity
+                    state.with_mut(|inner| {
+                        // Determine which handle to drag based on proximity
+                        if dist_start <= dist_end {
+                            inner.is_dragging_start = true;
+                            inner.focus_start.request_focus();
+                        } else {
+                            inner.is_dragging_end = true;
+                            inner.focus_end.request_focus();
+                        }
+                    });
+
                     if dist_start <= dist_end {
-                        inner.is_dragging_start = true;
-                        inner.focus_start.request_focus();
                         new_start = Some(progress);
                     } else {
-                        inner.is_dragging_end = true;
-                        inner.focus_end.request_focus();
                         new_end = Some(progress);
                     }
                 }
             }
             CursorEventContent::Released(_) => {
-                let mut inner = state.write();
-                inner.is_dragging_start = false;
-                inner.is_dragging_end = false;
+                state.with_mut(|inner| {
+                    inner.is_dragging_start = false;
+                    inner.is_dragging_end = false;
+                });
             }
             _ => {}
         }
     }
 
-    let r = state.read();
-    if (r.is_dragging_start || r.is_dragging_end)
-        && let Some(progress) = cursor_progress(input.cursor_position_rel, layout)
-    {
-        if r.is_dragging_start {
-            new_start = Some(progress.min(args.value.1)); // Don't cross end
-        } else {
-            new_end = Some(progress.max(args.value.0)); // Don't cross start
-        }
+    if let Some(progress) = cursor_progress(input.cursor_position_rel, layout) {
+        state.with(|s| {
+            if s.is_dragging_start {
+                new_start = Some(progress.min(args.value.1)); // Don't cross end
+            } else if s.is_dragging_end {
+                new_end = Some(progress.max(args.value.0)); // Don't cross start
+            }
+        });
     }
-    drop(r);
 
     if let Some(ns) = new_start
         && (ns - args.value.0).abs() > f32::EPSILON

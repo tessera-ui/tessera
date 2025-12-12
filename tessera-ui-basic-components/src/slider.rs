@@ -6,10 +6,9 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasureInput, MeasurementError, Px,
-    PxPosition, focus_state::Focus, remember, tessera, use_context,
+    PxPosition, State, focus_state::Focus, remember, tessera, use_context,
 };
 
 use crate::{pipelines::image_vector::command::VectorTintMode, theme::MaterialColorScheme};
@@ -39,24 +38,15 @@ const MIN_TOUCH_TARGET: Dp = Dp(40.0);
 const HANDLE_GAP: Dp = Dp(6.0);
 const STOP_INDICATOR_DIAMETER: Dp = Dp(4.0);
 
-/// Stores the interactive state for the [`slider`] component, such as whether
-/// the slider is currently being dragged by the user.
-pub(crate) struct SliderStateInner {
-    /// True if the user is currently dragging the slider.
-    pub is_dragging: bool,
-    /// The focus handler for the slider.
-    pub focus: Focus,
-    /// True when the cursor is hovering inside the slider bounds.
-    pub is_hovered: bool,
+/// Controller for the `slider` component.
+pub struct SliderController {
+    is_dragging: bool,
+    focus: Focus,
+    is_hovered: bool,
 }
 
-impl Default for SliderStateInner {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SliderStateInner {
+impl SliderController {
+    /// Creates a new slider controller.
     pub fn new() -> Self {
         Self {
             is_dragging: false,
@@ -64,57 +54,35 @@ impl SliderStateInner {
             is_hovered: false,
         }
     }
-}
-
-/// Controller for the `slider` component.
-pub struct SliderController {
-    inner: RwLock<SliderStateInner>,
-}
-
-impl SliderController {
-    /// Creates a new slider controller.
-    pub fn new() -> Self {
-        Self {
-            inner: RwLock::new(SliderStateInner::new()),
-        }
-    }
-
-    pub(crate) fn read(&self) -> RwLockReadGuard<'_, SliderStateInner> {
-        self.inner.read()
-    }
-
-    pub(crate) fn write(&self) -> RwLockWriteGuard<'_, SliderStateInner> {
-        self.inner.write()
-    }
 
     /// Returns whether the slider handle is currently being dragged.
     pub fn is_dragging(&self) -> bool {
-        self.read().is_dragging
+        self.is_dragging
     }
 
     /// Manually sets the dragging flag. Useful for custom gesture integrations.
-    pub fn set_dragging(&self, dragging: bool) {
-        self.write().is_dragging = dragging;
+    pub fn set_dragging(&mut self, dragging: bool) {
+        self.is_dragging = dragging;
     }
 
     /// Requests focus for the slider.
-    pub fn request_focus(&self) {
-        self.write().focus.request_focus();
+    pub fn request_focus(&mut self) {
+        self.focus.request_focus();
     }
 
     /// Clears focus from the slider if it is currently focused.
-    pub fn clear_focus(&self) {
-        self.write().focus.unfocus();
+    pub fn clear_focus(&mut self) {
+        self.focus.unfocus();
     }
 
     /// Returns `true` if this slider currently holds focus.
     pub fn is_focused(&self) -> bool {
-        self.read().focus.is_focused()
+        self.focus.is_focused()
     }
 
     /// Returns `true` if the cursor is hovering over this slider.
     pub fn is_hovered(&self) -> bool {
-        self.read().is_hovered
+        self.is_hovered
     }
 }
 
@@ -157,23 +125,23 @@ pub struct SliderArgs {
     #[builder(default = "DimensionValue::Fixed(Dp(260.0).to_px())")]
     pub width: DimensionValue,
     /// The color of the active part of the track (progress fill).
-    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
     pub active_track_color: Color,
     /// The color of the inactive part of the track (background).
-    #[builder(default = "use_context::<MaterialColorScheme>().secondary_container")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().secondary_container")]
     pub inactive_track_color: Color,
     /// The thickness of the handle indicator.
     #[builder(default = "Dp(4.0)")]
     pub thumb_diameter: Dp,
     /// Color of the handle indicator.
-    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
     pub thumb_color: Color,
     /// Height of the handle focus layer (hover/drag halo).
     #[builder(default = "Dp(18.0)")]
     pub state_layer_diameter: Dp,
     /// Base color for the state layer; alpha will be adjusted per interaction
     /// state.
-    #[builder(default = "use_context::<MaterialColorScheme>().primary.with_alpha(0.18)")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().primary.with_alpha(0.18)")]
     pub state_layer_color: Color,
     /// Disable interaction.
     #[builder(default = "false")]
@@ -214,11 +182,11 @@ pub struct RangeSliderArgs {
     pub width: DimensionValue,
 
     /// The color of the active part of the track (range fill).
-    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
     pub active_track_color: Color,
 
     /// The color of the inactive part of the track (background).
-    #[builder(default = "use_context::<MaterialColorScheme>().secondary_container")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().secondary_container")]
     pub inactive_track_color: Color,
 
     /// The thickness of the handle indicators.
@@ -226,7 +194,7 @@ pub struct RangeSliderArgs {
     pub thumb_diameter: Dp,
 
     /// Color of the handle indicators.
-    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
     pub thumb_color: Color,
 
     /// Height of the handle focus layer.
@@ -234,7 +202,7 @@ pub struct RangeSliderArgs {
     pub state_layer_diameter: Dp,
 
     /// Base color for the state layer.
-    #[builder(default = "use_context::<MaterialColorScheme>().primary.with_alpha(0.18)")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().primary.with_alpha(0.18)")]
     pub state_layer_color: Color,
 
     /// Disable interaction.
@@ -389,7 +357,7 @@ struct SliderColors {
 
 fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> SliderColors {
     if args.disabled {
-        let scheme = use_context::<MaterialColorScheme>();
+        let scheme = use_context::<MaterialColorScheme>().get();
         return SliderColors {
             active_track: scheme.on_surface.with_alpha(0.38),
             inactive_track: scheme.on_surface.with_alpha(0.12),
@@ -506,14 +474,13 @@ pub fn slider(args: impl Into<SliderArgs>) {
 /// # component();
 /// ```
 #[tessera]
-pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: Arc<SliderController>) {
+pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: State<SliderController>) {
     let args: SliderArgs = args.into();
     let initial_width = fallback_component_width(&args);
     let layout = slider_layout(&args, initial_width);
     let clamped_value = args.value.clamp(0.0, 1.0);
-    let state_snapshot = controller.read();
-    let colors = slider_colors(&args, state_snapshot.is_hovered, state_snapshot.is_dragging);
-    drop(state_snapshot);
+    let (is_hovered, is_dragging) = controller.with(|c| (c.is_hovered(), c.is_dragging()));
+    let colors = slider_colors(&args, is_hovered, is_dragging);
 
     render_active_segment(layout, &colors);
     render_inactive_segment(layout, &colors);
@@ -521,7 +488,7 @@ pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: Arc<Slide
     if let Some(icon_size) = layout.icon_size
         && let Some(inset_icon) = args.inset_icon.as_ref()
     {
-        let scheme = use_context::<MaterialColorScheme>();
+        let scheme = use_context::<MaterialColorScheme>().get();
         let tint = if args.disabled {
             scheme.on_surface.with_alpha(0.38)
         } else {
@@ -546,16 +513,11 @@ pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: Arc<Slide
     }
 
     let cloned_args = args.clone();
-    let controller_clone = controller.clone();
+    let controller_clone = controller;
     let clamped_value_for_accessibility = clamped_value;
     input_handler(Box::new(move |mut input| {
         let resolved_layout = slider_layout(&cloned_args, input.computed_data.width);
-        handle_slider_state(
-            &mut input,
-            &controller_clone,
-            &cloned_args,
-            &resolved_layout,
-        );
+        handle_slider_state(&mut input, controller_clone, &cloned_args, &resolved_layout);
         apply_slider_accessibility(
             &mut input,
             &cloned_args,
@@ -809,15 +771,14 @@ pub fn centered_slider(args: impl Into<SliderArgs>) {
 #[tessera]
 pub fn centered_slider_with_controller(
     args: impl Into<SliderArgs>,
-    controller: Arc<SliderController>,
+    controller: State<SliderController>,
 ) {
     let args: SliderArgs = args.into();
     let initial_width = fallback_component_width(&args);
     let layout = centered_slider_layout(&args, initial_width);
     let clamped_value = args.value.clamp(0.0, 1.0);
-    let state_snapshot = controller.read();
-    let colors = slider_colors(&args, state_snapshot.is_hovered, state_snapshot.is_dragging);
-    drop(state_snapshot);
+    let (is_hovered, is_dragging) = controller.with(|c| (c.is_hovered(), c.is_dragging()));
+    let colors = slider_colors(&args, is_hovered, is_dragging);
 
     render_centered_tracks(layout, &colors);
     render_focus(layout.base, &colors);
@@ -827,16 +788,10 @@ pub fn centered_slider_with_controller(
     }
 
     let cloned_args = args.clone();
-    let controller_clone = controller.clone();
     let clamped_value_for_accessibility = clamped_value;
     input_handler(Box::new(move |mut input| {
         let resolved_layout = centered_slider_layout(&cloned_args, input.computed_data.width);
-        handle_slider_state(
-            &mut input,
-            &controller_clone,
-            &cloned_args,
-            &resolved_layout.base,
-        );
+        handle_slider_state(&mut input, controller, &cloned_args, &resolved_layout.base);
         apply_slider_accessibility(
             &mut input,
             &cloned_args,
@@ -1047,7 +1002,7 @@ pub fn range_slider(args: impl Into<RangeSliderArgs>) {
 #[tessera]
 pub fn range_slider_with_controller(
     args: impl Into<RangeSliderArgs>,
-    state: Arc<RangeSliderController>,
+    state: State<RangeSliderController>,
 ) {
     let args: RangeSliderArgs = args.into();
     // Convert RangeSliderArgs to SliderArgs for layout helpers where possible,
@@ -1064,14 +1019,14 @@ pub fn range_slider_with_controller(
     let start = args.value.0.clamp(0.0, 1.0);
     let end = args.value.1.clamp(start, 1.0);
 
-    let state_snapshot = state.read();
+    let (is_dragging_any, is_hovered) =
+        state.with(|s| (s.is_dragging_start || s.is_dragging_end, s.is_hovered));
+
     // Determine colors based on interaction.
     // We check if *either* handle is interacted with to highlight the active
     // tracks/handles? Or ideally, we highlight specific handles.
     // For simplicity, let's use a unified color struct but apply focus colors
     // selectively.
-
-    let is_dragging_any = state_snapshot.is_dragging_start || state_snapshot.is_dragging_end;
 
     // Override colors from specific RangeSliderArgs
     // We need a helper to convert RangeSliderArgs colors to SliderColors if they
@@ -1080,7 +1035,7 @@ pub fn range_slider_with_controller(
     let mut state_layer_alpha_scale = 0.0;
     if is_dragging_any {
         state_layer_alpha_scale = 1.0;
-    } else if state_snapshot.is_hovered {
+    } else if is_hovered {
         state_layer_alpha_scale = 0.7;
     }
 
@@ -1090,7 +1045,7 @@ pub fn range_slider_with_controller(
         Color::new(base_state.r, base_state.g, base_state.b, state_layer_alpha);
 
     let colors = if args.disabled {
-        let scheme = use_context::<MaterialColorScheme>();
+        let scheme = use_context::<MaterialColorScheme>().get();
         SliderColors {
             active_track: scheme.on_surface.with_alpha(0.38),
             inactive_track: scheme.on_surface.with_alpha(0.12),
@@ -1105,8 +1060,6 @@ pub fn range_slider_with_controller(
             handle_focus: handle_focus_color,
         }
     };
-
-    drop(state_snapshot);
 
     render_range_tracks(layout, &colors);
 
@@ -1129,18 +1082,12 @@ pub fn range_slider_with_controller(
     }
 
     let cloned_args = args.clone();
-    let state_clone = state.clone();
     let start_val = start;
     let end_val = end;
 
     input_handler(Box::new(move |mut input| {
         let resolved_layout = range_slider_layout(&cloned_args, input.computed_data.width);
-        handle_range_slider_state(
-            &mut input,
-            &state_clone,
-            &cloned_args,
-            &resolved_layout.base,
-        );
+        handle_range_slider_state(&mut input, &state, &cloned_args, &resolved_layout.base);
         apply_range_slider_accessibility(
             &mut input,
             &cloned_args,

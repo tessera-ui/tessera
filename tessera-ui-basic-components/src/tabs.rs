@@ -8,11 +8,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use closure::closure;
 use derive_builder::Builder;
-use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, PxPosition,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
     remember, tessera, use_context,
 };
 
@@ -63,14 +61,12 @@ fn blend_state_layer(base: Color, layer: Color, opacity: f32) -> Color {
     }
 }
 
-/// Holds the mutable state used by the [`tabs`] component.
+/// Controller for the `tabs` component.
 ///
-/// Clone this handle to share it across UI parts. The state tracks the
-/// active tab index, previous index, animation progress and cached values used
-/// to animate the indicator and content scrolling. The component mutates parts
-/// of this state when a tab is switched; callers may also read the active tab
-/// via [`TabsController::active_tab`].
-struct TabsControllerInner {
+/// Tracks the active tab index, previous index, animation progress and cached
+/// values used to animate the indicator and content scrolling.
+#[derive(Clone)]
+pub struct TabsController {
     active_tab: usize,
     prev_active_tab: usize,
     progress: f32,
@@ -83,8 +79,9 @@ struct TabsControllerInner {
     target_content_scroll_offset: Px,
 }
 
-impl TabsControllerInner {
-    fn new(initial_tab: usize) -> Self {
+impl TabsController {
+    /// Create a new state with the specified initial active tab.
+    pub fn new(initial_tab: usize) -> Self {
         Self {
             active_tab: initial_tab,
             prev_active_tab: initial_tab,
@@ -105,7 +102,7 @@ impl TabsControllerInner {
     /// Otherwise the method updates cached indicator/content positions and
     /// resets the animation progress so the component will animate to the
     /// new active tab.
-    fn set_active_tab(&mut self, index: usize) {
+    pub fn set_active_tab(&mut self, index: usize) {
         if self.active_tab != index {
             self.prev_active_tab = self.active_tab;
             self.active_tab = index;
@@ -123,70 +120,47 @@ impl TabsControllerInner {
             self.progress = 0.0;
         }
     }
-}
-
-/// Controller for the `tabs` component.
-pub struct TabsController {
-    inner: RwLock<TabsControllerInner>,
-}
-
-impl TabsController {
-    /// Create a new state with the specified initial active tab.
-    pub fn new(initial_tab: usize) -> Self {
-        Self {
-            inner: RwLock::new(TabsControllerInner::new(initial_tab)),
-        }
-    }
-
-    /// Updates the active tab index and resets indicator progress.
-    pub fn set_active_tab(&self, index: usize) {
-        self.inner.write().set_active_tab(index);
-    }
 
     /// Returns the currently active tab index.
     pub fn active_tab(&self) -> usize {
-        self.inner.read().active_tab
+        self.active_tab
     }
 
     fn last_switch_time(&self) -> Option<Instant> {
-        self.inner.read().last_switch_time
+        self.last_switch_time
     }
 
-    fn set_progress(&self, progress: f32) {
-        self.inner.write().progress = progress;
+    fn set_progress(&mut self, progress: f32) {
+        self.progress = progress;
     }
 
     fn progress(&self) -> f32 {
-        self.inner.read().progress
+        self.progress
     }
 
     fn content_offsets(&self) -> (Px, Px) {
-        let inner = self.inner.read();
         (
-            inner.content_scroll_offset,
-            inner.target_content_scroll_offset,
+            self.content_scroll_offset,
+            self.target_content_scroll_offset,
         )
     }
 
-    fn update_content_offsets(&self, current: Px, target: Px) {
-        let mut inner = self.inner.write();
-        inner.content_scroll_offset = current;
-        inner.target_content_scroll_offset = target;
+    fn update_content_offsets(&mut self, current: Px, target: Px) {
+        self.content_scroll_offset = current;
+        self.target_content_scroll_offset = target;
     }
 
-    fn set_indicator_targets(&self, width: Px, x: Px) {
-        let mut inner = self.inner.write();
-        inner.indicator_to_width = width;
-        inner.indicator_to_x = x;
+    fn set_indicator_targets(&mut self, width: Px, x: Px) {
+        self.indicator_to_width = width;
+        self.indicator_to_x = x;
     }
 
     fn indicator_metrics(&self) -> (Px, Px, Px, Px) {
-        let inner = self.inner.read();
         (
-            inner.indicator_from_width,
-            inner.indicator_to_width,
-            inner.indicator_from_x,
-            inner.indicator_to_x,
+            self.indicator_from_width,
+            self.indicator_to_width,
+            self.indicator_from_x,
+            self.indicator_to_x,
         )
     }
 }
@@ -206,17 +180,17 @@ pub struct TabsArgs {
     #[builder(default = "0")]
     pub initial_active_tab: usize,
     /// Color of the active tab indicator.
-    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
     // Material primary tone
     pub indicator_color: Color,
     /// Background color for the tab row container.
-    #[builder(default = "use_context::<MaterialColorScheme>().surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().surface")]
     pub container_color: Color,
     /// Color applied to active tab titles (Material on-surface).
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface")]
     pub active_content_color: Color,
     /// Color applied to inactive tab titles (Material on-surface-variant).
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface_variant")]
     pub inactive_content_color: Color,
     /// Height of the indicator bar in density-independent pixels.
     #[builder(default = "Dp(3.0)")]
@@ -234,7 +208,7 @@ pub struct TabsArgs {
     #[builder(default = "Dp(12.0)")]
     pub tab_padding: Dp,
     /// Color used for hover/pressed state layers.
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface")]
     pub state_layer_color: Color,
     /// Opacity applied to the state layer on hover.
     #[builder(default = "0.08")]
@@ -502,7 +476,7 @@ where
 /// }
 /// ```
 #[tessera]
-pub fn tabs_with_controller<F>(args: TabsArgs, controller: Arc<TabsController>, scope_config: F)
+pub fn tabs_with_controller<F>(args: TabsArgs, controller: State<TabsController>, scope_config: F)
 where
     F: FnOnce(&mut TabsScope),
 {
@@ -514,7 +488,9 @@ where
     if num_tabs == 0 {
         return;
     }
-    let active_tab = controller.active_tab().min(num_tabs.saturating_sub(1));
+    let active_tab = controller
+        .with(|c| c.active_tab())
+        .min(num_tabs.saturating_sub(1));
 
     let (title_closures, content_closures): (Vec<_>, Vec<_>) =
         tabs.into_iter().map(|def| (def.title, def.content)).unzip();
@@ -554,9 +530,9 @@ where
                 .hover_color(Some(hover_color))
                 .padding(args.tab_padding)
                 .ripple_color(args.state_layer_color)
-                .on_click(Arc::new(closure!(clone controller, || {
-                    controller.set_active_tab(index);
-                })))
+                .on_click(Arc::new(move || {
+                    controller.with_mut(|c| c.set_active_tab(index));
+                }))
                 .width(DimensionValue::FILLED)
                 .shape(Shape::RECTANGLE)
                 .build()
@@ -579,27 +555,26 @@ where
         );
     }
 
-    let scroll_offset = {
-        let eased_progress = animation::easing(controller.progress());
-        let (content_offset, target_offset) = controller.content_offsets();
+    let scroll_offset = controller.with(|c| {
+        let eased_progress = animation::easing(c.progress());
+        let (content_offset, target_offset) = c.content_offsets();
         let offset =
             content_offset.0 as f32 + (target_offset.0 - content_offset.0) as f32 * eased_progress;
         Px(offset as i32)
-    };
+    });
 
     tabs_content_container(scroll_offset, content_closures);
 
-    let state_clone = controller.clone();
     input_handler(Box::new(move |_| {
-        if let Some(last_switch_time) = state_clone.last_switch_time() {
+        if let Some(last_switch_time) = controller.with(|c| c.last_switch_time()) {
             let elapsed = last_switch_time.elapsed();
             let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
-            state_clone.set_progress(fraction);
+            controller.with_mut(|c| c.set_progress(fraction));
         }
     }));
 
     let tabs_args = args.clone();
-    let controller_for_measure = controller.clone();
+    let controller_for_measure = controller;
 
     measure(Box::new(
         move |input| -> Result<ComputedData, MeasurementError> {
@@ -661,10 +636,12 @@ where
             let final_width = titles_total_width;
             let page_width = content_container_size.width;
             let target_offset = -Px(active_tab as i32 * page_width.0);
-            let (_, target_content_scroll_offset) = controller_for_measure.content_offsets();
+            let (_, target_content_scroll_offset) =
+                controller_for_measure.with(|c| c.content_offsets());
             if target_content_scroll_offset != target_offset {
-                controller_for_measure
-                    .update_content_offsets(target_content_scroll_offset, target_offset);
+                controller_for_measure.with_mut(|c| {
+                    c.update_content_offsets(target_content_scroll_offset, target_offset)
+                });
             }
 
             let (indicator_width, indicator_x) = {
@@ -682,11 +659,13 @@ where
                 );
                 let centered_x = active_title_x + Px((active_title_width.0 - clamped_width.0) / 2);
 
-                controller_for_measure.set_indicator_targets(clamped_width, centered_x);
+                controller_for_measure
+                    .with_mut(|c| c.set_indicator_targets(clamped_width, centered_x));
 
                 let (from_width, to_width, from_x, to_x) =
-                    controller_for_measure.indicator_metrics();
-                let eased_progress = animation::easing(controller_for_measure.progress());
+                    controller_for_measure.with(|c| c.indicator_metrics());
+                let eased_progress =
+                    animation::easing(controller_for_measure.with(|c| c.progress()));
                 let width = Px((from_width.0 as f32
                     + (to_width.0 - from_width.0) as f32 * eased_progress)
                     as i32);

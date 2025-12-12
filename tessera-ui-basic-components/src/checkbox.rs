@@ -10,9 +10,8 @@ use std::{
 
 use closure::closure;
 use derive_builder::Builder;
-use parking_lot::RwLock;
 use tessera_ui::{
-    Color, DimensionValue, Dp,
+    Color, DimensionValue, Dp, State,
     accesskit::{Action, Role, Toggled},
     remember, tessera, use_context,
 };
@@ -27,54 +26,46 @@ use crate::{
 };
 
 /// Controller for [`checkbox`] state.
+#[derive(Clone, Default)]
 pub struct CheckboxController {
-    checkmark: RwLock<CheckmarkState>,
+    checkmark: CheckmarkState,
 }
 
 impl CheckboxController {
     /// Creates a new controller with the provided initial checked state.
     pub fn new(initial_state: bool) -> CheckboxController {
         Self {
-            checkmark: RwLock::new(CheckmarkState::new(initial_state)),
+            checkmark: CheckmarkState::new(initial_state),
         }
     }
 
     /// Returns whether the checkbox is currently checked.
     pub fn is_checked(&self) -> bool {
-        self.checkmark.read().checked
+        self.checkmark.checked
     }
 
     /// Sets the checked state directly and resets animation progress.
-    pub fn set_checked(&self, checked: bool) {
-        let mut state = self.checkmark.write();
-        if state.checked != checked {
-            state.checked = checked;
-            state.progress = if checked { 1.0 } else { 0.0 };
-            state.last_toggle_time = None;
+    pub fn set_checked(&mut self, checked: bool) {
+        if self.checkmark.checked != checked {
+            self.checkmark.checked = checked;
+            self.checkmark.progress = if checked { 1.0 } else { 0.0 };
+            self.checkmark.last_toggle_time = None;
         }
     }
 
     /// Toggles the checked state and starts the animation timeline.
-    pub fn toggle(&self) {
-        self.checkmark.write().toggle();
+    pub fn toggle(&mut self) {
+        self.checkmark.toggle();
     }
 
     /// Advances the checkmark animation progress based on elapsed time.
-    fn update_progress(&self) {
-        self.checkmark.write().update_progress();
+    fn update_progress(&mut self) {
+        self.checkmark.update_progress();
     }
 
     /// Returns current animation progress (0.0..1.0).
     fn progress(&self) -> f32 {
-        self.checkmark.read().progress()
-    }
-}
-
-impl Default for CheckboxController {
-    fn default() -> Self {
-        Self {
-            checkmark: RwLock::new(CheckmarkState::default()),
-        }
+        self.checkmark.progress()
     }
 }
 
@@ -95,20 +86,20 @@ pub struct CheckboxArgs {
     #[builder(default = "Dp(18.0)")]
     pub size: Dp,
 
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface_variant")]
     /// Outline color when the checkbox is not checked.
     ///
     /// This sets the border color shown for the unchecked state.
     pub color: Color,
 
-    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
     /// Background color used when the checkbox is checked.
     ///
     /// This color is shown behind the checkmark to indicate an active/selected
     /// state. Choose a higher-contrast color relative to `color`.
     pub checked_color: Color,
 
-    #[builder(default = "use_context::<MaterialColorScheme>().on_primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_primary")]
     /// Color used to draw the checkmark icon inside the checkbox.
     ///
     /// This is applied on top of the `checked_color` surface.
@@ -140,11 +131,11 @@ pub struct CheckboxArgs {
     #[builder(default = "false")]
     pub disabled: bool,
 
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface.with_alpha(0.38)")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface.with_alpha(0.38)")]
     /// Color used for the checkbox border/background when disabled.
     pub disabled_color: Color,
 
-    #[builder(default = "use_context::<MaterialColorScheme>().surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().surface")]
     /// Color used for the checkmark icon when disabled.
     pub disabled_checkmark_color: Color,
 
@@ -174,6 +165,7 @@ impl Default for CheckboxArgs {
 const CHECKMARK_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 
 /// State for checkmark animation (similar to `SwitchState`)
+#[derive(Clone)]
 struct CheckmarkState {
     checked: bool,
     progress: f32,
@@ -319,27 +311,30 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
 #[tessera]
 pub fn checkbox_with_controller(
     args: impl Into<CheckboxArgs>,
-    controller: Arc<CheckboxController>,
+    controller: State<CheckboxController>,
 ) {
     let args: CheckboxArgs = args.into();
+
+    // Clone fields needed for closures before moving on_toggle
+    let size = args.size;
+    let shape = args.shape;
 
     // Click handler: toggle animation state and forward toggle callback
     let on_click = if args.disabled {
         None
     } else {
-        Some(Arc::new(
-            closure!(clone controller, clone args.on_toggle, || {
-                controller.toggle();
-                on_toggle(controller.is_checked());
-            }),
-        ))
+        let on_toggle = args.on_toggle;
+        Some(Arc::new(move || {
+            controller.with_mut(|c| c.toggle());
+            on_toggle(controller.with(|c| c.is_checked()));
+        }))
     };
     let on_click_for_surface = on_click.clone();
 
     // Determine colors based on state
-    let scheme = use_context::<MaterialColorScheme>();
+    let scheme = use_context::<MaterialColorScheme>().get();
     let (checkbox_style, icon_color) = if args.disabled {
-        if controller.is_checked() {
+        if controller.with(|c| c.is_checked()) {
             (
                 SurfaceStyle::Filled {
                     color: args.disabled_color,
@@ -355,7 +350,7 @@ pub fn checkbox_with_controller(
                 Color::TRANSPARENT,
             )
         }
-    } else if controller.is_checked() {
+    } else if controller.with(|c| c.is_checked()) {
         (
             SurfaceStyle::Filled {
                 color: args.checked_color,
@@ -378,7 +373,7 @@ pub fn checkbox_with_controller(
     } else if let Some(c) = args.hover_color {
         c
     } else {
-        let base = if controller.is_checked() {
+        let base = if controller.with(|c| c.is_checked()) {
             args.checked_color
         } else {
             scheme.on_surface
@@ -387,50 +382,48 @@ pub fn checkbox_with_controller(
     };
 
     // Checkmark
-    let render_checkmark = closure!(
-        clone controller,
-        clone args,
-        clone icon_color,
-        || {
-            let progress = controller.progress();
-            if progress > 0.0 {
-                boxed(
-                    BoxedArgsBuilder::default()
-                        .alignment(Alignment::Center)
-                        .width(DimensionValue::FILLED)
-                        .height(DimensionValue::FILLED)
-                        .build()
-                        .expect("builder construction failed"),
-                    |scope| {
-                        scope.child(move || {
-                            checkmark(
-                                CheckmarkArgsBuilder::default()
-                                    .color(icon_color)
-                                    .stroke_width(args.checkmark_stroke_width)
-                                    .progress(progress)
-                                    .size(Dp(args.size.0 * 0.8))
-                                    .padding([0.0, 0.0])
-                                    .build()
-                                    .expect("builder construction failed"),
-                            )
-                        });
-                    },
-                );
-            }
+    let checkmark_stroke_width = args.checkmark_stroke_width;
+    let checkbox_size = args.size;
+    let render_checkmark = move || {
+        let progress = controller.with(|c| c.progress());
+        if progress > 0.0 {
+            boxed(
+                BoxedArgsBuilder::default()
+                    .alignment(Alignment::Center)
+                    .width(DimensionValue::FILLED)
+                    .height(DimensionValue::FILLED)
+                    .build()
+                    .expect("builder construction failed"),
+                |scope| {
+                    scope.child(move || {
+                        checkmark(
+                            CheckmarkArgsBuilder::default()
+                                .color(icon_color)
+                                .stroke_width(checkmark_stroke_width)
+                                .progress(progress)
+                                .size(Dp(checkbox_size.0 * 0.8))
+                                .padding([0.0, 0.0])
+                                .build()
+                                .expect("builder construction failed"),
+                        )
+                    });
+                },
+            );
         }
-    );
+    };
 
     // Checkbox Surface (18x18)
     let render_checkbox_surface = closure!(
-        clone args,
+        clone size,
+        clone shape,
         clone checkbox_style,
         clone render_checkmark,
         || {
             surface(
                 SurfaceArgsBuilder::default()
-                    .width(DimensionValue::Fixed(args.size.to_px()))
-                    .height(DimensionValue::Fixed(args.size.to_px()))
-                    .shape(args.shape)
+                    .width(DimensionValue::Fixed(size.to_px()))
+                    .height(DimensionValue::Fixed(size.to_px()))
+                    .shape(shape)
                     .style(checkbox_style)
                     .build()
                     .expect("builder construction failed"),
@@ -503,55 +496,44 @@ pub fn checkbox_with_controller(
 
     let accessibility_label = args.accessibility_label.clone();
     let accessibility_description = args.accessibility_description.clone();
-    let accessibility_state = controller.clone();
     let on_click_for_accessibility = on_click.clone();
     let disabled = args.disabled;
-    input_handler(Box::new(closure!(
-        clone accessibility_state,
-        clone accessibility_label,
-        clone accessibility_description,
-        clone on_click_for_accessibility,
-        |input| {
-            // Update animation progress
-            accessibility_state.update_progress();
+    input_handler(Box::new(move |input| {
+        // Update animation progress
+        controller.with_mut(|c| c.update_progress());
 
-            let checked = accessibility_state.is_checked();
-            let mut builder = input.accessibility().role(Role::CheckBox);
+        let checked = controller.with(|c| c.is_checked());
+        let mut builder = input.accessibility().role(Role::CheckBox);
 
-            if let Some(label) = accessibility_label.as_ref() {
-                builder = builder.label(label.clone());
-            }
-            if let Some(description) = accessibility_description.as_ref() {
-                builder = builder.description(description.clone());
-            }
-
-            if disabled {
-                builder = builder.disabled();
-            }
-
-            builder = builder
-                .focusable()
-                .action(Action::Click)
-                .toggled(if checked {
-                    Toggled::True
-                } else {
-                    Toggled::False
-                });
-
-            builder.commit();
-
-            if !disabled
-                && let Some(handler) = on_click_for_accessibility.as_ref() {
-                    let handler = handler.clone();
-                    input.set_accessibility_action_handler(closure!(
-                        clone handler,
-                        |action| {
-                            if action == Action::Click {
-                                handler();
-                            }
-                        }
-                    ));
-                }
+        if let Some(label) = &accessibility_label {
+            builder = builder.label(label.clone());
         }
-    )));
+        if let Some(description) = &accessibility_description {
+            builder = builder.description(description.clone());
+        }
+
+        if disabled {
+            builder = builder.disabled();
+        }
+
+        builder = builder
+            .focusable()
+            .action(Action::Click)
+            .toggled(if checked {
+                Toggled::True
+            } else {
+                Toggled::False
+            });
+
+        builder.commit();
+
+        if !disabled && let Some(handler) = on_click_for_accessibility.as_ref() {
+            let handler = handler.clone();
+            input.set_accessibility_action_handler(move |action| {
+                if action == Action::Click {
+                    handler();
+                }
+            });
+        }
+    }));
 }

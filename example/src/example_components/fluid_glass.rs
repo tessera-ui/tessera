@@ -1,7 +1,6 @@
 use std::{fmt::Display, sync::Arc};
 
 use closure::closure;
-use parking_lot::RwLock;
 use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
@@ -124,9 +123,8 @@ pub fn fluid_glass_showcase() {
 
 #[tessera]
 fn test_content() {
-    let state = remember(|| RwLock::new(ExampleGlassState::default()));
-    let state_for_glass = state.clone();
-    let image_data = state.read().background_image_data.clone();
+    let state = remember(ExampleGlassState::default);
+    let image_data = state.with(|s| s.background_image_data.clone());
     column(
         ColumnArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -135,15 +133,27 @@ fn test_content() {
             .unwrap(),
         move |scope| {
             scope.child(move || {
-                let state = state.read();
-                let corner_radius = Dp(state.corner_radius.value.0 as f64);
-                let width = state.width.value;
-                let height = state.height.value;
-                let border_width = state.border_width.value;
-                let state_string = (*state).to_string();
-                let refraction_amount = state.refraction_amount.value;
-                let refraction_height = state.refraction_height.value;
-                let blur_radius = state.blur_radius.value;
+                let (
+                    corner_radius,
+                    width,
+                    height,
+                    border_width,
+                    state_string,
+                    refraction_amount,
+                    refraction_height,
+                    blur_radius,
+                ) = state.with(|s| {
+                    (
+                        Dp(s.corner_radius.value.0 as f64),
+                        s.width.value,
+                        s.height.value,
+                        s.border_width.value,
+                        s.to_string(),
+                        s.refraction_amount.value,
+                        s.refraction_height.value,
+                        s.blur_radius.value,
+                    )
+                });
 
                 row(
                     RowArgsBuilder::default()
@@ -243,13 +253,12 @@ fn test_content() {
                 )
             });
 
-            let state = state_for_glass.clone();
             scope.child(move || {
                 glass_config_slider(
                     "Width",
-                    state.read().width.value.0 as f32 / 500.0,
+                    state.with(|s| s.width.value.0 as f32 / 500.0),
                     Arc::new(closure!(clone state, |value| {
-                        state.write().width.value = Dp(f64::from(value) * 500.0);
+                        state.with_mut(|s| s.width.value = Dp(f64::from(value) * 500.0));
                     })),
                 );
             });
@@ -262,15 +271,13 @@ fn test_content() {
                         .unwrap(),
                 )
             });
-
-            let state = state_for_glass.clone();
 
             scope.child(move || {
                 glass_config_slider(
                     "Height",
-                    state.read().height.value.0 as f32 / 500.0,
+                    state.with(|s| s.height.value.0 as f32 / 500.0),
                     Arc::new(closure!(clone state, |value| {
-                        state.write().height.value = Dp(f64::from(value) * 500.0);
+                        state.with_mut(|s| s.height.value = Dp(f64::from(value) * 500.0));
                     })),
                 );
             });
@@ -284,13 +291,12 @@ fn test_content() {
                 )
             });
 
-            let state = state_for_glass.clone();
             scope.child(move || {
                 glass_config_slider(
                     "Corner Radius",
-                    state.read().corner_radius.value.0 / 100.0,
+                    state.with(|s| s.corner_radius.value.0 / 100.0),
                     Arc::new(closure!(clone state, |value| {
-                        state.write().corner_radius.value = CornerRadius(value * 100.0);
+                        state.with_mut(|s| s.corner_radius.value = CornerRadius(value * 100.0));
                     })),
                 );
             });
@@ -304,13 +310,12 @@ fn test_content() {
                 )
             });
 
-            let state = state_for_glass.clone();
             scope.child(move || {
                 glass_config_slider(
                     "Border Width",
-                    state.read().border_width.value.0 as f32 / 20.0,
+                    state.with(|s| s.border_width.value.0 as f32 / 20.0),
                     Arc::new(closure!(clone state, |value| {
-                        state.write().border_width.value = Dp(f64::from(value) * 20.0);
+                        state.with_mut(|s| s.border_width.value = Dp(f64::from(value) * 20.0));
                     })),
                 );
             });
@@ -324,13 +329,12 @@ fn test_content() {
                 )
             });
 
-            let state = state_for_glass.clone();
             scope.child(move || {
                 glass_config_slider(
                     "Refraction Strength",
-                    state.read().refraction_amount.value / 100.0,
+                    state.with(|s| s.refraction_amount.value / 100.0),
                     Arc::new(closure!(clone state, |value| {
-                        state.write().refraction_amount.value = value * 100.0;
+                        state.with_mut(|s| s.refraction_amount.value = value * 100.0);
                     })),
                 );
             });
@@ -344,13 +348,12 @@ fn test_content() {
                 )
             });
 
-            let state = state_for_glass.clone();
             scope.child(move || {
                 glass_config_slider(
                     "Refraction Height",
-                    state.read().refraction_height.value.0 as f32 / 50.0,
+                    state.with(|s| s.refraction_height.value.0 as f32 / 50.0),
                     Arc::new(closure!(clone state, |value| {
-                        state.write().refraction_height.value = Dp(f64::from(value * 50.0));
+                        state.with_mut(|s| s.refraction_height.value = Dp(f64::from(value * 50.0)));
                     })),
                 );
             });
@@ -364,13 +367,12 @@ fn test_content() {
                 )
             });
 
-            let state = state_for_glass.clone();
             scope.child(move || {
                 glass_config_slider(
                     "Blur Radius",
-                    state.read().blur_radius.value.0 as f32 / 100.0,
+                    state.with(|s| s.blur_radius.value.0 as f32 / 100.0),
                     Arc::new(closure!(clone state, |value| {
-                        state.write().blur_radius.value = Dp(f64::from(value * 100.0));
+                        state.with_mut(|s| s.blur_radius.value = Dp(f64::from(value * 100.0)));
                     })),
                 );
             });

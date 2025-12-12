@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
@@ -60,14 +60,18 @@ pub fn glass_button_showcase() {
 
 #[tessera]
 fn test_content() {
-    let counter = remember(|| Mutex::new(0));
+    let counter = remember(|| 0);
     let image_data = remember(|| {
-        load_image_from_source(&ImageSource::Bytes(Arc::from(IMAGE_BYTES)))
-            .expect("Failed to load image from embedded bytes")
+        Arc::new(
+            load_image_from_source(&ImageSource::Bytes(Arc::from(IMAGE_BYTES)))
+                .expect("Failed to load image from embedded bytes"),
+        )
     });
     let icon_data = remember(|| {
-        load_image_vector_from_source(&ImageVectorSource::Bytes(Arc::from(ICON_BYTES)))
-            .expect("Failed to load icon SVG")
+        Arc::new(
+            load_image_vector_from_source(&ImageVectorSource::Bytes(Arc::from(ICON_BYTES)))
+                .expect("Failed to load icon SVG"),
+        )
     });
 
     column(
@@ -82,13 +86,8 @@ fn test_content() {
             scope.child(|| {
                 spacer(Dp(20.0));
             });
-
-            // Glass Button on top
-            let image_data = image_data.clone();
-            let counter_btn = counter.clone();
-            let icon_data = icon_data.clone();
             scope.child(move || {
-                let image_data = image_data.clone();
+                let image_data = image_data;
                 boxed(
                     BoxedArgsBuilder::default()
                         .alignment(Alignment::Center)
@@ -100,14 +99,12 @@ fn test_content() {
                                 ImageArgsBuilder::default()
                                     .width(DimensionValue::from(Dp(250.0)))
                                     .height(DimensionValue::from(Dp(250.0)))
-                                    .data(image_data)
+                                    .data(image_data.get())
                                     .build()
                                     .unwrap(),
                             );
                         });
 
-                        let counter = counter_btn.clone();
-                        let icon_data = icon_data.clone();
                         scope.child(move || {
                             column(
                                 ColumnArgs {
@@ -115,12 +112,8 @@ fn test_content() {
                                     ..Default::default()
                                 },
                                 move |scope| {
-                                    let on_click = Arc::new({
-                                        let counter_clone = counter.clone();
-                                        move || {
-                                            let mut count = counter_clone.lock().unwrap();
-                                            *count += 1;
-                                        }
+                                    let on_click = Arc::new(move || {
+                                        counter.with_mut(|c| *c += 1);
                                     });
 
                                     scope.child(move || {
@@ -141,22 +134,15 @@ fn test_content() {
                                         });
                                     });
 
-                                    let counter = counter.clone();
-                                    let icon_data = icon_data.clone();
                                     scope.child(move || {
                                         let icon = IconArgsBuilder::default()
-                                            .content(IconContent::from(icon_data.clone()))
+                                            .content(IconContent::from(icon_data.get().clone()))
                                             .size(Dp(28.0))
                                             .build()
                                             .unwrap();
 
-                                        let on_click = Arc::new({
-                                            let counter_clone = counter.clone();
-                                            move || {
-                                                let mut count = counter_clone.lock().unwrap();
-                                                *count += 1;
-                                                println!("Glass icon button clicked!");
-                                            }
+                                        let on_click = Arc::new(move || {
+                                            counter.with_mut(|c| *c += 1);
                                         });
 
                                         let args = GlassIconButtonArgsBuilder::default()
@@ -184,10 +170,8 @@ fn test_content() {
                 spacer(Dp(20.0));
             });
 
-            let counter = counter.clone();
             scope.child(move || {
-                let count = counter.lock().unwrap();
-                text(format!("Click count: {}", *count));
+                text(format!("Click count: {}", counter.get()));
             });
         },
     )

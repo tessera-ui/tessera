@@ -129,7 +129,7 @@ impl GlassIconButtonArgsBuilder {
 #[tessera]
 pub fn icon_button(args: impl Into<IconButtonArgs>) {
     let args: IconButtonArgs = args.into();
-    let scheme = use_context::<MaterialColorScheme>();
+    let scheme = use_context::<MaterialColorScheme>().get();
 
     // Determine colors based on variant
     let (default_container_color, default_content_color, border_width, border_color) =

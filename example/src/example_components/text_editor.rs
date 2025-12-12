@@ -64,7 +64,7 @@ fn test_content() {
 
             scope.child(|| spacer(Dp(10.0)));
 
-            let editor_state = editor_state.clone();
+            let editor_state = editor_state;
             scope.child(move || {
                 text_editor_with_controller(
                     TextEditorArgsBuilder::default()
@@ -73,7 +73,7 @@ fn test_content() {
                         .on_change(Arc::new(move |v| v))
                         .build()
                         .unwrap(),
-                    editor_state.clone(),
+                    editor_state,
                 );
             });
         },

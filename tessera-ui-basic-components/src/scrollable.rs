@@ -4,12 +4,11 @@
 //!
 //! Use to display content that might overflow the available space.
 mod scrollbar;
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use derive_builder::Builder;
-use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition, State,
     remember, tessera,
 };
 
@@ -97,65 +96,8 @@ impl Default for ScrollableArgs {
 ///
 /// The scroll position is smoothly interpolated over time to create a fluid
 /// scrolling effect.
-#[derive(Default)]
+#[derive(Clone)]
 pub struct ScrollableController {
-    /// The inner state containing scroll position, size
-    inner: RwLock<ScrollableControllerInner>,
-    /// The state for vertical scrollbar
-    scrollbar_state_v: ScrollBarState,
-    /// The state for horizontal scrollbar
-    scrollbar_state_h: ScrollBarState,
-}
-
-impl ScrollableController {
-    /// Creates a new `ScrollableController` with default values.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Returns the current child position relative to the scrollable container.
-    ///
-    /// This is primarily useful for components that need to implement custom
-    /// virtualization strategies (e.g. lazy lists) and must know the current
-    /// scroll offset. Values are clamped by the scroll logic, so consumers
-    /// can safely derive their offset from the returned position.
-    pub fn child_position(&self) -> PxPosition {
-        self.inner.read().child_position
-    }
-
-    /// Returns the currently visible viewport size of the scrollable container.
-    pub fn visible_size(&self) -> ComputedData {
-        self.inner.read().visible_size
-    }
-
-    fn child_size(&self) -> ComputedData {
-        self.inner.read().child_size
-    }
-
-    /// Overrides the child size used for scroll extent calculation.
-    pub fn override_child_size(&self, size: ComputedData) {
-        self.inner.write().override_child_size = Some(size);
-    }
-
-    fn target_position(&self) -> PxPosition {
-        self.inner.read().target_position
-    }
-
-    fn set_target_position(&self, target: PxPosition) {
-        self.inner.write().set_target_position(target);
-    }
-
-    fn update_scroll_position(&self, smoothing: f32) -> bool {
-        self.inner.write().update_scroll_position(smoothing)
-    }
-
-    fn write(&self) -> parking_lot::RwLockWriteGuard<'_, ScrollableControllerInner> {
-        self.inner.write()
-    }
-}
-
-#[derive(Clone, Debug)]
-struct ScrollableControllerInner {
     /// The current position of the child component (for rendering)
     child_position: PxPosition,
     /// The target position of the child component (scrolling destination)
@@ -168,16 +110,20 @@ struct ScrollableControllerInner {
     override_child_size: Option<ComputedData>,
     /// Last frame time for delta time calculation
     last_frame_time: Option<Instant>,
+    /// The state for vertical scrollbar
+    scrollbar_state_v: ScrollBarState,
+    /// The state for horizontal scrollbar
+    scrollbar_state_h: ScrollBarState,
 }
 
-impl Default for ScrollableControllerInner {
+impl Default for ScrollableController {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ScrollableControllerInner {
-    /// Creates a new ScrollableController with default values.
+impl ScrollableController {
+    /// Creates a new `ScrollableController` with default values.
     pub fn new() -> Self {
         Self {
             child_position: PxPosition::ZERO,
@@ -186,7 +132,41 @@ impl ScrollableControllerInner {
             visible_size: ComputedData::ZERO,
             override_child_size: None,
             last_frame_time: None,
+            scrollbar_state_v: ScrollBarState::default(),
+            scrollbar_state_h: ScrollBarState::default(),
         }
+    }
+
+    /// Returns the current child position relative to the scrollable container.
+    ///
+    /// This is primarily useful for components that need to implement custom
+    /// virtualization strategies (e.g. lazy lists) and must know the current
+    /// scroll offset. Values are clamped by the scroll logic, so consumers
+    /// can safely derive their offset from the returned position.
+    pub fn child_position(&self) -> PxPosition {
+        self.child_position
+    }
+
+    /// Returns the currently visible viewport size of the scrollable container.
+    pub fn visible_size(&self) -> ComputedData {
+        self.visible_size
+    }
+
+    fn child_size(&self) -> ComputedData {
+        self.child_size
+    }
+
+    /// Overrides the child size used for scroll extent calculation.
+    pub fn override_child_size(&mut self, size: ComputedData) {
+        self.override_child_size = Some(size);
+    }
+
+    fn target_position(&self) -> PxPosition {
+        self.target_position
+    }
+
+    fn set_target_position(&mut self, target: PxPosition) {
+        self.target_position = target;
     }
 
     /// Updates the scroll position based on time-based interpolation
@@ -221,10 +201,6 @@ impl ScrollableControllerInner {
         let mut movement_factor = (1.0 - smoothing) * delta_time * 60.0;
 
         // CRITICAL FIX: Clamp the movement factor to a maximum of 1.0.
-        // A factor greater than 1.0 causes the interpolation to overshoot the target,
-        // leading to oscillations that grow exponentially, causing the value explosion
-        // and overflow panic seen in the logs. Clamping ensures stability by
-        // preventing the position from moving past the target in a single frame.
         if movement_factor > 1.0 {
             movement_factor = 1.0;
         }
@@ -239,9 +215,12 @@ impl ScrollableControllerInner {
         old_position != self.child_position
     }
 
-    /// Sets a new target position for scrolling
-    fn set_target_position(&mut self, target: PxPosition) {
-        self.target_position = target;
+    pub(crate) fn scrollbar_state_v(&self) -> ScrollBarState {
+        self.scrollbar_state_v.clone()
+    }
+
+    pub(crate) fn scrollbar_state_h(&self) -> ScrollBarState {
+        self.scrollbar_state_h.clone()
     }
 }
 
@@ -358,18 +337,18 @@ pub fn scrollable(args: impl Into<ScrollableArgs>, child: impl FnOnce() + Send +
 #[tessera]
 pub fn scrollable_with_controller(
     args: impl Into<ScrollableArgs>,
-    controller: Arc<ScrollableController>,
+    controller: State<ScrollableController>,
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
     let args: ScrollableArgs = args.into();
 
     // Create separate ScrollBarArgs for vertical and horizontal scrollbars
     let scrollbar_args_v = ScrollBarArgs {
-        total: controller.child_size().height,
-        visible: controller.visible_size().height,
-        offset: controller.child_position().y,
+        total: controller.with(|c| c.child_size().height),
+        visible: controller.with(|c| c.visible_size().height),
+        offset: controller.with(|c| c.child_position().y),
         thickness: Dp(8.0), // Default scrollbar thickness
-        state: controller.clone(),
+        state: controller,
         scrollbar_behavior: args.scrollbar_behavior.clone(),
         track_color: args.scrollbar_track_color,
         thumb_color: args.scrollbar_thumb_color,
@@ -377,11 +356,11 @@ pub fn scrollable_with_controller(
     };
 
     let scrollbar_args_h = ScrollBarArgs {
-        total: controller.child_size().width,
-        visible: controller.visible_size().width,
-        offset: controller.child_position().x,
+        total: controller.with(|c| c.child_size().width),
+        visible: controller.with(|c| c.visible_size().width),
+        offset: controller.with(|c| c.child_position().x),
         thickness: Dp(8.0), // Default scrollbar thickness
-        state: controller.clone(),
+        state: controller,
         scrollbar_behavior: args.scrollbar_behavior.clone(),
         track_color: args.scrollbar_track_color,
         thumb_color: args.scrollbar_thumb_color,
@@ -412,26 +391,29 @@ pub fn scrollable_with_controller(
 
 #[tessera]
 fn scrollable_with_alongside_scrollbar(
-    controller: Arc<ScrollableController>,
+    controller: State<ScrollableController>,
     args: ScrollableArgs,
     scrollbar_args_v: ScrollBarArgs,
     scrollbar_args_h: ScrollBarArgs,
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
+    let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
+    let scrollbar_h_state = controller.with(|c| c.scrollbar_state_h());
+
     scrollable_inner(
         args.clone(),
-        controller.clone(),
-        controller.scrollbar_state_v.clone(),
-        controller.scrollbar_state_h.clone(),
+        controller,
+        scrollbar_v_state.clone(),
+        scrollbar_h_state.clone(),
         child,
     );
 
     if args.vertical {
-        scrollbar_v(scrollbar_args_v, controller.scrollbar_state_v.clone());
+        scrollbar_v(scrollbar_args_v, scrollbar_v_state);
     }
 
     if args.horizontal {
-        scrollbar_h(scrollbar_args_h, controller.scrollbar_state_h.clone());
+        scrollbar_h(scrollbar_args_h, scrollbar_h_state);
     }
 
     measure(Box::new(move |input| {
@@ -497,7 +479,7 @@ fn scrollable_with_alongside_scrollbar(
 
 #[tessera]
 fn scrollable_with_overlay_scrollbar(
-    controller: Arc<ScrollableController>,
+    controller: State<ScrollableController>,
     args: ScrollableArgs,
     scrollbar_args_v: ScrollBarArgs,
     scrollbar_args_h: ScrollBarArgs,
@@ -512,14 +494,15 @@ fn scrollable_with_overlay_scrollbar(
             .expect("builder construction failed"),
         |scope| {
             scope.child({
-                let controller = controller.clone();
                 let args = args.clone();
+                let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
+                let scrollbar_h_state = controller.with(|c| c.scrollbar_state_h());
                 move || {
                     scrollable_inner(
                         args,
-                        controller.clone(),
-                        controller.scrollbar_state_v.clone(),
-                        controller.scrollbar_state_h.clone(),
+                        controller,
+                        scrollbar_v_state,
+                        scrollbar_h_state,
                         child,
                     );
                 }
@@ -527,20 +510,20 @@ fn scrollable_with_overlay_scrollbar(
             scope.child({
                 let scrollbar_args_v = scrollbar_args_v.clone();
                 let args = args.clone();
-                let controller = controller.clone();
+                let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
                 move || {
                     if args.vertical {
-                        scrollbar_v(scrollbar_args_v, controller.scrollbar_state_v.clone());
+                        scrollbar_v(scrollbar_args_v, scrollbar_v_state);
                     }
                 }
             });
             scope.child({
                 let scrollbar_args_h = scrollbar_args_h.clone();
                 let args = args.clone();
-                let controller = controller.clone();
+                let scrollbar_h_state = controller.with(|c| c.scrollbar_state_h());
                 move || {
                     if args.horizontal {
-                        scrollbar_h(scrollbar_args_h, controller.scrollbar_state_h.clone());
+                        scrollbar_h(scrollbar_args_h, scrollbar_h_state);
                     }
                 }
             });
@@ -574,14 +557,13 @@ fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
 #[tessera]
 fn scrollable_inner(
     args: impl Into<ScrollableArgs>,
-    controller: Arc<ScrollableController>,
+    controller: State<ScrollableController>,
     scrollbar_state_v: ScrollBarState,
     scrollbar_state_h: ScrollBarState,
     child: impl FnOnce(),
 ) {
     let args: ScrollableArgs = args.into();
     {
-        let controller = controller.clone();
         measure(Box::new(move |input| {
             // Enable clip
             input.enable_clipping();
@@ -613,16 +595,15 @@ fn scrollable_inner(
             // Update the child position and size in the state. Allow components to override
             // the scroll extent (used by virtualized lists) while maintaining the actual
             // measured viewport size for layout.
-            let current_child_position = {
-                let mut state_guard = controller.write();
-                if let Some(override_size) = state_guard.override_child_size.take() {
-                    state_guard.child_size = override_size;
+            let current_child_position = controller.with_mut(|c| {
+                if let Some(override_size) = c.override_child_size.take() {
+                    c.child_size = override_size;
                 } else {
-                    state_guard.child_size = child_measurement;
+                    c.child_size = child_measurement;
                 }
-                state_guard.update_scroll_position(args.scroll_smoothing);
-                state_guard.child_position
-            };
+                c.update_scroll_position(args.scroll_smoothing);
+                c.child_position
+            });
 
             // Place child at current interpolated position
             input.place_child(child_node_id, current_child_position);
@@ -642,7 +623,7 @@ fn scrollable_inner(
             // Pack the size into ComputedData
             let computed_data = ComputedData { width, height };
             // Update the visible size in the state
-            controller.write().visible_size = computed_data;
+            controller.with_mut(|c| c.visible_size = computed_data);
             // Return the size of the scrollable area
             Ok(computed_data)
         }));
@@ -666,31 +647,31 @@ fn scrollable_inner(
                     _ => None,
                 })
             {
-                let mut state_guard = controller.write();
+                controller.with_mut(|c| {
+                    // Use scroll delta directly (speed already handled in cursor.rs)
+                    let scroll_delta_x = event.delta_x;
+                    let scroll_delta_y = event.delta_y;
 
-                // Use scroll delta directly (speed already handled in cursor.rs)
-                let scroll_delta_x = event.delta_x;
-                let scroll_delta_y = event.delta_y;
+                    // Calculate new target position using saturating arithmetic
+                    let current_target = c.target_position;
+                    let new_target = current_target.saturating_offset(
+                        Px::saturating_from_f32(scroll_delta_x),
+                        Px::saturating_from_f32(scroll_delta_y),
+                    );
 
-                // Calculate new target position using saturating arithmetic
-                let current_target = state_guard.target_position;
-                let new_target = current_target.saturating_offset(
-                    Px::saturating_from_f32(scroll_delta_x),
-                    Px::saturating_from_f32(scroll_delta_y),
-                );
+                    // Apply bounds constraints immediately before setting target
+                    let child_size = c.child_size;
+                    let constrained_target = constrain_position(
+                        new_target,
+                        &child_size,
+                        &input.computed_data,
+                        args.vertical,
+                        args.horizontal,
+                    );
 
-                // Apply bounds constraints immediately before setting target
-                let child_size = state_guard.child_size;
-                let constrained_target = constrain_position(
-                    new_target,
-                    &child_size,
-                    &input.computed_data,
-                    args.vertical,
-                    args.horizontal,
-                );
-
-                // Set constrained target position
-                state_guard.set_target_position(constrained_target);
+                    // Set constrained target position
+                    c.set_target_position(constrained_target);
+                });
 
                 // Update scroll activity for AutoHide behavior
                 if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
@@ -711,8 +692,8 @@ fn scrollable_inner(
 
             // Apply bound constraints to the child position
             // To make sure we constrain the target position at least once per frame
-            let target = controller.target_position();
-            let child_size = controller.child_size();
+            let target = controller.with(|c| c.target_position());
+            let child_size = controller.with(|c| c.child_size());
             let constrained_position = constrain_position(
                 target,
                 &child_size,
@@ -720,7 +701,7 @@ fn scrollable_inner(
                 args.vertical,
                 args.horizontal,
             );
-            controller.set_target_position(constrained_position);
+            controller.with_mut(|c| c.set_target_position(constrained_position));
 
             // Block cursor events to prevent propagation
             input.cursor_events.clear();
@@ -728,7 +709,7 @@ fn scrollable_inner(
 
         // Update scroll position based on time (only once per frame, after handling
         // events)
-        controller.update_scroll_position(args.scroll_smoothing);
+        controller.with_mut(|c| c.update_scroll_position(args.scroll_smoothing));
     }));
 
     // Add child component

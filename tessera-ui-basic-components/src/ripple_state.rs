@@ -6,12 +6,12 @@
 //! (buttons, surfaces, glass buttons) to indicate clicks and hover
 //! interactions.
 
-use std::sync::{Arc, atomic};
+use std::sync::atomic;
 
 /// # RippleState
 ///
 /// Manage ripple animations and hover state for interactive UI components.
-/// Recommended use: create a single `RippleState` handle and clone it to share.
+/// Use with `remember` to create persistent state across frames.
 ///
 /// ## Parameters
 ///
@@ -22,14 +22,24 @@ use std::sync::{Arc, atomic};
 ///
 /// ```
 /// use tessera_ui_basic_components::ripple_state::RippleState;
-/// let s = RippleState::new();
+/// let mut s = RippleState::new();
 /// assert!(!s.is_hovered());
 /// s.set_hovered(true);
 /// assert!(s.is_hovered());
 /// ```
-#[derive(Clone)]
 pub struct RippleState {
-    inner: Arc<RippleStateInner>,
+    /// Whether the ripple animation is currently active.
+    is_animating: atomic::AtomicBool,
+    /// The animation start time, stored as milliseconds since the Unix epoch.
+    start_time: atomic::AtomicU64,
+    /// The X coordinate of the click position, stored as fixed-point
+    /// (multiplied by 1000).
+    click_pos_x: atomic::AtomicI32,
+    /// The Y coordinate of the click position, stored as fixed-point
+    /// (multiplied by 1000).
+    click_pos_y: atomic::AtomicI32,
+    /// Whether the pointer is currently hovering over the component.
+    is_hovered: atomic::AtomicBool,
 }
 
 impl Default for RippleState {
@@ -50,7 +60,11 @@ impl RippleState {
     /// ```
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(RippleStateInner::new()),
+            is_animating: atomic::AtomicBool::new(false),
+            start_time: atomic::AtomicU64::new(0),
+            click_pos_x: atomic::AtomicI32::new(0),
+            click_pos_y: atomic::AtomicI32::new(0),
+            is_hovered: atomic::AtomicBool::new(false),
         }
     }
 
@@ -68,7 +82,17 @@ impl RippleState {
     /// state.start_animation([0.5, 0.5]);
     /// ```
     pub fn start_animation(&self, click_pos: [f32; 2]) {
-        self.inner.start_animation(click_pos);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time earlier than UNIX_EPOCH")
+            .as_millis() as u64;
+
+        self.start_time.store(now, atomic::Ordering::SeqCst);
+        self.click_pos_x
+            .store((click_pos[0] * 1000.0) as i32, atomic::Ordering::SeqCst);
+        self.click_pos_y
+            .store((click_pos[1] * 1000.0) as i32, atomic::Ordering::SeqCst);
+        self.is_animating.store(true, atomic::Ordering::SeqCst);
     }
 
     /// Returns the current progress of the ripple animation and the origin
@@ -91,80 +115,6 @@ impl RippleState {
     /// }
     /// ```
     pub fn get_animation_progress(&self) -> Option<(f32, [f32; 2])> {
-        self.inner.get_animation_progress()
-    }
-
-    /// Sets the hover state for the ripple.
-    ///
-    /// # Arguments
-    ///
-    /// * `hovered` - `true` if the pointer is over the component, `false`
-    ///   otherwise.
-    ///
-    /// # Example
-    /// ```
-    /// use tessera_ui_basic_components::ripple_state::RippleState;
-    /// let state = RippleState::new();
-    /// state.set_hovered(true);
-    /// ```
-    pub fn set_hovered(&self, hovered: bool) {
-        self.inner.set_hovered(hovered);
-    }
-
-    /// Returns whether the pointer is currently hovering over the component.
-    ///
-    /// # Example
-    /// ```
-    /// use tessera_ui_basic_components::ripple_state::RippleState;
-    /// let state = RippleState::new();
-    /// let hovered = state.is_hovered();
-    /// ```
-    pub fn is_hovered(&self) -> bool {
-        self.inner.is_hovered()
-    }
-}
-
-struct RippleStateInner {
-    /// Whether the ripple animation is currently active.
-    is_animating: atomic::AtomicBool,
-    /// The animation start time, stored as milliseconds since the Unix epoch.
-    start_time: atomic::AtomicU64,
-    /// The X coordinate of the click position, stored as fixed-point
-    /// (multiplied by 1000).
-    click_pos_x: atomic::AtomicI32,
-    /// The Y coordinate of the click position, stored as fixed-point
-    /// (multiplied by 1000).
-    click_pos_y: atomic::AtomicI32,
-    /// Whether the pointer is currently hovering over the component.
-    is_hovered: atomic::AtomicBool,
-}
-
-impl RippleStateInner {
-    fn new() -> Self {
-        Self {
-            is_animating: atomic::AtomicBool::new(false),
-            start_time: atomic::AtomicU64::new(0),
-            click_pos_x: atomic::AtomicI32::new(0),
-            click_pos_y: atomic::AtomicI32::new(0),
-            is_hovered: atomic::AtomicBool::new(false),
-        }
-    }
-
-    fn start_animation(&self, click_pos: [f32; 2]) {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time earlier than UNIX_EPOCH")
-            .as_millis() as u64;
-
-        self.start_time.store(now, atomic::Ordering::SeqCst);
-        self.click_pos_x
-            .store((click_pos[0] * 1000.0) as i32, atomic::Ordering::SeqCst);
-        self.click_pos_y
-            .store((click_pos[1] * 1000.0) as i32, atomic::Ordering::SeqCst);
-        self.is_animating.store(true, atomic::Ordering::SeqCst);
-    }
-
-    fn get_animation_progress(&self) -> Option<(f32, [f32; 2])> {
         let is_animating = self.is_animating.load(atomic::Ordering::SeqCst);
 
         if !is_animating {
@@ -192,11 +142,32 @@ impl RippleStateInner {
         Some((progress, click_pos))
     }
 
-    fn set_hovered(&self, hovered: bool) {
+    /// Sets the hover state for the ripple.
+    ///
+    /// # Arguments
+    ///
+    /// * `hovered` - `true` if the pointer is over the component, `false`
+    ///   otherwise.
+    ///
+    /// # Example
+    /// ```
+    /// use tessera_ui_basic_components::ripple_state::RippleState;
+    /// let state = RippleState::new();
+    /// state.set_hovered(true);
+    /// ```
+    pub fn set_hovered(&self, hovered: bool) {
         self.is_hovered.store(hovered, atomic::Ordering::SeqCst);
     }
 
-    fn is_hovered(&self) -> bool {
+    /// Returns whether the pointer is currently hovering over the component.
+    ///
+    /// # Example
+    /// ```
+    /// use tessera_ui_basic_components::ripple_state::RippleState;
+    /// let state = RippleState::new();
+    /// let hovered = state.is_hovered();
+    /// ```
+    pub fn is_hovered(&self) -> bool {
         self.is_hovered.load(atomic::Ordering::SeqCst)
     }
 }

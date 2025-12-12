@@ -108,6 +108,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                             .variant(IconButtonVariant::Filled)
                                             .color(
                                                 use_context::<MaterialColorScheme>()
+                                                    .get()
                                                     .surface_variant,
                                             )
                                             .on_click(closure!(
@@ -161,6 +162,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                         MaterialColorScheme,
                                                                     >(
                                                                     )
+                                                                    .get()
                                                                     .on_primary,
                                                                 )
                                                                 .build()
@@ -192,6 +194,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                         MaterialColorScheme,
                                                                     >(
                                                                     )
+                                                                    .get()
                                                                     .primary,
                                                                 )
                                                                 .build()
@@ -223,6 +226,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                         MaterialColorScheme,
                                                                     >(
                                                                     )
+                                                                    .get()
                                                                     .on_secondary_container,
                                                                 )
                                                                 .build()
@@ -261,6 +265,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                             MaterialColorScheme,
                                                                         >(
                                                                         )
+                                                                        .get()
                                                                         .primary,
                                                                     )
                                                                     .build()
@@ -292,6 +297,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                             MaterialColorScheme,
                                                                         >(
                                                                         )
+                                                                        .get()
                                                                         .primary,
                                                                     )
                                                                     .build()

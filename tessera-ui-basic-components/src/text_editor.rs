@@ -8,8 +8,8 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use glyphon::{Action as GlyphonAction, Edit};
 use tessera_ui::{
-    Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, accesskit::Role,
-    remember, tessera, use_context, winit,
+    Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, State,
+    accesskit::Role, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -48,13 +48,13 @@ pub struct TextEditorArgs {
     #[builder(default = "None")]
     pub min_height: Option<Dp>,
     /// Background color of the text editor (RGBA). Defaults to light gray.
-    #[builder(default = "Some(use_context::<MaterialColorScheme>().surface_variant)")]
+    #[builder(default = "Some(use_context::<MaterialColorScheme>().get().surface_variant)")]
     pub background_color: Option<Color>,
     /// Border width in Dp. Defaults to 1.0 Dp.
     #[builder(default = "Dp(1.0)")]
     pub border_width: Dp,
     /// Border color (RGBA). Defaults to gray.
-    #[builder(default = "Some(use_context::<MaterialColorScheme>().outline_variant)")]
+    #[builder(default = "Some(use_context::<MaterialColorScheme>().get().outline_variant)")]
     pub border_color: Option<Color>,
     /// The shape of the text editor container.
     #[builder(default = "Shape::RoundedRectangle {
@@ -68,14 +68,16 @@ pub struct TextEditorArgs {
     #[builder(default = "Dp(5.0)")]
     pub padding: Dp,
     /// Border color when focused (RGBA). Defaults to blue.
-    #[builder(default = "Some(use_context::<MaterialColorScheme>().primary)")]
+    #[builder(default = "Some(use_context::<MaterialColorScheme>().get().primary)")]
     pub focus_border_color: Option<Color>,
     /// Background color when focused (RGBA). Defaults to white.
-    #[builder(default = "Some(use_context::<MaterialColorScheme>().surface)")]
+    #[builder(default = "Some(use_context::<MaterialColorScheme>().get().surface)")]
     pub focus_background_color: Option<Color>,
     /// Color for text selection highlight (RGBA). Defaults to light blue with
     /// transparency.
-    #[builder(default = "Some(use_context::<MaterialColorScheme>().primary.with_alpha(0.35))")]
+    #[builder(
+        default = "Some(use_context::<MaterialColorScheme>().get().primary.with_alpha(0.35))"
+    )]
     pub selection_color: Option<Color>,
     /// Optional label announced by assistive technologies.
     #[builder(default, setter(strip_option, into))]
@@ -203,25 +205,25 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
 #[tessera]
 pub fn text_editor_with_controller(
     args: impl Into<TextEditorArgs>,
-    controller: Arc<TextEditorController>,
+    controller: State<TextEditorController>,
 ) {
     let editor_args: TextEditorArgs = args.into();
     let on_change = editor_args.on_change.clone();
 
     // Update the state with the selection color from args
     if let Some(selection_color) = editor_args.selection_color {
-        controller.write().set_selection_color(selection_color);
+        controller.with(|c| c.write().set_selection_color(selection_color));
     }
 
     // surface layer - provides visual container and minimum size guarantee
     {
-        let state_for_surface = controller.clone();
+        let state_for_surface = controller;
         let args_for_surface = editor_args.clone();
         surface(
             create_surface_args(&args_for_surface, &state_for_surface),
             move || {
                 // Core layer - handles text rendering and editing logic
-                text_edit_core(state_for_surface.clone());
+                text_edit_core(state_for_surface);
             },
         );
     }
@@ -229,7 +231,7 @@ pub fn text_editor_with_controller(
     // Event handling at the outermost layer - can access full surface area
 
     let args_for_handler = editor_args.clone();
-    let state_for_handler = controller.clone();
+    let state_for_handler = controller;
     input_handler(Box::new(move |mut input| {
         let size = input.computed_data; // This is the full surface size
         let cursor_pos_option = input.cursor_position_rel;
@@ -260,11 +262,10 @@ pub fn text_editor_with_controller(
 
             if !click_events.is_empty() {
                 // Request focus if not already focused
-                if !state_for_handler.read().focus_handler().is_focused() {
-                    state_for_handler
-                        .write()
-                        .focus_handler_mut()
-                        .request_focus();
+                if !state_for_handler.with(|s| s.read().focus_handler().is_focused()) {
+                    state_for_handler.with(|s| {
+                        s.write().focus_handler_mut().request_focus();
+                    });
                 }
 
                 // Handle cursor positioning for clicks
@@ -282,52 +283,59 @@ pub fn text_editor_with_controller(
                         let text_relative_pos =
                             PxPosition::new(text_relative_x_px, text_relative_y_px);
                         // Determine click type and handle accordingly
-                        let click_type = state_for_handler
-                            .write()
-                            .handle_click(text_relative_pos, click_events[0].timestamp);
+                        let click_type = state_for_handler.with(|s| {
+                            s.write()
+                                .handle_click(text_relative_pos, click_events[0].timestamp)
+                        });
 
                         match click_type {
                             ClickType::Single => {
                                 // Single click: position cursor
-                                state_for_handler.write().editor_mut().action(
-                                    &mut write_font_system(),
-                                    GlyphonAction::Click {
-                                        x: text_relative_pos.x.0,
-                                        y: text_relative_pos.y.0,
-                                    },
-                                );
+                                state_for_handler.with(|s| {
+                                    s.write().editor_mut().action(
+                                        &mut write_font_system(),
+                                        GlyphonAction::Click {
+                                            x: text_relative_pos.x.0,
+                                            y: text_relative_pos.y.0,
+                                        },
+                                    );
+                                });
                             }
                             ClickType::Double => {
                                 // Double click: select word
-                                state_for_handler.write().editor_mut().action(
-                                    &mut write_font_system(),
-                                    GlyphonAction::DoubleClick {
-                                        x: text_relative_pos.x.0,
-                                        y: text_relative_pos.y.0,
-                                    },
-                                );
+                                state_for_handler.with(|s| {
+                                    s.write().editor_mut().action(
+                                        &mut write_font_system(),
+                                        GlyphonAction::DoubleClick {
+                                            x: text_relative_pos.x.0,
+                                            y: text_relative_pos.y.0,
+                                        },
+                                    );
+                                });
                             }
                             ClickType::Triple => {
                                 // Triple click: select line
-                                state_for_handler.write().editor_mut().action(
-                                    &mut write_font_system(),
-                                    GlyphonAction::TripleClick {
-                                        x: text_relative_pos.x.0,
-                                        y: text_relative_pos.y.0,
-                                    },
-                                );
+                                state_for_handler.with(|s| {
+                                    s.write().editor_mut().action(
+                                        &mut write_font_system(),
+                                        GlyphonAction::TripleClick {
+                                            x: text_relative_pos.x.0,
+                                            y: text_relative_pos.y.0,
+                                        },
+                                    );
+                                });
                             }
                         }
 
                         // Start potential drag operation
-                        state_for_handler.write().start_drag();
+                        state_for_handler.with(|s| s.write().start_drag());
                     }
                 }
             }
 
             // Handle drag events (mouse move while dragging)
             // This happens every frame when cursor position changes during drag
-            if state_for_handler.read().is_dragging()
+            if state_for_handler.with(|s| s.read().is_dragging())
                 && let Some(cursor_pos) = cursor_pos_option
             {
                 let padding_px: Px = args_for_handler.padding.into();
@@ -338,29 +346,31 @@ pub fn text_editor_with_controller(
 
                 if text_relative_x_px >= Px(0) && text_relative_y_px >= Px(0) {
                     let current_pos_px = PxPosition::new(text_relative_x_px, text_relative_y_px);
-                    let last_pos_px = state_for_handler.read().last_click_position();
+                    let last_pos_px = state_for_handler.with(|s| s.read().last_click_position());
 
                     if last_pos_px != Some(current_pos_px) {
                         // Extend selection by dragging
-                        state_for_handler.write().editor_mut().action(
-                            &mut write_font_system(),
-                            GlyphonAction::Drag {
-                                x: current_pos_px.x.0,
-                                y: current_pos_px.y.0,
-                            },
-                        );
+                        state_for_handler.with(|s| {
+                            s.write().editor_mut().action(
+                                &mut write_font_system(),
+                                GlyphonAction::Drag {
+                                    x: current_pos_px.x.0,
+                                    y: current_pos_px.y.0,
+                                },
+                            );
+                        });
 
                         // Update last position to current position
-                        state_for_handler
-                            .write()
-                            .update_last_click_position(current_pos_px);
+                        state_for_handler.with(|s| {
+                            s.write().update_last_click_position(current_pos_px);
+                        });
                     }
                 }
             }
 
             // Handle mouse release events (end drag)
             if !release_events.is_empty() {
-                state_for_handler.write().stop_drag();
+                state_for_handler.with(|s| s.write().stop_drag());
             }
 
             let scroll_events: Vec<_> = input
@@ -373,28 +383,29 @@ pub fn text_editor_with_controller(
                 .collect();
 
             // Handle scroll events (only when focused and cursor is in editor)
-            if state_for_handler.read().focus_handler().is_focused() {
+            if state_for_handler.with(|s| s.read().focus_handler().is_focused()) {
                 for scroll_event in scroll_events {
                     // Convert scroll delta to lines
                     let scroll = -scroll_event.delta_y;
 
                     // Scroll up for positive, down for negative
                     let action = GlyphonAction::Scroll { pixels: scroll };
-                    state_for_handler
-                        .write()
-                        .editor_mut()
-                        .action(&mut write_font_system(), action);
+                    state_for_handler.with(|s| {
+                        s.write()
+                            .editor_mut()
+                            .action(&mut write_font_system(), action);
+                    });
                 }
             }
 
             // Only block cursor events when focused to prevent propagation
-            if state_for_handler.read().focus_handler().is_focused() {
+            if state_for_handler.with(|s| s.read().focus_handler().is_focused()) {
                 input.cursor_events.clear();
             }
         }
 
         // Handle keyboard events (only when focused)
-        if state_for_handler.read().focus_handler().is_focused() {
+        if state_for_handler.with(|s| s.read().focus_handler().is_focused()) {
             // Handle keyboard events
             let is_ctrl = input.key_modifiers.control_key() || input.key_modifiers.super_key();
 
@@ -410,25 +421,27 @@ pub fn text_editor_with_controller(
             });
 
             if let Some(_index) = select_all_event_index {
-                let mut state = state_for_handler.write();
-                let editor = state.editor_mut();
-                // Set cursor to the beginning of the document
-                editor.set_cursor(glyphon::Cursor::new(0, 0));
-                // Set selection to start from the beginning
-                editor.set_selection(glyphon::cosmic_text::Selection::Normal(
-                    glyphon::Cursor::new(0, 0),
-                ));
-                // Move cursor to the end, which extends the selection (use BufferEnd for full
-                // document)
-                editor.action(
-                    &mut write_font_system(),
-                    GlyphonAction::Motion(glyphon::cosmic_text::Motion::BufferEnd),
-                );
+                state_for_handler.with(|s| {
+                    let mut state = s.write();
+                    let editor = state.editor_mut();
+                    // Set cursor to the beginning of the document
+                    editor.set_cursor(glyphon::Cursor::new(0, 0));
+                    // Set selection to start from the beginning
+                    editor.set_selection(glyphon::cosmic_text::Selection::Normal(
+                        glyphon::Cursor::new(0, 0),
+                    ));
+                    // Move cursor to the end, which extends the selection (use BufferEnd for full
+                    // document)
+                    editor.action(
+                        &mut write_font_system(),
+                        GlyphonAction::Motion(glyphon::cosmic_text::Motion::BufferEnd),
+                    );
+                });
             } else {
                 // Original logic for other keys
                 let mut all_actions = Vec::new();
-                {
-                    let mut state = state_for_handler.write();
+                state_for_handler.with(|s| {
+                    let mut state = s.write();
                     for key_event in input.keyboard_events.iter().cloned() {
                         if let Some(actions) = state.map_key_event_to_action(
                             key_event,
@@ -438,7 +451,7 @@ pub fn text_editor_with_controller(
                             all_actions.extend(actions);
                         }
                     }
-                }
+                });
 
                 if !all_actions.is_empty() {
                     for action in all_actions {
@@ -453,12 +466,11 @@ pub fn text_editor_with_controller(
             // Handle IME events
             let ime_events: Vec<_> = input.ime_events.drain(..).collect();
             for event in ime_events {
-                let mut state = state_for_handler.write();
                 match event {
                     winit::event::Ime::Commit(text) => {
                         // Clear preedit string if it exists
-                        let preedit_text = state.preedit_string.take();
-                        drop(state);
+                        let preedit_text =
+                            state_for_handler.with(|s| s.write().preedit_string.take());
 
                         if let Some(preedit_text) = preedit_text {
                             for _ in 0..preedit_text.chars().count() {
@@ -480,8 +492,8 @@ pub fn text_editor_with_controller(
                     }
                     winit::event::Ime::Preedit(text, _cursor_offset) => {
                         // Remove the old preedit text if it exists
-                        let old_preedit = state.preedit_string.take();
-                        drop(state);
+                        let old_preedit =
+                            state_for_handler.with(|s| s.write().preedit_string.take());
 
                         if let Some(old_preedit) = old_preedit {
                             for _ in 0..old_preedit.chars().count() {
@@ -500,7 +512,8 @@ pub fn text_editor_with_controller(
                                 on_change.clone(),
                             );
                         }
-                        state_for_handler.write().preedit_string = Some(text.to_string());
+                        state_for_handler
+                            .with(|c| c.write().preedit_string = Some(text.to_string()));
                     }
                     _ => {}
                 }
@@ -515,12 +528,12 @@ pub fn text_editor_with_controller(
 }
 
 fn handle_action(
-    state: &TextEditorController,
+    state: &State<TextEditorController>,
     action: GlyphonAction,
     on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
 ) {
     // Clone a temporary editor and apply action, waiting for on_change to confirm
-    let mut new_editor = state.read().editor().clone();
+    let mut new_editor = state.with(|c| c.read().editor().clone());
 
     // Make sure new editor own a isolated buffer
     let mut new_buffer = None;
@@ -540,24 +553,27 @@ fn handle_action(
     new_editor.action(&mut write_font_system(), action);
     let content_after_action = get_editor_content(&new_editor);
 
-    state
-        .write()
-        .editor_mut()
-        .action(&mut write_font_system(), action);
+    state.with(|c| {
+        c.write()
+            .editor_mut()
+            .action(&mut write_font_system(), action)
+    });
     let new_content = on_change(content_after_action);
 
     // Update editor content
-    state.write().editor_mut().set_text_reactive(
-        &new_content,
-        &mut write_font_system(),
-        &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
-    );
+    state.with(|c| {
+        c.write().editor_mut().set_text_reactive(
+            &new_content,
+            &mut write_font_system(),
+            &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
+        )
+    });
 }
 
 /// Create surface arguments based on editor configuration and state
 fn create_surface_args(
     args: &TextEditorArgs,
-    state: &TextEditorController,
+    state: &State<TextEditorController>,
 ) -> crate::surface::SurfaceArgs {
     let style = if args.border_width.to_pixels_f32() > 0.0 {
         crate::surface::SurfaceStyle::FilledOutlined {
@@ -583,26 +599,30 @@ fn create_surface_args(
 }
 
 /// Determine background color based on focus state
-fn determine_background_color(args: &TextEditorArgs, state: &TextEditorController) -> Color {
-    if state.read().focus_handler().is_focused() {
+fn determine_background_color(args: &TextEditorArgs, state: &State<TextEditorController>) -> Color {
+    if state.with(|c| c.read().focus_handler().is_focused()) {
         args.focus_background_color
             .or(args.background_color)
-            .unwrap_or(use_context::<MaterialColorScheme>().surface)
+            .unwrap_or(use_context::<MaterialColorScheme>().get().surface)
     } else {
         args.background_color
-            .unwrap_or(use_context::<MaterialColorScheme>().surface_variant)
+            .unwrap_or(use_context::<MaterialColorScheme>().get().surface_variant)
     }
 }
 
 /// Determine border color based on focus state
-fn determine_border_color(args: &TextEditorArgs, state: &TextEditorController) -> Option<Color> {
-    if state.read().focus_handler().is_focused() {
+fn determine_border_color(
+    args: &TextEditorArgs,
+    state: &State<TextEditorController>,
+) -> Option<Color> {
+    if state.with(|c| c.read().focus_handler().is_focused()) {
         args.focus_border_color
             .or(args.border_color)
-            .or(Some(use_context::<MaterialColorScheme>().primary))
+            .or(Some(use_context::<MaterialColorScheme>().get().primary))
     } else {
-        args.border_color
-            .or(Some(use_context::<MaterialColorScheme>().outline_variant))
+        args.border_color.or(Some(
+            use_context::<MaterialColorScheme>().get().outline_variant,
+        ))
     }
 }
 
@@ -628,9 +648,13 @@ impl TextEditorArgs {
     pub fn simple() -> Self {
         TextEditorArgsBuilder::default()
             .min_width(Some(Dp(120.0)))
-            .background_color(Some(use_context::<MaterialColorScheme>().surface_variant))
+            .background_color(Some(
+                use_context::<MaterialColorScheme>().get().surface_variant,
+            ))
             .border_width(Dp(1.0))
-            .border_color(Some(use_context::<MaterialColorScheme>().outline_variant))
+            .border_color(Some(
+                use_context::<MaterialColorScheme>().get().outline_variant,
+            ))
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(Dp(0.0), 3.0),
                 top_right: RoundedCorner::manual(Dp(0.0), 3.0),
@@ -940,7 +964,7 @@ fn get_editor_content(editor: &glyphon::Editor) -> String {
 fn apply_text_editor_accessibility(
     input: &mut tessera_ui::InputHandlerInput<'_>,
     args: &TextEditorArgs,
-    state: &TextEditorController,
+    state: &State<TextEditorController>,
 ) {
     let mut builder = input.accessibility().role(Role::MultilineTextInput);
 
@@ -952,10 +976,10 @@ fn apply_text_editor_accessibility(
         builder = builder.description(description.clone());
     }
 
-    let current_text = {
-        let guard = state.read();
+    let current_text = state.with(|c| {
+        let guard = c.read();
         get_editor_content(guard.editor())
-    };
+    });
     if !current_text.is_empty() {
         builder = builder.value(current_text);
     }

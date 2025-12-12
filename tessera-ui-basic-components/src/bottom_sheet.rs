@@ -9,10 +9,9 @@ use std::{
 };
 
 use derive_builder::Builder;
-use parking_lot::RwLock;
 use tessera_ui::{
     Color, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px, PxPosition,
-    remember, tessera, use_context, winit,
+    State, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -59,8 +58,13 @@ pub struct BottomSheetProviderArgs {
     pub is_open: bool,
 }
 
-#[derive(Default)]
-struct BottomSheetStateInner {
+/// Controller for [`bottom_sheet_provider`], managing open/closed state.
+///
+/// This controller can be created by the application and passed to the
+/// [`bottom_sheet_provider_with_controller`]. It is used to control the
+/// visibility of the sheet programmatically.
+#[derive(Clone)]
+pub struct BottomSheetController {
     is_open: bool,
     timer: Option<Instant>,
     is_dragging: bool,
@@ -68,39 +72,15 @@ struct BottomSheetStateInner {
     drag_start_y: f32,
 }
 
-/// Controller for [`bottom_sheet_provider`], managing open/closed state.
-///
-/// This controller can be created by the application and passed to the
-/// [`bottom_sheet_provider_with_controller`]. It is used to control the
-/// visibility of the sheet programmatically.
-///
-/// # Example
-///
-/// ```
-/// use tessera_ui_basic_components::bottom_sheet::BottomSheetController;
-///
-/// let controller = BottomSheetController::new(false);
-/// assert!(!controller.is_open());
-/// controller.open();
-/// assert!(controller.is_open());
-/// controller.close();
-/// assert!(!controller.is_open());
-/// ```
-pub struct BottomSheetController {
-    inner: RwLock<BottomSheetStateInner>,
-}
-
 impl BottomSheetController {
     /// Creates a new controller.
     pub fn new(initial_open: bool) -> Self {
         Self {
-            inner: RwLock::new(BottomSheetStateInner {
-                is_open: initial_open,
-                timer: None,
-                is_dragging: false,
-                drag_offset: 0.0,
-                drag_start_y: 0.0,
-            }),
+            is_open: initial_open,
+            timer: None,
+            is_dragging: false,
+            drag_offset: 0.0,
+            drag_start_y: 0.0,
         }
     }
 
@@ -109,19 +89,18 @@ impl BottomSheetController {
     /// If the sheet is already open, this has no effect. If the sheet is
     /// currently closing, it will reverse direction and start opening from
     /// its current position.
-    pub fn open(&self) {
-        let mut inner = self.inner.write();
-        if !inner.is_open {
-            inner.is_open = true;
-            inner.drag_offset = 0.0;
+    pub fn open(&mut self) {
+        if !self.is_open {
+            self.is_open = true;
+            self.drag_offset = 0.0;
             let mut timer = Instant::now();
-            if let Some(old_timer) = inner.timer {
+            if let Some(old_timer) = self.timer {
                 let elapsed = old_timer.elapsed();
                 if elapsed < ANIM_TIME {
                     timer += ANIM_TIME - elapsed;
                 }
             }
-            inner.timer = Some(timer);
+            self.timer = Some(timer);
         }
     }
 
@@ -130,61 +109,56 @@ impl BottomSheetController {
     /// If the sheet is already closed, this has no effect. If the sheet is
     /// currently opening, it will reverse direction and start closing from
     /// its current position.
-    pub fn close(&self) {
-        let mut inner = self.inner.write();
-        if inner.is_open {
-            inner.is_open = false;
+    pub fn close(&mut self) {
+        if self.is_open {
+            self.is_open = false;
             let mut timer = Instant::now();
-            if let Some(old_timer) = inner.timer {
+            if let Some(old_timer) = self.timer {
                 let elapsed = old_timer.elapsed();
                 if elapsed < ANIM_TIME {
                     timer += ANIM_TIME - elapsed;
                 }
             }
-            inner.timer = Some(timer);
+            self.timer = Some(timer);
         }
     }
 
     /// Returns whether the sheet is currently open.
     pub fn is_open(&self) -> bool {
-        self.inner.read().is_open
+        self.is_open
     }
 
     /// Returns whether the sheet is currently animating in either direction.
     pub fn is_animating(&self) -> bool {
-        self.inner
-            .read()
-            .timer
-            .is_some_and(|t| t.elapsed() < ANIM_TIME)
+        self.timer.is_some_and(|t| t.elapsed() < ANIM_TIME)
     }
 
     fn snapshot(&self) -> (bool, Option<Instant>, f32) {
-        let inner = self.inner.read();
-        (inner.is_open, inner.timer, inner.drag_offset)
+        (self.is_open, self.timer, self.drag_offset)
     }
 
-    fn set_dragging(&self, dragging: bool) {
-        self.inner.write().is_dragging = dragging;
+    fn set_dragging(&mut self, dragging: bool) {
+        self.is_dragging = dragging;
     }
 
-    fn update_drag_offset(&self, offset: f32) {
-        self.inner.write().drag_offset = offset;
+    fn update_drag_offset(&mut self, offset: f32) {
+        self.drag_offset = offset;
     }
 
     fn get_drag_offset(&self) -> f32 {
-        self.inner.read().drag_offset
+        self.drag_offset
     }
 
     fn is_dragging(&self) -> bool {
-        self.inner.read().is_dragging
+        self.is_dragging
     }
 
-    fn set_drag_start_y(&self, y: f32) {
-        self.inner.write().drag_start_y = y;
+    fn set_drag_start_y(&mut self, y: f32) {
+        self.drag_start_y = y;
     }
 
     fn get_drag_start_y(&self) -> f32 {
-        self.inner.read().drag_start_y
+        self.drag_start_y
     }
 }
 
@@ -283,7 +257,7 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
 fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
     // Material scrim: compute alpha and render a simple dark surface.
     let scrim_alpha = scrim_alpha_for(progress, is_open);
-    let scrim_color = use_context::<MaterialColorScheme>().scrim;
+    let scrim_color = use_context::<MaterialColorScheme>().get().scrim;
     surface(
         SurfaceArgsBuilder::default()
             .style(scrim_color.with_alpha(scrim_alpha).into())
@@ -313,11 +287,6 @@ fn render_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
     }
 }
 
-/// Snapshot provider state to reduce lock duration and centralize access.
-fn snapshot_state(controller: &BottomSheetController) -> (bool, Option<Instant>, f32) {
-    controller.snapshot()
-}
-
 /// Create the keyboard handler closure used to close the sheet on Escape.
 fn make_keyboard_closure(
     on_close: Arc<dyn Fn() + Send + Sync>,
@@ -336,31 +305,33 @@ fn make_keyboard_closure(
 
 /// Handle drag gestures on the bottom sheet.
 fn handle_drag_gestures(
-    controller: &Arc<BottomSheetController>,
+    controller: State<BottomSheetController>,
     input: &mut tessera_ui::InputHandlerInput<'_>,
     on_close: &Arc<dyn Fn() + Send + Sync>,
 ) {
-    let mut is_dragging = controller.is_dragging();
-    let drag_offset = controller.get_drag_offset();
+    let mut is_dragging = controller.with(|c| c.is_dragging());
+    let drag_offset = controller.with(|c| c.get_drag_offset());
 
     for event in input.cursor_events.iter() {
         match &event.content {
             CursorEventContent::Pressed(PressKeyEventType::Left) => {
                 if let Some(pos) = input.cursor_position_rel {
                     is_dragging = true;
-                    controller.set_dragging(true);
-                    controller.set_drag_start_y(pos.y.0 as f32);
+                    controller.with_mut(|c| {
+                        c.set_dragging(true);
+                        c.set_drag_start_y(pos.y.0 as f32);
+                    });
                 }
             }
             CursorEventContent::Released(PressKeyEventType::Left) => {
                 if is_dragging {
                     is_dragging = false;
-                    controller.set_dragging(false);
+                    controller.with_mut(|c| c.set_dragging(false));
 
                     if drag_offset > 100.0 {
                         (on_close)();
                     } else {
-                        controller.update_drag_offset(0.0);
+                        controller.with_mut(|c| c.update_drag_offset(0.0));
                     }
                 }
             }
@@ -370,13 +341,13 @@ fn handle_drag_gestures(
 
     if is_dragging && let Some(pos) = input.cursor_position_rel {
         let current_y = pos.y.0 as f32;
-        let start_y = controller.get_drag_start_y();
+        let start_y = controller.with(|c| c.get_drag_start_y());
         let delta = current_y - start_y;
 
         // Accumulate delta since component moves with drag.
         let new_offset = (drag_offset + delta).max(0.0);
         if (new_offset - drag_offset).abs() > 0.001 {
-            controller.update_drag_offset(new_offset);
+            controller.with_mut(|c| c.update_drag_offset(new_offset));
         }
     }
 }
@@ -385,7 +356,7 @@ fn handle_drag_gestures(
 /// function.
 fn place_bottom_sheet_if_present(
     input: &tessera_ui::MeasureInput<'_>,
-    controller_for_measure: &BottomSheetController,
+    controller_for_measure: State<BottomSheetController>,
     progress: f32,
 ) {
     if input.children_ids.len() <= 2 {
@@ -428,7 +399,7 @@ fn place_bottom_sheet_if_present(
         Err(_) => return,
     };
 
-    let (current_is_open, _, drag_offset) = controller_for_measure.snapshot();
+    let (current_is_open, _, drag_offset) = controller_for_measure.with(|c| c.snapshot());
     let y = compute_bottom_sheet_y(
         parent_height,
         child_size.height,
@@ -448,7 +419,7 @@ fn place_bottom_sheet_if_present(
 
 #[derive(Clone)]
 struct DragHandlerArgs {
-    controller: Arc<BottomSheetController>,
+    controller: State<BottomSheetController>,
     on_close: Arc<dyn Fn() + Send + Sync>,
 }
 
@@ -457,11 +428,8 @@ fn drag_handler(args: DragHandlerArgs, child: impl FnOnce() + Send + Sync + 'sta
     let controller = args.controller;
     let on_close = args.on_close;
 
-    let controller_for_handler = controller.clone();
-    let on_close_for_handler = on_close.clone();
-
     input_handler(Box::new(move |mut input| {
-        handle_drag_gestures(&controller_for_handler, &mut input, &on_close_for_handler);
+        handle_drag_gestures(controller, &mut input, &on_close);
     }));
 
     child();
@@ -470,17 +438,14 @@ fn drag_handler(args: DragHandlerArgs, child: impl FnOnce() + Send + Sync + 'sta
 fn render_content(
     style: BottomSheetStyle,
     bottom_sheet_content: impl FnOnce() + Send + Sync + 'static,
-    controller: Arc<BottomSheetController>,
+    controller: State<BottomSheetController>,
     on_close: Arc<dyn Fn() + Send + Sync>,
 ) {
-    let controller_for_handler = controller.clone();
-    let on_close_for_handler = on_close.clone();
-
     let content_wrapper = move || {
         drag_handler(
             DragHandlerArgs {
-                controller: controller_for_handler,
-                on_close: on_close_for_handler,
+                controller,
+                on_close: on_close.clone(),
             },
             || {
                 column(
@@ -506,6 +471,7 @@ fn render_content(
                                 SurfaceArgsBuilder::default()
                                     .style(
                                         use_context::<MaterialColorScheme>()
+                                            .get()
                                             .on_surface_variant
                                             .with_alpha(0.4)
                                             .into(),
@@ -561,6 +527,7 @@ fn render_content(
                 SurfaceArgsBuilder::default()
                     .style(
                         use_context::<MaterialColorScheme>()
+                            .get()
                             .surface_container_low
                             .into(),
                     )
@@ -626,11 +593,12 @@ pub fn bottom_sheet_provider(
     let args: BottomSheetProviderArgs = args.into();
     let controller = remember(|| BottomSheetController::new(args.is_open));
 
-    if args.is_open != controller.is_open() {
+    let current_open = controller.with(|c| c.is_open());
+    if args.is_open != current_open {
         if args.is_open {
-            controller.open();
+            controller.with_mut(|c| c.open());
         } else {
-            controller.close();
+            controller.with_mut(|c| c.close());
         }
     }
 
@@ -660,7 +628,7 @@ pub fn bottom_sheet_provider(
 #[tessera]
 pub fn bottom_sheet_provider_with_controller(
     args: impl Into<BottomSheetProviderArgs>,
-    controller: Arc<BottomSheetController>,
+    controller: State<BottomSheetController>,
     main_content: impl FnOnce() + Send + Sync + 'static,
     bottom_sheet_content: impl FnOnce() + Send + Sync + 'static,
 ) {
@@ -669,7 +637,7 @@ pub fn bottom_sheet_provider_with_controller(
     main_content();
 
     // Snapshot state to minimize locking overhead.
-    let (is_open, timer_opt, _) = snapshot_state(&controller);
+    let (is_open, timer_opt, _) = controller.with(|c| c.snapshot());
 
     if !(is_open || timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME)) {
         return;
@@ -686,11 +654,11 @@ pub fn bottom_sheet_provider_with_controller(
     render_content(
         args.style,
         bottom_sheet_content,
-        controller.clone(),
+        controller,
         args.on_close_request.clone(),
     );
 
-    let controller_for_measure = controller.clone();
+    let controller_for_measure = controller;
     let measure_closure = Box::new(move |input: &tessera_ui::MeasureInput<'_>| {
         let main_content_id = input.children_ids[0];
         let main_content_size = input.measure_child(main_content_id, input.parent_constraint)?;
@@ -702,7 +670,7 @@ pub fn bottom_sheet_provider_with_controller(
             input.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
         }
 
-        place_bottom_sheet_if_present(input, &controller_for_measure, progress);
+        place_bottom_sheet_if_present(input, controller_for_measure, progress);
 
         // Return main content size to satisfy closure type.
         Ok(main_content_size)

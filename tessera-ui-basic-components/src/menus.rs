@@ -7,7 +7,7 @@ use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEvent, CursorEventContent, DimensionValue, Dp, Px,
-    PxPosition, PxSize, accesskit::Role, remember, tessera, use_context, winit,
+    PxPosition, PxSize, State, accesskit::Role, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -49,7 +49,7 @@ fn default_menu_shape() -> Shape {
 }
 
 fn default_menu_shadow() -> Option<ShadowProps> {
-    let scheme = use_context::<MaterialColorScheme>();
+    let scheme = use_context::<MaterialColorScheme>().get();
     Some(ShadowProps {
         color: scheme.shadow.with_alpha(0.12),
         offset: [0.0, 3.0],
@@ -58,11 +58,11 @@ fn default_menu_shadow() -> Option<ShadowProps> {
 }
 
 fn default_menu_color() -> Color {
-    use_context::<MaterialColorScheme>().surface
+    use_context::<MaterialColorScheme>().get().surface
 }
 
 fn default_hover_color() -> Color {
-    let scheme = use_context::<MaterialColorScheme>();
+    let scheme = use_context::<MaterialColorScheme>().get();
     scheme.surface.blend_over(scheme.on_surface, 0.08)
 }
 
@@ -73,7 +73,7 @@ fn default_scrim_color() -> Color {
 /// Scope for adding items inside a [`menu`].
 pub struct MenuScope<'a, 'b> {
     scope: &'a mut crate::column::ColumnScope<'b>,
-    controller: Arc<MenuController>,
+    controller: State<MenuController>,
 }
 
 impl<'a, 'b> MenuScope<'a, 'b> {
@@ -90,12 +90,12 @@ impl<'a, 'b> MenuScope<'a, 'b> {
         let mut args = args.into();
         if args.close_on_click {
             let prev = args.on_click;
-            let controller = self.controller.clone();
+            let controller = self.controller;
             args.on_click = Some(Arc::new(move || {
                 if let Some(f) = &prev {
                     f();
                 }
-                controller.close();
+                controller.with_mut(|c| c.close());
             }));
         }
         self.scope.child(move || {
@@ -139,16 +139,11 @@ impl Default for MenuAnchor {
     }
 }
 
-#[derive(Default)]
-struct MenuStateInner {
+/// Shared state for controlling menu visibility and anchor placement.
+#[derive(Default, Clone)]
+pub struct MenuController {
     is_open: bool,
     anchor: Option<MenuAnchor>,
-}
-
-/// Shared state for controlling menu visibility and anchor placement.
-#[derive(Default)]
-pub struct MenuController {
-    inner: RwLock<MenuStateInner>,
 }
 
 impl MenuController {
@@ -162,36 +157,33 @@ impl MenuController {
     /// If an anchor was previously set via [`open_at`](Self::open_at), it is
     /// reused. Otherwise, the menu defaults to anchoring to the provider's
     /// content.
-    pub fn open(&self) {
-        self.inner.write().is_open = true;
+    pub fn open(&mut self) {
+        self.is_open = true;
     }
 
     /// Opens the menu at the provided anchor rectangle.
-    pub fn open_at(&self, anchor: MenuAnchor) {
-        let mut inner = self.inner.write();
-        inner.anchor = Some(anchor);
-        inner.is_open = true;
+    pub fn open_at(&mut self, anchor: MenuAnchor) {
+        self.anchor = Some(anchor);
+        self.is_open = true;
     }
 
     /// Closes the menu.
-    pub fn close(&self) {
-        self.inner.write().is_open = false;
+    pub fn close(&mut self) {
+        self.is_open = false;
     }
 
     /// Toggles the open state, keeping the current anchor.
-    pub fn toggle(&self) {
-        let mut inner = self.inner.write();
-        inner.is_open = !inner.is_open;
+    pub fn toggle(&mut self) {
+        self.is_open = !self.is_open;
     }
 
     /// Returns whether the menu is currently open.
     pub fn is_open(&self) -> bool {
-        self.inner.read().is_open
+        self.is_open
     }
 
     fn snapshot(&self) -> (bool, Option<MenuAnchor>) {
-        let inner = self.inner.read();
-        (inner.is_open, inner.anchor)
+        (self.is_open, self.anchor)
     }
 }
 
@@ -360,13 +352,13 @@ fn should_close_on_click(
 }
 
 fn apply_close_action(
-    controller: &MenuController,
+    controller: State<MenuController>,
     on_dismiss: &Option<Arc<dyn Fn() + Send + Sync>>,
 ) {
     if let Some(callback) = on_dismiss {
         callback();
     }
-    controller.close();
+    controller.with_mut(|c| c.close());
 }
 
 /// # menu_provider
@@ -435,11 +427,11 @@ pub fn menu_provider(
     let args: MenuProviderArgs = args.into();
     let controller = remember(MenuController::new);
 
-    if controller.is_open() != args.is_open {
+    if controller.with(|c| c.is_open()) != args.is_open {
         if args.is_open {
-            controller.open();
+            controller.with_mut(|c| c.open());
         } else {
-            controller.close();
+            controller.with_mut(|c| c.close());
         }
     }
 
@@ -512,7 +504,7 @@ pub fn menu_provider(
 #[tessera]
 pub fn menu_provider_with_controller(
     args: impl Into<MenuProviderArgs>,
-    controller: Arc<MenuController>,
+    controller: State<MenuController>,
     main_content: impl FnOnce() + Send + Sync + 'static,
     menu_content: impl FnOnce(&mut MenuScope<'_, '_>) + Send + Sync + 'static,
 ) {
@@ -521,7 +513,7 @@ pub fn menu_provider_with_controller(
     // Render underlying content first.
     main_content();
 
-    let (is_open, anchor) = controller.snapshot();
+    let (is_open, anchor) = controller.with(|c| c.snapshot());
     if !is_open {
         return;
     }
@@ -574,7 +566,6 @@ pub fn menu_provider_with_controller(
                     .build()
                     .expect("builder construction failed"),
                 {
-                    let controller = controller.clone();
                     move |scope| {
                         let mut menu_scope = MenuScope { scope, controller };
                         menu_content(&mut menu_scope);
@@ -589,7 +580,6 @@ pub fn menu_provider_with_controller(
     let on_dismiss_for_handler = args.on_dismiss.clone();
     let close_on_escape = args.close_on_escape;
     let close_on_background = args.close_on_background;
-    let controller_for_handler = controller.clone();
     input_handler(Box::new(move |mut input| {
         let mut cursor_events: Vec<_> = Vec::new();
         std::mem::swap(&mut cursor_events, input.cursor_events);
@@ -615,7 +605,7 @@ pub fn menu_provider_with_controller(
             });
 
         if should_close_click || should_close_escape {
-            apply_close_action(&controller_for_handler, &on_dismiss_for_handler);
+            apply_close_action(controller, &on_dismiss_for_handler);
         }
     }));
 
@@ -694,7 +684,7 @@ pub fn menu(
 #[tessera]
 pub fn menu_with_controller(
     args: impl Into<MenuProviderArgs>,
-    controller: Arc<MenuController>,
+    controller: State<MenuController>,
     content: impl FnOnce(&mut MenuScope<'_, '_>) + Send + Sync + 'static,
 ) {
     menu_provider_with_controller(args, controller, || {}, content);
@@ -733,13 +723,13 @@ pub struct MenuItemArgs {
     #[builder(default = "MENU_ITEM_HEIGHT")]
     pub height: Dp,
     /// Tint applied to the label text.
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface")]
     pub label_color: Color,
     /// Tint applied to supporting or trailing text.
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface_variant")]
     pub supporting_color: Color,
     /// Tint applied when the item is disabled.
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface.with_alpha(0.38)")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface.with_alpha(0.38)")]
     pub disabled_color: Color,
     /// Callback invoked when the item is activated.
     #[builder(default, setter(strip_option))]
@@ -918,6 +908,7 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
         .block_input(true)
         .ripple_color(
             use_context::<MaterialColorScheme>()
+                .get()
                 .on_surface
                 .with_alpha(0.12),
         );

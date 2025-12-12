@@ -103,56 +103,40 @@ fn app() {
             ..Default::default()
         },
         || {
-            let count = remember(|| AtomicUsize::new(0));
+            let count = remember(|| 0);
 
-            column(ColumnArgs::default(), move |scope| {
-                scope.child(closure!(
-                    clone count,
-                    || {
-                        button(
-                            ButtonArgs {
-                                on_click: Some(Arc::new(closure!(
-                                    clone count,
-                                    || {
-                                        count.fetch_add(1, atomic::Ordering::Relaxed);
-                                    }
-                                ))),
-                                ..Default::default()
-                            },
-                            || {
-                                text("+");
-                            },
-                        )
-                    }
-                ));
+            column(ColumnArgs::default(), |scope| {
+                scope.child(|| {
+                    button(
+                        ButtonArgs {
+                            on_click: Some(Arc::new(move || {
+                                count.with_mut(|c| *c += 1);
+                            })),
+                            ..Default::default()
+                        },
+                        || {
+                            text("+");
+                        },
+                    )
+                });
 
-                scope.child(closure!(
-                    clone count,
-                    || {
-                        let current_count = count.load(atomic::Ordering::Relaxed);
-                        text(format!("Count: {current_count}"))
-                    }
-                ));
+                scope.child(|| {
+                    text(format!("Count: {}", count.get()))
+                });
 
-                scope.child(closure!(
-                    clone count,
-                    || {
-                        button(
-                            ButtonArgs {
-                                on_click: Some(Arc::new(closure!(
-                                    clone count,
-                                    || {
-                                        count.fetch_sub(1, atomic::Ordering::Relaxed);
-                                    }
-                                ))),
-                                ..Default::default()
-                            },
-                            || {
-                                text("-");
-                            },
-                        )
-                    }
-                ));
+                scope.child(|| {
+                    button(
+                        ButtonArgs {
+                            on_click: Some(Arc::new(move || {
+                                count.with_mut(|c| *c -= 1);
+                            })),
+                            ..Default::default()
+                        },
+                        || {
+                            text("-");
+                        },
+                    )
+                });
             });
         },
     );

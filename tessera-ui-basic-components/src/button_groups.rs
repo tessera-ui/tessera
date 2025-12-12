@@ -13,7 +13,6 @@ use std::{
     time::Instant,
 };
 
-use closure::closure;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{Color, ComputedData, Dp, Px, PxPosition, remember, tessera, use_context};
@@ -201,9 +200,9 @@ struct ButtonItemState {
 }
 
 /// Internal state of a button group.
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct ButtonGroupsState {
-    item_states: RwLock<HashMap<usize, ButtonItemState>>,
+    item_states: HashMap<usize, ButtonItemState>,
 }
 
 /// # button_groups
@@ -298,79 +297,73 @@ where
             main_axis_alignment: MainAxisAlignment::SpaceBetween,
             ..Default::default()
         },
-        closure!(
-            clone state,
-            |scope| {
-                for (index, child_closure) in child_closures.into_iter().enumerate() {
-                    let on_click_closure = on_click_closures[index].clone();
-                    let item_state = state.item_states.write().entry(index).or_default().clone();
+        move |scope| {
+            for (index, child_closure) in child_closures.into_iter().enumerate() {
+                let on_click_closure = on_click_closures[index].clone();
+                let item_state =
+                    state.with_mut(|s| s.item_states.entry(index).or_default().clone());
 
-                    scope.child(
-                        closure!(clone state, clone layout, || {
-                            let actived = item_state.actived.load(Ordering::Acquire);
-                            let elastic_state = item_state.elastic_state.clone();
-                            if actived {
-                                let mut button_args = ButtonArgs::filled(
-                                    Arc::new(move || {
-                                        on_click_closure(false);
-                                        item_state.actived.store(false, Ordering::Release);
-                                        item_state.elastic_state.write().toggle();
-                                    })
-                                );
-                                button_args.shape = layout.active_button_shape;
-                                let scheme = use_context::<MaterialColorScheme>();
-                                button(button_args, || elastic_container(elastic_state, move || child_closure(scheme.on_primary)));
-                            } else {
-                                let mut button_args = ButtonArgs::filled(
-                                    Arc::new(move || {
-                                        on_click_closure(true);
-                                        if selection_mode == ButtonGroupsSelectionMode::Single {
-                                            // Deactivate all other buttons if in single selection mode
-                                            for item in state.item_states.read().values() {
-                                                if item.actived.load(Ordering::Acquire) {
-                                                    item.actived.store(false, Ordering::Release);
-                                                    item.elastic_state.write().toggle();
-                                                }
-                                            }
-                                        }
-                                        item_state.actived.store(true, Ordering::Release);
-                                        item_state.elastic_state.write().toggle();
-                                    })
-                                );
-                                let scheme = use_context::<MaterialColorScheme>();
-                                button_args.color = scheme.secondary_container;
-                                if index == 0 {
-                                    button_args.shape = layout.inactive_button_shape_start;
-                                } else if index == child_len - 1 {
-                                    button_args.shape = layout.inactive_button_shape_end;
-                                } else {
-                                    button_args.shape = layout.inactive_button_shape;
+                scope.child(move || {
+                    let actived = item_state.actived.load(Ordering::Acquire);
+                    let elastic_state = item_state.elastic_state.clone();
+                    if actived {
+                        let mut button_args = ButtonArgs::filled(Arc::new(move || {
+                            on_click_closure(false);
+                            item_state.actived.store(false, Ordering::Release);
+                            item_state.elastic_state.write().toggle();
+                        }));
+                        button_args.shape = layout.active_button_shape;
+                        let scheme = use_context::<MaterialColorScheme>().get();
+                        button(button_args, || {
+                            elastic_container(elastic_state, move || {
+                                child_closure(scheme.on_primary)
+                            })
+                        });
+                    } else {
+                        let mut button_args = ButtonArgs::filled(Arc::new(move || {
+                            on_click_closure(true);
+                            if selection_mode == ButtonGroupsSelectionMode::Single {
+                                // Deactivate all other buttons if in single selection mode
+                                for item in state
+                                    .with(|s| s.item_states.values().cloned().collect::<Vec<_>>())
+                                {
+                                    if item.actived.load(Ordering::Acquire) {
+                                        item.actived.store(false, Ordering::Release);
+                                        item.elastic_state.write().toggle();
+                                    }
                                 }
-
-                                let scheme = use_context::<MaterialColorScheme>();
-                                button(
-                                    button_args,
-                                    move || {
-                                        elastic_container(
-                                            elastic_state,
-                                            move || child_closure(scheme.on_secondary_container),
-                                        )
-                                    },
-                                );
                             }
-                        })
-                    );
-                    if index != child_len - 1 {
-                        scope.child(move || {
-                            spacer(SpacerArgs {
-                                width: layout.between_space.into(),
-                                ..Default::default()
-                            });
-                        })
+                            item_state.actived.store(true, Ordering::Release);
+                            item_state.elastic_state.write().toggle();
+                        }));
+                        let scheme = use_context::<MaterialColorScheme>().get();
+                        button_args.color = scheme.secondary_container;
+                        if index == 0 {
+                            button_args.shape = layout.inactive_button_shape_start;
+                        } else if index == child_len - 1 {
+                            button_args.shape = layout.inactive_button_shape_end;
+                        } else {
+                            button_args.shape = layout.inactive_button_shape;
+                        }
+
+                        let scheme = use_context::<MaterialColorScheme>().get();
+                        button(button_args, move || {
+                            elastic_container(elastic_state, move || {
+                                child_closure(scheme.on_secondary_container)
+                            })
+                        });
                     }
+                });
+                if index != child_len - 1 {
+                    scope.child(move || {
+                        spacer(SpacerArgs {
+                            width: layout.between_space.into(),
+                            ..Default::default()
+                        });
+                    })
                 }
             }
-        ),
+        },
     )
 }
 

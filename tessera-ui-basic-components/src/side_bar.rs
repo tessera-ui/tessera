@@ -9,8 +9,7 @@ use std::{
 };
 
 use derive_builder::Builder;
-use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, remember, tessera, winit};
+use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, State, remember, tessera, winit};
 
 use crate::{
     animation,
@@ -52,12 +51,6 @@ pub struct SideBarProviderArgs {
     pub is_open: bool,
 }
 
-#[derive(Default)]
-struct SideBarStateInner {
-    is_open: bool,
-    timer: Option<Instant>,
-}
-
 /// Controller for [`side_bar_provider`], managing open/closed state.
 ///
 /// This controller can be created by the application and passed to the
@@ -76,18 +69,18 @@ struct SideBarStateInner {
 /// controller.close();
 /// assert!(!controller.is_open()); // Closed again
 /// ```
+#[derive(Clone)]
 pub struct SideBarController {
-    inner: RwLock<SideBarStateInner>,
+    is_open: bool,
+    timer: Option<Instant>,
 }
 
 impl SideBarController {
     /// Creates a new controller.
     pub fn new(initial_open: bool) -> Self {
         Self {
-            inner: RwLock::new(SideBarStateInner {
-                is_open: initial_open,
-                timer: None,
-            }),
+            is_open: initial_open,
+            timer: None,
         }
     }
 
@@ -96,18 +89,17 @@ impl SideBarController {
     /// If the side bar is already open this has no effect. If it is currently
     /// closing, the animation will reverse direction and start opening from the
     /// current animated position.
-    pub fn open(&self) {
-        let mut inner = self.inner.write();
-        if !inner.is_open {
-            inner.is_open = true;
+    pub fn open(&mut self) {
+        if !self.is_open {
+            self.is_open = true;
             let mut timer = Instant::now();
-            if let Some(old_timer) = inner.timer {
+            if let Some(old_timer) = self.timer {
                 let elapsed = old_timer.elapsed();
                 if elapsed < ANIM_TIME {
                     timer += ANIM_TIME - elapsed;
                 }
             }
-            inner.timer = Some(timer);
+            self.timer = Some(timer);
         }
     }
 
@@ -116,37 +108,32 @@ impl SideBarController {
     /// If the side bar is already closed this has no effect. If it is currently
     /// opening, the animation will reverse direction and start closing from the
     /// current animated position.
-    pub fn close(&self) {
-        let mut inner = self.inner.write();
-        if inner.is_open {
-            inner.is_open = false;
+    pub fn close(&mut self) {
+        if self.is_open {
+            self.is_open = false;
             let mut timer = Instant::now();
-            if let Some(old_timer) = inner.timer {
+            if let Some(old_timer) = self.timer {
                 let elapsed = old_timer.elapsed();
                 if elapsed < ANIM_TIME {
                     timer += ANIM_TIME - elapsed;
                 }
             }
-            inner.timer = Some(timer);
+            self.timer = Some(timer);
         }
     }
 
     /// Returns whether the side bar is currently open.
     pub fn is_open(&self) -> bool {
-        self.inner.read().is_open
+        self.is_open
     }
 
     /// Returns whether the side bar is currently animating.
     pub fn is_animating(&self) -> bool {
-        self.inner
-            .read()
-            .timer
-            .is_some_and(|t| t.elapsed() < ANIM_TIME)
+        self.timer.is_some_and(|t| t.elapsed() < ANIM_TIME)
     }
 
     fn snapshot(&self) -> (bool, Option<Instant>) {
-        let inner = self.inner.read();
-        (inner.is_open, inner.timer)
+        (self.is_open, self.timer)
     }
 }
 
@@ -267,11 +254,6 @@ fn render_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) {
     }
 }
 
-/// Snapshot provider state to reduce lock duration and centralize access.
-fn snapshot_state(controller: &SideBarController) -> (bool, Option<Instant>) {
-    controller.snapshot()
-}
-
 /// Create the keyboard handler closure used to close the sheet on Escape.
 fn make_keyboard_closure(
     on_close: Arc<dyn Fn() + Send + Sync>,
@@ -292,7 +274,7 @@ fn make_keyboard_closure(
 /// function.
 fn place_side_bar_if_present(
     input: &tessera_ui::MeasureInput<'_>,
-    controller_for_measure: &SideBarController,
+    controller: State<SideBarController>,
     progress: f32,
 ) {
     if input.children_ids.len() <= 2 {
@@ -306,7 +288,7 @@ fn place_side_bar_if_present(
         Err(_) => return,
     };
 
-    let current_is_open = controller_for_measure.is_open();
+    let current_is_open = controller.with(|c| c.is_open());
     let x = compute_side_bar_x(child_size.width, progress, current_is_open);
     input.place_child(side_bar_id, PxPosition::new(Px(x), Px(0)));
 }
@@ -353,11 +335,11 @@ pub fn side_bar_provider(
     let args: SideBarProviderArgs = args.into();
     let controller = remember(|| SideBarController::new(args.is_open));
 
-    if args.is_open != controller.is_open() {
+    if args.is_open != controller.with(|c| c.is_open()) {
         if args.is_open {
-            controller.open();
+            controller.with_mut(|c| c.open());
         } else {
-            controller.close();
+            controller.with_mut(|c| c.close());
         }
     }
 
@@ -410,7 +392,7 @@ pub fn side_bar_provider(
 #[tessera]
 pub fn side_bar_provider_with_controller(
     args: impl Into<SideBarProviderArgs>,
-    controller: Arc<SideBarController>,
+    controller: State<SideBarController>,
     main_content: impl FnOnce() + Send + Sync + 'static,
     side_bar_content: impl FnOnce() + Send + Sync + 'static,
 ) {
@@ -420,7 +402,7 @@ pub fn side_bar_provider_with_controller(
     main_content();
 
     // Snapshot state once to minimize locking overhead.
-    let (is_open, timer_opt) = snapshot_state(&controller);
+    let (is_open, timer_opt) = controller.with(|c| c.snapshot());
 
     // Fast exit when nothing to render.
     if !(is_open || timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME)) {
@@ -442,7 +424,6 @@ pub fn side_bar_provider_with_controller(
     side_bar_content_wrapper(args.style, side_bar_content);
 
     // Measurement: place main content, scrim and side bar.
-    let controller_for_measure = controller.clone();
     let measure_closure = Box::new(move |input: &tessera_ui::MeasureInput<'_>| {
         // Place main content at origin.
         let main_content_id = input.children_ids[0];
@@ -457,7 +438,7 @@ pub fn side_bar_provider_with_controller(
         }
 
         // Place side bar (if present) using extracted helper.
-        place_side_bar_if_present(input, &controller_for_measure, progress);
+        place_side_bar_if_present(input, controller, progress);
 
         // Return the main content size (best-effort; unwrap used above to satisfy
         // closure type).

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use closure::closure;
 use tessera_ui::{
-    Color, DimensionValue, Dp,
+    Color, DimensionValue, Dp, State, remember,
     router::{Router, router_root},
     shard, tessera, use_context,
 };
@@ -61,57 +61,46 @@ use crate::example_components::{
     text_editor::TextEditorShowcaseDestination,
 };
 
-#[derive(Default)]
-struct AppState {
-    bottom_sheet_controller: Arc<BottomSheetController>,
-    side_bar_controller: Arc<SideBarController>,
-    dialog_controller: Arc<DialogController>,
-}
-
 #[tessera]
-#[shard]
-pub fn app(#[state] app_state: AppState) {
+pub fn app() {
+    let side_bar_controller = remember(SideBarController::default);
+    let bottom_sheet_controller = remember(BottomSheetController::default);
+    let dialog_controller = remember(DialogController::default);
+
     side_bar_provider_with_controller(
         SideBarProviderArgsBuilder::default()
-            .on_close_request(Arc::new(closure!(clone app_state.side_bar_controller, || {
-                side_bar_controller.close();
+            .on_close_request(Arc::new(closure!(clone side_bar_controller, || {
+                side_bar_controller.with_mut(|c| c.close());
             })))
             .style(SideBarStyle::Glass)
             .build()
             .unwrap(),
-        app_state.side_bar_controller.clone(),
+        side_bar_controller,
         move || {
             bottom_sheet_provider_with_controller(
                 BottomSheetProviderArgsBuilder::default()
-                    .on_close_request(Arc::new(
-                        closure!(clone app_state.bottom_sheet_controller, || {
-                            bottom_sheet_controller.close();
-                        }),
-                    ))
+                    .on_close_request(Arc::new(closure!(clone bottom_sheet_controller, || {
+                        bottom_sheet_controller.with_mut(|c| c.close());
+                    })))
                     .style(BottomSheetStyle::Material)
                     .build()
                     .unwrap(),
-                app_state.bottom_sheet_controller.clone(),
+                bottom_sheet_controller,
                 move || {
-                    let dialog_controller = app_state.dialog_controller.clone();
                     dialog_provider_with_controller(
                         DialogProviderArgsBuilder::default()
                             .on_close_request(Arc::new(closure!(clone dialog_controller, || {
-                                dialog_controller.close();
+                                dialog_controller.with_mut(|c| c.close());
                             })))
                             .style(DialogStyle::Material)
                             .build()
                             .unwrap(),
-                        dialog_controller.clone(),
+                        dialog_controller,
                         move || {
                             column(ColumnArgs::default(), |scope| {
                                 scope.child(|| {
                                     top_app_bar();
                                 });
-                                let bottom_sheet_controller =
-                                    app_state.bottom_sheet_controller.clone();
-                                let side_bar_controller = app_state.side_bar_controller.clone();
-                                let dialog_controller = app_state.dialog_controller.clone();
                                 scope.child_weighted(
                                     move || {
                                         router_root(HomeDestination {
@@ -122,10 +111,6 @@ pub fn app(#[state] app_state: AppState) {
                                     },
                                     1.0,
                                 );
-                                let bottom_sheet_controller =
-                                    app_state.bottom_sheet_controller.clone();
-                                let side_bar_controller = app_state.side_bar_controller.clone();
-                                let dialog_controller = app_state.dialog_controller.clone();
                                 scope.child(move || {
                                     let home_icon_content = filled::home_icon();
                                     let home_icon_args = IconArgsBuilder::default()
@@ -156,13 +141,9 @@ pub fn app(#[state] app_state: AppState) {
                                                         Router::with_mut(|router| {
                                                             router.reset_with(
                                                                 HomeDestination {
-                                                                    bottom_sheet_controller:
-                                                                        bottom_sheet_controller
-                                                                            .clone(),
-                                                                    side_bar_controller:
-                                                                        side_bar_controller.clone(),
-                                                                    dialog_controller:
-                                                                        dialog_controller.clone(),
+                                                                    bottom_sheet_controller,
+                                                                    side_bar_controller,
+                                                                    dialog_controller,
                                                                 },
                                                             );
                                                         });
@@ -205,7 +186,7 @@ pub fn app(#[state] app_state: AppState) {
                                     .confirm_button(closure!(clone dialog_controller, || {
                                         button(
                                             ButtonArgs::text(Arc::new(closure!(clone dialog_controller, || {
-                                                    dialog_controller.close();
+                                                    dialog_controller.with_mut(|c| c.close());
                                                 }))),
                                             || text("Confirm"),
                                         );
@@ -213,7 +194,7 @@ pub fn app(#[state] app_state: AppState) {
                                     .dismiss_button(closure!(clone dialog_controller, || {
                                         button(
                                             ButtonArgs::text(Arc::new(closure!(clone dialog_controller, || {
-                                                    dialog_controller.close();
+                                                    dialog_controller.with_mut(|c| c.close());
                                                 }))),
                                             || text("Dismiss"),
                                         );
@@ -279,9 +260,9 @@ impl ComponentExampleDesc {
 #[tessera]
 #[shard]
 fn home(
-    bottom_sheet_controller: Arc<BottomSheetController>,
-    side_bar_controller: Arc<SideBarController>,
-    dialog_controller: Arc<DialogController>,
+    bottom_sheet_controller: State<BottomSheetController>,
+    side_bar_controller: State<SideBarController>,
+    dialog_controller: State<DialogController>,
 ) {
     let examples = Arc::new(vec![
         ComponentExampleDesc::new(
@@ -393,7 +374,7 @@ fn home(
             "Dialog",
             "A modal window that appears on top of the main content.",
             move || {
-                dialog_controller.open();
+                dialog_controller.with_mut(|c| c.open());
             },
         ),
         ComponentExampleDesc::new(
@@ -481,14 +462,14 @@ fn home(
             "Bottom Sheet",
             "bottom sheet displays content sliding up from the bottom of the screen.",
             move || {
-                bottom_sheet_controller.open();
+                bottom_sheet_controller.with_mut(|c| c.open());
             },
         ),
         ComponentExampleDesc::new(
             "Side Bar",
             "side bar displays content sliding in from the left side of the screen.",
             move || {
-                side_bar_controller.open();
+                side_bar_controller.with_mut(|c| c.open());
             },
         ),
     ]);
@@ -500,8 +481,6 @@ fn home(
             .build()
             .unwrap(),
         move || {
-            let examples_clone = examples.clone();
-
             lazy_column(
                 LazyColumnArgsBuilder::default()
                     .scrollable(
@@ -519,7 +498,7 @@ fn home(
                     .build()
                     .unwrap(),
                 move |scope| {
-                    scope.items_from_iter(examples_clone.iter().cloned(), move |_, example| {
+                    scope.items_from_iter(examples.iter().cloned(), move |_, example| {
                         let on_click = example.on_click.clone();
                         let title = example.title.clone();
                         let description = example.desription.clone();
@@ -541,7 +520,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
             .padding(Dp(25.0))
             .on_click(on_click)
             .style(SurfaceStyle::Filled {
-                color: use_context::<MaterialColorScheme>().primary_container,
+                color: use_context::<MaterialColorScheme>().get().primary_container,
             })
             .shape(Shape::rounded_rectangle(Dp(25.0)))
             .shadow(ShadowProps::default())
@@ -563,7 +542,11 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
                         TextArgsBuilder::default()
                             .text(description)
                             .size(Dp(14.0))
-                            .color(use_context::<MaterialColorScheme>().on_surface_variant)
+                            .color(
+                                use_context::<MaterialColorScheme>()
+                                    .get()
+                                    .on_surface_variant,
+                            )
                             .build()
                             .unwrap(),
                     );
@@ -600,6 +583,7 @@ fn top_app_bar() {
                             .color(Color::TRANSPARENT)
                             .hover_color(Some(
                                 use_context::<MaterialColorScheme>()
+                                    .get()
                                     .on_surface
                                     .with_alpha(0.1),
                             ))
@@ -670,7 +654,7 @@ Copyright 2025 Tessera UI Framework Developers
                                     .to_string(),
                                 )
                                 .size(Dp(20.0))
-                                .color(use_context::<MaterialColorScheme>().on_surface)
+                                .color(use_context::<MaterialColorScheme>().get().on_surface)
                                 .build()
                                 .unwrap(),
                         );

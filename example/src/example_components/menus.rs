@@ -1,6 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use closure::closure;
 use tessera_ui::{DimensionValue, Dp, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
@@ -21,18 +20,10 @@ use tessera_ui_basic_components::{
 #[shard]
 pub fn menus_showcase() {
     let menu_controller = remember(MenuController::new);
-    let selected_label = remember(|| Mutex::new("None".to_string()));
-    let pinned = remember(|| Mutex::new(false));
-
-    let selected_label = selected_label.clone();
-    let pinned = pinned.clone();
+    let selected_label = remember(|| "None".to_string());
+    let pinned = remember(|| false);
     // Anchor near the trigger button (padding 20dp + title/subtitle + spacer).
     let anchor = MenuAnchor::from_dp((Dp(20.0), Dp(72.0)), (Dp(180.0), Dp(48.0)));
-    let menu_controller = menu_controller.clone();
-    let selection_for_edit = selected_label.clone();
-    let selection_for_share = selected_label.clone();
-    let pin_state = pinned.clone();
-    let pin_selection = selected_label.clone();
 
     surface(
         SurfaceArgsBuilder::default()
@@ -48,11 +39,8 @@ pub fn menus_showcase() {
                     .offset([Dp(0.0), Dp(6.0)])
                     .build()
                     .expect("builder construction failed"),
-                menu_controller.clone(),
+                menu_controller,
                 {
-                    let selected_label = selected_label.clone();
-                    let pinned = pinned.clone();
-                    let menu_controller_for_button = menu_controller.clone();
                     move || {
                         column(
                             ColumnArgsBuilder::default()
@@ -70,19 +58,18 @@ pub fn menus_showcase() {
                                     );
                                 });
 
-                                let selected_label_display = selected_label.lock().unwrap().clone();
-                                let pinned_display = *pinned.lock().unwrap();
                                 scope.child(move || {
                                     text(
                                         TextArgsBuilder::default()
                                             .text(format!(
                                                 "Selected: {} | Pinned: {}",
-                                                selected_label_display,
-                                                if pinned_display { "Yes" } else { "No" }
+                                                selected_label.get(),
+                                                if pinned.get() { "Yes" } else { "No" }
                                             ))
                                             .size(Dp(14.0))
                                             .color(
                                                 use_context::<MaterialColorScheme>()
+                                                    .get()
                                                     .on_surface_variant,
                                             )
                                             .build()
@@ -112,13 +99,10 @@ pub fn menus_showcase() {
                                                         .width(DimensionValue::Fixed(
                                                             Dp(180.0).into(),
                                                         ))
-                                                        .on_click(Arc::new(closure!(
-                                                            clone menu_controller_for_button,
-                                                            || {
-                                                                menu_controller_for_button
-                                                                    .open_at(anchor);
+                                                        .on_click(Arc::new(move || {
+                                                                menu_controller.with_mut(|c| c.open_at(anchor));
                                                             }
-                                                        )))
+                                                        ))
                                                         .build()
                                                         .expect("builder construction failed"),
                                                     || {
@@ -145,7 +129,7 @@ pub fn menus_showcase() {
                                                     "Click to open at the button's anchor point.",
                                                 )
                                                 .size(Dp(14.0))
-                                                .color(use_context::<MaterialColorScheme>().on_surface_variant)
+                                                .color(use_context::<MaterialColorScheme>().get().on_surface_variant)
                                                 .build()
                                                 .expect("builder construction failed"),
                                         );
@@ -158,21 +142,12 @@ pub fn menus_showcase() {
                     }
                 },
                 move |menu_scope| {
-                    let selection_for_edit = selection_for_edit.clone();
-                    let selection_for_share = selection_for_share.clone();
-                    let pin_state = pin_state.clone();
-                    let pin_selection = pin_selection.clone();
-
                     menu_scope.menu_item(
                         MenuItemArgsBuilder::default()
                             .label("Revert")
-                            .on_click(Arc::new(closure!(
-                                clone selection_for_edit,
-                                || {
-                                    *selection_for_edit.lock().unwrap() =
-                                        "Revert".to_string();
-                                }
-                            )))
+                            .on_click(Arc::new(move || {
+                                selected_label.set("Revert".to_string());
+                            }))
                             .build()
                             .expect("builder construction failed"),
                     );
@@ -180,35 +155,28 @@ pub fn menus_showcase() {
                     menu_scope.menu_item(
                         MenuItemArgsBuilder::default()
                             .label("Settings")
-                            .on_click(Arc::new(closure!(
-                                clone selection_for_share,
-                                || {
-                                    *selection_for_share.lock().unwrap() =
-                                        "Settings".to_string();
-                                }
-                            )))
+                            .on_click(Arc::new(move || {
+                                selected_label.set("Settings".to_string());
+                            }))
                             .build()
                             .expect("builder construction failed"),
                     );
 
-                    let is_pinned = *pin_state.lock().unwrap();
                     menu_scope.menu_item(
                         MenuItemArgsBuilder::default()
                             .label("Send Feedback")
-                            .selected(is_pinned)
-                            .on_click(Arc::new(closure!(
-                                clone pin_state,
-                                clone pin_selection,
-                                || {
-                                    let mut flag = pin_state.lock().unwrap();
-                                    *flag = !*flag;
-                                    *pin_selection.lock().unwrap() = if *flag {
-                                        "Send Feedback".to_string()
-                                    } else {
-                                        "Unpinned".to_string()
-                                    };
-                                }
-                            )))
+                            .selected(pinned.get())
+                            .on_click(Arc::new(move || {
+                                let flag = pinned.with_mut(|p| {
+                                    *p = !*p;
+                                    *p
+                                });
+                                selected_label.set(if flag {
+                                    "Send Feedback".to_string()
+                                } else {
+                                    "Unpinned".to_string()
+                                });
+                            }))
                             .build()
                             .expect("builder construction failed"),
                     );

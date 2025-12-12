@@ -31,11 +31,11 @@ pub struct ProgressArgs {
     pub height: Dp,
 
     /// The color of the active part of the track.
-    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
     pub progress_color: Color,
 
     /// The color of the inactive part of the track.
-    #[builder(default = "use_context::<MaterialColorScheme>().surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().surface_variant")]
     pub track_color: Color,
 }
 

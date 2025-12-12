@@ -8,7 +8,7 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     BarrierRequirement, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    GestureState, PressKeyEventType, Px, PxPosition,
+    GestureState, InputHandlerInput, PressKeyEventType, Px, PxPosition, State,
     accesskit::{Action, Role},
     remember,
     renderer::DrawCommand,
@@ -226,9 +226,9 @@ impl DrawCommand for FluidGlassCommand {
 // crate.
 fn handle_click_state(
     args: &FluidGlassArgs,
-    ripple_state: Option<&RippleState>,
+    ripple_state: Option<State<RippleState>>,
     on_click: Arc<dyn Fn() + Send + Sync>,
-    input: &mut tessera_ui::InputHandlerInput,
+    input: &mut InputHandlerInput,
 ) {
     let size = input.computed_data;
     let cursor_pos_option = input.cursor_position_rel;
@@ -246,13 +246,15 @@ fn handle_click_state(
                     CursorEventContent::Released(PressKeyEventType::Left)
                 )
         }) {
-            if let (Some(ripple_state), Some(pos)) = (ripple_state, input.cursor_position_rel) {
+            if let (Some(ripple_state), Some(pos)) =
+                (ripple_state.as_ref(), input.cursor_position_rel)
+            {
                 let size = input.computed_data;
                 let normalized_pos = [
                     pos.x.to_f32() / size.width.to_f32(),
                     pos.y.to_f32() / size.height.to_f32(),
                 ];
-                ripple_state.start_animation(normalized_pos);
+                ripple_state.with(|s| s.start_animation(normalized_pos));
             }
             on_click();
         }
@@ -362,7 +364,7 @@ pub fn fluid_glass(mut args: FluidGlassArgs, child: impl FnOnce()) {
 
     if let Some((progress, center)) = ripple_state
         .as_ref()
-        .and_then(|state| state.get_animation_progress())
+        .and_then(|state| state.with(|s| s.get_animation_progress()))
     {
         args.ripple_center = Some(center);
         args.ripple_radius = Some(progress);
@@ -475,7 +477,7 @@ pub fn fluid_glass(mut args: FluidGlassArgs, child: impl FnOnce()) {
             // Then handle click state (which includes block_input logic)
             handle_click_state(
                 &args_for_handler,
-                ripple_state.as_deref(),
+                ripple_state,
                 on_click_arc.clone(),
                 &mut input,
             );

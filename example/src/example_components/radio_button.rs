@@ -1,9 +1,6 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, State, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
@@ -48,7 +45,7 @@ pub fn radio_button_showcase() {
 
 #[tessera]
 fn content() {
-    let selected_index = remember(|| AtomicUsize::new(0));
+    let selected_index = remember(|| 0usize);
     let radio_a = remember(|| RadioButtonController::new(true));
     let radio_b = remember(|| RadioButtonController::new(false));
     let radio_c = remember(|| RadioButtonController::new(false));
@@ -56,15 +53,11 @@ fn content() {
     let disabled_unselected = remember(|| RadioButtonController::new(false));
 
     let select = Arc::new({
-        let selected_index = selected_index.clone();
-        let radio_a = radio_a.clone();
-        let radio_b = radio_b.clone();
-        let radio_c = radio_c.clone();
         move |index: usize| {
-            selected_index.store(index, Ordering::SeqCst);
-            radio_a.set_selected(index == 0);
-            radio_b.set_selected(index == 1);
-            radio_c.set_selected(index == 2);
+            selected_index.set(index);
+            radio_a.with_mut(|c| c.set_selected(index == 0));
+            radio_b.with_mut(|c| c.set_selected(index == 1));
+            radio_c.with_mut(|c| c.set_selected(index == 2));
         }
     });
 
@@ -75,12 +68,6 @@ fn content() {
             .build()
             .unwrap(),
         {
-            let selected_index = selected_index.clone();
-            let radio_a = radio_a.clone();
-            let radio_b = radio_b.clone();
-            let radio_c = radio_c.clone();
-            let disabled_selected = disabled_selected.clone();
-            let disabled_unselected = disabled_unselected.clone();
             let select = select.clone();
             move |scope| {
                 scope.child(|| {
@@ -93,7 +80,7 @@ fn content() {
                     )
                 });
 
-                let selected = selected_index.load(Ordering::Acquire);
+                let selected = selected_index.get();
                 scope.child(|| {
                     text(
                         TextArgsBuilder::default()
@@ -106,11 +93,10 @@ fn content() {
 
                 scope.child({
                     let select = select.clone();
-                    let radio_a = radio_a.clone();
                     move || {
                         option_row(
                             "Cat".to_string(),
-                            radio_a.clone(),
+                            radio_a,
                             selected == 0,
                             {
                                 let select = select.clone();
@@ -123,11 +109,10 @@ fn content() {
 
                 scope.child({
                     let select = select.clone();
-                    let radio_b = radio_b.clone();
                     move || {
                         option_row(
                             "Dog".to_string(),
-                            radio_b.clone(),
+                            radio_b,
                             selected == 1,
                             move |_| select(1),
                             true,
@@ -136,12 +121,11 @@ fn content() {
                 });
 
                 scope.child({
-                    let radio_c = radio_c.clone();
                     let select = select.clone();
                     move || {
                         option_row(
                             "Red Panda".to_string(),
-                            radio_c.clone(),
+                            radio_c,
                             selected == 2,
                             move |_| select(2),
                             true,
@@ -175,11 +159,10 @@ fn content() {
                 });
 
                 scope.child({
-                    let disabled_selected = disabled_selected.clone();
                     move || {
                         option_row(
                             "Selected (disabled)".to_string(),
-                            disabled_selected.clone(),
+                            disabled_selected,
                             true,
                             |_| {},
                             false,
@@ -188,11 +171,10 @@ fn content() {
                 });
 
                 scope.child({
-                    let disabled_unselected = disabled_unselected.clone();
                     move || {
                         option_row(
                             "Unselected (disabled)".to_string(),
-                            disabled_unselected.clone(),
+                            disabled_unselected,
                             false,
                             |_| {},
                             false,
@@ -206,7 +188,7 @@ fn content() {
 
 fn option_row(
     label: String,
-    controller: Arc<RadioButtonController>,
+    controller: State<RadioButtonController>,
     is_selected: bool,
     on_select: impl Fn(bool) + Clone + Send + Sync + 'static,
     enabled: bool,
@@ -220,7 +202,6 @@ fn option_row(
             let on_select = Arc::new(on_select);
             scope.child({
                 let on_select = on_select.clone();
-                let controller = controller.clone();
                 move || {
                     radio_button_with_controller(
                         RadioButtonArgsBuilder::default()
@@ -228,7 +209,7 @@ fn option_row(
                             .enabled(enabled)
                             .build()
                             .unwrap(),
-                        controller.clone(),
+                        controller,
                     );
                 }
             });

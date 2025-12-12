@@ -1,6 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use closure::closure;
 use tessera_ui::{DimensionValue, Dp, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
@@ -47,7 +46,7 @@ pub fn glass_progress_showcase() {
 
 #[tessera]
 fn test_content() {
-    let progress = remember(|| Mutex::new(0.5));
+    let progress = remember(|| 0.5);
 
     column(
         ColumnArgsBuilder::default()
@@ -65,17 +64,15 @@ fn test_content() {
                 text(TextArgsBuilder::default()
                     .text("This is the glass progress, adjust the slider below to change its value.")
                     .size(Dp(20.0))
-                    .color(use_context::<MaterialColorScheme>().on_surface_variant)
+                    .color(use_context::<MaterialColorScheme>().get().on_surface_variant)
                     .build()
                     .unwrap());
             });
 
-            let progress_clone = progress.clone();
             scope.child(move || {
-                let progress_val = *progress_clone.lock().unwrap();
                 glass_progress(
                     GlassProgressArgsBuilder::default()
-                        .value(progress_val)
+                        .value(progress.get())
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()
                         .unwrap(),
@@ -86,14 +83,13 @@ fn test_content() {
                 spacer(Dp(20.0));
             });
 
-            let progress_clone = progress.clone();
             scope.child(move || {
-                let on_change = Arc::new(closure!(clone progress_clone, |new_value| {
-                    *progress_clone.lock().unwrap() = new_value;
-                }));
+                let on_change = Arc::new(move |new_value| {
+                    progress.set(new_value);
+                });
                 slider(
                     SliderArgsBuilder::default()
-                        .value(*progress_clone.lock().unwrap())
+                        .value(progress.get())
                         .on_change(on_change)
                         .width(DimensionValue::Fixed(Dp(250.0).to_px()))
                         .build()

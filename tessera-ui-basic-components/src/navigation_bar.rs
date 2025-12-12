@@ -8,10 +8,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use closure::closure;
 use derive_builder::Builder;
-use parking_lot::RwLock;
-use tessera_ui::{Color, DimensionValue, Dp, remember, tessera, use_context};
+use tessera_ui::{Color, DimensionValue, Dp, State, remember, tessera, use_context};
 
 use crate::{
     ShadowProps,
@@ -155,8 +153,10 @@ where
 /// }
 /// ```
 #[tessera]
-pub fn navigation_bar_with_controller<F>(controller: Arc<NavigationBarController>, scope_config: F)
-where
+pub fn navigation_bar_with_controller<F>(
+    controller: State<NavigationBarController>,
+    scope_config: F,
+) where
     F: FnOnce(&mut NavigationBarScope),
 {
     let mut items = Vec::new();
@@ -164,16 +164,18 @@ where
         let mut scope = NavigationBarScope { items: &mut items };
         scope_config(&mut scope);
     }
-    let scheme = use_context::<MaterialColorScheme>();
+    let scheme = use_context::<MaterialColorScheme>().get();
     let container_shadow = ShadowProps {
         color: scheme.shadow.with_alpha(0.16),
         offset: [0.0, 3.0],
         smoothness: 10.0,
     };
 
-    let animation_progress = controller.animation_progress().unwrap_or(1.0);
-    let selected_index = controller.selected();
-    let previous_index = controller.previous_selected();
+    let animation_progress = controller
+        .with_mut(|c| c.animation_progress())
+        .unwrap_or(1.0);
+    let selected_index = controller.with(|c| c.selected());
+    let previous_index = controller.with(|c| c.previous_selected());
 
     surface(
         SurfaceArgsBuilder::default()
@@ -218,12 +220,11 @@ where
                                     .expect("RowArgsBuilder failed with required fields set"),
                                 move |row_scope| {
                                     for (index, item) in items.into_iter().enumerate() {
-                                        let controller_clone = controller.clone();
                                         let scheme_for_item = scheme.clone();
                                         row_scope.child_weighted(
                                             move || {
                                                 render_navigation_item(
-                                                    &controller_clone,
+                                                    controller,
                                                     index,
                                                     item,
                                                     selected_index,
@@ -247,13 +248,13 @@ where
 }
 
 fn render_navigation_item(
-    controller: &NavigationBarController,
+    controller: State<NavigationBarController>,
     index: usize,
     item: NavigationBarItem,
     selected_index: usize,
     previous_index: usize,
     animation_progress: f32,
-    scheme: Arc<MaterialColorScheme>,
+    scheme: MaterialColorScheme,
 ) {
     let is_selected = index == selected_index;
     let was_selected = index == previous_index && selected_index != previous_index;
@@ -304,12 +305,12 @@ fn render_navigation_item(
             .ripple_color(ripple_color)
             .hover_style(None)
             .accessibility_label(label_text.clone())
-            .on_click(Arc::new(closure!(clone controller, clone on_click, || {
-                if index != controller.selected() {
-                    controller.set_selected(index);
+            .on_click(Arc::new(move || {
+                if index != controller.with(|c| c.selected()) {
+                    controller.with_mut(|c| c.set_selected(index));
                     on_click();
                 }
-            })))
+            }))
             .build()
             .expect("SurfaceArgsBuilder failed with required fields set"),
         move || {
@@ -404,20 +405,37 @@ fn render_navigation_item(
     );
 }
 
-/// Holds selection state for the navigation bar.
-struct NavigationBarStateInner {
+/// Controller for the `navigation_bar` component.
+#[derive(Clone)]
+pub struct NavigationBarController {
     selected: usize,
     previous_selected: usize,
     anim_start_time: Option<Instant>,
 }
 
-impl NavigationBarStateInner {
-    fn new(selected: usize) -> Self {
+impl NavigationBarController {
+    /// Create a new state with an initial selected index.
+    pub fn new(selected: usize) -> Self {
         Self {
             selected,
             previous_selected: selected,
             anim_start_time: None,
         }
+    }
+
+    /// Returns the index of the currently selected navigation item.
+    pub fn selected(&self) -> usize {
+        self.selected
+    }
+
+    /// Returns the index of the previously selected navigation item.
+    pub(crate) fn previous_selected(&self) -> usize {
+        self.previous_selected
+    }
+
+    /// Programmatically select an item by index.
+    pub fn select(&mut self, index: usize) {
+        self.set_selected(index);
     }
 
     fn set_selected(&mut self, index: usize) {
@@ -442,44 +460,6 @@ impl NavigationBarStateInner {
         } else {
             None
         }
-    }
-}
-
-/// Controller for the `navigation_bar` component.
-#[derive(Clone)]
-pub struct NavigationBarController {
-    inner: Arc<RwLock<NavigationBarStateInner>>,
-}
-
-impl NavigationBarController {
-    /// Create a new state with an initial selected index.
-    pub fn new(selected: usize) -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(NavigationBarStateInner::new(selected))),
-        }
-    }
-
-    /// Returns the index of the currently selected navigation item.
-    pub fn selected(&self) -> usize {
-        self.inner.read().selected
-    }
-
-    /// Returns the index of the previously selected navigation item.
-    pub(crate) fn previous_selected(&self) -> usize {
-        self.inner.read().previous_selected
-    }
-
-    /// Programmatically select an item by index.
-    pub fn select(&self, index: usize) {
-        self.inner.write().set_selected(index);
-    }
-
-    fn set_selected(&self, index: usize) {
-        self.inner.write().set_selected(index);
-    }
-
-    fn animation_progress(&self) -> Option<f32> {
-        self.inner.write().animation_progress()
     }
 }
 

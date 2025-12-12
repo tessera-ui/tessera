@@ -1,6 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use closure::closure;
 use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
@@ -44,7 +43,7 @@ pub fn glass_slider_showcase() {
 
 #[tessera]
 fn test_content() {
-    let value = remember(|| Mutex::new(0.5));
+    let value = remember(|| 0.5);
     let slider_controller = remember(GlassSliderController::new);
 
     column(
@@ -54,30 +53,25 @@ fn test_content() {
             .unwrap(),
         move |scope| {
             scope.child(|| text("Glass Slider Showcase"));
-
-            let value_clone = value.clone();
-            let slider_controller_clone = slider_controller.clone();
             scope.child(move || {
-                let on_change = Arc::new(closure!(clone value_clone, |new_value| {
-                    *value_clone.lock().unwrap() = new_value;
-                }));
+                let on_change = Arc::new(move |new_value| {
+                    value.set(new_value);
+                });
                 glass_slider_with_controller(
                     GlassSliderArgsBuilder::default()
-                        .value(*value_clone.lock().unwrap())
+                        .value(value.get())
                         .on_change(on_change)
                         .width(Dp(250.0))
                         .build()
                         .unwrap(),
-                    slider_controller_clone,
+                    slider_controller,
                 );
             });
 
-            let value_clone = value.clone();
             scope.child(move || {
-                let value = *value_clone.lock().unwrap();
                 text(
                     TextArgsBuilder::default()
-                        .text(format!("Value: {:.2}", value))
+                        .text(format!("Value: {:.2}", value.get()))
                         .size(Dp(16.0))
                         .build()
                         .unwrap(),

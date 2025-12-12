@@ -812,6 +812,12 @@ Fps: {:.2}
         // End of frame cleanup
         args.cursor_state.frame_cleanup();
 
+        // Recycle unused remembered state slots
+        crate::runtime::end_frame_slots();
+
+        // Clear context storage
+        crate::context::clear_context();
+
         // Store the commands for the next frame's comparison
         *previous_commands = new_commands;
 

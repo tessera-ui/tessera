@@ -73,7 +73,7 @@ pub struct IconArgs {
     /// Tint color applied to vector icons. Defaults to white so it preserves
     /// the original colors (multiplying by white is a no-op). Raster icons
     /// ignore this field.
-    #[builder(default = "use_context::<ContentColor>().current")]
+    #[builder(default = "use_context::<ContentColor>().get().current")]
     pub tint: Color,
     /// How the tint is applied to vector icons.
     #[builder(default)]

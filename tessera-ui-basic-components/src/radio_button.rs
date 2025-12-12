@@ -8,9 +8,8 @@ use std::{
 
 use closure::closure;
 use derive_builder::Builder;
-use parking_lot::RwLock;
 use tessera_ui::{
-    Color, DimensionValue, Dp, Px,
+    Color, DimensionValue, Dp, Px, State,
     accesskit::{Action, Role, Toggled},
     remember, tessera, use_context,
 };
@@ -30,8 +29,12 @@ const RIPPLE_OPACITY: f32 = 0.1;
 
 /// Shared state for the `radio_button` component, including selection
 /// animation.
+#[derive(Clone)]
 pub struct RadioButtonController {
-    selection: RwLock<RadioSelectionState>,
+    selected: bool,
+    progress: f32,
+    start_progress: f32,
+    last_change_time: Option<Instant>,
 }
 
 impl Default for RadioButtonController {
@@ -43,70 +46,6 @@ impl Default for RadioButtonController {
 impl RadioButtonController {
     /// Creates a new radio button state with the given initial selection.
     pub fn new(selected: bool) -> Self {
-        Self {
-            selection: RwLock::new(RadioSelectionState::new(selected)),
-        }
-    }
-
-    /// Returns whether the radio button is currently selected.
-    pub fn is_selected(&self) -> bool {
-        self.selection.read().selected
-    }
-
-    /// Sets the selection state, starting an animation when the value changes.
-    pub fn set_selected(&self, selected: bool) {
-        let mut selection = self.selection.write();
-        if selection.selected != selected {
-            selection.selected = selected;
-            selection.start_progress = selection.progress;
-            selection.last_change_time = Some(Instant::now());
-        }
-    }
-
-    /// Marks the radio button as selected, returning `true` if this triggered a
-    /// state change.
-    pub fn select(&self) -> bool {
-        let mut selection = self.selection.write();
-        if selection.selected {
-            return false;
-        }
-        selection.selected = true;
-        selection.start_progress = selection.progress;
-        selection.last_change_time = Some(Instant::now());
-        true
-    }
-
-    fn update_animation(&self) {
-        let mut selection = self.selection.write();
-        if let Some(start) = selection.last_change_time {
-            let elapsed = start.elapsed();
-            let fraction =
-                (elapsed.as_secs_f32() / RADIO_ANIMATION_DURATION.as_secs_f32()).min(1.0);
-            let target = if selection.selected { 1.0 } else { 0.0 };
-            selection.progress =
-                selection.start_progress + (target - selection.start_progress) * fraction;
-            if fraction >= 1.0 {
-                selection.last_change_time = None;
-                selection.progress = target;
-                selection.start_progress = target;
-            }
-        }
-    }
-
-    fn animation_progress(&self) -> f32 {
-        self.selection.read().progress
-    }
-}
-
-struct RadioSelectionState {
-    selected: bool,
-    progress: f32,
-    start_progress: f32,
-    last_change_time: Option<Instant>,
-}
-
-impl RadioSelectionState {
-    fn new(selected: bool) -> Self {
         let progress = if selected { 1.0 } else { 0.0 };
         Self {
             selected,
@@ -114,6 +53,51 @@ impl RadioSelectionState {
             start_progress: progress,
             last_change_time: None,
         }
+    }
+
+    /// Returns whether the radio button is currently selected.
+    pub fn is_selected(&self) -> bool {
+        self.selected
+    }
+
+    /// Sets the selection state, starting an animation when the value changes.
+    pub fn set_selected(&mut self, selected: bool) {
+        if self.selected != selected {
+            self.selected = selected;
+            self.start_progress = self.progress;
+            self.last_change_time = Some(Instant::now());
+        }
+    }
+
+    /// Marks the radio button as selected, returning `true` if this triggered a
+    /// state change.
+    pub fn select(&mut self) -> bool {
+        if self.selected {
+            return false;
+        }
+        self.selected = true;
+        self.start_progress = self.progress;
+        self.last_change_time = Some(Instant::now());
+        true
+    }
+
+    fn update_animation(&mut self) {
+        if let Some(start) = self.last_change_time {
+            let elapsed = start.elapsed();
+            let fraction =
+                (elapsed.as_secs_f32() / RADIO_ANIMATION_DURATION.as_secs_f32()).min(1.0);
+            let target = if self.selected { 1.0 } else { 0.0 };
+            self.progress = self.start_progress + (target - self.start_progress) * fraction;
+            if fraction >= 1.0 {
+                self.last_change_time = None;
+                self.progress = target;
+                self.start_progress = target;
+            }
+        }
+    }
+
+    fn animation_progress(&self) -> f32 {
+        self.progress
     }
 }
 
@@ -141,16 +125,16 @@ pub struct RadioButtonArgs {
     #[builder(default = "Dp(10.0)")]
     pub dot_size: Dp,
     /// Ring and dot color when selected.
-    #[builder(default = "use_context::<MaterialColorScheme>().primary")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
     pub selected_color: Color,
     /// Ring color when not selected.
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface_variant")]
     pub unselected_color: Color,
     /// Ring and dot color when disabled but selected.
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface.with_alpha(0.38)")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface.with_alpha(0.38)")]
     pub disabled_selected_color: Color,
     /// Ring color when disabled and not selected.
-    #[builder(default = "use_context::<MaterialColorScheme>().on_surface.with_alpha(0.38)")]
+    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface.with_alpha(0.38)")]
     pub disabled_unselected_color: Color,
     /// Whether the control is interactive.
     #[builder(default = "true")]
@@ -216,8 +200,8 @@ pub fn radio_button(args: impl Into<RadioButtonArgs>) {
     let args: RadioButtonArgs = args.into();
     let controller = remember(|| RadioButtonController::new(args.selected));
 
-    if controller.is_selected() != args.selected {
-        controller.set_selected(args.selected);
+    if controller.with(|c| c.is_selected()) != args.selected {
+        controller.with_mut(|c| c.set_selected(args.selected));
     }
 
     radio_button_with_controller(args, controller);
@@ -236,19 +220,16 @@ pub fn radio_button(args: impl Into<RadioButtonArgs>) {
 #[tessera]
 pub fn radio_button_with_controller(
     args: impl Into<RadioButtonArgs>,
-    controller: Arc<RadioButtonController>,
+    controller: State<RadioButtonController>,
 ) {
     let args: RadioButtonArgs = args.into();
-
-    let controller_for_accessibility = controller.clone();
-    let controller_for_animation = controller.clone();
     let accessibility_label = args.accessibility_label.clone();
     let accessibility_description = args.accessibility_description.clone();
     let on_select_for_accessibility = args.on_select.clone();
     let enabled_for_accessibility = args.enabled;
     input_handler(Box::new(move |input| {
-        controller_for_animation.update_animation();
-        let selected = controller_for_animation.is_selected();
+        controller.with_mut(|c| c.update_animation());
+        let selected = controller.with(|c| c.is_selected());
 
         let mut builder = input.accessibility().role(Role::RadioButton);
 
@@ -274,20 +255,19 @@ pub fn radio_button_with_controller(
         builder.commit();
 
         if enabled_for_accessibility {
-            let controller = controller_for_accessibility.clone();
             let on_select = on_select_for_accessibility.clone();
             input.set_accessibility_action_handler(move |action| {
-                if action == Action::Click && controller.select() {
+                if action == Action::Click && controller.with_mut(|c| c.select()) {
                     on_select(true);
                 }
             });
         }
     }));
 
-    controller.update_animation();
-    let progress = controller.animation_progress();
+    controller.with_mut(|c| c.update_animation());
+    let progress = controller.with(|c| c.animation_progress());
     let eased_progress = animation::easing(progress);
-    let is_selected = controller.is_selected();
+    let is_selected = controller.with(|c| c.is_selected());
 
     let target_size = Dp(args.touch_target_size.0.max(args.size.0));
     let padding_dp = Dp(((target_size.0 - args.size.0) / 2.0).max(0.0));
@@ -333,7 +313,7 @@ pub fn radio_button_with_controller(
     let on_click = if args.enabled {
         Some(
             Arc::new(closure!(clone args.on_select, clone controller, || {
-                if controller.select() {
+                if controller.with_mut(|c| c.select()) {
                     on_select(true);
                 }
             })) as Arc<dyn Fn() + Send + Sync>,

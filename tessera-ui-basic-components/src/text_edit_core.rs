@@ -21,7 +21,7 @@
 
 mod cursor;
 
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use glyphon::{
     Cursor, Edit,
@@ -29,7 +29,7 @@ use glyphon::{
 };
 use parking_lot::RwLock;
 use tessera_ui::{
-    Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, focus_state::Focus,
+    Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, State, focus_state::Focus,
     tessera, winit,
 };
 use winit::keyboard::NamedKey;
@@ -528,10 +528,9 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
 /// * `state` - Shared state for the text editor, typically wrapped in
 ///   `Arc<RwLock<...>>`.
 #[tessera]
-pub fn text_edit_core(state: Arc<TextEditorController>) {
+pub fn text_edit_core(state: State<TextEditorController>) {
     // text rendering with constraints from parent container
     {
-        let state_clone = state.clone();
         measure(Box::new(move |input| {
             // Enable clipping for clip to visible area
             input.enable_clipping();
@@ -551,14 +550,16 @@ pub fn text_edit_core(state: Arc<TextEditorController>) {
                 DimensionValue::Fill { max, .. } => max,
             };
 
-            let text_data = state_clone.write().text_data(TextConstraint {
-                max_width: max_width_pixels.map(|px| px.to_f32()),
-                max_height: max_height_pixels.map(|px| px.to_f32()),
+            let text_data = state.with(|c| {
+                c.write().text_data(TextConstraint {
+                    max_width: max_width_pixels.map(|px| px.to_f32()),
+                    max_height: max_height_pixels.map(|px| px.to_f32()),
+                })
             });
 
             // Simplified selection rectangle computation using helper functions to reduce
             // complexity.
-            let mut selection_rects = compute_selection_rects(state_clone.read().editor());
+            let mut selection_rects = state.with(|c| compute_selection_rects(c.read().editor()));
 
             // Record length before moving (used to place cursor node after rects)
             let selection_rects_len = selection_rects.len();
@@ -575,10 +576,10 @@ pub fn text_edit_core(state: Arc<TextEditorController>) {
             let visible_x1 = max_width_pixels.unwrap_or(Px(i32::MAX));
             let visible_y1 = max_height_pixels.unwrap_or(Px(i32::MAX));
             selection_rects = clip_and_take_visible(selection_rects, visible_x1, visible_y1);
-            state_clone.write().current_selection_rects = selection_rects;
+            state.with(|c| c.write().current_selection_rects = selection_rects.clone());
 
             // Handle cursor positioning (cursor comes after selection rects)
-            if let Some(cursor_pos_raw) = state_clone.read().editor().cursor_position() {
+            if let Some(cursor_pos_raw) = state.with(|c| c.read().editor().cursor_position()) {
                 let cursor_pos = PxPosition::new(Px(cursor_pos_raw.0), Px(cursor_pos_raw.1));
                 let cursor_node_index = selection_rects_len;
                 if let Some(cursor_node_id) = input.children_ids.get(cursor_node_index).copied() {
@@ -608,10 +609,10 @@ pub fn text_edit_core(state: Arc<TextEditorController>) {
 
     // Selection highlighting
     {
-        let (rect_definitions, color_for_selection) = {
-            let guard = state.read();
+        let (rect_definitions, color_for_selection) = state.with(|c| {
+            let guard = c.read();
             (guard.current_selection_rects.clone(), guard.selection_color)
-        };
+        });
 
         for def in rect_definitions {
             selection_highlight_rect(def.width, def.height, color_for_selection);
@@ -619,7 +620,11 @@ pub fn text_edit_core(state: Arc<TextEditorController>) {
     }
 
     // Cursor rendering (only when focused)
-    if state.read().focus_handler().is_focused() {
-        cursor::cursor(state.read().line_height(), state.read().blink_timer());
+    if state.with(|c| c.read().focus_handler().is_focused()) {
+        let (line_height, blink_timer) = state.with(|c| {
+            let guard = c.read();
+            (guard.line_height(), guard.blink_timer())
+        });
+        cursor::cursor(line_height, blink_timer);
     }
 }

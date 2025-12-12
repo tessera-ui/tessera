@@ -48,7 +48,7 @@ pub fn lazy_lists_showcase() {
                                                 "Virtualized column/row that only mounts what is visible in the \
                                                 viewport.",
                                             )
-                                            .color(use_context::<MaterialColorScheme>().on_surface_variant)
+                                            .color(use_context::<MaterialColorScheme>().get().on_surface_variant)
                                             .build()
                                             .unwrap(),
                                     );
@@ -87,7 +87,12 @@ fn vertical_list() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .style(use_context::<MaterialColorScheme>().surface_variant.into())
+            .style(
+                use_context::<MaterialColorScheme>()
+                    .get()
+                    .surface_variant
+                    .into(),
+            )
             .padding(Dp(12.0))
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
@@ -124,7 +129,12 @@ fn horizontal_gallery() {
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
-            .style(use_context::<MaterialColorScheme>().surface_variant.into())
+            .style(
+                use_context::<MaterialColorScheme>()
+                    .get()
+                    .surface_variant
+                    .into(),
+            )
             .padding(Dp(12.0))
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
@@ -190,7 +200,11 @@ fn contact_card(index: usize) {
                             text(
                                 TextArgsBuilder::default()
                                     .text(format!("{unread_count} unread messages"))
-                                    .color(use_context::<MaterialColorScheme>().on_surface_variant)
+                                    .color(
+                                        use_context::<MaterialColorScheme>()
+                                            .get()
+                                            .on_surface_variant,
+                                    )
                                     .build()
                                     .unwrap(),
                             );

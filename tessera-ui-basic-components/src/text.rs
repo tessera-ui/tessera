@@ -27,7 +27,7 @@ pub struct TextArgs {
     pub text: String,
 
     /// The color of the text.
-    #[builder(default = "use_context::<ContentColor>().current")]
+    #[builder(default = "use_context::<ContentColor>().get().current")]
     pub color: Color,
 
     /// The font size in density-independent pixels (dp).

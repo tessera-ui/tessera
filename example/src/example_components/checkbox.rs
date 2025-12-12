@@ -1,7 +1,4 @@
-use std::sync::{
-    Arc,
-    atomic::{self, AtomicBool},
-};
+use std::sync::Arc;
 
 use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
 use tessera_ui_basic_components::{
@@ -55,21 +52,17 @@ pub fn checkbox_showcase() {
 
                                     // Interactive Checkbox
                                     scope.child(move || {
-                                        let is_checked = remember(|| AtomicBool::new(true));
+                                        let is_checked = remember(|| true);
                                         row(
                                             RowArgsBuilder::default()
                                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                                 .build()
                                                 .unwrap(),
                                             |scope| {
-                                                let is_checked_clone = is_checked.clone();
                                                 scope.child(move || {
                                                     let on_toggle = Arc::new({
                                                         move |new_value| {
-                                                            is_checked_clone.store(
-                                                                new_value,
-                                                                atomic::Ordering::SeqCst,
-                                                            );
+                                                            is_checked.set(new_value);
                                                         }
                                                     });
                                                     checkbox(
@@ -80,11 +73,8 @@ pub fn checkbox_showcase() {
                                                             .unwrap(),
                                                     );
                                                 });
-                                                let is_checked_clone = is_checked.clone();
                                                 scope.child(move || {
-                                                    let checked_str = if is_checked_clone
-                                                        .load(atomic::Ordering::Acquire)
-                                                    {
+                                                    let checked_str = if is_checked.get() {
                                                         "Checked"
                                                     } else {
                                                         "Unchecked"

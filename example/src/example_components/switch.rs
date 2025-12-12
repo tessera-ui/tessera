@@ -68,7 +68,7 @@ fn test_content() {
 
             scope.child(move || {
                 let controller = remember(|| SwitchController::new(false));
-                if controller.is_checked() {
+                if controller.with(|c| c.is_checked()) {
                     switch_with_child_and_controller(
                         SwitchArgsBuilder::default()
                             .on_toggle(Arc::new(|value| {
@@ -76,7 +76,7 @@ fn test_content() {
                             }))
                             .build()
                             .unwrap(),
-                        controller.clone(),
+                        controller,
                         move || {
                             icon(
                                 IconArgsBuilder::default()
@@ -95,7 +95,7 @@ fn test_content() {
                             }))
                             .build()
                             .unwrap(),
-                        controller.clone(),
+                        controller,
                     );
                 }
             });
