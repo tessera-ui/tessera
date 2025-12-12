@@ -178,19 +178,21 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
 /// use tessera_ui::Dp;
+/// use tessera_ui::remember;
 /// use tessera_ui_basic_components::{
 ///     text::write_font_system,
 ///     text_editor::{TextEditorArgsBuilder, TextEditorController, text_editor_with_controller},
 /// };
 ///
-/// let controller = Arc::new(TextEditorController::new(Dp(14.0), None));
-/// controller.write().editor_mut().set_text_reactive(
-///     "Initial text",
-///     &mut write_font_system(),
-///     &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
-/// );
+/// let controller = remember(|| TextEditorController::new(Dp(14.0), None));
+/// controller.with(|c| {
+///     c.write().editor_mut().set_text_reactive(
+///         "Initial text",
+///         &mut write_font_system(),
+///         &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
+///     );
+/// });
 ///
 /// text_editor_with_controller(
 ///     TextEditorArgsBuilder::default()

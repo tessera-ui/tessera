@@ -62,7 +62,7 @@ pub struct SideBarProviderArgs {
 /// ```
 /// use tessera_ui_basic_components::side_bar::SideBarController;
 ///
-/// let controller = SideBarController::new(false);
+/// let mut controller = SideBarController::new(false);
 /// assert!(!controller.is_open()); // Initially closed
 /// controller.open();
 /// assert!(controller.is_open()); // Now open

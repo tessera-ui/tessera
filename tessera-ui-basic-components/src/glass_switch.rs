@@ -264,21 +264,26 @@ fn apply_glass_switch_accessibility(
 /// ## Examples
 ///
 /// ```
-/// use std::sync::Arc;
+/// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::glass_switch::{
 ///     GlassSwitchArgsBuilder, GlassSwitchController, glass_switch_with_controller,
 /// };
 ///
-/// let controller = Arc::new(GlassSwitchController::new(false));
-/// assert!(!controller.is_checked());
+/// #[tessera]
+/// fn demo() {
+///     let controller = remember(|| GlassSwitchController::new(false));
+///     assert!(!controller.with(|c| c.is_checked()));
 ///
-/// glass_switch_with_controller(
-///     GlassSwitchArgsBuilder::default().build().unwrap(),
-///     controller.clone(),
-/// );
+///     glass_switch_with_controller(
+///         GlassSwitchArgsBuilder::default().build().unwrap(),
+///         controller,
+///     );
 ///
-/// controller.toggle();
-/// assert!(controller.is_checked());
+///     controller.with_mut(|c| c.toggle());
+///     assert!(controller.with(|c| c.is_checked()));
+/// }
+///
+/// demo();
 /// ```
 #[tessera]
 pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
@@ -306,7 +311,6 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
 /// # Examples
 ///
 /// ```
-/// use std::sync::Arc;
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::glass_switch::{
 ///     GlassSwitchArgsBuilder, GlassSwitchController, glass_switch_with_controller,
@@ -317,7 +321,7 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
 ///     let controller = remember(|| GlassSwitchController::new(false));
 ///     glass_switch_with_controller(
 ///         GlassSwitchArgsBuilder::default().build().unwrap(),
-///         controller.clone(),
+///         controller,
 ///     );
 /// }
 /// ```
