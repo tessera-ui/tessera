@@ -335,7 +335,7 @@ pub fn radio_button_with_controller(
         .accessibility_role(Role::RadioButton);
 
     if let Some(on_click) = on_click.clone() {
-        root_builder = root_builder.on_click(on_click);
+        root_builder = root_builder.on_click_shared(on_click);
     }
 
     surface(

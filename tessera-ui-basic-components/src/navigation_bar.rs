@@ -61,14 +61,46 @@ pub struct NavigationBarItem {
     #[builder(setter(into))]
     pub label: String,
     /// Optional icon rendered above the label.
-    #[builder(default, setter(strip_option))]
+    #[builder(default, setter(custom, strip_option))]
     pub icon: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Callback invoked after selection changes to this item.
-    #[builder(default = "Arc::new(|| {})")]
+    #[builder(default = "Arc::new(|| {})", setter(custom))]
     pub on_click: Arc<dyn Fn() + Send + Sync>,
     /// Whether the label is always visible or only appears when selected.
     #[builder(default = "NavigationBarLabelBehavior::AlwaysShow")]
     pub label_behavior: NavigationBarLabelBehavior,
+}
+
+impl NavigationBarItemBuilder {
+    /// Set the icon drawing callback.
+    pub fn icon<F>(mut self, icon: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.icon = Some(Some(Arc::new(icon)));
+        self
+    }
+
+    /// Set the icon drawing callback using a shared callback.
+    pub fn icon_shared(mut self, icon: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.icon = Some(Some(icon));
+        self
+    }
+
+    /// Set the click handler.
+    pub fn on_click<F>(mut self, on_click: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_click = Some(Arc::new(on_click));
+        self
+    }
+
+    /// Set the click handler using a shared callback.
+    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.on_click = Some(on_click);
+        self
+    }
 }
 
 /// # navigation_bar
@@ -305,12 +337,12 @@ fn render_navigation_item(
             .ripple_color(ripple_color)
             .hover_style(None)
             .accessibility_label(label_text.clone())
-            .on_click(Arc::new(move || {
+            .on_click(move || {
                 if index != controller.with(|c| c.selected()) {
                     controller.with_mut(|c| c.set_selected(index));
                     on_click();
                 }
-            }))
+            })
             .build()
             .expect("SurfaceArgsBuilder failed with required fields set"),
         move || {

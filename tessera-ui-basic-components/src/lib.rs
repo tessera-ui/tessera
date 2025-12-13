@@ -30,8 +30,6 @@
 //! # use tessera_ui::tessera;
 //! # #[tessera]
 //! # fn component() {
-//! use std::sync::Arc;
-//!
 //! use tessera_ui::Dp;
 //! use tessera_ui_basic_components::{
 //!     button::{ButtonArgs, button},
@@ -40,13 +38,9 @@
 //! };
 //!
 //! // Button example
-//! button(
-//!     ButtonArgs {
-//!         on_click: Some(Arc::new(|| { /* Handle click */ })),
-//!         ..Default::default()
-//!     },
-//!     || text("Click me".to_string()),
-//! );
+//! button(ButtonArgs::filled(|| { /* Handle click */ }), || {
+//!     text("Click me".to_string())
+//! });
 //!
 //! // Text editor example
 //! text_editor(TextEditorArgs::default());

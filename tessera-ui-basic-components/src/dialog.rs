@@ -80,6 +80,7 @@ pub enum DialogStyle {
 pub struct DialogProviderArgs {
     /// Callback function triggered when a close request is made, for example by
     /// clicking the scrim or pressing the `ESC` key.
+    #[builder(setter(custom))]
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
     /// Padding around the dialog content.
     #[builder(default = "Dp(24.0)")]
@@ -90,6 +91,26 @@ pub struct DialogProviderArgs {
     /// Whether the dialog is initially open (for declarative usage).
     #[builder(default = "false")]
     pub is_open: bool,
+}
+
+impl DialogProviderArgsBuilder {
+    /// Set the close-request callback.
+    pub fn on_close_request<F>(mut self, on_close_request: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_close_request = Some(Arc::new(on_close_request));
+        self
+    }
+
+    /// Set the close-request callback using a shared callback.
+    pub fn on_close_request_shared(
+        mut self,
+        on_close_request: Arc<dyn Fn() + Send + Sync>,
+    ) -> Self {
+        self.on_close_request = Some(on_close_request);
+        self
+    }
 }
 
 /// Controller for [`dialog_provider`], controlling visibility and animation.
@@ -159,7 +180,7 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
             let blur_radius = blur_radius_for(progress, is_open, 5.0);
             fluid_glass(
                 FluidGlassArgsBuilder::default()
-                    .on_click(args.on_close_request.clone())
+                    .on_click_shared(args.on_close_request.clone())
                     .tint_color(Color::TRANSPARENT)
                     .width(DimensionValue::Fill {
                         min: None,
@@ -192,7 +213,7 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
             surface(
                 SurfaceArgsBuilder::default()
                     .style(scrim_color.with_alpha(alpha).into())
-                    .on_click(args.on_close_request.clone())
+                    .on_click_shared(args.on_close_request.clone())
                     .width(DimensionValue::Fill {
                         min: None,
                         max: None,
@@ -342,7 +363,7 @@ fn dialog_content_wrapper(
 /// dialog_provider(
 ///     DialogProviderArgsBuilder::default()
 ///         .is_open(true)
-///         .on_close_request(std::sync::Arc::new(|| {}))
+///         .on_close_request(|| {})
 ///         .build()
 ///         .unwrap(),
 ///     || { /* main content */ },
@@ -398,7 +419,6 @@ pub fn dialog_provider(
 /// # Examples
 ///
 /// ```
-/// use std::sync::Arc;
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::dialog::{
 ///     BasicDialogArgsBuilder, DialogController, DialogProviderArgsBuilder, basic_dialog,
@@ -411,9 +431,9 @@ pub fn dialog_provider(
 ///
 ///     dialog_provider_with_controller(
 ///         DialogProviderArgsBuilder::default()
-///             .on_close_request(Arc::new(|| {
+///             .on_close_request(|| {
 ///                 // Handle close request
-///             }))
+///             })
 ///             .build()
 ///             .unwrap(),
 ///         dialog_controller.clone(),
@@ -472,7 +492,7 @@ pub fn dialog_provider_with_controller(
 #[builder(pattern = "owned")]
 pub struct BasicDialogArgs {
     /// Optional icon to display at the top of the dialog.
-    #[builder(default, setter(strip_option))]
+    #[builder(default, setter(custom, strip_option))]
     pub icon: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Optional headline text.
     #[builder(default, setter(strip_option, into))]
@@ -491,6 +511,21 @@ pub struct BasicDialogArgs {
 }
 
 impl BasicDialogArgsBuilder {
+    /// Sets the optional icon drawing callback.
+    pub fn icon<F>(mut self, icon: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.icon = Some(Some(Arc::new(icon)));
+        self
+    }
+
+    /// Sets the optional icon drawing callback using a shared callback.
+    pub fn icon_shared(mut self, icon: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.icon = Some(Some(icon));
+        self
+    }
+
     /// Sets the confirm button content.
     pub fn confirm_button<F>(mut self, f: F) -> Self
     where

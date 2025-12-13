@@ -208,9 +208,9 @@ fn test_content() {
                                                 .border(GlassBorder {
                                                     width: border_width.into(),
                                                 })
-                                                .on_click(Arc::new(|| {
+                                                .on_click(|| {
                                                     println!("Glass clicked");
-                                                }))
+                                                })
                                                 .refraction_amount(refraction_amount)
                                                 .refraction_height(refraction_height)
                                                 .build()

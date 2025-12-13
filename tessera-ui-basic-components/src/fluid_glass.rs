@@ -128,7 +128,7 @@ pub struct FluidGlassArgs {
     pub ripple_strength: Option<f32>,
 
     /// Optional click callback for interactive glass surfaces.
-    #[builder(default, setter(strip_option, into = false))]
+    #[builder(default, setter(custom, strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
 
     /// Optional border defining the outline thickness for the glass.
@@ -184,6 +184,23 @@ impl PartialEq for FluidGlassArgs {
 impl FluidGlassArgsBuilder {
     fn validate(&self) -> Result<(), String> {
         Ok(())
+    }
+}
+
+impl FluidGlassArgsBuilder {
+    /// Set the click handler.
+    pub fn on_click<F>(mut self, on_click: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_click = Some(Some(Arc::new(on_click)));
+        self
+    }
+
+    /// Set the click handler using a shared callback.
+    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.on_click = Some(Some(on_click));
+        self
     }
 }
 

@@ -18,7 +18,7 @@ use crate::{
 #[builder(pattern = "owned", setter(into, strip_option), default)]
 pub struct GlassButtonArgs {
     /// The click callback function
-    #[builder(setter(strip_option, into = false))]
+    #[builder(setter(custom, strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// The ripple color (RGB) for the button.
     #[builder(default = "Color::from_rgb(1.0, 1.0, 1.0)")]
@@ -85,10 +85,27 @@ pub struct GlassButtonArgs {
     pub accessibility_focusable: bool,
 }
 
+impl GlassButtonArgsBuilder {
+    /// Set the click handler.
+    pub fn on_click<F>(mut self, on_click: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_click = Some(Some(Arc::new(on_click)));
+        self
+    }
+
+    /// Set the click handler using a shared callback.
+    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.on_click = Some(Some(on_click));
+        self
+    }
+}
+
 /// Convenience constructors for common glass button styles
 impl GlassButtonArgs {
     /// Create a primary glass button with default blue tint
-    pub fn primary(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn primary(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         GlassButtonArgsBuilder::default()
             .on_click(on_click)
             .tint_color(Color::new(0.2, 0.5, 0.8, 0.2)) // Blue tint
@@ -98,7 +115,7 @@ impl GlassButtonArgs {
     }
 
     /// Create a secondary glass button with gray tint
-    pub fn secondary(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn secondary(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         GlassButtonArgsBuilder::default()
             .on_click(on_click)
             .tint_color(Color::new(0.6, 0.6, 0.6, 0.2)) // Gray tint
@@ -108,7 +125,7 @@ impl GlassButtonArgs {
     }
 
     /// Create a success glass button with green tint
-    pub fn success(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn success(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         GlassButtonArgsBuilder::default()
             .on_click(on_click)
             .tint_color(Color::new(0.1, 0.7, 0.3, 0.2)) // Green tint
@@ -118,7 +135,7 @@ impl GlassButtonArgs {
     }
 
     /// Create a danger glass button with red tint
-    pub fn danger(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn danger(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         GlassButtonArgsBuilder::default()
             .on_click(on_click)
             .tint_color(Color::new(0.8, 0.2, 0.2, 0.2)) // Red tint
@@ -147,19 +164,18 @@ impl GlassButtonArgs {
 /// ## Examples
 ///
 /// ```
-/// use std::sync::Arc;
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
-///     glass_button::{GlassButtonArgs, glass_button},
+///     glass_button::{GlassButtonArgsBuilder, glass_button},
 ///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// glass_button(
-///     GlassButtonArgs {
-///         on_click: Some(Arc::new(|| println!("Button clicked!"))),
-///         tint_color: Color::new(0.2, 0.3, 0.8, 0.3),
-///         ..Default::default()
-///     },
+///     GlassButtonArgsBuilder::default()
+///         .on_click(|| println!("Button clicked!"))
+///         .tint_color(Color::new(0.2, 0.3, 0.8, 0.3))
+///         .build()
+///         .expect("builder construction failed"),
 ///     || {
 ///         text(
 ///             TextArgsBuilder::default()
@@ -198,7 +214,7 @@ pub fn glass_button(
         .padding(args.padding);
 
     if let Some(on_click) = args.on_click {
-        glass_args = glass_args.on_click(on_click);
+        glass_args = glass_args.on_click_shared(on_click);
     }
 
     if let Some(border) = args.border {

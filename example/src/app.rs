@@ -69,9 +69,9 @@ pub fn app() {
 
     side_bar_provider_with_controller(
         SideBarProviderArgsBuilder::default()
-            .on_close_request(Arc::new(closure!(clone side_bar_controller, || {
+            .on_close_request(closure!(clone side_bar_controller, || {
                 side_bar_controller.with_mut(|c| c.close());
-            })))
+            }))
             .style(SideBarStyle::Glass)
             .build()
             .unwrap(),
@@ -79,9 +79,9 @@ pub fn app() {
         move || {
             bottom_sheet_provider_with_controller(
                 BottomSheetProviderArgsBuilder::default()
-                    .on_close_request(Arc::new(closure!(clone bottom_sheet_controller, || {
+                    .on_close_request(closure!(clone bottom_sheet_controller, || {
                         bottom_sheet_controller.with_mut(|c| c.close());
-                    })))
+                    }))
                     .style(BottomSheetStyle::Material)
                     .build()
                     .unwrap(),
@@ -89,9 +89,9 @@ pub fn app() {
                 move || {
                     dialog_provider_with_controller(
                         DialogProviderArgsBuilder::default()
-                            .on_close_request(Arc::new(closure!(clone dialog_controller, || {
+                            .on_close_request(closure!(clone dialog_controller, || {
                                 dialog_controller.with_mut(|c| c.close());
-                            })))
+                            }))
                             .style(DialogStyle::Material)
                             .build()
                             .unwrap(),
@@ -127,13 +127,13 @@ pub fn app() {
                                         scope.item(
                                             NavigationBarItemBuilder::default()
                                                 .label("Home")
-                                                .icon(Arc::new(closure!(
+                                                .icon(closure!(
                                                     clone home_icon_args,
                                                     || {
                                                         icon(home_icon_args.clone());
                                                     }
-                                                )))
-                                                .on_click(Arc::new(closure!(
+                                                ))
+                                                .on_click(closure!(
                                                     clone bottom_sheet_controller,
                                                     clone side_bar_controller,
                                                     clone dialog_controller,
@@ -148,7 +148,7 @@ pub fn app() {
                                                             );
                                                         });
                                                     }
-                                                )))
+                                                ))
                                                 .build()
                                                 .unwrap(),
                                         );
@@ -156,17 +156,17 @@ pub fn app() {
                                         scope.item(
                                             NavigationBarItemBuilder::default()
                                                 .label("About")
-                                                .icon(Arc::new(closure!(
+                                                .icon(closure!(
                                                     clone about_icon_args,
                                                     || {
                                                         icon(about_icon_args.clone());
                                                     }
-                                                )))
-                                                .on_click(Arc::new(|| {
+                                                ))
+                                                .on_click(|| {
                                                     Router::with_mut(|router| {
                                                         router.reset_with(AboutDestination {});
                                                     });
-                                                }))
+                                                })
                                                 .build()
                                                 .unwrap(),
                                         );
@@ -179,10 +179,10 @@ pub fn app() {
                                 BasicDialogArgsBuilder::default()
                                     .headline("Basic Dialog")
                                     .supporting_text("This is a basic dialog component.")
-                                    .icon(Arc::new(|| {
+                                    .icon(|| {
                                         let icon_content = filled::info_icon();
                                         icon(IconArgsBuilder::default().content(icon_content).build().unwrap());
-                                    }))
+                                    })
                                     .confirm_button(closure!(clone dialog_controller, || {
                                         button(
                                             ButtonArgs::text(closure!(clone dialog_controller, || {
@@ -518,7 +518,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .padding(Dp(25.0))
-            .on_click(on_click)
+            .on_click_shared(on_click)
             .style(SurfaceStyle::Filled {
                 color: use_context::<MaterialColorScheme>().get().primary_container,
             })
@@ -590,11 +590,11 @@ fn top_app_bar() {
                             .width(DimensionValue::Fixed(Dp(40.0).into()))
                             .height(DimensionValue::Fixed(Dp(40.0).into()));
                         if Router::with(|router| router.len()) > 1 {
-                            button_args = button_args.on_click(Arc::new(|| {
+                            button_args = button_args.on_click(|| {
                                 Router::with_mut(|router| {
                                     router.pop();
                                 });
-                            }));
+                            });
                         }
 
                         button(button_args.build().unwrap(), || {

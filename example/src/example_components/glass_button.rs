@@ -118,7 +118,7 @@ fn test_content() {
                                     scope.child(move || {
                                         glass_button(
                                             GlassButtonArgsBuilder::default()
-                                                .on_click(on_click)
+                                                .on_click_shared(on_click)
                                                 .shape(Shape::rounded_rectangle(Dp(25.0)))
                                                 .build()
                                                 .unwrap(),
@@ -147,7 +147,7 @@ fn test_content() {
                                         let args = GlassIconButtonArgsBuilder::default()
                                             .button(
                                                 GlassButtonArgsBuilder::default()
-                                                    .on_click(on_click)
+                                                    .on_click_shared(on_click)
                                                     .shape(Shape::Ellipse)
                                                     .build()
                                                     .unwrap(),

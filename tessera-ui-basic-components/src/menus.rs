@@ -239,11 +239,28 @@ pub struct MenuProviderArgs {
     #[builder(default = "true")]
     pub close_on_escape: bool,
     /// Optional callback invoked before the menu closes (background or Escape).
-    #[builder(default, setter(strip_option))]
+    #[builder(default, setter(custom, strip_option))]
     pub on_dismiss: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Whether the menu is currently open.
     #[builder(default = "false")]
     pub is_open: bool,
+}
+
+impl MenuProviderArgsBuilder {
+    /// Set the dismiss callback.
+    pub fn on_dismiss<F>(mut self, on_dismiss: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_dismiss = Some(Some(Arc::new(on_dismiss)));
+        self
+    }
+
+    /// Set the dismiss callback using a shared callback.
+    pub fn on_dismiss_shared(mut self, on_dismiss: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.on_dismiss = Some(Some(on_dismiss));
+        self
+    }
 }
 
 impl Default for MenuProviderArgs {
@@ -384,7 +401,6 @@ fn apply_close_action(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
 ///     menus::{
@@ -409,7 +425,7 @@ fn apply_close_action(
 ///         menu_scope.menu_item(
 ///             MenuItemArgsBuilder::default()
 ///                 .label("Edit")
-///                 .on_click(Arc::new(|| {}))
+///                 .on_click(|| {})
 ///                 .build()
 ///                 .unwrap(),
 ///         );
@@ -464,7 +480,6 @@ pub fn menu_provider(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
 /// use tessera_ui::{Dp, remember, tessera};
 /// use tessera_ui_basic_components::{
 ///     menus::{
@@ -489,9 +504,9 @@ pub fn menu_provider(
 ///             menu_scope.menu_item(
 ///                 MenuItemArgsBuilder::default()
 ///                     .label("Edit")
-///                     .on_click(Arc::new(|| {
+///                     .on_click(|| {
 ///                         // Handle edit action
-///                     }))
+///                     })
 ///                     .build()
 ///                     .unwrap(),
 ///             );
@@ -731,8 +746,25 @@ pub struct MenuItemArgs {
     #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface.with_alpha(0.38)")]
     pub disabled_color: Color,
     /// Callback invoked when the item is activated.
-    #[builder(default, setter(strip_option))]
+    #[builder(default, setter(custom, strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl MenuItemArgsBuilder {
+    /// Set the click handler.
+    pub fn on_click<F>(mut self, on_click: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_click = Some(Some(Arc::new(on_click)));
+        self
+    }
+
+    /// Set the click handler using a shared callback.
+    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.on_click = Some(Some(on_click));
+        self
+    }
 }
 
 impl Default for MenuItemArgs {
@@ -913,7 +945,7 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
         );
 
     if let Some(click) = interactive_click {
-        surface_builder = surface_builder.on_click(click);
+        surface_builder = surface_builder.on_click_shared(click);
     }
 
     if let Some(description) = args.supporting_text.clone() {

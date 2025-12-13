@@ -41,7 +41,7 @@ pub struct ButtonArgs {
     #[builder(default = "DimensionValue::WRAP", setter(into))]
     pub height: DimensionValue,
     /// The click callback function
-    #[builder(default, setter(strip_option))]
+    #[builder(default, setter(custom, strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// The ripple color (RGB) for the button.
     #[builder(default = "use_context::<MaterialColorScheme>().get().on_primary.with_alpha(0.12)")]
@@ -65,10 +65,27 @@ pub struct ButtonArgs {
     pub accessibility_description: Option<String>,
 }
 
+impl ButtonArgsBuilder {
+    /// Set the click handler.
+    pub fn on_click<F>(mut self, on_click: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_click = Some(Some(Arc::new(on_click)));
+        self
+    }
+
+    /// Set the click handler using a shared callback.
+    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.on_click = Some(Some(on_click));
+        self
+    }
+}
+
 impl Default for ButtonArgs {
     fn default() -> Self {
         ButtonArgsBuilder::default()
-            .on_click(Arc::new(|| {}))
+            .on_click(|| {})
             .build()
             .expect("ButtonArgsBuilder default build should succeed")
     }
@@ -155,7 +172,7 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
 
     // Set on_click handler if available
     if let Some(on_click) = args.on_click.clone() {
-        builder = builder.on_click(on_click);
+        builder = builder.on_click_shared(on_click);
     }
 
     if let Some(label) = args.accessibility_label.clone() {
@@ -190,7 +207,7 @@ impl ButtonArgs {
             .color(scheme.primary)
             .hover_color(Some(scheme.primary.blend_over(scheme.on_primary, 0.08)))
             .ripple_color(scheme.on_primary.with_alpha(0.12))
-            .on_click(Arc::new(on_click))
+            .on_click(on_click)
             .build()
             .expect("ButtonArgsBuilder failed for filled button")
     }
@@ -204,7 +221,7 @@ impl ButtonArgs {
             .hover_color(Some(scheme.surface.blend_over(scheme.primary, 0.08)))
             .ripple_color(scheme.primary.with_alpha(0.12))
             .shadow(ShadowProps::default())
-            .on_click(Arc::new(on_click))
+            .on_click(on_click)
             .build()
             .expect("ButtonArgsBuilder failed for elevated button")
     }
@@ -222,7 +239,7 @@ impl ButtonArgs {
                     .blend_over(scheme.on_secondary_container, 0.08),
             ))
             .ripple_color(scheme.on_secondary_container.with_alpha(0.12))
-            .on_click(Arc::new(on_click))
+            .on_click(on_click)
             .build()
             .expect("ButtonArgsBuilder failed for tonal button")
     }
@@ -237,7 +254,7 @@ impl ButtonArgs {
             .ripple_color(scheme.primary.with_alpha(0.12))
             .border_width(Dp(1.0))
             .border_color(Some(scheme.outline))
-            .on_click(Arc::new(on_click))
+            .on_click(on_click)
             .build()
             .expect("ButtonArgsBuilder failed for outlined button")
     }
@@ -250,7 +267,7 @@ impl ButtonArgs {
             .color(Color::TRANSPARENT)
             .hover_color(Some(Color::TRANSPARENT.blend_over(scheme.primary, 0.08)))
             .ripple_color(scheme.primary.with_alpha(0.12))
-            .on_click(Arc::new(on_click))
+            .on_click(on_click)
             .build()
             .expect("ButtonArgsBuilder failed for text button")
     }

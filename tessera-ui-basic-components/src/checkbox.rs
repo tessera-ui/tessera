@@ -455,7 +455,7 @@ pub fn checkbox_with_controller(
                 }));
 
             if let Some(handler) = on_click_for_surface.clone() {
-                builder = builder.on_click(handler);
+                builder = builder.on_click_shared(handler);
             }
 
             surface(

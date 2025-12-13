@@ -186,7 +186,7 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
 
     if let Some(on_click) = args.on_click {
         if args.enabled {
-            button_builder = button_builder.on_click(on_click);
+            button_builder = button_builder.on_click_shared(on_click);
         }
     }
 
@@ -221,7 +221,6 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
 /// ## Examples
 ///
 /// ```no_run
-/// use std::sync::Arc;
 /// use tessera_ui_basic_components::{
 ///     glass_button::GlassButtonArgsBuilder,
 ///     icon::IconArgsBuilder,
@@ -237,7 +236,7 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
 ///     GlassIconButtonArgsBuilder::default()
 ///         .button(
 ///             GlassButtonArgsBuilder::default()
-///                 .on_click(Arc::new(|| {}))
+///                 .on_click(|| {})
 ///                 .build()
 ///                 .unwrap(),
 ///         )

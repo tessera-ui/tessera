@@ -192,7 +192,7 @@ fn num_key(key: &'static str, app_state: State<AppState>, style: CalStyle) {
                     .shape(Shape::Ellipse)
                     .blur_radius(0.0)
                     .noise_amount(0.0)
-                    .on_click(on_click)
+                    .on_click_shared(on_click)
                     .build()
                     .unwrap(),
                 content_closure,
@@ -205,7 +205,7 @@ fn num_key(key: &'static str, app_state: State<AppState>, style: CalStyle) {
                     .height(DimensionValue::FILLED)
                     .shape(Shape::Ellipse)
                     .color(Color::GRAY)
-                    .on_click(on_click)
+                    .on_click_shared(on_click)
                     .build()
                     .unwrap(),
                 content_closure,

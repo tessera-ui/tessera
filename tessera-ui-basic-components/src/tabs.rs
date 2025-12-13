@@ -3,10 +3,7 @@
 //! ## Usage
 //!
 //! Use to organize content into separate pages that can be switched between.
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use derive_builder::Builder;
 use tessera_ui::{
@@ -530,9 +527,9 @@ where
                 .hover_color(Some(hover_color))
                 .padding(args.tab_padding)
                 .ripple_color(args.state_layer_color)
-                .on_click(Arc::new(move || {
+                .on_click(move || {
                     controller.with_mut(|c| c.set_active_tab(index));
-                }))
+                })
                 .width(DimensionValue::FILLED)
                 .shape(Shape::RECTANGLE)
                 .build()

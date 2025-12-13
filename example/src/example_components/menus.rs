@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tessera_ui::{DimensionValue, Dp, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
@@ -99,10 +97,10 @@ pub fn menus_showcase() {
                                                         .width(DimensionValue::Fixed(
                                                             Dp(180.0).into(),
                                                         ))
-                                                        .on_click(Arc::new(move || {
-                                                                menu_controller.with_mut(|c| c.open_at(anchor));
-                                                            }
-                                                        ))
+                                                        .on_click(move || {
+                                                            menu_controller
+                                                                .with_mut(|c| c.open_at(anchor));
+                                                        })
                                                         .build()
                                                         .expect("builder construction failed"),
                                                     || {
@@ -145,9 +143,9 @@ pub fn menus_showcase() {
                     menu_scope.menu_item(
                         MenuItemArgsBuilder::default()
                             .label("Revert")
-                            .on_click(Arc::new(move || {
+                            .on_click(move || {
                                 selected_label.set("Revert".to_string());
-                            }))
+                            })
                             .build()
                             .expect("builder construction failed"),
                     );
@@ -155,9 +153,9 @@ pub fn menus_showcase() {
                     menu_scope.menu_item(
                         MenuItemArgsBuilder::default()
                             .label("Settings")
-                            .on_click(Arc::new(move || {
+                            .on_click(move || {
                                 selected_label.set("Settings".to_string());
-                            }))
+                            })
                             .build()
                             .expect("builder construction failed"),
                     );
@@ -166,7 +164,7 @@ pub fn menus_showcase() {
                         MenuItemArgsBuilder::default()
                             .label("Send Feedback")
                             .selected(pinned.get())
-                            .on_click(Arc::new(move || {
+                            .on_click(move || {
                                 let flag = pinned.with_mut(|p| {
                                     *p = !*p;
                                     *p
@@ -176,7 +174,7 @@ pub fn menus_showcase() {
                                 } else {
                                     "Unpinned".to_string()
                                 });
-                            }))
+                            })
                             .build()
                             .expect("builder construction failed"),
                     );

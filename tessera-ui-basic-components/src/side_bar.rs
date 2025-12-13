@@ -42,6 +42,7 @@ pub struct SideBarProviderArgs {
     ///
     /// This can be triggered by clicking the scrim or pressing the `Escape`
     /// key. The callback is expected to close the side bar.
+    #[builder(setter(custom))]
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
     /// The visual style used by the provider. See [`SideBarStyle`].
     #[builder(default)]
@@ -49,6 +50,26 @@ pub struct SideBarProviderArgs {
     /// Whether the side bar is initially open (for declarative usage).
     #[builder(default = "false")]
     pub is_open: bool,
+}
+
+impl SideBarProviderArgsBuilder {
+    /// Set the close-request callback.
+    pub fn on_close_request<F>(&mut self, on_close_request: F) -> &mut Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_close_request = Some(Arc::new(on_close_request));
+        self
+    }
+
+    /// Set the close-request callback using a shared callback.
+    pub fn on_close_request_shared(
+        &mut self,
+        on_close_request: Arc<dyn Fn() + Send + Sync>,
+    ) -> &mut Self {
+        self.on_close_request = Some(on_close_request);
+        self
+    }
 }
 
 /// Controller for [`side_bar_provider`], managing open/closed state.
@@ -194,7 +215,7 @@ fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) 
     let blur_radius = blur_radius_for(progress, is_open, max_blur_radius);
     fluid_glass(
         FluidGlassArgsBuilder::default()
-            .on_click(args.on_close_request.clone())
+            .on_click_shared(args.on_close_request.clone())
             .tint_color(Color::TRANSPARENT)
             .width(DimensionValue::Fill {
                 min: None,
@@ -228,7 +249,7 @@ fn render_material_scrim(args: &SideBarProviderArgs, progress: f32, is_open: boo
     surface(
         SurfaceArgsBuilder::default()
             .style(Color::BLACK.with_alpha(scrim_alpha).into())
-            .on_click(args.on_close_request.clone())
+            .on_click_shared(args.on_close_request.clone())
             .width(DimensionValue::Fill {
                 min: None,
                 max: None,
@@ -319,7 +340,7 @@ fn place_side_bar_if_present(
 /// side_bar_provider(
 ///     SideBarProviderArgsBuilder::default()
 ///         .is_open(true)
-///         .on_close_request(std::sync::Arc::new(|| {}))
+///         .on_close_request(|| {})
 ///         .build()
 ///         .unwrap(),
 ///     || { /* main content */ },
@@ -369,7 +390,6 @@ pub fn side_bar_provider(
 /// # Examples
 ///
 /// ```
-/// use std::sync::Arc;
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::side_bar::{
 ///     SideBarController, SideBarProviderArgsBuilder, side_bar_provider_with_controller,
@@ -380,7 +400,7 @@ pub fn side_bar_provider(
 ///     let controller = remember(|| SideBarController::new(false));
 ///     side_bar_provider_with_controller(
 ///         SideBarProviderArgsBuilder::default()
-///             .on_close_request(Arc::new(|| {}))
+///             .on_close_request(|| {})
 ///             .build()
 ///             .unwrap(),
 ///         controller.clone(),

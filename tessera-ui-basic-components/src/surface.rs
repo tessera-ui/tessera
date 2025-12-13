@@ -101,7 +101,7 @@ pub struct SurfaceArgs {
     /// * Cursor changes to pointer when hovered
     /// * Press / release events are captured
     /// * Ripple animation starts on press
-    #[builder(default, setter(strip_option))]
+    #[builder(default, setter(custom, strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Color of the ripple effect (used when interactive).
     #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface.with_alpha(0.12)")]
@@ -123,6 +123,23 @@ pub struct SurfaceArgs {
     /// Whether this surface should be focusable even when not interactive.
     #[builder(default)]
     pub accessibility_focusable: bool,
+}
+
+impl SurfaceArgsBuilder {
+    /// Set the click handler.
+    pub fn on_click<F>(mut self, on_click: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_click = Some(Some(Arc::new(on_click)));
+        self
+    }
+
+    /// Set the click handler using a shared callback.
+    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.on_click = Some(Some(on_click));
+        self
+    }
 }
 
 impl Default for SurfaceArgs {
@@ -428,7 +445,6 @@ fn compute_surface_size(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::{
 ///     surface::{SurfaceArgsBuilder, surface},
@@ -438,7 +454,7 @@ fn compute_surface_size(
 /// surface(
 ///     SurfaceArgsBuilder::default()
 ///         .padding(Dp(16.0))
-///         .on_click(Arc::new(|| println!("Surface was clicked!")))
+///         .on_click(|| println!("Surface was clicked!"))
 ///         .build()
 ///         .unwrap(),
 ///     || {

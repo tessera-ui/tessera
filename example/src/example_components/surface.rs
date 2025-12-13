@@ -152,9 +152,9 @@ fn test_content(state: State<ExampleSurfaceState>) {
                                         bottom_right: RoundedCorner::manual(corner_radius, 3.0),
                                     })
                                     .style(style)
-                                    .on_click(Arc::new(|| {
+                                    .on_click(|| {
                                         println!("Surface clicked");
-                                    }))
+                                    })
                                     .build()
                                     .unwrap(),
                                 || {},
