@@ -525,19 +525,16 @@ impl BasicDialogArgsBuilder {
 /// # Examples
 ///
 /// ```
-/// use std::sync::Arc;
-/// use tessera_ui_basic_components::button::{ButtonArgsBuilder, button};
+/// use tessera_ui_basic_components::button::{ButtonArgs, button};
 /// use tessera_ui_basic_components::dialog::{BasicDialogArgsBuilder, basic_dialog};
-/// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
+/// use tessera_ui_basic_components::text::text;
 ///
 /// basic_dialog(
 ///     BasicDialogArgsBuilder::default()
 ///         .headline("Dialog Title")
 ///         .supporting_text("This is the dialog body text.")
 ///         .confirm_button(|| {
-///             button(ButtonArgsBuilder::default().build().unwrap(), || {
-///                 text("Confirm")
-///             });
+///             button(ButtonArgs::filled(|| {}), || text("Confirm"));
 ///         })
 ///         .build()
 ///         .unwrap(),

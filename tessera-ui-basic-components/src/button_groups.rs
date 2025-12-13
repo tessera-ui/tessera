@@ -4,17 +4,9 @@
 //!
 //! Used for grouping related actions.
 
-use std::{
-    collections::HashMap,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Instant,
-};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use derive_builder::Builder;
-use parking_lot::RwLock;
 use tessera_ui::{Color, ComputedData, Dp, Px, PxPosition, remember, tessera, use_context};
 
 use crate::{
@@ -193,16 +185,22 @@ impl ButtonGroupsLayout {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 struct ButtonItemState {
-    actived: Arc<AtomicBool>,
-    elastic_state: Arc<RwLock<ElasticState>>,
+    actived: bool,
+    elastic_state: ElasticState,
 }
 
 /// Internal state of a button group.
-#[derive(Default, Clone)]
+#[derive(Default)]
 struct ButtonGroupsState {
     item_states: HashMap<usize, ButtonItemState>,
+}
+
+impl ButtonGroupsState {
+    fn item_state_mut(&mut self, index: usize) -> &mut ButtonItemState {
+        self.item_states.entry(index).or_default()
+    }
 }
 
 /// # button_groups
@@ -300,42 +298,44 @@ where
         move |scope| {
             for (index, child_closure) in child_closures.into_iter().enumerate() {
                 let on_click_closure = on_click_closures[index].clone();
-                let item_state =
-                    state.with_mut(|s| s.item_states.entry(index).or_default().clone());
 
                 scope.child(move || {
-                    let actived = item_state.actived.load(Ordering::Acquire);
-                    let elastic_state = item_state.elastic_state.clone();
+                    let actived =
+                        state.with(|s| s.item_states.get(&index).is_some_and(|item| item.actived));
                     if actived {
-                        let mut button_args = ButtonArgs::filled(Arc::new(move || {
+                        let mut button_args = ButtonArgs::filled(move || {
                             on_click_closure(false);
-                            item_state.actived.store(false, Ordering::Release);
-                            item_state.elastic_state.write().toggle();
-                        }));
+                            state.with_mut(|s| {
+                                let item = s.item_state_mut(index);
+                                item.actived = false;
+                                item.elastic_state.toggle();
+                            });
+                        });
                         button_args.shape = layout.active_button_shape;
                         let scheme = use_context::<MaterialColorScheme>().get();
                         button(button_args, || {
-                            elastic_container(elastic_state, move || {
+                            elastic_container(state, index, move || {
                                 child_closure(scheme.on_primary)
                             })
                         });
                     } else {
-                        let mut button_args = ButtonArgs::filled(Arc::new(move || {
+                        let mut button_args = ButtonArgs::filled(move || {
                             on_click_closure(true);
-                            if selection_mode == ButtonGroupsSelectionMode::Single {
-                                // Deactivate all other buttons if in single selection mode
-                                for item in state
-                                    .with(|s| s.item_states.values().cloned().collect::<Vec<_>>())
-                                {
-                                    if item.actived.load(Ordering::Acquire) {
-                                        item.actived.store(false, Ordering::Release);
-                                        item.elastic_state.write().toggle();
+                            state.with_mut(|s| {
+                                if selection_mode == ButtonGroupsSelectionMode::Single {
+                                    for (other_index, item) in s.item_states.iter_mut() {
+                                        if *other_index != index && item.actived {
+                                            item.actived = false;
+                                            item.elastic_state.toggle();
+                                        }
                                     }
                                 }
-                            }
-                            item_state.actived.store(true, Ordering::Release);
-                            item_state.elastic_state.write().toggle();
-                        }));
+
+                                let item = s.item_state_mut(index);
+                                item.actived = true;
+                                item.elastic_state.toggle();
+                            });
+                        });
                         let scheme = use_context::<MaterialColorScheme>().get();
                         button_args.color = scheme.secondary_container;
                         if index == 0 {
@@ -348,7 +348,7 @@ where
 
                         let scheme = use_context::<MaterialColorScheme>().get();
                         button(button_args, move || {
-                            elastic_container(elastic_state, move || {
+                            elastic_container(state, index, move || {
                                 child_closure(scheme.on_secondary_container)
                             })
                         });
@@ -416,9 +416,13 @@ impl ElasticState {
 }
 
 #[tessera]
-fn elastic_container(state: Arc<RwLock<ElasticState>>, child: impl FnOnce()) {
+fn elastic_container(
+    state: tessera_ui::State<ButtonGroupsState>,
+    index: usize,
+    child: impl FnOnce(),
+) {
     child();
-    let progress = state.write().update();
+    let progress = state.with_mut(|s| s.item_state_mut(index).elastic_state.update());
     measure(Box::new(move |input| {
         let child_id = input.children_ids[0];
         let child_size = input.measure_child(child_id, input.parent_constraint)?;

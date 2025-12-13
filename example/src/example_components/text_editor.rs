@@ -64,7 +64,6 @@ fn test_content() {
 
             scope.child(|| spacer(Dp(10.0)));
 
-            let editor_state = editor_state;
             scope.child(move || {
                 text_editor_with_controller(
                     TextEditorArgsBuilder::default()

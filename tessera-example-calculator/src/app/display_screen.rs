@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use tessera_ui::{Color, Dp, tessera};
+use tessera_ui::{Color, Dp, State, tessera};
 use tessera_ui_basic_components::{
     alignment::MainAxisAlignment,
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
@@ -13,7 +11,7 @@ use tessera_ui_basic_components::{
 use crate::{CalStyle, app::AppState, cal::evaluate};
 
 #[tessera]
-pub fn display_screen(app_state: Arc<AppState>, style: CalStyle) {
+pub fn display_screen(app_state: State<AppState>, style: CalStyle) {
     // Outer transparent container with padding; delegate inner rendering to small
     // helpers
     surface(
@@ -23,15 +21,15 @@ pub fn display_screen(app_state: Arc<AppState>, style: CalStyle) {
             .build()
             .unwrap(),
         || match style {
-            CalStyle::Glass => render_glass_display(app_state.clone()),
-            CalStyle::Material => render_material_display(app_state.clone()),
+            CalStyle::Glass => render_glass_display(app_state),
+            CalStyle::Material => render_material_display(app_state),
         },
     );
 }
 
 /// Render display when using glass style. Extracted to keep `display_screen`
 /// short.
-fn render_glass_display(app_state: Arc<AppState>) {
+fn render_glass_display(app_state: State<AppState>) {
     fluid_glass(
         FluidGlassArgsBuilder::default()
             .padding(Dp(10.0))
@@ -40,14 +38,14 @@ fn render_glass_display(app_state: Arc<AppState>) {
             .build()
             .unwrap(),
         || {
-            content(app_state.clone());
+            content(app_state);
         },
     );
 }
 
 /// Render display when using material style. Extracted to keep `display_screen`
 /// short.
-fn render_material_display(app_state: Arc<AppState>) {
+fn render_material_display(app_state: State<AppState>) {
     surface(
         SurfaceArgsBuilder::default()
             .padding(Dp(10.0))
@@ -61,13 +59,13 @@ fn render_material_display(app_state: Arc<AppState>) {
             .build()
             .unwrap(),
         move || {
-            content(app_state.clone());
+            content(app_state);
         },
     );
 }
 
 #[tessera]
-fn content(app_state: Arc<AppState>) {
+fn content(app_state: State<AppState>) {
     row(
         RowArgsBuilder::default()
             .width(tessera_ui::DimensionValue::FILLED)
@@ -77,13 +75,12 @@ fn content(app_state: Arc<AppState>) {
             .unwrap(),
         |scope| {
             scope.child(move || {
-                let expr = app_state.expr.read();
+                let expr = app_state.with(|s| s.expr.clone());
 
                 let content = if expr.is_empty() {
                     String::new()
-                } else if let Ok(result) = evaluate(&expr, &mut app_state.interpreter.write()) {
-                    app_state.result.write().clone_from(&result);
-                    format!("{expr} = {:.2}", app_state.result.read())
+                } else if let Ok(result) = evaluate(&expr, &mut rsc::Interpreter::new()) {
+                    format!("{expr} = {:.2}", result)
                 } else {
                     format!("{expr}")
                 };

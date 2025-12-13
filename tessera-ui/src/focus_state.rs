@@ -2,23 +2,6 @@
 //!
 //! This module provides focus state management for the Tessera UI framework.
 //!
-//! ## Overview
-//!
-//! Focus is a common requirement in UI frameworks. As a functional UI
-//! framework, `tessera` lacks a stable method for locating specific components
-//! by reference. Treating focus as an independent, shared state aligns better
-//! with `tessera`'s design philosophy and provides greater flexibility.
-//!
-//! ## Design Philosophy
-//!
-//! The focus system is designed around the following principles:
-//! - **Decentralized**: Each component can create its own [`Focus`] instance
-//! - **Thread-safe**: Focus state is managed using atomic operations and locks
-//! - **Automatic cleanup**: Focus is automatically cleared when a [`Focus`]
-//!   instance is dropped
-//! - **Unique identification**: Each focus instance has a unique UUID to
-//!   prevent conflicts
-//!
 //! ## Usage
 //!
 //! ```

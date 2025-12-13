@@ -2,8 +2,7 @@ mod display_screen;
 mod keyboard;
 pub mod pipelines;
 
-use parking_lot::RwLock;
-use tessera_ui::{shard, tessera};
+use tessera_ui::{remember, shard, tessera};
 use tessera_ui_basic_components::column::{ColumnArgsBuilder, column};
 
 use crate::CalStyle;
@@ -13,24 +12,21 @@ use keyboard::keyboard;
 use pipelines::background::background;
 
 struct AppState {
-    expr: RwLock<String>,
-    result: RwLock<f64>,
-    interpreter: RwLock<rsc::Interpreter<f64>>,
+    expr: String,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         AppState {
-            expr: String::from("1 + 1").into(),
-            result: 0.0.into(),
-            interpreter: rsc::Interpreter::new().into(),
+            expr: String::from("1 + 1"),
         }
     }
 }
 
 #[tessera]
 #[shard]
-pub fn app(#[state] state: AppState, style: CalStyle) {
+pub fn app(style: CalStyle) {
+    let state = remember(AppState::default);
     background(
         || {
             column(
@@ -40,15 +36,11 @@ pub fn app(#[state] state: AppState, style: CalStyle) {
                     .build()
                     .unwrap(),
                 |scope| {
-                    scope.child({
-                        let state = state.clone();
-                        move || {
-                            display_screen(state, style);
-                        }
+                    scope.child(move || {
+                        display_screen(state, style);
                     });
                     scope.child_weighted(
                         {
-                            let state = state.clone();
                             move || {
                                 keyboard(state, style);
                             }

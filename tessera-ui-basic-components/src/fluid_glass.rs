@@ -254,7 +254,7 @@ fn handle_click_state(
                     pos.x.to_f32() / size.width.to_f32(),
                     pos.y.to_f32() / size.height.to_f32(),
                 ];
-                ripple_state.with(|s| s.start_animation(normalized_pos));
+                ripple_state.with_mut(|s| s.start_animation(normalized_pos));
             }
             on_click();
         }
@@ -364,7 +364,7 @@ pub fn fluid_glass(mut args: FluidGlassArgs, child: impl FnOnce()) {
 
     if let Some((progress, center)) = ripple_state
         .as_ref()
-        .and_then(|state| state.with(|s| s.get_animation_progress()))
+        .and_then(|state| state.with_mut(|s| s.get_animation_progress()))
     {
         args.ripple_center = Some(center);
         args.ripple_radius = Some(progress);

@@ -87,7 +87,6 @@ fn test_content() {
                 spacer(Dp(20.0));
             });
             scope.child(move || {
-                let image_data = image_data;
                 boxed(
                     BoxedArgsBuilder::default()
                         .alignment(Alignment::Center)

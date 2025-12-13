@@ -1,7 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, shard, tessera, use_context};
+use tessera_ui::{DimensionValue, Dp, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     button::{ButtonArgs, button},
@@ -24,7 +24,6 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
 
 #[derive(Clone)]
 struct ButtonShowcaseState {
-    counter: Arc<Mutex<i32>>,
     icon_data: Arc<ImageVectorData>,
 }
 
@@ -35,10 +34,7 @@ impl ButtonShowcaseState {
                 .expect("Failed to load icon SVG"),
         );
 
-        Self {
-            counter: Default::default(),
-            icon_data,
-        }
+        Self { icon_data }
     }
 }
 
@@ -51,6 +47,7 @@ impl Default for ButtonShowcaseState {
 #[tessera]
 #[shard]
 pub fn button_showcase(#[state] state: ButtonShowcaseState) {
+    let counter = remember(|| 0i32);
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
@@ -112,11 +109,9 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                     .surface_variant,
                                             )
                                             .on_click(closure!(
-                                                clone state.counter,
+                                                clone counter,
                                                 || {
-                                                    let mut count =
-                                                        counter.lock().unwrap();
-                                                    *count += 1;
+                                                    counter.with_mut(|count| *count += 1);
                                                     println!("Icon button clicked!");
                                                 }
                                             ))
@@ -150,9 +145,9 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                         row(RowArgsBuilder::default().build().unwrap(), |scope| {
                                             scope.child(|| {
                                                 button(
-                                                    ButtonArgs::filled(Arc::new(|| {
+                                                    ButtonArgs::filled(|| {
                                                         println!("Filled clicked")
-                                                    })),
+                                                    }),
                                                     || {
                                                         text(
                                                             TextArgsBuilder::default()
@@ -182,9 +177,9 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
 
                                             scope.child(|| {
                                                 button(
-                                                    ButtonArgs::elevated(Arc::new(|| {
+                                                    ButtonArgs::elevated(|| {
                                                         println!("Elevated clicked")
-                                                    })),
+                                                    }),
                                                     || {
                                                         text(
                                                             TextArgsBuilder::default()
@@ -214,9 +209,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
 
                                             scope.child(|| {
                                                 button(
-                                                    ButtonArgs::tonal(Arc::new(|| {
-                                                        println!("Tonal clicked")
-                                                    })),
+                                                    ButtonArgs::tonal(|| println!("Tonal clicked")),
                                                     || {
                                                         text(
                                                             TextArgsBuilder::default()
@@ -253,9 +246,9 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                             move |scope| {
                                                 scope.child(closure!(|| {
                                                     button(
-                                                        ButtonArgs::outlined(Arc::new(|| {
+                                                        ButtonArgs::outlined(|| {
                                                             println!("Outlined clicked")
-                                                        })),
+                                                        }),
                                                         || {
                                                             text(
                                                                 TextArgsBuilder::default()
@@ -285,9 +278,9 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
 
                                                 scope.child(closure!(|| {
                                                     button(
-                                                        ButtonArgs::text(Arc::new(|| {
+                                                        ButtonArgs::text(|| {
                                                             println!("Text clicked")
-                                                        })),
+                                                        }),
                                                         || {
                                                             text(
                                                                 TextArgsBuilder::default()

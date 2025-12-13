@@ -138,7 +138,7 @@ fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<State<RippleState
         return RippleProps::default();
     };
 
-    if let Some((progress, click_pos)) = ripple_state.with(|s| s.get_animation_progress()) {
+    if let Some((progress, click_pos)) = ripple_state.with_mut(|s| s.get_animation_progress()) {
         let radius = progress;
         let alpha = (1.0 - progress) * 0.3;
         return RippleProps {
@@ -331,7 +331,7 @@ fn try_build_simple_rect_command(
         return None;
     }
     if ripple_state
-        .and_then(|state| state.with(|s| s.get_animation_progress()))
+        .and_then(|state| state.with_mut(|s| s.get_animation_progress()))
         .is_some()
     {
         return None;
@@ -472,7 +472,6 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
         },
     );
     let ripple_state = args.on_click.as_ref().map(|_| remember(RippleState::new));
-    let ripple_state_for_measure = ripple_state;
     let args_measure_clone = args.clone();
     let args_for_handler = args.clone();
 
@@ -522,7 +521,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             }
         };
 
-        let is_hovered = ripple_state_for_measure
+        let is_hovered = ripple_state
             .as_ref()
             .map(|state| state.with(|s| s.is_hovered()))
             .unwrap_or(false);
@@ -537,17 +536,15 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
         let (width, height) =
             compute_surface_size(effective_surface_constraint, child_measurement, padding_px);
 
-        if let Some(simple) = try_build_simple_rect_command(
-            &args_measure_clone,
-            effective_style,
-            ripple_state_for_measure,
-        ) {
+        if let Some(simple) =
+            try_build_simple_rect_command(&args_measure_clone, effective_style, ripple_state)
+        {
             input.metadata_mut().push_draw_command(simple);
         } else {
             let drawable = make_surface_drawable(
                 &args_measure_clone,
                 effective_style,
-                ripple_state_for_measure,
+                ripple_state,
                 PxSize::new(width, height),
             );
 
@@ -559,7 +556,6 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
 
     if args.on_click.is_some() {
         let args_for_handler = args.clone();
-        let state_for_handler = ripple_state;
         input_handler(Box::new(move |mut input| {
             // Apply accessibility metadata first
             apply_surface_accessibility(
@@ -576,8 +572,8 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
 
-            if let Some(ref state) = state_for_handler {
-                state.with(|s| s.set_hovered(is_cursor_in_surface));
+            if let Some(ref state) = ripple_state {
+                state.with_mut(|s| s.set_hovered(is_cursor_in_surface));
             }
 
             if is_cursor_in_surface && args_for_handler.on_click.is_some() {
@@ -610,12 +606,12 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
 
                 if !press_events.is_empty()
                     && let Some(cursor_pos) = cursor_pos_option
-                    && let Some(state) = state_for_handler.as_ref()
+                    && let Some(state) = ripple_state.as_ref()
                 {
                     let normalized_x = (cursor_pos.x.to_f32() / size.width.to_f32()) - 0.5;
                     let normalized_y = (cursor_pos.y.to_f32() / size.height.to_f32()) - 0.5;
 
-                    state.with(|s| s.start_animation([normalized_x, normalized_y]));
+                    state.with_mut(|s| s.start_animation([normalized_x, normalized_y]));
                 }
 
                 if !release_events.is_empty()

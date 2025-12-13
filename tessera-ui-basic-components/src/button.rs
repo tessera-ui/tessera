@@ -95,19 +95,12 @@ impl Default for ButtonArgs {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
-/// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
-///     button::{ButtonArgsBuilder, button},
+///     button::{ButtonArgs, button},
 ///     text::{TextArgsBuilder, text},
 /// };
 ///
-/// let args = ButtonArgsBuilder::default()
-///     .on_click(Arc::new(|| {}))
-///     .build()
-///     .unwrap();
-///
-/// button(args, || {
+/// button(ButtonArgs::filled(|| {}), || {
 ///     text(
 ///         TextArgsBuilder::default()
 ///             .text("Click Me".to_string())
@@ -191,27 +184,27 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
 impl ButtonArgs {
     /// Create a standard "Filled" button (High emphasis).
     /// Uses Primary color for container and OnPrimary for content.
-    pub fn filled(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn filled(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         let scheme = use_context::<MaterialColorScheme>().get();
         ButtonArgsBuilder::default()
             .color(scheme.primary)
             .hover_color(Some(scheme.primary.blend_over(scheme.on_primary, 0.08)))
             .ripple_color(scheme.on_primary.with_alpha(0.12))
-            .on_click(on_click)
+            .on_click(Arc::new(on_click))
             .build()
             .expect("ButtonArgsBuilder failed for filled button")
     }
 
     /// Create an "Elevated" button (Medium emphasis).
     /// Uses Surface color (or SurfaceContainerLow if available) with a shadow.
-    pub fn elevated(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn elevated(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         let scheme = use_context::<MaterialColorScheme>().get();
         ButtonArgsBuilder::default()
             .color(scheme.surface)
             .hover_color(Some(scheme.surface.blend_over(scheme.primary, 0.08)))
             .ripple_color(scheme.primary.with_alpha(0.12))
             .shadow(ShadowProps::default())
-            .on_click(on_click)
+            .on_click(Arc::new(on_click))
             .build()
             .expect("ButtonArgsBuilder failed for elevated button")
     }
@@ -219,7 +212,7 @@ impl ButtonArgs {
     /// Create a "Tonal" button (Medium emphasis).
     /// Uses SecondaryContainer color for container and OnSecondaryContainer for
     /// content.
-    pub fn tonal(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn tonal(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         let scheme = use_context::<MaterialColorScheme>().get();
         ButtonArgsBuilder::default()
             .color(scheme.secondary_container)
@@ -229,14 +222,14 @@ impl ButtonArgs {
                     .blend_over(scheme.on_secondary_container, 0.08),
             ))
             .ripple_color(scheme.on_secondary_container.with_alpha(0.12))
-            .on_click(on_click)
+            .on_click(Arc::new(on_click))
             .build()
             .expect("ButtonArgsBuilder failed for tonal button")
     }
 
     /// Create an "Outlined" button (Medium emphasis).
     /// Transparent container with an Outline border.
-    pub fn outlined(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn outlined(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         let scheme = use_context::<MaterialColorScheme>().get();
         ButtonArgsBuilder::default()
             .color(Color::TRANSPARENT)
@@ -244,20 +237,20 @@ impl ButtonArgs {
             .ripple_color(scheme.primary.with_alpha(0.12))
             .border_width(Dp(1.0))
             .border_color(Some(scheme.outline))
-            .on_click(on_click)
+            .on_click(Arc::new(on_click))
             .build()
             .expect("ButtonArgsBuilder failed for outlined button")
     }
 
     /// Create a "Text" button (Low emphasis).
     /// Transparent container and no border.
-    pub fn text(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn text(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         let scheme = use_context::<MaterialColorScheme>().get();
         ButtonArgsBuilder::default()
             .color(Color::TRANSPARENT)
             .hover_color(Some(Color::TRANSPARENT.blend_over(scheme.primary, 0.08)))
             .ripple_color(scheme.primary.with_alpha(0.12))
-            .on_click(on_click)
+            .on_click(Arc::new(on_click))
             .build()
             .expect("ButtonArgsBuilder failed for text button")
     }

@@ -175,7 +175,6 @@ where
     }
 
     let n = child_closures.len();
-    let child_alignments = child_alignments;
 
     // Measurement closure: measure all present children and compute container size.
     measure(Box::new(move |input| {

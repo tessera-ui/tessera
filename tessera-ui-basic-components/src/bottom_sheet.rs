@@ -658,7 +658,6 @@ pub fn bottom_sheet_provider_with_controller(
         args.on_close_request.clone(),
     );
 
-    let controller_for_measure = controller;
     let measure_closure = Box::new(move |input: &tessera_ui::MeasureInput<'_>| {
         let main_content_id = input.children_ids[0];
         let main_content_size = input.measure_child(main_content_id, input.parent_constraint)?;
@@ -670,7 +669,7 @@ pub fn bottom_sheet_provider_with_controller(
             input.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
         }
 
-        place_bottom_sheet_if_present(input, controller_for_measure, progress);
+        place_bottom_sheet_if_present(input, controller, progress);
 
         // Return main content size to satisfy closure type.
         Ok(main_content_size)

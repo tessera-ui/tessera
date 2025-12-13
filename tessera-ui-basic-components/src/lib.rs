@@ -30,14 +30,13 @@
 //! # use tessera_ui::tessera;
 //! # #[tessera]
 //! # fn component() {
-//! use parking_lot::RwLock;
 //! use std::sync::Arc;
 //!
 //! use tessera_ui::Dp;
 //! use tessera_ui_basic_components::{
 //!     button::{ButtonArgs, button},
 //!     text::text,
-//!     text_editor::{TextEditorArgs, TextEditorController, text_editor},
+//!     text_editor::{TextEditorArgs, text_editor},
 //! };
 //!
 //! // Button example

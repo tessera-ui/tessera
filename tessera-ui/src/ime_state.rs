@@ -20,13 +20,7 @@ pub const KEEP_EVENTS_COUNT: usize = 10;
 /// events when the queue becomes too large, ensuring consistent performance
 /// even during intensive text input sessions.
 ///
-/// ## Thread Safety
-///
-/// This struct is not thread-safe by itself. If you need to share IME state
-/// across threads, wrap it in appropriate synchronization primitives like
-/// `Arc<Mutex<ImeState>>`.
-///
-/// ## Memory Management
+/// ## Memory Limitation
 ///
 /// The internal queue automatically maintains a maximum size of
 /// [`KEEP_EVENTS_COUNT`] events. When new events are added beyond this limit,

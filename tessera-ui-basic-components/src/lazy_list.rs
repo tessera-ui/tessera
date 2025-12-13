@@ -11,7 +11,6 @@ use std::{
 };
 
 use derive_builder::Builder;
-use parking_lot::RwLock;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, Px, PxPosition, State,
     key, remember, tessera,
@@ -25,9 +24,8 @@ use crate::{
 const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 
 /// Persistent state shared by lazy list components.
-#[derive(Clone)]
 pub struct LazyListController {
-    cache: Arc<RwLock<LazyListCache>>,
+    cache: LazyListCache,
 }
 
 impl Default for LazyListController {
@@ -40,12 +38,8 @@ impl LazyListController {
     /// Creates a new lazy list state with default scroll offsets and caches.
     pub fn new() -> Self {
         Self {
-            cache: Arc::new(RwLock::new(LazyListCache::default())),
+            cache: LazyListCache::default(),
         }
-    }
-
-    fn cache(&self) -> Arc<RwLock<LazyListCache>> {
-        self.cache.clone()
     }
 }
 
@@ -544,11 +538,7 @@ fn lazy_list_view(
     let plan = LazySlotPlan::new(slots);
     let total_count = plan.total_count();
 
-    let cache = controller.with(|c| c.cache());
-    {
-        let mut guard = cache.write();
-        guard.set_item_count(total_count);
-    }
+    controller.with_mut(|c| c.cache.set_item_count(total_count));
 
     let scroll_offset = view_args
         .axis
@@ -563,11 +553,10 @@ fn lazy_list_view(
     );
     let viewport_span = (viewport_span - (padding_main * 2)).max(Px::ZERO);
 
-    let visible_children = {
-        let cache_guard = cache.read();
+    let visible_children = controller.with(|c| {
         compute_visible_children(
             &plan,
-            &cache_guard,
+            &c.cache,
             total_count,
             scroll_offset,
             viewport_span,
@@ -575,14 +564,13 @@ fn lazy_list_view(
             view_args.estimated_item_main,
             view_args.item_spacing,
         )
-    };
+    });
 
     if visible_children.is_empty() {
         measure(Box::new(move |_| Ok(ComputedData::ZERO)));
         return;
     }
 
-    let cache_for_measure = cache.clone();
     let viewport_limit = viewport_span + padding_main + padding_main;
     let child_constraint_axis = view_args.axis;
     let estimated_item_main = view_args.estimated_item_main;
@@ -602,17 +590,17 @@ fn lazy_list_view(
             let mut child_constraint =
                 child_constraint_axis.child_constraint(input.parent_constraint);
             apply_cross_padding(&mut child_constraint, child_constraint_axis, padding_cross);
-            let mut placements = Vec::with_capacity(visible_plan.len());
-            let mut max_cross = Px::ZERO;
-            {
-                let mut cache_guard = cache_for_measure.write();
+            let (placements, inner_cross, total_main) = controller.with_mut(|c| {
+                let mut placements = Vec::with_capacity(visible_plan.len());
+                let mut max_cross = Px::ZERO;
 
                 for (visible, child_id) in visible_plan.iter().zip(input.children_ids.iter()) {
                     let item_offset =
-                        cache_guard.offset_for(visible.item_index, estimated_item_main, spacing);
+                        c.cache
+                            .offset_for(visible.item_index, estimated_item_main, spacing);
                     let child_size = input.measure_child(*child_id, &child_constraint)?;
 
-                    cache_guard.record_measurement(
+                    c.cache.record_measurement(
                         visible.item_index,
                         child_constraint_axis.main(&child_size),
                         estimated_item_main,
@@ -625,13 +613,11 @@ fn lazy_list_view(
                         size: child_size,
                     });
                 }
-            }
 
-            let total_main = cache_for_measure
-                .read()
-                .total_main_size(estimated_item_main, spacing);
+                let total_main = c.cache.total_main_size(estimated_item_main, spacing);
+                Ok::<_, MeasurementError>((placements, max_cross, total_main))
+            })?;
 
-            let inner_cross = max_cross;
             let total_main_with_padding = total_main + padding_main + padding_main;
             let cross_with_padding = inner_cross + padding_cross + padding_cross;
             let size = child_constraint_axis.pack_size(total_main_with_padding, cross_with_padding);

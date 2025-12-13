@@ -27,7 +27,6 @@ use glyphon::{
     Cursor, Edit,
     cosmic_text::{self, Selection},
 };
-use parking_lot::RwLock;
 use tessera_ui::{
     Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, State, focus_state::Focus,
     tessera, winit,
@@ -81,7 +80,7 @@ pub enum ClickType {
 /// This struct manages the text buffer, selection, cursor position, focus, and
 /// user interaction state. It is designed to be shared between UI components
 /// via a `TextEditorController`.
-pub struct TextEditorControllerInner {
+pub struct TextEditorController {
     line_height: Px,
     pub(crate) editor: glyphon::Editor<'static>,
     blink_timer: Instant,
@@ -97,33 +96,7 @@ pub struct TextEditorControllerInner {
     pub(crate) preedit_string: Option<String>,
 }
 
-/// Thin handle wrapping an internal `RwLock<TextEditorController>` and exposing
-/// `read()`/`write()`.
-pub struct TextEditorController {
-    inner: RwLock<TextEditorControllerInner>,
-}
-
 impl TextEditorController {
-    /// Creates a new text editor state with the given font size and optional
-    /// line height.
-    pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
-        Self {
-            inner: RwLock::new(TextEditorControllerInner::new(size, line_height)),
-        }
-    }
-
-    /// Returns a read guard for inspecting the underlying editor state.
-    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, TextEditorControllerInner> {
-        self.inner.read()
-    }
-
-    /// Returns a write guard for mutating the underlying editor state.
-    pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, TextEditorControllerInner> {
-        self.inner.write()
-    }
-}
-
-impl TextEditorControllerInner {
     /// Creates a new `TextEditorController` with the given font size and
     /// optional line height.
     ///
@@ -525,10 +498,9 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
 ///
 /// # Arguments
 ///
-/// * `state` - Shared state for the text editor, typically wrapped in
-///   `Arc<RwLock<...>>`.
+/// * `controller` - Shared controller for the text editor.
 #[tessera]
-pub fn text_edit_core(state: State<TextEditorController>) {
+pub fn text_edit_core(controller: State<TextEditorController>) {
     // text rendering with constraints from parent container
     {
         measure(Box::new(move |input| {
@@ -550,8 +522,8 @@ pub fn text_edit_core(state: State<TextEditorController>) {
                 DimensionValue::Fill { max, .. } => max,
             };
 
-            let text_data = state.with(|c| {
-                c.write().text_data(TextConstraint {
+            let text_data = controller.with_mut(|c| {
+                c.text_data(TextConstraint {
                     max_width: max_width_pixels.map(|px| px.to_f32()),
                     max_height: max_height_pixels.map(|px| px.to_f32()),
                 })
@@ -559,7 +531,7 @@ pub fn text_edit_core(state: State<TextEditorController>) {
 
             // Simplified selection rectangle computation using helper functions to reduce
             // complexity.
-            let mut selection_rects = state.with(|c| compute_selection_rects(c.read().editor()));
+            let mut selection_rects = controller.with(|c| compute_selection_rects(c.editor()));
 
             // Record length before moving (used to place cursor node after rects)
             let selection_rects_len = selection_rects.len();
@@ -576,10 +548,10 @@ pub fn text_edit_core(state: State<TextEditorController>) {
             let visible_x1 = max_width_pixels.unwrap_or(Px(i32::MAX));
             let visible_y1 = max_height_pixels.unwrap_or(Px(i32::MAX));
             selection_rects = clip_and_take_visible(selection_rects, visible_x1, visible_y1);
-            state.with(|c| c.write().current_selection_rects = selection_rects.clone());
+            controller.with_mut(|c| c.current_selection_rects = selection_rects.clone());
 
             // Handle cursor positioning (cursor comes after selection rects)
-            if let Some(cursor_pos_raw) = state.with(|c| c.read().editor().cursor_position()) {
+            if let Some(cursor_pos_raw) = controller.with(|c| c.editor().cursor_position()) {
                 let cursor_pos = PxPosition::new(Px(cursor_pos_raw.0), Px(cursor_pos_raw.1));
                 let cursor_node_index = selection_rects_len;
                 if let Some(cursor_node_id) = input.children_ids.get(cursor_node_index).copied() {
@@ -609,10 +581,8 @@ pub fn text_edit_core(state: State<TextEditorController>) {
 
     // Selection highlighting
     {
-        let (rect_definitions, color_for_selection) = state.with(|c| {
-            let guard = c.read();
-            (guard.current_selection_rects.clone(), guard.selection_color)
-        });
+        let (rect_definitions, color_for_selection) =
+            controller.with(|c| (c.current_selection_rects.clone(), c.selection_color));
 
         for def in rect_definitions {
             selection_highlight_rect(def.width, def.height, color_for_selection);
@@ -620,11 +590,8 @@ pub fn text_edit_core(state: State<TextEditorController>) {
     }
 
     // Cursor rendering (only when focused)
-    if state.with(|c| c.read().focus_handler().is_focused()) {
-        let (line_height, blink_timer) = state.with(|c| {
-            let guard = c.read();
-            (guard.line_height(), guard.blink_timer())
-        });
+    if controller.with(|c| c.focus_handler().is_focused()) {
+        let (line_height, blink_timer) = controller.with(|c| (c.line_height(), c.blink_timer()));
         cursor::cursor(line_height, blink_timer);
     }
 }

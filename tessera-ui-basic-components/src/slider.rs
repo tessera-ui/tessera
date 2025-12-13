@@ -513,15 +513,13 @@ pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: State<Sli
     }
 
     let cloned_args = args.clone();
-    let controller_clone = controller;
-    let clamped_value_for_accessibility = clamped_value;
     input_handler(Box::new(move |mut input| {
         let resolved_layout = slider_layout(&cloned_args, input.computed_data.width);
-        handle_slider_state(&mut input, controller_clone, &cloned_args, &resolved_layout);
+        handle_slider_state(&mut input, controller, &cloned_args, &resolved_layout);
         apply_slider_accessibility(
             &mut input,
             &cloned_args,
-            clamped_value_for_accessibility,
+            clamped_value,
             &cloned_args.on_change,
         );
     }));
@@ -788,14 +786,13 @@ pub fn centered_slider_with_controller(
     }
 
     let cloned_args = args.clone();
-    let clamped_value_for_accessibility = clamped_value;
     input_handler(Box::new(move |mut input| {
         let resolved_layout = centered_slider_layout(&cloned_args, input.computed_data.width);
         handle_slider_state(&mut input, controller, &cloned_args, &resolved_layout.base);
         apply_slider_accessibility(
             &mut input,
             &cloned_args,
-            clamped_value_for_accessibility,
+            clamped_value,
             &cloned_args.on_change,
         );
     }));

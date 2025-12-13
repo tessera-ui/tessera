@@ -233,28 +233,15 @@ impl CheckmarkState {
 /// ## Examples
 ///
 /// ```
-/// use std::sync::{
-///     Arc,
-///     atomic::{AtomicBool, Ordering},
-/// };
-/// use tessera_ui::{Color, Dp, tessera};
+/// use std::sync::Arc;
+/// use tessera_ui::{Dp, remember, tessera};
 /// use tessera_ui_basic_components::checkbox::{CheckboxArgsBuilder, checkbox};
 ///
 /// // A tiny UI demo that shows a checkbox and a text label that reflects its state.
-/// #[derive(Clone, Default)]
-/// struct DemoState {
-///     is_checked: Arc<AtomicBool>,
-/// }
-///
 /// #[tessera]
-/// fn checkbox_demo(state: DemoState) {
-///     // Build a simple checkbox whose on_toggle updates `is_checked`.
-///     let on_toggle = Arc::new({
-///         let is_checked = state.is_checked.clone();
-///         move |new_value| {
-///             is_checked.store(new_value, Ordering::SeqCst);
-///         }
-///     });
+/// fn checkbox_demo() {
+///     let is_checked = remember(|| false);
+///     let on_toggle = Arc::new(move |new_value| is_checked.set(new_value));
 ///
 ///     checkbox(
 ///         CheckboxArgsBuilder::default()

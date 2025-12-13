@@ -401,17 +401,16 @@ fn apply_glass_slider_accessibility(
         return;
     }
 
-    let value_for_handler = current_value;
     let on_change = on_change.clone();
     input.set_accessibility_action_handler(move |action| {
         let new_value = match action {
-            Action::Increment => Some((value_for_handler + ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
-            Action::Decrement => Some((value_for_handler - ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
+            Action::Increment => Some((current_value + ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
+            Action::Decrement => Some((current_value - ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
             _ => None,
         };
 
         if let Some(new_value) = new_value
-            && (new_value - value_for_handler).abs() > f32::EPSILON
+            && (new_value - current_value).abs() > f32::EPSILON
         {
             on_change(new_value);
         }

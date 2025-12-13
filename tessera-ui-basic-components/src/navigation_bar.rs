@@ -315,7 +315,6 @@ fn render_navigation_item(
             .expect("SurfaceArgsBuilder failed with required fields set"),
         move || {
             let label_for_text = label_text.clone();
-            let label_color_for_text = label_color;
             boxed(
                 BoxedArgsBuilder::default()
                     .alignment(Alignment::Center)
@@ -335,7 +334,6 @@ fn render_navigation_item(
                                 .expect("ColumnArgsBuilder failed with required fields set"),
                             move |column_scope| {
                                 let label_for_text = label_for_text.clone();
-                                let label_color = label_color_for_text;
                                 let has_icon = icon_closure.is_some();
                                 let icon_closure_for_stack = icon_closure.clone();
                                 column_scope.child(move || {

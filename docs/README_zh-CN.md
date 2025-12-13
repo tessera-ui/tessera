@@ -64,22 +64,16 @@ fn app() {
             column(ColumnArgs::default(), |scope| {
                 scope.child(|| {
                     button(
-                        ButtonArgs {
-                            ..Default::default()
-                        },
+                        ButtonArgs::filled(|| {}),
                         || {
                             text("+");
                         },
                     )
                 });
-
                 scope.child(|| text("count: 0"));
-
                 scope.child(|| {
                     button(
-                        ButtonArgs {
-                            ..Default::default()
-                        },
+                        ButtonArgs::filled(|| {}),
                         || {
                             text("-");
                         },
@@ -104,34 +98,19 @@ fn app() {
         },
         || {
             let count = remember(|| 0);
-
-            column(ColumnArgs::default(), |scope| {
-                scope.child(|| {
+            column(ColumnArgs::default(), move |scope| {
+                scope.child(move || {
                     button(
-                        ButtonArgs {
-                            on_click: Some(Arc::new(move || {
-                                count.with_mut(|c| *c += 1);
-                            })),
-                            ..Default::default()
-                        },
+                        ButtonArgs::filled(move || count.with_mut(|c| *c += 1)),
                         || {
                             text("+");
                         },
                     )
                 });
-
-                scope.child(|| {
-                    text(format!("Count: {}", count.get()))
-                });
-
-                scope.child(|| {
+                scope.child(move || text(format!("Count: {}", count.get())));
+                scope.child(move || {
                     button(
-                        ButtonArgs {
-                            on_click: Some(Arc::new(move || {
-                                count.with_mut(|c| *c -= 1);
-                            })),
-                            ..Default::default()
-                        },
+                        ButtonArgs::filled(move || count.with_mut(|c| *c -= 1)),
                         || {
                             text("-");
                         },

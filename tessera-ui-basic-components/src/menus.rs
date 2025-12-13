@@ -610,7 +610,6 @@ pub fn menu_provider_with_controller(
     }));
 
     // Measurement: place main content, background, and menu based on anchor.
-    let bounds_for_measure = bounds;
     let args_for_measure = args.clone();
     measure(Box::new(move |input| {
         let main_content_id = input
@@ -660,7 +659,7 @@ pub fn menu_provider_with_controller(
             metadata.clips_children = true;
         }
 
-        *bounds_for_measure.write() = Some(MenuBounds {
+        *bounds.write() = Some(MenuBounds {
             origin: menu_position,
             size: menu_size,
         });

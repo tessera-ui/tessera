@@ -28,7 +28,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 ### Component Model & #[tessera] Macro
 
-- Components are stateless Rust functions annotated with `#[tessera]`. All state must be passed via parameters (e.g., `Arc<Mutex<T>>` or atomic types).
+- Components are stateless Rust functions annotated with `#[tessera]`. Persistent UI state is created with `remember` (returned as `State<T>`) and can be passed around as `State<T>`.
 - Inside the component function:
   - `measure`: Custom layout and measurement logic (optional)
   - `input_handler`: Event and interaction handling (optional)
@@ -72,7 +72,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 ## 🎯 Event & State Management
 
-- Components are stateless; all state is passed via parameters (prefer `Arc<Mutex<T>>` or atomic types).
+- Components are stateless; persistent state is stored via `remember` as `State<T>` and passed via parameters as needed.
 - Event handling is done via the `input_handler` closure, which receives `InputHandlerInput` containing:
   - `node_id`, `computed_data`, `cursor_position`
   - `cursor_events`, `keyboard_events`, `ime_events`

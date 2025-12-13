@@ -123,22 +123,19 @@ fn my_component() {
 
 ```rust
 use tessera_macros::tessera;
-use std::sync::{Arc, atomic::{AtomicI32, Ordering}};
+use tessera_ui::remember;
+use tessera_ui_basic_components::{
+    button::{ButtonArgs, button},
+    text::text,
+};
 
 #[tessera]
-fn counter_component(count: Arc<AtomicI32>) {
-    let current_count = count.load(Ordering::Relaxed);
+fn counter_component() {
+    let count = remember(|| 0i32);
 
-    // 使用 tessera_basic_components 构建 UI
     button(
-        ButtonArgs {
-            on_click: Arc::new(move || {
-                count.fetch_add(1, Ordering::Relaxed);
-            }),
-            ..Default::default()
-        },
-        button_state,
-        move || text(format!("Count: {}", current_count)),
+        ButtonArgs::filled(move || count.with_mut(|c| *c += 1)),
+        || text(format!("Count: {}", count.get())),
     );
 }
 ```

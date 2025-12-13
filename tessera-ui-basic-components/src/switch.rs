@@ -327,12 +327,8 @@ fn switch_inner(
     let accessibility_on_toggle = on_toggle.clone();
     let accessibility_label = args.accessibility_label.clone();
     let accessibility_description = args.accessibility_description.clone();
-    let progress_for_measure = progress;
     let track_outline_width = args.track_outline_width;
     let thumb_padding = args.thumb_padding;
-    let base_thumb_px_for_measure = base_thumb_px;
-    let track_color_for_measure = track_color;
-    let track_outline_color_for_measure = track_outline_color;
     let width = args.width;
     let height = args.height;
 
@@ -366,11 +362,10 @@ fn switch_inner(
         let self_height_px = height.to_px();
         let thumb_padding_px = thumb_padding.to_px();
 
-        let start_center_x = thumb_padding_px.0 as f32 + base_thumb_px_for_measure.0 as f32 / 2.0;
-        let end_center_x = self_width_px.0 as f32
-            - thumb_padding_px.0 as f32
-            - base_thumb_px_for_measure.0 as f32 / 2.0;
-        let eased = animation::easing(progress_for_measure);
+        let start_center_x = thumb_padding_px.0 as f32 + base_thumb_px.0 as f32 / 2.0;
+        let end_center_x =
+            self_width_px.0 as f32 - thumb_padding_px.0 as f32 - base_thumb_px.0 as f32 / 2.0;
+        let eased = animation::easing(progress);
         let thumb_center_x = start_center_x + (end_center_x - start_center_x) * eased;
         let thumb_x = thumb_center_x - thumb_size.width.0 as f32 / 2.0;
 
@@ -382,8 +377,8 @@ fn switch_inner(
         );
 
         let track_command = ShapeCommand::FilledOutlinedRect {
-            color: track_color_for_measure,
-            border_color: track_outline_color_for_measure,
+            color: track_color,
+            border_color: track_outline_color,
             corner_radii: glam::Vec4::splat((self_height_px.0 as f32) / 2.0).into(),
             corner_g2: [2.0; 4], // Use G1 corners here specifically
             shadow: None,

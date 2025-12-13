@@ -185,17 +185,17 @@ pub fn app() {
                                     }))
                                     .confirm_button(closure!(clone dialog_controller, || {
                                         button(
-                                            ButtonArgs::text(Arc::new(closure!(clone dialog_controller, || {
-                                                    dialog_controller.with_mut(|c| c.close());
-                                                }))),
+                                            ButtonArgs::text(closure!(clone dialog_controller, || {
+                                                dialog_controller.with_mut(|c| c.close());
+                                            })),
                                             || text("Confirm"),
                                         );
                                     }))
                                     .dismiss_button(closure!(clone dialog_controller, || {
                                         button(
-                                            ButtonArgs::text(Arc::new(closure!(clone dialog_controller, || {
-                                                    dialog_controller.with_mut(|c| c.close());
-                                                }))),
+                                            ButtonArgs::text(closure!(clone dialog_controller, || {
+                                                dialog_controller.with_mut(|c| c.close());
+                                            })),
                                             || text("Dismiss"),
                                         );
                                     }))

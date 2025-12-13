@@ -574,7 +574,6 @@ where
     }));
 
     let tabs_args = args.clone();
-    let controller_for_measure = controller;
 
     measure(Box::new(
         move |input| -> Result<ComputedData, MeasurementError> {
@@ -636,10 +635,9 @@ where
             let final_width = titles_total_width;
             let page_width = content_container_size.width;
             let target_offset = -Px(active_tab as i32 * page_width.0);
-            let (_, target_content_scroll_offset) =
-                controller_for_measure.with(|c| c.content_offsets());
+            let (_, target_content_scroll_offset) = controller.with(|c| c.content_offsets());
             if target_content_scroll_offset != target_offset {
-                controller_for_measure.with_mut(|c| {
+                controller.with_mut(|c| {
                     c.update_content_offsets(target_content_scroll_offset, target_offset)
                 });
             }
@@ -659,13 +657,11 @@ where
                 );
                 let centered_x = active_title_x + Px((active_title_width.0 - clamped_width.0) / 2);
 
-                controller_for_measure
-                    .with_mut(|c| c.set_indicator_targets(clamped_width, centered_x));
+                controller.with_mut(|c| c.set_indicator_targets(clamped_width, centered_x));
 
                 let (from_width, to_width, from_x, to_x) =
-                    controller_for_measure.with(|c| c.indicator_metrics());
-                let eased_progress =
-                    animation::easing(controller_for_measure.with(|c| c.progress()));
+                    controller.with(|c| c.indicator_metrics());
+                let eased_progress = animation::easing(controller.with(|c| c.progress()));
                 let width = Px((from_width.0 as f32
                     + (to_width.0 - from_width.0) as f32 * eased_progress)
                     as i32);
