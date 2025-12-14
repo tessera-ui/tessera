@@ -95,6 +95,8 @@ This document defines how You should assist in the Tessera project to ensure cod
   - Enforce `rustfmt edition 2024` default rules
   - `use` imports must be grouped in four sections (standard library, third-party crates, crate root, submodules), separated by one blank line, sorted alphabetically within each group, and merged by root path
   - All code, comments, and documentation comments must be in English (except for rare functional clarifications)
+  - Treat `State<T>` (returned by `remember`) and values returned from `use_context::<T>().get()` as cheap `Copy` handles: do **not** call `.clone()` just to pass them into closures.
+  - Avoid `*_for_*` “capture helper” variable names (e.g. `state_for_handler`). Prefer capturing the original value directly; if a local alias is needed, keep the same name.
 - **Commit Guidelines**:
   - Follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) specification
   - **Breaking Changes**: If a commit introduces a breaking change of public api, you MUST include `BREAKING CHANGE:` in the commit body or footer. This is required to trigger a Major version bump.

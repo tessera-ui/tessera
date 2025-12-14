@@ -168,11 +168,7 @@ impl RippleState {
     ) {
         let now = Instant::now();
         let size = [size.width.to_f32(), size.height.to_f32()];
-        let center = if spec.bounded {
-            [click_pos[0].clamp(0.0, 1.0), click_pos[1].clamp(0.0, 1.0)]
-        } else {
-            [0.5, 0.5]
-        };
+        let center = if spec.bounded { click_pos } else { [0.5, 0.5] };
 
         let min_dimension = size[0].min(size[1]).max(1.0);
         let max_radius = if let Some(radius) = spec.radius {

@@ -177,6 +177,19 @@ pub struct SurfaceArgs {
     /// Optional explicit ripple radius for this surface.
     #[builder(default, setter(strip_option))]
     pub ripple_radius: Option<Dp>,
+    /// Optional shared interaction state used to render state layers and
+    /// ripples.
+    ///
+    /// This can be used to render visual feedback in one place while driving
+    /// interactions from another.
+    #[builder(default, setter(strip_option))]
+    pub interaction_state: Option<State<RippleState>>,
+    /// Whether to render the state-layer overlay for this surface.
+    #[builder(default = "true")]
+    pub show_state_layer: bool,
+    /// Whether to render ripple animations for this surface.
+    #[builder(default = "true")]
+    pub show_ripple: bool,
     /// If true, all input events inside the surface bounds are blocked (stop
     /// propagation), after (optionally) handling its own click logic.
     #[builder(default = "false")]
@@ -305,6 +318,9 @@ fn synthesize_shadow_for_elevation(elevation: Dp, scheme: &MaterialColorScheme) 
 }
 
 fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<State<RippleState>>) -> RippleProps {
+    if !args.show_ripple {
+        return RippleProps::default();
+    }
     let Some(ripple_state) = ripple_state else {
         return RippleProps::default();
     };
@@ -490,7 +506,7 @@ fn build_shape_command(
     ripple_props: RippleProps,
     size: PxSize,
 ) -> ShapeCommand {
-    let use_ripple = args.on_click.is_some();
+    let use_ripple = args.show_ripple && (args.on_click.is_some() || ripple_props.alpha > 0.0);
 
     match args.shape.resolve_for_size(size) {
         ResolvedShape::Rounded {
@@ -526,12 +542,13 @@ fn try_build_simple_rect_command(
     if args.shadow.is_some() {
         return None;
     }
-    if args.on_click.is_some() {
+    if args.show_ripple && args.on_click.is_some() {
         return None;
     }
-    if ripple_state
-        .and_then(|state| state.with_mut(|s| s.animation()))
-        .is_some()
+    if args.show_ripple
+        && ripple_state
+            .and_then(|state| state.with_mut(|s| s.animation()))
+            .is_some()
     {
         return None;
     }
@@ -668,6 +685,9 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
     });
     let clickable = args.on_click.is_some();
     let interactive = args.enabled && clickable;
+    let interaction_state = args
+        .interaction_state
+        .or_else(|| interactive.then(|| remember(RippleState::new)));
 
     provide_context(
         AbsoluteTonalElevation {
@@ -684,7 +704,6 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             );
         },
     );
-    let ripple_state = interactive.then(|| remember(RippleState::new));
     let args_measure_clone = args.clone();
     let args_for_handler = args.clone();
     let absolute_tonal_elevation_for_draw = absolute_tonal_elevation;
@@ -743,10 +762,14 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             }
         };
 
-        let state_layer_alpha = ripple_state
-            .as_ref()
-            .map(|state| state.with(|s| s.state_layer_alpha()))
-            .unwrap_or(0.0);
+        let state_layer_alpha = if args_measure_clone.show_state_layer {
+            interaction_state
+                .as_ref()
+                .map(|state| state.with(|s| s.state_layer_alpha()))
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
 
         let effective_style = &args_measure_clone.style;
         let effective_style = apply_tonal_elevation_to_style(
@@ -754,11 +777,15 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             &scheme,
             absolute_tonal_elevation_for_draw,
         );
-        let effective_style = apply_state_layer_to_style(
-            &effective_style,
-            args_for_draw.ripple_color.with_alpha(1.0),
-            state_layer_alpha,
-        );
+        let effective_style = if args_measure_clone.show_state_layer {
+            apply_state_layer_to_style(
+                &effective_style,
+                args_for_draw.ripple_color.with_alpha(1.0),
+                state_layer_alpha,
+            )
+        } else {
+            effective_style
+        };
 
         let padding_px: Px = args_measure_clone.padding.into();
         let content_box_width = child_measurement.width + padding_px * 2;
@@ -783,15 +810,21 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             }
         }
 
+        let ripple_state_for_draw = if args_measure_clone.show_ripple {
+            interaction_state
+        } else {
+            None
+        };
+
         if let Some(simple) =
-            try_build_simple_rect_command(&args_for_draw, &effective_style, ripple_state)
+            try_build_simple_rect_command(&args_for_draw, &effective_style, ripple_state_for_draw)
         {
             input.metadata_mut().push_draw_command(simple);
         } else {
             let drawable = make_surface_drawable(
                 &args_for_draw,
                 &effective_style,
-                ripple_state,
+                ripple_state_for_draw,
                 PxSize::new(width, height),
             );
 
@@ -820,7 +853,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 .unwrap_or(false);
 
             if interactive {
-                if let Some(ref state) = ripple_state {
+                if let Some(ref state) = interaction_state {
                     state.with_mut(|s| s.set_hovered(is_cursor_in_surface));
                 }
 
@@ -830,7 +863,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                         CursorEventContent::Released(PressKeyEventType::Left)
                     )
                 }) {
-                    if let Some(ref state) = ripple_state {
+                    if let Some(ref state) = interaction_state {
                         state.with_mut(|s| s.release());
                     }
                 }
@@ -865,7 +898,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
 
                     if !press_events.is_empty()
                         && let Some(cursor_pos) = cursor_pos_option
-                        && let Some(state) = ripple_state.as_ref()
+                        && let Some(state) = interaction_state.as_ref()
                     {
                         let denom_w = size.width.to_f32().max(1.0);
                         let denom_h = size.height.to_f32().max(1.0);

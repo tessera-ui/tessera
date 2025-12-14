@@ -9,31 +9,37 @@ use std::{
 };
 
 use derive_builder::Builder;
-use tessera_ui::{Color, DimensionValue, Dp, State, remember, tessera, use_context};
+use tessera_ui::{
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
+    MeasurementError, PressKeyEventType, Px, PxPosition, PxSize, State, accesskit::Role,
+    provide_context, remember, tessera, use_context, winit::window::CursorIcon,
+};
 
 use crate::{
     ShadowProps,
-    alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
+    alignment::{CrossAxisAlignment, MainAxisAlignment},
     animation,
-    boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
+    pos_misc::is_position_in_component,
+    ripple_state::{RippleSpec, RippleState},
     row::{RowArgsBuilder, row},
     shape_def::Shape,
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
-    theme::{MaterialColorScheme, MaterialTheme},
+    theme::{ContentColor, MaterialTheme, provide_text_style},
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
 const CONTAINER_HEIGHT: Dp = Dp(80.0);
-const ITEM_PADDING: Dp = Dp(12.0);
-const LABEL_TEXT_SIZE: Dp = Dp(16.0);
-const LABEL_SPACING: Dp = Dp(4.0);
 const INDICATOR_WIDTH: Dp = Dp(56.0);
 const INDICATOR_HEIGHT: Dp = Dp(32.0);
 const DIVIDER_HEIGHT: Dp = Dp(1.0);
 const UNSELECTED_LABEL_ALPHA: f32 = 0.8;
+const ITEM_HORIZONTAL_SPACING: Dp = Dp(8.0);
+const INDICATOR_TO_LABEL_PADDING: Dp = Dp(4.0);
+const INDICATOR_VERTICAL_PADDING: Dp = Dp(4.0);
+const INDICATOR_VERTICAL_OFFSET: Dp = Dp(12.0);
 
 fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
     Color {
@@ -42,6 +48,332 @@ fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
         b: from.b + (to.b - from.b) * progress,
         a: from.a + (to.a - from.a) * progress,
     }
+}
+
+#[tessera]
+fn navigation_bar_item(
+    controller: State<NavigationBarController>,
+    index: usize,
+    item: NavigationBarItem,
+    selected_index: usize,
+    previous_index: usize,
+    animation_progress: f32,
+) {
+    let theme = use_context::<MaterialTheme>().get();
+    let scheme = theme.color_scheme;
+    let typography = theme.typography;
+
+    let interaction_state = remember(RippleState::new);
+
+    let is_selected = index == selected_index;
+    let was_selected = index == previous_index && selected_index != previous_index;
+    let selection_fraction = if is_selected {
+        animation_progress
+    } else if was_selected {
+        1.0 - animation_progress
+    } else {
+        0.0
+    };
+
+    let always_show_label = matches!(item.label_behavior, NavigationBarLabelBehavior::AlwaysShow);
+    let has_label = !item.label.is_empty();
+    let has_icon = item.icon.is_some();
+
+    let indicator_alpha = selection_fraction;
+    let content_color = interpolate_color(
+        scheme.on_surface_variant,
+        scheme.on_secondary_container,
+        selection_fraction,
+    );
+    let ripple_color = content_color;
+
+    let label_alpha = if always_show_label {
+        selection_fraction + (1.0 - selection_fraction) * UNSELECTED_LABEL_ALPHA
+    } else {
+        selection_fraction
+    };
+    let label_color = content_color.with_alpha(content_color.a * label_alpha);
+
+    let indicator_color = scheme.secondary_container.with_alpha(indicator_alpha);
+
+    surface(
+        SurfaceArgsBuilder::default()
+            .style(SurfaceStyle::Filled {
+                color: indicator_color,
+            })
+            .shape(Shape::capsule())
+            .width(INDICATOR_WIDTH)
+            .height(INDICATOR_HEIGHT)
+            .show_state_layer(false)
+            .show_ripple(false)
+            .build()
+            .expect("builder construction failed"),
+        || {},
+    );
+
+    surface(
+        SurfaceArgsBuilder::default()
+            .style(SurfaceStyle::Filled {
+                color: Color::TRANSPARENT,
+            })
+            .shape(Shape::capsule())
+            .width(INDICATOR_WIDTH)
+            .height(INDICATOR_HEIGHT)
+            .enabled(true)
+            .enforce_min_interactive_size(false)
+            .interaction_state(interaction_state)
+            .ripple_color(ripple_color)
+            .build()
+            .expect("builder construction failed"),
+        || {},
+    );
+
+    if let Some(draw_icon) = item.icon {
+        provide_context(
+            ContentColor {
+                current: content_color,
+            },
+            || {
+                draw_icon();
+            },
+        );
+    }
+
+    if has_label {
+        let label = item.label.clone();
+        provide_text_style(typography.label_medium, move || {
+            text(
+                TextArgsBuilder::default()
+                    .text(label)
+                    .color(label_color)
+                    .build()
+                    .expect("builder construction failed"),
+            );
+        });
+    }
+
+    let label_for_accessibility = item.label.clone();
+    let on_click = item.on_click;
+
+    input_handler(Box::new(move |input| {
+        let size = input.computed_data;
+        let cursor_pos_option = input.cursor_position_rel;
+        let is_cursor_in_item = cursor_pos_option
+            .map(|pos| is_position_in_component(size, pos))
+            .unwrap_or(false);
+
+        interaction_state.with_mut(|s| s.set_hovered(is_cursor_in_item));
+
+        if input.cursor_events.iter().any(|event| {
+            matches!(
+                event.content,
+                CursorEventContent::Released(PressKeyEventType::Left)
+            )
+        }) {
+            interaction_state.with_mut(|s| s.release());
+        }
+
+        if is_cursor_in_item {
+            input.requests.cursor_icon = CursorIcon::Pointer;
+        }
+
+        if is_cursor_in_item {
+            let pressed = input.cursor_events.iter().any(|event| {
+                matches!(
+                    event.content,
+                    CursorEventContent::Pressed(PressKeyEventType::Left)
+                )
+            });
+
+            if pressed {
+                if let Some(cursor_pos) = cursor_pos_option {
+                    let item_width_px = size.width.to_f32().max(1.0);
+                    let indicator_width_px = INDICATOR_WIDTH.to_px().to_f32().max(1.0);
+                    let indicator_height_px = INDICATOR_HEIGHT.to_px().to_f32().max(1.0);
+
+                    let delta_x = (item_width_px - indicator_width_px) / 2.0;
+                    let delta_y = INDICATOR_VERTICAL_OFFSET.to_px().to_f32();
+
+                    let normalized_x = (cursor_pos.x.to_f32() - delta_x) / indicator_width_px;
+                    let normalized_y = (cursor_pos.y.to_f32() - delta_y) / indicator_height_px;
+
+                    let spec = RippleSpec {
+                        bounded: true,
+                        radius: None,
+                    };
+
+                    interaction_state.with_mut(|s| {
+                        s.start_animation_with_spec(
+                            [normalized_x, normalized_y],
+                            PxSize::new(INDICATOR_WIDTH.to_px(), INDICATOR_HEIGHT.to_px()),
+                            spec,
+                        );
+                        s.set_pressed(true);
+                    });
+                }
+            }
+
+            let released = input.cursor_events.iter().any(|event| {
+                event.gesture_state == GestureState::TapCandidate
+                    && matches!(
+                        event.content,
+                        CursorEventContent::Released(PressKeyEventType::Left)
+                    )
+            });
+
+            if released {
+                if index != controller.with(|c| c.selected()) {
+                    controller.with_mut(|c| c.set_selected(index));
+                    on_click();
+                }
+            }
+        }
+
+        input
+            .accessibility()
+            .role(Role::Tab)
+            .label(label_for_accessibility.clone())
+            .commit();
+    }));
+
+    measure(Box::new(
+        move |input| -> Result<ComputedData, MeasurementError> {
+            let parent_width = match input.parent_constraint.width {
+                DimensionValue::Fixed(v) => v,
+                DimensionValue::Wrap { max, .. } => max.unwrap_or(Px::ZERO),
+                DimensionValue::Fill { max, .. } => max.unwrap_or(Px::ZERO),
+            };
+
+            let min_height = CONTAINER_HEIGHT.to_px();
+            let parent_height = match input.parent_constraint.height {
+                DimensionValue::Fixed(v) => v.max(min_height),
+                DimensionValue::Wrap { min, .. } => min.unwrap_or(min_height).max(min_height),
+                DimensionValue::Fill { min, .. } => min.unwrap_or(min_height).max(min_height),
+            };
+
+            let indicator_background_id = input.children_ids[0];
+            let indicator_ripple_id = input.children_ids[1];
+            let mut child_index = 2;
+
+            let icon_id = if has_icon {
+                let id = input.children_ids[child_index];
+                child_index += 1;
+                Some(id)
+            } else {
+                None
+            };
+
+            let label_id = if has_label {
+                let id = input.children_ids[child_index];
+                Some(id)
+            } else {
+                None
+            };
+
+            let child_constraint = Constraint::new(
+                DimensionValue::Wrap {
+                    min: None,
+                    max: None,
+                },
+                DimensionValue::Wrap {
+                    min: None,
+                    max: None,
+                },
+            );
+
+            let indicator_size = input.measure_child(indicator_background_id, &child_constraint)?;
+            input.measure_child(indicator_ripple_id, &child_constraint)?;
+
+            let icon_size = if let Some(icon_id) = icon_id {
+                Some(input.measure_child(icon_id, &child_constraint)?)
+            } else {
+                None
+            };
+
+            let label_size = if let Some(label_id) = label_id {
+                Some(input.measure_child(label_id, &child_constraint)?)
+            } else {
+                None
+            };
+
+            let width = parent_width;
+            let height = parent_height;
+
+            if !has_label {
+                let ripple_x = (width - indicator_size.width) / 2;
+                let ripple_y = (height - indicator_size.height) / 2;
+                input.place_child(indicator_background_id, PxPosition::new(ripple_x, ripple_y));
+                input.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
+
+                if let (Some(icon_id), Some(icon_size)) = (icon_id, icon_size) {
+                    let icon_x = (width - icon_size.width) / 2;
+                    let icon_y = (height - icon_size.height) / 2;
+                    input.place_child(icon_id, PxPosition::new(icon_x, icon_y));
+                }
+
+                return Ok(ComputedData { width, height });
+            }
+
+            let icon_size = icon_size.unwrap_or(ComputedData {
+                width: Px::ZERO,
+                height: Px::ZERO,
+            });
+            let label_size = label_size.unwrap_or(ComputedData {
+                width: Px::ZERO,
+                height: Px::ZERO,
+            });
+
+            let indicator_vertical_padding_px = INDICATOR_VERTICAL_PADDING.to_px();
+            let content_height = icon_size.height
+                + indicator_vertical_padding_px
+                + INDICATOR_TO_LABEL_PADDING.to_px()
+                + label_size.height;
+
+            let content_vertical_padding =
+                ((height - content_height) / 2).max(indicator_vertical_padding_px);
+            let selected_icon_y = content_vertical_padding;
+            let unselected_icon_y = if always_show_label {
+                selected_icon_y
+            } else {
+                (height - icon_size.height) / 2
+            };
+
+            let icon_distance = unselected_icon_y - selected_icon_y;
+            let offset = Px(((icon_distance.0 as f32) * (1.0 - selection_fraction)).round() as i32);
+
+            let icon_x = (width - icon_size.width) / 2;
+            let label_x = (width - label_size.width) / 2;
+            let ripple_x = (width - indicator_size.width) / 2;
+
+            let ripple_y = selected_icon_y - indicator_vertical_padding_px;
+            let icon_y = selected_icon_y;
+            let label_y = selected_icon_y
+                + icon_size.height
+                + indicator_vertical_padding_px
+                + INDICATOR_TO_LABEL_PADDING.to_px();
+
+            input.place_child(
+                indicator_background_id,
+                PxPosition::new(ripple_x, Px(ripple_y.0 + offset.0)),
+            );
+            input.place_child(
+                indicator_ripple_id,
+                PxPosition::new(ripple_x, Px(ripple_y.0 + offset.0)),
+            );
+
+            if let Some(icon_id) = icon_id {
+                input.place_child(icon_id, PxPosition::new(icon_x, Px(icon_y.0 + offset.0)));
+            }
+
+            if always_show_label || selection_fraction != 0.0 {
+                if let Some(label_id) = label_id {
+                    input.place_child(label_id, PxPosition::new(label_x, Px(label_y.0 + offset.0)));
+                }
+            }
+
+            Ok(ComputedData { width, height })
+        },
+    ));
 }
 
 /// Controls label visibility for a navigation bar item.
@@ -213,7 +545,7 @@ pub fn navigation_bar_with_controller<F>(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .height(CONTAINER_HEIGHT)
-            .style(scheme.surface.into())
+            .style(scheme.surface_container.into())
             .shadow(container_shadow)
             .block_input(true)
             .build()
@@ -246,185 +578,45 @@ pub fn navigation_bar_with_controller<F>(
                                 RowArgsBuilder::default()
                                     .width(DimensionValue::FILLED)
                                     .height(DimensionValue::FILLED)
-                                    .main_axis_alignment(MainAxisAlignment::SpaceEvenly)
+                                    .main_axis_alignment(MainAxisAlignment::Start)
                                     .cross_axis_alignment(CrossAxisAlignment::Center)
                                     .build()
                                     .expect("RowArgsBuilder failed with required fields set"),
                                 move |row_scope| {
+                                    let last_index = items.len().saturating_sub(1);
                                     for (index, item) in items.into_iter().enumerate() {
-                                        let scheme_for_item = scheme.clone();
                                         row_scope.child_weighted(
                                             move || {
-                                                render_navigation_item(
+                                                navigation_bar_item(
                                                     controller,
                                                     index,
                                                     item,
                                                     selected_index,
                                                     previous_index,
                                                     animation_progress,
-                                                    scheme_for_item,
                                                 );
                                             },
                                             1.0,
                                         );
+
+                                        if index != last_index {
+                                            row_scope.child(|| {
+                                                spacer(
+                                                    SpacerArgsBuilder::default()
+                                                        .width(DimensionValue::Fixed(
+                                                            ITEM_HORIZONTAL_SPACING.to_px(),
+                                                        ))
+                                                        .build()
+                                                        .expect("builder construction failed"),
+                                                );
+                                            });
+                                        }
                                     }
                                 },
                             );
                         },
                         1.0,
                     );
-                },
-            );
-        },
-    );
-}
-
-fn render_navigation_item(
-    controller: State<NavigationBarController>,
-    index: usize,
-    item: NavigationBarItem,
-    selected_index: usize,
-    previous_index: usize,
-    animation_progress: f32,
-    scheme: MaterialColorScheme,
-) {
-    let is_selected = index == selected_index;
-    let was_selected = index == previous_index && selected_index != previous_index;
-    let selection_fraction = if is_selected {
-        animation_progress
-    } else if was_selected {
-        1.0 - animation_progress
-    } else {
-        0.0
-    };
-
-    let indicator_alpha = selection_fraction;
-    let content_color = interpolate_color(
-        scheme.on_surface_variant,
-        scheme.on_secondary_container,
-        selection_fraction,
-    );
-    let ripple_color = content_color;
-
-    let label_alpha = match item.label_behavior {
-        NavigationBarLabelBehavior::AlwaysShow => {
-            selection_fraction + (1.0 - selection_fraction) * UNSELECTED_LABEL_ALPHA
-        }
-        NavigationBarLabelBehavior::SelectedOnly => selection_fraction,
-    };
-    let label_color = content_color.with_alpha(content_color.a * label_alpha);
-
-    let label_text = item.label.clone();
-    let icon_closure = item.icon.clone();
-    let indicator_color = scheme.secondary_container.with_alpha(indicator_alpha);
-
-    let icon_only_indicator_color = indicator_color;
-    let on_click = item.on_click.clone();
-
-    surface(
-        SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
-            .style(SurfaceStyle::Filled {
-                color: Color::TRANSPARENT,
-            })
-            .shape(Shape::RECTANGLE)
-            .padding(ITEM_PADDING)
-            .content_color(content_color)
-            .ripple_color(ripple_color)
-            .accessibility_label(label_text.clone())
-            .on_click(move || {
-                if index != controller.with(|c| c.selected()) {
-                    controller.with_mut(|c| c.set_selected(index));
-                    on_click();
-                }
-            })
-            .build()
-            .expect("SurfaceArgsBuilder failed with required fields set"),
-        move || {
-            let label_for_text = label_text.clone();
-            boxed(
-                BoxedArgsBuilder::default()
-                    .alignment(Alignment::Center)
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::FILLED)
-                    .build()
-                    .expect("BoxedArgsBuilder failed for item container"),
-                move |container| {
-                    container.child(move || {
-                        column(
-                            ColumnArgsBuilder::default()
-                                .width(DimensionValue::WRAP)
-                                .height(DimensionValue::WRAP)
-                                .main_axis_alignment(MainAxisAlignment::Center)
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .build()
-                                .expect("ColumnArgsBuilder failed with required fields set"),
-                            move |column_scope| {
-                                let label_for_text = label_for_text.clone();
-                                let has_icon = icon_closure.is_some();
-                                let icon_closure_for_stack = icon_closure.clone();
-                                column_scope.child(move || {
-                                    boxed(
-                                        BoxedArgsBuilder::default()
-                                        .alignment(Alignment::Center)
-                                        .build()
-                                        .expect("BoxedArgsBuilder failed for icon stack"),
-                                    move |icon_stack| {
-                                        let indicator_color = icon_only_indicator_color;
-                                        icon_stack.child(move || {
-                                            surface(
-                                                SurfaceArgsBuilder::default()
-                                                    .style(SurfaceStyle::Filled {
-                                                        color: indicator_color,
-                                                    })
-                                                    .shape(Shape::capsule())
-                                                    .width(INDICATOR_WIDTH)
-                                                    .height(INDICATOR_HEIGHT)
-                                                    .build()
-                                                    .expect("SurfaceArgsBuilder failed for indicator"),
-                                                || {},
-                                            );
-                                        });
-
-                                        if let Some(draw_icon) = icon_closure_for_stack.clone()
-                                        {
-                                            icon_stack.child(move || {
-                                                draw_icon();
-                                                });
-                                            }
-                                        },
-                                    );
-                                });
-
-                                if !label_for_text.is_empty() {
-                                    if has_icon {
-                                        column_scope.child(move || {
-                                            spacer(
-                                                SpacerArgsBuilder::default()
-                                                    .height(LABEL_SPACING)
-                                                    .build()
-                                                    .expect(
-                                                        "SpacerArgsBuilder failed with required fields set",
-                                                    ),
-                                            );
-                                        });
-                                    }
-                                    let label = label_for_text.clone();
-                                    column_scope.child(move || {
-                                        text(
-                                            TextArgsBuilder::default()
-                                                .text(label)
-                                                .color(label_color)
-                                                .size(LABEL_TEXT_SIZE)
-                                                .build()
-                                                .expect("TextArgsBuilder failed with required fields set"),
-                                        );
-                                    });
-                                }
-                            },
-                        );
-                    });
                 },
             );
         },
