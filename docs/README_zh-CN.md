@@ -65,18 +65,14 @@ fn app() {
                 scope.child(|| {
                     button(
                         ButtonArgs::filled(|| {}),
-                        || {
-                            text("+");
-                        },
+                        || text("+"),
                     )
                 });
                 scope.child(|| text("count: 0"));
                 scope.child(|| {
                     button(
                         ButtonArgs::filled(|| {}),
-                        || {
-                            text("-");
-                        },
+                        || text("-"),
                     )
                 });
             });
@@ -102,18 +98,14 @@ fn app() {
                 scope.child(move || {
                     button(
                         ButtonArgs::filled(move || count.with_mut(|c| *c += 1)),
-                        || {
-                            text("+");
-                        },
+                        || text("+"),
                     )
                 });
                 scope.child(move || text(format!("Count: {}", count.get())));
                 scope.child(move || {
                     button(
                         ButtonArgs::filled(move || count.with_mut(|c| *c -= 1)),
-                        || {
-                            text("-");
-                        },
+                        || text("-"),
                     )
                 });
             });
