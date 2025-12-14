@@ -256,22 +256,48 @@ fn handle_click_state(
     if is_cursor_in {
         input.requests.cursor_icon = CursorIcon::Pointer;
 
-        if let Some(_event) = input.cursor_events.iter().find(|e| {
-            e.gesture_state == GestureState::TapCandidate
-                && matches!(
-                    e.content,
+        let press_events: Vec<_> = input
+            .cursor_events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event.content,
+                    CursorEventContent::Pressed(PressKeyEventType::Left)
+                )
+            })
+            .collect();
+
+        let release_events: Vec<_> = input
+            .cursor_events
+            .iter()
+            .filter(|event| event.gesture_state == GestureState::TapCandidate)
+            .filter(|event| {
+                matches!(
+                    event.content,
                     CursorEventContent::Released(PressKeyEventType::Left)
                 )
-        }) {
-            if let (Some(ripple_state), Some(pos)) =
+            })
+            .collect();
+
+        if !press_events.is_empty()
+            && let (Some(ripple_state), Some(pos)) =
                 (ripple_state.as_ref(), input.cursor_position_rel)
-            {
-                let size = input.computed_data;
-                let normalized_pos = [
-                    pos.x.to_f32() / size.width.to_f32(),
-                    pos.y.to_f32() / size.height.to_f32(),
-                ];
-                ripple_state.with_mut(|s| s.start_animation(normalized_pos));
+        {
+            let denom_w = size.width.to_f32().max(1.0);
+            let denom_h = size.height.to_f32().max(1.0);
+            let normalized_pos = [
+                (pos.x.to_f32() / denom_w).clamp(0.0, 1.0),
+                (pos.y.to_f32() / denom_h).clamp(0.0, 1.0),
+            ];
+            ripple_state.with_mut(|s| {
+                s.start_animation(normalized_pos);
+                s.set_pressed(true);
+            });
+        }
+
+        if !release_events.is_empty() {
+            if let Some(ripple_state) = ripple_state.as_ref() {
+                ripple_state.with_mut(|s| s.release());
             }
             on_click();
         }

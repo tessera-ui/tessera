@@ -38,9 +38,9 @@ impl MaterialAlpha {
     /// Alpha for hover state layers.
     pub const HOVER: f32 = 0.08;
     /// Alpha for pressed state layers.
-    pub const PRESSED: f32 = 0.12;
+    pub const PRESSED: f32 = 0.1;
     /// Alpha for focused state layers.
-    pub const FOCUSED: f32 = 0.12;
+    pub const FOCUSED: f32 = 0.1;
     /// Alpha for dragged state layers.
     pub const DRAGGED: f32 = 0.16;
     /// Alpha for disabled containers (e.g., filled controls).
@@ -49,31 +49,12 @@ impl MaterialAlpha {
     pub const DISABLED_CONTENT: f32 = 0.38;
 }
 
-/// Maps a container color to an appropriate foreground color from the scheme.
-pub fn content_color_for(container: Color, scheme: &MaterialColorScheme) -> Color {
-    if container == scheme.primary {
-        scheme.on_primary
-    } else if container == scheme.primary_container {
-        scheme.on_primary_container
-    } else if container == scheme.secondary {
-        scheme.on_secondary
-    } else if container == scheme.secondary_container {
-        scheme.on_secondary_container
-    } else if container == scheme.tertiary {
-        scheme.on_tertiary
-    } else if container == scheme.tertiary_container {
-        scheme.on_tertiary_container
-    } else if container == scheme.error {
-        scheme.on_error
-    } else if container == scheme.error_container {
-        scheme.on_error_container
-    } else if container == scheme.surface_variant {
-        scheme.on_surface_variant
-    } else if container == scheme.inverse_surface {
-        scheme.inverse_on_surface
-    } else {
-        scheme.on_surface
-    }
+/// Returns the matching content color for a background color in the scheme.
+///
+/// When the background color does not match a known scheme color, this returns
+/// `None`.
+pub fn content_color_for(background: Color, scheme: &MaterialColorScheme) -> Option<Color> {
+    scheme.content_color_for(background)
 }
 
 /// A simple text style used by components to derive default font size and line
@@ -231,7 +212,7 @@ impl Default for MaterialShapes {
 
 /// Material theme container holding the three primary Material 3 theme
 /// primitives.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct MaterialTheme {
     /// Color scheme used by Material components.
     pub color_scheme: MaterialColorScheme,
@@ -239,16 +220,6 @@ pub struct MaterialTheme {
     pub typography: MaterialTypography,
     /// Shape scale used by container components.
     pub shapes: MaterialShapes,
-}
-
-impl Default for MaterialTheme {
-    fn default() -> Self {
-        Self {
-            color_scheme: MaterialColorScheme::default(),
-            typography: MaterialTypography::default(),
-            shapes: MaterialShapes::default(),
-        }
-    }
 }
 
 impl MaterialTheme {
@@ -394,6 +365,12 @@ pub struct MaterialColorScheme {
     pub shadow: Color,
     /// The scrim color.
     pub scrim: Color,
+    /// Tint color used by tonal elevation overlays on surfaces.
+    pub surface_tint: Color,
+    /// Brighter surface color used by expressive surface roles.
+    pub surface_bright: Color,
+    /// Dimmer surface color used by expressive surface roles.
+    pub surface_dim: Color,
     /// An inverse of the surface color.
     pub inverse_surface: Color,
     /// Color used for content on top of `inverse_surface`.
@@ -410,6 +387,36 @@ pub struct MaterialColorScheme {
     pub surface_container_low: Color,
     /// A lowest container color for surfaces.
     pub surface_container_lowest: Color,
+    /// Fixed primary color role that maintains the same tone in light/dark
+    /// themes.
+    pub primary_fixed: Color,
+    /// Fixed primary dim color role that maintains the same tone in light/dark
+    /// themes.
+    pub primary_fixed_dim: Color,
+    /// Content color used on `primary_fixed` and `primary_fixed_dim`.
+    pub on_primary_fixed: Color,
+    /// Lower-emphasis content color used on `primary_fixed` roles.
+    pub on_primary_fixed_variant: Color,
+    /// Fixed secondary color role that maintains the same tone in light/dark
+    /// themes.
+    pub secondary_fixed: Color,
+    /// Fixed secondary dim color role that maintains the same tone in
+    /// light/dark themes.
+    pub secondary_fixed_dim: Color,
+    /// Content color used on `secondary_fixed` and `secondary_fixed_dim`.
+    pub on_secondary_fixed: Color,
+    /// Lower-emphasis content color used on `secondary_fixed` roles.
+    pub on_secondary_fixed_variant: Color,
+    /// Fixed tertiary color role that maintains the same tone in light/dark
+    /// themes.
+    pub tertiary_fixed: Color,
+    /// Fixed tertiary dim color role that maintains the same tone in light/dark
+    /// themes.
+    pub tertiary_fixed_dim: Color,
+    /// Content color used on `tertiary_fixed` and `tertiary_fixed_dim`.
+    pub on_tertiary_fixed: Color,
+    /// Lower-emphasis content color used on `tertiary_fixed` roles.
+    pub on_tertiary_fixed_variant: Color,
 }
 
 impl MaterialColorScheme {
@@ -421,6 +428,75 @@ impl MaterialColorScheme {
     /// Generates a dark color scheme derived from the provided seed color.
     pub fn dark_from_seed(seed: Color) -> Self {
         scheme_from_seed(seed, true)
+    }
+
+    /// Returns the matching content color for a background color in this
+    /// scheme.
+    ///
+    /// When the background color does not match a known scheme color, this
+    /// returns `None`.
+    pub fn content_color_for(&self, background: Color) -> Option<Color> {
+        if background == self.primary {
+            Some(self.on_primary)
+        } else if background == self.secondary {
+            Some(self.on_secondary)
+        } else if background == self.tertiary {
+            Some(self.on_tertiary)
+        } else if background == self.background {
+            Some(self.on_background)
+        } else if background == self.error {
+            Some(self.on_error)
+        } else if background == self.primary_container {
+            Some(self.on_primary_container)
+        } else if background == self.secondary_container {
+            Some(self.on_secondary_container)
+        } else if background == self.tertiary_container {
+            Some(self.on_tertiary_container)
+        } else if background == self.error_container {
+            Some(self.on_error_container)
+        } else if background == self.inverse_surface {
+            Some(self.inverse_on_surface)
+        } else if background == self.surface {
+            Some(self.on_surface)
+        } else if background == self.surface_variant {
+            Some(self.on_surface_variant)
+        } else if background == self.surface_bright
+            || background == self.surface_container
+            || background == self.surface_container_high
+            || background == self.surface_container_highest
+            || background == self.surface_container_low
+            || background == self.surface_container_lowest
+            || background == self.surface_dim
+        {
+            Some(self.on_surface)
+        } else if background == self.primary_fixed || background == self.primary_fixed_dim {
+            Some(self.on_primary_fixed)
+        } else if background == self.secondary_fixed || background == self.secondary_fixed_dim {
+            Some(self.on_secondary_fixed)
+        } else if background == self.tertiary_fixed || background == self.tertiary_fixed_dim {
+            Some(self.on_tertiary_fixed)
+        } else {
+            None
+        }
+    }
+
+    /// Computes the surface tonal color at an elevation.
+    pub fn surface_color_at_elevation(&self, elevation: Dp) -> Color {
+        if elevation.0 == 0.0 {
+            return self.surface;
+        }
+        let alpha = ((4.5 * (elevation.0 + 1.0).ln()) + 2.0) / 100.0;
+        self.surface.blend_over(self.surface_tint, alpha as f32)
+    }
+
+    /// Returns `surface_color_at_elevation` for the scheme surface, otherwise
+    /// returns `background`.
+    pub fn surface_color_at_elevation_for(&self, background: Color, elevation: Dp) -> Color {
+        if background == self.surface {
+            self.surface_color_at_elevation(elevation)
+        } else {
+            background
+        }
     }
 }
 
@@ -473,9 +549,12 @@ fn scheme_from_seed(seed: Color, is_dark: bool) -> MaterialColorScheme {
         outline_variant: argb_to_color(dynamic_colors.outline_variant().get_argb(&scheme)),
         shadow: argb_to_color(dynamic_colors.shadow().get_argb(&scheme)),
         scrim: argb_to_color(dynamic_colors.scrim().get_argb(&scheme)),
+        surface_tint: argb_to_color(dynamic_colors.surface_tint().get_argb(&scheme)),
         inverse_surface: argb_to_color(dynamic_colors.inverse_surface().get_argb(&scheme)),
         inverse_on_surface: argb_to_color(dynamic_colors.inverse_on_surface().get_argb(&scheme)),
         inverse_primary: argb_to_color(dynamic_colors.inverse_primary().get_argb(&scheme)),
+        surface_bright: argb_to_color(dynamic_colors.surface_bright().get_argb(&scheme)),
+        surface_dim: argb_to_color(dynamic_colors.surface_dim().get_argb(&scheme)),
         surface_container: argb_to_color(dynamic_colors.surface_container().get_argb(&scheme)),
         surface_container_high: argb_to_color(
             dynamic_colors.surface_container_high().get_argb(&scheme),
@@ -488,6 +567,26 @@ fn scheme_from_seed(seed: Color, is_dark: bool) -> MaterialColorScheme {
         ),
         surface_container_lowest: argb_to_color(
             dynamic_colors.surface_container_lowest().get_argb(&scheme),
+        ),
+        primary_fixed: argb_to_color(dynamic_colors.primary_fixed().get_argb(&scheme)),
+        primary_fixed_dim: argb_to_color(dynamic_colors.primary_fixed_dim().get_argb(&scheme)),
+        on_primary_fixed: argb_to_color(dynamic_colors.on_primary_fixed().get_argb(&scheme)),
+        on_primary_fixed_variant: argb_to_color(
+            dynamic_colors.on_primary_fixed_variant().get_argb(&scheme),
+        ),
+        secondary_fixed: argb_to_color(dynamic_colors.secondary_fixed().get_argb(&scheme)),
+        secondary_fixed_dim: argb_to_color(dynamic_colors.secondary_fixed_dim().get_argb(&scheme)),
+        on_secondary_fixed: argb_to_color(dynamic_colors.on_secondary_fixed().get_argb(&scheme)),
+        on_secondary_fixed_variant: argb_to_color(
+            dynamic_colors
+                .on_secondary_fixed_variant()
+                .get_argb(&scheme),
+        ),
+        tertiary_fixed: argb_to_color(dynamic_colors.tertiary_fixed().get_argb(&scheme)),
+        tertiary_fixed_dim: argb_to_color(dynamic_colors.tertiary_fixed_dim().get_argb(&scheme)),
+        on_tertiary_fixed: argb_to_color(dynamic_colors.on_tertiary_fixed().get_argb(&scheme)),
+        on_tertiary_fixed_variant: argb_to_color(
+            dynamic_colors.on_tertiary_fixed_variant().get_argb(&scheme),
         ),
     }
 }

@@ -559,8 +559,6 @@ where
         args.state_layer_color,
         args.hover_state_layer_opacity,
     );
-    // Align with Compose: the ripple is based on the selected content color so it
-    // does not "jump" as selection changes.
     let ripple_color = TabsDefaults::ripple_color(args.active_content_color);
 
     for (index, child) in title_closures.into_iter().enumerate() {

@@ -697,6 +697,7 @@ struct ShadowKey {
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct RippleKey {
     center: [u32; 2],
+    bounded: bool,
     radius: u32,
     alpha: u32,
     color: [u32; 4],
@@ -753,6 +754,7 @@ fn color_to_bits(color: Color) -> [u32; 4] {
 fn ripple_to_key(ripple: &RippleProps) -> RippleKey {
     RippleKey {
         center: [f32_to_bits(ripple.center[0]), f32_to_bits(ripple.center[1])],
+        bounded: ripple.bounded,
         radius: f32_to_bits(ripple.radius),
         alpha: f32_to_bits(ripple.alpha),
         color: color_to_bits(ripple.color),

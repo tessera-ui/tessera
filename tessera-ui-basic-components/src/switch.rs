@@ -405,12 +405,8 @@ fn switch_inner(
     let thumb_size_px = thumb_diameter_dp.to_px();
 
     let state_layer_base = SwitchDefaults::state_layer_base_color(checked, &scheme);
-    let state_layer_hover = SwitchDefaults::state_layer_hover_color(state_layer_base);
-    let state_layer_ripple = SwitchDefaults::state_layer_ripple_color(state_layer_base);
 
-    // A non-visual state layer for hover + ripple feedback. This mirrors Compose's
-    // thumb indication behavior (bounded=false, radius=StateLayerSize/2) in a
-    // simplified way.
+    // A non-visual state layer for hover + ripple feedback.
     let mut state_layer_builder = SurfaceArgsBuilder::default()
         .width(DimensionValue::Fixed(
             SwitchDefaults::STATE_LAYER_SIZE.to_px(),
@@ -420,13 +416,13 @@ fn switch_inner(
         ))
         .shape(Shape::Ellipse)
         .enabled(interactive)
+        .enforce_min_interactive_size(false)
         .style(SurfaceStyle::Filled {
             color: Color::TRANSPARENT,
         })
-        .hover_style(interactive.then(|| SurfaceStyle::Filled {
-            color: state_layer_hover,
-        }))
-        .ripple_color(state_layer_ripple);
+        .ripple_bounded(false)
+        .ripple_radius(Dp(SwitchDefaults::STATE_LAYER_SIZE.0 / 2.0))
+        .ripple_color(state_layer_base);
     if interactive {
         state_layer_builder = state_layer_builder.on_click(|| {});
     }
@@ -502,13 +498,13 @@ fn switch_inner(
                 max: None,
             },
         );
-        let _ = input.measure_child(state_layer_id, &thumb_constraint)?;
+        let state_layer_size = input.measure_child(state_layer_id, &thumb_constraint)?;
         let thumb_size = input.measure_child(thumb_id, &thumb_constraint)?;
 
         let self_width_px = width.to_px();
         let self_height_px = height.to_px();
 
-        // Align with Compose positioning:
+        // Calculate thumb positioning:
         // - unchecked offset is (height - thumbDiameter) / 2
         // - checked offset is (width - checkedThumbDiameter) - thumbPadding
         // - pressed snaps towards the inside by TrackOutlineWidth
@@ -529,10 +525,9 @@ fn switch_inner(
         let thumb_x = offset_dp.to_px();
 
         // State layer follows the thumb center.
-        let state_layer_size_px = SwitchDefaults::STATE_LAYER_SIZE.to_px();
-        let state_layer_y = (self_height_px.0 - state_layer_size_px.0) / 2;
+        let state_layer_y = (self_height_px.0 - state_layer_size.height.0) / 2;
         let thumb_center_x = thumb_x.0 + thumb_size.width.0 / 2;
-        let state_layer_x = thumb_center_x - state_layer_size_px.0 / 2;
+        let state_layer_x = thumb_center_x - state_layer_size.width.0 / 2;
 
         input.place_child(
             thumb_id,

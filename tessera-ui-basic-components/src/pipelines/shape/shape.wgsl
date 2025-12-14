@@ -117,21 +117,13 @@ fn sdf_ellipse(p: vec2f, r: vec2f) -> f32 {
 
 
 // Calculate ripple effect based on distance from ripple center
-fn calculate_ripple_effect(dist_to_center: f32, ripple_radius: f32) -> f32 {
+fn calculate_ripple_mask(dist_to_center: f32, ripple_radius: f32, aa: f32) -> f32 {
     if ripple_radius <= 0.0 {
         return 0.0;
     }
-    
-    // Create a smooth ripple wave
-    let normalized_dist = dist_to_center / max(ripple_radius, 0.001);
-    
-    // Simple ripple: fade out as we get further from center, with a peak at the edge
-    let ripple_wave = 1.0 - abs(normalized_dist - 1.0);
-    
-    // Smooth falloff to avoid harsh edges
-    let smooth_falloff = smoothstep(0.0, 0.3, ripple_wave) * smoothstep(1.5, 0.8, normalized_dist);
 
-    return clamp(smooth_falloff, 0.0, 1.0);
+    // Filled circle that expands over time, with a soft edge.
+    return 1.0 - smoothstep(ripple_radius - aa, ripple_radius + aa, dist_to_center);
 }
 
 @fragment
@@ -153,6 +145,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let ripple_radius = instance.ripple_params.z;
     let ripple_alpha = instance.ripple_params.w;
     let ripple_color_rgb = instance.ripple_color.rgb;
+    let ripple_bounded = instance.ripple_color.a > 0.5;
 
     // in.local_pos is expected to be in normalized range, e.g., [-0.5, 0.5] for x and y
     let p_normalized = in.local_pos;
@@ -204,13 +197,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         }
         let aa_width_object = fwidth(dist_object);
 
-        if render_mode == 0.0 { // --- Draw Fill ---
-            let object_alpha = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
+        let shape_mask = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
 
-            if object_alpha <= 0.001 {
+        if render_mode == 0.0 { // --- Draw Fill ---
+            if shape_mask <= 0.001 {
                 discard;
             }
-            final_color = vec4f(primary_color_uniform.rgb, primary_color_uniform.a * object_alpha);
+            final_color = vec4f(primary_color_uniform.rgb, primary_color_uniform.a * shape_mask);
 
         } else if render_mode == 1.0 { // --- Draw Outline ---
             if border_width <= 0.0 {
@@ -220,108 +213,66 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             let alpha_outer_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
             // Alpha for the inner edge of the border (shape shrunk by border_width)
             let alpha_inner_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object + border_width);
-            
-            // The outline alpha is the difference
-            let outline_alpha = alpha_outer_edge - alpha_inner_edge;
+            let outline_mask = max(0.0, alpha_outer_edge - alpha_inner_edge);
 
-            if outline_alpha <= 0.001 {
+            if outline_mask <= 0.001 {
                 discard;
             }
-            final_color = vec4f(primary_color_uniform.rgb, primary_color_uniform.a * max(0.0, outline_alpha));
+            final_color = vec4f(primary_color_uniform.rgb, primary_color_uniform.a * outline_mask);
 
-        } else if render_mode == 3.0 { // --- Draw Ripple Fill ---
-            let object_alpha = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
+        } else if render_mode == 3.0 || render_mode == 4.0 || render_mode == 5.0 { // --- Fill / Outline / Filled+Outline with Ripple ---
+            // Base color (can be transparent for outlined-only, allowing ripple to draw over background).
+            var base_rgb: vec3f;
+            var base_a: f32;
 
-            if object_alpha <= 0.001 {
-                discard;
-            }
-
-            // Calculate ripple effect
-            let p_pixel = p_normalized * size;
-            let center_pixel = ripple_center * size;
-            let dist_to_ripple_center_pixel = distance(p_pixel, center_pixel);
-            
-            let min_dimension = min(size.x, size.y);
-            let normalized_dist = dist_to_ripple_center_pixel / min_dimension;
-            let ripple_effect = calculate_ripple_effect(normalized_dist, ripple_radius);
-            let ripple_final_alpha = ripple_effect * ripple_alpha;
-
-            // Blend primary color with ripple effect
-            let base_color = vec3f(primary_color_uniform.rgb);
-            let blended_color = mix(base_color, ripple_color_rgb, ripple_final_alpha);
-
-            final_color = vec4f(blended_color, primary_color_uniform.a * object_alpha);
-
-        } else if render_mode == 4.0 { // --- Draw Ripple Outline ---
-            if border_width <= 0.0 {
-                discard;
-            }
-            let alpha_outer_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
-            let alpha_inner_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object + border_width);
-            
-            let outline_alpha = alpha_outer_edge - alpha_inner_edge;
-
-            if outline_alpha <= 0.001 {
-                discard;
-            }
-
-            // Calculate ripple effect
-            let p_pixel = p_normalized * size;
-            let center_pixel = ripple_center * size;
-            let dist_to_ripple_center_pixel = distance(p_pixel, center_pixel);
-            
-            let min_dimension = min(size.x, size.y);
-            let normalized_dist = dist_to_ripple_center_pixel / min_dimension;
-            let ripple_effect = calculate_ripple_effect(normalized_dist, ripple_radius);
-            let ripple_final_alpha = ripple_effect * ripple_alpha;
-
-            // Blend primary color with ripple effect
-            let base_color = vec3f(primary_color_uniform.rgb);
-            let blended_color = mix(base_color, ripple_color_rgb, ripple_final_alpha);
-
-            final_color = vec4f(blended_color, primary_color_uniform.a * max(0.0, outline_alpha));
-
-        } else if render_mode == 5.0 { // --- Draw Fill with Outline ---
-            // Calculate ripple effect
-            let p_pixel = p_normalized * size;
-            let center_pixel = ripple_center * size;
-            let dist_to_ripple_center_pixel = distance(p_pixel, center_pixel);
-            
-            let min_dimension = min(size.x, size.y);
-            let normalized_dist = dist_to_ripple_center_pixel / min_dimension;
-            let ripple_effect = calculate_ripple_effect(normalized_dist, ripple_radius);
-            let ripple_final_alpha = ripple_effect * ripple_alpha;
-
-            // Blend primary color with ripple effect
-            let ripple_mixed_fill_color = mix(primary_color_uniform.rgb, ripple_color_rgb, ripple_final_alpha);
-
-            if border_width <= 0.0 { // If no border, just do a normal fill
-                let object_alpha = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
-                if object_alpha <= 0.001 {
+            if render_mode == 3.0 { // fill base
+                base_rgb = primary_color_uniform.rgb;
+                base_a = primary_color_uniform.a * shape_mask;
+            } else if render_mode == 4.0 { // outline base
+                if border_width <= 0.0 {
                     discard;
                 }
-                final_color = vec4f(ripple_mixed_fill_color, primary_color_uniform.a * object_alpha);
-            } else {
-                let dist_inner_edge = dist_object + border_width;
-                let aa = fwidth(dist_object);
-
-                // Smoothly transition from border color to fill color
-                // t is 0 for fill, 1 for border
-                let t = smoothstep(-aa, aa, dist_inner_edge);
-                let blended_color = mix(ripple_mixed_fill_color, instance.border_color.rgb, t);
-                let blended_alpha = mix(primary_color_uniform.a, instance.border_color.a, t);
-
-                // Handle transparency of the whole shape
-                let object_alpha = 1.0 - smoothstep(-aa, aa, dist_object);
-
-                if (object_alpha <= 0.001) {
-                    discard;
+                let alpha_outer_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object);
+                let alpha_inner_edge = 1.0 - smoothstep(-aa_width_object, aa_width_object, dist_object + border_width);
+                let outline_mask = max(0.0, alpha_outer_edge - alpha_inner_edge);
+                base_rgb = primary_color_uniform.rgb;
+                base_a = primary_color_uniform.a * outline_mask;
+            } else { // render_mode == 5.0 (filled + outline base)
+                if border_width <= 0.0 {
+                    if shape_mask <= 0.001 {
+                        discard;
+                    }
+                    base_rgb = primary_color_uniform.rgb;
+                    base_a = primary_color_uniform.a * shape_mask;
+                } else {
+                    let dist_inner_edge = dist_object + border_width;
+                    let aa = fwidth(dist_object);
+                    let t = smoothstep(-aa, aa, dist_inner_edge);
+                    base_rgb = mix(primary_color_uniform.rgb, instance.border_color.rgb, t);
+                    base_a = mix(primary_color_uniform.a, instance.border_color.a, t) * shape_mask;
                 }
-                // Use the blended alpha for the whole object
-                final_color = vec4f(blended_color, blended_alpha * object_alpha);
             }
+
+            // Ripple overlay.
+            let p_pixel = p_normalized * size;
+            let center_pixel = ripple_center * size;
+            let dist_to_ripple_center_pixel = distance(p_pixel, center_pixel);
+            let min_dimension = min(size.x, size.y);
+            let dist_norm = dist_to_ripple_center_pixel / max(min_dimension, 1.0);
+            let aa_ripple = max(fwidth(dist_norm), 0.001);
+            let ripple_mask = calculate_ripple_mask(dist_norm, ripple_radius, aa_ripple);
+            let bounded_mask = select(1.0, shape_mask, ripple_bounded);
+            let overlay_a = clamp(ripple_mask * ripple_alpha * bounded_mask, 0.0, 1.0);
+
+            // Composite overlay on top of base in unpremultiplied space.
+            let out_a = overlay_a + base_a * (1.0 - overlay_a);
+            if out_a <= 0.001 {
+                discard;
+            }
+
+            let out_pm_rgb = ripple_color_rgb * overlay_a + base_rgb * base_a * (1.0 - overlay_a);
+            final_color = vec4f(out_pm_rgb / out_a, out_a);
         } else {
-            // Should not happen with valid render_mode
             discard;
         }
     }

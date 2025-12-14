@@ -242,6 +242,11 @@ impl Default for ShadowProps {
 pub struct RippleProps {
     /// Center position of the ripple in normalized coordinates [-0.5, 0.5]
     pub center: [f32; 2],
+    /// If true, the ripple is clipped by the shape bounds.
+    ///
+    /// If false, the ripple is not clipped by the shape (but is still bounded
+    /// by the draw quad).
+    pub bounded: bool,
     /// Current radius of the ripple (0.0 to 1.0, where 1.0 covers the entire
     /// shape)
     pub radius: f32,
@@ -255,6 +260,7 @@ impl Default for RippleProps {
     fn default() -> Self {
         Self {
             center: [0.0, 0.0],
+            bounded: true,
             radius: 0.0,
             alpha: 0.0,
             color: Color::WHITE,
@@ -427,6 +433,7 @@ pub(crate) fn rect_to_uniforms(
     };
 
     let (ripple_params, ripple_color) = if let Some(r_props) = ripple {
+        let bounded_flag = if r_props.bounded { 1.0 } else { 0.0 };
         (
             Vec4::new(
                 r_props.center[0],
@@ -434,7 +441,12 @@ pub(crate) fn rect_to_uniforms(
                 r_props.radius,
                 r_props.alpha,
             ),
-            Vec4::new(r_props.color.r, r_props.color.g, r_props.color.b, 0.0),
+            Vec4::new(
+                r_props.color.r,
+                r_props.color.g,
+                r_props.color.b,
+                bounded_flag,
+            ),
         )
     } else {
         (Vec4::ZERO, Vec4::ZERO)

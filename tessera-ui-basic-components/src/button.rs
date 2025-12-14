@@ -6,14 +6,16 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera_ui::{Color, DimensionValue, Dp, accesskit::Role, tessera, use_context};
+use tessera_ui::{Color, DimensionValue, Dp, Px, accesskit::Role, tessera, use_context};
 
 use crate::{
     ShadowProps,
+    alignment::Alignment,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     theme::{
-        MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for, provide_text_style,
+        ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for,
+        provide_text_style,
     },
 };
 
@@ -29,20 +31,38 @@ impl ButtonDefaults {
     pub const DISABLED_CONTAINER_ALPHA: f32 = MaterialAlpha::DISABLED_CONTAINER;
     /// Default disabled content alpha.
     pub const DISABLED_CONTENT_ALPHA: f32 = MaterialAlpha::DISABLED_CONTENT;
+    /// Disabled container opacity used by filled/elevated buttons.
+    pub const FILLED_DISABLED_CONTAINER_ALPHA: f32 = 0.1;
+    /// Disabled content opacity used by most buttons.
+    pub const DISABLED_LABEL_ALPHA: f32 = 0.38;
+    /// Minimum width for buttons (Material default = 58dp).
+    pub const MIN_WIDTH: Dp = Dp(58.0);
+    /// Minimum height for buttons (Material default = 40dp).
+    pub const MIN_HEIGHT: Dp = Dp(40.0);
+    /// Horizontal padding used inside buttons.
+    pub const CONTENT_HORIZONTAL_PADDING: Dp = Dp(16.0);
+    /// Vertical padding used inside buttons.
+    pub const CONTENT_VERTICAL_PADDING: Dp = Dp(8.0);
 
-    /// Default disabled container color for most buttons.
+    /// Default disabled container color for filled buttons.
     pub fn disabled_container_color(scheme: &MaterialColorScheme) -> Color {
-        scheme.on_surface.with_alpha(Self::DISABLED_CONTAINER_ALPHA)
+        scheme
+            .on_surface
+            .with_alpha(Self::FILLED_DISABLED_CONTAINER_ALPHA)
     }
 
-    /// Default disabled content color for most buttons.
+    /// Default disabled content color for filled buttons.
     pub fn disabled_content_color(scheme: &MaterialColorScheme) -> Color {
-        scheme.on_surface.with_alpha(Self::DISABLED_CONTENT_ALPHA)
+        scheme
+            .on_surface_variant
+            .with_alpha(Self::DISABLED_LABEL_ALPHA)
     }
 
     /// Default disabled border color for outlined buttons.
     pub fn disabled_border_color(scheme: &MaterialColorScheme) -> Color {
-        scheme.on_surface.with_alpha(Self::DISABLED_CONTAINER_ALPHA)
+        scheme
+            .outline_variant
+            .with_alpha(Self::FILLED_DISABLED_CONTAINER_ALPHA)
     }
 
     /// Returns a state-layer hover color computed from a container + overlay
@@ -69,15 +89,13 @@ pub struct ButtonArgs {
     pub content_color: Option<Color>,
     /// The hover color of the button (RGBA). If None, no hover effect is
     /// applied.
-    #[builder(
-        default = "{ let scheme = use_context::<MaterialTheme>().get().color_scheme; Some(ButtonDefaults::hover_color(scheme.primary, scheme.on_primary)) }"
-    )]
+    #[builder(default = "None")]
     pub hover_color: Option<Color>,
     /// The shape of the button.
-    #[builder(default = "Shape::rounded_rectangle(Dp(20.0))")]
+    #[builder(default = "Shape::capsule()")]
     pub shape: Shape,
     /// The padding of the button.
-    #[builder(default = "Dp(10.0)")]
+    #[builder(default = "ButtonDefaults::CONTENT_VERTICAL_PADDING")]
     pub padding: Dp,
     /// Optional explicit width behavior for the button.
     #[builder(default = "DimensionValue::WRAP", setter(into))]
@@ -89,9 +107,7 @@ pub struct ButtonArgs {
     #[builder(default, setter(custom, strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// The ripple color (RGB) for the button.
-    #[builder(
-        default = "use_context::<MaterialTheme>().get().color_scheme.on_primary.with_alpha(ButtonDefaults::PRESSED_ALPHA)"
-    )]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_primary")]
     pub ripple_color: Color,
     /// Width of the border. If > 0, an outline will be drawn.
     #[builder(default = "Dp(0.0)")]
@@ -210,6 +226,7 @@ pub fn button(args: impl Into<ButtonArgs>, child: impl FnOnce()) {
 /// Create surface arguments based on button configuration
 fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
     let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let inherited_content_color = use_context::<ContentColor>().get().current;
 
     let container_color = if args.enabled {
         args.color
@@ -218,8 +235,9 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
     };
 
     let content_color = if args.enabled {
-        args.content_color
-            .unwrap_or_else(|| content_color_for(args.color, &scheme))
+        args.content_color.unwrap_or_else(|| {
+            content_color_for(args.color, &scheme).unwrap_or(inherited_content_color)
+        })
     } else {
         args.disabled_content_color
     };
@@ -284,21 +302,46 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         builder = builder.accessibility_description(description);
     }
 
+    let width = enforce_min_dimension(args.width, ButtonDefaults::MIN_WIDTH);
+    let height = enforce_min_dimension(args.height, ButtonDefaults::MIN_HEIGHT);
+
     builder
         .style(style)
         .hover_style(hover_style)
         .shape(args.shape)
         .padding(args.padding)
         .ripple_color(args.ripple_color)
+        .content_alignment(Alignment::Center)
         .content_color(content_color)
         .enabled(args.enabled)
         .tonal_elevation(args.tonal_elevation)
-        .width(args.width)
-        .height(args.height)
+        .width(width)
+        .height(height)
         .accessibility_role(Role::Button)
         .accessibility_focusable(true)
         .build()
         .expect("SurfaceArgsBuilder failed with required button fields set")
+}
+
+fn enforce_min_dimension(value: DimensionValue, min: Dp) -> DimensionValue {
+    let min_px = min.to_px();
+    match value {
+        DimensionValue::Fixed(_) => value,
+        DimensionValue::Wrap {
+            min: current_min,
+            max,
+        } => DimensionValue::Wrap {
+            min: Some(current_min.unwrap_or(Px(0)).max(min_px)),
+            max,
+        },
+        DimensionValue::Fill {
+            min: current_min,
+            max,
+        } => DimensionValue::Fill {
+            min: Some(current_min.unwrap_or(Px(0)).max(min_px)),
+            max,
+        },
+    }
 }
 
 /// Convenience constructors for standard Material Design 3 button styles
@@ -310,11 +353,17 @@ impl ButtonArgs {
         ButtonArgsBuilder::default()
             .color(scheme.primary)
             .content_color(scheme.on_primary)
-            .hover_color(Some(ButtonDefaults::hover_color(
-                scheme.primary,
-                scheme.on_primary,
-            )))
-            .ripple_color(scheme.on_primary.with_alpha(ButtonDefaults::PRESSED_ALPHA))
+            .ripple_color(scheme.on_primary)
+            .disabled_container_color(
+                scheme
+                    .on_surface
+                    .with_alpha(ButtonDefaults::FILLED_DISABLED_CONTAINER_ALPHA),
+            )
+            .disabled_content_color(
+                scheme
+                    .on_surface_variant
+                    .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
+            )
             .on_click(on_click)
             .build()
             .expect("ButtonArgsBuilder failed for filled button")
@@ -327,12 +376,18 @@ impl ButtonArgs {
         ButtonArgsBuilder::default()
             .color(scheme.surface_container_low)
             .content_color(scheme.primary)
-            .hover_color(Some(ButtonDefaults::hover_color(
-                scheme.surface,
-                scheme.primary,
-            )))
-            .ripple_color(scheme.primary.with_alpha(ButtonDefaults::PRESSED_ALPHA))
+            .ripple_color(scheme.primary)
             .shadow_elevation(Dp(1.0))
+            .disabled_container_color(
+                scheme
+                    .on_surface
+                    .with_alpha(ButtonDefaults::FILLED_DISABLED_CONTAINER_ALPHA),
+            )
+            .disabled_content_color(
+                scheme
+                    .on_surface_variant
+                    .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
+            )
             .on_click(on_click)
             .build()
             .expect("ButtonArgsBuilder failed for elevated button")
@@ -346,14 +401,16 @@ impl ButtonArgs {
         ButtonArgsBuilder::default()
             .color(scheme.secondary_container)
             .content_color(scheme.on_secondary_container)
-            .hover_color(Some(ButtonDefaults::hover_color(
-                scheme.secondary_container,
-                scheme.on_secondary_container,
-            )))
-            .ripple_color(
+            .ripple_color(scheme.on_secondary_container)
+            .disabled_container_color(
                 scheme
-                    .on_secondary_container
-                    .with_alpha(ButtonDefaults::PRESSED_ALPHA),
+                    .on_surface
+                    .with_alpha(ButtonDefaults::DISABLED_CONTAINER_ALPHA),
+            )
+            .disabled_content_color(
+                scheme
+                    .on_surface
+                    .with_alpha(ButtonDefaults::DISABLED_CONTENT_ALPHA),
             )
             .on_click(on_click)
             .build()
@@ -366,15 +423,21 @@ impl ButtonArgs {
         let scheme = use_context::<MaterialTheme>().get().color_scheme;
         ButtonArgsBuilder::default()
             .color(Color::TRANSPARENT)
-            .content_color(scheme.primary)
+            .content_color(scheme.on_surface_variant)
             .disabled_container_color(Color::TRANSPARENT)
-            .hover_color(Some(ButtonDefaults::hover_color(
-                Color::TRANSPARENT,
-                scheme.primary,
-            )))
-            .ripple_color(scheme.primary.with_alpha(ButtonDefaults::PRESSED_ALPHA))
+            .ripple_color(scheme.on_surface_variant)
             .border_width(Dp(1.0))
-            .border_color(Some(scheme.outline))
+            .border_color(Some(scheme.outline_variant))
+            .disabled_border_color(
+                scheme
+                    .outline_variant
+                    .with_alpha(ButtonDefaults::FILLED_DISABLED_CONTAINER_ALPHA),
+            )
+            .disabled_content_color(
+                scheme
+                    .on_surface_variant
+                    .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
+            )
             .on_click(on_click)
             .build()
             .expect("ButtonArgsBuilder failed for outlined button")
@@ -388,11 +451,12 @@ impl ButtonArgs {
             .color(Color::TRANSPARENT)
             .content_color(scheme.primary)
             .disabled_container_color(Color::TRANSPARENT)
-            .hover_color(Some(ButtonDefaults::hover_color(
-                Color::TRANSPARENT,
-                scheme.primary,
-            )))
-            .ripple_color(scheme.primary.with_alpha(ButtonDefaults::PRESSED_ALPHA))
+            .ripple_color(scheme.primary)
+            .disabled_content_color(
+                scheme
+                    .on_surface_variant
+                    .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
+            )
             .on_click(on_click)
             .build()
             .expect("ButtonArgsBuilder failed for text button")

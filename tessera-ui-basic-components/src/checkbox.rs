@@ -493,7 +493,7 @@ pub fn checkbox_with_controller(
                 .style(SurfaceStyle::Filled {
                     color: Color::TRANSPARENT,
                 })
-                .hover_style(enabled.then(|| SurfaceStyle::Filled {
+                .hover_style(enabled.then_some(SurfaceStyle::Filled {
                     color: state_layer_hover_color,
                 }))
                 .ripple_color(state_layer_ripple_color);

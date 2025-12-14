@@ -16,13 +16,25 @@ use tessera_ui::{
 
 use crate::{
     RippleProps, ShadowProps,
+    alignment::Alignment,
     padding_utils::remove_padding_from_dimension,
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
     pos_misc::is_position_in_component,
-    ripple_state::RippleState,
+    ripple_state::{RippleSpec, RippleState},
     shape_def::{ResolvedShape, RoundedCorner, Shape},
     theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for},
 };
+
+#[derive(Clone, Copy, Debug)]
+struct AbsoluteTonalElevation {
+    current: Dp,
+}
+
+impl Default for AbsoluteTonalElevation {
+    fn default() -> Self {
+        Self { current: Dp(0.0) }
+    }
+}
 
 /// Material Design 3 defaults for [`surface`].
 pub struct SurfaceDefaults;
@@ -33,56 +45,14 @@ impl SurfaceDefaults {
 
     /// Returns the standard ripple color for a surface.
     pub fn ripple_color(scheme: &MaterialColorScheme) -> Color {
-        scheme.on_surface.with_alpha(Self::RIPPLE_ALPHA)
-    }
-
-    /// Computes the tonal overlay alpha for a given tonal elevation.
-    ///
-    /// This follows the Material 3 formula:
-    /// `alpha = ((4.5 * ln(elevation + 1)) + 2) / 100`.
-    pub fn tonal_overlay_alpha(tonal_elevation: Dp) -> f32 {
-        if tonal_elevation.0 <= 0.0 {
-            return 0.0;
-        }
-        let elevation = tonal_elevation.0 as f64;
-        let alpha = ((4.5 * (elevation + 1.0).ln()) + 2.0) / 100.0;
-        (alpha as f32).clamp(0.0, 1.0)
-    }
-
-    /// Applies tonal elevation to styles that use the theme `surface` color.
-    pub fn apply_tonal_elevation(
-        style: &SurfaceStyle,
-        scheme: &MaterialColorScheme,
-        tonal_elevation: Dp,
-    ) -> SurfaceStyle {
-        let alpha = Self::tonal_overlay_alpha(tonal_elevation);
-        if alpha <= 0.0 {
-            return style.clone();
-        }
-
-        let tint = scheme.primary;
-        match style {
-            SurfaceStyle::Filled { color } if *color == scheme.surface => SurfaceStyle::Filled {
-                color: scheme.surface.blend_over(tint, alpha),
-            },
-            SurfaceStyle::FilledOutlined {
-                fill_color,
-                border_color,
-                border_width,
-            } if *fill_color == scheme.surface => SurfaceStyle::FilledOutlined {
-                fill_color: scheme.surface.blend_over(tint, alpha),
-                border_color: *border_color,
-                border_width: *border_width,
-            },
-            _ => style.clone(),
-        }
+        scheme.on_surface
     }
 
     /// Synthesizes a shadow style for the provided elevation.
     pub fn synthesize_shadow(elevation: Dp, scheme: &MaterialColorScheme) -> ShadowProps {
         let elevation_px = elevation.to_pixels_f32();
-        let offset_y = (elevation_px * 0.5).max(1.0).min(12.0);
-        let smoothness = (elevation_px * 0.75).max(2.0).min(24.0);
+        let offset_y = (elevation_px * 0.5).clamp(1.0, 12.0);
+        let smoothness = (elevation_px * 0.75).clamp(2.0, 24.0);
         ShadowProps {
             color: scheme.shadow.with_alpha(0.25),
             offset: [0.0, offset_y],
@@ -170,12 +140,19 @@ pub struct SurfaceArgs {
     /// [`content_color_for`].
     #[builder(default, setter(strip_option))]
     pub content_color: Option<Color>,
+    /// Aligns child content within the surface bounds.
+    #[builder(default)]
+    pub content_alignment: Alignment,
     /// Whether this surface is enabled for user interaction.
     ///
     /// When disabled, it will not react to input, will not show hover/ripple
     /// feedback, and will expose a disabled state to accessibility services.
     #[builder(default = "true")]
     pub enabled: bool,
+    /// Whether this surface should enforce the minimum interactive size
+    /// when it is clickable.
+    #[builder(default = "true")]
+    pub enforce_min_interactive_size: bool,
     /// Internal padding applied symmetrically (left/right & top/bottom). Child
     /// content is positioned at (padding, padding). Also influences
     /// measured minimum size.
@@ -196,10 +173,14 @@ pub struct SurfaceArgs {
     #[builder(default, setter(custom, strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Color of the ripple effect (used when interactive).
-    #[builder(
-        default = "use_context::<MaterialTheme>().get().color_scheme.on_surface.with_alpha(MaterialAlpha::PRESSED)"
-    )]
+    #[builder(default = "use_context::<ContentColor>().get().current")]
     pub ripple_color: Color,
+    /// Whether ripples are bounded to the surface shape.
+    #[builder(default = "true")]
+    pub ripple_bounded: bool,
+    /// Optional explicit ripple radius for this surface.
+    #[builder(default, setter(strip_option))]
+    pub ripple_radius: Option<Dp>,
     /// If true, all input events inside the surface bounds are blocked (stop
     /// propagation), after (optionally) handling its own click logic.
     #[builder(default = "false")]
@@ -244,12 +225,83 @@ impl Default for SurfaceArgs {
     }
 }
 
+fn enforce_min_dimension_value(value: DimensionValue, min: Px) -> DimensionValue {
+    match value {
+        DimensionValue::Fixed(v) => DimensionValue::Fixed(v.max(min)),
+        DimensionValue::Wrap {
+            min: current_min,
+            max,
+        } => DimensionValue::Wrap {
+            min: Some(current_min.unwrap_or(Px(0)).max(min)),
+            max,
+        },
+        DimensionValue::Fill {
+            min: current_min,
+            max,
+        } => DimensionValue::Fill {
+            min: Some(current_min.unwrap_or(Px(0)).max(min)),
+            max,
+        },
+    }
+}
+
+fn compute_content_offset(
+    alignment: Alignment,
+    container_w: Px,
+    container_h: Px,
+    content_w: Px,
+    content_h: Px,
+) -> (Px, Px) {
+    fn center_axis(container: Px, content: Px) -> Px {
+        Px(((container.0 - content.0).max(0)) / 2)
+    }
+
+    match alignment {
+        Alignment::TopStart => (Px(0), Px(0)),
+        Alignment::TopCenter => (center_axis(container_w, content_w), Px(0)),
+        Alignment::TopEnd => (Px((container_w.0 - content_w.0).max(0)), Px(0)),
+        Alignment::CenterStart => (Px(0), center_axis(container_h, content_h)),
+        Alignment::Center => (
+            center_axis(container_w, content_w),
+            center_axis(container_h, content_h),
+        ),
+        Alignment::CenterEnd => (
+            Px((container_w.0 - content_w.0).max(0)),
+            center_axis(container_h, content_h),
+        ),
+        Alignment::BottomStart => (Px(0), Px((container_h.0 - content_h.0).max(0))),
+        Alignment::BottomCenter => (
+            center_axis(container_w, content_w),
+            Px((container_h.0 - content_h.0).max(0)),
+        ),
+        Alignment::BottomEnd => (
+            Px((container_w.0 - content_w.0).max(0)),
+            Px((container_h.0 - content_h.0).max(0)),
+        ),
+    }
+}
+
 fn apply_tonal_elevation_to_style(
     style: &SurfaceStyle,
     scheme: &MaterialColorScheme,
-    tonal_elevation: Dp,
+    absolute_tonal_elevation: Dp,
 ) -> SurfaceStyle {
-    SurfaceDefaults::apply_tonal_elevation(style, scheme, tonal_elevation)
+    match style {
+        SurfaceStyle::Filled { color } => SurfaceStyle::Filled {
+            color: scheme.surface_color_at_elevation_for(*color, absolute_tonal_elevation),
+        },
+        SurfaceStyle::FilledOutlined {
+            fill_color,
+            border_color,
+            border_width,
+        } => SurfaceStyle::FilledOutlined {
+            fill_color: scheme
+                .surface_color_at_elevation_for(*fill_color, absolute_tonal_elevation),
+            border_color: *border_color,
+            border_width: *border_width,
+        },
+        SurfaceStyle::Outlined { .. } => style.clone(),
+    }
 }
 
 fn synthesize_shadow_for_elevation(elevation: Dp, scheme: &MaterialColorScheme) -> ShadowProps {
@@ -261,17 +313,45 @@ fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<State<RippleState
         return RippleProps::default();
     };
 
-    if let Some((progress, click_pos)) = ripple_state.with_mut(|s| s.get_animation_progress()) {
-        let radius = progress;
-        let alpha = (1.0 - progress) * 0.3;
+    if let Some(animation) = ripple_state.with_mut(|s| s.animation()) {
         return RippleProps {
-            center: click_pos,
-            radius,
-            alpha,
-            color: args.ripple_color,
+            center: [animation.center[0] - 0.5, animation.center[1] - 0.5],
+            bounded: args.ripple_bounded,
+            radius: animation.radius,
+            alpha: animation.alpha,
+            color: args.ripple_color.with_alpha(1.0),
         };
     }
     RippleProps::default()
+}
+
+fn apply_state_layer_to_style(style: &SurfaceStyle, color: Color, alpha: f32) -> SurfaceStyle {
+    if alpha <= 0.0 {
+        return style.clone();
+    }
+
+    match style {
+        SurfaceStyle::Filled { color: fill_color } => SurfaceStyle::Filled {
+            color: fill_color.blend_over(color, alpha),
+        },
+        SurfaceStyle::Outlined {
+            color: border_color,
+            width,
+        } => SurfaceStyle::FilledOutlined {
+            fill_color: Color::TRANSPARENT.blend_over(color, alpha),
+            border_color: *border_color,
+            border_width: *width,
+        },
+        SurfaceStyle::FilledOutlined {
+            fill_color,
+            border_color,
+            border_width,
+        } => SurfaceStyle::FilledOutlined {
+            fill_color: fill_color.blend_over(color, alpha),
+            border_color: *border_color,
+            border_width: *border_width,
+        },
+    }
 }
 
 fn build_rounded_rectangle_command(
@@ -454,7 +534,7 @@ fn try_build_simple_rect_command(
         return None;
     }
     if ripple_state
-        .and_then(|state| state.with_mut(|s| s.get_animation_progress()))
+        .and_then(|state| state.with_mut(|s| s.animation()))
         .is_some()
     {
         return None;
@@ -578,25 +658,40 @@ fn compute_surface_size(
 #[tessera]
 pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
     let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let parent_absolute_elevation = use_context::<AbsoluteTonalElevation>().get().current;
+    let absolute_tonal_elevation = Dp(parent_absolute_elevation.0 + args.tonal_elevation.0);
     let inherited_content_color = use_context::<ContentColor>().get().current;
     let content_color = args.content_color.unwrap_or_else(|| match &args.style {
-        SurfaceStyle::Filled { color } => content_color_for(*color, &scheme),
-        SurfaceStyle::FilledOutlined { fill_color, .. } => content_color_for(*fill_color, &scheme),
+        SurfaceStyle::Filled { color } => {
+            content_color_for(*color, &scheme).unwrap_or(inherited_content_color)
+        }
+        SurfaceStyle::FilledOutlined { fill_color, .. } => {
+            content_color_for(*fill_color, &scheme).unwrap_or(inherited_content_color)
+        }
         SurfaceStyle::Outlined { .. } => inherited_content_color,
     });
-    let interactive = args.enabled && args.on_click.is_some();
+    let clickable = args.on_click.is_some();
+    let interactive = args.enabled && clickable;
 
     provide_context(
-        ContentColor {
-            current: content_color,
+        AbsoluteTonalElevation {
+            current: absolute_tonal_elevation,
         },
         || {
-            (child)();
+            provide_context(
+                ContentColor {
+                    current: content_color,
+                },
+                || {
+                    (child)();
+                },
+            );
         },
     );
     let ripple_state = interactive.then(|| remember(RippleState::new));
     let args_measure_clone = args.clone();
     let args_for_handler = args.clone();
+    let absolute_tonal_elevation_for_draw = absolute_tonal_elevation;
 
     measure(Box::new(move |input| {
         let mut args_for_draw = args_measure_clone.clone();
@@ -611,8 +706,15 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
         let surface_intrinsic_height = args_measure_clone.height;
         let surface_intrinsic_constraint =
             Constraint::new(surface_intrinsic_width, surface_intrinsic_height);
-        let effective_surface_constraint =
+        let mut effective_surface_constraint =
             surface_intrinsic_constraint.merge(input.parent_constraint);
+        if clickable && args_measure_clone.enforce_min_interactive_size {
+            let min_size = Dp(48.0).to_px();
+            effective_surface_constraint.width =
+                enforce_min_dimension_value(effective_surface_constraint.width, min_size);
+            effective_surface_constraint.height =
+                enforce_min_dimension_value(effective_surface_constraint.height, min_size);
+        }
         let padding_px: Px = args_measure_clone.padding.into();
         let child_constraint = Constraint::new(
             remove_padding_from_dimension(effective_surface_constraint.width, padding_px),
@@ -628,13 +730,6 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                     .map(|node_id| (node_id, child_constraint))
                     .collect(),
             )?;
-            input.place_child(
-                input.children_ids[0],
-                PxPosition {
-                    x: args.padding.into(),
-                    y: args.padding.into(),
-                },
-            );
             let mut max_width = Px::ZERO;
             let mut max_height = Px::ZERO;
             for measurement in child_measurements.values() {
@@ -656,6 +751,10 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             .as_ref()
             .map(|state| state.with(|s| s.is_hovered()))
             .unwrap_or(false);
+        let state_layer_alpha = ripple_state
+            .as_ref()
+            .map(|state| state.with(|s| s.state_layer_alpha()))
+            .unwrap_or(0.0);
 
         let effective_style = args_measure_clone
             .hover_style
@@ -665,12 +764,36 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
         let effective_style = apply_tonal_elevation_to_style(
             effective_style,
             &scheme,
-            args_measure_clone.tonal_elevation,
+            absolute_tonal_elevation_for_draw,
+        );
+        let effective_style = apply_state_layer_to_style(
+            &effective_style,
+            args_for_draw.ripple_color.with_alpha(1.0),
+            state_layer_alpha,
         );
 
         let padding_px: Px = args_measure_clone.padding.into();
+        let content_box_width = child_measurement.width + padding_px * 2;
+        let content_box_height = child_measurement.height + padding_px * 2;
         let (width, height) =
             compute_surface_size(effective_surface_constraint, child_measurement, padding_px);
+
+        if !input.children_ids.is_empty() {
+            let (extra_x, extra_y) = compute_content_offset(
+                args_measure_clone.content_alignment,
+                width,
+                height,
+                content_box_width,
+                content_box_height,
+            );
+            let origin = PxPosition {
+                x: Px(padding_px.0 + extra_x.0),
+                y: Px(padding_px.0 + extra_y.0),
+            };
+            for &child_id in input.children_ids.iter() {
+                input.place_child(child_id, origin);
+            }
+        }
 
         if let Some(simple) =
             try_build_simple_rect_command(&args_for_draw, &effective_style, ripple_state)
@@ -690,10 +813,10 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
         Ok(ComputedData { width, height })
     }));
 
-    if interactive {
+    if clickable {
         let args_for_handler = args.clone();
         input_handler(Box::new(move |mut input| {
-            // Apply accessibility metadata first
+            // Apply accessibility metadata first.
             apply_surface_accessibility(
                 &mut input,
                 &args_for_handler,
@@ -702,64 +825,91 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 args_for_handler.on_click.clone(),
             );
 
-            // Then handle interactive behavior
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
 
-            if let Some(ref state) = ripple_state {
-                state.with_mut(|s| s.set_hovered(is_cursor_in_surface));
-            }
-
-            if is_cursor_in_surface {
-                input.requests.cursor_icon = CursorIcon::Pointer;
-            }
-
-            if is_cursor_in_surface {
-                let press_events: Vec<_> = input
-                    .cursor_events
-                    .iter()
-                    .filter(|event| {
-                        matches!(
-                            event.content,
-                            CursorEventContent::Pressed(PressKeyEventType::Left)
-                        )
-                    })
-                    .collect();
-
-                let release_events: Vec<_> = input
-                    .cursor_events
-                    .iter()
-                    .filter(|event| event.gesture_state == GestureState::TapCandidate)
-                    .filter(|event| {
-                        matches!(
-                            event.content,
-                            CursorEventContent::Released(PressKeyEventType::Left)
-                        )
-                    })
-                    .collect();
-
-                if !press_events.is_empty()
-                    && let Some(cursor_pos) = cursor_pos_option
-                    && let Some(state) = ripple_state.as_ref()
-                {
-                    let normalized_x = (cursor_pos.x.to_f32() / size.width.to_f32()) - 0.5;
-                    let normalized_y = (cursor_pos.y.to_f32() / size.height.to_f32()) - 0.5;
-
-                    state.with_mut(|s| s.start_animation([normalized_x, normalized_y]));
+            if interactive {
+                if let Some(ref state) = ripple_state {
+                    state.with_mut(|s| s.set_hovered(is_cursor_in_surface));
                 }
 
-                if !release_events.is_empty()
-                    && let Some(ref on_click) = args_for_handler.on_click
-                {
-                    on_click();
+                if input.cursor_events.iter().any(|event| {
+                    matches!(
+                        event.content,
+                        CursorEventContent::Released(PressKeyEventType::Left)
+                    )
+                }) {
+                    if let Some(ref state) = ripple_state {
+                        state.with_mut(|s| s.release());
+                    }
                 }
 
-                if args_for_handler.block_input {
-                    input.block_all();
+                if is_cursor_in_surface {
+                    input.requests.cursor_icon = CursorIcon::Pointer;
                 }
+
+                if is_cursor_in_surface {
+                    let press_events: Vec<_> = input
+                        .cursor_events
+                        .iter()
+                        .filter(|event| {
+                            matches!(
+                                event.content,
+                                CursorEventContent::Pressed(PressKeyEventType::Left)
+                            )
+                        })
+                        .collect();
+
+                    let release_events: Vec<_> = input
+                        .cursor_events
+                        .iter()
+                        .filter(|event| event.gesture_state == GestureState::TapCandidate)
+                        .filter(|event| {
+                            matches!(
+                                event.content,
+                                CursorEventContent::Released(PressKeyEventType::Left)
+                            )
+                        })
+                        .collect();
+
+                    if !press_events.is_empty()
+                        && let Some(cursor_pos) = cursor_pos_option
+                        && let Some(state) = ripple_state.as_ref()
+                    {
+                        let denom_w = size.width.to_f32().max(1.0);
+                        let denom_h = size.height.to_f32().max(1.0);
+                        let normalized_x = (cursor_pos.x.to_f32() / denom_w).clamp(0.0, 1.0);
+                        let normalized_y = (cursor_pos.y.to_f32() / denom_h).clamp(0.0, 1.0);
+                        let spec = RippleSpec {
+                            bounded: args_for_handler.ripple_bounded,
+                            radius: args_for_handler.ripple_radius,
+                        };
+
+                        state.with_mut(|s| {
+                            s.start_animation_with_spec(
+                                [normalized_x, normalized_y],
+                                PxSize::new(size.width, size.height),
+                                spec,
+                            );
+                            s.set_pressed(true);
+                        });
+                    }
+
+                    if !release_events.is_empty()
+                        && let Some(ref on_click) = args_for_handler.on_click
+                    {
+                        on_click();
+                    }
+
+                    if args_for_handler.block_input {
+                        input.block_all();
+                    }
+                }
+            } else if args_for_handler.block_input && is_cursor_in_surface {
+                input.block_all();
             }
         }));
     } else {

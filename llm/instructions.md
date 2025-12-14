@@ -102,6 +102,10 @@ This document defines how You should assist in the Tessera project to ensure cod
 - **Documentation**:
   - Main documentation must be in English. Other language versions, if any, should be placed in the docs/ directory and kept in sync with the English version.
   - Documentation format should pass markdown lint if possible
+- **Comment Policy**:
+  - Documentation comments (`//!`, `///`) are written for end users. Describe purpose, behavior, and usage. Do **not** include implementation details, internal architecture notes, or references to upstream/source code (e.g., “ported from Compose”, file paths, commit hashes).
+  - Non-documentation comments (`//`, `/* */`) are allowed only when necessary to explain *why* a piece of code is written a certain way (non-obvious tradeoffs, invariants, safety/performance constraints). Do **not** restate what the code does.
+  - Any other commentary-style comments are not allowed.
 
 ---
 

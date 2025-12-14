@@ -156,21 +156,9 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
     let container_color = args.color.unwrap_or(default_container_color);
     let content_color = args.content_color.unwrap_or(default_content_color);
 
-    // Determine hover and ripple colors
-    let hover_overlay_color = content_color;
-
-    let hover_color = if args.variant == IconButtonVariant::Standard
-        || args.variant == IconButtonVariant::Outlined
-    {
-        Some(hover_overlay_color.with_alpha(ButtonDefaults::HOVER_ALPHA))
-    } else {
-        Some(ButtonDefaults::hover_color(
-            container_color,
-            hover_overlay_color,
-        ))
-    };
-
-    let ripple_color = hover_overlay_color.with_alpha(ButtonDefaults::PRESSED_ALPHA);
+    // Use state-layer + ripple derived from the current content color.
+    let hover_color = None;
+    let ripple_color = content_color;
 
     // Construct ButtonArgs
     let mut button_builder = ButtonArgsBuilder::default()
