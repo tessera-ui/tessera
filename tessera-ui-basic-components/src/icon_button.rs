@@ -9,11 +9,11 @@ use derive_builder::Builder;
 use tessera_ui::{Color, Dp, tessera, use_context};
 
 use crate::{
-    button::{ButtonArgsBuilder, button},
+    button::{ButtonArgsBuilder, ButtonDefaults, button},
     glass_button::{GlassButtonArgs, glass_button},
     icon::{IconArgs, icon},
     shape_def::Shape,
-    theme::MaterialColorScheme,
+    theme::MaterialTheme,
 };
 
 /// Variations of the icon button as per Material Design 3.
@@ -129,7 +129,7 @@ impl GlassIconButtonArgsBuilder {
 #[tessera]
 pub fn icon_button(args: impl Into<IconButtonArgs>) {
     let args: IconButtonArgs = args.into();
-    let scheme = use_context::<MaterialColorScheme>().get();
+    let scheme = use_context::<MaterialTheme>().get().color_scheme;
 
     // Determine colors based on variant
     let (default_container_color, default_content_color, border_width, border_color) =
@@ -162,12 +162,15 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
     let hover_color = if args.variant == IconButtonVariant::Standard
         || args.variant == IconButtonVariant::Outlined
     {
-        Some(hover_overlay_color.with_alpha(0.08))
+        Some(hover_overlay_color.with_alpha(ButtonDefaults::HOVER_ALPHA))
     } else {
-        Some(container_color.blend_over(hover_overlay_color, 0.08))
+        Some(ButtonDefaults::hover_color(
+            container_color,
+            hover_overlay_color,
+        ))
     };
 
-    let ripple_color = hover_overlay_color.with_alpha(0.12);
+    let ripple_color = hover_overlay_color.with_alpha(ButtonDefaults::PRESSED_ALPHA);
 
     // Construct ButtonArgs
     let mut button_builder = ButtonArgsBuilder::default()
@@ -176,6 +179,16 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
         .padding(Dp(8.0))
         .shape(Shape::rounded_rectangle(Dp(20.0)))
         .color(container_color)
+        .content_color(content_color)
+        .enabled(args.enabled)
+        .disabled_container_color(match args.variant {
+            IconButtonVariant::Standard | IconButtonVariant::Outlined => Color::TRANSPARENT,
+            IconButtonVariant::Filled | IconButtonVariant::FilledTonal => {
+                ButtonDefaults::disabled_container_color(&scheme)
+            }
+        })
+        .disabled_content_color(ButtonDefaults::disabled_content_color(&scheme))
+        .disabled_border_color(ButtonDefaults::disabled_border_color(&scheme))
         .hover_color(hover_color)
         .ripple_color(ripple_color)
         .border_width(border_width);
@@ -185,9 +198,7 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
     }
 
     if let Some(on_click) = args.on_click {
-        if args.enabled {
-            button_builder = button_builder.on_click_shared(on_click);
-        }
+        button_builder = button_builder.on_click_shared(on_click);
     }
 
     // Prepare IconArgs

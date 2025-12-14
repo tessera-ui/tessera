@@ -7,7 +7,7 @@ use tessera_ui_basic_components::{
     scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
-    theme::MaterialColorScheme,
+    theme::MaterialTheme,
 };
 
 #[tessera]
@@ -77,8 +77,9 @@ fn row_showcase() {
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
                     .style(
-                        use_context::<MaterialColorScheme>()
+                        use_context::<MaterialTheme>()
                             .get()
+                            .color_scheme
                             .surface_variant
                             .into(),
                     )
@@ -120,8 +121,9 @@ fn column_showcase() {
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
                     .style(
-                        use_context::<MaterialColorScheme>()
+                        use_context::<MaterialTheme>()
                             .get()
+                            .color_scheme
                             .surface_variant
                             .into(),
                     )
@@ -163,8 +165,9 @@ fn boxed_showcase() {
                 SurfaceArgsBuilder::default()
                     .padding(Dp(10.0))
                     .style(
-                        use_context::<MaterialColorScheme>()
+                        use_context::<MaterialTheme>()
                             .get()
+                            .color_scheme
                             .surface_variant
                             .into(),
                     )

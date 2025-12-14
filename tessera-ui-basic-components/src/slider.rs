@@ -11,7 +11,10 @@ use tessera_ui::{
     PxPosition, State, focus_state::Focus, remember, tessera, use_context,
 };
 
-use crate::{pipelines::image_vector::command::VectorTintMode, theme::MaterialColorScheme};
+use crate::{
+    pipelines::image_vector::command::VectorTintMode,
+    theme::{MaterialAlpha, MaterialTheme},
+};
 
 use interaction::{
     apply_range_slider_accessibility, apply_slider_accessibility, handle_range_slider_state,
@@ -125,23 +128,25 @@ pub struct SliderArgs {
     #[builder(default = "DimensionValue::Fixed(Dp(260.0).to_px())")]
     pub width: DimensionValue,
     /// The color of the active part of the track (progress fill).
-    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub active_track_color: Color,
     /// The color of the inactive part of the track (background).
-    #[builder(default = "use_context::<MaterialColorScheme>().get().secondary_container")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.secondary_container")]
     pub inactive_track_color: Color,
     /// The thickness of the handle indicator.
     #[builder(default = "Dp(4.0)")]
     pub thumb_diameter: Dp,
     /// Color of the handle indicator.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub thumb_color: Color,
     /// Height of the handle focus layer (hover/drag halo).
     #[builder(default = "Dp(18.0)")]
     pub state_layer_diameter: Dp,
     /// Base color for the state layer; alpha will be adjusted per interaction
     /// state.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().primary.with_alpha(0.18)")]
+    #[builder(
+        default = "use_context::<MaterialTheme>().get().color_scheme.primary.with_alpha(0.18)"
+    )]
     pub state_layer_color: Color,
     /// Disable interaction.
     #[builder(default = "false")]
@@ -182,11 +187,11 @@ pub struct RangeSliderArgs {
     pub width: DimensionValue,
 
     /// The color of the active part of the track (range fill).
-    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub active_track_color: Color,
 
     /// The color of the inactive part of the track (background).
-    #[builder(default = "use_context::<MaterialColorScheme>().get().secondary_container")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.secondary_container")]
     pub inactive_track_color: Color,
 
     /// The thickness of the handle indicators.
@@ -194,7 +199,7 @@ pub struct RangeSliderArgs {
     pub thumb_diameter: Dp,
 
     /// Color of the handle indicators.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub thumb_color: Color,
 
     /// Height of the handle focus layer.
@@ -202,7 +207,9 @@ pub struct RangeSliderArgs {
     pub state_layer_diameter: Dp,
 
     /// Base color for the state layer.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().primary.with_alpha(0.18)")]
+    #[builder(
+        default = "use_context::<MaterialTheme>().get().color_scheme.primary.with_alpha(0.18)"
+    )]
     pub state_layer_color: Color,
 
     /// Disable interaction.
@@ -357,11 +364,17 @@ struct SliderColors {
 
 fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> SliderColors {
     if args.disabled {
-        let scheme = use_context::<MaterialColorScheme>().get();
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
         return SliderColors {
-            active_track: scheme.on_surface.with_alpha(0.38),
-            inactive_track: scheme.on_surface.with_alpha(0.12),
-            handle: scheme.on_surface.with_alpha(0.38),
+            active_track: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+            inactive_track: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
+            handle: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
             handle_focus: Color::new(0.0, 0.0, 0.0, 0.0),
         };
     }
@@ -488,9 +501,11 @@ pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: State<Sli
     if let Some(icon_size) = layout.icon_size
         && let Some(inset_icon) = args.inset_icon.as_ref()
     {
-        let scheme = use_context::<MaterialColorScheme>().get();
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
         let tint = if args.disabled {
-            scheme.on_surface.with_alpha(0.38)
+            scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT)
         } else {
             scheme.on_primary
         };
@@ -1042,11 +1057,17 @@ pub fn range_slider_with_controller(
         Color::new(base_state.r, base_state.g, base_state.b, state_layer_alpha);
 
     let colors = if args.disabled {
-        let scheme = use_context::<MaterialColorScheme>().get();
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
         SliderColors {
-            active_track: scheme.on_surface.with_alpha(0.38),
-            inactive_track: scheme.on_surface.with_alpha(0.12),
-            handle: scheme.on_surface.with_alpha(0.38),
+            active_track: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+            inactive_track: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
+            handle: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
             handle_focus: Color::new(0.0, 0.0, 0.0, 0.0),
         }
     } else {

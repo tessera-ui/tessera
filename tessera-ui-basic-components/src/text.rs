@@ -1,8 +1,8 @@
-//! A component for rendering single-style text.
+//! Single-style text rendering.
 //!
 //! ## Usage
 //!
-//! Use to display labels, headings, or other static or dynamic text content.
+//! Display labels, headings, and other text content.
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, DimensionValue, Dp, Px, accesskit::Role, tessera, use_context,
@@ -13,7 +13,7 @@ use crate::{
         command::{TextCommand, TextConstraint},
         pipeline::TextData,
     },
-    theme::ContentColor,
+    theme::{ContentColor, TextStyle},
 };
 
 pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
@@ -31,7 +31,7 @@ pub struct TextArgs {
     pub color: Color,
 
     /// The font size in density-independent pixels (dp).
-    #[builder(default = "Dp(25.0)")]
+    #[builder(default = "use_context::<TextStyle>().get().font_size")]
     pub size: Dp,
 
     /// Optional override for line height in density-independent pixels (dp).
@@ -114,6 +114,7 @@ pub fn text(args: impl Into<TextArgs>) {
     let accessibility_label = text_args.accessibility_label.clone();
     let accessibility_description = text_args.accessibility_description.clone();
     let text_for_accessibility = text_args.text.clone();
+    let inherited_style = use_context::<TextStyle>().get();
 
     input_handler(Box::new(move |input| {
         let mut builder = input.accessibility().role(Role::Label);
@@ -143,7 +144,10 @@ pub fn text(args: impl Into<TextArgs>) {
             DimensionValue::Fill { max, .. } => max, // Use max from Fill
         };
 
-        let line_height = text_args.line_height.unwrap_or(Dp(text_args.size.0 * 1.2));
+        let line_height = text_args
+            .line_height
+            .or(inherited_style.line_height)
+            .unwrap_or(Dp(text_args.size.0 * 1.2));
 
         let text_data = TextData::new(
             text_args.text.clone(),

@@ -22,7 +22,7 @@ use crate::{
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
-    theme::MaterialColorScheme,
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
@@ -196,7 +196,7 @@ pub fn navigation_bar_with_controller<F>(
         let mut scope = NavigationBarScope { items: &mut items };
         scope_config(&mut scope);
     }
-    let scheme = use_context::<MaterialColorScheme>().get();
+    let scheme = use_context::<MaterialTheme>().get().color_scheme;
     let container_shadow = ShadowProps {
         color: scheme.shadow.with_alpha(0.16),
         offset: [0.0, 3.0],
@@ -305,8 +305,10 @@ fn render_navigation_item(
         selection_fraction,
     );
     let ripple_color = interpolate_color(
-        scheme.on_surface_variant.with_alpha(0.12),
-        scheme.on_secondary_container.with_alpha(0.12),
+        scheme.on_surface_variant.with_alpha(MaterialAlpha::PRESSED),
+        scheme
+            .on_secondary_container
+            .with_alpha(MaterialAlpha::PRESSED),
         selection_fraction,
     );
 
@@ -334,6 +336,7 @@ fn render_navigation_item(
             })
             .shape(Shape::RECTANGLE)
             .padding(ITEM_PADDING)
+            .content_color(content_color)
             .ripple_color(ripple_color)
             .hover_style(None)
             .accessibility_label(label_text.clone())

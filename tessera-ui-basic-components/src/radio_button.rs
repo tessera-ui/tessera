@@ -1,5 +1,8 @@
 //! Material Design 3 radio button with animated selection feedback.
-//! ## Usage Add single-choice selectors to forms, filters, and settings panes.
+//!
+//! ## Usage
+//!
+//! Add single-choice selectors to forms, filters, and settings panes.
 
 use std::{
     sync::Arc,
@@ -20,11 +23,10 @@ use crate::{
     boxed::{BoxedArgsBuilder, boxed},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
-    theme::MaterialColorScheme,
+    theme::{MaterialAlpha, MaterialTheme},
 };
 
 const RADIO_ANIMATION_DURATION: Duration = Duration::from_millis(200);
-const HOVER_STATE_LAYER_OPACITY: f32 = 0.08;
 const RIPPLE_OPACITY: f32 = 0.1;
 
 /// Shared state for the `radio_button` component, including selection
@@ -125,16 +127,20 @@ pub struct RadioButtonArgs {
     #[builder(default = "Dp(10.0)")]
     pub dot_size: Dp,
     /// Ring and dot color when selected.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub selected_color: Color,
     /// Ring color when not selected.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_surface_variant")]
     pub unselected_color: Color,
     /// Ring and dot color when disabled but selected.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface.with_alpha(0.38)")]
+    #[builder(
+        default = "use_context::<MaterialTheme>().get().color_scheme.on_surface.with_alpha(MaterialAlpha::DISABLED_CONTENT)"
+    )]
     pub disabled_selected_color: Color,
     /// Ring color when disabled and not selected.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface.with_alpha(0.38)")]
+    #[builder(
+        default = "use_context::<MaterialTheme>().get().color_scheme.on_surface.with_alpha(MaterialAlpha::DISABLED_CONTENT)"
+    )]
     pub disabled_unselected_color: Color,
     /// Whether the control is interactive.
     #[builder(default = "true")]
@@ -289,7 +295,7 @@ pub fn radio_button_with_controller(
     };
 
     let hover_style = args.enabled.then_some(SurfaceStyle::Filled {
-        color: base_state_layer_color.with_alpha(HOVER_STATE_LAYER_OPACITY),
+        color: base_state_layer_color.with_alpha(MaterialAlpha::HOVER),
     });
 
     let ripple_color = if args.enabled {

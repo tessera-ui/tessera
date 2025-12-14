@@ -24,11 +24,107 @@ use crate::{
     pipelines::shape::command::ShapeCommand,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
-    theme::MaterialColorScheme,
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(150);
-const THUMB_OFF_SCALE: f32 = 0.72;
+
+/// Material Design 3 defaults for [`switch`].
+pub struct SwitchDefaults;
+
+impl SwitchDefaults {
+    /// Default track width.
+    pub const WIDTH: Dp = Dp(52.0);
+    /// Default track height.
+    pub const HEIGHT: Dp = Dp(32.0);
+    /// Default state layer size (unbounded ripple/hover target around the
+    /// thumb).
+    pub const STATE_LAYER_SIZE: Dp = Dp(40.0);
+    /// Thumb diameter when checked or when it contains content.
+    pub const THUMB_DIAMETER: Dp = Dp(24.0);
+    /// Thumb diameter when unchecked and it has no content.
+    pub const UNCHECKED_THUMB_DIAMETER: Dp = Dp(16.0);
+    /// Thumb diameter when pressed.
+    pub const PRESSED_THUMB_DIAMETER: Dp = Dp(28.0);
+    /// Default track outline width.
+    pub const TRACK_OUTLINE_WIDTH: Dp = Dp(2.0);
+    /// Default thumb outline width.
+    pub const THUMB_BORDER_WIDTH: Dp = Dp(1.5);
+    /// Default padding around the thumb inside the track.
+    pub const THUMB_PADDING: Dp = Dp(4.0);
+
+    /// Computes the thumb diameter from the track height and thumb padding.
+    pub fn thumb_size(height: Dp, thumb_padding: Dp) -> Dp {
+        Dp(height.0 - (thumb_padding.0 * 2.0))
+    }
+
+    /// Applies the standard disabled container alpha over `scheme.on_surface`.
+    pub fn apply_disabled_container(color: Color, scheme: &MaterialColorScheme) -> Color {
+        color.blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTAINER)
+    }
+
+    /// Applies the standard disabled content alpha over `scheme.on_surface`.
+    pub fn apply_disabled_content(color: Color, scheme: &MaterialColorScheme) -> Color {
+        color.blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT)
+    }
+
+    /// Returns the base state layer color used for hover/press feedback.
+    pub fn state_layer_base_color(checked: bool, scheme: &MaterialColorScheme) -> Color {
+        if checked {
+            scheme.primary
+        } else {
+            scheme.on_surface
+        }
+    }
+
+    /// Returns the standard hover fill for the state layer.
+    pub fn state_layer_hover_color(base: Color) -> Color {
+        base.with_alpha(MaterialAlpha::HOVER)
+    }
+
+    /// Returns the standard ripple color for the state layer.
+    pub fn state_layer_ripple_color(base: Color) -> Color {
+        base.with_alpha(MaterialAlpha::PRESSED)
+    }
+
+    /// Resolves effective colors for the current animation progress.
+    fn resolve_colors(
+        args: &SwitchArgs,
+        scheme: &MaterialColorScheme,
+        progress: f32,
+        interactive: bool,
+    ) -> SwitchResolvedColors {
+        let mut track_color =
+            interpolate_color(args.track_color, args.track_checked_color, progress);
+        let mut track_outline_color =
+            interpolate_color(args.track_outline_color, args.track_checked_color, progress);
+        let mut thumb_color =
+            interpolate_color(args.thumb_color, args.thumb_checked_color, progress);
+        let mut thumb_border_color =
+            interpolate_color(args.thumb_border_color, args.thumb_checked_color, progress);
+
+        if !interactive {
+            track_color = Self::apply_disabled_container(track_color, scheme);
+            track_outline_color = Self::apply_disabled_container(track_outline_color, scheme);
+            thumb_color = Self::apply_disabled_content(thumb_color, scheme);
+            thumb_border_color = Self::apply_disabled_container(thumb_border_color, scheme);
+        }
+
+        SwitchResolvedColors {
+            track_color,
+            track_outline_color,
+            thumb_color,
+            thumb_border_color,
+        }
+    }
+}
+
+struct SwitchResolvedColors {
+    track_color: Color,
+    track_outline_color: Color,
+    thumb_color: Color,
+    thumb_border_color: Color,
+}
 
 /// Controller for the `switch` component.
 pub struct SwitchController {
@@ -107,42 +203,48 @@ pub struct SwitchArgs {
     /// Optional callback invoked when the switch toggles.
     #[builder(default, setter(strip_option))]
     pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
+    /// Whether the control is enabled for user interaction.
+    ///
+    /// When `false`, the switch will not react to input and will expose a
+    /// disabled state to accessibility services.
+    #[builder(default = "true")]
+    pub enabled: bool,
     /// Initial checked state.
     #[builder(default = "false")]
     pub checked: bool,
     /// Total width of the switch track.
-    #[builder(default = "Dp(52.0)")]
+    #[builder(default = "SwitchDefaults::WIDTH")]
     pub width: Dp,
     /// Total height of the switch track (including padding).
-    #[builder(default = "Dp(32.0)")]
+    #[builder(default = "SwitchDefaults::HEIGHT")]
     pub height: Dp,
     /// Track color when the switch is off.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().surface_variant")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.surface_variant")]
     pub track_color: Color,
     /// Track color when the switch is on.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub track_checked_color: Color,
     /// Outline color for the track when the switch is off; fades out as the
     /// switch turns on.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().outline")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.outline")]
     pub track_outline_color: Color,
     /// Border width for the track outline.
-    #[builder(default = "Dp(1.5)")]
+    #[builder(default = "SwitchDefaults::TRACK_OUTLINE_WIDTH")]
     pub track_outline_width: Dp,
     /// Thumb color when the switch is off.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface_variant")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_surface_variant")]
     pub thumb_color: Color,
     /// Thumb color when the switch is on.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().on_primary")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_primary")]
     pub thumb_checked_color: Color,
     /// Thumb outline color to mirror Material Design's stroked thumb when off.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().outline")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.outline")]
     pub thumb_border_color: Color,
     /// Width of the thumb outline stroke.
-    #[builder(default = "Dp(1.5)")]
+    #[builder(default = "SwitchDefaults::THUMB_BORDER_WIDTH")]
     pub thumb_border_width: Dp,
     /// Padding around the thumb inside the track.
-    #[builder(default = "Dp(4.0)")]
+    #[builder(default = "SwitchDefaults::THUMB_PADDING")]
     pub thumb_padding: Dp,
     /// Optional accessibility label read by assistive technologies.
     #[builder(default, setter(strip_option, into))]
@@ -171,6 +273,7 @@ fn is_cursor_in_component(size: ComputedData, pos_option: Option<tessera_ui::PxP
 fn handle_input_events_switch(
     controller: State<SwitchController>,
     on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
+    pressed: State<bool>,
     input: &mut tessera_ui::InputHandlerInput,
 ) {
     controller.with_mut(|c| c.update_progress());
@@ -188,8 +291,19 @@ fn handle_input_events_switch(
             CursorEventContent::Pressed(PressKeyEventType::Left)
         ) && is_cursor_in
         {
+            pressed.set(true);
             toggle_switch_state(controller, on_toggle);
         }
+        if matches!(
+            e.content,
+            CursorEventContent::Released(PressKeyEventType::Left)
+        ) {
+            pressed.set(false);
+        }
+    }
+
+    if !is_cursor_in {
+        pressed.set(false);
     }
 }
 
@@ -263,37 +377,72 @@ fn switch_inner(
     controller: State<SwitchController>,
     child: Option<Box<dyn FnOnce() + Send + Sync>>,
 ) {
+    let pressed = remember(|| false);
     controller.with_mut(|c| c.update_progress());
 
-    let thumb_size = Dp(args.height.0 - (args.thumb_padding.0 * 2.0));
+    let has_thumb_content = child.is_some();
+    let is_pressed = pressed.with(|v| *v);
     let progress = controller.with(|c| c.animation_progress());
     let eased_progress = animation::easing(progress);
-    let thumb_scale = THUMB_OFF_SCALE + (1.0 - THUMB_OFF_SCALE) * eased_progress;
-    let scheme = use_context::<MaterialColorScheme>().get();
-    let interactive = args.on_toggle.is_some();
+    let eased_progress_f64 = eased_progress as f64;
+    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let checked = controller.with(|c| c.is_checked());
+    let on_toggle = args.enabled.then(|| args.on_toggle.clone()).flatten();
+    let interactive = on_toggle.is_some();
+    let colors = SwitchDefaults::resolve_colors(&args, &scheme, progress, interactive);
 
-    let mut track_color = interpolate_color(args.track_color, args.track_checked_color, progress);
-    let mut track_outline_color =
-        interpolate_color(args.track_outline_color, args.track_checked_color, progress);
-    let mut thumb_color = interpolate_color(args.thumb_color, args.thumb_checked_color, progress);
-    let mut thumb_border_color =
-        interpolate_color(args.thumb_border_color, args.thumb_checked_color, progress);
+    let off_diameter = if has_thumb_content {
+        SwitchDefaults::THUMB_DIAMETER
+    } else {
+        SwitchDefaults::UNCHECKED_THUMB_DIAMETER
+    };
+    let thumb_diameter_dp = if is_pressed {
+        SwitchDefaults::PRESSED_THUMB_DIAMETER
+    } else {
+        Dp(off_diameter.0
+            + (SwitchDefaults::THUMB_DIAMETER.0 - off_diameter.0) * eased_progress_f64)
+    };
+    let thumb_size_px = thumb_diameter_dp.to_px();
 
-    if !interactive {
-        track_color = track_color.blend_over(scheme.on_surface, 0.12);
-        track_outline_color = track_outline_color.blend_over(scheme.on_surface, 0.12);
-        thumb_color = thumb_color.blend_over(scheme.on_surface, 0.38);
-        thumb_border_color = thumb_border_color.blend_over(scheme.on_surface, 0.12);
+    let state_layer_base = SwitchDefaults::state_layer_base_color(checked, &scheme);
+    let state_layer_hover = SwitchDefaults::state_layer_hover_color(state_layer_base);
+    let state_layer_ripple = SwitchDefaults::state_layer_ripple_color(state_layer_base);
+
+    // A non-visual state layer for hover + ripple feedback. This mirrors Compose's
+    // thumb indication behavior (bounded=false, radius=StateLayerSize/2) in a
+    // simplified way.
+    let mut state_layer_builder = SurfaceArgsBuilder::default()
+        .width(DimensionValue::Fixed(
+            SwitchDefaults::STATE_LAYER_SIZE.to_px(),
+        ))
+        .height(DimensionValue::Fixed(
+            SwitchDefaults::STATE_LAYER_SIZE.to_px(),
+        ))
+        .shape(Shape::Ellipse)
+        .enabled(interactive)
+        .style(SurfaceStyle::Filled {
+            color: Color::TRANSPARENT,
+        })
+        .hover_style(interactive.then(|| SurfaceStyle::Filled {
+            color: state_layer_hover,
+        }))
+        .ripple_color(state_layer_ripple);
+    if interactive {
+        state_layer_builder = state_layer_builder.on_click(|| {});
     }
+    surface(
+        state_layer_builder
+            .build()
+            .expect("builder construction failed"),
+        || {},
+    );
 
     let thumb_style = SurfaceStyle::FilledOutlined {
-        fill_color: thumb_color,
-        border_color: thumb_border_color,
+        fill_color: colors.thumb_color,
+        border_color: colors.thumb_border_color,
         border_width: args.thumb_border_width,
     };
-    let base_thumb_px = thumb_size.to_px();
-    let thumb_size_px = tessera_ui::Px((base_thumb_px.0 as f32 * thumb_scale).round() as i32);
-
+    let child = child;
     surface(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(thumb_size_px))
@@ -302,39 +451,35 @@ fn switch_inner(
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
-        {
-            move || {
-                if let Some(child) = child {
-                    boxed(
-                        BoxedArgsBuilder::default()
-                            .width(DimensionValue::Fixed(thumb_size_px))
-                            .height(DimensionValue::Fixed(thumb_size_px))
-                            .alignment(Alignment::Center)
-                            .build()
-                            .expect("builder construction failed"),
-                        |scope| {
-                            scope.child(move || {
-                                child();
-                            });
-                        },
-                    );
-                }
+        move || {
+            if let Some(child) = child {
+                boxed(
+                    BoxedArgsBuilder::default()
+                        .width(DimensionValue::Fixed(thumb_size_px))
+                        .height(DimensionValue::Fixed(thumb_size_px))
+                        .alignment(Alignment::Center)
+                        .build()
+                        .expect("builder construction failed"),
+                    |scope| {
+                        scope.child(move || {
+                            child();
+                        });
+                    },
+                );
             }
         },
     );
 
-    let on_toggle = args.on_toggle.clone();
     let accessibility_on_toggle = on_toggle.clone();
     let accessibility_label = args.accessibility_label.clone();
     let accessibility_description = args.accessibility_description.clone();
     let track_outline_width = args.track_outline_width;
-    let thumb_padding = args.thumb_padding;
     let width = args.width;
     let height = args.height;
 
     input_handler(Box::new(move |mut input| {
         // Delegate input handling to the extracted helper.
-        handle_input_events_switch(controller, &on_toggle, &mut input);
+        handle_input_events_switch(controller, &on_toggle, pressed, &mut input);
         apply_switch_accessibility(
             &mut input,
             controller,
@@ -345,7 +490,8 @@ fn switch_inner(
     }));
 
     measure(Box::new(move |input| {
-        let thumb_id = input.children_ids[0];
+        let state_layer_id = input.children_ids[0];
+        let thumb_id = input.children_ids[1];
         let thumb_constraint = Constraint::new(
             DimensionValue::Wrap {
                 min: None,
@@ -356,29 +502,50 @@ fn switch_inner(
                 max: None,
             },
         );
+        let _ = input.measure_child(state_layer_id, &thumb_constraint)?;
         let thumb_size = input.measure_child(thumb_id, &thumb_constraint)?;
 
         let self_width_px = width.to_px();
         let self_height_px = height.to_px();
-        let thumb_padding_px = thumb_padding.to_px();
 
-        let start_center_x = thumb_padding_px.0 as f32 + base_thumb_px.0 as f32 / 2.0;
-        let end_center_x =
-            self_width_px.0 as f32 - thumb_padding_px.0 as f32 - base_thumb_px.0 as f32 / 2.0;
-        let eased = animation::easing(progress);
-        let thumb_center_x = start_center_x + (end_center_x - start_center_x) * eased;
-        let thumb_x = thumb_center_x - thumb_size.width.0 as f32 / 2.0;
+        // Align with Compose positioning:
+        // - unchecked offset is (height - thumbDiameter) / 2
+        // - checked offset is (width - checkedThumbDiameter) - thumbPadding
+        // - pressed snaps towards the inside by TrackOutlineWidth
+        let checked_thumb_diameter = SwitchDefaults::THUMB_DIAMETER;
+        let thumb_padding_start = Dp((height.0 - checked_thumb_diameter.0) / 2.0);
+        let max_bound_dp = Dp((width.0 - checked_thumb_diameter.0) - thumb_padding_start.0);
 
-        let thumb_y = (self_height_px - thumb_size.height) / 2;
+        let min_bound_dp = Dp((height.0 - thumb_diameter_dp.0) / 2.0);
+        let anim_offset_dp =
+            Dp(min_bound_dp.0 + (max_bound_dp.0 - min_bound_dp.0) * eased_progress_f64);
+        let offset_dp = if is_pressed && checked {
+            Dp(max_bound_dp.0 - track_outline_width.0)
+        } else if is_pressed && !checked {
+            track_outline_width
+        } else {
+            anim_offset_dp
+        };
+        let thumb_x = offset_dp.to_px();
+
+        // State layer follows the thumb center.
+        let state_layer_size_px = SwitchDefaults::STATE_LAYER_SIZE.to_px();
+        let state_layer_y = (self_height_px.0 - state_layer_size_px.0) / 2;
+        let thumb_center_x = thumb_x.0 + thumb_size.width.0 / 2;
+        let state_layer_x = thumb_center_x - state_layer_size_px.0 / 2;
 
         input.place_child(
             thumb_id,
-            PxPosition::new(tessera_ui::Px(thumb_x as i32), thumb_y),
+            PxPosition::new(thumb_x, (self_height_px - thumb_size.height) / 2),
+        );
+        input.place_child(
+            state_layer_id,
+            PxPosition::new(tessera_ui::Px(state_layer_x), tessera_ui::Px(state_layer_y)),
         );
 
         let track_command = ShapeCommand::FilledOutlinedRect {
-            color: track_color,
-            border_color: track_outline_color,
+            color: colors.track_color,
+            border_color: colors.track_outline_color,
             corner_radii: glam::Vec4::splat((self_height_px.0 as f32) / 2.0).into(),
             corner_g2: [2.0; 4], // Use G1 corners here specifically
             shadow: None,

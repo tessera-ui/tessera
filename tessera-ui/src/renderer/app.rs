@@ -1,5 +1,8 @@
 //! Core WGPU app wrapper for Tessera renderer components.
-//! ## Usage Manage window/surface lifecycle, pipeline registries, and frame submission.
+//!
+//! ## Usage
+//!
+//! Manage window/surface lifecycle, pipeline registries, and frame submission.
 
 use std::{any::TypeId, io, mem, sync::Arc};
 

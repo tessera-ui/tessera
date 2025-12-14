@@ -9,7 +9,7 @@ use tessera_ui_basic_components::{
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
-    theme::MaterialColorScheme,
+    theme::MaterialTheme,
 };
 
 #[tessera]
@@ -64,7 +64,12 @@ fn test_content() {
                 text(TextArgsBuilder::default()
                     .text("This is the glass progress, adjust the slider below to change its value.")
                     .size(Dp(20.0))
-                    .color(use_context::<MaterialColorScheme>().get().on_surface_variant)
+                    .color(
+                        use_context::<MaterialTheme>()
+                            .get()
+                            .color_scheme
+                            .on_surface_variant,
+                    )
                     .build()
                     .unwrap());
             });

@@ -1,5 +1,8 @@
 //! Command reordering utilities to improve batching and reduce GPU barriers.
-//! ## Usage Sort command streams before submission to minimize pipeline flushes.
+//!
+//! ## Usage
+//!
+//! Sort command streams before submission to minimize pipeline flushes.
 
 use std::{
     any::TypeId,

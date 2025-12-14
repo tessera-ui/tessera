@@ -34,7 +34,7 @@ use tessera_ui_basic_components::{
     spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
-    theme::MaterialColorScheme,
+    theme::MaterialTheme,
 };
 
 use crate::example_components::{
@@ -520,7 +520,10 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
             .padding(Dp(25.0))
             .on_click_shared(on_click)
             .style(SurfaceStyle::Filled {
-                color: use_context::<MaterialColorScheme>().get().primary_container,
+                color: use_context::<MaterialTheme>()
+                    .get()
+                    .color_scheme
+                    .primary_container,
             })
             .shape(Shape::rounded_rectangle(Dp(25.0)))
             .shadow(ShadowProps::default())
@@ -543,8 +546,9 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
                             .text(description)
                             .size(Dp(14.0))
                             .color(
-                                use_context::<MaterialColorScheme>()
+                                use_context::<MaterialTheme>()
                                     .get()
+                                    .color_scheme
                                     .on_surface_variant,
                             )
                             .build()
@@ -582,8 +586,9 @@ fn top_app_bar() {
                             .shape(Shape::Ellipse)
                             .color(Color::TRANSPARENT)
                             .hover_color(Some(
-                                use_context::<MaterialColorScheme>()
+                                use_context::<MaterialTheme>()
                                     .get()
+                                    .color_scheme
                                     .on_surface
                                     .with_alpha(0.1),
                             ))
@@ -654,7 +659,7 @@ Copyright 2025 Tessera UI Framework Developers
                                     .to_string(),
                                 )
                                 .size(Dp(20.0))
-                                .color(use_context::<MaterialColorScheme>().get().on_surface)
+                                .color(use_context::<MaterialTheme>().get().color_scheme.on_surface)
                                 .build()
                                 .unwrap(),
                         );

@@ -21,8 +21,75 @@ use crate::{
     pos_misc::is_position_in_component,
     ripple_state::RippleState,
     shape_def::{ResolvedShape, RoundedCorner, Shape},
-    theme::{ContentColor, MaterialColorScheme, content_color_for},
+    theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for},
 };
+
+/// Material Design 3 defaults for [`surface`].
+pub struct SurfaceDefaults;
+
+impl SurfaceDefaults {
+    /// Default pressed ripple alpha used by surfaces.
+    pub const RIPPLE_ALPHA: f32 = MaterialAlpha::PRESSED;
+
+    /// Returns the standard ripple color for a surface.
+    pub fn ripple_color(scheme: &MaterialColorScheme) -> Color {
+        scheme.on_surface.with_alpha(Self::RIPPLE_ALPHA)
+    }
+
+    /// Computes the tonal overlay alpha for a given tonal elevation.
+    ///
+    /// This follows the Material 3 formula:
+    /// `alpha = ((4.5 * ln(elevation + 1)) + 2) / 100`.
+    pub fn tonal_overlay_alpha(tonal_elevation: Dp) -> f32 {
+        if tonal_elevation.0 <= 0.0 {
+            return 0.0;
+        }
+        let elevation = tonal_elevation.0 as f64;
+        let alpha = ((4.5 * (elevation + 1.0).ln()) + 2.0) / 100.0;
+        (alpha as f32).clamp(0.0, 1.0)
+    }
+
+    /// Applies tonal elevation to styles that use the theme `surface` color.
+    pub fn apply_tonal_elevation(
+        style: &SurfaceStyle,
+        scheme: &MaterialColorScheme,
+        tonal_elevation: Dp,
+    ) -> SurfaceStyle {
+        let alpha = Self::tonal_overlay_alpha(tonal_elevation);
+        if alpha <= 0.0 {
+            return style.clone();
+        }
+
+        let tint = scheme.primary;
+        match style {
+            SurfaceStyle::Filled { color } if *color == scheme.surface => SurfaceStyle::Filled {
+                color: scheme.surface.blend_over(tint, alpha),
+            },
+            SurfaceStyle::FilledOutlined {
+                fill_color,
+                border_color,
+                border_width,
+            } if *fill_color == scheme.surface => SurfaceStyle::FilledOutlined {
+                fill_color: scheme.surface.blend_over(tint, alpha),
+                border_color: *border_color,
+                border_width: *border_width,
+            },
+            _ => style.clone(),
+        }
+    }
+
+    /// Synthesizes a shadow style for the provided elevation.
+    pub fn synthesize_shadow(elevation: Dp, scheme: &MaterialColorScheme) -> ShadowProps {
+        let elevation_px = elevation.to_pixels_f32();
+        let offset_y = (elevation_px * 0.5).max(1.0).min(12.0);
+        let smoothness = (elevation_px * 0.75).max(2.0).min(24.0);
+        ShadowProps {
+            color: scheme.shadow.with_alpha(0.25),
+            offset: [0.0, offset_y],
+            smoothness,
+        }
+    }
+}
 
 /// Defines the visual style of the surface (fill, outline, or both).
 #[derive(Clone)]
@@ -52,7 +119,7 @@ pub enum SurfaceStyle {
 
 impl Default for SurfaceStyle {
     fn default() -> Self {
-        let scheme = use_context::<MaterialColorScheme>().get();
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
         SurfaceStyle::Filled {
             color: scheme.surface,
         }
@@ -84,6 +151,31 @@ pub struct SurfaceArgs {
     /// the shape pipeline.
     #[builder(default, setter(strip_option))]
     pub shadow: Option<ShadowProps>,
+    /// Optional elevation hint used to synthesize a shadow when `shadow` is not
+    /// provided.
+    ///
+    /// This is a lightweight approximation intended to ease gradual migration
+    /// towards Material 3 style APIs.
+    #[builder(default, setter(strip_option))]
+    pub shadow_elevation: Option<Dp>,
+    /// Tonal elevation for surfaces that use the theme `surface` color.
+    ///
+    /// When the container color equals `MaterialColorScheme.surface`, a tint is
+    /// overlaid to simulate Material 3 tonal elevation.
+    #[builder(default = "Dp(0.0)")]
+    pub tonal_elevation: Dp,
+    /// Optional explicit content color override for descendants.
+    ///
+    /// When `None`, the surface derives its content color from the theme using
+    /// [`content_color_for`].
+    #[builder(default, setter(strip_option))]
+    pub content_color: Option<Color>,
+    /// Whether this surface is enabled for user interaction.
+    ///
+    /// When disabled, it will not react to input, will not show hover/ripple
+    /// feedback, and will expose a disabled state to accessibility services.
+    #[builder(default = "true")]
+    pub enabled: bool,
     /// Internal padding applied symmetrically (left/right & top/bottom). Child
     /// content is positioned at (padding, padding). Also influences
     /// measured minimum size.
@@ -104,7 +196,9 @@ pub struct SurfaceArgs {
     #[builder(default, setter(custom, strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Color of the ripple effect (used when interactive).
-    #[builder(default = "use_context::<MaterialColorScheme>().get().on_surface.with_alpha(0.12)")]
+    #[builder(
+        default = "use_context::<MaterialTheme>().get().color_scheme.on_surface.with_alpha(MaterialAlpha::PRESSED)"
+    )]
     pub ripple_color: Color,
     /// If true, all input events inside the surface bounds are blocked (stop
     /// propagation), after (optionally) handling its own click logic.
@@ -148,6 +242,18 @@ impl Default for SurfaceArgs {
             .build()
             .expect("builder construction failed")
     }
+}
+
+fn apply_tonal_elevation_to_style(
+    style: &SurfaceStyle,
+    scheme: &MaterialColorScheme,
+    tonal_elevation: Dp,
+) -> SurfaceStyle {
+    SurfaceDefaults::apply_tonal_elevation(style, scheme, tonal_elevation)
+}
+
+fn synthesize_shadow_for_elevation(elevation: Dp, scheme: &MaterialColorScheme) -> ShadowProps {
+    SurfaceDefaults::synthesize_shadow(elevation, scheme)
 }
 
 fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<State<RippleState>>) -> RippleProps {
@@ -471,13 +577,14 @@ fn compute_surface_size(
 /// ```
 #[tessera]
 pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
-    let scheme = use_context::<MaterialColorScheme>().get();
+    let scheme = use_context::<MaterialTheme>().get().color_scheme;
     let inherited_content_color = use_context::<ContentColor>().get().current;
-    let content_color = match &args.style {
+    let content_color = args.content_color.unwrap_or_else(|| match &args.style {
         SurfaceStyle::Filled { color } => content_color_for(*color, &scheme),
         SurfaceStyle::FilledOutlined { fill_color, .. } => content_color_for(*fill_color, &scheme),
         SurfaceStyle::Outlined { .. } => inherited_content_color,
-    };
+    });
+    let interactive = args.enabled && args.on_click.is_some();
 
     provide_context(
         ContentColor {
@@ -487,11 +594,19 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             (child)();
         },
     );
-    let ripple_state = args.on_click.as_ref().map(|_| remember(RippleState::new));
+    let ripple_state = interactive.then(|| remember(RippleState::new));
     let args_measure_clone = args.clone();
     let args_for_handler = args.clone();
 
     measure(Box::new(move |input| {
+        let mut args_for_draw = args_measure_clone.clone();
+        if args_for_draw.shadow.is_none()
+            && let Some(elevation) = args_for_draw.shadow_elevation
+            && elevation.0 > 0.0
+        {
+            args_for_draw.shadow = Some(synthesize_shadow_for_elevation(elevation, &scheme));
+        }
+
         let surface_intrinsic_width = args_measure_clone.width;
         let surface_intrinsic_height = args_measure_clone.height;
         let surface_intrinsic_constraint =
@@ -547,19 +662,24 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             .as_ref()
             .filter(|_| is_hovered)
             .unwrap_or(&args_measure_clone.style);
+        let effective_style = apply_tonal_elevation_to_style(
+            effective_style,
+            &scheme,
+            args_measure_clone.tonal_elevation,
+        );
 
         let padding_px: Px = args_measure_clone.padding.into();
         let (width, height) =
             compute_surface_size(effective_surface_constraint, child_measurement, padding_px);
 
         if let Some(simple) =
-            try_build_simple_rect_command(&args_measure_clone, effective_style, ripple_state)
+            try_build_simple_rect_command(&args_for_draw, &effective_style, ripple_state)
         {
             input.metadata_mut().push_draw_command(simple);
         } else {
             let drawable = make_surface_drawable(
-                &args_measure_clone,
-                effective_style,
+                &args_for_draw,
+                &effective_style,
                 ripple_state,
                 PxSize::new(width, height),
             );
@@ -570,7 +690,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
         Ok(ComputedData { width, height })
     }));
 
-    if args.on_click.is_some() {
+    if interactive {
         let args_for_handler = args.clone();
         input_handler(Box::new(move |mut input| {
             // Apply accessibility metadata first
@@ -578,6 +698,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 &mut input,
                 &args_for_handler,
                 true,
+                args_for_handler.enabled,
                 args_for_handler.on_click.clone(),
             );
 
@@ -592,7 +713,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                 state.with_mut(|s| s.set_hovered(is_cursor_in_surface));
             }
 
-            if is_cursor_in_surface && args_for_handler.on_click.is_some() {
+            if is_cursor_in_surface {
                 input.requests.cursor_icon = CursorIcon::Pointer;
             }
 
@@ -644,7 +765,13 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
     } else {
         input_handler(Box::new(move |mut input| {
             // Apply accessibility metadata first
-            apply_surface_accessibility(&mut input, &args_for_handler, false, None);
+            apply_surface_accessibility(
+                &mut input,
+                &args_for_handler,
+                false,
+                args_for_handler.enabled,
+                None,
+            );
 
             // Then handle input blocking if needed
             let size = input.computed_data;
@@ -663,6 +790,7 @@ fn apply_surface_accessibility(
     input: &mut InputHandlerInput<'_>,
     args: &SurfaceArgs,
     interactive: bool,
+    enabled: bool,
     on_click: Option<Arc<dyn Fn() + Send + Sync>>,
 ) {
     let has_metadata = args.accessibility_role.is_some()
@@ -689,15 +817,22 @@ fn apply_surface_accessibility(
     if let Some(description) = args.accessibility_description.as_ref() {
         builder = builder.description(description.clone());
     }
-    if args.accessibility_focusable || interactive {
-        builder = builder.focusable();
-    }
-    if interactive {
-        builder = builder.action(Action::Click);
+    if !enabled {
+        builder = builder.disabled();
+    } else {
+        if args.accessibility_focusable || interactive {
+            builder = builder.focusable();
+        }
+        if interactive {
+            builder = builder.action(Action::Click);
+        }
     }
     builder.commit();
 
-    if interactive && let Some(on_click) = on_click {
+    if enabled
+        && interactive
+        && let Some(on_click) = on_click
+    {
         input.set_accessibility_action_handler(move |action| {
             if action == Action::Click {
                 on_click();

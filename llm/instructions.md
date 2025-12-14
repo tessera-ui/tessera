@@ -127,10 +127,13 @@ so all contributors follow the same conventions.
 
 ### Module docs
 
-- Keep module docs to exactly two lines (short description + usage header).
-- Line 1: A brief description of what the module provides.
-- Line 2: "## Usage" followed by a one-line statement describing app-level usage
-  scenarios (e.g., alerts, confirmations, multi-step forms, or interactive controls).
+- Module docs must follow this exact 5-line template:
+  1. `//! <short description>`
+  2. `//!`
+  3. `//! ## Usage`
+  4. `//!`
+  5. `//! <one-line app-level usage scenario>` (e.g., alerts, confirmations, multi-step forms, or interactive controls).
+- `//! ## Usage` must be on its own line and must be followed by a blank `//!` line (do not inline the usage sentence on the same line).
 
 Example:
 
@@ -138,7 +141,7 @@ Example:
 //! Modal dialog provider — show modal content above the main app UI.
 //!
 //! ## Usage
-//! 
+//!
 //! Show alerts, confirmations and multi-step forms that block the main UI while active.
 ```
 
@@ -154,6 +157,7 @@ Example:
   5. `## Examples` — a runnable rustdoc example (no `no_run`, no `ignore`) that demonstrates
      the key state logic (e.g., open/close a dialog or state toggle) and uses `assert!` to
      verify expected behavior.
+- `/// ## Usage` must be on its own line and must be followed by a blank `///` line.
 
 Example:
 

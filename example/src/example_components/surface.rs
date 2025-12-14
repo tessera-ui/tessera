@@ -11,7 +11,7 @@ use tessera_ui_basic_components::{
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
-    theme::MaterialColorScheme,
+    theme::MaterialTheme,
 };
 
 struct CornerRadius(f32);
@@ -126,18 +126,21 @@ fn test_content(state: State<ExampleSurfaceState>) {
                         scope.child(move || {
                             let style = if border_width.to_pixels_f32() > 0.1 {
                                 SurfaceStyle::FilledOutlined {
-                                    fill_color: use_context::<MaterialColorScheme>()
+                                    fill_color: use_context::<MaterialTheme>()
                                         .get()
+                                        .color_scheme
                                         .primary_container,
-                                    border_color: use_context::<MaterialColorScheme>()
+                                    border_color: use_context::<MaterialTheme>()
                                         .get()
+                                        .color_scheme
                                         .outline,
                                     border_width,
                                 }
                             } else {
                                 SurfaceStyle::Filled {
-                                    color: use_context::<MaterialColorScheme>()
+                                    color: use_context::<MaterialTheme>()
                                         .get()
+                                        .color_scheme
                                         .primary_container,
                                 }
                             };

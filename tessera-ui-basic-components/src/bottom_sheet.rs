@@ -22,7 +22,7 @@ use crate::{
     shape_def::{RoundedCorner, Shape},
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
-    theme::MaterialColorScheme,
+    theme::MaterialTheme,
 };
 
 const ANIM_TIME: Duration = Duration::from_millis(300);
@@ -278,7 +278,7 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
 fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
     // Material scrim: compute alpha and render a simple dark surface.
     let scrim_alpha = scrim_alpha_for(progress, is_open);
-    let scrim_color = use_context::<MaterialColorScheme>().get().scrim;
+    let scrim_color = use_context::<MaterialTheme>().get().color_scheme.scrim;
     surface(
         SurfaceArgsBuilder::default()
             .style(scrim_color.with_alpha(scrim_alpha).into())
@@ -491,8 +491,9 @@ fn render_content(
                             surface(
                                 SurfaceArgsBuilder::default()
                                     .style(
-                                        use_context::<MaterialColorScheme>()
+                                        use_context::<MaterialTheme>()
                                             .get()
+                                            .color_scheme
                                             .on_surface_variant
                                             .with_alpha(0.4)
                                             .into(),
@@ -547,8 +548,9 @@ fn render_content(
             surface(
                 SurfaceArgsBuilder::default()
                     .style(
-                        use_context::<MaterialColorScheme>()
+                        use_context::<MaterialTheme>()
                             .get()
+                            .color_scheme
                             .surface_container_low
                             .into(),
                     )

@@ -16,7 +16,7 @@ use crate::{
     row::{RowArgs, row},
     shape_def::{RoundedCorner, Shape},
     spacer::{SpacerArgs, spacer},
-    theme::MaterialColorScheme,
+    theme::MaterialTheme,
 };
 
 /// According to the [`ButtonGroups-Types`](https://m3.material.io/components/button-groups/specs#3b51d175-cc02-4701-b3f8-c9ffa229123a)
@@ -312,7 +312,7 @@ where
                             });
                         });
                         button_args.shape = layout.active_button_shape;
-                        let scheme = use_context::<MaterialColorScheme>().get();
+                        let scheme = use_context::<MaterialTheme>().get().color_scheme;
                         button(button_args, || {
                             elastic_container(state, index, move || {
                                 child_closure(scheme.on_primary)
@@ -336,7 +336,7 @@ where
                                 item.elastic_state.toggle();
                             });
                         });
-                        let scheme = use_context::<MaterialColorScheme>().get();
+                        let scheme = use_context::<MaterialTheme>().get().color_scheme;
                         button_args.color = scheme.secondary_container;
                         if index == 0 {
                             button_args.shape = layout.inactive_button_shape_start;
@@ -346,7 +346,7 @@ where
                             button_args.shape = layout.inactive_button_shape;
                         }
 
-                        let scheme = use_context::<MaterialColorScheme>().get();
+                        let scheme = use_context::<MaterialTheme>().get().color_scheme;
                         button(button_args, move || {
                             elastic_container(state, index, move || {
                                 child_closure(scheme.on_secondary_container)

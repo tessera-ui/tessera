@@ -11,7 +11,7 @@ use tessera_ui::{
 use crate::{
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
-    theme::MaterialColorScheme,
+    theme::MaterialTheme,
 };
 
 /// Arguments for the `progress` component.
@@ -31,11 +31,11 @@ pub struct ProgressArgs {
     pub height: Dp,
 
     /// The color of the active part of the track.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().primary")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub progress_color: Color,
 
     /// The color of the inactive part of the track.
-    #[builder(default = "use_context::<MaterialColorScheme>().get().surface_variant")]
+    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.surface_variant")]
     pub track_color: Color,
 }
 

@@ -7,7 +7,7 @@ use tessera_ui_basic_components::{
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
-    theme::MaterialColorScheme,
+    theme::MaterialTheme,
 };
 
 #[tessera]
@@ -48,7 +48,12 @@ pub fn lazy_lists_showcase() {
                                                 "Virtualized column/row that only mounts what is visible in the \
                                                 viewport.",
                                             )
-                                            .color(use_context::<MaterialColorScheme>().get().on_surface_variant)
+                                            .color(
+                                                use_context::<MaterialTheme>()
+                                                    .get()
+                                                    .color_scheme
+                                                    .on_surface_variant,
+                                            )
                                             .build()
                                             .unwrap(),
                                     );
@@ -88,8 +93,9 @@ fn vertical_list() {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .style(
-                use_context::<MaterialColorScheme>()
+                use_context::<MaterialTheme>()
                     .get()
+                    .color_scheme
                     .surface_variant
                     .into(),
             )
@@ -130,8 +136,9 @@ fn horizontal_gallery() {
         SurfaceArgsBuilder::default()
             .width(DimensionValue::FILLED)
             .style(
-                use_context::<MaterialColorScheme>()
+                use_context::<MaterialTheme>()
                     .get()
+                    .color_scheme
                     .surface_variant
                     .into(),
             )
@@ -201,8 +208,9 @@ fn contact_card(index: usize) {
                                 TextArgsBuilder::default()
                                     .text(format!("{unread_count} unread messages"))
                                     .color(
-                                        use_context::<MaterialColorScheme>()
+                                        use_context::<MaterialTheme>()
                                             .get()
+                                            .color_scheme
                                             .on_surface_variant,
                                     )
                                     .build()

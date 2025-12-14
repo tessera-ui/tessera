@@ -27,7 +27,7 @@ use crate::{
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
-    theme::{ContentColor, MaterialColorScheme},
+    theme::{ContentColor, MaterialTheme},
 };
 
 /// The duration of the full dialog animation.
@@ -209,7 +209,7 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
         }
         DialogStyle::Material => {
             let alpha = scrim_alpha_for(progress, is_open);
-            let scrim_color = use_context::<MaterialColorScheme>().get().scrim;
+            let scrim_color = use_context::<MaterialTheme>().get().color_scheme.scrim;
             surface(
                 SurfaceArgsBuilder::default()
                     .style(scrim_color.with_alpha(alpha).into())
@@ -307,8 +307,9 @@ fn dialog_content_wrapper(
                             surface(
                                 SurfaceArgsBuilder::default()
                                     .style(
-                                        use_context::<MaterialColorScheme>()
+                                        use_context::<MaterialTheme>()
                                             .get()
+                                            .color_scheme
                                             .surface_container_high
                                             .into(),
                                     )
@@ -578,7 +579,7 @@ impl BasicDialogArgsBuilder {
 #[tessera]
 pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
     let args = args.into();
-    let scheme = use_context::<MaterialColorScheme>().get();
+    let scheme = use_context::<MaterialTheme>().get().color_scheme;
     let alignment = if args.icon.is_some() {
         CrossAxisAlignment::Center
     } else {

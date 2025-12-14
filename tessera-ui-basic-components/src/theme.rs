@@ -1,9 +1,16 @@
-//! Provide theme contexts
+//! Material theme primitives for color, typography, and shape.
+//!
+//! ## Usage
+//!
+//! Provide app-wide defaults for Material components.
+
 use material_color_utilities::{
     dynamiccolor::{DynamicSchemeBuilder, MaterialDynamicColors, SpecVersion, Variant},
     hct::Hct,
 };
-use tessera_ui::{Color, provide_context, tessera};
+use tessera_ui::{Color, Dp, provide_context, tessera};
+
+use crate::shape_def::Shape;
 
 const DEFAULT_COLOR: Color = Color::from_rgb(0.4039, 0.3137, 0.6431); // #6750A4
 
@@ -22,6 +29,24 @@ impl Default for ContentColor {
             current: Color::BLACK,
         }
     }
+}
+
+/// Standard Material 3 alpha values used for state layers and disabled content.
+pub struct MaterialAlpha;
+
+impl MaterialAlpha {
+    /// Alpha for hover state layers.
+    pub const HOVER: f32 = 0.08;
+    /// Alpha for pressed state layers.
+    pub const PRESSED: f32 = 0.12;
+    /// Alpha for focused state layers.
+    pub const FOCUSED: f32 = 0.12;
+    /// Alpha for dragged state layers.
+    pub const DRAGGED: f32 = 0.16;
+    /// Alpha for disabled containers (e.g., filled controls).
+    pub const DISABLED_CONTAINER: f32 = 0.12;
+    /// Alpha for disabled content (text/icons) placed on disabled containers.
+    pub const DISABLED_CONTENT: f32 = 0.38;
 }
 
 /// Maps a container color to an appropriate foreground color from the scheme.
@@ -51,22 +76,264 @@ pub fn content_color_for(container: Color, scheme: &MaterialColorScheme) -> Colo
     }
 }
 
+/// A simple text style used by components to derive default font size and line
+/// height.
+#[derive(Clone, Copy, Debug)]
+pub struct TextStyle {
+    /// Font size in density-independent pixels (dp).
+    pub font_size: Dp,
+    /// Optional line height override in density-independent pixels (dp).
+    pub line_height: Option<Dp>,
+}
+
+impl Default for TextStyle {
+    fn default() -> Self {
+        Self {
+            font_size: Dp(16.0),
+            line_height: Some(Dp(24.0)),
+        }
+    }
+}
+
+/// Provides a text style to descendants for the duration of `child`.
+pub fn provide_text_style(style: TextStyle, child: impl FnOnce()) {
+    provide_context(style, child);
+}
+
+/// Material typography scale used by components to resolve default text styles.
+#[derive(Clone, Copy, Debug)]
+pub struct MaterialTypography {
+    /// Large display text.
+    pub display_large: TextStyle,
+    /// Medium display text.
+    pub display_medium: TextStyle,
+    /// Small display text.
+    pub display_small: TextStyle,
+    /// Large headline text.
+    pub headline_large: TextStyle,
+    /// Medium headline text.
+    pub headline_medium: TextStyle,
+    /// Small headline text.
+    pub headline_small: TextStyle,
+    /// Large title text.
+    pub title_large: TextStyle,
+    /// Medium title text.
+    pub title_medium: TextStyle,
+    /// Small title text.
+    pub title_small: TextStyle,
+    /// Large body text.
+    pub body_large: TextStyle,
+    /// Medium body text.
+    pub body_medium: TextStyle,
+    /// Small body text.
+    pub body_small: TextStyle,
+    /// Large label text.
+    pub label_large: TextStyle,
+    /// Medium label text.
+    pub label_medium: TextStyle,
+    /// Small label text.
+    pub label_small: TextStyle,
+}
+
+impl Default for MaterialTypography {
+    fn default() -> Self {
+        Self {
+            display_large: TextStyle {
+                font_size: Dp(57.0),
+                line_height: Some(Dp(64.0)),
+            },
+            display_medium: TextStyle {
+                font_size: Dp(45.0),
+                line_height: Some(Dp(52.0)),
+            },
+            display_small: TextStyle {
+                font_size: Dp(36.0),
+                line_height: Some(Dp(44.0)),
+            },
+            headline_large: TextStyle {
+                font_size: Dp(32.0),
+                line_height: Some(Dp(40.0)),
+            },
+            headline_medium: TextStyle {
+                font_size: Dp(28.0),
+                line_height: Some(Dp(36.0)),
+            },
+            headline_small: TextStyle {
+                font_size: Dp(24.0),
+                line_height: Some(Dp(32.0)),
+            },
+            title_large: TextStyle {
+                font_size: Dp(22.0),
+                line_height: Some(Dp(28.0)),
+            },
+            title_medium: TextStyle {
+                font_size: Dp(16.0),
+                line_height: Some(Dp(24.0)),
+            },
+            title_small: TextStyle {
+                font_size: Dp(14.0),
+                line_height: Some(Dp(20.0)),
+            },
+            body_large: TextStyle {
+                font_size: Dp(16.0),
+                line_height: Some(Dp(24.0)),
+            },
+            body_medium: TextStyle {
+                font_size: Dp(14.0),
+                line_height: Some(Dp(20.0)),
+            },
+            body_small: TextStyle {
+                font_size: Dp(12.0),
+                line_height: Some(Dp(16.0)),
+            },
+            label_large: TextStyle {
+                font_size: Dp(14.0),
+                line_height: Some(Dp(20.0)),
+            },
+            label_medium: TextStyle {
+                font_size: Dp(12.0),
+                line_height: Some(Dp(16.0)),
+            },
+            label_small: TextStyle {
+                font_size: Dp(11.0),
+                line_height: Some(Dp(16.0)),
+            },
+        }
+    }
+}
+
+/// Material shape scale used by components to resolve default container shapes.
+#[derive(Clone, Copy, Debug)]
+pub struct MaterialShapes {
+    /// Extra small container shape.
+    pub extra_small: Shape,
+    /// Small container shape.
+    pub small: Shape,
+    /// Medium container shape.
+    pub medium: Shape,
+    /// Large container shape.
+    pub large: Shape,
+    /// Extra large container shape.
+    pub extra_large: Shape,
+}
+
+impl Default for MaterialShapes {
+    fn default() -> Self {
+        Self {
+            extra_small: Shape::rounded_rectangle(Dp(4.0)),
+            small: Shape::rounded_rectangle(Dp(8.0)),
+            medium: Shape::rounded_rectangle(Dp(12.0)),
+            large: Shape::rounded_rectangle(Dp(16.0)),
+            extra_large: Shape::rounded_rectangle(Dp(28.0)),
+        }
+    }
+}
+
+/// Material theme container holding the three primary Material 3 theme
+/// primitives.
+#[derive(Clone, Debug)]
+pub struct MaterialTheme {
+    /// Color scheme used by Material components.
+    pub color_scheme: MaterialColorScheme,
+    /// Typography scale used by text-based components.
+    pub typography: MaterialTypography,
+    /// Shape scale used by container components.
+    pub shapes: MaterialShapes,
+}
+
+impl Default for MaterialTheme {
+    fn default() -> Self {
+        Self {
+            color_scheme: MaterialColorScheme::default(),
+            typography: MaterialTypography::default(),
+            shapes: MaterialShapes::default(),
+        }
+    }
+}
+
+impl MaterialTheme {
+    /// Create a theme from an explicit color scheme, using default typography
+    /// and shapes.
+    pub fn from_color_scheme(color_scheme: MaterialColorScheme) -> Self {
+        Self {
+            color_scheme,
+            ..Self::default()
+        }
+    }
+
+    /// Create a theme from a seed color.
+    pub fn from_seed(seed: Color, is_dark: bool) -> Self {
+        Self::from_color_scheme(scheme_from_seed(seed, is_dark))
+    }
+}
+
+/// # material_theme
+///
+/// Provides Material theme contexts (color scheme, typography, shapes) to
+/// descendants.
+///
+/// ## Usage
+///
+/// Wrap your app (or a subtree) to configure defaults for Material components.
+///
+/// ## Parameters
+///
+/// - `theme` — theme configuration; see [`MaterialTheme`].
+/// - `child` — subtree that consumes the theme.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_ui::{Color, tessera};
+/// use tessera_ui_basic_components::theme::{
+///     MaterialColorScheme, MaterialTheme, MaterialTypography, material_theme,
+/// };
+///
+/// #[tessera]
+/// fn app() {
+///     let scheme = MaterialColorScheme::light_from_seed(Color::from_rgb(0.4, 0.3, 0.6));
+///     let typography = MaterialTypography::default();
+///
+///     material_theme(
+///         MaterialTheme {
+///             color_scheme: scheme,
+///             typography,
+///             ..MaterialTheme::default()
+///         },
+///         || {
+///             // Your UI here.
+///         },
+///     );
+/// }
+/// ```
+#[tessera]
+pub fn material_theme(theme: impl Into<MaterialTheme>, child: impl FnOnce()) {
+    let theme = theme.into();
+    let body_large = theme.typography.body_large;
+    let content_color = ContentColor {
+        current: theme.color_scheme.on_surface,
+    };
+
+    provide_context(theme, || {
+        provide_context(content_color, || {
+            provide_text_style(body_large, child);
+        })
+    });
+}
+
 /// Provides a Material theme to descendants.
+///
+/// This is a compatibility wrapper around [`material_theme`] for code that only
+/// supplies a color scheme.
 #[tessera]
 pub fn material_theme_provider(scheme: MaterialColorScheme, child: impl FnOnce()) {
-    let content_color = ContentColor {
-        current: scheme.on_surface,
-    };
-    provide_context(scheme, || {
-        provide_context(content_color, child);
-    });
+    material_theme(MaterialTheme::from_color_scheme(scheme), child);
 }
 
 /// Generates a Material theme from a seed color and provides it to descendants.
 #[tessera]
 pub fn material_theme_from_seed(seed: Color, is_dark: bool, child: impl FnOnce()) {
-    let scheme = scheme_from_seed(seed, is_dark);
-    material_theme_provider(scheme, child);
+    material_theme(MaterialTheme::from_seed(seed, is_dark), child);
 }
 
 /// A Material Design color scheme, which can be light or dark,

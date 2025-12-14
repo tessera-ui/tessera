@@ -11,7 +11,7 @@ use tessera_ui_basic_components::{
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
-    theme::MaterialColorScheme,
+    theme::MaterialTheme,
 };
 
 #[tessera]
@@ -66,8 +66,9 @@ pub fn menus_showcase() {
                                             ))
                                             .size(Dp(14.0))
                                             .color(
-                                                use_context::<MaterialColorScheme>()
+                                                use_context::<MaterialTheme>()
                                                     .get()
+                                                    .color_scheme
                                                     .on_surface_variant,
                                             )
                                             .build()
@@ -127,7 +128,12 @@ pub fn menus_showcase() {
                                                     "Click to open at the button's anchor point.",
                                                 )
                                                 .size(Dp(14.0))
-                                                .color(use_context::<MaterialColorScheme>().get().on_surface_variant)
+                                                .color(
+                                                    use_context::<MaterialTheme>()
+                                                        .get()
+                                                        .color_scheme
+                                                        .on_surface_variant,
+                                                )
                                                 .build()
                                                 .expect("builder construction failed"),
                                         );
