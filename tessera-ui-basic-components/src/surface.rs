@@ -109,10 +109,6 @@ pub struct SurfaceArgs {
     /// Defines the visual style of the surface (fill, outline, or both).
     #[builder(default)]
     pub style: SurfaceStyle,
-    /// Optional style to apply when the cursor is hovering over the surface.
-    /// This is only active when `on_click` is also provided.
-    #[builder(default)]
-    pub hover_style: Option<SurfaceStyle>,
     /// Geometric outline of the surface (rounded rectangle / ellipse / capsule
     /// variants).
     #[builder(default)]
@@ -747,20 +743,12 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             }
         };
 
-        let is_hovered = ripple_state
-            .as_ref()
-            .map(|state| state.with(|s| s.is_hovered()))
-            .unwrap_or(false);
         let state_layer_alpha = ripple_state
             .as_ref()
             .map(|state| state.with(|s| s.state_layer_alpha()))
             .unwrap_or(0.0);
 
-        let effective_style = args_measure_clone
-            .hover_style
-            .as_ref()
-            .filter(|_| is_hovered)
-            .unwrap_or(&args_measure_clone.style);
+        let effective_style = &args_measure_clone.style;
         let effective_style = apply_tonal_elevation_to_style(
             effective_style,
             &scheme,

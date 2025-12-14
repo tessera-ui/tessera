@@ -35,11 +35,6 @@ impl CheckboxDefaults {
     pub const STATE_LAYER_SIZE: Dp = Dp(40.0);
     /// Minimum recommended touch target size.
     pub const TOUCH_TARGET_SIZE: Dp = Dp(48.0);
-    /// Default hover alpha for state layers.
-    pub const HOVER_ALPHA: f32 = MaterialAlpha::HOVER;
-    /// Default pressed alpha for ripple.
-    pub const PRESSED_ALPHA: f32 = MaterialAlpha::PRESSED;
-
     /// Computes the default state-layer base color for the current checked
     /// state.
     pub fn state_layer_base_color(
@@ -52,16 +47,6 @@ impl CheckboxDefaults {
         } else {
             scheme.on_surface
         }
-    }
-
-    /// Derives the hover fill color for the state layer.
-    pub fn hover_color(base: Color) -> Color {
-        base.with_alpha(Self::HOVER_ALPHA)
-    }
-
-    /// Derives the ripple color for the state layer.
-    pub fn ripple_color(base: Color) -> Color {
-        base.with_alpha(Self::PRESSED_ALPHA)
     }
 }
 
@@ -159,13 +144,6 @@ pub struct CheckboxArgs {
     ///
     /// Use this to customize the corner radii or switch to alternate shapes.
     pub shape: Shape,
-
-    /// Optional surface color to apply when the pointer hovers over the
-    /// control.
-    ///
-    /// If `None`, the control uses the default Material 3 state layer behavior.
-    #[builder(default)]
-    pub hover_color: Option<Color>,
 
     /// Whether the checkbox is disabled.
     #[builder(default = "false")]
@@ -398,15 +376,7 @@ pub fn checkbox_with_controller(
         )
     };
 
-    // State layer colors (hover + ripple) follow Material 3.
     let state_layer_base = CheckboxDefaults::state_layer_base_color(is_checked, &args, &scheme);
-    let state_layer_hover_color = if enabled {
-        args.hover_color
-            .unwrap_or_else(|| CheckboxDefaults::hover_color(state_layer_base))
-    } else {
-        Color::TRANSPARENT
-    };
-    let state_layer_ripple_color = CheckboxDefaults::ripple_color(state_layer_base);
 
     // Checkmark
     let checkmark_stroke_width = args.checkmark_stroke_width;
@@ -480,8 +450,7 @@ pub fn checkbox_with_controller(
     // State Layer Surface (40x40)
     let render_state_layer = closure!(
         clone enabled,
-        clone state_layer_hover_color,
-        clone state_layer_ripple_color,
+        clone state_layer_base,
         clone on_click_for_surface,
         clone render_checkbox_container,
         || {
@@ -493,10 +462,9 @@ pub fn checkbox_with_controller(
                 .style(SurfaceStyle::Filled {
                     color: Color::TRANSPARENT,
                 })
-                .hover_style(enabled.then_some(SurfaceStyle::Filled {
-                    color: state_layer_hover_color,
-                }))
-                .ripple_color(state_layer_ripple_color);
+                .ripple_bounded(false)
+                .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
+                .ripple_color(state_layer_base);
 
             if let Some(handler) = on_click_for_surface.clone() {
                 builder = builder.on_click_shared(handler);

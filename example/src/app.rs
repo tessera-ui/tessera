@@ -581,17 +581,13 @@ fn top_app_bar() {
                     .unwrap(),
                 |scope| {
                     scope.child(move || {
+                        let scheme = use_context::<MaterialTheme>().get().color_scheme;
                         let mut button_args = ButtonArgsBuilder::default()
                             .padding(Dp(5.0))
                             .shape(Shape::Ellipse)
                             .color(Color::TRANSPARENT)
-                            .hover_color(Some(
-                                use_context::<MaterialTheme>()
-                                    .get()
-                                    .color_scheme
-                                    .on_surface
-                                    .with_alpha(0.1),
-                            ))
+                            .content_color(scheme.on_surface)
+                            .ripple_color(scheme.on_surface)
                             .width(DimensionValue::Fixed(Dp(40.0).into()))
                             .height(DimensionValue::Fixed(Dp(40.0).into()));
                         if Router::with(|router| router.len()) > 1 {

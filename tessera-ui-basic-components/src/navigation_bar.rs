@@ -22,7 +22,7 @@ use crate::{
     spacer::{SpacerArgsBuilder, spacer},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
-    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
+    theme::{MaterialColorScheme, MaterialTheme},
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
@@ -304,13 +304,7 @@ fn render_navigation_item(
         scheme.on_secondary_container,
         selection_fraction,
     );
-    let ripple_color = interpolate_color(
-        scheme.on_surface_variant.with_alpha(MaterialAlpha::PRESSED),
-        scheme
-            .on_secondary_container
-            .with_alpha(MaterialAlpha::PRESSED),
-        selection_fraction,
-    );
+    let ripple_color = content_color;
 
     let label_alpha = match item.label_behavior {
         NavigationBarLabelBehavior::AlwaysShow => {
@@ -338,7 +332,6 @@ fn render_navigation_item(
             .padding(ITEM_PADDING)
             .content_color(content_color)
             .ripple_color(ripple_color)
-            .hover_style(None)
             .accessibility_label(label_text.clone())
             .on_click(move || {
                 if index != controller.with(|c| c.selected()) {

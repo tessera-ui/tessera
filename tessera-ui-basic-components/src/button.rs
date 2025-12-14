@@ -23,8 +23,6 @@ use crate::{
 pub struct ButtonDefaults;
 
 impl ButtonDefaults {
-    /// Default hover alpha used for button state layers.
-    pub const HOVER_ALPHA: f32 = MaterialAlpha::HOVER;
     /// Default pressed alpha used for ripple feedback.
     pub const PRESSED_ALPHA: f32 = MaterialAlpha::PRESSED;
     /// Default disabled container alpha.
@@ -64,12 +62,6 @@ impl ButtonDefaults {
             .outline_variant
             .with_alpha(Self::FILLED_DISABLED_CONTAINER_ALPHA)
     }
-
-    /// Returns a state-layer hover color computed from a container + overlay
-    /// color.
-    pub fn hover_color(container: Color, overlay: Color) -> Color {
-        container.blend_over(overlay, Self::HOVER_ALPHA)
-    }
 }
 
 /// Arguments for the `button` component.
@@ -87,10 +79,6 @@ pub struct ButtonArgs {
     /// When `None`, the button derives its content color from the theme.
     #[builder(default, setter(strip_option))]
     pub content_color: Option<Color>,
-    /// The hover color of the button (RGBA). If None, no hover effect is
-    /// applied.
-    #[builder(default = "None")]
-    pub hover_color: Option<Color>,
     /// The shape of the button.
     #[builder(default = "Shape::capsule()")]
     pub shape: Shape,
@@ -259,24 +247,6 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         }
     };
 
-    let hover_style = if args.enabled
-        && args.on_click.is_some()
-        && let Some(hover_color) = args.hover_color
-    {
-        let style = if args.border_width.to_pixels_f32() > 0.0 {
-            crate::surface::SurfaceStyle::FilledOutlined {
-                fill_color: hover_color,
-                border_color: args.border_color.unwrap_or(hover_color),
-                border_width: args.border_width,
-            }
-        } else {
-            crate::surface::SurfaceStyle::Filled { color: hover_color }
-        };
-        Some(style)
-    } else {
-        None
-    };
-
     let mut builder = SurfaceArgsBuilder::default();
 
     // Set shadow if available
@@ -307,7 +277,6 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
 
     builder
         .style(style)
-        .hover_style(hover_style)
         .shape(args.shape)
         .padding(args.padding)
         .ripple_color(args.ripple_color)
@@ -468,12 +437,6 @@ impl ButtonArgs {
     /// Sets the fill color for the button.
     pub fn with_color(mut self, color: Color) -> Self {
         self.color = color;
-        self
-    }
-
-    /// Sets the hover color applied when the pointer is over the button.
-    pub fn with_hover_color(mut self, hover_color: Color) -> Self {
-        self.hover_color = Some(hover_color);
         self
     }
 

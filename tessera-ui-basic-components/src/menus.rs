@@ -63,13 +63,6 @@ fn default_menu_color() -> Color {
     use_context::<MaterialTheme>().get().color_scheme.surface
 }
 
-fn default_hover_color() -> Color {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
-    scheme
-        .surface
-        .blend_over(scheme.on_surface, MaterialAlpha::HOVER)
-}
-
 fn default_scrim_color() -> Color {
     Color::new(0.0, 0.0, 0.0, 0.0)
 }
@@ -921,9 +914,6 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
             color: Color::TRANSPARENT,
         })
         .enabled(enabled)
-        .hover_style(enabled.then(|| SurfaceStyle::Filled {
-            color: default_hover_color(),
-        }))
         .padding(Dp(0.0))
         .width(DimensionValue::FILLED)
         .height(DimensionValue::Wrap {
@@ -938,7 +928,7 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
                 .get()
                 .color_scheme
                 .on_surface
-                .with_alpha(MaterialAlpha::PRESSED),
+                .with_alpha(1.0),
         );
 
     if let Some(on_click) = args.on_click.clone() {

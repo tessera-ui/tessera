@@ -157,7 +157,6 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
     let content_color = args.content_color.unwrap_or(default_content_color);
 
     // Use state-layer + ripple derived from the current content color.
-    let hover_color = None;
     let ripple_color = content_color;
 
     // Construct ButtonArgs
@@ -177,7 +176,6 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
         })
         .disabled_content_color(ButtonDefaults::disabled_content_color(&scheme))
         .disabled_border_color(ButtonDefaults::disabled_border_color(&scheme))
-        .hover_color(hover_color)
         .ripple_color(ripple_color)
         .border_width(border_width);
 

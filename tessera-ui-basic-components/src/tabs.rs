@@ -47,14 +47,9 @@ impl TabsDefaults {
             .with_alpha(MaterialAlpha::DISABLED_CONTENT)
     }
 
-    /// Default ripple color derived from the state layer base color.
-    pub fn ripple_color(state_layer_color: Color) -> Color {
-        state_layer_color.with_alpha(MaterialAlpha::PRESSED)
-    }
-
-    /// Default hover color derived from container and state layer colors.
-    pub fn hover_color(container: Color, state_layer: Color) -> Color {
-        blend_state_layer(container, state_layer, Self::HOVER_STATE_LAYER_OPACITY)
+    /// Default ripple color derived from the selected content color.
+    pub fn ripple_color(selected_content_color: Color) -> Color {
+        selected_content_color
     }
 }
 
@@ -80,16 +75,6 @@ fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
         DimensionValue::Fixed(v) => v,
         DimensionValue::Wrap { min, max } => clamp_wrap(min, max, measure),
         DimensionValue::Fill { min, max } => fill_value(min, max, measure),
-    }
-}
-
-fn blend_state_layer(base: Color, layer: Color, opacity: f32) -> Color {
-    let opacity = opacity.clamp(0.0, 1.0);
-    Color {
-        r: base.r * (1.0 - opacity) + layer.r * opacity,
-        g: base.g * (1.0 - opacity) + layer.g * opacity,
-        b: base.b * (1.0 - opacity) + layer.b * opacity,
-        a: base.a,
     }
 }
 
@@ -554,11 +539,6 @@ where
         || {},
     );
 
-    let hover_color = blend_state_layer(
-        args.container_color,
-        args.state_layer_color,
-        args.hover_state_layer_opacity,
-    );
     let ripple_color = TabsDefaults::ripple_color(args.active_content_color);
 
     for (index, child) in title_closures.into_iter().enumerate() {
@@ -574,7 +554,6 @@ where
             .color(args.container_color)
             .content_color(label_color)
             .enabled(args.enabled)
-            .hover_color(Some(hover_color))
             .padding(args.tab_padding)
             .ripple_color(ripple_color)
             .width(DimensionValue::FILLED)
