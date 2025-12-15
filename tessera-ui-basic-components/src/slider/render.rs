@@ -1,4 +1,4 @@
-use tessera_ui::DimensionValue;
+use tessera_ui::{Color, DimensionValue, Px};
 
 use crate::{
     shape_def::{RoundedCorner, Shape},
@@ -49,25 +49,12 @@ pub(super) fn render_inactive_segment(layout: SliderLayout, colors: &SliderColor
     );
 }
 
-pub(super) fn render_focus(layout: SliderLayout, colors: &SliderColors) {
+pub(super) fn render_handle(layout: SliderLayout, width: tessera_ui::Px, colors: &SliderColors) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.focus_width))
-            .height(DimensionValue::Fixed(layout.focus_height))
-            .style(colors.handle_focus.into())
-            .shape(Shape::capsule())
-            .build()
-            .expect("builder construction failed"),
-        || {},
-    );
-}
-
-pub(super) fn render_handle(layout: SliderLayout, colors: &SliderColors) {
-    surface(
-        SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.handle_width))
+            .width(DimensionValue::Fixed(width))
             .height(DimensionValue::Fixed(layout.handle_height))
-            .style(colors.handle.into())
+            .style(colors.thumb.into())
             .shape(Shape::capsule())
             .build()
             .expect("builder construction failed"),
@@ -80,7 +67,20 @@ pub(super) fn render_stop_indicator(layout: SliderLayout, colors: &SliderColors)
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(layout.stop_indicator_diameter))
             .height(DimensionValue::Fixed(layout.stop_indicator_diameter))
-            .style(colors.handle.into())
+            .style(colors.active_track.into())
+            .shape(Shape::Ellipse)
+            .build()
+            .expect("builder construction failed"),
+        || {},
+    );
+}
+
+pub(super) fn render_tick(diameter: Px, color: Color) {
+    surface(
+        SurfaceArgsBuilder::default()
+            .width(DimensionValue::Fixed(diameter))
+            .height(DimensionValue::Fixed(diameter))
+            .style(color.into())
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
@@ -162,7 +162,7 @@ pub(super) fn render_centered_stops(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
             .height(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
-            .style(colors.handle.into())
+            .style(colors.active_track.into())
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
@@ -174,7 +174,7 @@ pub(super) fn render_centered_stops(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
             .height(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
-            .style(colors.handle.into())
+            .style(colors.active_track.into())
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
@@ -191,7 +191,7 @@ pub(super) fn render_range_stops(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
             .height(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
-            .style(colors.handle.into())
+            .style(colors.active_track.into())
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),
@@ -203,7 +203,7 @@ pub(super) fn render_range_stops(
         SurfaceArgsBuilder::default()
             .width(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
             .height(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
-            .style(colors.handle.into())
+            .style(colors.active_track.into())
             .shape(Shape::Ellipse)
             .build()
             .expect("builder construction failed"),

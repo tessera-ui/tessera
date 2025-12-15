@@ -437,7 +437,7 @@ pub fn dialog_provider(
 ///             })
 ///             .build()
 ///             .unwrap(),
-///         dialog_controller.clone(),
+///         dialog_controller,
 ///         || { /* main content */ },
 ///         |alpha| {
 ///             basic_dialog(

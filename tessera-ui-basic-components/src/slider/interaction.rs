@@ -1,12 +1,21 @@
 use std::sync::Arc;
 
 use tessera_ui::{
-    ComputedData, CursorEventContent, Focus, InputHandlerInput, PxPosition, State,
+    ComputedData, CursorEventContent, Focus, InputHandlerInput, Px, PxPosition, State,
     accesskit::{Action, Role},
     winit::window::CursorIcon,
 };
 
 use super::{ACCESSIBILITY_STEP, SliderArgs, SliderController, SliderLayout};
+
+pub(super) fn snap_fraction(value: f32, steps: usize) -> f32 {
+    if steps == 0 {
+        return value.clamp(0.0, 1.0);
+    }
+    let denom = steps as f32 + 1.0;
+    let step = 1.0 / denom;
+    (value / step).round().mul_add(step, 0.0).clamp(0.0, 1.0)
+}
 
 /// Helper: check if a cursor position is within the bounds of a component.
 pub(super) fn cursor_within_component(
@@ -28,10 +37,52 @@ pub(super) fn cursor_progress(
     cursor_pos: Option<PxPosition>,
     layout: &SliderLayout,
 ) -> Option<f32> {
-    if layout.component_width.0 <= 0 {
+    if layout.track_total_width.0 <= 0 {
         return None;
     }
-    cursor_pos.map(|pos| (pos.x.0 as f32 / layout.component_width.to_f32()).clamp(0.0, 1.0))
+    cursor_pos.map(|pos| {
+        let cursor_x = pos.x.to_f32();
+        let half_handle = layout.handle_width.to_f32() / 2.0;
+        let start_x = layout.handle_gap.to_f32() + half_handle;
+        let fraction = (cursor_x - start_x) / layout.track_total_width.to_f32();
+        fraction.clamp(0.0, 1.0)
+    })
+}
+
+fn range_cursor_progress(
+    cursor_pos: Option<PxPosition>,
+    layout: &SliderLayout,
+    start_handle_width: Px,
+    end_handle_width: Px,
+) -> Option<f32> {
+    let cursor_pos = cursor_pos?;
+    let component_width = layout.component_width.to_f32();
+    let gap = layout.handle_gap.to_f32();
+    let start_half = start_handle_width.to_f32() / 2.0;
+    let end_half = end_handle_width.to_f32() / 2.0;
+    let track_total = (component_width - start_half - end_half - gap * 2.0).max(0.0);
+    if track_total <= 0.0 {
+        return None;
+    }
+    let start_x = gap + start_half;
+    let fraction = (cursor_pos.x.to_f32() - start_x) / track_total;
+    Some(fraction.clamp(0.0, 1.0))
+}
+
+fn range_handle_center_x(
+    layout: &SliderLayout,
+    value: f32,
+    start_handle_width: Px,
+    end_handle_width: Px,
+) -> f32 {
+    let component_width = layout.component_width.to_f32();
+    let gap = layout.handle_gap.to_f32();
+    let start_half = start_handle_width.to_f32() / 2.0;
+    let end_half = end_handle_width.to_f32() / 2.0;
+    let track_total = (component_width - start_half - end_half - gap * 2.0).max(0.0);
+    let start_x = gap + start_half;
+    let raw = start_x + value.clamp(0.0, 1.0) * track_total;
+    raw.clamp(start_x, (component_width - gap - end_half).max(start_x))
 }
 
 pub(super) fn handle_slider_state(
@@ -64,8 +115,8 @@ pub(super) fn handle_slider_state(
 
     let mut new_value: Option<f32> = None;
 
-    handle_cursor_events(input, state, &mut new_value, layout);
-    update_value_on_drag(input, state, &mut new_value, layout);
+    handle_cursor_events(input, state, &mut new_value, layout, args.steps);
+    update_value_on_drag(input, state, &mut new_value, layout, args.steps);
     notify_on_change(new_value, args);
 }
 
@@ -74,6 +125,7 @@ fn handle_cursor_events(
     state: State<SliderController>,
     new_value: &mut Option<f32>,
     layout: &SliderLayout,
+    steps: usize,
 ) {
     for event in input.cursor_events.iter() {
         match &event.content {
@@ -83,7 +135,7 @@ fn handle_cursor_events(
                     inner.is_dragging = true;
                 });
                 if let Some(v) = cursor_progress(input.cursor_position_rel, layout) {
-                    *new_value = Some(v);
+                    *new_value = Some(snap_fraction(v, steps));
                 }
             }
             CursorEventContent::Released(_) => {
@@ -99,11 +151,12 @@ fn update_value_on_drag(
     state: State<SliderController>,
     new_value: &mut Option<f32>,
     layout: &SliderLayout,
+    steps: usize,
 ) {
     if state.with(|s| s.is_dragging)
         && let Some(v) = cursor_progress(input.cursor_position_rel, layout)
     {
-        *new_value = Some(v);
+        *new_value = Some(snap_fraction(v, steps));
     }
 }
 
@@ -150,10 +203,16 @@ pub(super) fn apply_slider_accessibility(
     }
 
     let on_change = on_change.clone();
+    let steps = args.steps;
     input.set_accessibility_action_handler(move |action| {
+        let delta = if steps == 0 {
+            ACCESSIBILITY_STEP
+        } else {
+            1.0 / (steps as f32 + 1.0)
+        };
         let new_value = match action {
-            Action::Increment => Some((current_value + ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
-            Action::Decrement => Some((current_value - ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
+            Action::Increment => Some(snap_fraction(current_value + delta, steps)),
+            Action::Decrement => Some(snap_fraction(current_value - delta, steps)),
             _ => None,
         };
 
@@ -198,6 +257,8 @@ pub(super) fn handle_range_slider_state(
     state: &State<RangeSliderController>,
     args: &super::RangeSliderArgs,
     layout: &SliderLayout,
+    start_handle_width: Px,
+    end_handle_width: Px,
 ) {
     if args.disabled {
         state.with_mut(|inner| {
@@ -230,13 +291,35 @@ pub(super) fn handle_range_slider_state(
     for event in input.cursor_events.iter() {
         match &event.content {
             CursorEventContent::Pressed(_) => {
-                if let Some(progress) = cursor_progress(input.cursor_position_rel, layout) {
-                    let dist_start = (progress - args.value.0).abs();
-                    let dist_end = (progress - args.value.1).abs();
+                if let Some(progress) = range_cursor_progress(
+                    input.cursor_position_rel,
+                    layout,
+                    start_handle_width,
+                    end_handle_width,
+                ) {
+                    let progress = snap_fraction(progress, args.steps);
+                    let start_value = args.value.0.clamp(0.0, 1.0);
+                    let end_value = args.value.1.clamp(start_value, 1.0);
+                    let cursor_x = input.cursor_position_rel.map(|pos| pos.x.to_f32());
+                    let start_center_x = range_handle_center_x(
+                        layout,
+                        start_value,
+                        start_handle_width,
+                        end_handle_width,
+                    );
+                    let end_center_x = range_handle_center_x(
+                        layout,
+                        end_value,
+                        start_handle_width,
+                        end_handle_width,
+                    );
+                    let dist_start = cursor_x.map(|x| (x - start_center_x).abs());
+                    let dist_end = cursor_x.map(|x| (x - end_center_x).abs());
+                    let drag_start =
+                        dist_start.unwrap_or(f32::INFINITY) <= dist_end.unwrap_or(f32::INFINITY);
 
                     state.with_mut(|inner| {
-                        // Determine which handle to drag based on proximity
-                        if dist_start <= dist_end {
+                        if drag_start {
                             inner.is_dragging_start = true;
                             inner.focus_start.request_focus();
                         } else {
@@ -245,7 +328,7 @@ pub(super) fn handle_range_slider_state(
                         }
                     });
 
-                    if dist_start <= dist_end {
+                    if drag_start {
                         new_start = Some(progress);
                     } else {
                         new_end = Some(progress);
@@ -262,7 +345,13 @@ pub(super) fn handle_range_slider_state(
         }
     }
 
-    if let Some(progress) = cursor_progress(input.cursor_position_rel, layout) {
+    if let Some(progress) = range_cursor_progress(
+        input.cursor_position_rel,
+        layout,
+        start_handle_width,
+        end_handle_width,
+    ) {
+        let progress = snap_fraction(progress, args.steps);
         state.with(|s| {
             if s.is_dragging_start {
                 new_start = Some(progress.min(args.value.1)); // Don't cross end
@@ -291,24 +380,7 @@ pub(super) fn apply_range_slider_accessibility(
     _current_end: f32,
     _on_change: &Arc<dyn Fn((f32, f32)) + Send + Sync>,
 ) {
-    // For range slider, we ideally need two accessibility nodes.
-    // However, given current limitations, we might just expose one node or the
-    // "primary" interaction. A better approach for accessibility in range
-    // sliders is usually multiple children nodes. For now, let's just make the
-    // container focusable but it might be confusing. To do this properly, we
-    // should probably split the accessibility into the two handles in the main
-    // component code by attaching accessibility info to the handle children
-    // instead of the container. But the current structure attaches to the
-    // container. TODO: Improve accessibility for range slider (requires
-    // structural changes to expose handles as children).
-
-    // Minimal implementation: report range as a string? or just focusable?
-    // Let's skip specific numeric value reporting for the container to avoid
-    // confusion, or just report the start value for now.
-    let mut builder = input.accessibility().role(Role::Slider);
-    if let Some(label) = args.accessibility_label.as_ref() {
-        builder = builder.label(label.clone());
-    }
+    let mut builder = input.accessibility().hidden();
     if args.disabled {
         builder = builder.disabled();
     }

@@ -44,7 +44,7 @@ fn get_slider_specs(size: SliderSize) -> SliderSpecs {
     }
 }
 
-const INNER_CORNER_RADIUS: Dp = Dp(4.0);
+const INNER_CORNER_RADIUS: Dp = Dp(2.0);
 
 #[derive(Clone, Copy)]
 pub(super) struct SliderLayout {
@@ -59,9 +59,6 @@ pub(super) struct SliderLayout {
     pub handle_height: Px,
     pub handle_y: Px,
     pub handle_gap: Px,
-    pub focus_width: Px,
-    pub focus_height: Px,
-    pub focus_y: Px,
     pub stop_indicator_diameter: Px,
     pub stop_indicator_y: Px,
     pub show_stop_indicator: bool,
@@ -182,9 +179,7 @@ impl CenteredSliderLayout {
     }
 
     pub fn stop_indicator_offset(&self) -> Px {
-        // Replicating padding logic: Dp(8.0) - size/2
-
-        Dp(8.0).to_px() - self.base.stop_indicator_diameter / Px(2)
+        self.base.track_corner_radius.to_px()
     }
 }
 
@@ -215,29 +210,29 @@ pub(super) fn fallback_component_width(args: &SliderArgs) -> Px {
 }
 
 pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLayout {
+    slider_layout_with_handle_width(args, component_width, args.thumb_diameter.to_px())
+}
+
+pub(super) fn slider_layout_with_handle_width(
+    args: &SliderArgs,
+    component_width: Px,
+    handle_width: Px,
+) -> SliderLayout {
     let specs = get_slider_specs(args.size);
 
-    let handle_width = args.thumb_diameter.to_px();
     let track_height = specs.track_height.to_px();
     let touch_target_height = MIN_TOUCH_TARGET.to_px();
     let handle_gap = HANDLE_GAP.to_px();
     let handle_height = specs.handle_height.to_px();
-    let focus_width = Px((handle_width.to_f32() * 1.6).round() as i32);
-    let focus_height = Px((handle_height.to_f32() * 1.2).round() as i32);
     let stop_indicator_diameter = STOP_INDICATOR_DIAMETER.to_px();
     let track_corner_radius = specs.track_corner_radius;
 
     let track_total_width = Px((component_width.0 - handle_width.0 - handle_gap.0 * 2).max(0));
 
-    let component_height = Px(*[
-        track_height.0,
-        handle_height.0,
-        focus_height.0,
-        touch_target_height.0,
-    ]
-    .iter()
-    .max()
-    .expect("non-empty"));
+    let component_height = Px(track_height
+        .0
+        .max(handle_height.0)
+        .max(touch_target_height.0));
     let track_y = Px((component_height.0 - track_height.0) / 2);
 
     SliderLayout {
@@ -252,22 +247,10 @@ pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLay
         handle_height,
         handle_gap,
         handle_y: Px((component_height.0 - handle_height.0) / 2),
-        focus_width,
-        focus_height,
-        focus_y: Px((component_height.0 - focus_height.0) / 2),
         stop_indicator_diameter,
         stop_indicator_y: Px((component_height.0 - stop_indicator_diameter.0) / 2),
         show_stop_indicator: args.show_stop_indicator,
         icon_size: specs.icon_size,
-    }
-}
-
-pub(super) fn centered_slider_layout(
-    args: &SliderArgs,
-    component_width: Px,
-) -> CenteredSliderLayout {
-    CenteredSliderLayout {
-        base: slider_layout(args, component_width),
     }
 }
 
@@ -285,33 +268,38 @@ pub(super) struct RangeSegments {
 }
 
 impl RangeSliderLayout {
-    pub fn segments(&self, start: f32, end: f32) -> RangeSegments {
+    pub fn segments(
+        &self,
+        start: f32,
+        end: f32,
+        start_handle_width: Px,
+        end_handle_width: Px,
+    ) -> RangeSegments {
         let start = start.clamp(0.0, 1.0);
         let end = end.clamp(start, 1.0); // Ensure start <= end
 
         let w = self.base.component_width.to_f32();
-        let h_w = self.base.handle_width.to_f32();
         let gap = self.base.handle_gap.to_f32();
-        let track_total = self.base.track_total_width.to_f32();
+        let start_half = start_handle_width.to_f32() / 2.0;
+        let end_half = end_handle_width.to_f32() / 2.0;
+        let track_total = (w - start_half - end_half - gap * 2.0).max(0.0);
 
-        // Handle Centers
-        // Mapping: 0.0 -> gap + h/2, 1.0 -> W - gap - h/2
-        // active_width (for value) = value * track_total
-        // x = active_width + gap + h/2
+        let start_center_raw = (start * track_total) + gap + start_half;
+        let end_center_raw = (end * track_total) + gap + start_half;
 
-        let start_center_raw = (start * track_total) + gap + (h_w / 2.0);
-        let end_center_raw = (end * track_total) + gap + (h_w / 2.0);
+        let start_min = gap + start_half;
+        let start_max = (w - gap - start_half).max(start_min);
+        let end_min = start_min;
+        let end_max = (w - gap - end_half).max(end_min);
 
-        let max_x = (w - h_w / 2.0).max(0.0);
+        let start_handle_center_x = start_center_raw.clamp(start_min, start_max);
+        let end_handle_center_x = end_center_raw.clamp(end_min, end_max);
 
-        let start_handle_center_x = start_center_raw.clamp(h_w / 2.0, max_x);
-        let end_handle_center_x = end_center_raw.clamp(h_w / 2.0, max_x);
-
-        let start_handle_right = start_handle_center_x + h_w / 2.0;
-        let end_handle_left = end_handle_center_x - h_w / 2.0;
+        let start_handle_right = start_handle_center_x + start_half;
+        let end_handle_left = end_handle_center_x - end_half;
 
         // Left Inactive: 0 to StartHandleLeft - Gap
-        let start_handle_left = start_handle_center_x - h_w / 2.0;
+        let start_handle_left = start_handle_center_x - start_half;
         let li_end = (start_handle_left - gap).max(0.0);
         let li_w = li_end;
         let li_x: f32 = 0.0;
@@ -323,7 +311,7 @@ impl RangeSliderLayout {
         let a_x = a_start;
 
         // Right Inactive: EndHandleRight + Gap to Width
-        let end_handle_right = end_handle_center_x + h_w / 2.0;
+        let end_handle_right = end_handle_center_x + end_half;
         let ri_start = end_handle_right + gap;
         let ri_end = w;
         let ri_w = (ri_end - ri_start).max(0.0);
@@ -349,14 +337,7 @@ pub(super) fn range_slider_layout(
     args: &super::RangeSliderArgs,
     component_width: Px,
 ) -> RangeSliderLayout {
-    // Reuse basic slider layout logic for dimensions, but we need to construct a
-    // dummy SliderArgs or refactor slider_layout. Since slider_layout mainly
-    // uses width and style args which exist in RangeSliderArgs, let's create a
-    // temporary adapter or just manually construct if needed. Better yet, let's
-    // extract the common args into a helper or just construct SliderArgs.
-
-    // Note: We'll construct a SliderArgs to reuse the layout calculation.
-    // This is a bit of a hack but avoids refactoring everything.
+    // Range sliders share the same base sizing rules as single-value sliders.
     let dummy_args = SliderArgs {
         value: 0.0,
         on_change: std::sync::Arc::new(|_| {}),
@@ -366,12 +347,11 @@ pub(super) fn range_slider_layout(
         inactive_track_color: args.inactive_track_color,
         thumb_diameter: args.thumb_diameter,
         thumb_color: args.thumb_color,
-        state_layer_diameter: args.state_layer_diameter,
-        state_layer_color: args.state_layer_color,
         disabled: args.disabled,
         accessibility_label: None,
         accessibility_description: None,
         show_stop_indicator: args.show_stop_indicator,
+        steps: args.steps,
         inset_icon: None,
     };
 

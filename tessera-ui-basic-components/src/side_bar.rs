@@ -403,7 +403,7 @@ pub fn side_bar_provider(
 ///             .on_close_request(|| {})
 ///             .build()
 ///             .unwrap(),
-///         controller.clone(),
+///         controller,
 ///         || { /* main content */ },
 ///         || { /* side bar content */ },
 ///     );

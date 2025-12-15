@@ -8,7 +8,11 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasureInput, MeasurementError, Px,
-    PxPosition, State, focus_state::Focus, remember, tessera, use_context,
+    PxPosition, State,
+    accessibility::AccessibilityNode,
+    accesskit::{Action, Role},
+    focus_state::Focus,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -18,16 +22,16 @@ use crate::{
 
 use interaction::{
     apply_range_slider_accessibility, apply_slider_accessibility, handle_range_slider_state,
-    handle_slider_state,
+    handle_slider_state, snap_fraction,
 };
 use layout::{
-    CenteredSliderLayout, RangeSliderLayout, SliderLayout, centered_slider_layout,
-    fallback_component_width, range_slider_layout, resolve_component_width, slider_layout,
+    CenteredSliderLayout, RangeSliderLayout, SliderLayout, fallback_component_width,
+    range_slider_layout, resolve_component_width, slider_layout_with_handle_width,
 };
 use render::{
-    render_active_segment, render_centered_stops, render_centered_tracks, render_focus,
-    render_handle, render_inactive_segment, render_range_stops, render_range_tracks,
-    render_stop_indicator,
+    render_active_segment, render_centered_stops, render_centered_tracks, render_handle,
+    render_inactive_segment, render_range_stops, render_range_tracks, render_stop_indicator,
+    render_tick,
 };
 
 pub use interaction::RangeSliderController;
@@ -40,6 +44,95 @@ const ACCESSIBILITY_STEP: f32 = 0.05;
 const MIN_TOUCH_TARGET: Dp = Dp(40.0);
 const HANDLE_GAP: Dp = Dp(6.0);
 const STOP_INDICATOR_DIAMETER: Dp = Dp(4.0);
+
+fn tick_fractions(steps: usize) -> Vec<f32> {
+    if steps == 0 {
+        return Vec::new();
+    }
+    let denom = steps as f32 + 1.0;
+    (0..=steps + 1).map(|i| i as f32 / denom).collect()
+}
+
+struct RangeThumbAccessibilityArgs<'a> {
+    key: &'static str,
+    label: Option<&'a String>,
+    description: Option<&'a String>,
+    fallback_description: &'static str,
+    steps: usize,
+    disabled: bool,
+    value: f32,
+    min: f32,
+    max: f32,
+    on_change: Arc<dyn Fn(f32) + Send + Sync>,
+}
+
+fn set_range_thumb_accessibility(
+    input: &MeasureInput,
+    thumb_id: tessera_ui::NodeId,
+    args: RangeThumbAccessibilityArgs<'_>,
+) {
+    let mut node = AccessibilityNode::new()
+        .with_role(Role::Slider)
+        .with_numeric_value(args.value as f64)
+        .with_numeric_range(args.min as f64, args.max as f64)
+        .focusable()
+        .with_key(args.key);
+
+    if let Some(label) = args.label {
+        node = node.with_label(label.clone());
+    }
+
+    let description = args
+        .description
+        .map(|d| format!("{d} ({})", args.fallback_description))
+        .unwrap_or_else(|| args.fallback_description.to_string());
+    node = node.with_description(description);
+
+    if args.disabled {
+        node.disabled = true;
+    } else {
+        node.actions = vec![Action::Increment, Action::Decrement];
+    }
+
+    if let Some(mut metadata) = input.metadatas.get_mut(&thumb_id) {
+        metadata.accessibility = Some(node);
+        metadata.accessibility_action_handler = if args.disabled {
+            None
+        } else {
+            let delta = if args.steps == 0 {
+                ACCESSIBILITY_STEP
+            } else {
+                1.0 / (args.steps as f32 + 1.0)
+            };
+            let value = args.value;
+            let min = args.min;
+            let max = args.max;
+            let steps = args.steps;
+            let on_change = args.on_change.clone();
+            Some(Box::new(move |action| {
+                let next = match action {
+                    Action::Increment => value + delta,
+                    Action::Decrement => value - delta,
+                    _ => return,
+                };
+                let next = snap_fraction(next, steps).clamp(min, max);
+                on_change(next);
+            }))
+        };
+    }
+}
+
+struct RangeSliderMeasureArgs {
+    start: f32,
+    end: f32,
+    start_handle_width: Px,
+    end_handle_width: Px,
+    steps: usize,
+    disabled: bool,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+    on_change: Arc<dyn Fn((f32, f32)) + Send + Sync>,
+}
 
 /// Controller for the `slider` component.
 pub struct SliderController {
@@ -139,15 +232,6 @@ pub struct SliderArgs {
     /// Color of the handle indicator.
     #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub thumb_color: Color,
-    /// Height of the handle focus layer (hover/drag halo).
-    #[builder(default = "Dp(18.0)")]
-    pub state_layer_diameter: Dp,
-    /// Base color for the state layer; alpha will be adjusted per interaction
-    /// state.
-    #[builder(
-        default = "use_context::<MaterialTheme>().get().color_scheme.primary.with_alpha(0.18)"
-    )]
-    pub state_layer_color: Color,
     /// Disable interaction.
     #[builder(default = "false")]
     pub disabled: bool,
@@ -160,6 +244,12 @@ pub struct SliderArgs {
     /// Whether to show the stop indicators at the ends of the track.
     #[builder(default = "true")]
     pub show_stop_indicator: bool,
+    /// Number of discrete steps between 0.0 and 1.0.
+    ///
+    /// When set to a value greater than 0, the slider value snaps to
+    /// `steps + 2` evenly spaced tick positions (including both ends).
+    #[builder(default = "0")]
+    pub steps: usize,
     /// Optional icon content to display at the start of the slider (only for
     /// Medium sizes and above).
     #[builder(default, setter(strip_option, into))]
@@ -202,16 +292,6 @@ pub struct RangeSliderArgs {
     #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub thumb_color: Color,
 
-    /// Height of the handle focus layer.
-    #[builder(default = "Dp(18.0)")]
-    pub state_layer_diameter: Dp,
-
-    /// Base color for the state layer.
-    #[builder(
-        default = "use_context::<MaterialTheme>().get().color_scheme.primary.with_alpha(0.18)"
-    )]
-    pub state_layer_color: Color,
-
     /// Disable interaction.
     #[builder(default = "false")]
     pub disabled: bool,
@@ -225,6 +305,12 @@ pub struct RangeSliderArgs {
     /// Whether to show the stop indicators at the ends of the track.
     #[builder(default = "true")]
     pub show_stop_indicator: bool,
+    /// Number of discrete steps between 0.0 and 1.0.
+    ///
+    /// When set to a value greater than 0, the slider values snap to
+    /// `steps + 2` evenly spaced tick positions (including both ends).
+    #[builder(default = "0")]
+    pub steps: usize,
 }
 
 fn measure_slider(
@@ -232,6 +318,8 @@ fn measure_slider(
     layout: SliderLayout,
     clamped_value: f32,
     has_inset_icon: bool,
+    handle_width: Px,
+    steps: usize,
 ) -> Result<ComputedData, MeasurementError> {
     let self_width = layout.component_width;
     let self_height = layout.component_height;
@@ -239,7 +327,7 @@ fn measure_slider(
     let active_id = input.children_ids[0];
     let inactive_id = input.children_ids[1];
 
-    // Order in render: active, inactive, [icon], focus, handle, [stop]
+    // Order in render: active, inactive, [icon], [ticks], [stop], handle
     let mut current_index = 2;
 
     let icon_id = if has_inset_icon {
@@ -250,16 +338,19 @@ fn measure_slider(
         None
     };
 
-    let focus_id = input.children_ids[current_index];
-    current_index += 1;
-    let handle_id = input.children_ids[current_index];
-    current_index += 1;
+    let tick_count = if steps == 0 { 0 } else { steps + 2 };
+    let tick_ids = &input.children_ids[current_index..current_index + tick_count];
+    current_index += tick_count;
 
     let stop_id = if layout.show_stop_indicator {
-        input.children_ids.get(current_index).copied()
+        let id = input.children_ids.get(current_index).copied();
+        current_index += 1;
+        id
     } else {
         None
     };
+
+    let handle_id = input.children_ids[current_index];
 
     let active_width = layout.active_width(clamped_value);
     let inactive_width = layout.inactive_width(clamped_value);
@@ -279,31 +370,19 @@ fn measure_slider(
     input.place_child(
         inactive_id,
         PxPosition::new(
-            Px(active_width.0 + layout.handle_gap.0 * 2 + layout.handle_width.0),
+            Px(active_width.0 + layout.handle_gap.0 * 2 + handle_width.0),
             layout.track_y,
         ),
     );
 
-    let focus_constraint = Constraint::new(
-        DimensionValue::Fixed(layout.focus_width),
-        DimensionValue::Fixed(layout.focus_height),
-    );
-    input.measure_child(focus_id, &focus_constraint)?;
-
     let handle_constraint = Constraint::new(
-        DimensionValue::Fixed(layout.handle_width),
+        DimensionValue::Fixed(handle_width),
         DimensionValue::Fixed(layout.handle_height),
     );
     input.measure_child(handle_id, &handle_constraint)?;
 
     let handle_center = layout.handle_center(clamped_value);
-    let focus_offset = layout.center_child_offset(layout.focus_width);
-    input.place_child(
-        focus_id,
-        PxPosition::new(Px(handle_center.x.0 - focus_offset.0), layout.focus_y),
-    );
-
-    let handle_offset = layout.center_child_offset(layout.handle_width);
+    let handle_offset = layout.center_child_offset(handle_width);
     input.place_child(
         handle_id,
         PxPosition::new(Px(handle_center.x.0 - handle_offset.0), layout.handle_y),
@@ -317,9 +396,9 @@ fn measure_slider(
         );
         input.measure_child(stop_id, &stop_constraint)?;
         let stop_offset = layout.center_child_offset(layout.stop_indicator_diameter);
-        let inactive_start = active_width.0 + layout.handle_gap.0 * 2 + layout.handle_width.0;
-        let padding = Dp(8.0).to_px() - stop_size / Px(2);
-        let stop_center_x = Px(inactive_start + inactive_width.0 - padding.0);
+        let inactive_start = active_width.0 + layout.handle_gap.0 * 2 + handle_width.0;
+        let corner = layout.track_corner_radius.to_px();
+        let stop_center_x = Px(inactive_start + inactive_width.0 - corner.0);
         input.place_child(
             stop_id,
             PxPosition::new(Px(stop_center_x.0 - stop_offset.0), layout.stop_indicator_y),
@@ -348,6 +427,28 @@ fn measure_slider(
         input.place_child(icon_id, PxPosition::new(icon_padding, icon_y));
     }
 
+    if steps > 0 {
+        let tick_size = layout.stop_indicator_diameter;
+        let tick_constraint = Constraint::new(
+            DimensionValue::Fixed(tick_size),
+            DimensionValue::Fixed(tick_size),
+        );
+        let tick_offset = layout.center_child_offset(tick_size);
+        let start_x = layout.handle_gap.to_f32() + handle_width.to_f32() / 2.0;
+        for (i, tick_id) in tick_ids.iter().copied().enumerate() {
+            input.measure_child(tick_id, &tick_constraint)?;
+            let fraction = i as f32 / (steps as f32 + 1.0);
+            let tick_center_x = start_x + fraction * layout.track_total_width.to_f32();
+            input.place_child(
+                tick_id,
+                PxPosition::new(
+                    Px(tick_center_x.round() as i32 - tick_offset.0),
+                    layout.stop_indicator_y,
+                ),
+            );
+        }
+    }
+
     Ok(ComputedData {
         width: self_width,
         height: self_height,
@@ -358,13 +459,15 @@ fn measure_slider(
 struct SliderColors {
     active_track: Color,
     inactive_track: Color,
-    handle: Color,
-    handle_focus: Color,
+    thumb: Color,
 }
 
-fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> SliderColors {
+fn slider_colors(args: &SliderArgs) -> SliderColors {
     if args.disabled {
         let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let disabled_thumb = scheme
+            .surface
+            .blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT);
         return SliderColors {
             active_track: scheme
                 .on_surface
@@ -372,28 +475,38 @@ fn slider_colors(args: &SliderArgs, is_hovered: bool, is_dragging: bool) -> Slid
             inactive_track: scheme
                 .on_surface
                 .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
-            handle: scheme
-                .on_surface
-                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
-            handle_focus: Color::new(0.0, 0.0, 0.0, 0.0),
+            thumb: disabled_thumb,
         };
     }
-
-    let mut state_layer_alpha_scale = 0.0;
-    if is_dragging {
-        state_layer_alpha_scale = 1.0;
-    } else if is_hovered {
-        state_layer_alpha_scale = 0.7;
-    }
-    let base_state = args.state_layer_color;
-    let state_layer_alpha = (base_state.a * state_layer_alpha_scale).clamp(0.0, 1.0);
-    let handle_focus = Color::new(base_state.r, base_state.g, base_state.b, state_layer_alpha);
 
     SliderColors {
         active_track: args.active_track_color,
         inactive_track: args.inactive_track_color,
-        handle: args.thumb_color,
-        handle_focus,
+        thumb: args.thumb_color,
+    }
+}
+
+fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
+    if args.disabled {
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let disabled_thumb = scheme
+            .surface
+            .blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT);
+        return SliderColors {
+            active_track: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+            inactive_track: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
+            thumb: disabled_thumb,
+        };
+    }
+
+    SliderColors {
+        active_track: args.active_track_color,
+        inactive_track: args.inactive_track_color,
+        thumb: args.thumb_color,
     }
 }
 
@@ -447,19 +560,19 @@ pub fn slider(args: impl Into<SliderArgs>) {
 
 /// # slider_with_controller
 ///
-/// Controlled slider variant
+/// Controlled slider variant.
 ///
-/// # Usage
+/// ## Usage
 ///
 /// Use when you need to manage the slider's interactive state externally.
 ///
-/// # Parameters
+/// ## Parameters
 ///
 /// - `args` — configures the slider's value, appearance, and callbacks; see
 ///   [`SliderArgs`].
 /// - `controller` — the slider controller to manage interactive state.
 ///
-/// # Examples
+/// ## Examples
 ///
 /// ```
 /// # use tessera_ui::tessera;
@@ -481,7 +594,7 @@ pub fn slider(args: impl Into<SliderArgs>) {
 ///         }))
 ///         .build()
 ///         .unwrap(),
-///     controller.clone(),
+///     controller,
 /// );
 /// # }
 /// # component();
@@ -490,10 +603,17 @@ pub fn slider(args: impl Into<SliderArgs>) {
 pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: State<SliderController>) {
     let args: SliderArgs = args.into();
     let initial_width = fallback_component_width(&args);
-    let layout = slider_layout(&args, initial_width);
     let clamped_value = args.value.clamp(0.0, 1.0);
-    let (is_hovered, is_dragging) = controller.with(|c| (c.is_hovered(), c.is_dragging()));
-    let colors = slider_colors(&args, is_hovered, is_dragging);
+    let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
+    let base_handle_width = args.thumb_diameter.to_px();
+    let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
+    let handle_width = if is_dragging || is_focused {
+        pressed_handle_width
+    } else {
+        base_handle_width
+    };
+    let layout = slider_layout_with_handle_width(&args, initial_width, handle_width);
+    let colors = slider_colors(&args);
 
     render_active_segment(layout, &colors);
     render_inactive_segment(layout, &colors);
@@ -521,15 +641,34 @@ pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: State<Sli
         );
     }
 
-    render_focus(layout, &colors);
-    render_handle(layout, &colors);
+    if args.steps > 0 {
+        for fraction in tick_fractions(args.steps) {
+            let is_active = fraction <= clamped_value;
+            let color = if is_active {
+                colors.inactive_track
+            } else {
+                colors.active_track
+            };
+            render_tick(layout.stop_indicator_diameter, color);
+        }
+    }
     if layout.show_stop_indicator {
         render_stop_indicator(layout, &colors);
     }
+    render_handle(layout, handle_width, &colors);
 
     let cloned_args = args.clone();
     input_handler(Box::new(move |mut input| {
-        let resolved_layout = slider_layout(&cloned_args, input.computed_data.width);
+        let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
+        let base_handle_width = cloned_args.thumb_diameter.to_px();
+        let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
+        let handle_width = if is_dragging || is_focused {
+            pressed_handle_width
+        } else {
+            base_handle_width
+        };
+        let resolved_layout =
+            slider_layout_with_handle_width(&cloned_args, input.computed_data.width, handle_width);
         handle_slider_state(&mut input, controller, &cloned_args, &resolved_layout);
         apply_slider_accessibility(
             &mut input,
@@ -541,9 +680,24 @@ pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: State<Sli
 
     measure(Box::new(move |input| {
         let component_width = resolve_component_width(&args, input.parent_constraint);
-        let resolved_layout = slider_layout(&args, component_width);
+        let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
+        let base_handle_width = args.thumb_diameter.to_px();
+        let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
+        let handle_width = if is_dragging || is_focused {
+            pressed_handle_width
+        } else {
+            base_handle_width
+        };
+        let resolved_layout = slider_layout_with_handle_width(&args, component_width, handle_width);
         let has_inset_icon = args.inset_icon.is_some();
-        measure_slider(input, resolved_layout, clamped_value, has_inset_icon)
+        measure_slider(
+            input,
+            resolved_layout,
+            clamped_value,
+            has_inset_icon,
+            handle_width,
+            args.steps,
+        )
     }));
 }
 
@@ -551,6 +705,8 @@ fn measure_centered_slider(
     input: &MeasureInput,
     layout: CenteredSliderLayout,
     value: f32,
+    handle_width: Px,
+    steps: usize,
 ) -> Result<ComputedData, MeasurementError> {
     let self_width = layout.base.component_width;
     let self_height = layout.base.component_height;
@@ -559,10 +715,20 @@ fn measure_centered_slider(
     let left_inactive_id = input.children_ids[0];
     let active_id = input.children_ids[1];
     let right_inactive_id = input.children_ids[2];
-    let focus_id = input.children_ids[3];
-    let handle_id = input.children_ids[4];
-    let left_stop_id = input.children_ids[5];
-    let right_stop_id = input.children_ids[6];
+    let mut current_index = 3;
+    let tick_count = if steps == 0 { 0 } else { steps + 2 };
+    let tick_ids = &input.children_ids[current_index..current_index + tick_count];
+    current_index += tick_count;
+
+    let (left_stop_id, right_stop_id) = if layout.base.show_stop_indicator {
+        let left = input.children_ids[current_index];
+        let right = input.children_ids[current_index + 1];
+        current_index += 2;
+        (Some(left), Some(right))
+    } else {
+        (None, None)
+    };
+    let handle_id = input.children_ids[current_index];
 
     let segments = layout.segments(value);
 
@@ -602,29 +768,12 @@ fn measure_centered_slider(
         PxPosition::new(segments.right_inactive.0, track_y),
     );
 
-    // 4. Focus
-    let focus_offset = layout.base.center_child_offset(layout.base.focus_width);
-    input.measure_child(
-        focus_id,
-        &Constraint::new(
-            DimensionValue::Fixed(layout.base.focus_width),
-            DimensionValue::Fixed(layout.base.focus_height),
-        ),
-    )?;
-    input.place_child(
-        focus_id,
-        PxPosition::new(
-            Px(segments.handle_center.x.0 - focus_offset.0),
-            layout.base.focus_y,
-        ),
-    );
-
-    // 5. Handle
-    let handle_offset = layout.base.center_child_offset(layout.base.handle_width);
+    // 4. Handle
+    let handle_offset = layout.base.center_child_offset(handle_width);
     input.measure_child(
         handle_id,
         &Constraint::new(
-            DimensionValue::Fixed(layout.base.handle_width),
+            DimensionValue::Fixed(handle_width),
             DimensionValue::Fixed(layout.base.handle_height),
         ),
     )?;
@@ -637,7 +786,12 @@ fn measure_centered_slider(
     );
 
     if layout.base.show_stop_indicator {
-        // 6. Left Stop
+        let (Some(left_stop_id), Some(right_stop_id)) = (left_stop_id, right_stop_id) else {
+            return Err(MeasurementError::MeasureFnFailed(
+                "Missing stop indicator children".to_string(),
+            ));
+        };
+        // 5. Left Stop
         let stop_size = layout.base.stop_indicator_diameter;
         let stop_constraint = Constraint::new(
             DimensionValue::Fixed(stop_size),
@@ -658,7 +812,7 @@ fn measure_centered_slider(
             ),
         );
 
-        // 7. Right Stop
+        // 6. Right Stop
         input.measure_child(right_stop_id, &stop_constraint)?;
         let right_stop_x = Px(self_width.0 - stop_padding.0);
 
@@ -669,6 +823,28 @@ fn measure_centered_slider(
                 layout.base.stop_indicator_y,
             ),
         );
+    }
+
+    if steps > 0 {
+        let tick_size = layout.base.stop_indicator_diameter;
+        let tick_constraint = Constraint::new(
+            DimensionValue::Fixed(tick_size),
+            DimensionValue::Fixed(tick_size),
+        );
+        let tick_offset = layout.base.center_child_offset(tick_size);
+        let start_x = layout.base.handle_gap.to_f32() + handle_width.to_f32() / 2.0;
+        for (i, tick_id) in tick_ids.iter().copied().enumerate() {
+            input.measure_child(tick_id, &tick_constraint)?;
+            let fraction = i as f32 / (steps as f32 + 1.0);
+            let tick_center_x = start_x + fraction * layout.base.track_total_width.to_f32();
+            input.place_child(
+                tick_id,
+                PxPosition::new(
+                    Px(tick_center_x.round() as i32 - tick_offset.0),
+                    layout.base.stop_indicator_y,
+                ),
+            );
+        }
     }
 
     Ok(ComputedData {
@@ -745,42 +921,46 @@ pub fn centered_slider(args: impl Into<SliderArgs>) {
 
 /// # centered_slider_with_controller
 ///
-/// Controlled centered slider variant
+/// Controlled centered slider variant.
 ///
-/// # Usage
+/// ## Usage
 ///
-/// Use when you need to manage the slider's interactive state externally.
+/// Use when you need to manage the centered slider's interactive state
+/// externally.
 ///
-/// # Parameters
+/// ## Parameters
 ///
 /// - `args` — configures the slider's value, appearance, and callbacks; see
 ///   [`SliderArgs`].
 /// - `controller` — the slider controller to manage interactive state.
 ///
-/// # Examples
+/// ## Examples
 ///
-/// # }
-/// # component();
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use std::sync::Arc;
-/// use tessera_ui::{DimensionValue, Dp, remember, tessera};
-/// use tessera_ui_basic_components::slider::{centered_slider_with_controller, SliderArgsBuilder, SliderController};
+/// use tessera_ui::{DimensionValue, Dp, remember};
+/// use tessera_ui_basic_components::slider::{
+///     SliderArgsBuilder, SliderController, centered_slider_with_controller,
+/// };
 ///
-/// #[tessera]
-/// fn foo() {
-///     let controller = remember(|| SliderController::new());
-///     centered_slider_with_controller(
-///         SliderArgsBuilder::default()
-///            .width(DimensionValue::Fixed(Dp(200.0).to_px()))
-///            .value(0.5)
-///            .on_change(Arc::new(|new_value| {
-///                 println!("Centered slider value changed to: {}", new_value);
+/// let controller = remember(SliderController::new);
+/// centered_slider_with_controller(
+///     SliderArgsBuilder::default()
+///         .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///         .value(0.5)
+///         .on_change(Arc::new(|new_value| {
+///             println!("Centered slider value changed to: {}", new_value);
 ///         }))
 ///         .build()
 ///         .unwrap(),
-///        controller.clone(),
-///     );
-/// }
+///     controller,
+/// );
+/// # }
+/// # component();
+/// ```
 #[tessera]
 pub fn centered_slider_with_controller(
     args: impl Into<SliderArgs>,
@@ -788,21 +968,56 @@ pub fn centered_slider_with_controller(
 ) {
     let args: SliderArgs = args.into();
     let initial_width = fallback_component_width(&args);
-    let layout = centered_slider_layout(&args, initial_width);
     let clamped_value = args.value.clamp(0.0, 1.0);
-    let (is_hovered, is_dragging) = controller.with(|c| (c.is_hovered(), c.is_dragging()));
-    let colors = slider_colors(&args, is_hovered, is_dragging);
+    let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
+    let base_handle_width = args.thumb_diameter.to_px();
+    let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
+    let handle_width = if is_dragging || is_focused {
+        pressed_handle_width
+    } else {
+        base_handle_width
+    };
+    let layout = CenteredSliderLayout {
+        base: slider_layout_with_handle_width(&args, initial_width, handle_width),
+    };
+    let colors = slider_colors(&args);
 
     render_centered_tracks(layout, &colors);
-    render_focus(layout.base, &colors);
-    render_handle(layout.base, &colors);
+    if args.steps > 0 {
+        let active_start = clamped_value.min(0.5);
+        let active_end = clamped_value.max(0.5);
+        for fraction in tick_fractions(args.steps) {
+            let is_active = fraction >= active_start && fraction <= active_end;
+            let color = if is_active {
+                colors.inactive_track
+            } else {
+                colors.active_track
+            };
+            render_tick(layout.base.stop_indicator_diameter, color);
+        }
+    }
     if layout.base.show_stop_indicator {
         render_centered_stops(layout, &colors);
     }
+    render_handle(layout.base, handle_width, &colors);
 
     let cloned_args = args.clone();
     input_handler(Box::new(move |mut input| {
-        let resolved_layout = centered_slider_layout(&cloned_args, input.computed_data.width);
+        let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
+        let base_handle_width = cloned_args.thumb_diameter.to_px();
+        let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
+        let handle_width = if is_dragging || is_focused {
+            pressed_handle_width
+        } else {
+            base_handle_width
+        };
+        let resolved_layout = CenteredSliderLayout {
+            base: slider_layout_with_handle_width(
+                &cloned_args,
+                input.computed_data.width,
+                handle_width,
+            ),
+        };
         handle_slider_state(&mut input, controller, &cloned_args, &resolved_layout.base);
         apply_slider_accessibility(
             &mut input,
@@ -814,16 +1029,31 @@ pub fn centered_slider_with_controller(
 
     measure(Box::new(move |input| {
         let component_width = resolve_component_width(&args, input.parent_constraint);
-        let resolved_layout = centered_slider_layout(&args, component_width);
-        measure_centered_slider(input, resolved_layout, clamped_value)
+        let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
+        let base_handle_width = args.thumb_diameter.to_px();
+        let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
+        let handle_width = if is_dragging || is_focused {
+            pressed_handle_width
+        } else {
+            base_handle_width
+        };
+        let resolved_layout = CenteredSliderLayout {
+            base: slider_layout_with_handle_width(&args, component_width, handle_width),
+        };
+        measure_centered_slider(
+            input,
+            resolved_layout,
+            clamped_value,
+            handle_width,
+            args.steps,
+        )
     }));
 }
 
 fn measure_range_slider(
     input: &MeasureInput,
     layout: RangeSliderLayout,
-    start: f32,
-    end: f32,
+    args: RangeSliderMeasureArgs,
 ) -> Result<ComputedData, MeasurementError> {
     let self_width = layout.base.component_width;
     let self_height = layout.base.component_height;
@@ -832,14 +1062,29 @@ fn measure_range_slider(
     let left_inactive_id = input.children_ids[0];
     let active_id = input.children_ids[1];
     let right_inactive_id = input.children_ids[2];
-    let focus_start_id = input.children_ids[3];
-    let focus_end_id = input.children_ids[4];
-    let handle_start_id = input.children_ids[5];
-    let handle_end_id = input.children_ids[6];
-    let stop_start_id = input.children_ids[7];
-    let stop_end_id = input.children_ids[8];
+    let mut current_index = 3;
+    let tick_count = if args.steps == 0 { 0 } else { args.steps + 2 };
+    let tick_ids = &input.children_ids[current_index..current_index + tick_count];
+    current_index += tick_count;
 
-    let segments = layout.segments(start, end);
+    let (stop_start_id, stop_end_id) = if layout.base.show_stop_indicator {
+        let start_id = input.children_ids.get(current_index).copied();
+        let end_id = input.children_ids.get(current_index + 1).copied();
+        current_index += 2;
+        (start_id, end_id)
+    } else {
+        (None, None)
+    };
+
+    let handle_start_id = input.children_ids[current_index];
+    let handle_end_id = input.children_ids[current_index + 1];
+
+    let segments = layout.segments(
+        args.start,
+        args.end,
+        args.start_handle_width,
+        args.end_handle_width,
+    );
 
     input.measure_child(
         left_inactive_id,
@@ -874,54 +1119,111 @@ fn measure_range_slider(
         PxPosition::new(segments.right_inactive.0, track_y),
     );
 
-    let focus_constraint = Constraint::new(
-        DimensionValue::Fixed(layout.base.focus_width),
-        DimensionValue::Fixed(layout.base.focus_height),
-    );
-    let handle_constraint = Constraint::new(
-        DimensionValue::Fixed(layout.base.handle_width),
+    let start_handle_constraint = Constraint::new(
+        DimensionValue::Fixed(args.start_handle_width),
         DimensionValue::Fixed(layout.base.handle_height),
     );
-    let focus_offset = layout.base.center_child_offset(layout.base.focus_width);
-    let handle_offset = layout.base.center_child_offset(layout.base.handle_width);
-
-    input.measure_child(focus_start_id, &focus_constraint)?;
-    input.place_child(
-        focus_start_id,
-        PxPosition::new(
-            Px(segments.start_handle_center.x.0 - focus_offset.0),
-            layout.base.focus_y,
-        ),
+    let end_handle_constraint = Constraint::new(
+        DimensionValue::Fixed(args.end_handle_width),
+        DimensionValue::Fixed(layout.base.handle_height),
     );
+    let start_handle_offset = layout.base.center_child_offset(args.start_handle_width);
+    let end_handle_offset = layout.base.center_child_offset(args.end_handle_width);
 
-    input.measure_child(handle_start_id, &handle_constraint)?;
+    input.measure_child(handle_start_id, &start_handle_constraint)?;
     input.place_child(
         handle_start_id,
         PxPosition::new(
-            Px(segments.start_handle_center.x.0 - handle_offset.0),
+            Px(segments.start_handle_center.x.0 - start_handle_offset.0),
             layout.base.handle_y,
         ),
     );
 
-    input.measure_child(focus_end_id, &focus_constraint)?;
-    input.place_child(
-        focus_end_id,
-        PxPosition::new(
-            Px(segments.end_handle_center.x.0 - focus_offset.0),
-            layout.base.focus_y,
-        ),
-    );
-
-    input.measure_child(handle_end_id, &handle_constraint)?;
+    input.measure_child(handle_end_id, &end_handle_constraint)?;
     input.place_child(
         handle_end_id,
         PxPosition::new(
-            Px(segments.end_handle_center.x.0 - handle_offset.0),
+            Px(segments.end_handle_center.x.0 - end_handle_offset.0),
             layout.base.handle_y,
         ),
     );
 
+    let start_value = args.start;
+    let end_value = args.end;
+    set_range_thumb_accessibility(
+        input,
+        handle_start_id,
+        RangeThumbAccessibilityArgs {
+            key: "range_slider_start_thumb",
+            label: args.accessibility_label.as_ref(),
+            description: args.accessibility_description.as_ref(),
+            fallback_description: "range start",
+            steps: args.steps,
+            disabled: args.disabled,
+            value: start_value,
+            min: 0.0,
+            max: end_value,
+            on_change: Arc::new({
+                let on_change = args.on_change.clone();
+                move |new_start| (on_change)((new_start, end_value))
+            }),
+        },
+    );
+    set_range_thumb_accessibility(
+        input,
+        handle_end_id,
+        RangeThumbAccessibilityArgs {
+            key: "range_slider_end_thumb",
+            label: args.accessibility_label.as_ref(),
+            description: args.accessibility_description.as_ref(),
+            fallback_description: "range end",
+            steps: args.steps,
+            disabled: args.disabled,
+            value: end_value,
+            min: start_value,
+            max: 1.0,
+            on_change: Arc::new({
+                let on_change = args.on_change.clone();
+                move |new_end| (on_change)((start_value, new_end))
+            }),
+        },
+    );
+
+    if args.steps > 0 {
+        let tick_size = layout.base.stop_indicator_diameter;
+        let tick_constraint = Constraint::new(
+            DimensionValue::Fixed(tick_size),
+            DimensionValue::Fixed(tick_size),
+        );
+        let tick_offset = layout.base.center_child_offset(tick_size);
+
+        let component_width = layout.base.component_width.to_f32();
+        let gap = layout.base.handle_gap.to_f32();
+        let start_half = args.start_handle_width.to_f32() / 2.0;
+        let end_half = args.end_handle_width.to_f32() / 2.0;
+        let track_total = (component_width - start_half - end_half - gap * 2.0).max(0.0);
+        let start_x = gap + start_half;
+        for (i, tick_id) in tick_ids.iter().copied().enumerate() {
+            input.measure_child(tick_id, &tick_constraint)?;
+            let fraction = i as f32 / (args.steps as f32 + 1.0);
+            let tick_center_x = start_x + fraction * track_total;
+            input.place_child(
+                tick_id,
+                PxPosition::new(
+                    Px(tick_center_x.round() as i32 - tick_offset.0),
+                    layout.base.stop_indicator_y,
+                ),
+            );
+        }
+    }
+
     if layout.base.show_stop_indicator {
+        let (Some(stop_start_id), Some(stop_end_id)) = (stop_start_id, stop_end_id) else {
+            return Err(MeasurementError::MeasureFnFailed(
+                "Missing stop indicator children".to_string(),
+            ));
+        };
+
         let stop_size = layout.base.stop_indicator_diameter;
         let stop_constraint = Constraint::new(
             DimensionValue::Fixed(stop_size),
@@ -930,11 +1232,8 @@ fn measure_range_slider(
         input.measure_child(stop_start_id, &stop_constraint)?;
 
         let stop_offset = layout.base.center_child_offset(stop_size);
-        // We can reuse stop_indicator_offset logic if we expose it or reimplement it.
-        // layout.base doesn't have it, CenteredSliderLayout does.
-        // Let's reimplement simple padding: Dp(8.0) - size/2
-        let padding = Dp(8.0).to_px() - stop_size / Px(2);
-        let start_stop_x = Px(padding.0);
+        let corner = layout.base.track_corner_radius.to_px();
+        let start_stop_x = corner;
 
         input.place_child(
             stop_start_id,
@@ -945,7 +1244,7 @@ fn measure_range_slider(
         );
 
         input.measure_child(stop_end_id, &stop_constraint)?;
-        let end_stop_x = Px(self_width.0 - padding.0);
+        let end_stop_x = Px(self_width.0 - corner.0);
 
         input.place_child(
             stop_end_id,
@@ -1017,11 +1316,10 @@ pub fn range_slider_with_controller(
     state: State<RangeSliderController>,
 ) {
     let args: RangeSliderArgs = args.into();
-    // Convert RangeSliderArgs to SliderArgs for layout helpers where possible,
-    // or rely on the dedicated range_slider_layout which handles this.
     let dummy_slider_args = SliderArgsBuilder::default()
         .width(args.width)
         .size(args.size)
+        .show_stop_indicator(args.show_stop_indicator)
         .build()
         .expect("Failed to build dummy args");
     let initial_width = fallback_component_width(&dummy_slider_args);
@@ -1031,73 +1329,44 @@ pub fn range_slider_with_controller(
     let start = args.value.0.clamp(0.0, 1.0);
     let end = args.value.1.clamp(start, 1.0);
 
-    let (is_dragging_any, is_hovered) =
-        state.with(|s| (s.is_dragging_start || s.is_dragging_end, s.is_hovered));
-
-    // Determine colors based on interaction.
-    // We check if *either* handle is interacted with to highlight the active
-    // tracks/handles? Or ideally, we highlight specific handles.
-    // For simplicity, let's use a unified color struct but apply focus colors
-    // selectively.
-
-    // Override colors from specific RangeSliderArgs
-    // We need a helper to convert RangeSliderArgs colors to SliderColors if they
-    // differ But for now we just reused the dummy args construction above which
-    // didn't copy colors. Let's reconstruct colors properly.
-    let mut state_layer_alpha_scale = 0.0;
-    if is_dragging_any {
-        state_layer_alpha_scale = 1.0;
-    } else if is_hovered {
-        state_layer_alpha_scale = 0.7;
-    }
-
-    let base_state = args.state_layer_color;
-    let state_layer_alpha = (base_state.a * state_layer_alpha_scale).clamp(0.0, 1.0);
-    let handle_focus_color =
-        Color::new(base_state.r, base_state.g, base_state.b, state_layer_alpha);
-
-    let colors = if args.disabled {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
-        SliderColors {
-            active_track: scheme
-                .on_surface
-                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
-            inactive_track: scheme
-                .on_surface
-                .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
-            handle: scheme
-                .on_surface
-                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
-            handle_focus: Color::new(0.0, 0.0, 0.0, 0.0),
-        }
+    let base_handle_width = args.thumb_diameter.to_px();
+    let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
+    let (start_interacting, end_interacting) = state.with(|s| {
+        (
+            s.is_dragging_start || s.focus_start.is_focused(),
+            s.is_dragging_end || s.focus_end.is_focused(),
+        )
+    });
+    let start_handle_width = if start_interacting {
+        pressed_handle_width
     } else {
-        SliderColors {
-            active_track: args.active_track_color,
-            inactive_track: args.inactive_track_color,
-            handle: args.thumb_color,
-            handle_focus: handle_focus_color,
-        }
+        base_handle_width
+    };
+    let end_handle_width = if end_interacting {
+        pressed_handle_width
+    } else {
+        base_handle_width
     };
 
+    let colors = range_slider_colors(&args);
+
     render_range_tracks(layout, &colors);
-
-    // Render Start Focus & Handle
-    render_focus(layout.base, &colors);
-    // Note: render_focus uses layout.focus_width/height. Position is handled by
-    // measure/place. But we need two focus indicators.
-
-    // Render End Focus
-    render_focus(layout.base, &colors);
-
-    // Render Start Handle
-    render_handle(layout.base, &colors);
-
-    // Render End Handle
-    render_handle(layout.base, &colors);
-
+    if args.steps > 0 {
+        for fraction in tick_fractions(args.steps) {
+            let is_active = fraction >= start && fraction <= end;
+            let color = if is_active {
+                colors.inactive_track
+            } else {
+                colors.active_track
+            };
+            render_tick(layout.base.stop_indicator_diameter, color);
+        }
+    }
     if layout.base.show_stop_indicator {
         render_range_stops(layout, &colors);
     }
+    render_handle(layout.base, start_handle_width, &colors);
+    render_handle(layout.base, end_handle_width, &colors);
 
     let cloned_args = args.clone();
     let start_val = start;
@@ -1105,7 +1374,32 @@ pub fn range_slider_with_controller(
 
     input_handler(Box::new(move |mut input| {
         let resolved_layout = range_slider_layout(&cloned_args, input.computed_data.width);
-        handle_range_slider_state(&mut input, &state, &cloned_args, &resolved_layout.base);
+        let base_handle_width = cloned_args.thumb_diameter.to_px();
+        let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
+        let (start_interacting, end_interacting) = state.with(|s| {
+            (
+                s.is_dragging_start || s.focus_start.is_focused(),
+                s.is_dragging_end || s.focus_end.is_focused(),
+            )
+        });
+        let start_handle_width = if start_interacting {
+            pressed_handle_width
+        } else {
+            base_handle_width
+        };
+        let end_handle_width = if end_interacting {
+            pressed_handle_width
+        } else {
+            base_handle_width
+        };
+        handle_range_slider_state(
+            &mut input,
+            &state,
+            &cloned_args,
+            &resolved_layout.base,
+            start_handle_width,
+            end_handle_width,
+        );
         apply_range_slider_accessibility(
             &mut input,
             &cloned_args,
@@ -1118,6 +1412,38 @@ pub fn range_slider_with_controller(
     measure(Box::new(move |input| {
         let component_width = resolve_component_width(&dummy_for_measure, input.parent_constraint);
         let resolved_layout = range_slider_layout(&args, component_width);
-        measure_range_slider(input, resolved_layout, start, end)
+        let base_handle_width = args.thumb_diameter.to_px();
+        let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
+        let (start_interacting, end_interacting) = state.with(|s| {
+            (
+                s.is_dragging_start || s.focus_start.is_focused(),
+                s.is_dragging_end || s.focus_end.is_focused(),
+            )
+        });
+        let start_handle_width = if start_interacting {
+            pressed_handle_width
+        } else {
+            base_handle_width
+        };
+        let end_handle_width = if end_interacting {
+            pressed_handle_width
+        } else {
+            base_handle_width
+        };
+        measure_range_slider(
+            input,
+            resolved_layout,
+            RangeSliderMeasureArgs {
+                start,
+                end,
+                start_handle_width,
+                end_handle_width,
+                steps: args.steps,
+                disabled: args.disabled,
+                accessibility_label: args.accessibility_label.clone(),
+                accessibility_description: args.accessibility_description.clone(),
+                on_change: args.on_change.clone(),
+            },
+        )
     }));
 }

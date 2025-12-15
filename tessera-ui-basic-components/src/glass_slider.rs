@@ -270,7 +270,7 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>) {
 ///             }))
 ///             .build()
 ///             .unwrap(),
-///         controller.clone(),
+///         controller,
 ///     );
 /// }
 /// ```
