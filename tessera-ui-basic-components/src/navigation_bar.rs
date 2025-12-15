@@ -35,7 +35,6 @@ const CONTAINER_HEIGHT: Dp = Dp(80.0);
 const INDICATOR_WIDTH: Dp = Dp(56.0);
 const INDICATOR_HEIGHT: Dp = Dp(32.0);
 const DIVIDER_HEIGHT: Dp = Dp(1.0);
-const UNSELECTED_LABEL_ALPHA: f32 = 0.8;
 const ITEM_HORIZONTAL_SPACING: Dp = Dp(8.0);
 const INDICATOR_TO_LABEL_PADDING: Dp = Dp(4.0);
 const INDICATOR_VERTICAL_PADDING: Dp = Dp(4.0);
@@ -80,21 +79,32 @@ fn navigation_bar_item(
     let has_icon = item.icon.is_some();
 
     let indicator_alpha = selection_fraction;
-    let content_color = interpolate_color(
+    let icon_color = interpolate_color(
         scheme.on_surface_variant,
         scheme.on_secondary_container,
         selection_fraction,
     );
-    let ripple_color = content_color;
+    let ripple_color = icon_color;
 
     let label_alpha = if always_show_label {
-        selection_fraction + (1.0 - selection_fraction) * UNSELECTED_LABEL_ALPHA
+        1.0
     } else {
         selection_fraction
     };
-    let label_color = content_color.with_alpha(content_color.a * label_alpha);
+    let label_color_base = interpolate_color(
+        scheme.on_surface_variant,
+        scheme.secondary,
+        selection_fraction,
+    );
+    let label_color = label_color_base.with_alpha(label_color_base.a * label_alpha);
 
     let indicator_color = scheme.secondary_container.with_alpha(indicator_alpha);
+
+    let size_animation_progress = selection_fraction.max(0.0);
+    let indicator_width_px = INDICATOR_WIDTH.to_px();
+    let animated_indicator_width_px = Px(((indicator_width_px.0 as f32) * size_animation_progress)
+        .round()
+        .max(0.0) as i32);
 
     surface(
         SurfaceArgsBuilder::default()
@@ -102,7 +112,7 @@ fn navigation_bar_item(
                 color: indicator_color,
             })
             .shape(Shape::capsule())
-            .width(INDICATOR_WIDTH)
+            .width(DimensionValue::Fixed(animated_indicator_width_px))
             .height(INDICATOR_HEIGHT)
             .show_state_layer(false)
             .show_ripple(false)
@@ -131,7 +141,7 @@ fn navigation_bar_item(
     if let Some(draw_icon) = item.icon {
         provide_context(
             ContentColor {
-                current: content_color,
+                current: icon_color,
             },
             || {
                 draw_icon();
@@ -282,7 +292,8 @@ fn navigation_bar_item(
             );
 
             let indicator_size = input.measure_child(indicator_background_id, &child_constraint)?;
-            input.measure_child(indicator_ripple_id, &child_constraint)?;
+            let indicator_ripple_size =
+                input.measure_child(indicator_ripple_id, &child_constraint)?;
 
             let icon_size = if let Some(icon_id) = icon_id {
                 Some(input.measure_child(icon_id, &child_constraint)?)
@@ -300,9 +311,14 @@ fn navigation_bar_item(
             let height = parent_height;
 
             if !has_label {
-                let ripple_x = (width - indicator_size.width) / 2;
-                let ripple_y = (height - indicator_size.height) / 2;
-                input.place_child(indicator_background_id, PxPosition::new(ripple_x, ripple_y));
+                let ripple_x = (width - indicator_ripple_size.width) / 2;
+                let ripple_y = (height - indicator_ripple_size.height) / 2;
+                let indicator_x = (width - indicator_size.width) / 2;
+                let indicator_y = (height - indicator_size.height) / 2;
+                input.place_child(
+                    indicator_background_id,
+                    PxPosition::new(indicator_x, indicator_y),
+                );
                 input.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
 
                 if let (Some(icon_id), Some(icon_size)) = (icon_id, icon_size) {
@@ -343,9 +359,11 @@ fn navigation_bar_item(
 
             let icon_x = (width - icon_size.width) / 2;
             let label_x = (width - label_size.width) / 2;
-            let ripple_x = (width - indicator_size.width) / 2;
+            let ripple_x = (width - indicator_ripple_size.width) / 2;
+            let indicator_x = (width - indicator_size.width) / 2;
 
             let ripple_y = selected_icon_y - indicator_vertical_padding_px;
+            let indicator_y = selected_icon_y - indicator_vertical_padding_px;
             let icon_y = selected_icon_y;
             let label_y = selected_icon_y
                 + icon_size.height
@@ -354,7 +372,7 @@ fn navigation_bar_item(
 
             input.place_child(
                 indicator_background_id,
-                PxPosition::new(ripple_x, Px(ripple_y.0 + offset.0)),
+                PxPosition::new(indicator_x, Px(indicator_y.0 + offset.0)),
             );
             input.place_child(
                 indicator_ripple_id,
