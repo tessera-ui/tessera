@@ -549,7 +549,7 @@ pub fn reset_slots() {
 }
 
 /// Recycle state slots that were not touched in the current frame.
-pub fn end_frame_slots() {
+pub fn recycle_frame_slots() {
     let mut table = slot_table().write();
     let epoch = table.epoch;
     let mut freed: Vec<(u32, SlotKey)> = Vec::new();

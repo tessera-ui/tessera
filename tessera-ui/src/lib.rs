@@ -215,6 +215,7 @@ pub mod dyn_eq_compute;
 pub mod focus_state;
 mod ime_state;
 mod keyboard_state;
+pub mod modifier;
 pub(crate) mod pipeline_cache;
 pub mod px;
 pub mod renderer;
@@ -244,6 +245,7 @@ pub use crate::{
     cursor::{CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent},
     dp::Dp,
     focus_state::Focus,
+    modifier::{Modifier, ModifierChild, ModifierWrapper},
     px::{Px, PxPosition, PxRect, PxSize},
     renderer::{
         BarrierRequirement, Command, Renderer,
