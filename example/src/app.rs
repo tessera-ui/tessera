@@ -51,6 +51,7 @@ use crate::example_components::{
     lazy_lists::LazyListsShowcaseDestination,
     menus::MenusShowcaseDestination,
     progress::ProgressShowcaseDestination,
+    progress_indicator::ProgressIndicatorShowcaseDestination,
     radio_button::RadioButtonShowcaseDestination,
     slider::SliderShowcaseDestination,
     spacer::SpacerShowcaseDestination,
@@ -315,6 +316,15 @@ fn home(
                 router.push(ProgressShowcaseDestination {});
             });
         }),
+        ComponentExampleDesc::new(
+            "Progress Indicators",
+            "Material 3 linear and circular progress indicators.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(ProgressIndicatorShowcaseDestination {});
+                });
+            },
+        ),
         ComponentExampleDesc::new("Image", "A component to display images.", || {
             Router::with_mut(|router| {
                 router.push(ImageShowcaseDestination {});

@@ -16,7 +16,7 @@ use crate::{
     animation,
     boxed::{BoxedArgs, boxed},
     button::{ButtonArgsBuilder, button},
-    shape_def::{RoundedCorner, Shape},
+    shape_def::Shape,
     surface::{SurfaceArgs, surface},
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
@@ -32,11 +32,11 @@ impl TabsDefaults {
     /// Default minimum indicator width.
     pub const INDICATOR_MIN_WIDTH: Dp = Dp(24.0);
     /// Default maximum indicator width.
-    pub const INDICATOR_MAX_WIDTH: Option<Dp> = Some(Dp(64.0));
+    pub const INDICATOR_MAX_WIDTH: Option<Dp> = None;
     /// Minimum height for a tab (Material spec uses 48dp).
     pub const MIN_TAB_HEIGHT: Dp = Dp(48.0);
     /// Default internal padding for each tab.
-    pub const TAB_PADDING: Dp = Dp(12.0);
+    pub const TAB_PADDING: Dp = Dp(16.0);
     /// Default hover alpha for state layers.
     pub const HOVER_STATE_LAYER_OPACITY: f32 = MaterialAlpha::HOVER;
 
@@ -525,15 +525,21 @@ where
 
     surface(
         SurfaceArgs {
+            style: args.container_color.into(),
+            width: DimensionValue::FILLED,
+            height: DimensionValue::FILLED,
+            shape: Shape::RECTANGLE,
+            ..Default::default()
+        },
+        || {},
+    );
+
+    surface(
+        SurfaceArgs {
             style: args.indicator_color.into(),
             width: DimensionValue::FILLED,
             height: DimensionValue::FILLED,
-            shape: Shape::RoundedRectangle {
-                top_left: RoundedCorner::Capsule,
-                top_right: RoundedCorner::Capsule,
-                bottom_right: RoundedCorner::ZERO,
-                bottom_left: RoundedCorner::ZERO,
-            },
+            shape: Shape::capsule(),
             ..Default::default()
         },
         || {},
@@ -551,7 +557,7 @@ where
         };
 
         let mut builder = ButtonArgsBuilder::default()
-            .color(args.container_color)
+            .color(Color::TRANSPARENT)
             .content_color(label_color)
             .enabled(args.enabled)
             .padding(args.tab_padding)
@@ -628,16 +634,63 @@ where
                 height: tabs_effective_constraint.height,
             };
 
-            let indicator_id = input.children_ids[0];
-            let title_ids = &input.children_ids[1..=num_tabs];
-            let content_container_id = input.children_ids[num_tabs + 1];
+            let container_id = input.children_ids[0];
+            let indicator_id = input.children_ids[1];
+            let title_ids = &input.children_ids[2..=num_tabs + 1];
+            let content_container_id = input.children_ids[num_tabs + 2];
 
             let title_constraints: Vec<_> = title_ids
                 .iter()
                 .map(|&id| (id, tab_effective_width))
                 .collect();
-            let title_results = input.measure_children(title_constraints)?;
+            let title_results = input.measure_children(title_constraints.clone())?;
 
+            let mut titles_total_width = Px(0);
+            let mut titles_max_height = Px(0);
+            for &title_id in title_ids {
+                if let Some(result) = title_results.get(&title_id) {
+                    titles_total_width += result.width;
+                    titles_max_height = titles_max_height.max(result.height);
+                }
+            }
+
+            let tab_width = if num_tabs == 0 {
+                Px(0)
+            } else {
+                Px(titles_total_width.0 / num_tabs as i32)
+            };
+            let horizontal_padding = tabs_args.tab_padding.to_px().to_f32() * 2.0;
+            let indicator_min_width: Px = tabs_args.indicator_min_width.into();
+
+            let intrinsic_constraints: Vec<_> = title_ids
+                .iter()
+                .map(|&id| {
+                    (
+                        id,
+                        Constraint::new(
+                            DimensionValue::Wrap {
+                                min: None,
+                                max: Some(tab_width),
+                            },
+                            DimensionValue::Fixed(titles_max_height),
+                        ),
+                    )
+                })
+                .collect();
+            let intrinsic_results = input.measure_children(intrinsic_constraints)?;
+            let mut indicator_widths = Vec::with_capacity(num_tabs);
+            for &title_id in title_ids {
+                let intrinsic_width = intrinsic_results
+                    .get(&title_id)
+                    .map_or(Px(0), |s| s.width)
+                    .min(tab_width);
+                let content_width = (intrinsic_width.to_f32() - horizontal_padding).max(0.0);
+                let indicator_width =
+                    Px::saturating_from_f32(content_width).max(indicator_min_width);
+                indicator_widths.push(indicator_width);
+            }
+
+            let title_results = input.measure_children(title_constraints)?;
             let mut title_sizes = Vec::with_capacity(num_tabs);
             let mut titles_total_width = Px(0);
             let mut titles_max_height = Px(0);
@@ -680,8 +733,9 @@ where
                     .map(|s| s.width)
                     .fold(Px(0), |acc, w| acc + w);
 
+                let desired_width = indicator_widths.get(active_tab).copied().unwrap_or(Px(0));
                 let clamped_width = clamp_px(
-                    active_title_width,
+                    desired_width,
                     tabs_args.indicator_min_width.into(),
                     tabs_args.indicator_max_width.map(|v| v.into()),
                 );
@@ -711,6 +765,12 @@ where
             let final_height = tab_bar_height + content_container_size.height;
             let title_offset_y = (tab_bar_height - indicator_height - titles_max_height).max(Px(0));
 
+            let container_constraint = Constraint::new(
+                DimensionValue::Fixed(final_width),
+                DimensionValue::Fixed(tab_bar_height),
+            );
+            let _ = input.measure_child(container_id, &container_constraint)?;
+
             let mut current_x = Px(0);
             for (i, &title_id) in title_ids.iter().enumerate() {
                 input.place_child(title_id, PxPosition::new(current_x, title_offset_y));
@@ -719,6 +779,7 @@ where
                 }
             }
 
+            input.place_child(container_id, PxPosition::new(Px(0), Px(0)));
             input.place_child(
                 indicator_id,
                 PxPosition::new(indicator_x, tab_bar_height - indicator_height),
