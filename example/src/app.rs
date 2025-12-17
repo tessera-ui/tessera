@@ -38,6 +38,7 @@ use tessera_ui_basic_components::{
 };
 
 use crate::example_components::{
+    badge::BadgeShowcaseDestination,
     button::ButtonShowcaseDestination,
     button_group::ButtonGroupShowcaseDestination,
     checkbox::CheckboxShowcaseDestination,
@@ -291,6 +292,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(DividerShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Badge",
+            "Material 3 badges for status indicators and counts.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(BadgeShowcaseDestination {});
                 });
             },
         ),
