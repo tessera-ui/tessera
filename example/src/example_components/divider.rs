@@ -114,7 +114,7 @@ pub fn divider_showcase() {
                                 .unwrap(),
                             |scope| {
                                 scope.child(|| {
-                                    text(TextArgsBuilder::default().text("Left").build().unwrap());
+                                    text("Left");
                                 });
 
                                 scope.child(|| {
@@ -142,7 +142,7 @@ pub fn divider_showcase() {
                                 });
 
                                 scope.child(|| {
-                                    text(TextArgsBuilder::default().text("Right").build().unwrap());
+                                    text("Right");
                                 });
                             },
                         );

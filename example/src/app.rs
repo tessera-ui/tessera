@@ -41,6 +41,7 @@ use crate::example_components::{
     badge::BadgeShowcaseDestination,
     button::ButtonShowcaseDestination,
     button_group::ButtonGroupShowcaseDestination,
+    card::CardShowcaseDestination,
     checkbox::CheckboxShowcaseDestination,
     divider::DividerShowcaseDestination,
     fluid_glass::FluidGlassShowcaseDestination,
@@ -295,6 +296,11 @@ fn home(
                 });
             },
         ),
+        ComponentExampleDesc::new("Card", "Material 3 cards for grouped content.", || {
+            Router::with_mut(|router| {
+                router.push(CardShowcaseDestination {});
+            });
+        }),
         ComponentExampleDesc::new(
             "Badge",
             "Material 3 badges for status indicators and counts.",

@@ -59,6 +59,7 @@ pub mod bottom_sheet;
 pub mod boxed;
 pub mod button;
 pub mod button_groups;
+pub mod card;
 pub mod checkbox;
 mod checkmark;
 pub mod column;
