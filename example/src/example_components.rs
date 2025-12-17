@@ -1,6 +1,7 @@
 pub mod button;
 pub mod button_group;
 pub mod checkbox;
+pub mod divider;
 pub mod fluid_glass;
 pub mod glass_button;
 pub mod glass_progress;

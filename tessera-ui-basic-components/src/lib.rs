@@ -62,6 +62,7 @@ pub mod checkbox;
 mod checkmark;
 pub mod column;
 pub mod dialog;
+pub mod divider;
 pub mod fluid_glass;
 pub mod glass_button;
 pub mod glass_progress;

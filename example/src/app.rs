@@ -41,6 +41,7 @@ use crate::example_components::{
     button::ButtonShowcaseDestination,
     button_group::ButtonGroupShowcaseDestination,
     checkbox::CheckboxShowcaseDestination,
+    divider::DividerShowcaseDestination,
     fluid_glass::FluidGlassShowcaseDestination,
     glass_button::GlassButtonShowcaseDestination,
     glass_progress::GlassProgressShowcaseDestination,
@@ -281,6 +282,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(TabsShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Divider",
+            "Material 3 horizontal and vertical dividers.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(DividerShowcaseDestination {});
                 });
             },
         ),
