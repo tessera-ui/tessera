@@ -602,22 +602,36 @@ fn compute_surface_size(
             .min(max.unwrap_or(Px::MAX))
     }
 
-    fn fill_value(min: Option<Px>, max: Option<Px>, min_measure: Px) -> Px {
-        max.expect("Seems that you are trying to fill an infinite dimension, which is not allowed")
-            .max(min_measure)
-            .max(min.unwrap_or(Px(0)))
+    fn fill_value(min: Option<Px>, max: Px, min_measure: Px) -> Px {
+        max.max(min_measure).max(min.unwrap_or(Px(0)))
     }
 
     let width = match effective_surface_constraint.width {
         DimensionValue::Fixed(value) => value,
         DimensionValue::Wrap { min, max } => clamp_wrap(min, max, min_width),
-        DimensionValue::Fill { min, max } => fill_value(min, max, min_width),
+        DimensionValue::Fill {
+            min,
+            max: Some(max),
+        } => fill_value(min, max, min_width),
+        DimensionValue::Fill { .. } => {
+            panic!(
+                "Seems that you are trying to fill an infinite dimension, which is not allowed\nsurface width = Fill without max\nconstraint = {effective_surface_constraint:?}\nchild_measurement = {child_measurement:?}\npadding_px = {padding_px:?}"
+            )
+        }
     };
 
     let height = match effective_surface_constraint.height {
         DimensionValue::Fixed(value) => value,
         DimensionValue::Wrap { min, max } => clamp_wrap(min, max, min_height),
-        DimensionValue::Fill { min, max } => fill_value(min, max, min_height),
+        DimensionValue::Fill {
+            min,
+            max: Some(max),
+        } => fill_value(min, max, min_height),
+        DimensionValue::Fill { .. } => {
+            panic!(
+                "Seems that you are trying to fill an infinite dimension, which is not allowed\nsurface height = Fill without max\nconstraint = {effective_surface_constraint:?}\nchild_measurement = {child_measurement:?}\npadding_px = {padding_px:?}"
+            )
+        }
     };
 
     (width, height)

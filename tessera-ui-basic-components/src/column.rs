@@ -5,8 +5,8 @@
 //! Use to stack children vertically.
 use derive_builder::Builder;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, MeasureInput, MeasurementError, NodeId, Px,
-    PxPosition, tessera,
+    ComputedData, Constraint, DimensionValue, MeasureInput, MeasurementError, NodeId,
+    ParentConstraint, Px, PxPosition, tessera,
 };
 
 use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
@@ -353,7 +353,7 @@ fn calculate_final_column_height(
 fn calculate_final_column_width(
     column_effective_constraint: &Constraint,
     max_child_width: Px,
-    parent_constraint: &Constraint,
+    parent_constraint: ParentConstraint<'_>,
 ) -> Px {
     match column_effective_constraint.width {
         DimensionValue::Fixed(w) => w,

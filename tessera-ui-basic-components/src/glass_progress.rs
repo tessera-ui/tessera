@@ -4,7 +4,9 @@
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, tessera};
+use tessera_ui::{
+    Color, ComputedData, Constraint, DimensionValue, Dp, ParentConstraint, Px, PxPosition, tessera,
+};
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
@@ -70,7 +72,7 @@ fn compute_progress_dims(args: &GlassProgressArgs, width_px: Px) -> Option<(Px, 
     }
 }
 
-fn resolve_width_px(args: &GlassProgressArgs, parent: Option<&Constraint>) -> Px {
+fn resolve_width_px(args: &GlassProgressArgs, parent: Option<ParentConstraint<'_>>) -> Px {
     let fallback = Dp(200.0).to_px();
     let base = Constraint::new(args.width, DimensionValue::Fixed(args.height.to_px()));
     let merged = match parent {

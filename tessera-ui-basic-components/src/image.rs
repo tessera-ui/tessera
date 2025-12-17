@@ -138,7 +138,7 @@ pub fn image(args: impl Into<ImageArgs>) {
                 .max(intrinsic_width)
                 .min(max.unwrap_or(Px::MAX)),
             DimensionValue::Fill { min, max } => {
-                let parent_max = input.parent_constraint.width.get_max().unwrap_or(Px::MAX);
+                let parent_max = input.parent_constraint.width().get_max().unwrap_or(Px::MAX);
                 max.unwrap_or(parent_max)
                     .max(min.unwrap_or(Px(0)))
                     .max(intrinsic_width)
@@ -152,7 +152,11 @@ pub fn image(args: impl Into<ImageArgs>) {
                 .max(intrinsic_height)
                 .min(max.unwrap_or(Px::MAX)),
             DimensionValue::Fill { min, max } => {
-                let parent_max = input.parent_constraint.height.get_max().unwrap_or(Px::MAX);
+                let parent_max = input
+                    .parent_constraint
+                    .height()
+                    .get_max()
+                    .unwrap_or(Px::MAX);
                 max.unwrap_or(parent_max)
                     .max(min.unwrap_or(Px(0)))
                     .max(intrinsic_height)

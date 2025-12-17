@@ -5,7 +5,7 @@
 //! Display labels, headings, and other text content.
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, Px, accesskit::Role, tessera, use_context,
+    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, accesskit::Role, tessera, use_context,
 };
 
 use crate::{
@@ -132,13 +132,13 @@ pub fn text(args: impl Into<TextArgs>) {
         builder.commit();
     }));
     measure(Box::new(move |input| {
-        let max_width: Option<Px> = match input.parent_constraint.width {
+        let max_width: Option<Px> = match input.parent_constraint.width() {
             DimensionValue::Fixed(w) => Some(w),
             DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
             DimensionValue::Fill { max, .. } => max, // Use max from Fill
         };
 
-        let max_height: Option<Px> = match input.parent_constraint.height {
+        let max_height: Option<Px> = match input.parent_constraint.height() {
             DimensionValue::Fixed(h) => Some(h),
             DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
             DimensionValue::Fill { max, .. } => max, // Use max from Fill
@@ -161,7 +161,10 @@ pub fn text(args: impl Into<TextArgs>) {
         );
 
         let size = text_data.size;
-        let drawable = TextCommand { data: text_data };
+        let drawable = TextCommand {
+            data: text_data,
+            offset: PxPosition::ZERO,
+        };
 
         // Use the new unified command system to add the text rendering command
         input.metadata_mut().push_draw_command(drawable);

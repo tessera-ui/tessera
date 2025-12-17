@@ -173,10 +173,13 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
             },
         );
 
-        let text_areas = context
-            .commands
-            .iter()
-            .map(|(command, _size, start_pos)| command.data.text_area(*start_pos));
+        let text_areas = context.commands.iter().map(|(command, _size, start_pos)| {
+            let start_pos = PxPosition::new(
+                start_pos.x + command.offset.x,
+                start_pos.y + command.offset.y,
+            );
+            command.data.text_area(start_pos)
+        });
 
         self.renderer
             .prepare(
@@ -208,6 +211,12 @@ pub struct TextData {
     text_buffer: glyphon::Buffer,
     /// text area size
     pub size: [u32; 2],
+    /// Baseline offset of the first visible line, relative to the text origin.
+    pub first_baseline: f32,
+    /// Baseline offset of the last visible line, relative to the text origin.
+    pub last_baseline: f32,
+    /// Number of visible layout lines.
+    pub line_count: u32,
     base_color: Color,
     current_color: Color,
     text: String,
@@ -244,12 +253,15 @@ impl TextData {
             return cache.clone();
         }
 
-        let (text_buffer, bounds) =
+        let (text_buffer, bounds, first_baseline, last_baseline, line_count) =
             Self::build_buffer(&text, color, size, line_height, &constraint);
         // build text data
         let result = Self {
             text_buffer,
             size: bounds,
+            first_baseline,
+            last_baseline,
+            line_count,
             base_color: color,
             current_color: color,
             text,
@@ -267,19 +279,29 @@ impl TextData {
     pub fn from_buffer(text_buffer: glyphon::Buffer) -> Self {
         // Calculate total height including descender for the last line
         let metrics = text_buffer.metrics();
-        let num_lines = text_buffer.layout_runs().count() as f32;
-        let descent_amount = (metrics.line_height - metrics.font_size).max(0.0);
-        let total_height = num_lines * metrics.line_height + descent_amount;
         // Calculate text bounds
         let mut run_width: f32 = 0.0;
+        let mut first_baseline = 0.0;
+        let mut last_baseline = 0.0;
+        let mut line_count: u32 = 0;
         for run in text_buffer.layout_runs() {
             // Take the max. width of all lines.
             run_width = run_width.max(run.line_w);
+            if line_count == 0 {
+                first_baseline = run.line_y;
+            }
+            last_baseline = run.line_y;
+            line_count += 1;
         }
+        let descent_amount = (metrics.line_height - metrics.font_size).max(0.0);
+        let total_height = line_count as f32 * metrics.line_height + descent_amount;
         // build text data
         Self {
             text_buffer,
             size: [run_width as u32, total_height.ceil() as u32],
+            first_baseline,
+            last_baseline,
+            line_count,
             base_color: Color::WHITE,
             current_color: Color::WHITE,
             text: String::new(),
@@ -319,7 +341,7 @@ impl TextData {
         size: f32,
         line_height: f32,
         constraint: &TextConstraint,
-    ) -> (glyphon::Buffer, [u32; 2]) {
+    ) -> (glyphon::Buffer, [u32; 2], f32, f32, u32) {
         // Create text buffer
         let mut text_buffer = glyphon::Buffer::new(
             &mut write_font_system(),
@@ -347,16 +369,29 @@ impl TextData {
             None,
         );
         text_buffer.shape_until_scroll(&mut write_font_system(), false);
-        // Calculate text bounds
+        // Calculate text bounds and baselines.
         let mut run_width: f32 = 0.0;
         let metrics = text_buffer.metrics();
-        let num_lines = text_buffer.layout_runs().count() as f32;
-        let descent_amount = (metrics.line_height - metrics.font_size).max(0.0);
-        let total_height = num_lines * metrics.line_height + descent_amount;
+        let mut first_baseline = 0.0;
+        let mut last_baseline = 0.0;
+        let mut line_count: u32 = 0;
         for run in text_buffer.layout_runs() {
             run_width = run_width.max(run.line_w);
+            if line_count == 0 {
+                first_baseline = run.line_y;
+            }
+            last_baseline = run.line_y;
+            line_count += 1;
         }
-        (text_buffer, [run_width as u32, total_height.ceil() as u32])
+        let descent_amount = (metrics.line_height - metrics.font_size).max(0.0);
+        let total_height = line_count as f32 * metrics.line_height + descent_amount;
+        (
+            text_buffer,
+            [run_width as u32, total_height.ceil() as u32],
+            first_baseline,
+            last_baseline,
+            line_count,
+        )
     }
 
     pub(crate) fn apply_opacity(&mut self, opacity: f32) {
@@ -370,7 +405,7 @@ impl TextData {
             return;
         }
 
-        let (buffer, bounds) = Self::build_buffer(
+        let (buffer, bounds, first_baseline, last_baseline, line_count) = Self::build_buffer(
             &self.text,
             target_color,
             self.font_size,
@@ -379,6 +414,9 @@ impl TextData {
         );
         self.text_buffer = buffer;
         self.size = bounds;
+        self.first_baseline = first_baseline;
+        self.last_baseline = last_baseline;
+        self.line_count = line_count;
         self.current_color = target_color;
     }
 }

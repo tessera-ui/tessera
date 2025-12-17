@@ -261,7 +261,7 @@ fn dialog_content_wrapper(
                 height: Px(0),
             });
         };
-        let computed = input.measure_child(child_id, input.parent_constraint)?;
+        let computed = input.measure_child_in_parent_constraint(child_id)?;
         input.place_child(child_id, PxPosition::ZERO);
         Ok(computed)
     }));

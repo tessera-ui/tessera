@@ -425,7 +425,7 @@ fn elastic_container(
     let progress = state.with_mut(|s| s.item_state_mut(index).elastic_state.update());
     measure(Box::new(move |input| {
         let child_id = input.children_ids[0];
-        let child_size = input.measure_child(child_id, input.parent_constraint)?;
+        let child_size = input.measure_child_in_parent_constraint(child_id)?;
         let additional_width = child_size.width.mul_f32(0.15 * progress);
         input.place_child(child_id, PxPosition::new(additional_width / 2, Px::ZERO));
 

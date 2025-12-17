@@ -23,7 +23,7 @@ use crate::{
     runtime::{RuntimePhase, push_current_node, push_phase},
 };
 
-use super::constraint::{Constraint, DimensionValue};
+use super::constraint::{Constraint, DimensionValue, ParentConstraint};
 
 /// A guard that manages accessibility node building and automatically
 /// commits the result to the metadata when dropped.
@@ -267,7 +267,7 @@ pub struct MeasureInput<'a> {
     pub tree: &'a ComponentNodeTree,
     /// The effective constraint for this node, merged with its parent's
     /// constraint.
-    pub parent_constraint: &'a Constraint,
+    pub parent_constraint: ParentConstraint<'a>,
     /// The children nodes of the current node.
     pub children_ids: &'a [indextree::NodeId],
     /// Metadata for all component nodes, used to access cached data and
@@ -337,6 +337,14 @@ impl<'a> MeasureInput<'a> {
             self.compute_resource_manager.clone(),
             self.gpu,
         )
+    }
+
+    /// Measures a single child node using this node's inherited constraint.
+    pub fn measure_child_in_parent_constraint(
+        &self,
+        child_id: NodeId,
+    ) -> Result<ComputedData, MeasurementError> {
+        self.measure_child(child_id, self.parent_constraint.as_ref())
     }
 
     /// Sets the relative position of a child node.
@@ -592,7 +600,7 @@ pub(crate) fn measure_node(
         measure_fn(&MeasureInput {
             current_node_id: node_id,
             tree,
-            parent_constraint,
+            parent_constraint: ParentConstraint::new(parent_constraint),
             children_ids: &children,
             metadatas: component_node_metadatas,
             compute_resource_manager,
@@ -602,7 +610,7 @@ pub(crate) fn measure_node(
         DEFAULT_LAYOUT_DESC(&MeasureInput {
             current_node_id: node_id,
             tree,
-            parent_constraint,
+            parent_constraint: ParentConstraint::new(parent_constraint),
             children_ids: &children,
             metadatas: component_node_metadatas,
             compute_resource_manager,
@@ -648,13 +656,15 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
         // applied. The actual min size enforcement happens when the parent (or
         // this node itself if it has intrinsic min) considers its own
         // DimensionValue.
-        return Ok(ComputedData::min_from_constraint(input.parent_constraint));
+        return Ok(ComputedData::min_from_constraint(
+            input.parent_constraint.as_ref(),
+        ));
     }
 
     let nodes_to_measure: Vec<(NodeId, Constraint)> = input
         .children_ids
         .iter()
-        .map(|&child_id| (child_id, *input.parent_constraint)) // Children inherit parent's effective constraint
+        .map(|&child_id| (child_id, *input.parent_constraint.as_ref())) // Children inherit parent's effective constraint
         .collect();
 
     let children_results_map = measure_nodes(
@@ -736,7 +746,7 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
     let mut final_width = aggregate_size.width;
     let mut final_height = aggregate_size.height;
 
-    match input.parent_constraint.width {
+    match input.parent_constraint.width() {
         DimensionValue::Fixed(w) => final_width = w,
         DimensionValue::Wrap { min, max } => {
             if let Some(min_w) = min {
@@ -760,7 +770,7 @@ pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
             // wraps them.
         }
     }
-    match input.parent_constraint.height {
+    match input.parent_constraint.height() {
         DimensionValue::Fixed(h) => final_height = h,
         DimensionValue::Wrap { min, max } => {
             if let Some(min_h) = min {

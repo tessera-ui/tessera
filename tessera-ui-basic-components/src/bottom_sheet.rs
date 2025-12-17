@@ -386,8 +386,8 @@ fn place_bottom_sheet_if_present(
 
     let bottom_sheet_id = input.children_ids[2];
 
-    let parent_width = input.parent_constraint.width.get_max().unwrap_or(Px(0));
-    let parent_height = input.parent_constraint.height.get_max().unwrap_or(Px(0));
+    let parent_width = input.parent_constraint.width().get_max().unwrap_or(Px(0));
+    let parent_height = input.parent_constraint.height().get_max().unwrap_or(Px(0));
 
     // M3 Spec: Max width 640dp.
     let max_width_px = Dp(640.0).to_px();
@@ -683,12 +683,12 @@ pub fn bottom_sheet_provider_with_controller(
 
     let measure_closure = Box::new(move |input: &tessera_ui::MeasureInput<'_>| {
         let main_content_id = input.children_ids[0];
-        let main_content_size = input.measure_child(main_content_id, input.parent_constraint)?;
+        let main_content_size = input.measure_child_in_parent_constraint(main_content_id)?;
         input.place_child(main_content_id, PxPosition::new(Px(0), Px(0)));
 
         if input.children_ids.len() > 1 {
             let scrim_id = input.children_ids[1];
-            input.measure_child(scrim_id, input.parent_constraint)?;
+            input.measure_child_in_parent_constraint(scrim_id)?;
             input.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
         }
 

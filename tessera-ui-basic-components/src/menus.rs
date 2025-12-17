@@ -8,7 +8,7 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEvent, CursorEventContent, DimensionValue, Dp, Px,
+    Color, ComputedData, CursorEvent, CursorEventContent, DimensionValue, Dp, ParentConstraint, Px,
     PxPosition, PxSize, State, accesskit::Role, remember, tessera, use_context, winit,
 };
 
@@ -329,14 +329,14 @@ fn resolve_menu_position(
     PxPosition::new(x, y)
 }
 
-fn extract_available_size(constraint: &Constraint) -> ComputedData {
-    let width = match constraint.width {
+fn extract_available_size(constraint: ParentConstraint<'_>) -> ComputedData {
+    let width = match constraint.width() {
         DimensionValue::Fixed(px) => px,
         DimensionValue::Wrap { max, .. } | DimensionValue::Fill { max, .. } => {
             max.unwrap_or(Px::MAX)
         }
     };
-    let height = match constraint.height {
+    let height = match constraint.height() {
         DimensionValue::Fixed(px) => px,
         DimensionValue::Wrap { max, .. } | DimensionValue::Fill { max, .. } => {
             max.unwrap_or(Px::MAX)
@@ -629,7 +629,7 @@ pub fn menu_provider_with_controller(
             .first()
             .copied()
             .expect("main content should exist");
-        let main_size = input.measure_child(main_content_id, input.parent_constraint)?;
+        let main_size = input.measure_child_in_parent_constraint(main_content_id)?;
         input.place_child(main_content_id, PxPosition::new(Px::ZERO, Px::ZERO));
 
         let background_id = input
@@ -643,10 +643,10 @@ pub fn menu_provider_with_controller(
             .copied()
             .expect("menu surface should exist");
 
-        let background_size = input.measure_child(background_id, input.parent_constraint)?;
+        let background_size = input.measure_child_in_parent_constraint(background_id)?;
         input.place_child(background_id, PxPosition::new(Px::ZERO, Px::ZERO));
 
-        let menu_size = input.measure_child(menu_id, input.parent_constraint)?;
+        let menu_size = input.measure_child_in_parent_constraint(menu_id)?;
         let available = if background_size.width > Px::ZERO && background_size.height > Px::ZERO {
             background_size
         } else {

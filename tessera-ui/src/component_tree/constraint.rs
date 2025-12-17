@@ -101,39 +101,53 @@
 //!
 //! ```
 //! # use tessera_ui::Px;
-//! # use tessera_ui::{Constraint, DimensionValue};
-//! // Parent provides 200px of space
-//! let parent = Constraint::new(
-//!     DimensionValue::Fixed(Px(200)),
-//!     DimensionValue::Fixed(Px(200)),
-//! );
-//!
-//! // Child wants to fill with minimum 50px
-//! let child = Constraint::new(
-//!     DimensionValue::Fill {
-//!         min: Some(Px(50)),
-//!         max: None,
-//!     },
-//!     DimensionValue::Fill {
-//!         min: Some(Px(50)),
-//!         max: None,
-//!     },
-//! );
-//!
-//! // Result: Child fills parent's 200px space, respecting its 50px minimum
-//! let merged = child.merge(&parent);
-//! assert_eq!(
-//!     merged.width,
-//!     DimensionValue::Fill {
-//!         min: Some(Px(50)),
-//!         max: Some(Px(200))
-//!     }
-//! );
+//! # use tessera_ui::{Constraint, DimensionValue, MeasureInput};
+//! fn merge_example(input: &MeasureInput<'_>) {
+//!     let child = Constraint::new(
+//!         DimensionValue::Fill {
+//!             min: Some(Px(50)),
+//!             max: None,
+//!         },
+//!         DimensionValue::Fill {
+//!             min: Some(Px(50)),
+//!             max: None,
+//!         },
+//!     );
+//!     let _merged = child.merge(input.parent_constraint);
+//! }
 //! ```
 
 use std::ops::Sub;
 
 use crate::{Dp, Px};
+
+/// The constraint inherited from a parent node during measurement.
+///
+/// This wrapper exists to make APIs that combine constraints less error-prone.
+/// A parent constraint is provided by the layout engine and is not meant to be
+/// synthesized by user code.
+#[derive(Clone, Copy, Debug)]
+pub struct ParentConstraint<'a>(&'a Constraint);
+
+impl<'a> ParentConstraint<'a> {
+    pub(crate) fn new(constraint: &'a Constraint) -> Self {
+        Self(constraint)
+    }
+
+    /// Returns the inherited width constraint.
+    pub const fn width(self) -> DimensionValue {
+        self.0.width
+    }
+
+    /// Returns the inherited height constraint.
+    pub const fn height(self) -> DimensionValue {
+        self.0.height
+    }
+
+    pub(crate) const fn as_ref(self) -> &'a Constraint {
+        self.0
+    }
+}
 
 /// Defines how a dimension (width or height) should be calculated.
 ///
@@ -613,42 +627,24 @@ impl Constraint {
     ///
     /// ```
     /// # use tessera_ui::Px;
-    /// # use tessera_ui::{Constraint, DimensionValue};
-    /// // Fixed child in fixed parent - child wins
-    /// let parent = Constraint::new(
-    ///     DimensionValue::Fixed(Px(200)),
-    ///     DimensionValue::Fixed(Px(200)),
-    /// );
-    /// let child = Constraint::new(
-    ///     DimensionValue::Fixed(Px(100)),
-    ///     DimensionValue::Fixed(Px(100)),
-    /// );
-    /// let merged = child.merge(&parent);
-    /// assert_eq!(merged.width, DimensionValue::Fixed(Px(100)));
-    ///
-    /// // Fill child in fixed parent - child fills parent's space
-    /// let child_fill = Constraint::new(
-    ///     DimensionValue::Fill {
-    ///         min: Some(Px(50)),
-    ///         max: None,
-    ///     },
-    ///     DimensionValue::Fill {
-    ///         min: Some(Px(50)),
-    ///         max: None,
-    ///     },
-    /// );
-    /// let merged_fill = child_fill.merge(&parent);
-    /// assert_eq!(
-    ///     merged_fill.width,
-    ///     DimensionValue::Fill {
-    ///         min: Some(Px(50)),
-    ///         max: Some(Px(200))
-    ///     }
-    /// );
+    /// # use tessera_ui::{Constraint, DimensionValue, MeasureInput};
+    /// fn merge_example(input: &MeasureInput<'_>) {
+    ///     let child = Constraint::new(
+    ///         DimensionValue::Wrap {
+    ///             min: None,
+    ///             max: None,
+    ///         },
+    ///         DimensionValue::Wrap {
+    ///             min: None,
+    ///             max: None,
+    ///         },
+    ///     );
+    ///     let _merged = child.merge(input.parent_constraint);
+    /// }
     /// ```
-    pub fn merge(&self, parent_constraint: &Constraint) -> Self {
-        let new_width = Self::merge_dimension(self.width, parent_constraint.width);
-        let new_height = Self::merge_dimension(self.height, parent_constraint.height);
+    pub fn merge(&self, parent_constraint: ParentConstraint<'_>) -> Self {
+        let new_width = Self::merge_dimension(self.width, parent_constraint.width());
+        let new_height = Self::merge_dimension(self.height, parent_constraint.height());
         Constraint::new(new_width, new_height)
     }
 
@@ -814,7 +810,7 @@ mod tests {
         );
 
         // First level merge: child merges with fixed parent
-        let merged_child = child.merge(&parent);
+        let merged_child = child.merge(ParentConstraint::new(&parent));
 
         // Child is Wrap, parent is Fixed - result should be Wrap with child's
         // constraints Since child's max (80) is less than parent's fixed size
@@ -835,7 +831,7 @@ mod tests {
         );
 
         // Second level merge: grandchild merges with merged child
-        let final_result = grandchild.merge(&merged_child);
+        let final_result = grandchild.merge(ParentConstraint::new(&merged_child));
 
         // Both are Wrap - result should be Wrap with the more restrictive constraints
         // Grandchild's max (50) is smaller than merged child's max (80), so grandchild
@@ -883,7 +879,7 @@ mod tests {
             },
         );
 
-        let result = child.merge(&parent);
+        let result = child.merge(ParentConstraint::new(&parent));
 
         // Child is Wrap, parent is Fill - result should be Wrap
         // Child keeps its own min (30px) and max (150px) since both are within parent's
@@ -932,7 +928,7 @@ mod tests {
             },
         );
 
-        let result = child.merge(&parent);
+        let result = child.merge(ParentConstraint::new(&parent));
 
         // Child is Wrap and should keep its own min (None), not inherit from parent's
         // Fill min This preserves the wrap behavior of sizing to content
@@ -981,7 +977,7 @@ mod tests {
             },
         );
 
-        let result = child.merge(&parent);
+        let result = child.merge(ParentConstraint::new(&parent));
 
         // Child should keep its own constraints since parent Fill has no max to
         // constrain it
@@ -1022,7 +1018,7 @@ mod tests {
             },
         );
 
-        let result = child.merge(&parent);
+        let result = child.merge(ParentConstraint::new(&parent));
 
         // Child remains Wrap but max is limited by parent's fixed size
         // min keeps child's own value (30px)
@@ -1065,7 +1061,7 @@ mod tests {
             },
         );
 
-        let result = child.merge(&parent);
+        let result = child.merge(ParentConstraint::new(&parent));
 
         // Child remains Wrap, parent's fixed size becomes the maximum constraint
         // This prevents the child from growing beyond the parent's available space
@@ -1106,7 +1102,7 @@ mod tests {
             },
         );
 
-        let result = child.merge(&parent);
+        let result = child.merge(ParentConstraint::new(&parent));
 
         // Child remains Fill but max is limited by parent's fixed size
         // min keeps child's own value (30px)
@@ -1149,7 +1145,7 @@ mod tests {
             },
         );
 
-        let result = child.merge(&parent);
+        let result = child.merge(ParentConstraint::new(&parent));
 
         // Child remains Fill, parent's fixed size becomes the maximum constraint
         // This ensures the child fills exactly the parent's available space
@@ -1191,7 +1187,7 @@ mod tests {
             },
         );
 
-        let result = child.merge(&parent);
+        let result = child.merge(ParentConstraint::new(&parent));
 
         // Child remains Fill, keeps its own min (None), max is limited by parent's
         // fixed size This allows the child to fill the parent's space without

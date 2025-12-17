@@ -428,7 +428,7 @@ fn scrollable_with_alongside_scrollbar(
         // measure the scrollbar
         if args.vertical {
             let scrollbar_node_id = input.children_ids[1];
-            let size = input.measure_child(scrollbar_node_id, input.parent_constraint)?;
+            let size = input.measure_child_in_parent_constraint(scrollbar_node_id)?;
             // substract the scrollbar size from the content constraint
             content_contraint.width -= size.width;
             // update the size
@@ -440,7 +440,7 @@ fn scrollable_with_alongside_scrollbar(
             } else {
                 input.children_ids[1]
             };
-            let size = input.measure_child(scrollbar_node_id, input.parent_constraint)?;
+            let size = input.measure_child_in_parent_constraint(scrollbar_node_id)?;
             content_contraint.height -= size.height;
             // update the size
             final_size.height += size.height;
@@ -565,14 +565,12 @@ fn scrollable_inner(
     let args: ScrollableArgs = args.into();
     {
         measure(Box::new(move |input| {
-            // Enable clip
             input.enable_clipping();
-            // Merge constraints with parent constraints
             let arg_constraint = Constraint {
                 width: args.width,
                 height: args.height,
             };
-            let merged_constraint = input.parent_constraint.merge(&arg_constraint);
+            let merged_constraint = arg_constraint.merge(input.parent_constraint);
             // Now calculate the constraints to child
             let mut child_constraint = merged_constraint;
             // If vertical scrollable, set height to wrap
@@ -613,10 +611,10 @@ fn scrollable_inner(
             let mut width = resolve_dimension(merged_constraint.width, child_measurement.width);
             let mut height = resolve_dimension(merged_constraint.height, child_measurement.height);
 
-            if let Some(parent_max_width) = input.parent_constraint.width.get_max() {
+            if let Some(parent_max_width) = input.parent_constraint.width().get_max() {
                 width = width.min(parent_max_width);
             }
-            if let Some(parent_max_height) = input.parent_constraint.height.get_max() {
+            if let Some(parent_max_height) = input.parent_constraint.height().get_max() {
                 height = height.min(parent_max_height);
             }
 

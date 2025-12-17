@@ -304,7 +304,7 @@ fn place_side_bar_if_present(
 
     let side_bar_id = input.children_ids[2];
 
-    let child_size = match input.measure_child(side_bar_id, input.parent_constraint) {
+    let child_size = match input.measure_child_in_parent_constraint(side_bar_id) {
         Ok(s) => s,
         Err(_) => return,
     };
@@ -447,13 +447,13 @@ pub fn side_bar_provider_with_controller(
     let measure_closure = Box::new(move |input: &tessera_ui::MeasureInput<'_>| {
         // Place main content at origin.
         let main_content_id = input.children_ids[0];
-        let main_content_size = input.measure_child(main_content_id, input.parent_constraint)?;
+        let main_content_size = input.measure_child_in_parent_constraint(main_content_id)?;
         input.place_child(main_content_id, PxPosition::new(Px(0), Px(0)));
 
         // Place scrim (if present) covering the whole parent.
         if input.children_ids.len() > 1 {
             let scrim_id = input.children_ids[1];
-            input.measure_child(scrim_id, input.parent_constraint)?;
+            input.measure_child_in_parent_constraint(scrim_id)?;
             input.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
         }
 

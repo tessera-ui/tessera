@@ -238,7 +238,7 @@ pub use crate::{
     component_tree::{
         ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
         ComponentTree, ComputedData, Constraint, DimensionValue, ImeRequest, InputHandlerFn,
-        InputHandlerInput, MeasureFn, MeasureInput, MeasurementError,
+        InputHandlerInput, MeasureFn, MeasureInput, MeasurementError, ParentConstraint,
     },
     context::{Context, provide_context, use_context},
     cursor::{CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent},

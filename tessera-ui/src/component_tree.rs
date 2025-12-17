@@ -16,7 +16,7 @@ use crate::{
     runtime::{RuntimePhase, push_current_node, push_phase},
 };
 
-pub use constraint::{Constraint, DimensionValue};
+pub use constraint::{Constraint, DimensionValue, ParentConstraint};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
     ImeRequest, InputHandlerFn, InputHandlerInput, MeasureFn, MeasureInput, MeasurementError,

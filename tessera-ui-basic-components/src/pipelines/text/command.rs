@@ -1,4 +1,4 @@
-use tessera_ui::DrawCommand;
+use tessera_ui::{DrawCommand, PxPosition};
 
 use super::pipeline::TextData;
 
@@ -7,6 +7,8 @@ use super::pipeline::TextData;
 pub struct TextCommand {
     /// Glyph layout and styling for the text draw.
     pub data: TextData,
+    /// Offset applied to the command relative to the component origin.
+    pub offset: PxPosition,
 }
 
 impl DrawCommand for TextCommand {

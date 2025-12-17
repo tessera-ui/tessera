@@ -145,9 +145,9 @@ static START_AT: OnceLock<Instant> = OnceLock::new();
 
 /// Resolve a DimensionValue into a concrete Px value, using sensible defaults
 /// for Wrap/Fill when max is not provided.
-fn resolve_dimension(value: &DimensionValue) -> Px {
+fn resolve_dimension(value: DimensionValue) -> Px {
     match value {
-        DimensionValue::Fixed(v) => *v,
+        DimensionValue::Fixed(v) => v,
         DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
         DimensionValue::Fill { max, .. } => max.unwrap_or(Px(0)),
     }
@@ -165,8 +165,8 @@ pub fn background(child: impl FnOnce(), style: CalStyle) {
             child();
 
             measure(Box::new(move |input| {
-                let width = resolve_dimension(&input.parent_constraint.width);
-                let height = resolve_dimension(&input.parent_constraint.height);
+                let width = resolve_dimension(input.parent_constraint.width());
+                let height = resolve_dimension(input.parent_constraint.height());
 
                 let time = current_time();
 

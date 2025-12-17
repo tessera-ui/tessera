@@ -1,4 +1,4 @@
-use tessera_ui::{Constraint, DimensionValue, Dp, Px, PxPosition};
+use tessera_ui::{Constraint, DimensionValue, Dp, ParentConstraint, Px, PxPosition};
 
 use super::{HANDLE_GAP, MIN_TOUCH_TARGET, STOP_INDICATOR_DIAMETER, SliderArgs, SliderSize};
 
@@ -183,7 +183,10 @@ impl CenteredSliderLayout {
     }
 }
 
-pub(super) fn resolve_component_width(args: &SliderArgs, parent_constraint: &Constraint) -> Px {
+pub(super) fn resolve_component_width(
+    args: &SliderArgs,
+    parent_constraint: ParentConstraint<'_>,
+) -> Px {
     let specs = get_slider_specs(args.size);
     let fallback = Dp(260.0).to_px();
     let merged = Constraint::new(

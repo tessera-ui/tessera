@@ -508,7 +508,7 @@ pub fn text_edit_core(controller: State<TextEditorController>) {
             input.enable_clipping();
 
             // surface provides constraints that should be respected for text layout
-            let max_width_pixels: Option<Px> = match input.parent_constraint.width {
+            let max_width_pixels: Option<Px> = match input.parent_constraint.width() {
                 DimensionValue::Fixed(w) => Some(w),
                 DimensionValue::Wrap { max, .. } => max,
                 DimensionValue::Fill { max, .. } => max,
@@ -516,7 +516,7 @@ pub fn text_edit_core(controller: State<TextEditorController>) {
 
             // For proper scrolling behavior, we need to respect height constraints
             // When max height is specified, content should be clipped and scrollable
-            let max_height_pixels: Option<Px> = match input.parent_constraint.height {
+            let max_height_pixels: Option<Px> = match input.parent_constraint.height() {
                 DimensionValue::Fixed(h) => Some(h), // Respect explicit fixed heights
                 DimensionValue::Wrap { max, .. } => max, // Respect max height for wrapping
                 DimensionValue::Fill { max, .. } => max,
@@ -539,7 +539,7 @@ pub fn text_edit_core(controller: State<TextEditorController>) {
             // Handle selection rectangle positioning
             for (i, rect_def) in selection_rects.iter().enumerate() {
                 if let Some(rect_node_id) = input.children_ids.get(i).copied() {
-                    input.measure_child(rect_node_id, input.parent_constraint)?;
+                    input.measure_child_in_parent_constraint(rect_node_id)?;
                     input.place_child(rect_node_id, PxPosition::new(rect_def.x, rect_def.y));
                 }
             }
@@ -555,13 +555,14 @@ pub fn text_edit_core(controller: State<TextEditorController>) {
                 let cursor_pos = PxPosition::new(Px(cursor_pos_raw.0), Px(cursor_pos_raw.1));
                 let cursor_node_index = selection_rects_len;
                 if let Some(cursor_node_id) = input.children_ids.get(cursor_node_index).copied() {
-                    input.measure_child(cursor_node_id, input.parent_constraint)?;
+                    input.measure_child_in_parent_constraint(cursor_node_id)?;
                     input.place_child(cursor_node_id, cursor_pos);
                 }
             }
 
             let drawable = TextCommand {
                 data: text_data.clone(),
+                offset: PxPosition::ZERO,
             };
             input.metadata_mut().push_draw_command(drawable);
 

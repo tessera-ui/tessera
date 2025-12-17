@@ -12,8 +12,8 @@ use std::{
 
 use derive_builder::Builder;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, Px, PxPosition, State,
-    key, remember, tessera,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, ParentConstraint, Px,
+    PxPosition, State, key, remember, tessera,
 };
 
 use crate::{
@@ -695,7 +695,7 @@ fn compute_visible_children(
 
 fn clamp_reported_main(
     axis: LazyListAxis,
-    parent_constraint: &Constraint,
+    parent_constraint: ParentConstraint<'_>,
     total_main: Px,
     viewport_span: Px,
     fallback_limit: Option<Px>,
@@ -771,10 +771,10 @@ impl LazyListAxis {
         }
     }
 
-    fn child_constraint(&self, parent: &Constraint) -> Constraint {
+    fn child_constraint(&self, parent: ParentConstraint<'_>) -> Constraint {
         match self {
             Self::Vertical => Constraint::new(
-                parent.width,
+                parent.width(),
                 DimensionValue::Wrap {
                     min: None,
                     max: None,
@@ -785,15 +785,15 @@ impl LazyListAxis {
                     min: None,
                     max: None,
                 },
-                parent.height,
+                parent.height(),
             ),
         }
     }
 
-    fn constraint_max(&self, constraint: &Constraint) -> Option<Px> {
+    fn constraint_max(&self, constraint: ParentConstraint<'_>) -> Option<Px> {
         match self {
-            Self::Vertical => constraint.height.get_max(),
-            Self::Horizontal => constraint.width.get_max(),
+            Self::Vertical => constraint.height().get_max(),
+            Self::Horizontal => constraint.width().get_max(),
         }
     }
 }

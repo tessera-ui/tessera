@@ -248,14 +248,14 @@ fn navigation_bar_item(
 
     measure(Box::new(
         move |input| -> Result<ComputedData, MeasurementError> {
-            let parent_width = match input.parent_constraint.width {
+            let parent_width = match input.parent_constraint.width() {
                 DimensionValue::Fixed(v) => v,
                 DimensionValue::Wrap { max, .. } => max.unwrap_or(Px::ZERO),
                 DimensionValue::Fill { max, .. } => max.unwrap_or(Px::ZERO),
             };
 
             let min_height = CONTAINER_HEIGHT.to_px();
-            let parent_height = match input.parent_constraint.height {
+            let parent_height = match input.parent_constraint.height() {
                 DimensionValue::Fixed(v) => v.max(min_height),
                 DimensionValue::Wrap { min, .. } => min.unwrap_or(min_height).max(min_height),
                 DimensionValue::Fill { min, .. } => min.unwrap_or(min_height).max(min_height),

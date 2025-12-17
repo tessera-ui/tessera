@@ -7,8 +7,8 @@ use std::time::Instant;
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, accesskit::Role, remember,
-    tessera, use_context,
+    Color, ComputedData, Constraint, DimensionValue, Dp, ParentConstraint, Px, PxPosition,
+    accesskit::Role, remember, tessera, use_context,
 };
 
 use crate::{
@@ -132,7 +132,10 @@ fn resolve_dimension(dimension: DimensionValue, fallback: Px) -> Px {
     }
 }
 
-fn resolve_linear_size(args: &LinearProgressIndicatorArgs, parent: &Constraint) -> (Px, Px) {
+fn resolve_linear_size(
+    args: &LinearProgressIndicatorArgs,
+    parent: ParentConstraint<'_>,
+) -> (Px, Px) {
     let height = args.height.to_px();
     let fallback_width = ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH.to_px();
     let base = Constraint::new(args.width, DimensionValue::Fixed(height));
