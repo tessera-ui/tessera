@@ -11,8 +11,8 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, Dp, Modifier, State,
-    accesskit::{Action, Role, Toggled},
+    Color, Dp, Modifier, PxSize, State,
+    accesskit::Role,
     remember, tessera, use_context,
 };
 
@@ -21,6 +21,7 @@ use crate::{
     boxed::{BoxedArgsBuilder, boxed},
     checkmark::{CheckmarkArgsBuilder, checkmark},
     modifier::ModifierExt,
+    ripple_state::{RippleSpec, RippleState},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
@@ -99,6 +100,9 @@ impl CheckboxController {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct CheckboxArgs {
+    /// Optional modifier chain applied to the checkbox subtree.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// Callback invoked when the checkbox is toggled.
     #[builder(default = "Arc::new(|_| {})")]
     pub on_toggle: Arc<dyn Fn(bool) + Send + Sync>,
@@ -323,26 +327,24 @@ pub fn checkbox_with_controller(
 ) {
     let args: CheckboxArgs = args.into();
     let enabled = !args.disabled;
+    controller.with_mut(|c| c.update_progress());
 
     // Clone fields needed for closures before moving on_toggle
     let size = args.size;
     let shape = args.shape;
 
-    // Click handler: toggle animation state and forward toggle callback
-    let on_click = if enabled {
+    let is_checked = controller.with(|c| c.is_checked());
+    let interaction_state = enabled.then(|| remember(RippleState::new));
+    let on_value_change = {
         let on_toggle = args.on_toggle.clone();
-        Some(Arc::new(move || {
-            controller.with_mut(|c| c.toggle());
-            on_toggle(controller.with(|c| c.is_checked()));
-        }))
-    } else {
-        None
+        Arc::new(move |checked| {
+            controller.with_mut(|c| c.set_checked(checked));
+            on_toggle(checked);
+        }) as Arc<dyn Fn(bool) + Send + Sync>
     };
-    let on_click_for_surface = on_click.clone();
 
     // Determine colors based on state
     let scheme = use_context::<MaterialTheme>().get().color_scheme;
-    let is_checked = controller.with(|c| c.is_checked());
     let (checkbox_style, icon_color) = if args.disabled {
         if is_checked {
             (
@@ -449,7 +451,7 @@ pub fn checkbox_with_controller(
     let render_state_layer = closure!(
         clone enabled,
         clone state_layer_base,
-        clone on_click_for_surface,
+        clone interaction_state,
         clone render_checkbox_container,
         || {
             let mut builder = SurfaceArgsBuilder::default()
@@ -466,8 +468,8 @@ pub fn checkbox_with_controller(
                 .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
                 .ripple_color(state_layer_base);
 
-            if let Some(handler) = on_click_for_surface.clone() {
-                builder = builder.on_click_shared(handler);
+            if let Some(interaction_state) = interaction_state {
+                builder = builder.interaction_state(interaction_state);
             }
 
             surface(
@@ -478,12 +480,33 @@ pub fn checkbox_with_controller(
     );
 
     // Outer Box (Layout 48x48)
+    let mut modifier = args
+        .modifier
+        .size(CheckboxDefaults::TOUCH_TARGET_SIZE, CheckboxDefaults::TOUCH_TARGET_SIZE);
+    if enabled {
+        let ripple_spec = RippleSpec {
+            bounded: false,
+            radius: Some(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0)),
+        };
+        let ripple_size = PxSize::new(
+            CheckboxDefaults::STATE_LAYER_SIZE.to_px(),
+            CheckboxDefaults::STATE_LAYER_SIZE.to_px(),
+        );
+        modifier = modifier.toggleable(
+            is_checked,
+            on_value_change,
+            true,
+            Some(Role::CheckBox),
+            args.accessibility_label.clone(),
+            args.accessibility_description.clone(),
+            interaction_state,
+            Some(ripple_spec),
+            Some(ripple_size),
+        );
+    }
     boxed(
         BoxedArgsBuilder::default()
-            .modifier(Modifier::new().size(
-                CheckboxDefaults::TOUCH_TARGET_SIZE,
-                CheckboxDefaults::TOUCH_TARGET_SIZE,
-            ))
+            .modifier(modifier)
             .alignment(Alignment::Center)
             .build()
             .expect("builder construction failed"),
@@ -494,47 +517,4 @@ pub fn checkbox_with_controller(
             }
         ),
     );
-
-    let accessibility_label = args.accessibility_label.clone();
-    let accessibility_description = args.accessibility_description.clone();
-    let on_click_for_accessibility = on_click.clone();
-    let disabled = args.disabled;
-    input_handler(Box::new(move |input| {
-        // Update animation progress
-        controller.with_mut(|c| c.update_progress());
-
-        let checked = controller.with(|c| c.is_checked());
-        let mut builder = input.accessibility().role(Role::CheckBox);
-
-        if let Some(label) = &accessibility_label {
-            builder = builder.label(label.clone());
-        }
-        if let Some(description) = &accessibility_description {
-            builder = builder.description(description.clone());
-        }
-
-        if disabled {
-            builder = builder.disabled();
-        }
-
-        builder = builder
-            .focusable()
-            .action(Action::Click)
-            .toggled(if checked {
-                Toggled::True
-            } else {
-                Toggled::False
-            });
-
-        builder.commit();
-
-        if !disabled && let Some(handler) = on_click_for_accessibility.as_ref() {
-            let handler = handler.clone();
-            input.set_accessibility_action_handler(move |action| {
-                if action == Action::Click {
-                    handler();
-                }
-            });
-        }
-    }));
 }

@@ -12,8 +12,8 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, DimensionValue, Dp, Modifier, Px, State,
-    accesskit::{Action, Role, Toggled},
+    Color, DimensionValue, Dp, Modifier, Px, PxSize, State,
+    accesskit::Role,
     remember, tessera, use_context,
 };
 
@@ -22,6 +22,7 @@ use crate::{
     animation,
     boxed::{BoxedArgsBuilder, boxed},
     modifier::ModifierExt as _,
+    ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     theme::{MaterialAlpha, MaterialTheme},
@@ -115,6 +116,9 @@ impl RadioButtonController {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct RadioButtonArgs {
+    /// Optional modifier chain applied to the radio button subtree.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// Callback invoked when the radio transitions to the selected state.
     #[builder(default = "Arc::new(|_| {})")]
     pub on_select: Arc<dyn Fn(bool) + Send + Sync>,
@@ -237,51 +241,11 @@ pub fn radio_button_with_controller(
     controller: State<RadioButtonController>,
 ) {
     let args: RadioButtonArgs = args.into();
-    let accessibility_label = args.accessibility_label.clone();
-    let accessibility_description = args.accessibility_description.clone();
-    let on_select_for_accessibility = args.on_select.clone();
-    let enabled_for_accessibility = args.enabled;
-    input_handler(Box::new(move |input| {
-        controller.with_mut(|c| c.update_animation());
-        let selected = controller.with(|c| c.is_selected());
-
-        let mut builder = input.accessibility().role(Role::RadioButton);
-
-        if let Some(label) = accessibility_label.as_ref() {
-            builder = builder.label(label.clone());
-        }
-        if let Some(description) = accessibility_description.as_ref() {
-            builder = builder.description(description.clone());
-        }
-
-        builder = builder.toggled(if selected {
-            Toggled::True
-        } else {
-            Toggled::False
-        });
-
-        if enabled_for_accessibility {
-            builder = builder.focusable().action(Action::Click);
-        } else {
-            builder = builder.disabled();
-        }
-
-        builder.commit();
-
-        if enabled_for_accessibility {
-            let on_select = on_select_for_accessibility.clone();
-            input.set_accessibility_action_handler(move |action| {
-                if action == Action::Click && controller.with_mut(|c| c.select()) {
-                    on_select(true);
-                }
-            });
-        }
-    }));
-
     controller.with_mut(|c| c.update_animation());
     let progress = controller.with(|c| c.animation_progress());
     let eased_progress = animation::easing(progress);
     let is_selected = controller.with(|c| c.is_selected());
+    let interaction_state = args.enabled.then(|| remember(RippleState::new));
 
     let target_size = Dp(args.touch_target_size.0.max(args.size.0));
 
@@ -315,17 +279,11 @@ pub fn radio_button_with_controller(
         width: args.stroke_width,
     };
 
-    let on_click = if args.enabled {
-        Some(
-            Arc::new(closure!(clone args.on_select, clone controller, || {
-                if controller.with_mut(|c| c.select()) {
-                    on_select(true);
-                }
-            })) as Arc<dyn Fn() + Send + Sync>,
-        )
-    } else {
-        None
-    };
+    let on_click = Arc::new(closure!(clone args.on_select, clone controller, || {
+        if controller.with_mut(|c| c.select()) {
+            on_select(true);
+        }
+    })) as Arc<dyn Fn() + Send + Sync>;
 
     let state_layer_size = RadioButtonDefaults::STATE_LAYER_SIZE;
     let state_layer_radius = Dp(state_layer_size.0 / 2.0);
@@ -341,17 +299,37 @@ pub fn radio_button_with_controller(
         .ripple_radius(state_layer_radius)
         .ripple_color(ripple_color);
 
-    if let Some(on_click) = on_click.clone() {
-        state_layer_builder = state_layer_builder.on_click_shared(on_click);
+    if let Some(interaction_state) = interaction_state {
+        state_layer_builder = state_layer_builder.interaction_state(interaction_state);
     }
 
     let state_layer_args = state_layer_builder
         .build()
         .expect("builder construction failed");
 
+    let mut modifier = args.modifier.size(target_size, target_size);
+    if args.enabled {
+        let ripple_spec = RippleSpec {
+            bounded: false,
+            radius: Some(state_layer_radius),
+        };
+        let ripple_size = PxSize::new(state_layer_size.to_px(), state_layer_size.to_px());
+        modifier = modifier.selectable(
+            is_selected,
+            on_click.clone(),
+            true,
+            Some(Role::RadioButton),
+            args.accessibility_label.clone(),
+            args.accessibility_description.clone(),
+            interaction_state,
+            Some(ripple_spec),
+            Some(ripple_size),
+        );
+    }
+
     boxed(
         BoxedArgsBuilder::default()
-            .modifier(Modifier::new().size(target_size, target_size))
+            .modifier(modifier)
             .alignment(Alignment::Center)
             .build()
             .expect("builder construction failed"),
