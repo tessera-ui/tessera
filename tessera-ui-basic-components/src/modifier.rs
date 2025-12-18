@@ -16,6 +16,7 @@ use crate::{
     pipelines::shape::command::ShapeCommand,
     pos_misc::is_position_in_rect,
     shape_def::{ResolvedShape, Shape},
+    ShadowProps,
 };
 
 /// Controls whether minimum interactive size wrappers are enforced.
@@ -109,6 +110,12 @@ pub trait ModifierExt {
 
     /// Draws a border stroke above the subtree using a custom shape.
     fn border_with_shape(self, width: Dp, color: Color, shape: Shape) -> Modifier;
+
+    /// Draws a shadow behind the subtree.
+    fn shadow(self, shadow: ShadowProps) -> Modifier;
+
+    /// Draws a shadow behind the subtree using a custom shape.
+    fn shadow_with_shape(self, shadow: ShadowProps, shape: Shape) -> Modifier;
 
     /// Constrains the content to an exact size when possible.
     fn size(self, width: Dp, height: Dp) -> Modifier;
@@ -236,6 +243,20 @@ impl ModifierExt for Modifier {
         self.push_wrapper(move |child| {
             move || {
                 modifier_border(width, color, shape, || {
+                    child();
+                });
+            }
+        })
+    }
+
+    fn shadow(self, shadow: ShadowProps) -> Modifier {
+        self.shadow_with_shape(shadow, Shape::RECTANGLE)
+    }
+
+    fn shadow_with_shape(self, shadow: ShadowProps, shape: Shape) -> Modifier {
+        self.push_wrapper(move |child| {
+            move || {
+                modifier_shadow(shadow, shape, || {
                     child();
                 });
             }
@@ -705,6 +726,25 @@ fn shape_border_command(color: Color, width: Dp, shape: Shape, size: PxSize) -> 
     }
 }
 
+fn shape_shadow_command(shadow: ShadowProps, shape: Shape, size: PxSize) -> ShapeCommand {
+    let color = Color::TRANSPARENT;
+    match shape.resolve_for_size(size) {
+        ResolvedShape::Rounded {
+            corner_radii,
+            corner_g2,
+        } => ShapeCommand::Rect {
+            color,
+            corner_radii,
+            corner_g2,
+            shadow: Some(shadow),
+        },
+        ResolvedShape::Ellipse => ShapeCommand::Ellipse {
+            color,
+            shadow: Some(shadow),
+        },
+    }
+}
+
 #[tessera]
 fn modifier_background<F>(color: Color, shape: Shape, child: F)
 where
@@ -735,6 +775,48 @@ where
         input
             .metadata_mut()
             .push_draw_command(shape_background_command(color, shape, size));
+
+        input.place_child(child_id, PxPosition::ZERO);
+
+        Ok(ComputedData {
+            width: final_width,
+            height: final_height,
+        })
+    }));
+
+    child();
+}
+
+#[tessera]
+fn modifier_shadow<F>(shadow: ShadowProps, shape: Shape, child: F)
+where
+    F: FnOnce(),
+{
+    measure(Box::new(move |input| {
+        let child_id = input
+            .children_ids
+            .first()
+            .copied()
+            .expect("modifier_shadow expects exactly one child");
+
+        let parent_constraint = Constraint::new(
+            input.parent_constraint.width(),
+            input.parent_constraint.height(),
+        );
+        let child_measurements = input.measure_children(vec![(child_id, parent_constraint)])?;
+        let child_measurement = *child_measurements
+            .get(&child_id)
+            .expect("Child measurement missing");
+
+        let final_width =
+            resolve_dimension(parent_constraint.width, child_measurement.width, "width");
+        let final_height =
+            resolve_dimension(parent_constraint.height, child_measurement.height, "height");
+        let size = PxSize::new(final_width, final_height);
+
+        input
+            .metadata_mut()
+            .push_draw_command(shape_shadow_command(shadow, shape, size));
 
         input.place_child(child_id, PxPosition::ZERO);
 

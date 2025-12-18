@@ -116,8 +116,7 @@ pub struct SurfaceArgs {
     /// variants).
     #[builder(default)]
     pub shape: Shape,
-    /// Optional shadow/elevation style. When present it is passed through to
-    /// the shape pipeline.
+    /// Optional shadow style rendered behind the surface.
     #[builder(default, setter(strip_option))]
     pub shadow: Option<ShadowProps>,
     /// Optional elevation hint used to synthesize a shadow when `shadow` is not
@@ -335,7 +334,7 @@ fn apply_state_layer_to_style(style: &SurfaceStyle, color: Color, alpha: f32) ->
 }
 
 fn build_rounded_rectangle_command(
-    args: &SurfaceArgs,
+    _args: &SurfaceArgs,
     style: &SurfaceStyle,
     ripple_props: RippleProps,
     corner_radii: [f32; 4],
@@ -349,7 +348,7 @@ fn build_rounded_rectangle_command(
                     color: *color,
                     corner_radii,
                     corner_g2,
-                    shadow: args.shadow,
+                    shadow: None,
                     ripple: ripple_props,
                 }
             } else {
@@ -357,7 +356,7 @@ fn build_rounded_rectangle_command(
                     color: *color,
                     corner_radii,
                     corner_g2,
-                    shadow: args.shadow,
+                    shadow: None,
                 }
             }
         }
@@ -367,7 +366,7 @@ fn build_rounded_rectangle_command(
                     color: *color,
                     corner_radii,
                     corner_g2,
-                    shadow: args.shadow,
+                    shadow: None,
                     border_width: width.to_pixels_f32(),
                     ripple: ripple_props,
                 }
@@ -376,7 +375,7 @@ fn build_rounded_rectangle_command(
                     color: *color,
                     corner_radii,
                     corner_g2,
-                    shadow: args.shadow,
+                    shadow: None,
                     border_width: width.to_pixels_f32(),
                 }
             }
@@ -392,7 +391,7 @@ fn build_rounded_rectangle_command(
                     border_color: *border_color,
                     corner_radii,
                     corner_g2,
-                    shadow: args.shadow,
+                    shadow: None,
                     border_width: border_width.to_pixels_f32(),
                     ripple: ripple_props,
                 }
@@ -402,7 +401,7 @@ fn build_rounded_rectangle_command(
                     border_color: *border_color,
                     corner_radii,
                     corner_g2,
-                    shadow: args.shadow,
+                    shadow: None,
                     border_width: border_width.to_pixels_f32(),
                 }
             }
@@ -411,7 +410,7 @@ fn build_rounded_rectangle_command(
 }
 
 fn build_ellipse_command(
-    args: &SurfaceArgs,
+    _args: &SurfaceArgs,
     style: &SurfaceStyle,
     ripple_props: RippleProps,
     use_ripple: bool,
@@ -424,13 +423,13 @@ fn build_ellipse_command(
                     color: *color,
                     corner_radii: corner_marker,
                     corner_g2: [0.0; 4],
-                    shadow: args.shadow,
+                    shadow: None,
                     ripple: ripple_props,
                 }
             } else {
                 ShapeCommand::Ellipse {
                     color: *color,
-                    shadow: args.shadow,
+                    shadow: None,
                 }
             }
         }
@@ -440,14 +439,14 @@ fn build_ellipse_command(
                     color: *color,
                     corner_radii: corner_marker,
                     corner_g2: [0.0; 4],
-                    shadow: args.shadow,
+                    shadow: None,
                     border_width: width.to_pixels_f32(),
                     ripple: ripple_props,
                 }
             } else {
                 ShapeCommand::OutlinedEllipse {
                     color: *color,
-                    shadow: args.shadow,
+                    shadow: None,
                     border_width: width.to_pixels_f32(),
                 }
             }
@@ -461,7 +460,7 @@ fn build_ellipse_command(
             ShapeCommand::FilledOutlinedEllipse {
                 color: *fill_color,
                 border_color: *border_color,
-                shadow: args.shadow,
+                shadow: None,
                 border_width: border_width.to_pixels_f32(),
             }
         }
@@ -507,9 +506,6 @@ fn try_build_simple_rect_command(
     style: &SurfaceStyle,
     ripple_state: Option<State<RippleState>>,
 ) -> Option<SimpleRectCommand> {
-    if args.shadow.is_some() {
-        return None;
-    }
     if args.show_ripple && args.on_click.is_some() {
         return None;
     }
@@ -648,13 +644,27 @@ fn compute_surface_size(
 /// # component();
 /// ```
 pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) {
-    let modifier = if args.on_click.is_some() {
-        args.modifier.minimum_interactive_component_size()
-    } else {
-        args.modifier
-    };
     let mut args = args;
+    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+
+    let mut modifier = args.modifier;
+    if args.on_click.is_some() {
+        modifier = modifier.minimum_interactive_component_size();
+    }
+
+    let shadow = args.shadow.or_else(|| {
+        args.shadow_elevation
+            .filter(|elevation| elevation.0 > 0.0)
+            .map(|elevation| synthesize_shadow_for_elevation(elevation, &scheme))
+    });
+    if let Some(shadow) = shadow {
+        modifier = modifier.shadow_with_shape(shadow, args.shape);
+    }
+
+    args.shadow = None;
+    args.shadow_elevation = None;
     args.modifier = Modifier::new();
+
     modifier.run(move || surface_inner(args, child));
 }
 
@@ -698,13 +708,7 @@ fn surface_inner(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static
     let absolute_tonal_elevation_for_draw = absolute_tonal_elevation;
 
     measure(Box::new(move |input| {
-        let mut args_for_draw = args_measure.clone();
-        if args_for_draw.shadow.is_none()
-            && let Some(elevation) = args_for_draw.shadow_elevation
-            && elevation.0 > 0.0
-        {
-            args_for_draw.shadow = Some(synthesize_shadow_for_elevation(elevation, &scheme));
-        }
+        let args_for_draw = args_measure.clone();
 
         let effective_surface_constraint = Constraint::new(
             input.parent_constraint.width(),
