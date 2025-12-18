@@ -153,12 +153,18 @@ pub trait ModifierExt {
     /// Enforces a minimum interactive size by expanding and centering content.
     fn minimum_interactive_component_size(self) -> Modifier;
 
-    /// Makes the subtree clickable with hover cursor and accessibility action.
+    /// Makes the subtree clickable with optional ripple feedback and an
+    /// accessibility click action.
     fn clickable(
         self,
         on_click: Arc<dyn Fn() + Send + Sync>,
         enabled: bool,
         role: Option<accesskit::Role>,
+        label: Option<String>,
+        description: Option<String>,
+        interaction_state: Option<State<RippleState>>,
+        ripple_spec: Option<RippleSpec>,
+        ripple_size: Option<PxSize>,
     ) -> Modifier;
 
     /// Makes the subtree toggleable with optional ripple/state-layer feedback.
@@ -442,13 +448,30 @@ impl ModifierExt for Modifier {
         on_click: Arc<dyn Fn() + Send + Sync>,
         enabled: bool,
         role: Option<accesskit::Role>,
+        label: Option<String>,
+        description: Option<String>,
+        interaction_state: Option<State<RippleState>>,
+        ripple_spec: Option<RippleSpec>,
+        ripple_size: Option<PxSize>,
     ) -> Modifier {
         self.push_wrapper(move |child| {
             let on_click = on_click.clone();
+            let label = label.clone();
+            let description = description.clone();
             move || {
-                modifier_clickable(on_click, enabled, role, || {
-                    child();
-                });
+                modifier_clickable(
+                    on_click,
+                    enabled,
+                    role,
+                    label,
+                    description,
+                    interaction_state,
+                    ripple_spec,
+                    ripple_size,
+                    || {
+                        child();
+                    },
+                );
             }
         })
     }
@@ -730,20 +753,24 @@ fn modifier_clickable<F>(
     on_click: Arc<dyn Fn() + Send + Sync>,
     enabled: bool,
     role: Option<accesskit::Role>,
+    label: Option<String>,
+    description: Option<String>,
+    interaction_state: Option<State<RippleState>>,
+    ripple_spec: Option<RippleSpec>,
+    ripple_size: Option<PxSize>,
     child: F,
 ) where
     F: FnOnce(),
 {
     child();
 
-    let on_click = on_click.clone();
     let role = role.unwrap_or(accesskit::Role::Button);
     input_handler(Box::new(move |input| {
         let mut cursor_events = Vec::new();
         mem::swap(&mut cursor_events, input.cursor_events);
-        let cursor_position = input.cursor_position_rel;
 
-        let within_bounds = cursor_position
+        let within_bounds = input
+            .cursor_position_rel
             .map(|pos| {
                 is_position_in_rect(
                     pos,
@@ -758,16 +785,13 @@ fn modifier_clickable<F>(
             input.requests.cursor_icon = CursorIcon::Pointer;
         }
 
-        if enabled
-            && within_bounds
-            && cursor_events
-                .iter()
-                .any(|event| matches!(event.content, CursorEventContent::Released(_)))
-        {
-            on_click();
-        }
-
         let mut builder = input.accessibility().role(role);
+        if let Some(label) = label.as_ref() {
+            builder = builder.label(label.clone());
+        }
+        if let Some(description) = description.as_ref() {
+            builder = builder.description(description.clone());
+        }
         builder = if enabled {
             builder.action(Action::Click).focusable()
         } else {
@@ -775,16 +799,91 @@ fn modifier_clickable<F>(
         };
         builder.commit();
 
-        if !enabled {
+        if enabled {
+            let on_click_action = on_click.clone();
+            input.set_accessibility_action_handler(move |action| {
+                if action == Action::Click {
+                    on_click_action();
+                }
+            });
+        }
+
+        let Some(interaction_state) = interaction_state else {
+            if !enabled {
+                return;
+            }
+
+            for event in cursor_events.iter() {
+                if within_bounds
+                    && event.gesture_state == GestureState::TapCandidate
+                    && matches!(
+                        event.content,
+                        CursorEventContent::Released(PressKeyEventType::Left)
+                    )
+                {
+                    on_click();
+                }
+            }
+            return;
+        };
+
+        if enabled {
+            interaction_state.with_mut(|s| s.set_hovered(within_bounds));
+        } else {
+            interaction_state.with_mut(|s| {
+                s.release();
+                s.set_hovered(false);
+            });
             return;
         }
 
-        let on_click_for_a11y = on_click.clone();
-        input.set_accessibility_action_handler(move |action| {
-            if action == Action::Click {
-                on_click_for_a11y();
-            }
+        let spec = ripple_spec.unwrap_or(RippleSpec {
+            bounded: true,
+            radius: None,
         });
+        let size = ripple_size.unwrap_or(PxSize::new(
+            input.computed_data.width,
+            input.computed_data.height,
+        ));
+        let click_pos = normalized_click_position(input.cursor_position_rel, input.computed_data);
+
+        for event in cursor_events.iter() {
+            if within_bounds
+                && matches!(
+                    event.content,
+                    CursorEventContent::Pressed(PressKeyEventType::Left)
+                )
+            {
+                interaction_state.with_mut(|s| {
+                    s.start_animation_with_spec(click_pos, size, spec);
+                    s.set_pressed(true);
+                });
+            }
+
+            if matches!(
+                event.content,
+                CursorEventContent::Released(PressKeyEventType::Left)
+            ) {
+                interaction_state.with_mut(|s| s.release());
+            }
+
+            if within_bounds
+                && event.gesture_state == GestureState::TapCandidate
+                && matches!(
+                    event.content,
+                    CursorEventContent::Released(PressKeyEventType::Left)
+                )
+            {
+                on_click();
+            }
+        }
+
+        if !within_bounds {
+            interaction_state.with_mut(|s| {
+                s.release();
+                s.set_hovered(false);
+            });
+        }
     }));
 }
 
