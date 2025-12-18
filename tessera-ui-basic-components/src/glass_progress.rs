@@ -149,10 +149,8 @@ fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Sh
 pub fn glass_progress(args: impl Into<GlassProgressArgs>) {
     let args: GlassProgressArgs = args.into();
     let modifier = args.modifier;
-    let mut inner_args = args;
-    inner_args.modifier = Modifier::new();
 
-    modifier.run(move || glass_progress_inner(inner_args));
+    modifier.run(move || glass_progress_inner(args));
 }
 
 #[tessera]

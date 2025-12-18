@@ -3,18 +3,20 @@
 //! ## Usage
 //!
 //! Use to organize content into separate pages that can be switched between.
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
-    Modifier, Px, PxPosition, State, remember, tessera, use_context,
+    Modifier, Px, PxPosition, State, accesskit::Role, remember, remember_with_key, tessera,
+    use_context,
 };
 
 use crate::{
     alignment::Alignment,
     icon::{IconArgsBuilder, IconContent, icon},
     modifier::ModifierExt,
+    ripple_state::RippleState,
     pipelines::text::{
         command::{TextCommand, TextConstraint},
         pipeline::TextData,
@@ -956,9 +958,10 @@ where
     let ripple_color = TabsDefaults::ripple_color(args.active_content_color);
 
     for (index, child) in title_closures.into_iter().enumerate() {
+        let selected = index == active_tab;
         let label_color = if !args.enabled {
             args.disabled_content_color
-        } else if index == active_tab {
+        } else if selected {
             args.active_content_color
         } else {
             args.inactive_content_color
@@ -972,27 +975,41 @@ where
             _ => args.min_tab_height,
         };
 
+        let interaction_state =
+            args.enabled.then(|| remember_with_key(("tabs_tab_interaction", index), RippleState::new));
+        let mut modifier =
+            Modifier::new().constrain(None, Some(DimensionValue::Fixed(tab_height.into())));
+        if args.enabled {
+            let on_click = Arc::new(move || {
+                controller.with_mut(|c| c.set_active_tab(index));
+            }) as Arc<dyn Fn() + Send + Sync>;
+            modifier = modifier.selectable(
+                selected,
+                on_click,
+                true,
+                Some(Role::Tab),
+                match &child {
+                    TabTitle::Label { text, .. } if !text.is_empty() => Some(text.clone()),
+                    _ => None,
+                },
+                None,
+                interaction_state,
+                None,
+                None,
+            );
+        }
+
         let mut tab_surface = SurfaceArgsBuilder::default()
             .style(Color::TRANSPARENT.into())
             .content_alignment(Alignment::Center)
             .content_color(label_color)
-            .modifier(
-                Modifier::new().constrain(None, Some(DimensionValue::Fixed(tab_height.into()))),
-            )
+            .modifier(modifier)
             .ripple_color(ripple_color)
             .shape(Shape::RECTANGLE)
-            .enabled(args.enabled)
-            .accessibility_role(tessera_ui::accesskit::Role::Tab)
-            .accessibility_focusable(true);
+            .enabled(args.enabled);
 
-        if let TabTitle::Label { text, .. } = &child {
-            tab_surface = tab_surface.accessibility_label(text.clone());
-        }
-
-        if args.enabled {
-            tab_surface = tab_surface.on_click(move || {
-                controller.with_mut(|c| c.set_active_tab(index));
-            });
+        if let Some(interaction_state) = interaction_state {
+            tab_surface = tab_surface.interaction_state(interaction_state);
         }
 
         surface(

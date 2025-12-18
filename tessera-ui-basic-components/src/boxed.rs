@@ -167,8 +167,6 @@ where
     F: FnOnce(&mut BoxedScope),
 {
     let modifier = args.modifier;
-    let mut args = args;
-    args.modifier = Modifier::new();
 
     let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
     let mut child_alignments: Vec<Option<Alignment>> = Vec::new();

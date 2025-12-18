@@ -238,9 +238,8 @@ pub fn glass_switch_with_controller(
     args: impl Into<GlassSwitchArgs>,
     controller: State<GlassSwitchController>,
 ) {
-    let mut args: GlassSwitchArgs = args.into();
+    let args: GlassSwitchArgs = args.into();
     let mut modifier = args.modifier;
-    args.modifier = Modifier::new();
 
     let on_toggle = args.on_toggle.clone();
     let enabled = on_toggle.is_some();

@@ -604,8 +604,6 @@ pub fn slider(args: impl Into<SliderArgs>) {
 pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: State<SliderController>) {
     let args: SliderArgs = args.into();
     let modifier = args.modifier;
-    let mut args = args;
-    args.modifier = Modifier::new();
     modifier.run(move || slider_with_controller_inner(args, controller));
 }
 
@@ -1330,8 +1328,6 @@ pub fn range_slider_with_controller(
 ) {
     let args: RangeSliderArgs = args.into();
     let modifier = args.modifier;
-    let mut args = args;
-    args.modifier = Modifier::new();
     modifier.run(move || range_slider_with_controller_inner(args, state));
 }
 

@@ -117,10 +117,7 @@ pub fn image(args: impl Into<ImageArgs>) {
     let image_args: ImageArgs = args.into();
 
     let modifier = image_args.modifier;
-    let mut inner_args = image_args;
-    inner_args.modifier = Modifier::new();
-
-    modifier.run(move || image_inner(inner_args));
+    modifier.run(move || image_inner(image_args));
 }
 
 #[tessera]

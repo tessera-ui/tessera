@@ -663,7 +663,6 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) 
 
     args.shadow = None;
     args.shadow_elevation = None;
-    args.modifier = Modifier::new();
 
     modifier.run(move || surface_inner(args, child));
 }

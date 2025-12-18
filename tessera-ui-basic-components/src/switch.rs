@@ -266,9 +266,7 @@ fn switch_inner(
     controller: State<SwitchController>,
     child: Option<Box<dyn FnOnce() + Send + Sync>>,
 ) {
-    let mut args = args;
     let mut modifier = args.modifier;
-    args.modifier = Modifier::new();
 
     controller.with_mut(|c| c.update_progress());
 

@@ -404,10 +404,8 @@ fn apply_fluid_glass_accessibility(
 #[tessera]
 pub fn fluid_glass(args: FluidGlassArgs, child: impl FnOnce() + Send + Sync + 'static) {
     let modifier = args.modifier;
-    let mut inner_args = args;
-    inner_args.modifier = Modifier::new();
 
-    modifier.run(move || fluid_glass_inner(inner_args, child));
+    modifier.run(move || fluid_glass_inner(args, child));
 }
 
 #[tessera]

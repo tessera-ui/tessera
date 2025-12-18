@@ -301,8 +301,6 @@ pub struct LinearProgressIndicatorArgs {
 pub fn linear_progress_indicator(args: impl Into<LinearProgressIndicatorArgs>) {
     let args: LinearProgressIndicatorArgs = args.into();
     let modifier = args.modifier;
-    let mut args = args;
-    args.modifier = Modifier::new();
     modifier.run(move || linear_progress_indicator_inner(args));
 }
 

@@ -340,8 +340,6 @@ pub fn scrollable_with_controller(
 ) {
     let args: ScrollableArgs = args.into();
     let modifier = args.modifier;
-    let mut args = args;
-    args.modifier = Modifier::new();
 
     // Create separate ScrollBarArgs for vertical and horizontal scrollbars
     let scrollbar_args_v = ScrollBarArgs {

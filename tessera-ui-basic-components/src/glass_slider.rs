@@ -332,10 +332,8 @@ pub fn glass_slider_with_controller(
 ) {
     let args: GlassSliderArgs = args.into();
     let modifier = args.modifier;
-    let mut inner_args = args;
-    inner_args.modifier = Modifier::new();
 
-    modifier.run(move || glass_slider_inner(inner_args, controller));
+    modifier.run(move || glass_slider_inner(args, controller));
 }
 
 #[tessera]

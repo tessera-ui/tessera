@@ -120,8 +120,6 @@ where
     F: FnOnce(&mut ColumnScope),
 {
     let modifier = args.modifier;
-    let mut args = args;
-    args.modifier = Modifier::new();
 
     let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
     let mut child_weights: Vec<Option<f32>> = Vec::new();
