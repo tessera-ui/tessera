@@ -10,8 +10,8 @@ use std::{
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType,
-    PxPosition, State,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Modifier,
+    PressKeyEventType, PxPosition, State,
     accesskit::{Action, Role, Toggled},
     remember, tessera,
     winit::window::CursorIcon,
@@ -20,6 +20,7 @@ use tessera_ui::{
 use crate::{
     animation,
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
+    modifier::ModifierExt as _,
     shape_def::Shape,
 };
 
@@ -343,8 +344,10 @@ pub fn glass_switch_with_controller(
 
     // Build and render track
     let mut track_builder = FluidGlassArgsBuilder::default()
-        .width(DimensionValue::Fixed(width_px))
-        .height(DimensionValue::Fixed(height_px))
+        .modifier(Modifier::new().constrain(
+            Some(DimensionValue::Fixed(width_px)),
+            Some(DimensionValue::Fixed(height_px)),
+        ))
         .tint_color(track_color)
         .shape(Shape::capsule())
         .blur_radius(8.0);
@@ -361,8 +364,10 @@ pub fn glass_switch_with_controller(
         args.thumb_off_alpha + (args.thumb_on_alpha - args.thumb_off_alpha) * progress;
     let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
     let mut thumb_builder = FluidGlassArgsBuilder::default()
-        .width(DimensionValue::Fixed(thumb_px))
-        .height(DimensionValue::Fixed(thumb_px))
+        .modifier(Modifier::new().constrain(
+            Some(DimensionValue::Fixed(thumb_px)),
+            Some(DimensionValue::Fixed(thumb_px)),
+        ))
         .tint_color(thumb_color)
         .refraction_height(1.0)
         .shape(Shape::Ellipse);

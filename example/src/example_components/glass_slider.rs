@@ -60,7 +60,7 @@ fn test_content() {
                     GlassSliderArgsBuilder::default()
                         .value(value.get())
                         .on_change(on_change)
-                        .width(Dp(250.0))
+                        .modifier(Modifier::new().width(Dp(250.0)))
                         .build()
                         .unwrap(),
                     slider_controller,

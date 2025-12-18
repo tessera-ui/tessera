@@ -5,11 +5,12 @@
 //! Use to indicate the completion of a task or a specific value in a range.
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, ParentConstraint, Px, PxPosition, tessera,
+    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, Px, PxPosition, tessera,
 };
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
+    modifier::ModifierExt as _,
     shape_def::{RoundedCorner, Shape},
 };
 
@@ -21,9 +22,9 @@ pub struct GlassProgressArgs {
     #[builder(default = "0.0")]
     pub value: f32,
 
-    /// The width of the progress bar.
-    #[builder(default = "DimensionValue::Fixed(Dp(200.0).to_px())")]
-    pub width: DimensionValue,
+    /// Layout modifiers applied to the progress bar.
+    #[builder(default = "default_progress_modifier()")]
+    pub modifier: Modifier,
 
     /// The height of the progress bar.
     #[builder(default = "Dp(12.0)")]
@@ -46,6 +47,10 @@ pub struct GlassProgressArgs {
     pub track_border_width: Dp,
 }
 
+fn default_progress_modifier() -> Modifier {
+    Modifier::new().width(Dp(200.0))
+}
+
 /// Produce a capsule-shaped RoundedRectangle shape for the given height (px).
 fn capsule_shape_for_height(height: Dp) -> Shape {
     let radius = Dp(height.0 / 2.0);
@@ -57,73 +62,55 @@ fn capsule_shape_for_height(height: Dp) -> Shape {
     }
 }
 
-/// Compute progress width and inner effective height (excluding borders).
-/// Returns None when progress width is zero or negative.
-fn compute_progress_dims(args: &GlassProgressArgs, width_px: Px) -> Option<(Px, f32)> {
-    let progress_width = (width_px.to_f32() * args.value.clamp(0.0, 1.0))
-        - (args.track_border_width.to_px().to_f32() * 2.0);
-    let effective_height =
-        args.height.to_px().to_f32() - (args.track_border_width.to_px().to_f32() * 2.0);
-
-    if progress_width > 0.0 {
-        Some((Px(progress_width as i32), effective_height))
-    } else {
-        None
-    }
-}
-
-fn resolve_width_px(args: &GlassProgressArgs, parent: Option<ParentConstraint<'_>>) -> Px {
-    let fallback = Dp(200.0).to_px();
-    let base = Constraint::new(args.width, DimensionValue::Fixed(args.height.to_px()));
-    let merged = match parent {
-        Some(parent_constraint) => base.merge(parent_constraint),
-        None => base,
-    };
-
-    match merged.width {
-        DimensionValue::Fixed(px) => px,
-        DimensionValue::Fill { max, .. } | DimensionValue::Wrap { max, .. } => {
-            max.unwrap_or(fallback)
-        }
-    }
-}
-
-/// Render the outer track and the inner progress fill.
-/// Extracted to reduce the size of `glass_progress` and keep each unit focused.
-fn render_track_and_fill(args: GlassProgressArgs, width_px: Px) {
+#[tessera]
+fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Shape) {
     fluid_glass(
         FluidGlassArgsBuilder::default()
-            .width(DimensionValue::Fixed(width_px))
-            .height(DimensionValue::Fixed(args.height.to_px()))
-            .tint_color(args.track_tint_color)
-            .blur_radius(args.blur_radius)
-            .shape(capsule_shape_for_height(args.height))
-            .border(GlassBorder::new(args.track_border_width.into()))
-            .padding(args.track_border_width)
+            .tint_color(tint_color)
+            .blur_radius(blur_radius)
+            .shape(shape)
+            .refraction_amount(0.0)
             .build()
             .expect("builder construction failed"),
-        move || {
-            // Internal progress fill - capsule shape
-            if let Some((progress_px, effective_height)) = compute_progress_dims(&args, width_px) {
-                fluid_glass(
-                    FluidGlassArgsBuilder::default()
-                        .width(DimensionValue::Fixed(progress_px))
-                        .height(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
-                        .tint_color(args.progress_tint_color)
-                        .shape(capsule_shape_for_height(Dp::from_pixels_f32(
-                            effective_height,
-                        )))
-                        .refraction_amount(0.0)
-                        .build()
-                        .expect("builder construction failed"),
-                    || {},
-                );
-            }
-        },
+        || {},
     );
+
+    let value = value.clamp(0.0, 1.0);
+    measure(Box::new(move |input| {
+        let available_width = match input.parent_constraint.width() {
+            DimensionValue::Fixed(px) => px,
+            DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
+            DimensionValue::Fill { max, .. } => max.expect(
+                "Seems that you are trying to fill an infinite width, which is not allowed",
+            ),
+        };
+        let available_height = match input.parent_constraint.height() {
+            DimensionValue::Fixed(px) => px,
+            DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
+            DimensionValue::Fill { max, .. } => max.expect(
+                "Seems that you are trying to fill an infinite height, which is not allowed",
+            ),
+        };
+
+        let width_px = Px((available_width.to_f32() * value).round() as i32);
+        let child_id = input
+            .children_ids
+            .first()
+            .copied()
+            .expect("progress fill child should exist");
+
+        let child_constraint = Constraint::new(
+            DimensionValue::Fixed(width_px),
+            DimensionValue::Fixed(available_height),
+        );
+        input.measure_child(child_id, &child_constraint)?;
+        input.place_child(child_id, PxPosition::new(Px(0), Px(0)));
+
+        Ok(ComputedData {
+            width: width_px,
+            height: available_height,
+        })
+    }));
 }
 
 /// # glass_progress
@@ -145,6 +132,9 @@ fn render_track_and_fill(args: GlassProgressArgs, width_px: Px) {
 /// ```
 /// use tessera_ui_basic_components::glass_progress::{GlassProgressArgsBuilder, glass_progress};
 ///
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// // Render a progress bar at 75% completion.
 /// glass_progress(
 ///     GlassProgressArgsBuilder::default()
@@ -152,33 +142,56 @@ fn render_track_and_fill(args: GlassProgressArgs, width_px: Px) {
 ///         .build()
 ///         .unwrap(),
 /// );
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn glass_progress(args: impl Into<GlassProgressArgs>) {
     let args: GlassProgressArgs = args.into();
-    let fallback_width = resolve_width_px(&args, None);
+    let modifier = args.modifier;
+    let mut inner_args = args;
+    inner_args.modifier = Modifier::new();
 
-    // Render track and inner fill using extracted helper.
-    let args_for_render = args.clone();
-    render_track_and_fill(args_for_render, fallback_width);
+    modifier.run(move || glass_progress_inner(inner_args));
+}
 
+#[tessera]
+fn glass_progress_inner(args: GlassProgressArgs) {
+    let effective_height = Dp((args.height.0 - (args.track_border_width.0 * 2.0)).max(0.0));
+    let fill_shape = capsule_shape_for_height(effective_height);
+
+    fluid_glass(
+        FluidGlassArgsBuilder::default()
+            .tint_color(args.track_tint_color)
+            .blur_radius(args.blur_radius)
+            .shape(capsule_shape_for_height(args.height))
+            .border(GlassBorder::new(args.track_border_width.into()))
+            .padding(args.track_border_width)
+            .build()
+            .expect("builder construction failed"),
+        move || {
+            glass_progress_fill(
+                args.value,
+                args.progress_tint_color,
+                args.blur_radius,
+                fill_shape,
+            );
+        },
+    );
+
+    let height = args.height.to_px();
     measure(Box::new(move |input| {
-        let self_width = resolve_width_px(&args, Some(input.parent_constraint));
-        let self_height = args.height.to_px();
-
-        let track_id = input.children_ids[0];
-
-        // Measure track
-        let track_constraint = Constraint::new(
-            DimensionValue::Fixed(self_width),
-            DimensionValue::Fixed(self_height),
+        let track_id = input
+            .children_ids
+            .first()
+            .copied()
+            .expect("track should exist");
+        let constraint = Constraint::new(
+            input.parent_constraint.width(),
+            DimensionValue::Fixed(height),
         );
-        input.measure_child(track_id, &track_constraint)?;
+        let track_measurement = input.measure_child(track_id, &constraint)?;
         input.place_child(track_id, PxPosition::new(Px(0), Px(0)));
-
-        Ok(ComputedData {
-            width: self_width,
-            height: self_height,
-        })
+        Ok(track_measurement)
     }));
 }

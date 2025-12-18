@@ -238,9 +238,10 @@ impl ScrollableController {
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui::{DimensionValue, Dp, tessera};
+/// use tessera_ui::{Dp, Modifier, tessera};
 /// use tessera_ui_basic_components::{
 ///     column::{ColumnArgs, column},
+///     modifier::ModifierExt as _,
 ///     scrollable::{ScrollableArgs, scrollable},
 ///     text::{TextArgsBuilder, text},
 /// };
@@ -249,7 +250,7 @@ impl ScrollableController {
 /// fn demo() {
 ///     scrollable(
 ///         ScrollableArgs {
-///             height: DimensionValue::Fixed(Dp(100.0).into()),
+///             modifier: Modifier::new().height(Dp(100.0)),
 ///             ..Default::default()
 ///         },
 ///         || {
@@ -296,9 +297,10 @@ pub fn scrollable(args: impl Into<ScrollableArgs>, child: impl FnOnce() + Send +
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui::{DimensionValue, Dp, remember, tessera};
+/// use tessera_ui::{Dp, Modifier, remember, tessera};
 /// use tessera_ui_basic_components::{
 ///     column::{ColumnArgs, column},
+///     modifier::ModifierExt as _,
 ///     scrollable::{ScrollableArgs, ScrollableController, scrollable_with_controller},
 ///     text::{TextArgsBuilder, text},
 /// };
@@ -308,7 +310,7 @@ pub fn scrollable(args: impl Into<ScrollableArgs>, child: impl FnOnce() + Send +
 ///     let controller = remember(ScrollableController::new);
 ///     scrollable_with_controller(
 ///         ScrollableArgs {
-///             height: DimensionValue::Fixed(Dp(120.0).into()),
+///             modifier: Modifier::new().height(Dp(120.0)),
 ///             ..Default::default()
 ///         },
 ///         controller,

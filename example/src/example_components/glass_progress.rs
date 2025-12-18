@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, Modifier, remember, shard, tessera, use_context};
+use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     glass_progress::{GlassProgressArgsBuilder, glass_progress},
@@ -77,7 +77,7 @@ fn test_content() {
                 glass_progress(
                     GlassProgressArgsBuilder::default()
                         .value(progress.get())
-                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
+                        .modifier(Modifier::new().width(Dp(250.0)))
                         .build()
                         .unwrap(),
                 );

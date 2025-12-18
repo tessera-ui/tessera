@@ -9,9 +9,7 @@ use std::{
 };
 
 use derive_builder::Builder;
-use tessera_ui::{
-    Color, DimensionValue, Dp, Modifier, Px, PxPosition, State, remember, tessera, winit,
-};
+use tessera_ui::{Color, Dp, Modifier, Px, PxPosition, State, remember, tessera, winit};
 
 use crate::{
     animation,
@@ -220,14 +218,7 @@ fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) 
         FluidGlassArgsBuilder::default()
             .on_click_shared(args.on_close_request.clone())
             .tint_color(Color::TRANSPARENT)
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
+            .modifier(Modifier::new().fill_max_size())
             .dispersion_height(Dp(0.0))
             .refraction_height(Dp(0.0))
             .block_input(true)
@@ -476,11 +467,7 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                         bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
                     .tint_color(Color::new(0.6, 0.8, 1.0, 0.3))
-                    .width(DimensionValue::from(Dp(250.0)))
-                    .height(tessera_ui::DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
+                    .modifier(Modifier::new().width(Dp(250.0)).fill_max_height())
                     .blur_radius(Dp(10.0))
                     .padding(Dp(16.0))
                     .block_input(true)

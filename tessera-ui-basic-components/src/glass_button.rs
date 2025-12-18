@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera_ui::{Color, DimensionValue, Dp, tessera};
+use tessera_ui::{Color, Dp, Modifier, tessera};
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
@@ -17,6 +17,9 @@ use crate::{
 #[derive(Builder, Clone, Default)]
 #[builder(pattern = "owned", setter(into, strip_option), default)]
 pub struct GlassButtonArgs {
+    /// Optional modifier chain applied to the button node.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// The click callback function
     #[builder(setter(custom, strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
@@ -26,12 +29,6 @@ pub struct GlassButtonArgs {
     /// The padding of the button.
     #[builder(default = "Dp(12.0)")]
     pub padding: Dp,
-    /// Explicit width behavior for the button. Defaults to `WRAP`.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub width: DimensionValue,
-    /// Explicit height behavior for the button. Defaults to `WRAP`.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub height: DimensionValue,
     /// Tint color applied to the glass surface.
     #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
     pub tint_color: Color,
@@ -170,6 +167,9 @@ impl GlassButtonArgs {
 ///     text::{TextArgsBuilder, text},
 /// };
 ///
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// glass_button(
 ///     GlassButtonArgsBuilder::default()
 ///         .on_click(|| println!("Button clicked!"))
@@ -185,6 +185,8 @@ impl GlassButtonArgs {
 ///         )
 ///     },
 /// );
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn glass_button(
@@ -199,6 +201,7 @@ pub fn glass_button(
     }
 
     let mut glass_args = glass_args_builder
+        .modifier(args.modifier)
         .tint_color(args.tint_color)
         .shape(args.shape)
         .blur_radius(args.blur_radius)
@@ -208,8 +211,6 @@ pub fn glass_button(
         .refraction_amount(args.refraction_amount)
         .noise_amount(args.noise_amount)
         .noise_scale(args.noise_scale)
-        .width(args.width)
-        .height(args.height)
         .time(args.time)
         .padding(args.padding);
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{Color, DimensionValue, Dp, Modifier, State, tessera};
+use tessera_ui::{Color, Dp, Modifier, State, tessera};
 use tessera_ui_basic_components::{
     alignment::Alignment,
     boxed::{BoxedArgsBuilder, boxed},
@@ -182,8 +182,7 @@ fn num_key(key: &'static str, app_state: State<AppState>, style: CalStyle) {
         CalStyle::Glass => {
             glass_button(
                 GlassButtonArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .shape(Shape::Ellipse)
                     .blur_radius(0.0)
                     .noise_amount(0.0)

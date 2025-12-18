@@ -250,14 +250,7 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
         FluidGlassArgsBuilder::default()
             .on_click_shared(args.on_close_request.clone())
             .tint_color(Color::TRANSPARENT)
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
+            .modifier(Modifier::new().fill_max_size())
             .dispersion_height(Dp(0.0))
             .refraction_height(Dp(0.0))
             .block_input(true)
@@ -512,10 +505,7 @@ fn render_content(
                         bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
                     .tint_color(Color::WHITE.with_alpha(0.4))
-                    .width(DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
+                    .modifier(Modifier::new().fill_max_width())
                     .refraction_amount(32.0)
                     .blur_radius(Dp(5.0))
                     .block_input(true)

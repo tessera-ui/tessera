@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, Modifier, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::{BoxedArgsBuilder, boxed},
@@ -95,8 +95,7 @@ fn test_content() {
                         scope.child(move || {
                             image(
                                 ImageArgsBuilder::default()
-                                    .width(DimensionValue::from(Dp(250.0)))
-                                    .height(DimensionValue::from(Dp(250.0)))
+                                    .modifier(Modifier::new().size(Dp(250.0), Dp(250.0)))
                                     .data(image_data.get())
                                     .build()
                                     .unwrap(),

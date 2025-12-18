@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use image::GenericImageView;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, tessera};
+use tessera_ui::{ComputedData, DimensionValue, Modifier, Px, tessera};
 
 use crate::pipelines::image::command::ImageCommand;
 
@@ -68,13 +68,9 @@ pub struct ImageArgs {
     #[builder(setter(into))]
     pub data: Arc<ImageData>,
 
-    /// Explicit width for the image.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub width: DimensionValue,
-
-    /// Explicit height for the image.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub height: DimensionValue,
+    /// Optional modifier chain applied to the image node.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
 }
 
 impl From<ImageData> for ImageArgs {
@@ -120,51 +116,47 @@ impl From<ImageData> for ImageArgs {
 pub fn image(args: impl Into<ImageArgs>) {
     let image_args: ImageArgs = args.into();
 
+    let modifier = image_args.modifier;
+    let mut inner_args = image_args;
+    inner_args.modifier = Modifier::new();
+
+    modifier.run(move || image_inner(inner_args));
+}
+
+#[tessera]
+fn image_inner(args: ImageArgs) {
     measure(Box::new(move |input| {
-        let intrinsic_width = Px(image_args.data.width as i32);
-        let intrinsic_height = Px(image_args.data.height as i32);
+        let intrinsic_width = Px(args.data.width as i32);
+        let intrinsic_height = Px(args.data.height as i32);
 
-        let image_intrinsic_width = image_args.width;
-        let image_intrinsic_height = image_args.height;
-
-        let image_intrinsic_constraint =
-            Constraint::new(image_intrinsic_width, image_intrinsic_height);
-        let effective_image_constraint = image_intrinsic_constraint.merge(input.parent_constraint);
-
-        let width = match effective_image_constraint.width {
+        let width = match input.parent_constraint.width() {
             DimensionValue::Fixed(value) => value,
             DimensionValue::Wrap { min, max } => min
                 .unwrap_or(Px(0))
                 .max(intrinsic_width)
                 .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => {
-                let parent_max = input.parent_constraint.width().get_max().unwrap_or(Px::MAX);
-                max.unwrap_or(parent_max)
-                    .max(min.unwrap_or(Px(0)))
-                    .max(intrinsic_width)
-            }
+            DimensionValue::Fill { min, max } => max
+                .expect("Seems that you are trying to fill an infinite width, which is not allowed")
+                .max(min.unwrap_or(Px(0)))
+                .max(intrinsic_width),
         };
 
-        let height = match effective_image_constraint.height {
+        let height = match input.parent_constraint.height() {
             DimensionValue::Fixed(value) => value,
             DimensionValue::Wrap { min, max } => min
                 .unwrap_or(Px(0))
                 .max(intrinsic_height)
                 .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => {
-                let parent_max = input
-                    .parent_constraint
-                    .height()
-                    .get_max()
-                    .unwrap_or(Px::MAX);
-                max.unwrap_or(parent_max)
-                    .max(min.unwrap_or(Px(0)))
-                    .max(intrinsic_height)
-            }
+            DimensionValue::Fill { min, max } => max
+                .expect(
+                    "Seems that you are trying to fill an infinite height, which is not allowed",
+                )
+                .max(min.unwrap_or(Px(0)))
+                .max(intrinsic_height),
         };
 
         let image_command = ImageCommand {
-            data: image_args.data.clone(),
+            data: args.data.clone(),
             opacity: 1.0,
         };
 

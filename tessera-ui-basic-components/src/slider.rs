@@ -533,12 +533,13 @@ fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
 /// # #[tessera]
 /// # fn component() {
 /// use std::sync::Arc;
-/// use tessera_ui::{DimensionValue, Dp};
+/// use tessera_ui::{Dp, Modifier};
+/// use tessera_ui_basic_components::modifier::ModifierExt as _;
 /// use tessera_ui_basic_components::slider::{SliderArgsBuilder, slider};
 ///
 /// slider(
 ///     SliderArgsBuilder::default()
-///         .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(0.5)
 ///         .on_change(Arc::new(|new_value| {
 ///             // In a real app, you would update your state here.
@@ -578,7 +579,8 @@ pub fn slider(args: impl Into<SliderArgs>) {
 /// # #[tessera]
 /// # fn component() {
 /// use std::sync::Arc;
-/// use tessera_ui::{DimensionValue, Dp, remember};
+/// use tessera_ui::{Dp, Modifier, remember};
+/// use tessera_ui_basic_components::modifier::ModifierExt as _;
 /// use tessera_ui_basic_components::slider::{
 ///     SliderArgsBuilder, SliderController, slider_with_controller,
 /// };
@@ -586,7 +588,7 @@ pub fn slider(args: impl Into<SliderArgs>) {
 /// let controller = remember(|| SliderController::new());
 /// slider_with_controller(
 ///     SliderArgsBuilder::default()
-///         .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(0.5)
 ///         .on_change(Arc::new(|new_value| {
 ///             println!("Slider value changed to: {}", new_value);
@@ -886,7 +888,9 @@ fn measure_centered_slider(
 /// # #[tessera]
 /// # fn component() {
 /// use std::sync::{Arc, Mutex};
-/// use tessera_ui::{DimensionValue, Dp};
+/// use tessera_ui::{Dp, Modifier};
+/// use tessera_ui_basic_components::modifier::ModifierExt as _;
+/// use tessera_ui_basic_components::modifier::ModifierExt as _;
 /// use tessera_ui_basic_components::slider::{SliderArgsBuilder, centered_slider};
 /// let current_value = Arc::new(Mutex::new(0.5));
 ///
@@ -899,7 +903,7 @@ fn measure_centered_slider(
 ///
 /// centered_slider(
 ///     SliderArgsBuilder::default()
-///         .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(*current_value.lock().unwrap())
 ///         .on_change(Arc::new(move |new_value| {
 ///             // In a real app, you would update your state here.
@@ -948,7 +952,8 @@ pub fn centered_slider(args: impl Into<SliderArgs>) {
 /// # #[tessera]
 /// # fn component() {
 /// use std::sync::Arc;
-/// use tessera_ui::{DimensionValue, Dp, remember};
+/// use tessera_ui::{Dp, Modifier, remember};
+/// use tessera_ui_basic_components::modifier::ModifierExt as _;
 /// use tessera_ui_basic_components::slider::{
 ///     SliderArgsBuilder, SliderController, centered_slider_with_controller,
 /// };
@@ -956,7 +961,7 @@ pub fn centered_slider(args: impl Into<SliderArgs>) {
 /// let controller = remember(SliderController::new);
 /// centered_slider_with_controller(
 ///     SliderArgsBuilder::default()
-///         .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(0.5)
 ///         .on_change(Arc::new(|new_value| {
 ///             println!("Centered slider value changed to: {}", new_value);
@@ -1292,13 +1297,14 @@ fn measure_range_slider(
 /// # #[tessera]
 /// # fn component() {
 /// use std::sync::{Arc, Mutex};
-/// use tessera_ui::{DimensionValue, Dp};
+/// use tessera_ui::{Dp, Modifier};
+/// use tessera_ui_basic_components::modifier::ModifierExt as _;
 /// use tessera_ui_basic_components::slider::{RangeSliderArgsBuilder, range_slider};
 /// let range_value = Arc::new(Mutex::new((0.2, 0.8)));
 ///
 /// range_slider(
 ///     RangeSliderArgsBuilder::default()
-///         .width(DimensionValue::Fixed(Dp(200.0).to_px()))
+///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(*range_value.lock().unwrap())
 ///         .on_change(Arc::new(move |(start, end)| {
 ///             println!("Range changed: {} - {}", start, end);

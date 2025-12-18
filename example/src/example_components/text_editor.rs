@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, Modifier, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     modifier::ModifierExt as _,
@@ -66,8 +66,7 @@ fn test_content() {
             scope.child(move || {
                 text_editor_with_controller(
                     TextEditorArgsBuilder::default()
-                        .width(DimensionValue::FILLED)
-                        .height(Dp(200.0))
+                        .modifier(Modifier::new().fill_max_width().height(Dp(200.0)))
                         .on_change(Arc::new(move |v| v))
                         .build()
                         .unwrap(),

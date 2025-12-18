@@ -8,8 +8,8 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use glyphon::{Action as GlyphonAction, Edit};
 use tessera_ui::{
-    Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Modifier, Px, PxPosition, State,
-    accesskit::Role, remember, tessera, use_context, winit,
+    Color, CursorEventContent, Dp, ImeRequest, Modifier, Px, PxPosition, State, accesskit::Role,
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -30,12 +30,9 @@ pub use crate::text_edit_core::TextEditorController;
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TextEditorArgs {
-    /// Width constraint for the text editor. Defaults to `Wrap`.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub width: DimensionValue,
-    /// Height constraint for the text editor. Defaults to `Wrap`.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub height: DimensionValue,
+    /// Optional modifier chain applied to the editor container.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// Called when the text content changes. The closure receives the new text
     /// content and returns the updated content.
     #[builder(default = "Arc::new(|_| { String::new() })")]
@@ -575,7 +572,7 @@ fn create_surface_args(
     SurfaceArgsBuilder::default()
         .style(style)
         .shape(args.shape)
-        .modifier(Modifier::new().constrain(Some(args.width), Some(args.height)))
+        .modifier(args.modifier)
         .build()
         .expect("builder construction failed")
 }
@@ -711,44 +708,6 @@ impl TextEditorArgs {
 
 /// Builder methods for fluent API
 impl TextEditorArgs {
-    /// Sets the width constraint for the editor.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use tessera_ui::tessera;
-    /// # #[tessera]
-    /// # fn component() {
-    /// use tessera_ui::{DimensionValue, Px};
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
-    /// let args = TextEditorArgs::simple().with_width(DimensionValue::Fixed(Px(200)));
-    /// # }
-    /// # component();
-    /// ```
-    pub fn with_width(mut self, width: DimensionValue) -> Self {
-        self.width = width;
-        self
-    }
-
-    /// Sets the height constraint for the editor.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use tessera_ui::tessera;
-    /// # #[tessera]
-    /// # fn component() {
-    /// use tessera_ui::{DimensionValue, Px};
-    /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
-    /// let args = TextEditorArgs::simple().with_height(DimensionValue::Fixed(Px(100)));
-    /// # }
-    /// # component();
-    /// ```
-    pub fn with_height(mut self, height: DimensionValue) -> Self {
-        self.height = height;
-        self
-    }
-
     /// Sets the minimum width in Dp.
     ///
     /// # Example

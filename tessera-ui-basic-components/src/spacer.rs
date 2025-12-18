@@ -28,6 +28,9 @@ use tessera_ui::{ComputedData, Constraint, MeasurementError, Modifier, tessera};
 ///     text::{TextArgsBuilder, text},
 /// };
 ///
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// row(RowArgs::default(), |scope| {
 ///     scope.child(|| {
 ///         text(
@@ -48,6 +51,8 @@ use tessera_ui::{ComputedData, Constraint, MeasurementError, Modifier, tessera};
 ///         )
 ///     });
 /// });
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn spacer(modifier: Modifier) {

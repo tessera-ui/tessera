@@ -1,7 +1,7 @@
 use std::{fmt::Display, sync::Arc};
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, Modifier, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{BoxedArgsBuilder, boxed},
@@ -172,8 +172,9 @@ fn test_content() {
                                     scope.child(|| {
                                         image(
                                             ImageArgsBuilder::default()
-                                                .width(DimensionValue::from(Dp(250.0)))
-                                                .height(DimensionValue::from(Dp(250.0)))
+                                                .modifier(
+                                                    Modifier::new().size(Dp(250.0), Dp(250.0)),
+                                                )
                                                 .data(image_data)
                                                 .build()
                                                 .unwrap(),
@@ -183,8 +184,7 @@ fn test_content() {
                                     scope.child(move || {
                                         fluid_glass(
                                             FluidGlassArgsBuilder::default()
-                                                .width(DimensionValue::from(width))
-                                                .height(DimensionValue::from(height))
+                                                .modifier(Modifier::new().size(width, height))
                                                 .blur_radius(blur_radius)
                                                 .shape(Shape::RoundedRectangle {
                                                     top_left: RoundedCorner::manual(
@@ -354,7 +354,7 @@ fn glass_config_slider(label: &str, value: f32, on_change: Arc<dyn Fn(f32) + Sen
                                 GlassSliderArgsBuilder::default()
                                     .value(value)
                                     .on_change(on_change)
-                                    .width(Dp(300.0))
+                                    .modifier(Modifier::new().width(Dp(300.0)))
                                     .build()
                                     .unwrap(),
                             );

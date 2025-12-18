@@ -89,6 +89,9 @@ impl<'a> ColumnScope<'a> {
 /// use tessera_ui_basic_components::spacer::spacer;
 /// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
 ///
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// column(ColumnArgs::default(), |scope| {
 ///     scope.child(|| {
 ///         text(
@@ -108,6 +111,8 @@ impl<'a> ColumnScope<'a> {
 ///         )
 ///     });
 /// });
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn column<F>(args: ColumnArgs, scope_config: F)

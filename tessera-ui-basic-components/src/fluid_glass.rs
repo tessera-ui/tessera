@@ -8,7 +8,7 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     BarrierRequirement, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    GestureState, InputHandlerInput, PressKeyEventType, Px, PxPosition, State,
+    GestureState, InputHandlerInput, Modifier, PressKeyEventType, Px, PxPosition, State,
     accesskit::{Action, Role},
     remember,
     renderer::DrawCommand,
@@ -104,12 +104,9 @@ pub struct FluidGlassArgs {
     /// The contrast adjustment factor.
     #[builder(default, setter(strip_option))]
     pub contrast: Option<f32>,
-    /// The optional width of the component, defined as a `DimensionValue`.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub width: DimensionValue,
-    /// The optional height of the component, defined as a `DimensionValue`.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub height: DimensionValue,
+    /// Optional modifier chain applied to the glass node.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// Padding inside the glass component.
     #[builder(default = "Dp(0.0)")]
     pub padding: Dp,
@@ -169,8 +166,6 @@ impl PartialEq for FluidGlassArgs {
             && self.noise_scale == other.noise_scale
             && self.time == other.time
             && self.contrast == other.contrast
-            && self.width == other.width
-            && self.height == other.height
             && self.padding == other.padding
             && self.ripple_center == other.ripple_center
             && self.ripple_radius == other.ripple_radius
@@ -392,6 +387,9 @@ fn apply_fluid_glass_accessibility(
 ///     text::{TextArgsBuilder, text},
 /// };
 ///
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// fluid_glass(FluidGlassArgs::default(), || {
 ///     text(
 ///         TextArgsBuilder::default()
@@ -400,9 +398,20 @@ fn apply_fluid_glass_accessibility(
 ///             .expect("builder construction failed"),
 ///     );
 /// });
+/// # }
+/// # component();
 /// ```
 #[tessera]
-pub fn fluid_glass(mut args: FluidGlassArgs, child: impl FnOnce()) {
+pub fn fluid_glass(args: FluidGlassArgs, child: impl FnOnce() + Send + Sync + 'static) {
+    let modifier = args.modifier;
+    let mut inner_args = args;
+    inner_args.modifier = Modifier::new();
+
+    modifier.run(move || fluid_glass_inner(inner_args, child));
+}
+
+#[tessera]
+fn fluid_glass_inner(mut args: FluidGlassArgs, child: impl FnOnce() + Send + Sync + 'static) {
     let ripple_state = args.on_click.as_ref().map(|_| remember(RippleState::new));
 
     if let Some((progress, center)) = ripple_state
@@ -417,11 +426,10 @@ pub fn fluid_glass(mut args: FluidGlassArgs, child: impl FnOnce()) {
     (child)();
     let args_measure_clone = args.clone();
     measure(Box::new(move |input| {
-        let glass_intrinsic_width = args_measure_clone.width;
-        let glass_intrinsic_height = args_measure_clone.height;
-        let glass_intrinsic_constraint =
-            Constraint::new(glass_intrinsic_width, glass_intrinsic_height);
-        let effective_glass_constraint = glass_intrinsic_constraint.merge(input.parent_constraint);
+        let effective_glass_constraint = Constraint::new(
+            input.parent_constraint.width(),
+            input.parent_constraint.height(),
+        );
 
         let child_constraint = Constraint::new(
             remove_padding_from_dimension(

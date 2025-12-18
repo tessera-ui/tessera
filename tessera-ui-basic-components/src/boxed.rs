@@ -135,6 +135,9 @@ fn compute_child_offset(
 /// use tessera_ui_basic_components::boxed::{BoxedArgs, boxed};
 /// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
 ///
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// boxed(BoxedArgs::default(), |scope| {
 ///     // Add a child that will be in the background (rendered first).
 ///     scope.child(|| {
@@ -155,6 +158,8 @@ fn compute_child_offset(
 ///         );
 ///     });
 /// });
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn boxed<F>(args: BoxedArgs, scope_config: F)

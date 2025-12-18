@@ -114,6 +114,9 @@ struct MeasureWeightedChildrenArgs<'a> {
 ///     text::{TextArgsBuilder, text},
 /// };
 ///
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// row(RowArgs::default(), |scope| {
 ///     scope.child(|| {
 ///         text(
@@ -133,6 +136,8 @@ struct MeasureWeightedChildrenArgs<'a> {
 ///         )
 ///     });
 /// });
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn row<F>(args: RowArgs, scope_config: F)

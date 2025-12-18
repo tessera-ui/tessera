@@ -38,7 +38,7 @@ fn render_glass_display(app_state: State<AppState>) {
             .contrast(1.5)
             .build()
             .unwrap(),
-        || {
+        move || {
             content(app_state);
         },
     );
