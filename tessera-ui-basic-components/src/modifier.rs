@@ -779,7 +779,7 @@ fn modifier_clickable<F>(
     child();
 
     let role = role.unwrap_or(accesskit::Role::Button);
-    input_handler(Box::new(move |mut input| {
+    input_handler(Box::new(move |input| {
         let mut cursor_events = Vec::new();
         mem::swap(&mut cursor_events, input.cursor_events);
 
@@ -898,10 +898,6 @@ fn modifier_clickable<F>(
                 s.set_hovered(false);
             });
         }
-
-        if within_bounds {
-            input.block_cursor();
-        }
     }));
 }
 
@@ -960,7 +956,7 @@ fn modifier_toggleable<F>(
     child();
 
     let role = role.unwrap_or(accesskit::Role::CheckBox);
-    input_handler(Box::new(move |mut input| {
+    input_handler(Box::new(move |input| {
         let mut cursor_events = Vec::new();
         mem::swap(&mut cursor_events, input.cursor_events);
 
@@ -1066,10 +1062,6 @@ fn modifier_toggleable<F>(
                 s.set_hovered(false);
             });
         }
-
-        if within_bounds {
-            input.block_cursor();
-        }
     }));
 }
 
@@ -1091,7 +1083,7 @@ fn modifier_selectable<F>(
     child();
 
     let role = role.unwrap_or(accesskit::Role::Button);
-    input_handler(Box::new(move |mut input| {
+    input_handler(Box::new(move |input| {
         let mut cursor_events = Vec::new();
         mem::swap(&mut cursor_events, input.cursor_events);
 
@@ -1200,10 +1192,6 @@ fn modifier_selectable<F>(
                 s.release();
                 s.set_hovered(false);
             });
-        }
-
-        if within_bounds {
-            input.block_cursor();
         }
     }));
 }
