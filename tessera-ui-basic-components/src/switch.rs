@@ -10,11 +10,9 @@ use std::{
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
-    Modifier, PressKeyEventType, PxPosition, PxSize, State,
-    accesskit::{Action, Role, Toggled},
+    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, PxPosition, PxSize, State,
+    accesskit::Role,
     remember, tessera, use_context,
-    winit::window::CursorIcon,
 };
 
 use crate::{
@@ -197,6 +195,9 @@ impl Default for SwitchController {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SwitchArgs {
+    /// Optional modifier chain applied to the switch subtree.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// Optional callback invoked when the switch toggles.
     #[builder(default, setter(strip_option))]
     pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
@@ -259,171 +260,65 @@ impl Default for SwitchArgs {
     }
 }
 
-fn is_cursor_in_component(size: ComputedData, pos_option: Option<tessera_ui::PxPosition>) -> bool {
-    pos_option
-        .map(|pos| {
-            pos.x.0 >= 0 && pos.x.0 < size.width.0 && pos.y.0 >= 0 && pos.y.0 < size.height.0
-        })
-        .unwrap_or(false)
-}
-
-fn handle_input_events_switch(
-    controller: State<SwitchController>,
-    on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
-    pressed: State<bool>,
-    interaction_state: Option<State<RippleState>>,
-    input: &mut tessera_ui::InputHandlerInput,
-) {
-    controller.with_mut(|c| c.update_progress());
-
-    let size = input.computed_data;
-    let is_cursor_in = is_cursor_in_component(size, input.cursor_position_rel);
-    let interactive = on_toggle.is_some();
-
-    if interactive && let Some(interaction_state) = interaction_state {
-        interaction_state.with_mut(|s| s.set_hovered(is_cursor_in));
-    }
-
-    if is_cursor_in && interactive {
-        input.requests.cursor_icon = CursorIcon::Pointer;
-    }
-
-    for e in input.cursor_events.iter() {
-        if matches!(
-            e.content,
-            CursorEventContent::Pressed(PressKeyEventType::Left)
-        ) && is_cursor_in
-        {
-            if interactive && let Some(interaction_state) = interaction_state {
-                pressed.set(true);
-                interaction_state.with_mut(|s| {
-                    s.start_animation_with_spec(
-                        [0.5, 0.5],
-                        PxSize::new(
-                            SwitchDefaults::STATE_LAYER_SIZE.to_px(),
-                            SwitchDefaults::STATE_LAYER_SIZE.to_px(),
-                        ),
-                        RippleSpec {
-                            bounded: false,
-                            radius: Some(Dp(SwitchDefaults::STATE_LAYER_SIZE.0 / 2.0)),
-                        },
-                    );
-                    s.set_pressed(true);
-                });
-            } else if interactive {
-                pressed.set(true);
-            }
-        }
-        if matches!(
-            e.content,
-            CursorEventContent::Released(PressKeyEventType::Left)
-        ) && interactive
-        {
-            pressed.set(false);
-            if let Some(interaction_state) = interaction_state {
-                interaction_state.with_mut(|s| s.release());
-            }
-        }
-        if interactive
-            && e.gesture_state == GestureState::TapCandidate
-            && matches!(
-                e.content,
-                CursorEventContent::Released(PressKeyEventType::Left)
-            )
-            && is_cursor_in
-        {
-            toggle_switch_state(controller, on_toggle);
-        }
-    }
-
-    if !is_cursor_in && interactive {
-        pressed.set(false);
-        if let Some(interaction_state) = interaction_state {
-            interaction_state.with_mut(|s| {
-                s.release();
-                s.set_hovered(false);
-            });
-        }
-    }
-}
-
-fn toggle_switch_state(
-    controller: State<SwitchController>,
-    on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
-) -> bool {
-    let Some(on_toggle) = on_toggle else {
-        return false;
-    };
-
-    controller.with_mut(|c| c.toggle());
-    let checked = controller.with(|c| c.is_checked());
-    on_toggle(checked);
-    true
-}
-
-fn apply_switch_accessibility(
-    input: &mut tessera_ui::InputHandlerInput<'_>,
-    controller: State<SwitchController>,
-    enabled: bool,
-    on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
-    label: Option<&String>,
-    description: Option<&String>,
-) {
-    let checked = controller.with(|c| c.is_checked());
-    let mut builder = input.accessibility().role(Role::Switch);
-
-    if let Some(label) = label {
-        builder = builder.label(label.clone());
-    }
-    if let Some(description) = description {
-        builder = builder.description(description.clone());
-    }
-
-    builder = builder.toggled(if checked {
-        Toggled::True
-    } else {
-        Toggled::False
-    });
-
-    if !enabled {
-        builder = builder.disabled();
-    } else if on_toggle.is_some() {
-        builder = builder.focusable().action(Action::Click);
-    }
-
-    builder.commit();
-
-    if enabled && on_toggle.is_some() {
-        let on_toggle = on_toggle.clone();
-        input.set_accessibility_action_handler(move |action| {
-            if action == Action::Click {
-                toggle_switch_state(controller, &on_toggle);
-            }
-        });
-    }
-}
-
 #[tessera]
 fn switch_inner(
     args: SwitchArgs,
     controller: State<SwitchController>,
     child: Option<Box<dyn FnOnce() + Send + Sync>>,
 ) {
-    let pressed = remember(|| false);
+    let mut args = args;
+    let mut modifier = args.modifier;
+    args.modifier = Modifier::new();
+
     controller.with_mut(|c| c.update_progress());
 
+    let on_toggle = args.enabled.then(|| args.on_toggle.clone()).flatten();
+    let interactive = on_toggle.is_some();
+    let interaction_state = interactive.then(|| remember(RippleState::new));
+    let checked = controller.with(|c| c.is_checked());
+    if interactive {
+        modifier = modifier.minimum_interactive_component_size();
+        let controller = controller;
+        let on_toggle = on_toggle.clone();
+        let ripple_spec = RippleSpec {
+            bounded: false,
+            radius: Some(Dp(SwitchDefaults::STATE_LAYER_SIZE.0 / 2.0)),
+        };
+        let ripple_size = PxSize::new(
+            SwitchDefaults::STATE_LAYER_SIZE.to_px(),
+            SwitchDefaults::STATE_LAYER_SIZE.to_px(),
+        );
+        modifier = modifier.toggleable(
+            checked,
+            Arc::new(move |_| {
+                controller.with_mut(|c| c.toggle());
+                let checked = controller.with(|c| c.is_checked());
+                if let Some(on_toggle) = on_toggle.as_ref() {
+                    on_toggle(checked);
+                }
+            }),
+            args.enabled,
+            Some(Role::Switch),
+            args.accessibility_label.clone(),
+            args.accessibility_description.clone(),
+            interaction_state,
+            Some(ripple_spec),
+            Some(ripple_size),
+        );
+    }
+
     let has_thumb_content = child.is_some();
-    let is_pressed = pressed.with(|v| *v);
     let progress = controller.with(|c| c.animation_progress());
     let eased_progress = animation::easing(progress);
     let eased_progress_f64 = eased_progress as f64;
     let scheme = use_context::<MaterialTheme>().get().color_scheme;
-    let checked = controller.with(|c| c.is_checked());
     let enabled = args.enabled;
-    let on_toggle = enabled.then(|| args.on_toggle.clone()).flatten();
-    let interactive = on_toggle.is_some();
-    let interaction_state = interactive.then(|| remember(RippleState::new));
+    let is_pressed = interaction_state
+        .map(|state| state.with(|s| s.is_pressed()))
+        .unwrap_or(false);
     let colors = SwitchDefaults::resolve_colors(&args, &scheme, checked, enabled);
+
+    modifier.run(move || {
 
     let off_diameter = if has_thumb_content {
         SwitchDefaults::THUMB_DIAMETER
@@ -524,31 +419,9 @@ fn switch_inner(
         },
     );
 
-    let accessibility_on_toggle = on_toggle.clone();
-    let accessibility_label = args.accessibility_label.clone();
-    let accessibility_description = args.accessibility_description.clone();
     let track_outline_width = args.track_outline_width;
     let track_width = args.width;
     let track_height = args.height;
-
-    input_handler(Box::new(move |mut input| {
-        // Delegate input handling to the extracted helper.
-        handle_input_events_switch(
-            controller,
-            &on_toggle,
-            pressed,
-            interaction_state,
-            &mut input,
-        );
-        apply_switch_accessibility(
-            &mut input,
-            controller,
-            enabled,
-            &accessibility_on_toggle,
-            accessibility_label.as_ref(),
-            accessibility_description.as_ref(),
-        );
-    }));
 
     measure(Box::new(move |input| {
         let track_id = input.children_ids[0];
@@ -568,17 +441,14 @@ fn switch_inner(
         let state_layer_size = input.measure_child(state_layer_id, &thumb_constraint)?;
         let thumb_size = input.measure_child(thumb_id, &thumb_constraint)?;
 
-        let min_interactive_size = Dp(48.0).to_px();
-        let self_width_px = if interactive {
-            track_size.width.max(min_interactive_size)
-        } else {
-            track_size.width
-        };
-        let self_height_px = if interactive {
-            track_size.height.max(min_interactive_size)
-        } else {
-            track_size.height
-        };
+        let self_width_px = track_size
+            .width
+            .max(state_layer_size.width)
+            .max(thumb_size.width);
+        let self_height_px = track_size
+            .height
+            .max(state_layer_size.height)
+            .max(thumb_size.height);
         let track_origin_x = (self_width_px.0 - track_size.width.0) / 2;
         let track_origin_y = (self_height_px.0 - track_size.height.0) / 2;
 
@@ -632,6 +502,7 @@ fn switch_inner(
             height: self_height_px,
         })
     }));
+    });
 }
 
 /// # switch

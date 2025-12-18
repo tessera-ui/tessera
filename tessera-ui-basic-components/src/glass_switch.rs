@@ -10,11 +10,9 @@ use std::{
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Modifier,
-    PressKeyEventType, PxPosition, State,
-    accesskit::{Action, Role, Toggled},
+    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, PxPosition, State,
+    accesskit::Role,
     remember, tessera,
-    winit::window::CursorIcon,
 };
 
 use crate::{
@@ -90,6 +88,9 @@ impl Default for GlassSwitchController {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct GlassSwitchArgs {
+    /// Optional modifier chain applied to the switch subtree.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// Optional callback invoked when the switch toggles.
     #[builder(default, setter(strip_option))]
     pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
@@ -152,100 +153,6 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
         g: off.g + (on.g - off.g) * progress,
         b: off.b + (on.b - off.b) * progress,
         a: off.a + (on.a - off.a) * progress,
-    }
-}
-
-/// Return true if the given cursor position is inside the component bounds.
-fn is_cursor_inside(size: ComputedData, cursor_pos: Option<PxPosition>) -> bool {
-    cursor_pos
-        .map(|pos| {
-            pos.x.0 >= 0 && pos.x.0 < size.width.0 && pos.y.0 >= 0 && pos.y.0 < size.height.0
-        })
-        .unwrap_or(false)
-}
-
-/// Return true if there is a left-press event in the input.
-fn was_pressed_left(input: &tessera_ui::InputHandlerInput) -> bool {
-    input.cursor_events.iter().any(|e| {
-        matches!(
-            e.content,
-            CursorEventContent::Pressed(PressKeyEventType::Left)
-        )
-    })
-}
-
-fn handle_input_events(
-    state: State<GlassSwitchController>,
-    on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
-    input: &mut tessera_ui::InputHandlerInput,
-) {
-    let interactive = on_toggle.is_some();
-    // Update progress first
-    state.with_mut(|c| c.animation_progress());
-
-    // Cursor handling
-    let size = input.computed_data;
-    let is_cursor_in = is_cursor_inside(size, input.cursor_position_rel);
-
-    if is_cursor_in && interactive {
-        input.requests.cursor_icon = CursorIcon::Pointer;
-    }
-
-    // Handle press events: toggle state and call callback
-    let pressed = was_pressed_left(input);
-
-    if pressed && is_cursor_in {
-        toggle_glass_switch_state(state, &on_toggle);
-    }
-}
-
-fn toggle_glass_switch_state(
-    state: State<GlassSwitchController>,
-    on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
-) -> bool {
-    let Some(on_toggle) = on_toggle else {
-        return false;
-    };
-    state.with_mut(|c| c.toggle());
-    let checked = state.with(|c| c.is_checked());
-    on_toggle(checked);
-    true
-}
-
-fn apply_glass_switch_accessibility(
-    input: &mut tessera_ui::InputHandlerInput<'_>,
-    state: State<GlassSwitchController>,
-    on_toggle: &Option<Arc<dyn Fn(bool) + Send + Sync>>,
-    label: Option<&String>,
-    description: Option<&String>,
-) {
-    let checked = state.with(|s| s.is_checked());
-    let mut builder = input.accessibility().role(Role::Switch);
-
-    if let Some(label) = label {
-        builder = builder.label(label.clone());
-    }
-    if let Some(description) = description {
-        builder = builder.description(description.clone());
-    }
-
-    builder = builder
-        .focusable()
-        .action(Action::Click)
-        .toggled(if checked {
-            Toggled::True
-        } else {
-            Toggled::False
-        });
-    builder.commit();
-
-    if on_toggle.is_some() {
-        let on_toggle = on_toggle.clone();
-        input.set_accessibility_action_handler(move |action| {
-            if action == Action::Click {
-                toggle_glass_switch_state(state, &on_toggle);
-            }
-        });
     }
 }
 
@@ -331,7 +238,36 @@ pub fn glass_switch_with_controller(
     args: impl Into<GlassSwitchArgs>,
     controller: State<GlassSwitchController>,
 ) {
-    let args: GlassSwitchArgs = args.into();
+    let mut args: GlassSwitchArgs = args.into();
+    let mut modifier = args.modifier;
+    args.modifier = Modifier::new();
+
+    let on_toggle = args.on_toggle.clone();
+    let enabled = on_toggle.is_some();
+    let checked = controller.with(|c| c.is_checked());
+    if enabled {
+        modifier = modifier.minimum_interactive_component_size();
+        let controller = controller;
+        let on_toggle = on_toggle.clone();
+        modifier = modifier.toggleable(
+            checked,
+            Arc::new(move |_| {
+                controller.with_mut(|c| c.toggle());
+                let checked = controller.with(|c| c.is_checked());
+                if let Some(on_toggle) = on_toggle.as_ref() {
+                    on_toggle(checked);
+                }
+            }),
+            true,
+            Some(Role::Switch),
+            args.accessibility_label.clone(),
+            args.accessibility_description.clone(),
+            None,
+            None,
+            None,
+        );
+    }
+
     // Precompute pixel sizes to avoid repeated conversions
     let width_px = args.width.to_px();
     let height_px = args.height.to_px();
@@ -342,6 +278,7 @@ pub fn glass_switch_with_controller(
     let progress = controller.with_mut(|c| c.animation_progress());
     let track_color = interpolate_color(args.track_off_color, args.track_on_color, progress);
 
+    modifier.run(move || {
     // Build and render track
     let mut track_builder = FluidGlassArgsBuilder::default()
         .modifier(Modifier::new().constrain(
@@ -379,21 +316,6 @@ pub fn glass_switch_with_controller(
         || {},
     );
 
-    let on_toggle = args.on_toggle.clone();
-    let accessibility_on_toggle = on_toggle.clone();
-    let accessibility_label = args.accessibility_label.clone();
-    let accessibility_description = args.accessibility_description.clone();
-    input_handler(Box::new(move |mut input| {
-        handle_input_events(controller, on_toggle.clone(), &mut input);
-        apply_glass_switch_accessibility(
-            &mut input,
-            controller,
-            &accessibility_on_toggle,
-            accessibility_label.as_ref(),
-            accessibility_description.as_ref(),
-        );
-    }));
-
     // Measurement and placement
     measure(Box::new(move |input| {
         // Expect track then thumb as children
@@ -430,7 +352,7 @@ pub fn glass_switch_with_controller(
         let thumb_padding_px = args.thumb_padding.to_px();
 
         // Use eased progress for placement
-        let eased_progress = animation::easing(controller.with_mut(|c| c.animation_progress()));
+        let eased_progress = animation::easing(progress);
 
         input.place_child(
             track_id,
@@ -452,4 +374,5 @@ pub fn glass_switch_with_controller(
             height: self_height_px,
         })
     }));
+    });
 }
