@@ -7,7 +7,7 @@ members = [
     "tessera-ui-macros",
     "tessera-ui-shard",
     "tessera-example-calculator",
-    "cargo-tessera"
+    "cargo-tessera",
 ]
 
 [workspace.package]
@@ -23,3 +23,6 @@ strip = true
 
 [profile.dev]
 opt-level = 1
+
+[profile.dev.package."*"]
+debug = 0
