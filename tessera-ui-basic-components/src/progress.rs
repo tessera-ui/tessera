@@ -7,11 +7,12 @@ use std::time::Instant;
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, ParentConstraint, Px, PxPosition,
-    accesskit::Role, remember, tessera, use_context,
+    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, ParentConstraint, Px,
+    PxPosition, accesskit::Role, remember, tessera, use_context,
 };
 
 use crate::{
+    modifier::ModifierExt as _,
     pipelines::progress_arc::command::{ProgressArcCap, ProgressArcCommand},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -132,15 +133,12 @@ fn resolve_dimension(dimension: DimensionValue, fallback: Px) -> Px {
     }
 }
 
-fn resolve_linear_size(
-    args: &LinearProgressIndicatorArgs,
-    parent: ParentConstraint<'_>,
-) -> (Px, Px) {
-    let height = args.height.to_px();
+fn resolve_linear_size(parent: ParentConstraint<'_>) -> (Px, Px) {
     let fallback_width = ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH.to_px();
-    let base = Constraint::new(args.width, DimensionValue::Fixed(height));
-    let merged = base.merge(parent);
+    let fallback_height = ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT.to_px();
+    let merged = Constraint::new(parent.width(), parent.height()).merge(parent);
     let width = resolve_dimension(merged.width, fallback_width);
+    let height = resolve_dimension(merged.height, fallback_height);
     (width, height)
 }
 
@@ -232,15 +230,11 @@ pub struct LinearProgressIndicatorArgs {
     #[builder(default, setter(strip_option))]
     pub progress: Option<f32>,
 
-    /// Total width of the indicator.
+    /// Modifier chain applied to the indicator subtree.
     #[builder(
-        default = "DimensionValue::Fixed(ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH.to_px())"
+        default = "Modifier::new().size(ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH, ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT)"
     )]
-    pub width: DimensionValue,
-
-    /// Height (stroke thickness) of the indicator.
-    #[builder(default = "ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT")]
-    pub height: Dp,
+    pub modifier: Modifier,
 
     /// Color of the active indicator.
     #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
@@ -306,6 +300,14 @@ pub struct LinearProgressIndicatorArgs {
 #[tessera]
 pub fn linear_progress_indicator(args: impl Into<LinearProgressIndicatorArgs>) {
     let args: LinearProgressIndicatorArgs = args.into();
+    let modifier = args.modifier;
+    let mut args = args;
+    args.modifier = Modifier::new();
+    modifier.run(move || linear_progress_indicator_inner(args));
+}
+
+#[tessera]
+fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
     let args_for_accessibility = args.clone();
     let animation_start = remember(Instant::now);
 
@@ -320,8 +322,7 @@ pub fn linear_progress_indicator(args: impl Into<LinearProgressIndicatorArgs>) {
             SurfaceArgsBuilder::default()
                 .style(args.track_color.into())
                 .shape(segment_shape)
-                .width(DimensionValue::FILLED)
-                .height(DimensionValue::FILLED)
+                .modifier(Modifier::new().fill_max_size())
                 .build()
                 .expect("builder construction failed"),
             || {},
@@ -330,8 +331,7 @@ pub fn linear_progress_indicator(args: impl Into<LinearProgressIndicatorArgs>) {
             SurfaceArgsBuilder::default()
                 .style(args.color.into())
                 .shape(segment_shape)
-                .width(DimensionValue::FILLED)
-                .height(DimensionValue::FILLED)
+                .modifier(Modifier::new().fill_max_size())
                 .build()
                 .expect("builder construction failed"),
             || {},
@@ -346,8 +346,7 @@ pub fn linear_progress_indicator(args: impl Into<LinearProgressIndicatorArgs>) {
                 SurfaceArgsBuilder::default()
                     .style(args.color.into())
                     .shape(stop_shape)
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .expect("builder construction failed"),
                 || {},
@@ -365,8 +364,7 @@ pub fn linear_progress_indicator(args: impl Into<LinearProgressIndicatorArgs>) {
                 SurfaceArgsBuilder::default()
                     .style(color.into())
                     .shape(shape)
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .expect("builder construction failed"),
                 || {},
@@ -396,7 +394,7 @@ pub fn linear_progress_indicator(args: impl Into<LinearProgressIndicatorArgs>) {
     }));
 
     measure(Box::new(move |input| {
-        let (self_width, self_height) = resolve_linear_size(&args, input.parent_constraint);
+        let (self_width, self_height) = resolve_linear_size(input.parent_constraint);
         let is_butt = args.stroke_cap.effective_is_butt(self_width, self_height);
         let gap_fraction =
             adjusted_linear_gap_fraction(self_width, self_height, args.gap_size, is_butt);
@@ -817,13 +815,11 @@ pub struct ProgressArgs {
     #[builder(default = "0.0")]
     pub value: f32,
 
-    /// The width of the progress bar.
-    #[builder(default = "ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH")]
-    pub width: Dp,
-
-    /// The height of the progress bar.
-    #[builder(default = "ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT")]
-    pub height: Dp,
+    /// Modifier chain applied to the progress bar subtree.
+    #[builder(
+        default = "Modifier::new().size(ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH, ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT)"
+    )]
+    pub modifier: Modifier,
 
     /// The color of the active part of the track.
     #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
@@ -868,8 +864,7 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     linear_progress_indicator(
         LinearProgressIndicatorArgsBuilder::default()
             .progress(args.value)
-            .width(DimensionValue::Fixed(args.width.to_px()))
-            .height(args.height)
+            .modifier(args.modifier)
             .color(args.progress_color)
             .track_color(args.track_color)
             .build()

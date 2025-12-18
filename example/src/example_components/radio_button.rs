@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, State, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, State, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
+    modifier::ModifierExt as _,
     radio_button::{RadioButtonArgsBuilder, RadioButtonController, radio_button_with_controller},
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, scrollable},
@@ -16,21 +17,19 @@ use tessera_ui_basic_components::{
 pub fn radio_button_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_width())
                     .build()
                     .unwrap(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(25.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
                             .build()
                             .unwrap(),
                         move || {
@@ -63,7 +62,7 @@ fn content() {
 
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width())
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .build()
             .unwrap(),

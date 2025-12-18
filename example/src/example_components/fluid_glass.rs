@@ -1,7 +1,7 @@
 use std::{fmt::Display, sync::Arc};
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{BoxedArgsBuilder, boxed},
@@ -9,10 +9,11 @@ use tessera_ui_basic_components::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
     glass_slider::{GlassSliderArgsBuilder, glass_slider},
     image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
+    modifier::ModifierExt as _,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, scrollable},
     shape_def::{RoundedCorner, Shape},
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -94,21 +95,19 @@ impl Default for ExampleGlassState {
 pub fn fluid_glass_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_width())
                     .build()
                     .unwrap(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(16.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
                             .build()
                             .unwrap(),
                         move || {
@@ -127,7 +126,7 @@ fn test_content() {
     let image_data = state.with(|s| s.background_image_data.clone());
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width())
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .build()
             .unwrap(),
@@ -157,7 +156,7 @@ fn test_content() {
 
                 row(
                     RowArgsBuilder::default()
-                        .width(DimensionValue::FILLED)
+                        .modifier(Modifier::new().fill_max_width())
                         .main_axis_alignment(MainAxisAlignment::Center)
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .build()
@@ -222,14 +221,7 @@ fn test_content() {
                             );
                         });
 
-                        scope.child(|| {
-                            spacer(
-                                SpacerArgsBuilder::default()
-                                    .width(DimensionValue::from(Dp(16.0)))
-                                    .build()
-                                    .unwrap(),
-                            )
-                        });
+                        scope.child(|| spacer(Modifier::new().width(Dp(16.0))));
 
                         scope.child(move || {
                             text(
@@ -244,14 +236,7 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| {
-                spacer(
-                    SpacerArgsBuilder::default()
-                        .height(DimensionValue::from(Dp(16.0)))
-                        .build()
-                        .unwrap(),
-                )
-            });
+            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
 
             scope.child(move || {
                 glass_config_slider(
@@ -263,14 +248,7 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| {
-                spacer(
-                    SpacerArgsBuilder::default()
-                        .height(DimensionValue::from(Dp(16.0)))
-                        .build()
-                        .unwrap(),
-                )
-            });
+            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
 
             scope.child(move || {
                 glass_config_slider(
@@ -282,14 +260,7 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| {
-                spacer(
-                    SpacerArgsBuilder::default()
-                        .height(DimensionValue::from(Dp(16.0)))
-                        .build()
-                        .unwrap(),
-                )
-            });
+            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
 
             scope.child(move || {
                 glass_config_slider(
@@ -301,14 +272,7 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| {
-                spacer(
-                    SpacerArgsBuilder::default()
-                        .height(DimensionValue::from(Dp(16.0)))
-                        .build()
-                        .unwrap(),
-                )
-            });
+            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
 
             scope.child(move || {
                 glass_config_slider(
@@ -320,14 +284,7 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| {
-                spacer(
-                    SpacerArgsBuilder::default()
-                        .height(DimensionValue::from(Dp(16.0)))
-                        .build()
-                        .unwrap(),
-                )
-            });
+            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
 
             scope.child(move || {
                 glass_config_slider(
@@ -339,14 +296,7 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| {
-                spacer(
-                    SpacerArgsBuilder::default()
-                        .height(DimensionValue::from(Dp(16.0)))
-                        .build()
-                        .unwrap(),
-                )
-            });
+            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
 
             scope.child(move || {
                 glass_config_slider(
@@ -358,14 +308,7 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| {
-                spacer(
-                    SpacerArgsBuilder::default()
-                        .height(DimensionValue::from(Dp(32.0)))
-                        .build()
-                        .unwrap(),
-                )
-            });
+            scope.child(|| spacer(Modifier::new().height(Dp(32.0))));
 
             scope.child(move || {
                 glass_config_slider(
@@ -387,7 +330,7 @@ fn glass_config_slider(label: &str, value: f32, on_change: Arc<dyn Fn(f32) + Sen
         ColumnArgsBuilder::default()
             .main_axis_alignment(MainAxisAlignment::Center)
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width())
             .build()
             .unwrap(),
         move |scope| {
@@ -403,14 +346,7 @@ fn glass_config_slider(label: &str, value: f32, on_change: Arc<dyn Fn(f32) + Sen
                         );
                     });
 
-                    scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .width(DimensionValue::from(Dp(16.0)))
-                                .build()
-                                .unwrap(),
-                        )
-                    });
+                    scope.child(|| spacer(Modifier::new().width(Dp(16.0))));
 
                     scope.child({
                         move || {

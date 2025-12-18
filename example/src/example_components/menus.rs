@@ -1,4 +1,4 @@
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera, use_context};
+use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     button::{ButtonArgsBuilder, button},
@@ -7,8 +7,9 @@ use tessera_ui_basic_components::{
         MenuAnchor, MenuController, MenuItemArgsBuilder, MenuPlacement, MenuProviderArgsBuilder,
         menu_provider_with_controller,
     },
+    modifier::ModifierExt as _,
     row::{RowArgsBuilder, row},
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
     theme::MaterialTheme,
@@ -25,9 +26,7 @@ pub fn menus_showcase() {
 
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
-            .padding(Dp(20.0))
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .expect("builder construction failed"),
         move || {
@@ -42,6 +41,7 @@ pub fn menus_showcase() {
                     move || {
                         column(
                             ColumnArgsBuilder::default()
+                                .modifier(Modifier::new().fill_max_size().padding_all(Dp(20.0)))
                                 .cross_axis_alignment(CrossAxisAlignment::Start)
                                 .build()
                                 .expect("builder construction failed"),
@@ -77,27 +77,20 @@ pub fn menus_showcase() {
                                 });
 
                                 scope.child(|| {
-                                    spacer(
-                                        SpacerArgsBuilder::default()
-                                            .height(DimensionValue::Fixed(Dp(12.0).into()))
-                                            .build()
-                                            .expect("builder construction failed"),
-                                    );
+                                    spacer(Modifier::new().height(Dp(12.0)));
                                 });
 
                                 scope.child(move || {
                                     row(
                                         RowArgsBuilder::default()
-                                            .width(DimensionValue::FILLED)
+                                            .modifier(Modifier::new().fill_max_width())
                                             .build()
                                             .expect("builder construction failed"),
                                         |row_scope| {
                                             row_scope.child(move || {
                                                 button(
                                                     ButtonArgsBuilder::default()
-                                                        .width(DimensionValue::Fixed(
-                                                            Dp(180.0).into(),
-                                                        ))
+                                                        .modifier(Modifier::new().width(Dp(180.0)))
                                                         .on_click(move || {
                                                             menu_controller
                                                                 .with_mut(|c| c.open_at(anchor));
@@ -111,14 +104,7 @@ pub fn menus_showcase() {
                                             });
 
                                             row_scope.child(|| {
-                                                spacer(
-                                                    SpacerArgsBuilder::default()
-                                                        .width(DimensionValue::Fixed(
-                                                            Dp(12.0).into(),
-                                                        ))
-                                                        .build()
-                                                        .expect("builder construction failed"),
-                                                );
+                                                spacer(Modifier::new().width(Dp(12.0)));
                                             });
 
                                             row_scope.child(|| {

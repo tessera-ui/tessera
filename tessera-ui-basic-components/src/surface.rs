@@ -8,7 +8,7 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
-    InputHandlerInput, PressKeyEventType, Px, PxPosition, PxSize, State,
+    InputHandlerInput, Modifier, PressKeyEventType, Px, PxPosition, PxSize, State,
     accesskit::{Action, Role},
     provide_context, remember, tessera, use_context,
     winit::window::CursorIcon,
@@ -17,7 +17,7 @@ use tessera_ui::{
 use crate::{
     RippleProps, ShadowProps,
     alignment::Alignment,
-    padding_utils::remove_padding_from_dimension,
+    modifier::ModifierExt,
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
     pos_misc::is_position_in_component,
     ripple_state::{RippleSpec, RippleState},
@@ -106,6 +106,9 @@ impl From<Color> for SurfaceStyle {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SurfaceArgs {
+    /// Optional modifier chain applied to the surface subtree.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// Defines the visual style of the surface (fill, outline, or both).
     #[builder(default)]
     pub style: SurfaceStyle,
@@ -145,21 +148,6 @@ pub struct SurfaceArgs {
     /// feedback, and will expose a disabled state to accessibility services.
     #[builder(default = "true")]
     pub enabled: bool,
-    /// Whether this surface should enforce the minimum interactive size
-    /// when it is clickable.
-    #[builder(default = "true")]
-    pub enforce_min_interactive_size: bool,
-    /// Internal padding applied symmetrically (left/right & top/bottom). Child
-    /// content is positioned at (padding, padding). Also influences
-    /// measured minimum size.
-    #[builder(default = "Dp(0.0)")]
-    pub padding: Dp,
-    /// Explicit width constraint (Fixed / Wrap / Fill). Defaults to `Wrap`.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub width: DimensionValue,
-    /// Explicit height constraint (Fixed / Wrap / Fill). Defaults to `Wrap`.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub height: DimensionValue,
     /// Optional click handler. Presence of this value makes the surface
     /// interactive:
     ///
@@ -231,26 +219,6 @@ impl Default for SurfaceArgs {
         SurfaceArgsBuilder::default()
             .build()
             .expect("builder construction failed")
-    }
-}
-
-fn enforce_min_dimension_value(value: DimensionValue, min: Px) -> DimensionValue {
-    match value {
-        DimensionValue::Fixed(v) => DimensionValue::Fixed(v.max(min)),
-        DimensionValue::Wrap {
-            min: current_min,
-            max,
-        } => DimensionValue::Wrap {
-            min: Some(current_min.unwrap_or(Px(0)).max(min)),
-            max,
-        },
-        DimensionValue::Fill {
-            min: current_min,
-            max,
-        } => DimensionValue::Fill {
-            min: Some(current_min.unwrap_or(Px(0)).max(min)),
-            max,
-        },
     }
 }
 
@@ -591,11 +559,7 @@ fn try_build_simple_rect_command(
 fn compute_surface_size(
     effective_surface_constraint: Constraint,
     child_measurement: ComputedData,
-    padding_px: Px,
 ) -> (Px, Px) {
-    let min_width = child_measurement.width + padding_px * 2;
-    let min_height = child_measurement.height + padding_px * 2;
-
     fn clamp_wrap(min: Option<Px>, max: Option<Px>, min_measure: Px) -> Px {
         min.unwrap_or(Px(0))
             .max(min_measure)
@@ -608,28 +572,28 @@ fn compute_surface_size(
 
     let width = match effective_surface_constraint.width {
         DimensionValue::Fixed(value) => value,
-        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, min_width),
+        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, child_measurement.width),
         DimensionValue::Fill {
             min,
             max: Some(max),
-        } => fill_value(min, max, min_width),
+        } => fill_value(min, max, child_measurement.width),
         DimensionValue::Fill { .. } => {
             panic!(
-                "Seems that you are trying to fill an infinite dimension, which is not allowed\nsurface width = Fill without max\nconstraint = {effective_surface_constraint:?}\nchild_measurement = {child_measurement:?}\npadding_px = {padding_px:?}"
+                "Seems that you are trying to fill an infinite dimension, which is not allowed\nsurface width = Fill without max\nconstraint = {effective_surface_constraint:?}\nchild_measurement = {child_measurement:?}"
             )
         }
     };
 
     let height = match effective_surface_constraint.height {
         DimensionValue::Fixed(value) => value,
-        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, min_height),
+        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, child_measurement.height),
         DimensionValue::Fill {
             min,
             max: Some(max),
-        } => fill_value(min, max, min_height),
+        } => fill_value(min, max, child_measurement.height),
         DimensionValue::Fill { .. } => {
             panic!(
-                "Seems that you are trying to fill an infinite dimension, which is not allowed\nsurface height = Fill without max\nconstraint = {effective_surface_constraint:?}\nchild_measurement = {child_measurement:?}\npadding_px = {padding_px:?}"
+                "Seems that you are trying to fill an infinite dimension, which is not allowed\nsurface height = Fill without max\nconstraint = {effective_surface_constraint:?}\nchild_measurement = {child_measurement:?}"
             )
         }
     };
@@ -658,15 +622,16 @@ fn compute_surface_size(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_ui::Dp;
+/// use tessera_ui::{Dp, Modifier};
 /// use tessera_ui_basic_components::{
+///     modifier::{ModifierExt, Padding},
 ///     surface::{SurfaceArgsBuilder, surface},
 ///     text::{TextArgsBuilder, text},
 /// };
 ///
 /// surface(
 ///     SurfaceArgsBuilder::default()
-///         .padding(Dp(16.0))
+///         .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
 ///         .on_click(|| println!("Surface was clicked!"))
 ///         .build()
 ///         .unwrap(),
@@ -682,8 +647,19 @@ fn compute_surface_size(
 /// # }
 /// # component();
 /// ```
+pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) {
+    let modifier = if args.on_click.is_some() {
+        args.modifier.minimum_interactive_component_size()
+    } else {
+        args.modifier
+    };
+    let mut args = args;
+    args.modifier = Modifier::new();
+    modifier.run(move || surface_inner(args, child));
+}
+
 #[tessera]
-pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
+fn surface_inner(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) {
     let scheme = use_context::<MaterialTheme>().get().color_scheme;
     let parent_absolute_elevation = use_context::<AbsoluteTonalElevation>().get().current;
     let absolute_tonal_elevation = Dp(parent_absolute_elevation.0 + args.tonal_elevation.0);
@@ -718,12 +694,11 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             );
         },
     );
-    let args_measure_clone = args.clone();
-    let args_for_handler = args.clone();
+    let args_measure = args.clone();
     let absolute_tonal_elevation_for_draw = absolute_tonal_elevation;
 
     measure(Box::new(move |input| {
-        let mut args_for_draw = args_measure_clone.clone();
+        let mut args_for_draw = args_measure.clone();
         if args_for_draw.shadow.is_none()
             && let Some(elevation) = args_for_draw.shadow_elevation
             && elevation.0 > 0.0
@@ -731,23 +706,9 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             args_for_draw.shadow = Some(synthesize_shadow_for_elevation(elevation, &scheme));
         }
 
-        let surface_intrinsic_width = args_measure_clone.width;
-        let surface_intrinsic_height = args_measure_clone.height;
-        let surface_intrinsic_constraint =
-            Constraint::new(surface_intrinsic_width, surface_intrinsic_height);
-        let mut effective_surface_constraint =
-            surface_intrinsic_constraint.merge(input.parent_constraint);
-        if clickable && args_measure_clone.enforce_min_interactive_size {
-            let min_size = Dp(48.0).to_px();
-            effective_surface_constraint.width =
-                enforce_min_dimension_value(effective_surface_constraint.width, min_size);
-            effective_surface_constraint.height =
-                enforce_min_dimension_value(effective_surface_constraint.height, min_size);
-        }
-        let padding_px: Px = args_measure_clone.padding.into();
-        let child_constraint = Constraint::new(
-            remove_padding_from_dimension(effective_surface_constraint.width, padding_px),
-            remove_padding_from_dimension(effective_surface_constraint.height, padding_px),
+        let effective_surface_constraint = Constraint::new(
+            input.parent_constraint.width(),
+            input.parent_constraint.height(),
         );
 
         let child_measurement = if !input.children_ids.is_empty() {
@@ -756,7 +717,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                     .children_ids
                     .iter()
                     .copied()
-                    .map(|node_id| (node_id, child_constraint))
+                    .map(|node_id| (node_id, effective_surface_constraint))
                     .collect(),
             )?;
             let mut max_width = Px::ZERO;
@@ -776,7 +737,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             }
         };
 
-        let state_layer_alpha = if args_measure_clone.show_state_layer {
+        let state_layer_alpha = if args_measure.show_state_layer {
             interaction_state
                 .as_ref()
                 .map(|state| state.with(|s| s.state_layer_alpha()))
@@ -785,13 +746,13 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             0.0
         };
 
-        let effective_style = &args_measure_clone.style;
+        let effective_style = &args_measure.style;
         let effective_style = apply_tonal_elevation_to_style(
             effective_style,
             &scheme,
             absolute_tonal_elevation_for_draw,
         );
-        let effective_style = if args_measure_clone.show_state_layer {
+        let effective_style = if args_measure.show_state_layer {
             apply_state_layer_to_style(
                 &effective_style,
                 args_for_draw.ripple_color.with_alpha(1.0),
@@ -801,30 +762,26 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             effective_style
         };
 
-        let padding_px: Px = args_measure_clone.padding.into();
-        let content_box_width = child_measurement.width + padding_px * 2;
-        let content_box_height = child_measurement.height + padding_px * 2;
-        let (width, height) =
-            compute_surface_size(effective_surface_constraint, child_measurement, padding_px);
+        let (width, height) = compute_surface_size(effective_surface_constraint, child_measurement);
 
         if !input.children_ids.is_empty() {
             let (extra_x, extra_y) = compute_content_offset(
-                args_measure_clone.content_alignment,
+                args_measure.content_alignment,
                 width,
                 height,
-                content_box_width,
-                content_box_height,
+                child_measurement.width,
+                child_measurement.height,
             );
             let origin = PxPosition {
-                x: Px(padding_px.0 + extra_x.0),
-                y: Px(padding_px.0 + extra_y.0),
+                x: extra_x,
+                y: extra_y,
             };
             for &child_id in input.children_ids.iter() {
                 input.place_child(child_id, origin);
             }
         }
 
-        let ripple_state_for_draw = if args_measure_clone.show_ripple {
+        let ripple_state_for_draw = if args_measure.show_ripple {
             interaction_state
         } else {
             None
@@ -849,15 +806,15 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
     }));
 
     if clickable {
-        let args_for_handler = args.clone();
+        let args = args;
         input_handler(Box::new(move |mut input| {
             // Apply accessibility metadata first.
             apply_surface_accessibility(
                 &mut input,
-                &args_for_handler,
+                &args,
                 true,
-                args_for_handler.enabled,
-                args_for_handler.on_click.clone(),
+                args.enabled,
+                args.on_click.clone(),
             );
 
             let size = input.computed_data;
@@ -919,8 +876,8 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                         let normalized_x = (cursor_pos.x.to_f32() / denom_w).clamp(0.0, 1.0);
                         let normalized_y = (cursor_pos.y.to_f32() / denom_h).clamp(0.0, 1.0);
                         let spec = RippleSpec {
-                            bounded: args_for_handler.ripple_bounded,
-                            radius: args_for_handler.ripple_radius,
+                            bounded: args.ripple_bounded,
+                            radius: args.ripple_radius,
                         };
 
                         state.with_mut(|s| {
@@ -934,29 +891,24 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
                     }
 
                     if !release_events.is_empty()
-                        && let Some(ref on_click) = args_for_handler.on_click
+                        && let Some(ref on_click) = args.on_click
                     {
                         on_click();
                     }
 
-                    if args_for_handler.block_input {
+                    if args.block_input {
                         input.block_all();
                     }
                 }
-            } else if args_for_handler.block_input && is_cursor_in_surface {
+            } else if args.block_input && is_cursor_in_surface {
                 input.block_all();
             }
         }));
     } else {
+        let args = args;
         input_handler(Box::new(move |mut input| {
             // Apply accessibility metadata first
-            apply_surface_accessibility(
-                &mut input,
-                &args_for_handler,
-                false,
-                args_for_handler.enabled,
-                None,
-            );
+            apply_surface_accessibility(&mut input, &args, false, args.enabled, None);
 
             // Then handle input blocking if needed
             let size = input.computed_data;
@@ -964,7 +916,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce()) {
             let is_cursor_in_surface = cursor_pos_option
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
-            if args_for_handler.block_input && is_cursor_in_surface {
+            if args.block_input && is_cursor_in_surface {
                 input.block_all();
             }
         }));

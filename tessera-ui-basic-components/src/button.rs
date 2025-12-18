@@ -6,11 +6,12 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera_ui::{Color, DimensionValue, Dp, Px, accesskit::Role, tessera, use_context};
+use tessera_ui::{Color, Dp, Modifier, accesskit::Role, tessera, use_context};
 
 use crate::{
     ShadowProps,
     alignment::Alignment,
+    modifier::ModifierExt,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
     theme::{
@@ -71,6 +72,9 @@ pub struct ButtonArgs {
     /// Whether the button is enabled for user interaction.
     #[builder(default = "true")]
     pub enabled: bool,
+    /// Optional modifier chain applied to the button subtree.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// The fill color of the button (RGBA).
     #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub color: Color,
@@ -85,12 +89,6 @@ pub struct ButtonArgs {
     /// The padding of the button.
     #[builder(default = "ButtonDefaults::CONTENT_VERTICAL_PADDING")]
     pub padding: Dp,
-    /// Optional explicit width behavior for the button.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub width: DimensionValue,
-    /// Optional explicit height behavior for the button.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub height: DimensionValue,
     /// The click callback function
     #[builder(default, setter(custom, strip_option))]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
@@ -201,13 +199,23 @@ impl Default for ButtonArgs {
 /// # component();
 /// ```
 #[tessera]
-pub fn button(args: impl Into<ButtonArgs>, child: impl FnOnce()) {
+pub fn button(args: impl Into<ButtonArgs>, child: impl FnOnce() + Send + Sync + 'static) {
     let button_args: ButtonArgs = args.into();
     let typography = use_context::<MaterialTheme>().get().typography;
 
     // Create interactive surface for button
-    surface(create_surface_args(&button_args), || {
-        provide_text_style(typography.label_large, child)
+    surface(create_surface_args(&button_args), move || {
+        Modifier::new()
+            .size_in(
+                Some(ButtonDefaults::MIN_WIDTH),
+                None,
+                Some(ButtonDefaults::MIN_HEIGHT),
+                None,
+            )
+            .padding_all(button_args.padding)
+            .run(move || {
+                provide_text_style(typography.label_large, child);
+            });
     });
 }
 
@@ -272,45 +280,19 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         builder = builder.accessibility_description(description);
     }
 
-    let width = enforce_min_dimension(args.width, ButtonDefaults::MIN_WIDTH);
-    let height = enforce_min_dimension(args.height, ButtonDefaults::MIN_HEIGHT);
-
     builder
         .style(style)
         .shape(args.shape)
-        .padding(args.padding)
+        .modifier(args.modifier)
         .ripple_color(args.ripple_color)
         .content_alignment(Alignment::Center)
         .content_color(content_color)
         .enabled(args.enabled)
         .tonal_elevation(args.tonal_elevation)
-        .width(width)
-        .height(height)
         .accessibility_role(Role::Button)
         .accessibility_focusable(true)
         .build()
         .expect("SurfaceArgsBuilder failed with required button fields set")
-}
-
-fn enforce_min_dimension(value: DimensionValue, min: Dp) -> DimensionValue {
-    let min_px = min.to_px();
-    match value {
-        DimensionValue::Fixed(_) => value,
-        DimensionValue::Wrap {
-            min: current_min,
-            max,
-        } => DimensionValue::Wrap {
-            min: Some(current_min.unwrap_or(Px(0)).max(min_px)),
-            max,
-        },
-        DimensionValue::Fill {
-            min: current_min,
-            max,
-        } => DimensionValue::Fill {
-            min: Some(current_min.unwrap_or(Px(0)).max(min_px)),
-            max,
-        },
-    }
 }
 
 /// Convenience constructors for standard Material Design 3 button styles
@@ -449,18 +431,6 @@ impl ButtonArgs {
     /// Overrides the button's shape.
     pub fn with_shape(mut self, shape: Shape) -> Self {
         self.shape = shape;
-        self
-    }
-
-    /// Sets a fixed or flexible width constraint.
-    pub fn with_width(mut self, width: DimensionValue) -> Self {
-        self.width = width;
-        self
-    }
-
-    /// Sets a fixed or flexible height constraint.
-    pub fn with_height(mut self, height: DimensionValue) -> Self {
-        self.height = height;
         self
     }
 

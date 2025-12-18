@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use closure::closure;
 use tessera_ui::{
-    Color, DimensionValue, Dp, State, remember,
+    Color, Dp, Modifier, State, remember,
     router::{Router, router_root},
     shard, tessera, use_context,
 };
@@ -23,6 +23,7 @@ use tessera_ui_basic_components::{
     icon::{IconArgsBuilder, icon},
     lazy_list::{LazyColumnArgsBuilder, lazy_column},
     material_icons::filled,
+    modifier::ModifierExt as _,
     navigation_bar::{NavigationBarItemBuilder, navigation_bar},
     row::{RowArgsBuilder, row},
     scrollable::ScrollableArgsBuilder,
@@ -31,7 +32,7 @@ use tessera_ui_basic_components::{
         SideBarController, SideBarProviderArgsBuilder, SideBarStyle,
         side_bar_provider_with_controller,
     },
-    spacer::{SpacerArgs, spacer},
+    spacer::spacer,
     surface::{SurfaceArgs, SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
     theme::MaterialTheme,
@@ -213,7 +214,7 @@ pub fn app() {
                     surface(
                         SurfaceArgs {
                             style: Color::TRANSPARENT.into(),
-                            padding: Dp(16.0),
+                            modifier: Modifier::new().padding_all(Dp(16.0)),
                             ..Default::default()
                         },
                         || {
@@ -223,10 +224,7 @@ pub fn app() {
                                 });
 
                                 scope.child(|| {
-                                    spacer(SpacerArgs {
-                                        height: Dp(250.0).into(),
-                                        ..Default::default()
-                                    });
+                                    spacer(Modifier::new().height(Dp(250.0)));
                                 });
                             });
                         },
@@ -512,8 +510,7 @@ fn home(
 
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
@@ -521,8 +518,7 @@ fn home(
                 LazyColumnArgsBuilder::default()
                     .scrollable(
                         ScrollableArgsBuilder::default()
-                            .width(DimensionValue::FILLED)
-                            .height(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_size())
                             .build()
                             .unwrap(),
                     )
@@ -552,8 +548,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
     let description = description.to_string();
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .padding(Dp(25.0))
+            .modifier(Modifier::new().fill_max_width())
             .on_click_shared(on_click)
             .style(SurfaceStyle::Filled {
                 color: use_context::<MaterialTheme>()
@@ -566,32 +561,38 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
             .build()
             .unwrap(),
         || {
-            column(ColumnArgs::default(), |scope| {
-                scope.child(move || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text(title)
-                            .size(Dp(20.0))
-                            .build()
-                            .unwrap(),
-                    );
-                });
-                scope.child(move || {
-                    text(
-                        TextArgsBuilder::default()
-                            .text(description)
-                            .size(Dp(14.0))
-                            .color(
-                                use_context::<MaterialTheme>()
-                                    .get()
-                                    .color_scheme
-                                    .on_surface_variant,
-                            )
-                            .build()
-                            .unwrap(),
-                    );
-                });
-            });
+            column(
+                ColumnArgs {
+                    modifier: Modifier::new().fill_max_width().padding_all(Dp(25.0)),
+                    ..Default::default()
+                },
+                |scope| {
+                    scope.child(move || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text(title)
+                                .size(Dp(20.0))
+                                .build()
+                                .unwrap(),
+                        );
+                    });
+                    scope.child(move || {
+                        text(
+                            TextArgsBuilder::default()
+                                .text(description)
+                                .size(Dp(14.0))
+                                .color(
+                                    use_context::<MaterialTheme>()
+                                        .get()
+                                        .color_scheme
+                                        .on_surface_variant,
+                                )
+                                .build()
+                                .unwrap(),
+                        );
+                    });
+                },
+            );
         },
     );
 }
@@ -601,17 +602,14 @@ fn top_app_bar() {
     surface(
         SurfaceArgsBuilder::default()
             .shadow(ShadowProps::default())
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::Fixed(Dp(55.0).into()))
-            .padding(Dp(5.0))
+            .modifier(Modifier::new().fill_max_width().height(Dp(55.0)))
             .block_input(true)
             .build()
             .unwrap(),
         move || {
             row(
                 RowArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(5.0)))
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .build()
                     .unwrap(),
@@ -624,8 +622,7 @@ fn top_app_bar() {
                             .color(Color::TRANSPARENT)
                             .content_color(scheme.on_surface)
                             .ripple_color(scheme.on_surface)
-                            .width(DimensionValue::Fixed(Dp(40.0).into()))
-                            .height(DimensionValue::Fixed(Dp(40.0).into()));
+                            .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)));
                         if Router::with(|router| router.len()) > 1 {
                             button_args = button_args.on_click(|| {
                                 Router::with_mut(|router| {
@@ -637,8 +634,7 @@ fn top_app_bar() {
                         button(button_args.build().unwrap(), || {
                             boxed(
                                 BoxedArgsBuilder::default()
-                                    .width(DimensionValue::FILLED)
-                                    .height(DimensionValue::FILLED)
+                                    .modifier(Modifier::new().fill_max_size())
                                     .alignment(Alignment::Center)
                                     .build()
                                     .unwrap(),
@@ -667,14 +663,13 @@ fn top_app_bar() {
 fn about() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
-            .padding(Dp(16.0))
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         || {
             boxed(
                 BoxedArgsBuilder::default()
+                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
                     .alignment(Alignment::Center)
                     .build()
                     .unwrap(),

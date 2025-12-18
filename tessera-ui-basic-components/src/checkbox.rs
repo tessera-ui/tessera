@@ -11,7 +11,7 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, DimensionValue, Dp, State,
+    Color, Dp, Modifier, State,
     accesskit::{Action, Role, Toggled},
     remember, tessera, use_context,
 };
@@ -20,6 +20,7 @@ use crate::{
     alignment::Alignment,
     boxed::{BoxedArgsBuilder, boxed},
     checkmark::{CheckmarkArgsBuilder, checkmark},
+    modifier::ModifierExt,
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
@@ -387,8 +388,7 @@ pub fn checkbox_with_controller(
             boxed(
                 BoxedArgsBuilder::default()
                     .alignment(Alignment::Center)
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .expect("builder construction failed"),
                 |scope| {
@@ -418,8 +418,7 @@ pub fn checkbox_with_controller(
         || {
             surface(
                 SurfaceArgsBuilder::default()
-                    .width(DimensionValue::Fixed(size.to_px()))
-                    .height(DimensionValue::Fixed(size.to_px()))
+                    .modifier(Modifier::new().size(size, size))
                     .shape(shape)
                     .style(checkbox_style)
                     .build()
@@ -436,8 +435,7 @@ pub fn checkbox_with_controller(
             boxed(
                 BoxedArgsBuilder::default()
                     .alignment(Alignment::Center)
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .expect("builder construction failed"),
                 |scope| {
@@ -455,8 +453,10 @@ pub fn checkbox_with_controller(
         clone render_checkbox_container,
         || {
             let mut builder = SurfaceArgsBuilder::default()
-                .width(DimensionValue::Fixed(CheckboxDefaults::STATE_LAYER_SIZE.to_px()))
-                .height(DimensionValue::Fixed(CheckboxDefaults::STATE_LAYER_SIZE.to_px()))
+                .modifier(Modifier::new().size(
+                    CheckboxDefaults::STATE_LAYER_SIZE,
+                    CheckboxDefaults::STATE_LAYER_SIZE,
+                ))
                 .shape(Shape::Ellipse)
                 .enabled(enabled)
                 .style(SurfaceStyle::Filled {
@@ -480,11 +480,9 @@ pub fn checkbox_with_controller(
     // Outer Box (Layout 48x48)
     boxed(
         BoxedArgsBuilder::default()
-            .width(DimensionValue::Fixed(
-                CheckboxDefaults::TOUCH_TARGET_SIZE.to_px(),
-            ))
-            .height(DimensionValue::Fixed(
-                CheckboxDefaults::TOUCH_TARGET_SIZE.to_px(),
+            .modifier(Modifier::new().size(
+                CheckboxDefaults::TOUCH_TARGET_SIZE,
+                CheckboxDefaults::TOUCH_TARGET_SIZE,
             ))
             .alignment(Alignment::Center)
             .build()

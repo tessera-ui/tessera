@@ -7,9 +7,7 @@
 use std::{sync::Arc, time::Instant};
 
 use derive_builder::Builder;
-use tessera_ui::{
-    Color, DimensionValue, Dp, InputHandlerInput, State, remember, tessera, use_context,
-};
+use tessera_ui::{Color, Dp, InputHandlerInput, Modifier, State, remember, tessera, use_context};
 
 use crate::{
     column::{ColumnArgs, ColumnScope, column},
@@ -349,6 +347,9 @@ impl CardDefaults {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct CardArgs {
+    /// Optional modifier chain applied to the card subtree.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// Card variant controlling default tokens.
     #[builder(default)]
     pub variant: CardVariant,
@@ -373,12 +374,6 @@ pub struct CardArgs {
     /// Optional border stroke for the card container.
     #[builder(default, setter(strip_option))]
     pub border: Option<CardBorder>,
-    /// Explicit width constraint for the card.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub width: DimensionValue,
-    /// Explicit height constraint for the card.
-    #[builder(default = "DimensionValue::WRAP", setter(into))]
-    pub height: DimensionValue,
 }
 
 impl CardArgsBuilder {
@@ -462,7 +457,7 @@ impl Default for CardArgs {
 #[tessera]
 pub fn card<F>(args: impl Into<CardArgs>, content: F)
 where
-    F: FnOnce(&mut ColumnScope),
+    F: FnOnce(&mut ColumnScope) + Send + Sync + 'static,
 {
     let args: CardArgs = args.into();
 
@@ -528,8 +523,7 @@ where
 
     let mut surface_builder = SurfaceArgsBuilder::default()
         .shape(shape)
-        .width(args.width)
-        .height(args.height)
+        .modifier(args.modifier)
         .content_color(content_color)
         .shadow_elevation(shadow_elevation)
         .tonal_elevation(shadow_elevation)

@@ -1,8 +1,9 @@
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{Dp, Modifier, shard, tessera};
 use tessera_ui_basic_components::{
     card::{CardArgs, CardArgsBuilder, CardDefaults, CardVariant, card},
     column::{ColumnArgsBuilder, column},
-    spacer::{SpacerArgsBuilder, spacer},
+    modifier::ModifierExt as _,
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -12,15 +13,13 @@ use tessera_ui_basic_components::{
 pub fn card_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
-            .padding(Dp(16.0))
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             column(
                 ColumnArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
                     .build()
                     .unwrap(),
                 |scope| {
@@ -35,12 +34,7 @@ pub fn card_showcase() {
                     });
 
                     scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(16.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        spacer(Modifier::new().height(Dp(16.0)));
                     });
 
                     scope.child(|| {
@@ -59,7 +53,7 @@ pub fn card_showcase() {
                                 surface(
                                     SurfaceArgsBuilder::default()
                                         .style(tessera_ui::Color::TRANSPARENT.into())
-                                        .padding(Dp(16.0))
+                                        .modifier(Modifier::new().padding_all(Dp(16.0)))
                                         .build()
                                         .unwrap(),
                                     || {
@@ -71,12 +65,7 @@ pub fn card_showcase() {
                     });
 
                     scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(16.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        spacer(Modifier::new().height(Dp(16.0)));
                     });
 
                     scope.child(|| {
@@ -95,7 +84,7 @@ pub fn card_showcase() {
                                 surface(
                                     SurfaceArgsBuilder::default()
                                         .style(tessera_ui::Color::TRANSPARENT.into())
-                                        .padding(Dp(16.0))
+                                        .modifier(Modifier::new().padding_all(Dp(16.0)))
                                         .build()
                                         .unwrap(),
                                     || {
@@ -107,12 +96,7 @@ pub fn card_showcase() {
                     });
 
                     scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(16.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        spacer(Modifier::new().height(Dp(16.0)));
                     });
 
                     scope.child(|| {
@@ -131,7 +115,7 @@ pub fn card_showcase() {
                                 surface(
                                     SurfaceArgsBuilder::default()
                                         .style(tessera_ui::Color::TRANSPARENT.into())
-                                        .padding(Dp(16.0))
+                                        .modifier(Modifier::new().padding_all(Dp(16.0)))
                                         .build()
                                         .unwrap(),
                                     || {
@@ -143,12 +127,7 @@ pub fn card_showcase() {
                     });
 
                     scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(16.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        spacer(Modifier::new().height(Dp(16.0)));
                     });
 
                     scope.child(|| {
@@ -174,7 +153,7 @@ pub fn card_showcase() {
                                     surface(
                                         SurfaceArgsBuilder::default()
                                             .style(tessera_ui::Color::TRANSPARENT.into())
-                                            .padding(Dp(16.0))
+                                            .modifier(Modifier::new().padding_all(Dp(16.0)))
                                             .build()
                                             .unwrap(),
                                         || {

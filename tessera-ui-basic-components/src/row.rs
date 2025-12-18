@@ -5,22 +5,24 @@
 //! Use to stack children horizontally.
 use derive_builder::Builder;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, MeasureInput, MeasurementError, NodeId, Px,
+    ComputedData, Constraint, DimensionValue, MeasureInput, MeasurementError, Modifier, NodeId, Px,
     PxPosition, tessera,
 };
 
-use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
+use crate::{
+    alignment::{CrossAxisAlignment, MainAxisAlignment},
+    modifier::ModifierExt as _,
+};
 
 /// Arguments for the `row` component.
 #[derive(Builder, Clone, Debug)]
 #[builder(pattern = "owned")]
 pub struct RowArgs {
-    /// Width behavior for the row.
-    #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
-    pub width: DimensionValue,
-    /// Height behavior for the row.
-    #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
-    pub height: DimensionValue,
+    /// Modifier chain applied to the row subtree.
+    #[builder(
+        default = "Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))"
+    )]
+    pub modifier: Modifier,
     /// Main axis alignment (horizontal alignment).
     #[builder(default = "MainAxisAlignment::Start")]
     pub main_axis_alignment: MainAxisAlignment,
@@ -98,16 +100,17 @@ struct MeasureWeightedChildrenArgs<'a> {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the row's dimensions and alignment; see [`RowArgs`].
+/// - `args` — configures alignment and modifiers; see [`RowArgs`].
 /// - `scope_config` — a closure that receives a [`RowScope`] for adding
 ///   children.
 ///
 /// ## Examples
 ///
 /// ```
+/// use tessera_ui::Modifier;
 /// use tessera_ui_basic_components::{
 ///     row::{RowArgs, row},
-///     spacer::{SpacerArgs, spacer},
+///     spacer::spacer,
 ///     text::{TextArgsBuilder, text},
 /// };
 ///
@@ -120,7 +123,7 @@ struct MeasureWeightedChildrenArgs<'a> {
 ///                 .expect("builder construction failed"),
 ///         )
 ///     });
-///     scope.child_weighted(|| spacer(SpacerArgs::default()), 1.0); // Flexible space
+///     scope.child_weighted(|| spacer(Modifier::new()), 1.0); // Flexible space
 ///     scope.child(|| {
 ///         text(
 ///             TextArgsBuilder::default()
@@ -136,6 +139,10 @@ pub fn row<F>(args: RowArgs, scope_config: F)
 where
     F: FnOnce(&mut RowScope),
 {
+    let modifier = args.modifier;
+    let mut args = args;
+    args.modifier = Modifier::new();
+
     let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
     let mut child_weights: Vec<Option<f32>> = Vec::new();
 
@@ -147,6 +154,15 @@ where
         scope_config(&mut scope);
     }
 
+    modifier.run(move || row_inner(args, child_closures, child_weights));
+}
+
+#[tessera]
+fn row_inner(
+    args: RowArgs,
+    child_closures: Vec<Box<dyn FnOnce() + Send + Sync>>,
+    child_weights: Vec<Option<f32>>,
+) {
     let n = child_closures.len();
 
     measure(Box::new(
@@ -157,8 +173,10 @@ where
                 "Mismatch between children defined in scope and runtime children count"
             );
 
-            let row_intrinsic_constraint = Constraint::new(args.width, args.height);
-            let row_effective_constraint = row_intrinsic_constraint.merge(input.parent_constraint);
+            let row_effective_constraint = Constraint::new(
+                input.parent_constraint.width(),
+                input.parent_constraint.height(),
+            );
 
             let has_weighted_children = child_weights.iter().any(|w| w.unwrap_or(0.0) > 0.0);
             let should_use_weight_for_width = has_weighted_children

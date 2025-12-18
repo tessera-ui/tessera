@@ -11,8 +11,8 @@ use std::{
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, State, provide_context, remember,
-    tessera, use_context, winit,
+    Color, ComputedData, DimensionValue, Dp, Modifier, Px, PxPosition, State, provide_context,
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -22,9 +22,10 @@ use crate::{
     boxed::{BoxedArgsBuilder, boxed},
     column::{ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    modifier::ModifierExt,
     row::{RowArgsBuilder, row},
     shape_def::{RoundedCorner, Shape},
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
     theme::{ContentColor, MaterialTheme},
@@ -214,14 +215,7 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                 SurfaceArgsBuilder::default()
                     .style(scrim_color.with_alpha(alpha).into())
                     .on_click_shared(args.on_close_request.clone())
-                    .width(DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
-                    .height(DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
+                    .modifier(Modifier::new().fill_max_size())
                     .block_input(true)
                     .build()
                     .expect("builder construction failed"),
@@ -268,8 +262,7 @@ fn dialog_content_wrapper(
 
     boxed(
         BoxedArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .alignment(Alignment::Center)
             .build()
             .expect("builder construction failed"),
@@ -278,9 +271,11 @@ fn dialog_content_wrapper(
                 surface(
                     SurfaceArgsBuilder::default()
                         .style(Color::TRANSPARENT.into())
-                        .padding(Dp(24.0))
-                        .width(DimensionValue::WRAP)
-                        .height(DimensionValue::WRAP)
+                        .modifier(
+                            Modifier::new()
+                                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
+                                .padding_all(Dp(24.0)),
+                        )
                         .build()
                         .expect("builder construction failed"),
                     move || match style {
@@ -323,11 +318,12 @@ fn dialog_content_wrapper(
                                         bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
                                         bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
                                     })
-                                    .padding(padding)
                                     .block_input(true)
                                     .build()
                                     .expect("builder construction failed"),
-                                content,
+                                move || {
+                                    Modifier::new().padding_all(padding).run(content);
+                                },
                             );
                         }
                     },
@@ -588,11 +584,13 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
 
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::Wrap {
-                min: Some(Dp(280.0).into()),
-                max: Some(Dp(560.0).into()),
-            })
-            .height(DimensionValue::WRAP)
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Wrap {
+                    min: Some(Dp(280.0).into()),
+                    max: Some(Dp(560.0).into()),
+                }),
+                Some(DimensionValue::WRAP),
+            ))
             .cross_axis_alignment(alignment)
             .build()
             .expect("builder construction failed"),
@@ -611,12 +609,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                     );
                 });
                 scope.child(|| {
-                    spacer(
-                        SpacerArgsBuilder::default()
-                            .height(Dp(16.0))
-                            .build()
-                            .expect("failed to build spacer args for icon"),
-                    );
+                    spacer(Modifier::new().height(Dp(16.0)));
                 });
             }
 
@@ -633,12 +626,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                     );
                 });
                 scope.child(|| {
-                    spacer(
-                        SpacerArgsBuilder::default()
-                            .height(Dp(16.0))
-                            .build()
-                            .expect("failed to build headline spacer args"),
-                    );
+                    spacer(Modifier::new().height(Dp(16.0)));
                 });
             }
 
@@ -660,12 +648,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
 
             if confirm_button.is_some() || dismiss_button.is_some() {
                 scope.child(|| {
-                    spacer(
-                        SpacerArgsBuilder::default()
-                            .height(Dp(24.0))
-                            .build()
-                            .expect("failed to build actions spacer args"),
-                    );
+                    spacer(Modifier::new().height(Dp(24.0)));
                 });
                 let action_color = scheme.primary;
                 scope.child(move || {
@@ -676,7 +659,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                         || {
                             row(
                                 RowArgsBuilder::default()
-                                    .width(DimensionValue::FILLED)
+                                    .modifier(Modifier::new().fill_max_width())
                                     .main_axis_alignment(MainAxisAlignment::End)
                                     .build()
                                     .expect("failed to build actions row args"),
@@ -690,14 +673,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
 
                                     if has_dismiss && has_confirm {
                                         s.child(|| {
-                                            spacer(
-                                                SpacerArgsBuilder::default()
-                                                    .width(Dp(8.0))
-                                                    .build()
-                                                    .expect(
-                                                        "failed to build action gap spacer args",
-                                                    ),
-                                            );
+                                            spacer(Modifier::new().width(Dp(8.0)));
                                         });
                                     }
 

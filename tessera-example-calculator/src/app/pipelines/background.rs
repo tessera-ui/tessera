@@ -2,12 +2,15 @@ use std::{sync::OnceLock, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, DrawCommand, Px,
+    Color, ComputedData, Constraint, DimensionValue, DrawCommand, Modifier, Px,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     tessera,
     wgpu::{self, util::DeviceExt},
 };
-use tessera_ui_basic_components::surface::{SurfaceArgsBuilder, surface};
+use tessera_ui_basic_components::{
+    modifier::ModifierExt as _,
+    surface::{SurfaceArgsBuilder, surface},
+};
 
 use crate::CalStyle;
 
@@ -159,7 +162,7 @@ fn current_time() -> f32 {
 }
 
 #[tessera]
-pub fn background(child: impl FnOnce(), style: CalStyle) {
+pub fn background(child: impl FnOnce() + Send + Sync + 'static, style: CalStyle) {
     match style {
         CalStyle::Glass => {
             child();
@@ -189,8 +192,7 @@ pub fn background(child: impl FnOnce(), style: CalStyle) {
             surface(
                 SurfaceArgsBuilder::default()
                     .style(Color::WHITE.into())
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .unwrap(),
                 || {

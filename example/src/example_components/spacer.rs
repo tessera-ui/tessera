@@ -1,9 +1,10 @@
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera};
+use tessera_ui::{Color, Dp, Modifier, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
+    modifier::ModifierExt as _,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, scrollable},
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -13,21 +14,19 @@ use tessera_ui_basic_components::{
 pub fn spacer_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_width())
                     .build()
                     .unwrap(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(25.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
                             .build()
                             .unwrap(),
                         || {
@@ -44,7 +43,7 @@ pub fn spacer_showcase() {
 fn test_content() {
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width())
             .build()
             .unwrap(),
         |scope| {
@@ -62,23 +61,9 @@ fn test_content() {
             scope.child(|| {
                 row(RowArgsBuilder::default().build().unwrap(), |scope| {
                     scope.child(|| colored_box(Color::RED));
-                    scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .width(Dp(20.0))
-                                .build()
-                                .unwrap(),
-                        )
-                    });
+                    scope.child(|| spacer(Modifier::new().width(Dp(20.0))));
                     scope.child(|| colored_box(Color::GREEN));
-                    scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .width(Dp(40.0))
-                                .build()
-                                .unwrap(),
-                        )
-                    });
+                    scope.child(|| spacer(Modifier::new().width(Dp(20.0))));
                     scope.child(|| colored_box(Color::BLUE));
                 })
             });
@@ -87,23 +72,9 @@ fn test_content() {
             scope.child(|| {
                 column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
                     scope.child(|| colored_box(Color::RED));
-                    scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(20.0))
-                                .build()
-                                .unwrap(),
-                        )
-                    });
+                    scope.child(|| spacer(Modifier::new().height(Dp(20.0))));
                     scope.child(|| colored_box(Color::GREEN));
-                    scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(40.0))
-                                .build()
-                                .unwrap(),
-                        )
-                    });
+                    scope.child(|| spacer(Modifier::new().height(Dp(20.0))));
                     scope.child(|| colored_box(Color::BLUE));
                 })
             });
@@ -116,8 +87,7 @@ fn colored_box(color: Color) {
     surface(
         SurfaceArgsBuilder::default()
             .style(color.into())
-            .width(Dp(50.0))
-            .height(Dp(50.0))
+            .modifier(Modifier::new().size(Dp(50.0), Dp(50.0)))
             .build()
             .unwrap(),
         || {},

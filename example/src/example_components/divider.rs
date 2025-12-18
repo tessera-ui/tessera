@@ -1,9 +1,10 @@
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{Dp, Modifier, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     divider::{DividerArgsBuilder, horizontal_divider, vertical_divider},
+    modifier::ModifierExt as _,
     row::{RowArgsBuilder, row},
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -13,15 +14,13 @@ use tessera_ui_basic_components::{
 pub fn divider_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
-            .padding(Dp(16.0))
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             column(
                 ColumnArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
                     .build()
                     .unwrap(),
                 |scope| {
@@ -36,12 +35,7 @@ pub fn divider_showcase() {
                     });
 
                     scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(16.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        spacer(Modifier::new().height(Dp(16.0)));
                     });
 
                     scope.child(|| {
@@ -59,12 +53,7 @@ pub fn divider_showcase() {
                     });
 
                     scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(16.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        spacer(Modifier::new().height(Dp(16.0)));
                     });
 
                     scope.child(|| {
@@ -87,12 +76,7 @@ pub fn divider_showcase() {
                     });
 
                     scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(24.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        spacer(Modifier::new().height(Dp(24.0)));
                     });
 
                     scope.child(|| {
@@ -108,8 +92,7 @@ pub fn divider_showcase() {
                     scope.child(|| {
                         row(
                             RowArgsBuilder::default()
-                                .width(DimensionValue::FILLED)
-                                .height(DimensionValue::Fixed(Dp(56.0).to_px()))
+                                .modifier(Modifier::new().fill_max_width().height(Dp(56.0)))
                                 .build()
                                 .unwrap(),
                             |scope| {
@@ -118,12 +101,7 @@ pub fn divider_showcase() {
                                 });
 
                                 scope.child(|| {
-                                    spacer(
-                                        SpacerArgsBuilder::default()
-                                            .width(Dp(12.0))
-                                            .build()
-                                            .unwrap(),
-                                    );
+                                    spacer(Modifier::new().width(Dp(12.0)));
                                 });
 
                                 scope.child(|| {
@@ -133,12 +111,7 @@ pub fn divider_showcase() {
                                 });
 
                                 scope.child(|| {
-                                    spacer(
-                                        SpacerArgsBuilder::default()
-                                            .width(Dp(12.0))
-                                            .build()
-                                            .unwrap(),
-                                    );
+                                    spacer(Modifier::new().width(Dp(12.0)));
                                 });
 
                                 scope.child(|| {

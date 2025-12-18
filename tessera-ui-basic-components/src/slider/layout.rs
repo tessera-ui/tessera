@@ -190,7 +190,7 @@ pub(super) fn resolve_component_width(
     let specs = get_slider_specs(args.size);
     let fallback = Dp(260.0).to_px();
     let merged = Constraint::new(
-        args.width,
+        parent_constraint.width(),
         DimensionValue::Fixed(specs.track_height.to_px()),
     )
     .merge(parent_constraint);
@@ -204,24 +204,17 @@ pub(super) fn resolve_component_width(
 }
 
 pub(super) fn fallback_component_width(args: &SliderArgs) -> Px {
-    match args.width {
-        DimensionValue::Fixed(px) => px,
-        DimensionValue::Fill { max, .. } | DimensionValue::Wrap { max, .. } => {
-            max.unwrap_or(Dp(260.0).to_px())
-        }
-    }
+    let _ = args;
+    Dp(260.0).to_px()
 }
 
-pub(super) fn slider_layout(args: &SliderArgs, component_width: Px) -> SliderLayout {
-    slider_layout_with_handle_width(args, component_width, args.thumb_diameter.to_px())
-}
-
-pub(super) fn slider_layout_with_handle_width(
-    args: &SliderArgs,
+fn slider_layout_from_parts(
+    size: SliderSize,
+    show_stop_indicator: bool,
     component_width: Px,
     handle_width: Px,
 ) -> SliderLayout {
-    let specs = get_slider_specs(args.size);
+    let specs = get_slider_specs(size);
 
     let track_height = specs.track_height.to_px();
     let touch_target_height = MIN_TOUCH_TARGET.to_px();
@@ -252,9 +245,22 @@ pub(super) fn slider_layout_with_handle_width(
         handle_y: Px((component_height.0 - handle_height.0) / 2),
         stop_indicator_diameter,
         stop_indicator_y: Px((component_height.0 - stop_indicator_diameter.0) / 2),
-        show_stop_indicator: args.show_stop_indicator,
+        show_stop_indicator,
         icon_size: specs.icon_size,
     }
+}
+
+pub(super) fn slider_layout_with_handle_width(
+    args: &SliderArgs,
+    component_width: Px,
+    handle_width: Px,
+) -> SliderLayout {
+    slider_layout_from_parts(
+        args.size,
+        args.show_stop_indicator,
+        component_width,
+        handle_width,
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -340,25 +346,12 @@ pub(super) fn range_slider_layout(
     args: &super::RangeSliderArgs,
     component_width: Px,
 ) -> RangeSliderLayout {
-    // Range sliders share the same base sizing rules as single-value sliders.
-    let dummy_args = SliderArgs {
-        value: 0.0,
-        on_change: std::sync::Arc::new(|_| {}),
-        size: args.size,
-        width: args.width,
-        active_track_color: args.active_track_color,
-        inactive_track_color: args.inactive_track_color,
-        thumb_diameter: args.thumb_diameter,
-        thumb_color: args.thumb_color,
-        disabled: args.disabled,
-        accessibility_label: None,
-        accessibility_description: None,
-        show_stop_indicator: args.show_stop_indicator,
-        steps: args.steps,
-        inset_icon: None,
-    };
-
     RangeSliderLayout {
-        base: slider_layout(&dummy_args, component_width),
+        base: slider_layout_from_parts(
+            args.size,
+            args.show_stop_indicator,
+            component_width,
+            args.thumb_diameter.to_px(),
+        ),
     }
 }

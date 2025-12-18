@@ -2,12 +2,14 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, Constraint, CursorEventContent, Dp, PressKeyEventType, Px, PxPosition, State,
+    Color, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, PressKeyEventType, Px,
+    PxPosition, State,
     accesskit::{Action, Role},
     tessera,
 };
 
 use crate::{
+    modifier::ModifierExt as _,
     scrollable::{ScrollBarBehavior, ScrollableController},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
@@ -178,8 +180,10 @@ fn compute_thumb_color(state_lock: &ScrollBarState, args: &ScrollBarArgs) -> Col
 fn render_track_surface_v(width: Px, height: Px, color: Color) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(width)
-            .height(height)
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(width)),
+                Some(DimensionValue::Fixed(height)),
+            ))
             .style(color.into())
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::Capsule,
@@ -197,8 +201,10 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
 fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(width)
-            .height(height)
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(width)),
+                Some(DimensionValue::Fixed(height)),
+            ))
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::Capsule,
                 top_right: RoundedCorner::ZERO,
@@ -216,8 +222,10 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
 fn render_track_surface_h(width: Px, height: Px, color: Color) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(width)
-            .height(height)
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(width)),
+                Some(DimensionValue::Fixed(height)),
+            ))
             .style(color.into())
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::Capsule,
@@ -235,8 +243,10 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
 fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(width)
-            .height(height)
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(width)),
+                Some(DimensionValue::Fixed(height)),
+            ))
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::Capsule,
                 top_right: RoundedCorner::Capsule,

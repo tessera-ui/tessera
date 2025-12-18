@@ -6,6 +6,7 @@
 
 use std::{
     cell::{Cell, RefCell},
+    fmt,
     sync::Arc,
 };
 
@@ -95,11 +96,12 @@ impl Modifier {
     }
 
     /// Appends a wrapper action and returns the updated modifier.
-    pub fn push_wrapper<F>(self, wrapper: F) -> Self
+    pub fn push_wrapper<F, Child>(self, wrapper: F) -> Self
     where
-        F: Fn(ModifierChild) -> ModifierChild + Send + Sync + 'static,
+        F: Fn(ModifierChild) -> Child + Send + Sync + 'static,
+        Child: FnOnce() + Send + Sync + 'static,
     {
-        self.push_wrapper_shared(Arc::new(wrapper))
+        self.push_wrapper_shared(Arc::new(move |child| Box::new(wrapper(child))))
     }
 
     fn push_wrapper_shared(self, wrapper: ModifierWrapper) -> Self {
@@ -145,6 +147,15 @@ impl Modifier {
 impl Default for Modifier {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl fmt::Debug for Modifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Modifier")
+            .field("id", &self.id)
+            .field("generation", &self.generation)
+            .finish()
     }
 }
 

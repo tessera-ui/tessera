@@ -2,8 +2,11 @@ mod display_screen;
 mod keyboard;
 pub mod pipelines;
 
-use tessera_ui::{remember, shard, tessera};
-use tessera_ui_basic_components::column::{ColumnArgsBuilder, column};
+use tessera_ui::{Modifier, remember, shard, tessera};
+use tessera_ui_basic_components::{
+    column::{ColumnArgsBuilder, column},
+    modifier::ModifierExt as _,
+};
 
 use crate::CalStyle;
 
@@ -28,11 +31,10 @@ impl Default for AppState {
 pub fn app(style: CalStyle) {
     let state = remember(AppState::default);
     background(
-        || {
+        move || {
             column(
                 ColumnArgsBuilder::default()
-                    .width(tessera_ui::DimensionValue::FILLED)
-                    .height(tessera_ui::DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .unwrap(),
                 |scope| {

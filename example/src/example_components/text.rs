@@ -1,5 +1,6 @@
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{Dp, Modifier, shard, tessera};
 use tessera_ui_basic_components::{
+    modifier::ModifierExt as _,
     scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     text::text,
@@ -10,21 +11,19 @@ use tessera_ui_basic_components::{
 pub fn text_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .unwrap(),
                 || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(25.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
                             .build()
                             .unwrap(),
                         || {

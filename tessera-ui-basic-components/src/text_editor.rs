@@ -8,11 +8,12 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use glyphon::{Action as GlyphonAction, Edit};
 use tessera_ui::{
-    Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Px, PxPosition, State,
+    Color, CursorEventContent, DimensionValue, Dp, ImeRequest, Modifier, Px, PxPosition, State,
     accesskit::Role, remember, tessera, use_context, winit,
 };
 
 use crate::{
+    modifier::ModifierExt,
     pipelines::text::pipeline::write_font_system,
     pos_misc::is_position_in_component,
     shape_def::{RoundedCorner, Shape},
@@ -224,7 +225,10 @@ pub fn text_editor_with_controller(
             create_surface_args(&args_for_surface, &controller),
             move || {
                 // Core layer - handles text rendering and editing logic
-                text_edit_core(controller);
+                let padding = args_for_surface.padding;
+                Modifier::new().padding_all(padding).run(move || {
+                    text_edit_core(controller);
+                });
             },
         );
     }
@@ -571,9 +575,7 @@ fn create_surface_args(
     SurfaceArgsBuilder::default()
         .style(style)
         .shape(args.shape)
-        .padding(args.padding)
-        .width(args.width)
-        .height(args.height)
+        .modifier(Modifier::new().constrain(Some(args.width), Some(args.height)))
         .build()
         .expect("builder construction failed")
 }

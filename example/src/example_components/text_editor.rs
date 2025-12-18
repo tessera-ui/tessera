@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
+use tessera_ui::{DimensionValue, Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
+    modifier::ModifierExt as _,
     scrollable::{ScrollableArgsBuilder, scrollable},
     spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
@@ -15,21 +16,19 @@ use tessera_ui_basic_components::{
 pub fn text_editor_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .unwrap(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(25.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
                             .build()
                             .unwrap(),
                         move || {
@@ -48,7 +47,7 @@ fn test_content() {
 
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width())
             .build()
             .unwrap(),
         move |scope| {
@@ -62,7 +61,7 @@ fn test_content() {
                 )
             });
 
-            scope.child(|| spacer(Dp(10.0)));
+            scope.child(|| spacer(Modifier::new().height(Dp(10.0))));
 
             scope.child(move || {
                 text_editor_with_controller(

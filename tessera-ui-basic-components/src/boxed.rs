@@ -4,9 +4,9 @@
 //!
 //! Use to create layered UIs, overlays, or composite controls.
 use derive_builder::Builder;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Px, PxPosition, tessera};
+use tessera_ui::{ComputedData, Constraint, DimensionValue, Modifier, Px, PxPosition, tessera};
 
-use crate::alignment::Alignment;
+use crate::{alignment::Alignment, modifier::ModifierExt as _};
 
 /// Arguments for the `Boxed` component.
 #[derive(Clone, Debug, Builder)]
@@ -15,12 +15,11 @@ pub struct BoxedArgs {
     /// The alignment of children within the `Boxed` container.
     #[builder(default)]
     pub alignment: Alignment,
-    /// Width behavior for the boxed container.
-    #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
-    pub width: DimensionValue,
-    /// Height behavior for the boxed container.
-    #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
-    pub height: DimensionValue,
+    /// Modifier chain applied to the boxed subtree.
+    #[builder(
+        default = "Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))"
+    )]
+    pub modifier: Modifier,
 }
 
 impl Default for BoxedArgs {
@@ -58,13 +57,16 @@ impl<'a> BoxedScope<'a> {
     }
 }
 
-/// Helper: resolve an effective final dimension from a DimensionValue and the
-/// largest child size. Keeps logic concise and documented in one place.
 fn resolve_final_dimension(dv: DimensionValue, largest_child: Px) -> Px {
     match dv {
         DimensionValue::Fixed(v) => v,
         DimensionValue::Fill { min, max } => {
-            let mut v = max.unwrap_or(largest_child);
+            let Some(max) = max else {
+                panic!(
+                    "Seems that you are trying to fill an infinite dimension, which is not allowed\nboxed constraint = {dv:?}"
+                );
+            };
+            let mut v = max.max(largest_child);
             if let Some(min_v) = min {
                 v = v.max(min_v);
             }
@@ -83,13 +85,10 @@ fn resolve_final_dimension(dv: DimensionValue, largest_child: Px) -> Px {
     }
 }
 
-/// Helper: compute centered offset along one axis.
 fn center_axis(container: Px, child: Px) -> Px {
     (container - child) / 2
 }
 
-/// Helper: compute child placement (x, y) inside the container according to
-/// alignment.
 fn compute_child_offset(
     alignment: Alignment,
     container_w: Px,
@@ -125,8 +124,7 @@ fn compute_child_offset(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the container's dimensions and default alignment; see
-///   [`BoxedArgs`].
+/// - `args` — configures default alignment and modifiers; see [`BoxedArgs`].
 /// - `scope_config` — a closure that receives a [`BoxedScope`] for adding
 ///   children.
 ///
@@ -163,6 +161,10 @@ pub fn boxed<F>(args: BoxedArgs, scope_config: F)
 where
     F: FnOnce(&mut BoxedScope),
 {
+    let modifier = args.modifier;
+    let mut args = args;
+    args.modifier = Modifier::new();
+
     let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
     let mut child_alignments: Vec<Option<Alignment>> = Vec::new();
 
@@ -174,9 +176,17 @@ where
         scope_config(&mut scope);
     }
 
+    modifier.run(move || boxed_inner(args, child_closures, child_alignments));
+}
+
+#[tessera]
+fn boxed_inner(
+    args: BoxedArgs,
+    child_closures: Vec<Box<dyn FnOnce() + Send + Sync>>,
+    child_alignments: Vec<Option<Alignment>>,
+) {
     let n = child_closures.len();
 
-    // Measurement closure: measure all present children and compute container size.
     measure(Box::new(move |input| {
         debug_assert_eq!(
             input.children_ids.len(),
@@ -184,10 +194,11 @@ where
             "Mismatch between children defined in scope and runtime children count"
         );
 
-        let boxed_intrinsic_constraint = Constraint::new(args.width, args.height);
-        let effective_constraint = boxed_intrinsic_constraint.merge(input.parent_constraint);
+        let effective_constraint = Constraint::new(
+            input.parent_constraint.width(),
+            input.parent_constraint.height(),
+        );
 
-        // Track largest child sizes
         let mut max_child_width = Px(0);
         let mut max_child_height = Px(0);
         let mut children_sizes = vec![None; n];
@@ -208,11 +219,9 @@ where
             }
         }
 
-        // Resolve final container dimensions using helpers.
         let final_width = resolve_final_dimension(effective_constraint.width, max_child_width);
         let final_height = resolve_final_dimension(effective_constraint.height, max_child_height);
 
-        // Place each measured child according to alignment.
         for (i, child_size_opt) in children_sizes.iter().enumerate() {
             if let Some(child_size) = child_size_opt {
                 let child_id = input.children_ids[i];
@@ -234,7 +243,6 @@ where
         })
     }));
 
-    // Render child closures after measurement.
     for child_closure in child_closures {
         child_closure();
     }

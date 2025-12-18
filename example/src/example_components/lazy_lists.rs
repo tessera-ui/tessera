@@ -1,8 +1,9 @@
-use tessera_ui::{Color, DimensionValue, Dp, shard, tessera, use_context};
+use tessera_ui::{Color, Dp, Modifier, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
     lazy_list::{LazyColumnArgs, LazyColumnArgsBuilder, LazyRowArgsBuilder, lazy_column, lazy_row},
+    modifier::ModifierExt as _,
     scrollable::ScrollableArgsBuilder,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -15,7 +16,7 @@ use tessera_ui_basic_components::{
 pub fn lazy_lists_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
@@ -28,7 +29,7 @@ pub fn lazy_lists_showcase() {
                     scope.item(move || {
                         column(
                             ColumnArgsBuilder::default()
-                                .width(DimensionValue::FILLED)
+                                .modifier(Modifier::new().fill_max_width())
                                 .build()
                                 .unwrap(),
                             move |scope| {
@@ -91,7 +92,7 @@ pub fn lazy_lists_showcase() {
 fn vertical_list() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(
                 use_context::<MaterialTheme>()
                     .get()
@@ -99,7 +100,6 @@ fn vertical_list() {
                     .surface_variant
                     .into(),
             )
-            .padding(Dp(12.0))
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
             .unwrap(),
@@ -108,8 +108,7 @@ fn vertical_list() {
                 LazyColumnArgsBuilder::default()
                     .scrollable(
                         ScrollableArgsBuilder::default()
-                            .width(DimensionValue::FILLED)
-                            .height(DimensionValue::Fixed(Dp(360.0).into()))
+                            .modifier(Modifier::new().fill_max_width().height(Dp(360.0)))
                             .build()
                             .unwrap(),
                     )
@@ -134,7 +133,7 @@ fn vertical_list() {
 fn horizontal_gallery() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(
                 use_context::<MaterialTheme>()
                     .get()
@@ -142,7 +141,6 @@ fn horizontal_gallery() {
                     .surface_variant
                     .into(),
             )
-            .padding(Dp(12.0))
             .shape(Shape::rounded_rectangle(Dp(18.0)))
             .build()
             .unwrap(),
@@ -151,8 +149,7 @@ fn horizontal_gallery() {
                 LazyRowArgsBuilder::default()
                     .scrollable(
                         ScrollableArgsBuilder::default()
-                            .width(DimensionValue::FILLED)
-                            .height(DimensionValue::Fixed(Dp(180.0).into()))
+                            .modifier(Modifier::new().fill_max_width().height(Dp(180.0)))
                             .build()
                             .unwrap(),
                     )
@@ -176,8 +173,7 @@ fn horizontal_gallery() {
 fn contact_card(index: usize) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .padding(Dp(12.0))
+            .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .shape(Shape::rounded_rectangle(Dp(16.0)))
             .style(color_for_index(index).with_alpha(0.15).into())
             .build()
@@ -185,7 +181,7 @@ fn contact_card(index: usize) {
         move || {
             column(
                 ColumnArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_width())
                     .build()
                     .unwrap(),
                 |scope| {
@@ -228,9 +224,11 @@ fn contact_card(index: usize) {
 fn gallery_card(index: usize) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(Dp(150.0).into()))
-            .height(DimensionValue::Fixed(Dp(150.0).into()))
-            .padding(Dp(12.0))
+            .modifier(
+                Modifier::new()
+                    .size(Dp(150.0), Dp(150.0))
+                    .padding_all(Dp(12.0)),
+            )
             .shape(Shape::rounded_rectangle(Dp(24.0)))
             .style(color_for_index(index).into())
             .build()

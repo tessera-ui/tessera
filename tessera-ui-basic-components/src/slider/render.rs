@@ -1,6 +1,7 @@
-use tessera_ui::{Color, DimensionValue, Px};
+use tessera_ui::{Color, DimensionValue, Modifier, Px};
 
 use crate::{
+    modifier::ModifierExt,
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
 };
@@ -10,11 +11,10 @@ use super::{SliderColors, SliderLayout};
 pub(super) fn render_active_segment(layout: SliderLayout, colors: &SliderColors) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fixed(layout.track_height))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::FILLED),
+                Some(DimensionValue::Fixed(layout.track_height)),
+            ))
             .style(colors.active_track.into())
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
@@ -31,11 +31,10 @@ pub(super) fn render_active_segment(layout: SliderLayout, colors: &SliderColors)
 pub(super) fn render_inactive_segment(layout: SliderLayout, colors: &SliderColors) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fixed(layout.track_height))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::FILLED),
+                Some(DimensionValue::Fixed(layout.track_height)),
+            ))
             .style(colors.inactive_track.into())
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
@@ -52,8 +51,10 @@ pub(super) fn render_inactive_segment(layout: SliderLayout, colors: &SliderColor
 pub(super) fn render_handle(layout: SliderLayout, width: tessera_ui::Px, colors: &SliderColors) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(width))
-            .height(DimensionValue::Fixed(layout.handle_height))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(width)),
+                Some(DimensionValue::Fixed(layout.handle_height)),
+            ))
             .style(colors.thumb.into())
             .shape(Shape::capsule())
             .build()
@@ -65,8 +66,10 @@ pub(super) fn render_handle(layout: SliderLayout, width: tessera_ui::Px, colors:
 pub(super) fn render_stop_indicator(layout: SliderLayout, colors: &SliderColors) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.stop_indicator_diameter))
-            .height(DimensionValue::Fixed(layout.stop_indicator_diameter))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(layout.stop_indicator_diameter)),
+                Some(DimensionValue::Fixed(layout.stop_indicator_diameter)),
+            ))
             .style(colors.active_track.into())
             .shape(Shape::Ellipse)
             .build()
@@ -78,8 +81,10 @@ pub(super) fn render_stop_indicator(layout: SliderLayout, colors: &SliderColors)
 pub(super) fn render_tick(diameter: Px, color: Color) {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(diameter))
-            .height(DimensionValue::Fixed(diameter))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(diameter)),
+                Some(DimensionValue::Fixed(diameter)),
+            ))
             .style(color.into())
             .shape(Shape::Ellipse)
             .build()
@@ -95,11 +100,10 @@ pub(super) fn render_centered_tracks(
     // Left Inactive
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fixed(layout.base.track_height))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::FILLED),
+                Some(DimensionValue::Fixed(layout.base.track_height)),
+            ))
             .style(colors.inactive_track.into())
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
@@ -115,11 +119,10 @@ pub(super) fn render_centered_tracks(
     // Active (Middle)
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fixed(layout.base.track_height))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::FILLED),
+                Some(DimensionValue::Fixed(layout.base.track_height)),
+            ))
             .style(colors.active_track.into())
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
@@ -135,11 +138,10 @@ pub(super) fn render_centered_tracks(
     // Right Inactive
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fixed(layout.base.track_height))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::FILLED),
+                Some(DimensionValue::Fixed(layout.base.track_height)),
+            ))
             .style(colors.inactive_track.into())
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
@@ -160,8 +162,10 @@ pub(super) fn render_centered_stops(
     // Left Stop
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
-            .height(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+                Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+            ))
             .style(colors.active_track.into())
             .shape(Shape::Ellipse)
             .build()
@@ -172,8 +176,10 @@ pub(super) fn render_centered_stops(
     // Right Stop
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
-            .height(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+                Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+            ))
             .style(colors.active_track.into())
             .shape(Shape::Ellipse)
             .build()
@@ -189,8 +195,10 @@ pub(super) fn render_range_stops(
     // Left Stop
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
-            .height(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+                Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+            ))
             .style(colors.active_track.into())
             .shape(Shape::Ellipse)
             .build()
@@ -201,8 +209,10 @@ pub(super) fn render_range_stops(
     // Right Stop
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
-            .height(DimensionValue::Fixed(layout.base.stop_indicator_diameter))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+                Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+            ))
             .style(colors.active_track.into())
             .shape(Shape::Ellipse)
             .build()
@@ -218,11 +228,10 @@ pub(super) fn render_range_tracks(
     // Left Inactive
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fixed(layout.base.track_height))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::FILLED),
+                Some(DimensionValue::Fixed(layout.base.track_height)),
+            ))
             .style(colors.inactive_track.into())
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
@@ -238,11 +247,10 @@ pub(super) fn render_range_tracks(
     // Active (Middle)
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fixed(layout.base.track_height))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::FILLED),
+                Some(DimensionValue::Fixed(layout.base.track_height)),
+            ))
             .style(colors.active_track.into())
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
@@ -258,11 +266,10 @@ pub(super) fn render_range_tracks(
     // Right Inactive
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fixed(layout.base.track_height))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::FILLED),
+                Some(DimensionValue::Fixed(layout.base.track_height)),
+            ))
             .style(colors.inactive_track.into())
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),

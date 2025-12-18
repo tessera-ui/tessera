@@ -8,8 +8,9 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, CursorEvent, CursorEventContent, DimensionValue, Dp, ParentConstraint, Px,
-    PxPosition, PxSize, State, accesskit::Role, remember, tessera, use_context, winit,
+    Color, ComputedData, CursorEvent, CursorEventContent, DimensionValue, Dp, Modifier,
+    ParentConstraint, Px, PxPosition, PxSize, State, accesskit::Role, remember, tessera,
+    use_context, winit,
 };
 
 use crate::{
@@ -17,10 +18,11 @@ use crate::{
     alignment::CrossAxisAlignment,
     checkmark::{CheckmarkArgsBuilder, checkmark},
     column::{ColumnArgsBuilder, column},
+    modifier::ModifierExt as _,
     pos_misc::is_position_in_rect,
     row::{RowArgsBuilder, row},
     shape_def::Shape,
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
     theme::{MaterialAlpha, MaterialTheme},
@@ -539,8 +541,7 @@ pub fn menu_provider_with_controller(
             .style(SurfaceStyle::Filled {
                 color: args.scrim_color,
             })
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .block_input(true)
             .build()
             .expect("builder construction failed"),
@@ -555,12 +556,13 @@ pub fn menu_provider_with_controller(
                     color: args.container_color,
                 })
                 .shape(args.shape)
-                .padding(Dp(0.0))
-                .width(args.width)
-                .height(DimensionValue::Wrap {
-                    min: None,
-                    max: args.max_height,
-                })
+                .modifier(Modifier::new().constrain(
+                    Some(args.width),
+                    Some(DimensionValue::Wrap {
+                        min: None,
+                        max: args.max_height,
+                    }),
+                ))
                 .accessibility_role(Role::Menu)
                 .block_input(true);
 
@@ -570,10 +572,10 @@ pub fn menu_provider_with_controller(
 
             builder.build().expect("builder construction failed")
         },
-        || {
+        move || {
             column(
                 ColumnArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_width())
                     .cross_axis_alignment(CrossAxisAlignment::Start)
                     .build()
                     .expect("builder construction failed"),
@@ -811,13 +813,7 @@ fn render_leading(args: &MenuItemArgs, enabled: bool) {
                 .expect("builder construction failed"),
         );
     } else {
-        spacer(
-            SpacerArgsBuilder::default()
-                .width(DimensionValue::Fixed(Px::from(MENU_LEADING_SIZE)))
-                .height(DimensionValue::Fixed(Px::from(MENU_LEADING_SIZE)))
-                .build()
-                .expect("builder construction failed"),
-        );
+        spacer(Modifier::new().size(MENU_LEADING_SIZE, MENU_LEADING_SIZE));
     }
 }
 
@@ -837,7 +833,7 @@ fn render_labels(args: &MenuItemArgs, enabled: bool) {
 
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::WRAP)
+            .modifier(Modifier::new().constrain(Some(DimensionValue::WRAP), None))
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .build()
             .expect("builder construction failed"),
@@ -914,12 +910,13 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
             color: Color::TRANSPARENT,
         })
         .enabled(enabled)
-        .padding(Dp(0.0))
-        .width(DimensionValue::FILLED)
-        .height(DimensionValue::Wrap {
-            min: Some(Px::from(args.height)),
-            max: None,
-        })
+        .modifier(Modifier::new().constrain(
+            Some(DimensionValue::FILLED),
+            Some(DimensionValue::Wrap {
+                min: Some(Px::from(args.height)),
+                max: None,
+            }),
+        ))
         .accessibility_role(Role::MenuItem)
         .accessibility_label(args.label.clone())
         .block_input(true)
@@ -943,26 +940,26 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
         surface_builder
             .build()
             .expect("builder construction failed"),
-        || {
+        move || {
             row(
                 RowArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::Wrap {
-                        min: Some(Px::from(args.height)),
-                        max: None,
-                    })
+                    .modifier(Modifier::new().constrain(
+                        Some(DimensionValue::FILLED),
+                        Some(DimensionValue::Wrap {
+                            min: Some(Px::from(args.height)),
+                            max: None,
+                        }),
+                    ))
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .build()
                     .expect("builder construction failed"),
                 |row_scope| {
                     // Leading padding
                     row_scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .width(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING)))
-                                .build()
-                                .expect("builder construction failed"),
-                        );
+                        spacer(Modifier::new().constrain(
+                            Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
+                            None,
+                        ));
                     });
 
                     // Leading indicator / icon.
@@ -973,12 +970,10 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
 
                     // Gap after leading.
                     row_scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .width(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING)))
-                                .build()
-                                .expect("builder construction failed"),
-                        );
+                        spacer(Modifier::new().constrain(
+                            Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
+                            None,
+                        ));
                     });
 
                     // Labels column.
@@ -990,12 +985,7 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
                     // Flexible spacer.
                     row_scope.child_weighted(
                         || {
-                            spacer(
-                                SpacerArgsBuilder::default()
-                                    .width(DimensionValue::FILLED)
-                                    .build()
-                                    .expect("builder construction failed"),
-                            );
+                            spacer(Modifier::new().fill_max_width());
                         },
                         1.0,
                     );
@@ -1008,21 +998,17 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
                         });
 
                         row_scope.child(|| {
-                            spacer(
-                                SpacerArgsBuilder::default()
-                                    .width(DimensionValue::Fixed(Px::from(MENU_TRAILING_SPACING)))
-                                    .build()
-                                    .expect("builder construction failed"),
-                            );
+                            spacer(Modifier::new().constrain(
+                                Some(DimensionValue::Fixed(Px::from(MENU_TRAILING_SPACING))),
+                                None,
+                            ));
                         });
                     } else {
                         row_scope.child(|| {
-                            spacer(
-                                SpacerArgsBuilder::default()
-                                    .width(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING)))
-                                    .build()
-                                    .expect("builder construction failed"),
-                            );
+                            spacer(Modifier::new().constrain(
+                                Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
+                                None,
+                            ));
                         });
                     }
                 },

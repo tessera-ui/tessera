@@ -10,8 +10,8 @@ use std::{
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, Constraint, CursorEventContent, DimensionValue, Dp, PressKeyEventType, Px, PxPosition,
-    State, remember, tessera, use_context, winit,
+    Color, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, PressKeyEventType, Px,
+    PxPosition, State, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -19,8 +19,9 @@ use crate::{
     animation,
     column::{ColumnArgsBuilder, column},
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    modifier::ModifierExt,
     shape_def::{RoundedCorner, Shape},
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     theme::MaterialTheme,
 };
@@ -283,14 +284,7 @@ fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open:
         SurfaceArgsBuilder::default()
             .style(scrim_color.with_alpha(scrim_alpha).into())
             .on_click_shared(args.on_close_request.clone())
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
+            .modifier(Modifier::new().fill_max_size())
             .block_input(true)
             .build()
             .expect("SurfaceArgsBuilder failed with required fields set"),
@@ -471,21 +465,13 @@ fn render_content(
             || {
                 column(
                     ColumnArgsBuilder::default()
-                        .width(DimensionValue::Fill {
-                            min: None,
-                            max: None,
-                        })
+                        .modifier(Modifier::new().fill_max_width())
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .build()
                         .expect("ColumnArgsBuilder failed"),
                     |scope| {
                         scope.child(|| {
-                            spacer(
-                                SpacerArgsBuilder::default()
-                                    .height(Dp(22.0))
-                                    .build()
-                                    .expect("SpacerArgsBuilder failed"),
-                            );
+                            spacer(Modifier::new().height(Dp(22.0)));
                         });
                         scope.child(|| {
                             surface(
@@ -499,20 +485,14 @@ fn render_content(
                                             .into(),
                                     )
                                     .shape(Shape::capsule())
-                                    .width(DimensionValue::Fixed(Dp(32.0).to_px()))
-                                    .height(DimensionValue::Fixed(Dp(4.0).to_px()))
+                                    .modifier(Modifier::new().size(Dp(32.0), Dp(4.0)))
                                     .build()
                                     .expect("SurfaceArgsBuilder failed"),
                                 || {},
                             );
                         });
                         scope.child(|| {
-                            spacer(
-                                SpacerArgsBuilder::default()
-                                    .height(Dp(22.0))
-                                    .build()
-                                    .expect("SpacerArgsBuilder failed"),
-                            );
+                            spacer(Modifier::new().height(Dp(22.0)));
                         });
 
                         scope.child(bottom_sheet_content);
@@ -560,10 +540,7 @@ fn render_content(
                         bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
                         bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
-                    .width(DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
+                    .modifier(Modifier::new().fill_max_width())
                     .block_input(true)
                     .build()
                     .expect("SurfaceArgsBuilder failed with required fields set"),

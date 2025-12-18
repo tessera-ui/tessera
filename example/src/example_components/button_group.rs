@@ -1,8 +1,9 @@
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{Dp, Modifier, shard, tessera};
 use tessera_ui_basic_components::{
     button_groups::{ButtonGroupsArgs, ButtonGroupsStyle, button_groups},
     lazy_list::{LazyColumnArgs, lazy_column},
-    spacer::{SpacerArgs, spacer},
+    modifier::ModifierExt as _,
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgs, text},
 };
@@ -12,8 +13,7 @@ use tessera_ui_basic_components::{
 pub fn button_group_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .expect("builder construction failed"),
         move || {
@@ -70,12 +70,7 @@ pub fn button_group_showcase() {
                         });
                     });
 
-                    scope.item(|| {
-                        spacer(SpacerArgs {
-                            width: Dp(5.0).into(),
-                            ..Default::default()
-                        })
-                    });
+                    scope.item(|| spacer(Modifier::new().height(Dp(5.0))));
 
                     scope.item(move || {
                         button_groups(

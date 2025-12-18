@@ -7,13 +7,14 @@ use std::time::Instant;
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError, Px,
-    PxPosition, State, remember, tessera, use_context,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
+    Modifier, Px, PxPosition, State, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
     icon::{IconArgsBuilder, IconContent, icon},
+    modifier::ModifierExt,
     pipelines::text::{
         command::{TextCommand, TextConstraint},
         pipeline::TextData,
@@ -316,6 +317,9 @@ impl Default for TabsController {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct TabsArgs {
+    /// Optional modifier chain applied to the tabs subtree.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// Visual variant for this tab row.
     #[builder(default)]
     pub variant: TabsVariant,
@@ -325,7 +329,6 @@ pub struct TabsArgs {
     pub initial_active_tab: usize,
     /// Color of the active tab indicator.
     #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
-    // Material primary tone
     pub indicator_color: Color,
     /// Background color for the tab row container.
     #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.surface")]
@@ -384,12 +387,6 @@ pub struct TabsArgs {
     /// Minimum tab width for scrollable tab rows.
     #[builder(default = "TabsDefaults::SCROLLABLE_MIN_TAB_WIDTH")]
     pub min_scrollable_tab_width: Dp,
-    /// Width behavior for the entire tabs container.
-    #[builder(default = "DimensionValue::FILLED")]
-    pub width: DimensionValue,
-    /// Height behavior for the tabs container.
-    #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
-    pub height: DimensionValue,
 }
 
 impl Default for TabsArgs {
@@ -924,8 +921,7 @@ where
     surface(
         SurfaceArgsBuilder::default()
             .style(args.container_color.into())
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .shape(Shape::RECTANGLE)
             .build()
             .expect("builder construction failed"),
@@ -935,8 +931,7 @@ where
     surface(
         SurfaceArgsBuilder::default()
             .style(args.divider_color.into())
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .shape(Shape::RECTANGLE)
             .build()
             .expect("builder construction failed"),
@@ -951,8 +946,7 @@ where
     surface(
         SurfaceArgsBuilder::default()
             .style(args.indicator_color.into())
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .shape(indicator_shape)
             .build()
             .expect("builder construction failed"),
@@ -970,15 +964,6 @@ where
             args.inactive_content_color
         };
 
-        let tab_width = if args.scrollable {
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            }
-        } else {
-            DimensionValue::FILLED
-        };
-
         let tab_height = match &child {
             TabTitle::Label {
                 text,
@@ -991,8 +976,9 @@ where
             .style(Color::TRANSPARENT.into())
             .content_alignment(Alignment::Center)
             .content_color(label_color)
-            .width(tab_width)
-            .height(DimensionValue::Fixed(tab_height.into()))
+            .modifier(
+                Modifier::new().constrain(None, Some(DimensionValue::Fixed(tab_height.into()))),
+            )
             .ripple_color(ripple_color)
             .shape(Shape::RECTANGLE)
             .enabled(args.enabled)
@@ -1039,7 +1025,8 @@ where
             .commit();
         controller.with_mut(|c| c.tick(Instant::now()));
 
-        if args.scrollable
+        let is_scrollable = args.scrollable || controller.with(|c| c.tab_row_scroll_max() > Px(0));
+        if is_scrollable
             && let Some(pos) = input.cursor_position_rel
             && pos.y < controller.with(|c| c.tab_bar_height())
         {
@@ -1082,9 +1069,10 @@ where
 
     measure(Box::new(
         move |input| -> Result<ComputedData, MeasurementError> {
-            let tabs_intrinsic_constraint = Constraint::new(tabs_args.width, tabs_args.height);
-            let tabs_effective_constraint =
-                tabs_intrinsic_constraint.merge(input.parent_constraint);
+            let tabs_effective_constraint = Constraint::new(
+                input.parent_constraint.width(),
+                input.parent_constraint.height(),
+            );
 
             let container_id = input.children_ids[0];
             let divider_id = input.children_ids[1];

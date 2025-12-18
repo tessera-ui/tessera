@@ -1,11 +1,12 @@
-use tessera_ui::{DimensionValue, Dp, shard, tessera};
+use tessera_ui::{Dp, Modifier, shard, tessera};
 use tessera_ui_basic_components::{
     badge::{BadgeArgsBuilder, badge, badge_with_content, badged_box},
     column::{ColumnArgsBuilder, column},
     icon::{IconArgsBuilder, icon},
     material_icons::filled,
+    modifier::ModifierExt as _,
     row::{RowArgsBuilder, row},
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
 };
@@ -15,15 +16,13 @@ use tessera_ui_basic_components::{
 pub fn badge_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
-            .padding(Dp(16.0))
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             column(
                 ColumnArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
                     .build()
                     .unwrap(),
                 |scope| {
@@ -38,12 +37,7 @@ pub fn badge_showcase() {
                     });
 
                     scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(16.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        spacer(Modifier::new().height(Dp(16.0)));
                     });
 
                     scope.child(|| {
@@ -59,7 +53,7 @@ pub fn badge_showcase() {
                     scope.child(|| {
                         row(
                             RowArgsBuilder::default()
-                                .width(DimensionValue::FILLED)
+                                .modifier(Modifier::new().fill_max_width())
                                 .build()
                                 .unwrap(),
                             |row_scope| {
@@ -84,12 +78,7 @@ pub fn badge_showcase() {
                     });
 
                     scope.child(|| {
-                        spacer(
-                            SpacerArgsBuilder::default()
-                                .height(Dp(16.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        spacer(Modifier::new().height(Dp(16.0)));
                     });
 
                     scope.child(|| {
@@ -105,7 +94,7 @@ pub fn badge_showcase() {
                     scope.child(|| {
                         row(
                             RowArgsBuilder::default()
-                                .width(DimensionValue::FILLED)
+                                .modifier(Modifier::new().fill_max_width())
                                 .build()
                                 .unwrap(),
                             |row_scope| {

@@ -5,22 +5,24 @@
 //! Use to stack children vertically.
 use derive_builder::Builder;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, MeasureInput, MeasurementError, NodeId,
+    ComputedData, Constraint, DimensionValue, MeasureInput, MeasurementError, Modifier, NodeId,
     ParentConstraint, Px, PxPosition, tessera,
 };
 
-use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
+use crate::{
+    alignment::{CrossAxisAlignment, MainAxisAlignment},
+    modifier::ModifierExt as _,
+};
 
 /// Arguments for the `column` component.
 #[derive(Builder, Clone, Debug)]
 #[builder(pattern = "owned")]
 pub struct ColumnArgs {
-    /// Width behavior for the column.
-    #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
-    pub width: DimensionValue,
-    /// Height behavior for the column.
-    #[builder(default = "DimensionValue::Wrap { min: None, max: None }")]
-    pub height: DimensionValue,
+    /// Modifier chain applied to the column subtree.
+    #[builder(
+        default = "Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))"
+    )]
+    pub modifier: Modifier,
     /// Main axis alignment (vertical alignment).
     #[builder(default = "MainAxisAlignment::Start")]
     pub main_axis_alignment: MainAxisAlignment,
@@ -75,16 +77,16 @@ impl<'a> ColumnScope<'a> {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the column's dimensions and alignment; see
-///   [`ColumnArgs`].
+/// - `args` — configures alignment and modifiers; see [`ColumnArgs`].
 /// - `scope_config` — a closure that receives a [`ColumnScope`] for adding
 ///   children.
 ///
 /// ## Examples
 ///
 /// ```
+/// use tessera_ui::Modifier;
 /// use tessera_ui_basic_components::column::{ColumnArgs, column};
-/// use tessera_ui_basic_components::spacer::{SpacerArgs, spacer};
+/// use tessera_ui_basic_components::spacer::spacer;
 /// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
 ///
 /// column(ColumnArgs::default(), |scope| {
@@ -96,7 +98,7 @@ impl<'a> ColumnScope<'a> {
 ///                 .expect("builder construction failed"),
 ///         )
 ///     });
-///     scope.child_weighted(|| spacer(SpacerArgs::default()), 1.0); // This spacer will be flexible
+///     scope.child_weighted(|| spacer(Modifier::new()), 1.0); // This spacer will be flexible
 ///     scope.child(|| {
 ///         text(
 ///             TextArgsBuilder::default()
@@ -112,6 +114,10 @@ pub fn column<F>(args: ColumnArgs, scope_config: F)
 where
     F: FnOnce(&mut ColumnScope),
 {
+    let modifier = args.modifier;
+    let mut args = args;
+    args.modifier = Modifier::new();
+
     let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
     let mut child_weights: Vec<Option<f32>> = Vec::new();
 
@@ -123,6 +129,15 @@ where
         scope_config(&mut scope);
     }
 
+    modifier.run(move || column_inner(args, child_closures, child_weights));
+}
+
+#[tessera]
+fn column_inner(
+    args: ColumnArgs,
+    child_closures: Vec<Box<dyn FnOnce() + Send + Sync>>,
+    child_weights: Vec<Option<f32>>,
+) {
     let n = child_closures.len();
 
     measure(Box::new(
@@ -133,9 +148,10 @@ where
                 "Mismatch between children defined in scope and runtime children count"
             );
 
-            let column_intrinsic_constraint = Constraint::new(args.width, args.height);
-            let column_effective_constraint =
-                column_intrinsic_constraint.merge(input.parent_constraint);
+            let column_effective_constraint = Constraint::new(
+                input.parent_constraint.width(),
+                input.parent_constraint.height(),
+            );
 
             let mut children_sizes = vec![None; n];
             let mut max_child_width = Px(0);

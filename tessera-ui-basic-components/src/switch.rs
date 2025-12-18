@@ -11,7 +11,7 @@ use std::{
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
-    PressKeyEventType, PxPosition, PxSize, State,
+    Modifier, PressKeyEventType, PxPosition, PxSize, State,
     accesskit::{Action, Role, Toggled},
     remember, tessera, use_context,
     winit::window::CursorIcon,
@@ -21,6 +21,7 @@ use crate::{
     alignment::Alignment,
     animation,
     boxed::{BoxedArgsBuilder, boxed},
+    modifier::ModifierExt,
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
@@ -453,11 +454,9 @@ fn switch_inner(
 
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(args.width.to_px()))
-            .height(DimensionValue::Fixed(args.height.to_px()))
+            .modifier(Modifier::new().size(args.width, args.height))
             .style(track_style)
             .shape(Shape::capsule())
-            .enforce_min_interactive_size(false)
             .show_state_layer(false)
             .show_ripple(false)
             .build()
@@ -467,14 +466,11 @@ fn switch_inner(
 
     // A non-visual state layer for hover + ripple feedback.
     let mut state_layer_builder = SurfaceArgsBuilder::default()
-        .width(DimensionValue::Fixed(
-            SwitchDefaults::STATE_LAYER_SIZE.to_px(),
-        ))
-        .height(DimensionValue::Fixed(
-            SwitchDefaults::STATE_LAYER_SIZE.to_px(),
+        .modifier(Modifier::new().size(
+            SwitchDefaults::STATE_LAYER_SIZE,
+            SwitchDefaults::STATE_LAYER_SIZE,
         ))
         .shape(Shape::Ellipse)
-        .enforce_min_interactive_size(false)
         .style(SurfaceStyle::Filled {
             color: Color::TRANSPARENT,
         })
@@ -496,8 +492,10 @@ fn switch_inner(
     let child = child;
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::Fixed(thumb_size_px))
-            .height(DimensionValue::Fixed(thumb_size_px))
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(thumb_size_px)),
+                Some(DimensionValue::Fixed(thumb_size_px)),
+            ))
             .style(SurfaceStyle::Filled {
                 color: colors.thumb_color,
             })
@@ -509,8 +507,10 @@ fn switch_inner(
             if let Some(child) = child {
                 boxed(
                     BoxedArgsBuilder::default()
-                        .width(DimensionValue::Fixed(thumb_size_px))
-                        .height(DimensionValue::Fixed(thumb_size_px))
+                        .modifier(Modifier::new().constrain(
+                            Some(DimensionValue::Fixed(thumb_size_px)),
+                            Some(DimensionValue::Fixed(thumb_size_px)),
+                        ))
                         .alignment(Alignment::Center)
                         .build()
                         .expect("builder construction failed"),

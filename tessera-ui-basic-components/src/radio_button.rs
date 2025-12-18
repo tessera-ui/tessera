@@ -12,7 +12,7 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, DimensionValue, Dp, Px, State,
+    Color, DimensionValue, Dp, Modifier, Px, State,
     accesskit::{Action, Role, Toggled},
     remember, tessera, use_context,
 };
@@ -21,6 +21,7 @@ use crate::{
     alignment::Alignment,
     animation,
     boxed::{BoxedArgsBuilder, boxed},
+    modifier::ModifierExt as _,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     theme::{MaterialAlpha, MaterialTheme},
@@ -330,8 +331,7 @@ pub fn radio_button_with_controller(
     let state_layer_radius = Dp(state_layer_size.0 / 2.0);
 
     let mut state_layer_builder = SurfaceArgsBuilder::default()
-        .width(DimensionValue::Fixed(state_layer_size.to_px()))
-        .height(DimensionValue::Fixed(state_layer_size.to_px()))
+        .modifier(Modifier::new().size(state_layer_size, state_layer_size))
         .shape(Shape::Ellipse)
         .enabled(args.enabled)
         .style(SurfaceStyle::Filled {
@@ -351,8 +351,7 @@ pub fn radio_button_with_controller(
 
     boxed(
         BoxedArgsBuilder::default()
-            .width(DimensionValue::Fixed(target_size.to_px()))
-            .height(DimensionValue::Fixed(target_size.to_px()))
+            .modifier(Modifier::new().size(target_size, target_size))
             .alignment(Alignment::Center)
             .build()
             .expect("builder construction failed"),
@@ -364,8 +363,7 @@ pub fn radio_button_with_controller(
                     boxed(
                         BoxedArgsBuilder::default()
                             .alignment(Alignment::Center)
-                            .width(DimensionValue::FILLED)
-                            .height(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_size())
                             .build()
                             .expect("builder construction failed"),
                         move |center| {
@@ -374,8 +372,7 @@ pub fn radio_button_with_controller(
                             center.child(move || {
                                 surface(
                                     SurfaceArgsBuilder::default()
-                                        .width(DimensionValue::Fixed(args.size.to_px()))
-                                        .height(DimensionValue::Fixed(args.size.to_px()))
+                                        .modifier(Modifier::new().size(args.size, args.size))
                                         .shape(Shape::Ellipse)
                                         .style(ring_style)
                                         .build()
@@ -390,11 +387,9 @@ pub fn radio_button_with_controller(
                                                 boxed(
                                                     BoxedArgsBuilder::default()
                                                         .alignment(Alignment::Center)
-                                                        .width(DimensionValue::Fixed(
-                                                            args.size.to_px(),
-                                                        ))
-                                                        .height(DimensionValue::Fixed(
-                                                            args.size.to_px(),
+                                                        .modifier(Modifier::new().size(
+                                                            args.size,
+                                                            args.size,
                                                         ))
                                                         .build()
                                                         .expect("builder construction failed"),
@@ -404,14 +399,18 @@ pub fn radio_button_with_controller(
                                                             move || {
                                                                 surface(
                                                                     SurfaceArgsBuilder::default()
-                                                                        .width(
-                                                                            DimensionValue::Fixed(
-                                                                                Px(animated_size),
-                                                                            ),
-                                                                        )
-                                                                        .height(
-                                                                            DimensionValue::Fixed(
-                                                                                Px(animated_size),
+                                                                        .modifier(
+                                                                            Modifier::new().constrain(
+                                                                                Some(
+                                                                                    DimensionValue::Fixed(
+                                                                                        Px(animated_size),
+                                                                                    ),
+                                                                                ),
+                                                                                Some(
+                                                                                    DimensionValue::Fixed(
+                                                                                        Px(animated_size),
+                                                                                    ),
+                                                                                ),
                                                                             ),
                                                                         )
                                                                         .shape(Shape::Ellipse)

@@ -8,13 +8,14 @@ use std::time::Instant;
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Px, PxPosition, State,
-    remember, tessera,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, Px,
+    PxPosition, State, remember, tessera,
 };
 
 use crate::{
     alignment::Alignment,
     boxed::{BoxedArgsBuilder, boxed},
+    modifier::ModifierExt,
     pos_misc::is_position_in_component,
     scrollable::scrollbar::{ScrollBarArgs, ScrollBarState, scrollbar_h, scrollbar_v},
 };
@@ -22,14 +23,9 @@ use crate::{
 /// Arguments for the `scrollable` container.
 #[derive(Debug, Builder, Clone)]
 pub struct ScrollableArgs {
-    /// The desired width behavior of the scrollable area
-    /// Defaults to [`tessera_ui::DimensionValue::FILLED`].
-    #[builder(default = "tessera_ui::DimensionValue::FILLED")]
-    pub width: tessera_ui::DimensionValue,
-    /// The desired height behavior of the scrollable area.
-    /// Defaults to [`tessera_ui::DimensionValue::FILLED`].
-    #[builder(default = "tessera_ui::DimensionValue::FILLED")]
-    pub height: tessera_ui::DimensionValue,
+    /// Modifier chain applied to the scrollable subtree.
+    #[builder(default = "Modifier::new().fill_max_size()")]
+    pub modifier: Modifier,
     /// Is vertical scrollable?
     /// Defaults to `true` since most scrollable areas are vertical.
     #[builder(default = "true")]
@@ -341,6 +337,9 @@ pub fn scrollable_with_controller(
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
     let args: ScrollableArgs = args.into();
+    let modifier = args.modifier;
+    let mut args = args;
+    args.modifier = Modifier::new();
 
     // Create separate ScrollBarArgs for vertical and horizontal scrollbars
     let scrollbar_args_v = ScrollBarArgs {
@@ -369,22 +368,26 @@ pub fn scrollable_with_controller(
 
     match args.scrollbar_layout {
         ScrollBarLayout::Alongside => {
-            scrollable_with_alongside_scrollbar(
-                controller,
-                args,
-                scrollbar_args_v,
-                scrollbar_args_h,
-                child,
-            );
+            modifier.run(move || {
+                scrollable_with_alongside_scrollbar(
+                    controller,
+                    args,
+                    scrollbar_args_v,
+                    scrollbar_args_h,
+                    child,
+                );
+            });
         }
         ScrollBarLayout::Overlay => {
-            scrollable_with_overlay_scrollbar(
-                controller,
-                args,
-                scrollbar_args_v,
-                scrollbar_args_h,
-                child,
-            );
+            modifier.run(move || {
+                scrollable_with_overlay_scrollbar(
+                    controller,
+                    args,
+                    scrollbar_args_v,
+                    scrollbar_args_h,
+                    child,
+                );
+            });
         }
     }
 }
@@ -419,12 +422,10 @@ fn scrollable_with_alongside_scrollbar(
     measure(Box::new(move |input| {
         // Record the final size
         let mut final_size = ComputedData::ZERO;
-        // Merge arg constraints with parent constraints
-        let self_constraint = Constraint {
-            width: args.width,
-            height: args.height,
-        };
-        let mut content_contraint = self_constraint.merge(input.parent_constraint);
+        let mut content_contraint = Constraint::new(
+            input.parent_constraint.width(),
+            input.parent_constraint.height(),
+        );
         // measure the scrollbar
         if args.vertical {
             let scrollbar_node_id = input.children_ids[1];
@@ -487,8 +488,7 @@ fn scrollable_with_overlay_scrollbar(
 ) {
     boxed(
         BoxedArgsBuilder::default()
-            .width(args.width)
-            .height(args.height)
+            .modifier(Modifier::new().fill_max_size())
             .alignment(Alignment::BottomEnd)
             .build()
             .expect("builder construction failed"),
@@ -556,21 +556,19 @@ fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
 
 #[tessera]
 fn scrollable_inner(
-    args: impl Into<ScrollableArgs>,
+    args: ScrollableArgs,
     controller: State<ScrollableController>,
     scrollbar_state_v: ScrollBarState,
     scrollbar_state_h: ScrollBarState,
     child: impl FnOnce(),
 ) {
-    let args: ScrollableArgs = args.into();
     {
         measure(Box::new(move |input| {
             input.enable_clipping();
-            let arg_constraint = Constraint {
-                width: args.width,
-                height: args.height,
-            };
-            let merged_constraint = arg_constraint.merge(input.parent_constraint);
+            let merged_constraint = Constraint::new(
+                input.parent_constraint.width(),
+                input.parent_constraint.height(),
+            );
             // Now calculate the constraints to child
             let mut child_constraint = merged_constraint;
             // If vertical scrollable, set height to wrap

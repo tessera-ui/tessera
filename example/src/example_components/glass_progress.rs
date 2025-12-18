@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera, use_context};
+use tessera_ui::{DimensionValue, Dp, Modifier, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     glass_progress::{GlassProgressArgsBuilder, glass_progress},
+    modifier::ModifierExt as _,
     scrollable::{ScrollableArgsBuilder, scrollable},
     slider::{SliderArgsBuilder, slider},
     spacer::spacer,
@@ -17,21 +18,19 @@ use tessera_ui_basic_components::{
 pub fn glass_progress_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_width())
                     .build()
                     .unwrap(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(25.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
                             .build()
                             .unwrap(),
                         move || {
@@ -50,14 +49,14 @@ fn test_content() {
 
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width())
             .build()
             .unwrap(),
         move |scope| {
             scope.child(|| text("Glass Progress Showcase"));
 
             scope.child(|| {
-                spacer(Dp(20.0));
+                spacer(Modifier::new().height(Dp(20.0)));
             });
 
             scope.child(|| {
@@ -85,7 +84,7 @@ fn test_content() {
             });
 
             scope.child(|| {
-                spacer(Dp(20.0));
+                spacer(Modifier::new().height(Dp(20.0)));
             });
 
             scope.child(move || {
@@ -96,7 +95,7 @@ fn test_content() {
                     SliderArgsBuilder::default()
                         .value(progress.get())
                         .on_change(on_change)
-                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
+                        .modifier(Modifier::new().width(Dp(250.0)))
                         .build()
                         .unwrap(),
                 );

@@ -6,12 +6,13 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
-use tessera_ui::{Color, Dp, tessera, use_context};
+use tessera_ui::{Color, Dp, Modifier, tessera, use_context};
 
 use crate::{
     button::{ButtonArgsBuilder, ButtonDefaults, button},
     glass_button::{GlassButtonArgs, glass_button},
     icon::{IconArgs, icon},
+    modifier::ModifierExt,
     shape_def::Shape,
     theme::MaterialTheme,
 };
@@ -161,8 +162,7 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
 
     // Construct ButtonArgs
     let mut button_builder = ButtonArgsBuilder::default()
-        .width(Dp(40.0))
-        .height(Dp(40.0))
+        .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)))
         .padding(Dp(8.0))
         .shape(Shape::rounded_rectangle(Dp(20.0)))
         .color(container_color)

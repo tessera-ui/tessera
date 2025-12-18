@@ -9,11 +9,14 @@ use std::{
 };
 
 use derive_builder::Builder;
-use tessera_ui::{Color, DimensionValue, Dp, Px, PxPosition, State, remember, tessera, winit};
+use tessera_ui::{
+    Color, DimensionValue, Dp, Modifier, Px, PxPosition, State, remember, tessera, winit,
+};
 
 use crate::{
     animation,
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    modifier::ModifierExt,
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
 };
@@ -250,14 +253,7 @@ fn render_material_scrim(args: &SideBarProviderArgs, progress: f32, is_open: boo
         SurfaceArgsBuilder::default()
             .style(Color::BLACK.with_alpha(scrim_alpha).into())
             .on_click_shared(args.on_close_request.clone())
-            .width(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
-            .height(DimensionValue::Fill {
-                min: None,
-                max: None,
-            })
+            .modifier(Modifier::new().fill_max_size())
             .block_input(true)
             .build()
             .expect("builder construction failed"),
@@ -497,12 +493,7 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
             surface(
                 SurfaceArgsBuilder::default()
                     .style(Color::new(0.9, 0.9, 0.9, 1.0).into())
-                    .width(DimensionValue::from(Dp(250.0)))
-                    .height(tessera_ui::DimensionValue::Fill {
-                        min: None,
-                        max: None,
-                    })
-                    .padding(Dp(16.0))
+                    .modifier(Modifier::new().width(Dp(250.0)).fill_max_height())
                     .shape(Shape::RoundedRectangle {
                         top_left: RoundedCorner::manual(Dp(0.0), 3.0),
                         top_right: RoundedCorner::manual(Dp(25.0), 3.0),
@@ -512,7 +503,9 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                     .block_input(true)
                     .build()
                     .expect("builder construction failed"),
-                content,
+                move || {
+                    Modifier::new().padding_all(Dp(16.0)).run(content);
+                },
             );
         }
     }

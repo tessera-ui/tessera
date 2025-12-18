@@ -7,15 +7,18 @@
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use derive_builder::Builder;
-use tessera_ui::{Color, ComputedData, Dp, Px, PxPosition, remember, tessera, use_context};
+use tessera_ui::{
+    Color, ComputedData, Dp, Modifier, Px, PxPosition, remember, tessera, use_context,
+};
 
 use crate::{
     alignment::MainAxisAlignment,
     animation,
     button::{ButtonArgs, button},
+    modifier::ModifierExt,
     row::{RowArgs, row},
     shape_def::{RoundedCorner, Shape},
-    spacer::{SpacerArgs, spacer},
+    spacer::spacer,
     theme::MaterialTheme,
 };
 
@@ -291,7 +294,7 @@ where
     let selection_mode = args.selection_mode;
     row(
         RowArgs {
-            height: layout.container_height.into(),
+            modifier: Modifier::new().height(layout.container_height),
             main_axis_alignment: MainAxisAlignment::SpaceBetween,
             ..Default::default()
         },
@@ -313,10 +316,9 @@ where
                         });
                         button_args.shape = layout.active_button_shape;
                         let scheme = use_context::<MaterialTheme>().get().color_scheme;
-                        button(button_args, || {
-                            elastic_container(state, index, move || {
-                                child_closure(scheme.on_primary)
-                            })
+                        let label_color = scheme.on_primary;
+                        button(button_args, move || {
+                            elastic_container(state, index, move || child_closure(label_color))
                         });
                     } else {
                         let mut button_args = ButtonArgs::filled(move || {
@@ -347,19 +349,15 @@ where
                         }
 
                         let scheme = use_context::<MaterialTheme>().get().color_scheme;
+                        let label_color = scheme.on_secondary_container;
                         button(button_args, move || {
-                            elastic_container(state, index, move || {
-                                child_closure(scheme.on_secondary_container)
-                            })
+                            elastic_container(state, index, move || child_closure(label_color))
                         });
                     }
                 });
                 if index != child_len - 1 {
                     scope.child(move || {
-                        spacer(SpacerArgs {
-                            width: layout.between_space.into(),
-                            ..Default::default()
-                        });
+                        spacer(Modifier::new().width(layout.between_space));
                     })
                 }
             }

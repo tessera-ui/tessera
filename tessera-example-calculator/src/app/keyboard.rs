@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
-use tessera_ui::{Color, DimensionValue, Dp, State, tessera};
+use tessera_ui::{Color, DimensionValue, Dp, Modifier, State, tessera};
 use tessera_ui_basic_components::{
     alignment::Alignment,
     boxed::{BoxedArgsBuilder, boxed},
     button::{ButtonArgsBuilder, button},
     column::{ColumnArgsBuilder, column},
     glass_button::{GlassButtonArgsBuilder, glass_button},
+    modifier::ModifierExt,
     row::{RowArgsBuilder, row},
     shape_def::Shape,
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     text::{TextArgsBuilder, text},
 };
 
@@ -19,8 +20,7 @@ use crate::{CalStyle, app::AppState};
 pub fn keyboard(app_state: State<AppState>, style: CalStyle) {
     column(
         ColumnArgsBuilder::default()
-            .width(tessera_ui::DimensionValue::FILLED)
-            .height(tessera_ui::DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         |scope| {
@@ -42,8 +42,7 @@ pub fn keyboard(app_state: State<AppState>, style: CalStyle) {
 fn row_top(state: State<AppState>, style: CalStyle) {
     row(
         RowArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move |scope| {
@@ -63,8 +62,7 @@ fn row_top(state: State<AppState>, style: CalStyle) {
 fn row_1(state: State<AppState>, style: CalStyle) {
     row(
         RowArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move |scope| {
@@ -84,8 +82,7 @@ fn row_1(state: State<AppState>, style: CalStyle) {
 fn row_2(state: State<AppState>, style: CalStyle) {
     row(
         RowArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move |scope| {
@@ -105,8 +102,7 @@ fn row_2(state: State<AppState>, style: CalStyle) {
 fn row_3(state: State<AppState>, style: CalStyle) {
     row(
         RowArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move |scope| {
@@ -126,8 +122,7 @@ fn row_3(state: State<AppState>, style: CalStyle) {
 fn row_4(state: State<AppState>, style: CalStyle) {
     row(
         RowArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move |scope| {
@@ -201,8 +196,7 @@ fn num_key(key: &'static str, app_state: State<AppState>, style: CalStyle) {
         CalStyle::Material => {
             button(
                 ButtonArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .shape(Shape::Ellipse)
                     .color(Color::GRAY)
                     .on_click_shared(on_click)
@@ -224,8 +218,7 @@ fn key_content(key: &'static str) {
     };
     boxed(
         BoxedArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .alignment(Alignment::Center)
             .build()
             .unwrap(),
@@ -245,20 +238,10 @@ fn key_content(key: &'static str) {
 
 #[tessera]
 fn spacer_h() {
-    spacer(
-        SpacerArgsBuilder::default()
-            .width(DimensionValue::Fixed(Dp(5.0).to_px()))
-            .build()
-            .unwrap(),
-    );
+    spacer(Modifier::new().width(Dp(5.0)));
 }
 
 #[tessera]
 fn spacer_v() {
-    spacer(
-        SpacerArgsBuilder::default()
-            .height(DimensionValue::Fixed(Dp(5.0).to_px()))
-            .build()
-            .unwrap(),
-    );
+    spacer(Modifier::new().height(Dp(5.0)));
 }

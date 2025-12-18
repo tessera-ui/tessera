@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use closure::closure;
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera, use_context};
+use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     button::{ButtonArgs, button},
@@ -9,9 +9,10 @@ use tessera_ui_basic_components::{
     icon::{IconArgsBuilder, IconContent},
     icon_button::{IconButtonArgsBuilder, IconButtonVariant, icon_button},
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
+    modifier::ModifierExt as _,
     row::{RowArgsBuilder, row},
     scrollable::{ScrollableArgsBuilder, scrollable},
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, surface},
     text::{TextArgsBuilder, text},
     theme::MaterialTheme,
@@ -50,21 +51,19 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
     let counter = remember(|| 0i32);
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .unwrap(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(25.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
                             .build()
                             .unwrap(),
                         move || {
@@ -124,12 +123,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                     }));
 
                                     scope.child(|| {
-                                        spacer(
-                                            SpacerArgsBuilder::default()
-                                                .height(Dp(20.0))
-                                                .build()
-                                                .unwrap(),
-                                        );
+                                        spacer(Modifier::new().height(Dp(20.0)));
                                     });
 
                                     scope.child(|| {
@@ -165,14 +159,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                     },
                                                 );
                                             });
-                                            scope.child(|| {
-                                                spacer(
-                                                    SpacerArgsBuilder::default()
-                                                        .width(Dp(8.0))
-                                                        .build()
-                                                        .unwrap(),
-                                                )
-                                            });
+                                            scope.child(|| spacer(Modifier::new().width(Dp(8.0))));
 
                                             scope.child(|| {
                                                 button(
@@ -195,14 +182,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                     },
                                                 );
                                             });
-                                            scope.child(|| {
-                                                spacer(
-                                                    SpacerArgsBuilder::default()
-                                                        .width(Dp(8.0))
-                                                        .build()
-                                                        .unwrap(),
-                                                )
-                                            });
+                                            scope.child(|| spacer(Modifier::new().width(Dp(8.0))));
 
                                             scope.child(|| {
                                                 button(
@@ -226,14 +206,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                         });
                                     });
 
-                                    scope.child(|| {
-                                        spacer(
-                                            SpacerArgsBuilder::default()
-                                                .height(Dp(8.0))
-                                                .build()
-                                                .unwrap(),
-                                        )
-                                    });
+                                    scope.child(|| spacer(Modifier::new().height(Dp(8.0))));
 
                                     scope.child(closure!(|| {
                                         row(
@@ -261,12 +234,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                     );
                                                 }));
                                                 scope.child(|| {
-                                                    spacer(
-                                                        SpacerArgsBuilder::default()
-                                                            .width(Dp(8.0))
-                                                            .build()
-                                                            .unwrap(),
-                                                    )
+                                                    spacer(Modifier::new().width(Dp(8.0)))
                                                 });
 
                                                 scope.child(closure!(|| {

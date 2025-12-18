@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
+    modifier::ModifierExt as _,
     progress::{
         CircularProgressIndicatorArgsBuilder, LinearProgressIndicatorArgsBuilder,
         ProgressArgsBuilder, circular_progress_indicator, linear_progress_indicator, progress,
@@ -19,21 +20,19 @@ use tessera_ui_basic_components::{
 pub fn progress_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_width())
                     .build()
                     .unwrap(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(25.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
                             .build()
                             .unwrap(),
                         move || {
@@ -52,7 +51,7 @@ fn test_content() {
 
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width())
             .build()
             .unwrap(),
         move |scope| {
@@ -65,15 +64,13 @@ fn test_content() {
                 progress(
                     ProgressArgsBuilder::default()
                         .value(progress_val)
-                        .width(Dp(240.0))
+                        .modifier(Modifier::new().width(Dp(240.0)))
                         .build()
                         .unwrap(),
                 );
             });
 
-            scope.child(|| {
-                spacer(Dp(10.0));
-            });
+            scope.child(|| spacer(Modifier::new().height(Dp(10.0))));
 
             scope.child(move || {
                 let on_change = Arc::new(move |new_value| progress_value.set(new_value));
@@ -81,13 +78,13 @@ fn test_content() {
                     SliderArgsBuilder::default()
                         .value(progress_value.get())
                         .on_change(on_change)
-                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
+                        .modifier(Modifier::new().width(Dp(250.0)))
                         .build()
                         .unwrap(),
                 );
             });
 
-            scope.child(|| spacer(Dp(20.0)));
+            scope.child(|| spacer(Modifier::new().height(Dp(20.0))));
 
             scope.child(|| {
                 text("Linear progress indicator (indeterminate).".to_string());
@@ -100,7 +97,7 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| spacer(Dp(20.0)));
+            scope.child(|| spacer(Modifier::new().height(Dp(20.0))));
 
             scope.child(|| {
                 text("Circular progress indicator (determinate).".to_string());
@@ -114,7 +111,7 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| spacer(Dp(20.0)));
+            scope.child(|| spacer(Modifier::new().height(Dp(20.0))));
 
             scope.child(|| {
                 text("Circular progress indicator (indeterminate).".to_string());

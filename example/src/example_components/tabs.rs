@@ -1,7 +1,8 @@
-use tessera_ui::{DimensionValue, Dp, shard, tessera, use_context};
+use tessera_ui::{Dp, Modifier, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     material_icons,
+    modifier::ModifierExt as _,
     scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     tabs::{TabsArgsBuilder, TabsVariant, tabs},
@@ -14,21 +15,19 @@ use tessera_ui_basic_components::{
 pub fn tabs_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .unwrap(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(25.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
                             .build()
                             .unwrap(),
                         move || {
@@ -45,7 +44,7 @@ pub fn tabs_showcase() {
 fn test_content() {
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width())
             .build()
             .unwrap(),
         |scope| {
@@ -62,7 +61,7 @@ fn test_content() {
             scope.child(move || {
                 tabs(
                     TabsArgsBuilder::default()
-                        .width(DimensionValue::FILLED)
+                        .modifier(Modifier::new().fill_max_width())
                         .variant(TabsVariant::Primary)
                         .build()
                         .unwrap(),
@@ -100,7 +99,7 @@ fn test_content() {
                 let scheme = use_context::<MaterialTheme>().get().color_scheme;
                 tabs(
                     TabsArgsBuilder::default()
-                        .width(DimensionValue::FILLED)
+                        .modifier(Modifier::new().fill_max_width())
                         .variant(TabsVariant::Secondary)
                         .active_content_color(scheme.on_surface)
                         .build()
@@ -126,7 +125,7 @@ fn test_content() {
             scope.child(move || {
                 tabs(
                     TabsArgsBuilder::default()
-                        .width(DimensionValue::FILLED)
+                        .modifier(Modifier::new().fill_max_width())
                         .scrollable(true)
                         .variant(TabsVariant::Primary)
                         .build()

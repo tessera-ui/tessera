@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     column::{ColumnArgsBuilder, column},
     icon::{IconArgsBuilder, icon},
     material_icons::round::check_icon,
+    modifier::ModifierExt as _,
     scrollable::{ScrollableArgsBuilder, scrollable},
     surface::{SurfaceArgsBuilder, surface},
     switch::{
@@ -20,21 +21,19 @@ use tessera_ui_basic_components::{
 pub fn switch_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .build()
                     .unwrap(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(25.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
                             .build()
                             .unwrap(),
                         move || {
@@ -51,7 +50,7 @@ pub fn switch_showcase() {
 fn test_content() {
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width())
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .build()
             .unwrap(),

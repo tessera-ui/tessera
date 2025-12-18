@@ -1,7 +1,8 @@
-use tessera_ui::{Color, Dp, State, tessera};
+use tessera_ui::{Color, Dp, Modifier, State, tessera};
 use tessera_ui_basic_components::{
     alignment::MainAxisAlignment,
     fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    modifier::ModifierExt as _,
     row::{RowArgsBuilder, row},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, surface},
@@ -17,10 +18,10 @@ pub fn display_screen(app_state: State<AppState>, style: CalStyle) {
     surface(
         SurfaceArgsBuilder::default()
             .style(Color::TRANSPARENT.into())
-            .padding(Dp(5.0))
+            .modifier(Modifier::new().padding_all(Dp(5.0)))
             .build()
             .unwrap(),
-        || match style {
+        move || match style {
             CalStyle::Glass => render_glass_display(app_state),
             CalStyle::Material => render_material_display(app_state),
         },
@@ -48,7 +49,7 @@ fn render_glass_display(app_state: State<AppState>) {
 fn render_material_display(app_state: State<AppState>) {
     surface(
         SurfaceArgsBuilder::default()
-            .padding(Dp(10.0))
+            .modifier(Modifier::new().padding_all(Dp(10.0)))
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(Dp(25.0), 3.0),
                 top_right: RoundedCorner::manual(Dp(25.0), 3.0),
@@ -68,8 +69,7 @@ fn render_material_display(app_state: State<AppState>) {
 fn content(app_state: State<AppState>) {
     row(
         RowArgsBuilder::default()
-            .width(tessera_ui::DimensionValue::FILLED)
-            .height(tessera_ui::DimensionValue::WRAP)
+            .modifier(Modifier::new().fill_max_width())
             .main_axis_alignment(MainAxisAlignment::End)
             .build()
             .unwrap(),

@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use tessera_ui::{DimensionValue, Dp, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     column::{ColumnArgsBuilder, column},
     material_icons::filled,
+    modifier::ModifierExt as _,
     scrollable::{ScrollableArgsBuilder, scrollable},
     slider::{RangeSliderArgsBuilder, SliderArgsBuilder, centered_slider, range_slider, slider},
     surface::{SurfaceArgsBuilder, surface},
@@ -15,21 +16,19 @@ use tessera_ui_basic_components::{
 pub fn slider_showcase() {
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_size())
             .build()
             .unwrap(),
         move || {
             scrollable(
                 ScrollableArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_width())
                     .build()
                     .unwrap(),
                 move || {
                     surface(
                         SurfaceArgsBuilder::default()
-                            .padding(Dp(25.0))
-                            .width(DimensionValue::FILLED)
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
                             .build()
                             .unwrap(),
                         move || {
@@ -53,7 +52,7 @@ fn test_content() {
 
     column(
         ColumnArgsBuilder::default()
-            .width(DimensionValue::FILLED)
+            .modifier(Modifier::new().fill_max_width())
             .build()
             .unwrap(),
         move |scope| {
@@ -65,7 +64,7 @@ fn test_content() {
                     SliderArgsBuilder::default()
                         .value(value.get())
                         .on_change(on_change)
-                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
+                        .modifier(Modifier::new().width(Dp(250.0)))
                         .build()
                         .unwrap(),
                 );
@@ -87,7 +86,7 @@ fn test_content() {
                     SliderArgsBuilder::default()
                         .value(centered_value.get())
                         .on_change(on_change)
-                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
+                        .modifier(Modifier::new().width(Dp(250.0)))
                         .build()
                         .unwrap(),
                 );
@@ -109,7 +108,7 @@ fn test_content() {
                     RangeSliderArgsBuilder::default()
                         .value(range_value.get())
                         .on_change(on_change)
-                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
+                        .modifier(Modifier::new().width(Dp(250.0)))
                         .build()
                         .unwrap(),
                 );
@@ -130,7 +129,7 @@ fn test_content() {
                         .value(step_value.get())
                         .steps(5)
                         .on_change(on_change)
-                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
+                        .modifier(Modifier::new().width(Dp(250.0)))
                         .build()
                         .unwrap(),
                 );
@@ -150,7 +149,7 @@ fn test_content() {
                         .value(step_range_value.get())
                         .steps(5)
                         .on_change(on_change)
-                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
+                        .modifier(Modifier::new().width(Dp(250.0)))
                         .build()
                         .unwrap(),
                 );
@@ -175,7 +174,7 @@ fn test_content() {
                     SliderArgsBuilder::default()
                         .value(icon_slider_value.get())
                         .on_change(on_change)
-                        .width(DimensionValue::Fixed(Dp(250.0).to_px()))
+                        .modifier(Modifier::new().width(Dp(250.0)))
                         .size(tessera_ui_basic_components::slider::SliderSize::Medium)
                         .inset_icon(filled::volume_up_icon())
                         .build()

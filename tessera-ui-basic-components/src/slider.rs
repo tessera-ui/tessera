@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasureInput, MeasurementError, Px,
-    PxPosition, State,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasureInput, MeasurementError, Modifier,
+    Px, PxPosition, State,
     accessibility::AccessibilityNode,
     accesskit::{Action, Role},
     focus_state::Focus,
@@ -208,6 +208,9 @@ pub enum SliderSize {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct SliderArgs {
+    /// Modifier chain applied to the slider subtree.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// The current value of the slider, ranging from 0.0 to 1.0.
     #[builder(default = "0.0")]
     pub value: f32,
@@ -217,9 +220,6 @@ pub struct SliderArgs {
     /// Size variant of the slider.
     #[builder(default)]
     pub size: SliderSize,
-    /// Total width of the slider control.
-    #[builder(default = "DimensionValue::Fixed(Dp(260.0).to_px())")]
-    pub width: DimensionValue,
     /// The color of the active part of the track (progress fill).
     #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub active_track_color: Color,
@@ -260,6 +260,9 @@ pub struct SliderArgs {
 #[derive(Builder, Clone)]
 #[builder(pattern = "owned")]
 pub struct RangeSliderArgs {
+    /// Modifier chain applied to the range slider subtree.
+    #[builder(default = "Modifier::new()")]
+    pub modifier: Modifier,
     /// The current range values (start, end), each between 0.0 and 1.0.
     #[builder(default = "(0.0, 1.0)")]
     pub value: (f32, f32),
@@ -271,10 +274,6 @@ pub struct RangeSliderArgs {
     /// Size variant of the slider.
     #[builder(default)]
     pub size: SliderSize,
-
-    /// Total width of the slider control.
-    #[builder(default = "DimensionValue::Fixed(Dp(260.0).to_px())")]
-    pub width: DimensionValue,
 
     /// The color of the active part of the track (range fill).
     #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
@@ -602,6 +601,14 @@ pub fn slider(args: impl Into<SliderArgs>) {
 #[tessera]
 pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: State<SliderController>) {
     let args: SliderArgs = args.into();
+    let modifier = args.modifier;
+    let mut args = args;
+    args.modifier = Modifier::new();
+    modifier.run(move || slider_with_controller_inner(args, controller));
+}
+
+#[tessera]
+fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderController>) {
     let initial_width = fallback_component_width(&args);
     let clamped_value = args.value.clamp(0.0, 1.0);
     let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
@@ -1316,8 +1323,15 @@ pub fn range_slider_with_controller(
     state: State<RangeSliderController>,
 ) {
     let args: RangeSliderArgs = args.into();
+    let modifier = args.modifier;
+    let mut args = args;
+    args.modifier = Modifier::new();
+    modifier.run(move || range_slider_with_controller_inner(args, state));
+}
+
+#[tessera]
+fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeSliderController>) {
     let dummy_slider_args = SliderArgsBuilder::default()
-        .width(args.width)
         .size(args.size)
         .show_stop_indicator(args.show_stop_indicator)
         .build()

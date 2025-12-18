@@ -11,7 +11,7 @@ use std::{
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
-    MeasurementError, PressKeyEventType, Px, PxPosition, PxSize, State, accesskit::Role,
+    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, PxSize, State, accesskit::Role,
     provide_context, remember, tessera, use_context, winit::window::CursorIcon,
 };
 
@@ -20,11 +20,12 @@ use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     animation,
     column::{ColumnArgsBuilder, column},
+    modifier::ModifierExt,
     pos_misc::is_position_in_component,
     ripple_state::{RippleSpec, RippleState},
     row::{RowArgsBuilder, row},
     shape_def::Shape,
-    spacer::{SpacerArgsBuilder, spacer},
+    spacer::spacer,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
     theme::{ContentColor, MaterialTheme, provide_text_style},
@@ -112,8 +113,10 @@ fn navigation_bar_item(
                 color: indicator_color,
             })
             .shape(Shape::capsule())
-            .width(DimensionValue::Fixed(animated_indicator_width_px))
-            .height(INDICATOR_HEIGHT)
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(animated_indicator_width_px)),
+                Some(DimensionValue::Fixed(INDICATOR_HEIGHT.to_px())),
+            ))
             .show_state_layer(false)
             .show_ripple(false)
             .build()
@@ -127,10 +130,8 @@ fn navigation_bar_item(
                 color: Color::TRANSPARENT,
             })
             .shape(Shape::capsule())
-            .width(INDICATOR_WIDTH)
-            .height(INDICATOR_HEIGHT)
+            .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
             .enabled(true)
-            .enforce_min_interactive_size(false)
             .interaction_state(interaction_state)
             .ripple_color(ripple_color)
             .build()
@@ -561,8 +562,7 @@ pub fn navigation_bar_with_controller<F>(
 
     surface(
         SurfaceArgsBuilder::default()
-            .width(DimensionValue::FILLED)
-            .height(CONTAINER_HEIGHT)
+            .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
             .style(scheme.surface_container.into())
             .shadow(container_shadow)
             .block_input(true)
@@ -572,8 +572,7 @@ pub fn navigation_bar_with_controller<F>(
             let separator_color = scheme.outline_variant.with_alpha(0.12);
             column(
                 ColumnArgsBuilder::default()
-                    .width(DimensionValue::FILLED)
-                    .height(DimensionValue::FILLED)
+                    .modifier(Modifier::new().fill_max_size())
                     .cross_axis_alignment(CrossAxisAlignment::Stretch)
                     .build()
                     .expect("ColumnArgsBuilder failed with required fields set"),
@@ -581,8 +580,7 @@ pub fn navigation_bar_with_controller<F>(
                     column_scope.child(move || {
                         surface(
                             SurfaceArgsBuilder::default()
-                                .width(DimensionValue::FILLED)
-                                .height(DIVIDER_HEIGHT)
+                                .modifier(Modifier::new().fill_max_width().height(DIVIDER_HEIGHT))
                                 .style(separator_color.into())
                                 .build()
                                 .expect("SurfaceArgsBuilder failed for divider"),
@@ -594,8 +592,7 @@ pub fn navigation_bar_with_controller<F>(
                         move || {
                             row(
                                 RowArgsBuilder::default()
-                                    .width(DimensionValue::FILLED)
-                                    .height(DimensionValue::FILLED)
+                                    .modifier(Modifier::new().fill_max_size())
                                     .main_axis_alignment(MainAxisAlignment::Start)
                                     .cross_axis_alignment(CrossAxisAlignment::Center)
                                     .build()
@@ -620,12 +617,7 @@ pub fn navigation_bar_with_controller<F>(
                                         if index != last_index {
                                             row_scope.child(|| {
                                                 spacer(
-                                                    SpacerArgsBuilder::default()
-                                                        .width(DimensionValue::Fixed(
-                                                            ITEM_HORIZONTAL_SPACING.to_px(),
-                                                        ))
-                                                        .build()
-                                                        .expect("builder construction failed"),
+                                                    Modifier::new().width(ITEM_HORIZONTAL_SPACING),
                                                 );
                                             });
                                         }
