@@ -664,6 +664,7 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) 
     args.shadow = None;
     args.shadow_elevation = None;
 
+    modifier = modifier.block_touch_propagation();
     modifier.run(move || surface_inner(args, child));
 }
 

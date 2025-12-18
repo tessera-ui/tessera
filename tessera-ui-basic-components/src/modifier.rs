@@ -7,19 +7,19 @@
 use std::{mem, sync::Arc};
 
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, Px,
-    GestureState, PressKeyEventType, PxPosition, PxSize, State, accesskit,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
+    Modifier, PressKeyEventType, Px, PxPosition, PxSize, State, accesskit,
     accesskit::{Action, Toggled},
     tessera, use_context,
     winit::window::CursorIcon,
 };
 
 use crate::{
+    ShadowProps,
     pipelines::shape::command::ShapeCommand,
     pos_misc::is_position_in_rect,
     ripple_state::{RippleSpec, RippleState},
     shape_def::{ResolvedShape, Shape},
-    ShadowProps,
 };
 
 /// Controls whether minimum interactive size wrappers are enforced.
@@ -152,6 +152,10 @@ pub trait ModifierExt {
 
     /// Enforces a minimum interactive size by expanding and centering content.
     fn minimum_interactive_component_size(self) -> Modifier;
+
+    /// Prevents cursor events from propagating to components behind this
+    /// subtree.
+    fn block_touch_propagation(self) -> Modifier;
 
     /// Makes the subtree clickable with optional ripple feedback and an
     /// accessibility click action.
@@ -437,6 +441,16 @@ impl ModifierExt for Modifier {
         self.push_wrapper(move |child| {
             move || {
                 modifier_minimum_interactive_size(|| {
+                    child();
+                });
+            }
+        })
+    }
+
+    fn block_touch_propagation(self) -> Modifier {
+        self.push_wrapper(move |child| {
+            move || {
+                modifier_block_touch_propagation(|| {
                     child();
                 });
             }
@@ -765,7 +779,7 @@ fn modifier_clickable<F>(
     child();
 
     let role = role.unwrap_or(accesskit::Role::Button);
-    input_handler(Box::new(move |input| {
+    input_handler(Box::new(move |mut input| {
         let mut cursor_events = Vec::new();
         mem::swap(&mut cursor_events, input.cursor_events);
 
@@ -884,6 +898,36 @@ fn modifier_clickable<F>(
                 s.set_hovered(false);
             });
         }
+
+        if within_bounds {
+            input.block_cursor();
+        }
+    }));
+}
+
+#[tessera]
+fn modifier_block_touch_propagation<F>(child: F)
+where
+    F: FnOnce(),
+{
+    child();
+
+    input_handler(Box::new(move |mut input| {
+        let within_bounds = input
+            .cursor_position_rel
+            .map(|pos| {
+                is_position_in_rect(
+                    pos,
+                    PxPosition::ZERO,
+                    input.computed_data.width,
+                    input.computed_data.height,
+                )
+            })
+            .unwrap_or(false);
+
+        if within_bounds {
+            input.block_cursor();
+        }
     }));
 }
 
@@ -916,7 +960,7 @@ fn modifier_toggleable<F>(
     child();
 
     let role = role.unwrap_or(accesskit::Role::CheckBox);
-    input_handler(Box::new(move |input| {
+    input_handler(Box::new(move |mut input| {
         let mut cursor_events = Vec::new();
         mem::swap(&mut cursor_events, input.cursor_events);
 
@@ -943,11 +987,7 @@ fn modifier_toggleable<F>(
         if let Some(description) = description.as_ref() {
             builder = builder.description(description.clone());
         }
-        builder = builder.toggled(if value {
-            Toggled::True
-        } else {
-            Toggled::False
-        });
+        builder = builder.toggled(if value { Toggled::True } else { Toggled::False });
 
         builder = if enabled {
             builder.action(Action::Click).focusable()
@@ -983,7 +1023,10 @@ fn modifier_toggleable<F>(
             bounded: true,
             radius: None,
         });
-        let size = ripple_size.unwrap_or(PxSize::new(input.computed_data.width, input.computed_data.height));
+        let size = ripple_size.unwrap_or(PxSize::new(
+            input.computed_data.width,
+            input.computed_data.height,
+        ));
         let click_pos = normalized_click_position(input.cursor_position_rel, input.computed_data);
 
         for event in cursor_events.iter() {
@@ -1023,6 +1066,10 @@ fn modifier_toggleable<F>(
                 s.set_hovered(false);
             });
         }
+
+        if within_bounds {
+            input.block_cursor();
+        }
     }));
 }
 
@@ -1044,7 +1091,7 @@ fn modifier_selectable<F>(
     child();
 
     let role = role.unwrap_or(accesskit::Role::Button);
-    input_handler(Box::new(move |input| {
+    input_handler(Box::new(move |mut input| {
         let mut cursor_events = Vec::new();
         mem::swap(&mut cursor_events, input.cursor_events);
 
@@ -1111,7 +1158,10 @@ fn modifier_selectable<F>(
             bounded: true,
             radius: None,
         });
-        let size = ripple_size.unwrap_or(PxSize::new(input.computed_data.width, input.computed_data.height));
+        let size = ripple_size.unwrap_or(PxSize::new(
+            input.computed_data.width,
+            input.computed_data.height,
+        ));
         let click_pos = normalized_click_position(input.cursor_position_rel, input.computed_data);
 
         for event in cursor_events.iter() {
@@ -1150,6 +1200,10 @@ fn modifier_selectable<F>(
                 s.release();
                 s.set_hovered(false);
             });
+        }
+
+        if within_bounds {
+            input.block_cursor();
         }
     }));
 }
