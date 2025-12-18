@@ -4,13 +4,17 @@
 //!
 //! Attach layout and drawing behavior like padding and opacity to any subtree.
 
+use std::{mem, sync::Arc};
+
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, Px, PxPosition, PxSize, tessera,
-    use_context,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, Px,
+    PxPosition, PxSize, accesskit, accesskit::Action, tessera, use_context,
+    winit::window::CursorIcon,
 };
 
 use crate::{
     pipelines::shape::command::ShapeCommand,
+    pos_misc::is_position_in_rect,
     shape_def::{ResolvedShape, Shape},
 };
 
@@ -138,6 +142,14 @@ pub trait ModifierExt {
 
     /// Enforces a minimum interactive size by expanding and centering content.
     fn minimum_interactive_component_size(self) -> Modifier;
+
+    /// Makes the subtree clickable with hover cursor and accessibility action.
+    fn clickable(
+        self,
+        on_click: Arc<dyn Fn() + Send + Sync>,
+        enabled: bool,
+        role: Option<accesskit::Role>,
+    ) -> Modifier;
 }
 
 impl ModifierExt for Modifier {
@@ -372,6 +384,22 @@ impl ModifierExt for Modifier {
             }
         })
     }
+
+    fn clickable(
+        self,
+        on_click: Arc<dyn Fn() + Send + Sync>,
+        enabled: bool,
+        role: Option<accesskit::Role>,
+    ) -> Modifier {
+        self.push_wrapper(move |child| {
+            let on_click = on_click.clone();
+            move || {
+                modifier_clickable(on_click, enabled, role, || {
+                    child();
+                });
+            }
+        })
+    }
 }
 
 fn subtract_opt_px(value: Option<Px>, subtract: Px) -> Option<Px> {
@@ -573,6 +601,69 @@ where
     }));
 
     child();
+}
+
+#[tessera]
+fn modifier_clickable<F>(
+    on_click: Arc<dyn Fn() + Send + Sync>,
+    enabled: bool,
+    role: Option<accesskit::Role>,
+    child: F,
+) where
+    F: FnOnce(),
+{
+    child();
+
+    let on_click = on_click.clone();
+    let role = role.unwrap_or(accesskit::Role::Button);
+    input_handler(Box::new(move |input| {
+        let mut cursor_events = Vec::new();
+        mem::swap(&mut cursor_events, input.cursor_events);
+        let cursor_position = input.cursor_position_rel;
+
+        let within_bounds = cursor_position
+            .map(|pos| {
+                is_position_in_rect(
+                    pos,
+                    PxPosition::ZERO,
+                    input.computed_data.width,
+                    input.computed_data.height,
+                )
+            })
+            .unwrap_or(false);
+
+        if enabled && within_bounds {
+            input.requests.cursor_icon = CursorIcon::Pointer;
+        }
+
+        if enabled
+            && within_bounds
+            && cursor_events
+                .iter()
+                .any(|event| matches!(event.content, CursorEventContent::Released(_)))
+        {
+            on_click();
+        }
+
+        let mut builder = input.accessibility().role(role);
+        builder = if enabled {
+            builder.action(Action::Click).focusable()
+        } else {
+            builder.disabled()
+        };
+        builder.commit();
+
+        if !enabled {
+            return;
+        }
+
+        let on_click_for_a11y = on_click.clone();
+        input.set_accessibility_action_handler(move |action| {
+            if action == Action::Click {
+                on_click_for_a11y();
+            }
+        });
+    }));
 }
 
 fn shape_background_command(color: Color, shape: Shape, size: PxSize) -> ShapeCommand {
