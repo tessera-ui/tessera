@@ -11,9 +11,7 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, Dp, Modifier, PxSize, State,
-    accesskit::Role,
-    remember, tessera, use_context,
+    Color, Dp, Modifier, PxSize, State, accesskit::Role, remember, tessera, use_context,
 };
 
 use crate::{
@@ -480,9 +478,10 @@ pub fn checkbox_with_controller(
     );
 
     // Outer Box (Layout 48x48)
-    let mut modifier = args
-        .modifier
-        .size(CheckboxDefaults::TOUCH_TARGET_SIZE, CheckboxDefaults::TOUCH_TARGET_SIZE);
+    let mut modifier = args.modifier.size(
+        CheckboxDefaults::TOUCH_TARGET_SIZE,
+        CheckboxDefaults::TOUCH_TARGET_SIZE,
+    );
     if enabled {
         let ripple_spec = RippleSpec {
             bounded: false,
@@ -504,7 +503,9 @@ pub fn checkbox_with_controller(
         if let Some(state) = interaction_state {
             toggle_args = toggle_args.interaction_state(state);
         }
-        toggle_args = toggle_args.ripple_spec(ripple_spec).ripple_size(ripple_size);
+        toggle_args = toggle_args
+            .ripple_spec(ripple_spec)
+            .ripple_size(ripple_size);
         modifier = modifier.toggleable(toggle_args);
     }
     boxed(

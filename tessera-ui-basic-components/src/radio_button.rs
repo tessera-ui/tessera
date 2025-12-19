@@ -12,9 +12,8 @@ use std::{
 use closure::closure;
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, DimensionValue, Dp, Modifier, Px, PxSize, State,
-    accesskit::Role,
-    remember, tessera, use_context,
+    Color, DimensionValue, Dp, Modifier, Px, PxSize, State, accesskit::Role, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -326,7 +325,9 @@ pub fn radio_button_with_controller(
         if let Some(state) = interaction_state {
             selectable_args = selectable_args.interaction_state(state);
         }
-        selectable_args = selectable_args.ripple_spec(ripple_spec).ripple_size(ripple_size);
+        selectable_args = selectable_args
+            .ripple_spec(ripple_spec)
+            .ripple_size(ripple_size);
         modifier = modifier.selectable(selectable_args);
     }
 

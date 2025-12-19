@@ -245,7 +245,6 @@ pub fn glass_switch_with_controller(
     let checked = controller.with(|c| c.is_checked());
     if enabled {
         modifier = modifier.minimum_interactive_component_size();
-        let controller = controller;
         let on_toggle = on_toggle.clone();
         let mut toggle_args = ToggleableArgs::new(
             checked,
