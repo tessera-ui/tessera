@@ -21,7 +21,7 @@ use crate::{
     alignment::Alignment,
     animation,
     boxed::{BoxedArgsBuilder, boxed},
-    modifier::ModifierExt as _,
+    modifier::{ModifierExt as _, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
@@ -314,17 +314,20 @@ pub fn radio_button_with_controller(
             radius: Some(state_layer_radius),
         };
         let ripple_size = PxSize::new(state_layer_size.to_px(), state_layer_size.to_px());
-        modifier = modifier.selectable(
-            is_selected,
-            on_click.clone(),
-            true,
-            Some(Role::RadioButton),
-            args.accessibility_label.clone(),
-            args.accessibility_description.clone(),
-            interaction_state,
-            Some(ripple_spec),
-            Some(ripple_size),
-        );
+        let mut selectable_args = SelectableArgs::new(is_selected, on_click.clone())
+            .enabled(true)
+            .role(Role::RadioButton);
+        if let Some(label) = args.accessibility_label.clone() {
+            selectable_args = selectable_args.label(label);
+        }
+        if let Some(desc) = args.accessibility_description.clone() {
+            selectable_args = selectable_args.description(desc);
+        }
+        if let Some(state) = interaction_state {
+            selectable_args = selectable_args.interaction_state(state);
+        }
+        selectable_args = selectable_args.ripple_spec(ripple_spec).ripple_size(ripple_size);
+        modifier = modifier.selectable(selectable_args);
     }
 
     boxed(

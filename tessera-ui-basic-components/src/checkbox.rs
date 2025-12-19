@@ -20,7 +20,7 @@ use crate::{
     alignment::Alignment,
     boxed::{BoxedArgsBuilder, boxed},
     checkmark::{CheckmarkArgsBuilder, checkmark},
-    modifier::ModifierExt,
+    modifier::{ModifierExt, ToggleableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
@@ -492,17 +492,20 @@ pub fn checkbox_with_controller(
             CheckboxDefaults::STATE_LAYER_SIZE.to_px(),
             CheckboxDefaults::STATE_LAYER_SIZE.to_px(),
         );
-        modifier = modifier.toggleable(
-            is_checked,
-            on_value_change,
-            true,
-            Some(Role::CheckBox),
-            args.accessibility_label.clone(),
-            args.accessibility_description.clone(),
-            interaction_state,
-            Some(ripple_spec),
-            Some(ripple_size),
-        );
+        let mut toggle_args = ToggleableArgs::new(is_checked, on_value_change)
+            .enabled(true)
+            .role(Role::CheckBox);
+        if let Some(label) = args.accessibility_label.clone() {
+            toggle_args = toggle_args.label(label);
+        }
+        if let Some(desc) = args.accessibility_description.clone() {
+            toggle_args = toggle_args.description(desc);
+        }
+        if let Some(state) = interaction_state {
+            toggle_args = toggle_args.interaction_state(state);
+        }
+        toggle_args = toggle_args.ripple_spec(ripple_spec).ripple_size(ripple_size);
+        modifier = modifier.toggleable(toggle_args);
     }
     boxed(
         BoxedArgsBuilder::default()

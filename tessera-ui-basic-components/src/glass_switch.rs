@@ -11,14 +11,13 @@ use std::{
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, PxPosition, State,
-    accesskit::Role,
-    remember, tessera,
+    accesskit::Role, remember, tessera,
 };
 
 use crate::{
     animation,
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
-    modifier::ModifierExt as _,
+    modifier::{ModifierExt as _, ToggleableArgs},
     shape_def::Shape,
 };
 
@@ -248,7 +247,7 @@ pub fn glass_switch_with_controller(
         modifier = modifier.minimum_interactive_component_size();
         let controller = controller;
         let on_toggle = on_toggle.clone();
-        modifier = modifier.toggleable(
+        let mut toggle_args = ToggleableArgs::new(
             checked,
             Arc::new(move |_| {
                 controller.with_mut(|c| c.toggle());
@@ -257,14 +256,16 @@ pub fn glass_switch_with_controller(
                     on_toggle(checked);
                 }
             }),
-            true,
-            Some(Role::Switch),
-            args.accessibility_label.clone(),
-            args.accessibility_description.clone(),
-            None,
-            None,
-            None,
-        );
+        )
+        .enabled(true)
+        .role(Role::Switch);
+        if let Some(label) = args.accessibility_label.clone() {
+            toggle_args = toggle_args.label(label);
+        }
+        if let Some(desc) = args.accessibility_description.clone() {
+            toggle_args = toggle_args.description(desc);
+        }
+        modifier = modifier.toggleable(toggle_args);
     }
 
     // Precompute pixel sizes to avoid repeated conversions
@@ -278,100 +279,101 @@ pub fn glass_switch_with_controller(
     let track_color = interpolate_color(args.track_off_color, args.track_on_color, progress);
 
     modifier.run(move || {
-    // Build and render track
-    let mut track_builder = FluidGlassArgsBuilder::default()
-        .modifier(Modifier::new().constrain(
-            Some(DimensionValue::Fixed(width_px)),
-            Some(DimensionValue::Fixed(height_px)),
-        ))
-        .tint_color(track_color)
-        .shape(Shape::capsule())
-        .blur_radius(8.0);
-    if let Some(border) = args.track_border {
-        track_builder = track_builder.border(border);
-    }
-    fluid_glass(
-        track_builder.build().expect("builder construction failed"),
-        || {},
-    );
-
-    // Build and render thumb
-    let thumb_alpha =
-        args.thumb_off_alpha + (args.thumb_on_alpha - args.thumb_off_alpha) * progress;
-    let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
-    let mut thumb_builder = FluidGlassArgsBuilder::default()
-        .modifier(Modifier::new().constrain(
-            Some(DimensionValue::Fixed(thumb_px)),
-            Some(DimensionValue::Fixed(thumb_px)),
-        ))
-        .tint_color(thumb_color)
-        .refraction_height(1.0)
-        .shape(Shape::Ellipse);
-    if let Some(border) = args.thumb_border {
-        thumb_builder = thumb_builder.border(border);
-    }
-    fluid_glass(
-        thumb_builder.build().expect("builder construction failed"),
-        || {},
-    );
-
-    // Measurement and placement
-    measure(Box::new(move |input| {
-        // Expect track then thumb as children
-        let track_id = input.children_ids[0];
-        let thumb_id = input.children_ids[1];
-
-        let track_constraint = Constraint::new(
-            DimensionValue::Fixed(width_px),
-            DimensionValue::Fixed(height_px),
-        );
-        let thumb_constraint = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
+        // Build and render track
+        let mut track_builder = FluidGlassArgsBuilder::default()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(width_px)),
+                Some(DimensionValue::Fixed(height_px)),
+            ))
+            .tint_color(track_color)
+            .shape(Shape::capsule())
+            .blur_radius(8.0);
+        if let Some(border) = args.track_border {
+            track_builder = track_builder.border(border);
+        }
+        fluid_glass(
+            track_builder.build().expect("builder construction failed"),
+            || {},
         );
 
-        // Measure both children
-        let nodes_constraints = vec![(track_id, track_constraint), (thumb_id, thumb_constraint)];
-        let sizes_map = input.measure_children(nodes_constraints)?;
-
-        let _track_size = sizes_map
-            .get(&track_id)
-            .expect("track size should be measured");
-        let thumb_size = sizes_map
-            .get(&thumb_id)
-            .expect("thumb size should be measured");
-        let self_width_px = width_px;
-        let self_height_px = height_px;
-        let thumb_padding_px = args.thumb_padding.to_px();
-
-        // Use eased progress for placement
-        let eased_progress = animation::easing(progress);
-
-        input.place_child(
-            track_id,
-            PxPosition::new(tessera_ui::Px(0), tessera_ui::Px(0)),
+        // Build and render thumb
+        let thumb_alpha =
+            args.thumb_off_alpha + (args.thumb_on_alpha - args.thumb_off_alpha) * progress;
+        let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
+        let mut thumb_builder = FluidGlassArgsBuilder::default()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(thumb_px)),
+                Some(DimensionValue::Fixed(thumb_px)),
+            ))
+            .tint_color(thumb_color)
+            .refraction_height(1.0)
+            .shape(Shape::Ellipse);
+        if let Some(border) = args.thumb_border {
+            thumb_builder = thumb_builder.border(border);
+        }
+        fluid_glass(
+            thumb_builder.build().expect("builder construction failed"),
+            || {},
         );
 
-        let start_x = thumb_padding_px;
-        let end_x = self_width_px - thumb_size.width - thumb_padding_px;
-        let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * eased_progress;
-        let thumb_y = (self_height_px - thumb_size.height) / 2;
+        // Measurement and placement
+        measure(Box::new(move |input| {
+            // Expect track then thumb as children
+            let track_id = input.children_ids[0];
+            let thumb_id = input.children_ids[1];
 
-        input.place_child(
-            thumb_id,
-            PxPosition::new(tessera_ui::Px(thumb_x as i32), thumb_y),
-        );
+            let track_constraint = Constraint::new(
+                DimensionValue::Fixed(width_px),
+                DimensionValue::Fixed(height_px),
+            );
+            let thumb_constraint = Constraint::new(
+                DimensionValue::Wrap {
+                    min: None,
+                    max: None,
+                },
+                DimensionValue::Wrap {
+                    min: None,
+                    max: None,
+                },
+            );
 
-        Ok(ComputedData {
-            width: self_width_px,
-            height: self_height_px,
-        })
-    }));
+            // Measure both children
+            let nodes_constraints =
+                vec![(track_id, track_constraint), (thumb_id, thumb_constraint)];
+            let sizes_map = input.measure_children(nodes_constraints)?;
+
+            let _track_size = sizes_map
+                .get(&track_id)
+                .expect("track size should be measured");
+            let thumb_size = sizes_map
+                .get(&thumb_id)
+                .expect("thumb size should be measured");
+            let self_width_px = width_px;
+            let self_height_px = height_px;
+            let thumb_padding_px = args.thumb_padding.to_px();
+
+            // Use eased progress for placement
+            let eased_progress = animation::easing(progress);
+
+            input.place_child(
+                track_id,
+                PxPosition::new(tessera_ui::Px(0), tessera_ui::Px(0)),
+            );
+
+            let start_x = thumb_padding_px;
+            let end_x = self_width_px - thumb_size.width - thumb_padding_px;
+            let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * eased_progress;
+            let thumb_y = (self_height_px - thumb_size.height) / 2;
+
+            input.place_child(
+                thumb_id,
+                PxPosition::new(tessera_ui::Px(thumb_x as i32), thumb_y),
+            );
+
+            Ok(ComputedData {
+                width: self_width_px,
+                height: self_height_px,
+            })
+        }));
     });
 }

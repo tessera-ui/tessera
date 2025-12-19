@@ -15,7 +15,7 @@ use tessera_ui::{
 use crate::{
     alignment::Alignment,
     icon::{IconArgsBuilder, IconContent, icon},
-    modifier::ModifierExt,
+    modifier::{ModifierExt, SelectableArgs},
     ripple_state::RippleState,
     pipelines::text::{
         command::{TextCommand, TextConstraint},
@@ -983,20 +983,19 @@ where
             let on_click = Arc::new(move || {
                 controller.with_mut(|c| c.set_active_tab(index));
             }) as Arc<dyn Fn() + Send + Sync>;
-            modifier = modifier.selectable(
-                selected,
-                on_click,
-                true,
-                Some(Role::Tab),
-                match &child {
-                    TabTitle::Label { text, .. } if !text.is_empty() => Some(text.clone()),
-                    _ => None,
-                },
-                None,
-                interaction_state,
-                None,
-                None,
-            );
+            let mut selectable_args = SelectableArgs::new(selected, on_click)
+                .enabled(true)
+                .role(Role::Tab);
+            if let Some(label) = match &child {
+                TabTitle::Label { text, .. } if !text.is_empty() => Some(text.clone()),
+                _ => None,
+            } {
+                selectable_args = selectable_args.label(label);
+            }
+            if let Some(state) = interaction_state {
+                selectable_args = selectable_args.interaction_state(state);
+            }
+            modifier = modifier.selectable(selectable_args);
         }
 
         let mut tab_surface = SurfaceArgsBuilder::default()

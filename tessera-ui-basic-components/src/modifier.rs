@@ -81,6 +81,253 @@ impl Padding {
     }
 }
 
+/// Argument structs for complex interactive modifiers to improve call-site
+/// readability.
+///
+/// Use these builders to configure `clickable`, `toggleable` and `selectable`
+/// modifiers without long positional parameter lists.
+/// Arguments for the `clickable` modifier.
+pub struct ClickableArgs {
+    /// Callback invoked when the element is clicked.
+    pub on_click: Arc<dyn Fn() + Send + Sync>,
+    /// Whether the element is enabled for interaction.
+    pub enabled: bool,
+    /// Optional accessibility role (defaults to `Button`).
+    pub role: Option<accesskit::Role>,
+    /// Optional accessibility label.
+    pub label: Option<String>,
+    /// Optional accessibility description.
+    pub description: Option<String>,
+    /// Optional external ripple/interaction state.
+    pub interaction_state: Option<State<RippleState>>,
+    /// Optional ripple customization spec.
+    pub ripple_spec: Option<RippleSpec>,
+    /// Optional explicit ripple size.
+    pub ripple_size: Option<PxSize>,
+}
+
+impl ClickableArgs {
+    /// Create a new `ClickableArgs` with the required `on_click` handler.
+    pub fn new(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        Self {
+            on_click,
+            enabled: true,
+            role: None,
+            label: None,
+            description: None,
+            interaction_state: None,
+            ripple_spec: None,
+            ripple_size: None,
+        }
+    }
+
+    /// Set whether the control is enabled.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Set the accessibility role.
+    pub fn role(mut self, role: accesskit::Role) -> Self {
+        self.role = Some(role);
+        self
+    }
+
+    /// Set an accessibility label.
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Set an accessibility description.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Attach an external ripple/interaction `State`.
+    pub fn interaction_state(mut self, state: State<RippleState>) -> Self {
+        self.interaction_state = Some(state);
+        self
+    }
+
+    /// Provide a custom ripple spec.
+    pub fn ripple_spec(mut self, spec: RippleSpec) -> Self {
+        self.ripple_spec = Some(spec);
+        self
+    }
+
+    /// Provide an explicit ripple size.
+    pub fn ripple_size(mut self, size: PxSize) -> Self {
+        self.ripple_size = Some(size);
+        self
+    }
+}
+
+/// Arguments for the `toggleable` modifier.
+pub struct ToggleableArgs {
+    /// Current boolean value.
+    pub value: bool,
+    /// Callback invoked with the new value when changed.
+    pub on_value_change: Arc<dyn Fn(bool) + Send + Sync>,
+    /// Whether the control is enabled for interaction.
+    pub enabled: bool,
+    /// Optional accessibility role (defaults to `CheckBox` or similar).
+    pub role: Option<accesskit::Role>,
+    /// Optional accessibility label.
+    pub label: Option<String>,
+    /// Optional accessibility description.
+    pub description: Option<String>,
+    /// Optional external ripple/interaction state.
+    pub interaction_state: Option<State<RippleState>>,
+    /// Optional ripple customization spec.
+    pub ripple_spec: Option<RippleSpec>,
+    /// Optional explicit ripple size.
+    pub ripple_size: Option<PxSize>,
+}
+
+impl ToggleableArgs {
+    /// Create a new `ToggleableArgs` with the required `value` and
+    /// `on_value_change`.
+    pub fn new(value: bool, on_value_change: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
+        Self {
+            value,
+            on_value_change,
+            enabled: true,
+            role: None,
+            label: None,
+            description: None,
+            interaction_state: None,
+            ripple_spec: None,
+            ripple_size: None,
+        }
+    }
+
+    /// Set whether the control is enabled.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Set the accessibility role.
+    pub fn role(mut self, role: accesskit::Role) -> Self {
+        self.role = Some(role);
+        self
+    }
+
+    /// Set an accessibility label.
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Set an accessibility description.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Attach an external ripple/interaction `State`.
+    pub fn interaction_state(mut self, state: State<RippleState>) -> Self {
+        self.interaction_state = Some(state);
+        self
+    }
+
+    /// Provide a custom ripple spec.
+    pub fn ripple_spec(mut self, spec: RippleSpec) -> Self {
+        self.ripple_spec = Some(spec);
+        self
+    }
+
+    /// Provide an explicit ripple size.
+    pub fn ripple_size(mut self, size: PxSize) -> Self {
+        self.ripple_size = Some(size);
+        self
+    }
+}
+
+/// Arguments for the `selectable` modifier.
+pub struct SelectableArgs {
+    /// Whether the item is selected.
+    pub selected: bool,
+    /// Callback invoked when the selectable is activated.
+    pub on_click: Arc<dyn Fn() + Send + Sync>,
+    /// Whether the element is enabled for interaction.
+    pub enabled: bool,
+    /// Optional accessibility role (defaults to `Button` or specific role).
+    pub role: Option<accesskit::Role>,
+    /// Optional accessibility label.
+    pub label: Option<String>,
+    /// Optional accessibility description.
+    pub description: Option<String>,
+    /// Optional external ripple/interaction state.
+    pub interaction_state: Option<State<RippleState>>,
+    /// Optional ripple customization spec.
+    pub ripple_spec: Option<RippleSpec>,
+    /// Optional explicit ripple size.
+    pub ripple_size: Option<PxSize>,
+}
+
+impl SelectableArgs {
+    /// Create a new `SelectableArgs` with the required `selected` and
+    /// `on_click`.
+    pub fn new(selected: bool, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        Self {
+            selected,
+            on_click,
+            enabled: true,
+            role: None,
+            label: None,
+            description: None,
+            interaction_state: None,
+            ripple_spec: None,
+            ripple_size: None,
+        }
+    }
+
+    /// Set whether the control is enabled.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Set the accessibility role.
+    pub fn role(mut self, role: accesskit::Role) -> Self {
+        self.role = Some(role);
+        self
+    }
+
+    /// Set an accessibility label.
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Set an accessibility description.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Attach an external ripple/interaction `State`.
+    pub fn interaction_state(mut self, state: State<RippleState>) -> Self {
+        self.interaction_state = Some(state);
+        self
+    }
+
+    /// Provide a custom ripple spec.
+    pub fn ripple_spec(mut self, spec: RippleSpec) -> Self {
+        self.ripple_spec = Some(spec);
+        self
+    }
+
+    /// Provide an explicit ripple size.
+    pub fn ripple_size(mut self, size: PxSize) -> Self {
+        self.ripple_size = Some(size);
+        self
+    }
+}
+
 /// Extensions for composing reusable wrapper behavior around component
 /// subtrees.
 pub trait ModifierExt {
@@ -159,45 +406,13 @@ pub trait ModifierExt {
 
     /// Makes the subtree clickable with optional ripple feedback and an
     /// accessibility click action.
-    fn clickable(
-        self,
-        on_click: Arc<dyn Fn() + Send + Sync>,
-        enabled: bool,
-        role: Option<accesskit::Role>,
-        label: Option<String>,
-        description: Option<String>,
-        interaction_state: Option<State<RippleState>>,
-        ripple_spec: Option<RippleSpec>,
-        ripple_size: Option<PxSize>,
-    ) -> Modifier;
+    fn clickable(self, args: ClickableArgs) -> Modifier;
 
     /// Makes the subtree toggleable with optional ripple/state-layer feedback.
-    fn toggleable(
-        self,
-        value: bool,
-        on_value_change: Arc<dyn Fn(bool) + Send + Sync>,
-        enabled: bool,
-        role: Option<accesskit::Role>,
-        label: Option<String>,
-        description: Option<String>,
-        interaction_state: Option<State<RippleState>>,
-        ripple_spec: Option<RippleSpec>,
-        ripple_size: Option<PxSize>,
-    ) -> Modifier;
+    fn toggleable(self, args: ToggleableArgs) -> Modifier;
 
     /// Makes the subtree selectable with optional ripple/state-layer feedback.
-    fn selectable(
-        self,
-        selected: bool,
-        on_click: Arc<dyn Fn() + Send + Sync>,
-        enabled: bool,
-        role: Option<accesskit::Role>,
-        label: Option<String>,
-        description: Option<String>,
-        interaction_state: Option<State<RippleState>>,
-        ripple_spec: Option<RippleSpec>,
-        ripple_size: Option<PxSize>,
-    ) -> Modifier;
+    fn selectable(self, args: SelectableArgs) -> Modifier;
 }
 
 impl ModifierExt for Modifier {
@@ -457,21 +672,16 @@ impl ModifierExt for Modifier {
         })
     }
 
-    fn clickable(
-        self,
-        on_click: Arc<dyn Fn() + Send + Sync>,
-        enabled: bool,
-        role: Option<accesskit::Role>,
-        label: Option<String>,
-        description: Option<String>,
-        interaction_state: Option<State<RippleState>>,
-        ripple_spec: Option<RippleSpec>,
-        ripple_size: Option<PxSize>,
-    ) -> Modifier {
+    fn clickable(self, args: ClickableArgs) -> Modifier {
         self.push_wrapper(move |child| {
-            let on_click = on_click.clone();
-            let label = label.clone();
-            let description = description.clone();
+            let on_click = args.on_click.clone();
+            let label = args.label.clone();
+            let description = args.description.clone();
+            let interaction_state = args.interaction_state.clone();
+            let ripple_spec = args.ripple_spec;
+            let ripple_size = args.ripple_size;
+            let enabled = args.enabled;
+            let role = args.role;
             move || {
                 modifier_clickable(
                     on_click,
@@ -490,22 +700,17 @@ impl ModifierExt for Modifier {
         })
     }
 
-    fn toggleable(
-        self,
-        value: bool,
-        on_value_change: Arc<dyn Fn(bool) + Send + Sync>,
-        enabled: bool,
-        role: Option<accesskit::Role>,
-        label: Option<String>,
-        description: Option<String>,
-        interaction_state: Option<State<RippleState>>,
-        ripple_spec: Option<RippleSpec>,
-        ripple_size: Option<PxSize>,
-    ) -> Modifier {
+    fn toggleable(self, args: ToggleableArgs) -> Modifier {
         self.push_wrapper(move |child| {
-            let on_value_change = on_value_change.clone();
-            let label = label.clone();
-            let description = description.clone();
+            let value = args.value;
+            let on_value_change = args.on_value_change.clone();
+            let label = args.label.clone();
+            let description = args.description.clone();
+            let interaction_state = args.interaction_state.clone();
+            let ripple_spec = args.ripple_spec;
+            let ripple_size = args.ripple_size;
+            let enabled = args.enabled;
+            let role = args.role;
             move || {
                 modifier_toggleable(
                     value,
@@ -525,22 +730,17 @@ impl ModifierExt for Modifier {
         })
     }
 
-    fn selectable(
-        self,
-        selected: bool,
-        on_click: Arc<dyn Fn() + Send + Sync>,
-        enabled: bool,
-        role: Option<accesskit::Role>,
-        label: Option<String>,
-        description: Option<String>,
-        interaction_state: Option<State<RippleState>>,
-        ripple_spec: Option<RippleSpec>,
-        ripple_size: Option<PxSize>,
-    ) -> Modifier {
+    fn selectable(self, args: SelectableArgs) -> Modifier {
         self.push_wrapper(move |child| {
-            let on_click = on_click.clone();
-            let label = label.clone();
-            let description = description.clone();
+            let selected = args.selected;
+            let on_click = args.on_click.clone();
+            let label = args.label.clone();
+            let description = args.description.clone();
+            let interaction_state = args.interaction_state.clone();
+            let ripple_spec = args.ripple_spec;
+            let ripple_size = args.ripple_size;
+            let enabled = args.enabled;
+            let role = args.role;
             move || {
                 modifier_selectable(
                     selected,

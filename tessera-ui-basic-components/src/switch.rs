@@ -19,7 +19,7 @@ use crate::{
     alignment::Alignment,
     animation,
     boxed::{BoxedArgsBuilder, boxed},
-    modifier::ModifierExt,
+    modifier::{ModifierExt, ToggleableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
@@ -286,7 +286,7 @@ fn switch_inner(
             SwitchDefaults::STATE_LAYER_SIZE.to_px(),
             SwitchDefaults::STATE_LAYER_SIZE.to_px(),
         );
-        modifier = modifier.toggleable(
+        let mut toggle_args = ToggleableArgs::new(
             checked,
             Arc::new(move |_| {
                 controller.with_mut(|c| c.toggle());
@@ -295,14 +295,20 @@ fn switch_inner(
                     on_toggle(checked);
                 }
             }),
-            args.enabled,
-            Some(Role::Switch),
-            args.accessibility_label.clone(),
-            args.accessibility_description.clone(),
-            interaction_state,
-            Some(ripple_spec),
-            Some(ripple_size),
-        );
+        )
+        .enabled(args.enabled)
+        .role(Role::Switch);
+        if let Some(label) = args.accessibility_label.clone() {
+            toggle_args = toggle_args.label(label);
+        }
+        if let Some(desc) = args.accessibility_description.clone() {
+            toggle_args = toggle_args.description(desc);
+        }
+        if let Some(state) = interaction_state {
+            toggle_args = toggle_args.interaction_state(state);
+        }
+        toggle_args = toggle_args.ripple_spec(ripple_spec).ripple_size(ripple_size);
+        modifier = modifier.toggleable(toggle_args);
     }
 
     let has_thumb_content = child.is_some();
