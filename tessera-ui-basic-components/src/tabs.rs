@@ -3,20 +3,18 @@
 //! ## Usage
 //!
 //! Use to organize content into separate pages that can be switched between.
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
-    Modifier, Px, PxPosition, State, accesskit::Role, remember, remember_with_key, tessera,
-    use_context,
+    Modifier, Px, PxPosition, State, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
     icon::{IconArgsBuilder, IconContent, icon},
-    modifier::{ModifierExt, SelectableArgs},
-    ripple_state::RippleState,
+    modifier::ModifierExt,
     pipelines::text::{
         command::{TextCommand, TextConstraint},
         pipeline::TextData,
@@ -958,10 +956,9 @@ where
     let ripple_color = TabsDefaults::ripple_color(args.active_content_color);
 
     for (index, child) in title_closures.into_iter().enumerate() {
-        let selected = index == active_tab;
         let label_color = if !args.enabled {
             args.disabled_content_color
-        } else if selected {
+        } else if index == active_tab {
             args.active_content_color
         } else {
             args.inactive_content_color
@@ -975,40 +972,27 @@ where
             _ => args.min_tab_height,
         };
 
-        let interaction_state =
-            args.enabled.then(|| remember_with_key(("tabs_tab_interaction", index), RippleState::new));
-        let mut modifier =
-            Modifier::new().constrain(None, Some(DimensionValue::Fixed(tab_height.into())));
-        if args.enabled {
-            let on_click = Arc::new(move || {
-                controller.with_mut(|c| c.set_active_tab(index));
-            }) as Arc<dyn Fn() + Send + Sync>;
-            let mut selectable_args = SelectableArgs::new(selected, on_click)
-                .enabled(true)
-                .role(Role::Tab);
-            if let Some(label) = match &child {
-                TabTitle::Label { text, .. } if !text.is_empty() => Some(text.clone()),
-                _ => None,
-            } {
-                selectable_args = selectable_args.label(label);
-            }
-            if let Some(state) = interaction_state {
-                selectable_args = selectable_args.interaction_state(state);
-            }
-            modifier = modifier.selectable(selectable_args);
-        }
-
         let mut tab_surface = SurfaceArgsBuilder::default()
             .style(Color::TRANSPARENT.into())
             .content_alignment(Alignment::Center)
             .content_color(label_color)
-            .modifier(modifier)
+            .modifier(
+                Modifier::new().constrain(None, Some(DimensionValue::Fixed(tab_height.into()))),
+            )
             .ripple_color(ripple_color)
             .shape(Shape::RECTANGLE)
-            .enabled(args.enabled);
+            .enabled(args.enabled)
+            .accessibility_role(tessera_ui::accesskit::Role::Tab)
+            .accessibility_focusable(true);
 
-        if let Some(interaction_state) = interaction_state {
-            tab_surface = tab_surface.interaction_state(interaction_state);
+        if let TabTitle::Label { text, .. } = &child {
+            tab_surface = tab_surface.accessibility_label(text.clone());
+        }
+
+        if args.enabled {
+            tab_surface = tab_surface.on_click(move || {
+                controller.with_mut(|c| c.set_active_tab(index));
+            });
         }
 
         surface(
@@ -1042,41 +1026,48 @@ where
         controller.with_mut(|c| c.tick(Instant::now()));
 
         let is_scrollable = args.scrollable || controller.with(|c| c.tab_row_scroll_max() > Px(0));
-        if is_scrollable
-            && let Some(pos) = input.cursor_position_rel
-            && pos.y < controller.with(|c| c.tab_bar_height())
-        {
-            let mut consumed_scroll = false;
-            for event in input
-                .cursor_events
-                .iter()
-                .filter_map(|event| match &event.content {
-                    CursorEventContent::Scroll(event) => Some(event),
-                    _ => None,
-                })
-            {
-                let delta = if event.delta_x.abs() >= 0.01 {
-                    event.delta_x
-                } else {
-                    event.delta_y
-                };
-                if delta.abs() < 0.01 {
-                    continue;
+        if is_scrollable {
+            let cursor_in_tab_bar = if let Some(pos) = input.cursor_position_rel {
+                let within_x = pos.x.0 >= 0 && pos.x.0 < input.computed_data.width.0;
+                let within_y = pos.y.0 >= 0 && pos.y.0 < controller.with(|c| c.tab_bar_height()).0;
+                within_x && within_y
+            } else {
+                false
+            };
+
+            if cursor_in_tab_bar {
+                let mut consumed_scroll = false;
+                for event in input
+                    .cursor_events
+                    .iter()
+                    .filter_map(|event| match &event.content {
+                        CursorEventContent::Scroll(event) => Some(event),
+                        _ => None,
+                    })
+                {
+                    let delta = if event.delta_x.abs() >= 0.01 {
+                        event.delta_x
+                    } else {
+                        event.delta_y
+                    };
+                    if delta.abs() < 0.01 {
+                        continue;
+                    }
+
+                    controller.with_mut(|c| {
+                        let current = c.tab_row_scroll_offset.target;
+                        let max = c.tab_row_scroll_max().to_f32();
+                        let next = (current - delta).clamp(0.0, max);
+                        c.set_tab_row_scroll_immediate(Px::saturating_from_f32(next));
+                    });
+                    consumed_scroll = true;
                 }
 
-                controller.with_mut(|c| {
-                    let current = c.tab_row_scroll_offset.target;
-                    let max = c.tab_row_scroll_max().to_f32();
-                    let next = (current - delta).clamp(0.0, max);
-                    c.set_tab_row_scroll_immediate(Px::saturating_from_f32(next));
-                });
-                consumed_scroll = true;
-            }
-
-            if consumed_scroll {
-                input
-                    .cursor_events
-                    .retain(|event| !matches!(event.content, CursorEventContent::Scroll(_)));
+                if consumed_scroll {
+                    input
+                        .cursor_events
+                        .retain(|event| !matches!(event.content, CursorEventContent::Scroll(_)));
+                }
             }
         }
     }));
