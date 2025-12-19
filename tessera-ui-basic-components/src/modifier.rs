@@ -16,10 +16,12 @@ use tessera_ui::{
 
 use crate::{
     ShadowProps,
-    pipelines::shape::command::ShapeCommand,
+    pipelines::shape::command::{ShapeCommand, ShadowLayers},
     pos_misc::is_position_in_rect,
     ripple_state::{RippleSpec, RippleState},
     shape_def::{ResolvedShape, Shape},
+    surface::SurfaceDefaults,
+    theme::MaterialTheme,
 };
 
 /// Controls whether minimum interactive size wrappers are enforced.
@@ -370,6 +372,20 @@ pub trait ModifierExt {
     /// Draws a shadow behind the subtree using a custom shape.
     fn shadow_with_shape(self, shadow: ShadowProps, shape: Shape) -> Modifier;
 
+    /// Draws a set of shadow layers (ambient + spot) behind the subtree.
+    fn shadow_layers(self, layers: ShadowLayers) -> Modifier;
+
+    /// Draws a set of shadow layers (ambient + spot) behind the subtree using a custom shape.
+    fn shadow_layers_with_shape(self, layers: ShadowLayers, shape: Shape) -> Modifier;
+
+    /// Adds a shadow synthesized from a Material elevation hint using the
+    /// current `MaterialTheme` color scheme.
+    fn shadow_elevation(self, elevation: Dp) -> Modifier;
+
+    /// Adds a shadow synthesized from a Material elevation hint using the
+    /// current `MaterialTheme` color scheme and a custom `Shape`.
+    fn shadow_elevation_with_shape(self, elevation: Dp, shape: Shape) -> Modifier;
+
     /// Constrains the content to an exact size when possible.
     fn size(self, width: Dp, height: Dp) -> Modifier;
 
@@ -520,6 +536,35 @@ impl ModifierExt for Modifier {
                 });
             }
         })
+    }
+
+    fn shadow_layers(self, layers: ShadowLayers) -> Modifier {
+        self.shadow_layers_with_shape(layers, Shape::RECTANGLE)
+    }
+
+    fn shadow_layers_with_shape(self, layers: ShadowLayers, shape: Shape) -> Modifier {
+        self.push_wrapper(move |child| {
+            let layers = layers.clone();
+            move || {
+                modifier_shadow_layers(layers, shape, || {
+                    child();
+                });
+            }
+        })
+    }
+
+    fn shadow_elevation(self, elevation: Dp) -> Modifier {
+        // Synthesize ambient+spot layers using the current Material theme.
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let layers = SurfaceDefaults::synthesize_shadow_layers(elevation, &scheme);
+        self.shadow_layers(layers)
+    }
+
+    fn shadow_elevation_with_shape(self, elevation: Dp, shape: Shape) -> Modifier {
+        // Synthesize ambient+spot layers using the current Material theme.
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let layers = SurfaceDefaults::synthesize_shadow_layers(elevation, &scheme);
+        self.shadow_layers_with_shape(layers, shape)
     }
 
     fn size(self, width: Dp, height: Dp) -> Modifier {
@@ -1443,7 +1488,7 @@ fn shape_border_command(color: Color, width: Dp, shape: Shape, size: PxSize) -> 
     }
 }
 
-fn shape_shadow_command(shadow: ShadowProps, shape: Shape, size: PxSize) -> ShapeCommand {
+fn shape_shadow_command_layers(shadow: ShadowLayers, shape: Shape, size: PxSize) -> ShapeCommand {
     let color = Color::TRANSPARENT;
     match shape.resolve_for_size(size) {
         ResolvedShape::Rounded {
@@ -1461,6 +1506,7 @@ fn shape_shadow_command(shadow: ShadowProps, shape: Shape, size: PxSize) -> Shap
         },
     }
 }
+
 
 #[tessera]
 fn modifier_background<F>(color: Color, shape: Shape, child: F)
@@ -1505,7 +1551,7 @@ where
 }
 
 #[tessera]
-fn modifier_shadow<F>(shadow: ShadowProps, shape: Shape, child: F)
+fn modifier_shadow_layers<F>(shadow: ShadowLayers, shape: Shape, child: F)
 where
     F: FnOnce(),
 {
@@ -1533,7 +1579,7 @@ where
 
         input
             .metadata_mut()
-            .push_draw_command(shape_shadow_command(shadow, shape, size));
+            .push_draw_command(shape_shadow_command_layers(shadow, shape, size));
 
         input.place_child(child_id, PxPosition::ZERO);
 
@@ -1544,6 +1590,15 @@ where
     }));
 
     child();
+}
+
+// Compatibility wrapper accepting the older `ShadowProps` single-layer API.
+#[tessera]
+fn modifier_shadow<F>(shadow: ShadowProps, shape: Shape, child: F)
+where
+    F: FnOnce(),
+{
+    modifier_shadow_layers(ShadowLayers::from(shadow), shape, child);
 }
 
 #[tessera]
