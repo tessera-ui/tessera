@@ -17,7 +17,7 @@ anyhow = "1.0.100"
 bytemuck = "1.24.0"
 dashmap = "6.1.0"
 derive_builder = "0.20.2"
-tracing = "0.1.43"
+tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
 parking_lot = "0.12.5"
 rsc = "3.0.0"
