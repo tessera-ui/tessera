@@ -783,6 +783,24 @@ fn modifier_clickable<F>(
         let mut cursor_events = Vec::new();
         mem::swap(&mut cursor_events, input.cursor_events);
 
+        let mut unhandled_events = Vec::new();
+        let mut processed_events = Vec::new();
+
+        for event in cursor_events {
+            if matches!(
+                event.content,
+                CursorEventContent::Pressed(PressKeyEventType::Left)
+                    | CursorEventContent::Released(PressKeyEventType::Left)
+            ) {
+                processed_events.push(event);
+            } else {
+                unhandled_events.push(event);
+            }
+        }
+
+        input.cursor_events.extend(unhandled_events);
+        let cursor_events = processed_events;
+
         let within_bounds = input
             .cursor_position_rel
             .map(|pos| {
@@ -960,6 +978,24 @@ fn modifier_toggleable<F>(
         let mut cursor_events = Vec::new();
         mem::swap(&mut cursor_events, input.cursor_events);
 
+        let mut unhandled_events = Vec::new();
+        let mut processed_events = Vec::new();
+
+        for event in cursor_events {
+            if matches!(
+                event.content,
+                CursorEventContent::Pressed(PressKeyEventType::Left)
+                    | CursorEventContent::Released(PressKeyEventType::Left)
+            ) {
+                processed_events.push(event);
+            } else {
+                unhandled_events.push(event);
+            }
+        }
+
+        input.cursor_events.extend(unhandled_events);
+        let cursor_events = processed_events;
+
         let within_bounds = input
             .cursor_position_rel
             .map(|pos| {
@@ -1086,6 +1122,24 @@ fn modifier_selectable<F>(
     input_handler(Box::new(move |input| {
         let mut cursor_events = Vec::new();
         mem::swap(&mut cursor_events, input.cursor_events);
+
+        let mut unhandled_events = Vec::new();
+        let mut processed_events = Vec::new();
+
+        for event in cursor_events {
+            if matches!(
+                event.content,
+                CursorEventContent::Pressed(PressKeyEventType::Left)
+                    | CursorEventContent::Released(PressKeyEventType::Left)
+            ) {
+                processed_events.push(event);
+            } else {
+                unhandled_events.push(event);
+            }
+        }
+
+        input.cursor_events.extend(unhandled_events);
+        let cursor_events = processed_events;
 
         let within_bounds = input
             .cursor_position_rel
