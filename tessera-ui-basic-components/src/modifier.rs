@@ -8,8 +8,8 @@ use std::{mem, sync::Arc};
 
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
-    Modifier, PressKeyEventType, Px, PxPosition, PxSize, State, accesskit,
-    accesskit::{Action, Toggled},
+    Modifier, PressKeyEventType, Px, PxPosition, PxSize, State,
+    accesskit::{self, Action, Toggled},
     tessera, use_context,
     winit::window::CursorIcon,
 };
@@ -87,6 +87,7 @@ impl Padding {
 /// Use these builders to configure `clickable`, `toggleable` and `selectable`
 /// modifiers without long positional parameter lists.
 /// Arguments for the `clickable` modifier.
+#[derive(Clone)]
 pub struct ClickableArgs {
     /// Callback invoked when the element is clicked.
     pub on_click: Arc<dyn Fn() + Send + Sync>,
@@ -165,6 +166,7 @@ impl ClickableArgs {
 }
 
 /// Arguments for the `toggleable` modifier.
+#[derive(Clone)]
 pub struct ToggleableArgs {
     /// Current boolean value.
     pub value: bool,
@@ -247,6 +249,7 @@ impl ToggleableArgs {
 }
 
 /// Arguments for the `selectable` modifier.
+#[derive(Clone)]
 pub struct SelectableArgs {
     /// Whether the item is selected.
     pub selected: bool,
@@ -674,88 +677,33 @@ impl ModifierExt for Modifier {
 
     fn clickable(self, args: ClickableArgs) -> Modifier {
         self.push_wrapper(move |child| {
-            let on_click = args.on_click.clone();
-            let label = args.label.clone();
-            let description = args.description.clone();
-            let interaction_state = args.interaction_state.clone();
-            let ripple_spec = args.ripple_spec;
-            let ripple_size = args.ripple_size;
-            let enabled = args.enabled;
-            let role = args.role;
+            let args = args.clone();
             move || {
-                modifier_clickable(
-                    on_click,
-                    enabled,
-                    role,
-                    label,
-                    description,
-                    interaction_state,
-                    ripple_spec,
-                    ripple_size,
-                    || {
-                        child();
-                    },
-                );
+                modifier_clickable(args, || {
+                    child();
+                });
             }
         })
     }
 
     fn toggleable(self, args: ToggleableArgs) -> Modifier {
         self.push_wrapper(move |child| {
-            let value = args.value;
-            let on_value_change = args.on_value_change.clone();
-            let label = args.label.clone();
-            let description = args.description.clone();
-            let interaction_state = args.interaction_state.clone();
-            let ripple_spec = args.ripple_spec;
-            let ripple_size = args.ripple_size;
-            let enabled = args.enabled;
-            let role = args.role;
+            let args = args.clone();
             move || {
-                modifier_toggleable(
-                    value,
-                    on_value_change,
-                    enabled,
-                    role,
-                    label,
-                    description,
-                    interaction_state,
-                    ripple_spec,
-                    ripple_size,
-                    || {
-                        child();
-                    },
-                );
+                modifier_toggleable(args, || {
+                    child();
+                });
             }
         })
     }
 
     fn selectable(self, args: SelectableArgs) -> Modifier {
         self.push_wrapper(move |child| {
-            let selected = args.selected;
-            let on_click = args.on_click.clone();
-            let label = args.label.clone();
-            let description = args.description.clone();
-            let interaction_state = args.interaction_state.clone();
-            let ripple_spec = args.ripple_spec;
-            let ripple_size = args.ripple_size;
-            let enabled = args.enabled;
-            let role = args.role;
+            let args = args.clone();
             move || {
-                modifier_selectable(
-                    selected,
-                    on_click,
-                    enabled,
-                    role,
-                    label,
-                    description,
-                    interaction_state,
-                    ripple_spec,
-                    ripple_size,
-                    || {
-                        child();
-                    },
-                );
+                modifier_selectable(args, || {
+                    child();
+                });
             }
         })
     }
@@ -963,19 +911,21 @@ where
 }
 
 #[tessera]
-fn modifier_clickable<F>(
-    on_click: Arc<dyn Fn() + Send + Sync>,
-    enabled: bool,
-    role: Option<accesskit::Role>,
-    label: Option<String>,
-    description: Option<String>,
-    interaction_state: Option<State<RippleState>>,
-    ripple_spec: Option<RippleSpec>,
-    ripple_size: Option<PxSize>,
-    child: F,
-) where
+fn modifier_clickable<F>(args: ClickableArgs, child: F)
+where
     F: FnOnce(),
 {
+    let ClickableArgs {
+        on_click,
+        enabled,
+        role,
+        label,
+        description,
+        interaction_state,
+        ripple_spec,
+        ripple_size,
+    } = args;
+
     child();
 
     let role = role.unwrap_or(accesskit::Role::Button);
@@ -1157,20 +1107,22 @@ fn normalized_click_position(position: Option<PxPosition>, size: ComputedData) -
 }
 
 #[tessera]
-fn modifier_toggleable<F>(
-    value: bool,
-    on_value_change: Arc<dyn Fn(bool) + Send + Sync>,
-    enabled: bool,
-    role: Option<accesskit::Role>,
-    label: Option<String>,
-    description: Option<String>,
-    interaction_state: Option<State<RippleState>>,
-    ripple_spec: Option<RippleSpec>,
-    ripple_size: Option<PxSize>,
-    child: F,
-) where
+fn modifier_toggleable<F>(args: ToggleableArgs, child: F)
+where
     F: FnOnce(),
 {
+    let ToggleableArgs {
+        value,
+        on_value_change,
+        enabled,
+        role,
+        label,
+        description,
+        interaction_state,
+        ripple_spec,
+        ripple_size,
+    } = args;
+
     child();
 
     let role = role.unwrap_or(accesskit::Role::CheckBox);
@@ -1302,20 +1254,22 @@ fn modifier_toggleable<F>(
 }
 
 #[tessera]
-fn modifier_selectable<F>(
-    selected: bool,
-    on_click: Arc<dyn Fn() + Send + Sync>,
-    enabled: bool,
-    role: Option<accesskit::Role>,
-    label: Option<String>,
-    description: Option<String>,
-    interaction_state: Option<State<RippleState>>,
-    ripple_spec: Option<RippleSpec>,
-    ripple_size: Option<PxSize>,
-    child: F,
-) where
+fn modifier_selectable<F>(args: SelectableArgs, child: F)
+where
     F: FnOnce(),
 {
+    let SelectableArgs {
+        selected,
+        on_click,
+        enabled,
+        role,
+        label,
+        description,
+        interaction_state,
+        ripple_spec,
+        ripple_size,
+    } = args;
+
     child();
 
     let role = role.unwrap_or(accesskit::Role::Button);
