@@ -25,7 +25,7 @@ anyhow = "1.0"
 owo-colors = "4.2.3"
 comfy-table = "7.2.1"
 indicatif = "0.18.3"
-toml = "0.9.8"
+toml = "0.9.10"
 serde = { version = "1.0", features = ["derive"] }
 include_dir = "0.7"
 notify = "8.2.0"
