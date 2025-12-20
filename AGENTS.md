@@ -100,6 +100,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 - **Commit Guidelines**:
   - Follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) specification
   - **Breaking Changes**: If a commit introduces a breaking change of public api, you MUST include `BREAKING CHANGE:` in the commit body or footer. This is required to trigger a Major version bump.
+  - **Unreleased API changes**: If an API or behavior has never been included in a published release (i.e., it exists only in the working tree or an unmerged branch), you do **not** need to preserve backward compatibility for it. Use git (tags/releases) to confirm whether an API was released; when in doubt, discuss with maintainers before merging.
   - Ensure all tests pass, documentation is updated, and formatting checks are clean before committing
 - **Documentation**:
   - Main documentation must be in English. Other language versions, if any, should be placed in the docs/ directory and kept in sync with the English version.
