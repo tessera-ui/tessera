@@ -580,15 +580,15 @@ impl ModifierExt for Modifier {
         let scheme = use_context::<MaterialTheme>().get().color_scheme;
         let mut layers = SurfaceDefaults::synthesize_shadow_layers(args.elevation, &scheme);
 
-        if let Some(ambient) = args.ambient_color {
-            if let Some(ref mut layer) = layers.ambient {
-                layer.color = ambient;
-            }
+        if let Some(ambient) = args.ambient_color
+            && let Some(ref mut layer) = layers.ambient
+        {
+            layer.color = ambient;
         }
-        if let Some(spot) = args.spot_color {
-            if let Some(ref mut layer) = layers.spot {
-                layer.color = spot;
-            }
+        if let Some(spot) = args.spot_color
+            && let Some(ref mut layer) = layers.spot
+        {
+            layer.color = spot;
         }
 
         let mut modifier = self;

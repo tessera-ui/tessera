@@ -213,9 +213,7 @@ pub fn app() {
                     surface(
                         SurfaceArgs {
                             style: Color::TRANSPARENT.into(),
-                            modifier: Modifier::new()
-                                .padding_all(Dp(16.0))
-                                .shadow(Dp(6.0)),
+                            modifier: Modifier::new().padding_all(Dp(16.0)).shadow(Dp(6.0)),
                             ..Default::default()
                         },
                         || {

@@ -658,14 +658,14 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) 
         modifier = modifier.minimum_interactive_component_size();
     }
 
-    if let Some(elevation) = args.elevation {
-        if elevation.0 > 0.0 {
-            modifier = modifier.shadow(
-                crate::modifier::ShadowArgs::new(elevation)
-                    .shape(args.shape)
-                    .clip(false),
-            );
-        }
+    if let Some(elevation) = args.elevation
+        && elevation.0 > 0.0
+    {
+        modifier = modifier.shadow(
+            crate::modifier::ShadowArgs::new(elevation)
+                .shape(args.shape)
+                .clip(false),
+        );
     }
 
     if args.block_input {
