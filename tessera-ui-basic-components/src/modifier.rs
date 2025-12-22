@@ -15,80 +15,14 @@ use tessera_ui::{
 };
 
 use crate::{
-    pipelines::shape::command::{ShadowLayers, ShapeCommand},
+    pipelines::shape::command::ShapeCommand,
     pos_misc::is_position_in_rect,
     ripple_state::{RippleSpec, RippleState},
     shape_def::{ResolvedShape, Shape},
-    surface::SurfaceDefaults,
-    theme::MaterialTheme,
 };
 
-/// Arguments for the `shadow` modifier.
-#[derive(Clone, Debug)]
-pub struct ShadowArgs {
-    /// The elevation of the shadow.
-    pub elevation: Dp,
-    /// The shape of the shadow.
-    pub shape: Shape,
-    /// Whether to clip the content to the shape.
-    pub clip: bool,
-    /// Color of the ambient shadow. If None, uses the theme default.
-    pub ambient_color: Option<Color>,
-    /// Color of the spot shadow. If None, uses the theme default.
-    pub spot_color: Option<Color>,
-}
-
-impl Default for ShadowArgs {
-    fn default() -> Self {
-        Self {
-            elevation: Dp(0.0),
-            shape: Shape::RECTANGLE,
-            clip: false,
-            ambient_color: None,
-            spot_color: None,
-        }
-    }
-}
-
-impl ShadowArgs {
-    /// Creates a default `ShadowArgs` with the given elevation.
-    pub fn new(elevation: Dp) -> Self {
-        Self {
-            elevation,
-            ..Default::default()
-        }
-    }
-
-    /// Sets the shape.
-    pub fn shape(mut self, shape: Shape) -> Self {
-        self.shape = shape;
-        self
-    }
-
-    /// Sets whether to clip the content.
-    pub fn clip(mut self, clip: bool) -> Self {
-        self.clip = clip;
-        self
-    }
-
-    /// Sets the ambient shadow color.
-    pub fn ambient_color(mut self, color: Color) -> Self {
-        self.ambient_color = Some(color);
-        self
-    }
-
-    /// Sets the spot shadow color.
-    pub fn spot_color(mut self, color: Color) -> Self {
-        self.spot_color = Some(color);
-        self
-    }
-}
-
-impl From<Dp> for ShadowArgs {
-    fn from(elevation: Dp) -> Self {
-        Self::new(elevation)
-    }
-}
+mod shadow;
+pub use shadow::ShadowArgs;
 
 /// Controls whether minimum interactive size wrappers are enforced.
 #[derive(Clone, Copy, Debug)]
@@ -574,40 +508,7 @@ impl ModifierExt for Modifier {
     }
 
     fn shadow(self, args: impl Into<ShadowArgs>) -> Modifier {
-        let args = args.into();
-
-        // Synthesize ambient+spot layers using the current Material theme or overrides.
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
-        let mut layers = SurfaceDefaults::synthesize_shadow_layers(args.elevation, &scheme);
-
-        if let Some(ambient) = args.ambient_color
-            && let Some(ref mut layer) = layers.ambient
-        {
-            layer.color = ambient;
-        }
-        if let Some(spot) = args.spot_color
-            && let Some(ref mut layer) = layers.spot
-        {
-            layer.color = spot;
-        }
-
-        let mut modifier = self;
-
-        modifier = modifier.push_wrapper(move |child| {
-            let shape = args.shape;
-            move || {
-                modifier_shadow_layers(layers, shape, || {
-                    child();
-                });
-            }
-        });
-
-        if args.clip {
-            // Very basic clipping support (rect only for now as per existing modifier)
-            modifier = modifier.clip_to_bounds();
-        }
-
-        modifier
+        shadow::apply_shadow_modifier(self, args.into())
     }
 
     fn size(self, width: Dp, height: Dp) -> Modifier {
@@ -1531,25 +1432,6 @@ fn shape_border_command(color: Color, width: Dp, shape: Shape, size: PxSize) -> 
     }
 }
 
-fn shape_shadow_command_layers(shadow: ShadowLayers, shape: Shape, size: PxSize) -> ShapeCommand {
-    let color = Color::TRANSPARENT;
-    match shape.resolve_for_size(size) {
-        ResolvedShape::Rounded {
-            corner_radii,
-            corner_g2,
-        } => ShapeCommand::Rect {
-            color,
-            corner_radii,
-            corner_g2,
-            shadow: Some(shadow),
-        },
-        ResolvedShape::Ellipse => ShapeCommand::Ellipse {
-            color,
-            shadow: Some(shadow),
-        },
-    }
-}
-
 #[tessera]
 fn modifier_background<F>(color: Color, shape: Shape, child: F)
 where
@@ -1580,48 +1462,6 @@ where
         input
             .metadata_mut()
             .push_draw_command(shape_background_command(color, shape, size));
-
-        input.place_child(child_id, PxPosition::ZERO);
-
-        Ok(ComputedData {
-            width: final_width,
-            height: final_height,
-        })
-    }));
-
-    child();
-}
-
-#[tessera]
-fn modifier_shadow_layers<F>(shadow: ShadowLayers, shape: Shape, child: F)
-where
-    F: FnOnce(),
-{
-    measure(Box::new(move |input| {
-        let child_id = input
-            .children_ids
-            .first()
-            .copied()
-            .expect("modifier_shadow expects exactly one child");
-
-        let parent_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let child_measurements = input.measure_children(vec![(child_id, parent_constraint)])?;
-        let child_measurement = *child_measurements
-            .get(&child_id)
-            .expect("Child measurement missing");
-
-        let final_width =
-            resolve_dimension(parent_constraint.width, child_measurement.width, "width");
-        let final_height =
-            resolve_dimension(parent_constraint.height, child_measurement.height, "height");
-        let size = PxSize::new(final_width, final_height);
-
-        input
-            .metadata_mut()
-            .push_draw_command(shape_shadow_command_layers(shadow, shape, size));
 
         input.place_child(child_id, PxPosition::ZERO);
 
