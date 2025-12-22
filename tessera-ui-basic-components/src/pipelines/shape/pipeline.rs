@@ -48,22 +48,18 @@ struct Vertex {
 }
 
 /// Uniforms for shape rendering pipeline.
-///
-/// # Fields
-///
-/// - `size_cr_border_width`: Size, corner radius, border width.
-/// - `primary_color`: Main fill color.
-/// - `shadow_color`: Shadow color.
-/// - `render_params`: Additional rendering parameters.
-/// - `ripple_params`: Ripple effect parameters.
-/// - `ripple_color`: Ripple color.
 #[derive(ShaderType, Clone, Copy, Debug, PartialEq)]
 pub struct ShapeUniforms {
     pub corner_radii: Vec4, // x:tl, y:tr, z:br, w:bl
     pub corner_g2: Vec4,    // x:tl, y:tr, z:br, w:bl
     pub primary_color: Vec4,
     pub border_color: Vec4,
-    pub shadow_color: Vec4,
+    // Ambient shadow layer
+    pub shadow_ambient_color: Vec4,
+    pub shadow_ambient_params: Vec4, // x:y offset, z: smoothness, w: unused
+    // Spot shadow layer
+    pub shadow_spot_color: Vec4,
+    pub shadow_spot_params: Vec4, // x:y offset, z: smoothness, w: unused
     pub render_params: Vec4,
     pub ripple_params: Vec4,
     pub ripple_color: Vec4,
@@ -410,7 +406,8 @@ impl ShapePipeline {
         );
         uniforms.screen_size = [width as f32, height as f32].into();
 
-        let has_shadow = uniforms.shadow_color[3] > 0.0 && uniforms.render_params[2] > 0.0;
+        let has_shadow =
+            (uniforms.shadow_ambient_color[3] > 0.0) || (uniforms.shadow_spot_color[3] > 0.0);
         let mut instances = Vec::with_capacity(if has_shadow { 2 } else { 1 });
         if has_shadow {
             let mut shadow = uniforms;
@@ -661,7 +658,8 @@ fn build_instances(
             let mut uniforms = rect_to_uniforms(command, *size, *start_pos);
             uniforms.screen_size = [config.width as f32, config.height as f32].into();
 
-            let has_shadow = uniforms.shadow_color[3] > 0.0 && uniforms.render_params[2] > 0.0;
+            let has_shadow =
+                (uniforms.shadow_ambient_color[3] > 0.0) || (uniforms.shadow_spot_color[3] > 0.0);
 
             if has_shadow {
                 let mut uniforms_for_shadow = uniforms;
@@ -689,9 +687,12 @@ enum ShapeCacheVariant {
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct ShadowKey {
-    color: [u32; 4],
-    offset: [u32; 2],
-    smoothness: u32,
+    ambient_color: [u32; 4],
+    ambient_offset: [u32; 2],
+    ambient_smoothness: u32,
+    spot_color: [u32; 4],
+    spot_offset: [u32; 2],
+    spot_smoothness: u32,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -783,9 +784,27 @@ impl ShapeCacheKey {
                 corner_g2: corner_g2.map(f32_to_bits),
                 border_width: 0,
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
-                    color: color_to_bits(shadow.color),
-                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
-                    smoothness: f32_to_bits(shadow.smoothness),
+                    ambient_color: color_to_bits(
+                        shadow
+                            .ambient
+                            .map(|a| a.color)
+                            .unwrap_or(Color::TRANSPARENT),
+                    ),
+                    ambient_offset: [
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[1]).unwrap_or(0.0)),
+                    ],
+                    ambient_smoothness: f32_to_bits(
+                        shadow.ambient.map(|a| a.smoothness).unwrap_or(0.0),
+                    ),
+                    spot_color: color_to_bits(
+                        shadow.spot.map(|s| s.color).unwrap_or(Color::TRANSPARENT),
+                    ),
+                    spot_offset: [
+                        f32_to_bits(shadow.spot.map(|s| s.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.spot.map(|s| s.offset[1]).unwrap_or(0.0)),
+                    ],
+                    spot_smoothness: f32_to_bits(shadow.spot.map(|s| s.smoothness).unwrap_or(0.0)),
                 }),
                 ripple: None,
                 width,
@@ -805,9 +824,27 @@ impl ShapeCacheKey {
                 corner_g2: corner_g2.map(f32_to_bits),
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
-                    color: color_to_bits(shadow.color),
-                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
-                    smoothness: f32_to_bits(shadow.smoothness),
+                    ambient_color: color_to_bits(
+                        shadow
+                            .ambient
+                            .map(|a| a.color)
+                            .unwrap_or(Color::TRANSPARENT),
+                    ),
+                    ambient_offset: [
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[1]).unwrap_or(0.0)),
+                    ],
+                    ambient_smoothness: f32_to_bits(
+                        shadow.ambient.map(|a| a.smoothness).unwrap_or(0.0),
+                    ),
+                    spot_color: color_to_bits(
+                        shadow.spot.map(|s| s.color).unwrap_or(Color::TRANSPARENT),
+                    ),
+                    spot_offset: [
+                        f32_to_bits(shadow.spot.map(|s| s.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.spot.map(|s| s.offset[1]).unwrap_or(0.0)),
+                    ],
+                    spot_smoothness: f32_to_bits(shadow.spot.map(|s| s.smoothness).unwrap_or(0.0)),
                 }),
                 ripple: None,
                 width,
@@ -828,9 +865,27 @@ impl ShapeCacheKey {
                 corner_g2: corner_g2.map(f32_to_bits),
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
-                    color: color_to_bits(shadow.color),
-                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
-                    smoothness: f32_to_bits(shadow.smoothness),
+                    ambient_color: color_to_bits(
+                        shadow
+                            .ambient
+                            .map(|a| a.color)
+                            .unwrap_or(Color::TRANSPARENT),
+                    ),
+                    ambient_offset: [
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[1]).unwrap_or(0.0)),
+                    ],
+                    ambient_smoothness: f32_to_bits(
+                        shadow.ambient.map(|a| a.smoothness).unwrap_or(0.0),
+                    ),
+                    spot_color: color_to_bits(
+                        shadow.spot.map(|s| s.color).unwrap_or(Color::TRANSPARENT),
+                    ),
+                    spot_offset: [
+                        f32_to_bits(shadow.spot.map(|s| s.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.spot.map(|s| s.offset[1]).unwrap_or(0.0)),
+                    ],
+                    spot_smoothness: f32_to_bits(shadow.spot.map(|s| s.smoothness).unwrap_or(0.0)),
                 }),
                 ripple: None,
                 width,
@@ -844,9 +899,27 @@ impl ShapeCacheKey {
                 corner_g2: [f32_to_bits(0.0); 4],
                 border_width: 0,
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
-                    color: color_to_bits(shadow.color),
-                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
-                    smoothness: f32_to_bits(shadow.smoothness),
+                    ambient_color: color_to_bits(
+                        shadow
+                            .ambient
+                            .map(|a| a.color)
+                            .unwrap_or(Color::TRANSPARENT),
+                    ),
+                    ambient_offset: [
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[1]).unwrap_or(0.0)),
+                    ],
+                    ambient_smoothness: f32_to_bits(
+                        shadow.ambient.map(|a| a.smoothness).unwrap_or(0.0),
+                    ),
+                    spot_color: color_to_bits(
+                        shadow.spot.map(|s| s.color).unwrap_or(Color::TRANSPARENT),
+                    ),
+                    spot_offset: [
+                        f32_to_bits(shadow.spot.map(|s| s.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.spot.map(|s| s.offset[1]).unwrap_or(0.0)),
+                    ],
+                    spot_smoothness: f32_to_bits(shadow.spot.map(|s| s.smoothness).unwrap_or(0.0)),
                 }),
                 ripple: None,
                 width,
@@ -864,9 +937,27 @@ impl ShapeCacheKey {
                 corner_g2: [f32_to_bits(0.0); 4],
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
-                    color: color_to_bits(shadow.color),
-                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
-                    smoothness: f32_to_bits(shadow.smoothness),
+                    ambient_color: color_to_bits(
+                        shadow
+                            .ambient
+                            .map(|a| a.color)
+                            .unwrap_or(Color::TRANSPARENT),
+                    ),
+                    ambient_offset: [
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[1]).unwrap_or(0.0)),
+                    ],
+                    ambient_smoothness: f32_to_bits(
+                        shadow.ambient.map(|a| a.smoothness).unwrap_or(0.0),
+                    ),
+                    spot_color: color_to_bits(
+                        shadow.spot.map(|s| s.color).unwrap_or(Color::TRANSPARENT),
+                    ),
+                    spot_offset: [
+                        f32_to_bits(shadow.spot.map(|s| s.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.spot.map(|s| s.offset[1]).unwrap_or(0.0)),
+                    ],
+                    spot_smoothness: f32_to_bits(shadow.spot.map(|s| s.smoothness).unwrap_or(0.0)),
                 }),
                 ripple: None,
                 width,
@@ -885,9 +976,27 @@ impl ShapeCacheKey {
                 corner_g2: [f32_to_bits(0.0); 4],
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
-                    color: color_to_bits(shadow.color),
-                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
-                    smoothness: f32_to_bits(shadow.smoothness),
+                    ambient_color: color_to_bits(
+                        shadow
+                            .ambient
+                            .map(|a| a.color)
+                            .unwrap_or(Color::TRANSPARENT),
+                    ),
+                    ambient_offset: [
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[1]).unwrap_or(0.0)),
+                    ],
+                    ambient_smoothness: f32_to_bits(
+                        shadow.ambient.map(|a| a.smoothness).unwrap_or(0.0),
+                    ),
+                    spot_color: color_to_bits(
+                        shadow.spot.map(|s| s.color).unwrap_or(Color::TRANSPARENT),
+                    ),
+                    spot_offset: [
+                        f32_to_bits(shadow.spot.map(|s| s.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.spot.map(|s| s.offset[1]).unwrap_or(0.0)),
+                    ],
+                    spot_smoothness: f32_to_bits(shadow.spot.map(|s| s.smoothness).unwrap_or(0.0)),
                 }),
                 ripple: None,
                 width,
@@ -907,9 +1016,27 @@ impl ShapeCacheKey {
                 corner_g2: corner_g2.map(f32_to_bits),
                 border_width: 0,
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
-                    color: color_to_bits(shadow.color),
-                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
-                    smoothness: f32_to_bits(shadow.smoothness),
+                    ambient_color: color_to_bits(
+                        shadow
+                            .ambient
+                            .map(|a| a.color)
+                            .unwrap_or(Color::TRANSPARENT),
+                    ),
+                    ambient_offset: [
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[1]).unwrap_or(0.0)),
+                    ],
+                    ambient_smoothness: f32_to_bits(
+                        shadow.ambient.map(|a| a.smoothness).unwrap_or(0.0),
+                    ),
+                    spot_color: color_to_bits(
+                        shadow.spot.map(|s| s.color).unwrap_or(Color::TRANSPARENT),
+                    ),
+                    spot_offset: [
+                        f32_to_bits(shadow.spot.map(|s| s.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.spot.map(|s| s.offset[1]).unwrap_or(0.0)),
+                    ],
+                    spot_smoothness: f32_to_bits(shadow.spot.map(|s| s.smoothness).unwrap_or(0.0)),
                 }),
                 ripple: Some(ripple_to_key(ripple)),
                 width,
@@ -930,9 +1057,27 @@ impl ShapeCacheKey {
                 corner_g2: corner_g2.map(f32_to_bits),
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
-                    color: color_to_bits(shadow.color),
-                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
-                    smoothness: f32_to_bits(shadow.smoothness),
+                    ambient_color: color_to_bits(
+                        shadow
+                            .ambient
+                            .map(|a| a.color)
+                            .unwrap_or(Color::TRANSPARENT),
+                    ),
+                    ambient_offset: [
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[1]).unwrap_or(0.0)),
+                    ],
+                    ambient_smoothness: f32_to_bits(
+                        shadow.ambient.map(|a| a.smoothness).unwrap_or(0.0),
+                    ),
+                    spot_color: color_to_bits(
+                        shadow.spot.map(|s| s.color).unwrap_or(Color::TRANSPARENT),
+                    ),
+                    spot_offset: [
+                        f32_to_bits(shadow.spot.map(|s| s.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.spot.map(|s| s.offset[1]).unwrap_or(0.0)),
+                    ],
+                    spot_smoothness: f32_to_bits(shadow.spot.map(|s| s.smoothness).unwrap_or(0.0)),
                 }),
                 ripple: Some(ripple_to_key(ripple)),
                 width,
@@ -954,9 +1099,27 @@ impl ShapeCacheKey {
                 corner_g2: corner_g2.map(f32_to_bits),
                 border_width: f32_to_bits(*border_width),
                 shadow: shadow.as_ref().map(|shadow| ShadowKey {
-                    color: color_to_bits(shadow.color),
-                    offset: [f32_to_bits(shadow.offset[0]), f32_to_bits(shadow.offset[1])],
-                    smoothness: f32_to_bits(shadow.smoothness),
+                    ambient_color: color_to_bits(
+                        shadow
+                            .ambient
+                            .map(|a| a.color)
+                            .unwrap_or(Color::TRANSPARENT),
+                    ),
+                    ambient_offset: [
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.ambient.map(|a| a.offset[1]).unwrap_or(0.0)),
+                    ],
+                    ambient_smoothness: f32_to_bits(
+                        shadow.ambient.map(|a| a.smoothness).unwrap_or(0.0),
+                    ),
+                    spot_color: color_to_bits(
+                        shadow.spot.map(|s| s.color).unwrap_or(Color::TRANSPARENT),
+                    ),
+                    spot_offset: [
+                        f32_to_bits(shadow.spot.map(|s| s.offset[0]).unwrap_or(0.0)),
+                        f32_to_bits(shadow.spot.map(|s| s.offset[1]).unwrap_or(0.0)),
+                    ],
+                    spot_smoothness: f32_to_bits(shadow.spot.map(|s| s.smoothness).unwrap_or(0.0)),
                 }),
                 ripple: Some(ripple_to_key(ripple)),
                 width,

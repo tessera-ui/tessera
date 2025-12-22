@@ -3,7 +3,10 @@ struct ShapeUniforms {
     corner_g2: vec4f,          // x:tl, y:tr, z:br, w:bl
     primary_color: vec4f,
     border_color: vec4f,
-    shadow_color: vec4f,
+    shadow_ambient_color: vec4f,
+    shadow_ambient_params: vec4f,
+    shadow_spot_color: vec4f,
+    shadow_spot_params: vec4f,
     render_params: vec4f,
     ripple_params: vec4f,
     ripple_color: vec4f,
@@ -134,10 +137,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let border_width = instance.border_width;
 
     let primary_color_uniform = instance.primary_color;
-    let shadow_color_uniform = instance.shadow_color;
+    let ambient_color_uniform = instance.shadow_ambient_color;
+    let ambient_params = instance.shadow_ambient_params;
+    let spot_color_uniform = instance.shadow_spot_color;
+    let spot_params = instance.shadow_spot_params;
 
-    let shadow_offset = instance.render_params.xy;
-    let shadow_smoothness = instance.render_params.z;
     let render_mode = instance.render_params.w; // 0.0: fill, 1.0: outline, 2.0: shadow, 3.0: ripple_fill, 4.0: ripple_outline
     
     // Ripple parameters
@@ -155,33 +159,62 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     var final_color: vec4f;
 
-    if render_mode == 2.0 { // --- Draw Shadow ---
-        let p_scaled_shadow_space = p_scaled_object_space - shadow_offset;
-        var dist_shadow: f32;
-        if corner_radii.x < 0.0 {
-            dist_shadow = sdf_ellipse(p_scaled_shadow_space, rect_half_size);
-        } else {
-            dist_shadow = sdf_g2_rounded_box(
-                p_scaled_shadow_space,
-                rect_half_size,
-                corner_radii,
-                instance.corner_g2
-            );
+    if render_mode == 2.0 { // --- Draw Shadow (ambient + spot) ---
+        // Ambient layer (no offset)
+        let ambient_offset = instance.shadow_ambient_params.xy;
+        let ambient_smooth = instance.shadow_ambient_params.z;
+        var ambient_alpha: f32 = 0.0;
+        if instance.shadow_ambient_color.a > 0.0 {
+            let p_scaled_ambient_space = p_scaled_object_space - ambient_offset;
+            var dist_ambient: f32;
+            if corner_radii.x < 0.0 {
+                dist_ambient = sdf_ellipse(p_scaled_ambient_space, rect_half_size);
+            } else {
+                dist_ambient = sdf_g2_rounded_box(
+                    p_scaled_ambient_space,
+                    rect_half_size,
+                    corner_radii,
+                    instance.corner_g2
+                );
+            }
+            let aa_width_ambient = fwidth(dist_ambient);
+            let mask_ambient = 1.0 - smoothstep(-aa_width_ambient, aa_width_ambient, dist_ambient);
+            let soft_ambient = smoothstep(ambient_smooth, 0.0, dist_ambient);
+            ambient_alpha = mask_ambient * soft_ambient;
         }
 
-        // Anti-aliasing for shadow edge
-        let aa_width_shadow = fwidth(dist_shadow);
-        let shadow_alpha = 1.0 - smoothstep(-aa_width_shadow, aa_width_shadow, dist_shadow);
+        // Spot layer (offset)
+        let spot_offset = instance.shadow_spot_params.xy;
+        let spot_smooth = instance.shadow_spot_params.z;
+        var spot_alpha: f32 = 0.0;
+        if instance.shadow_spot_color.a > 0.0 {
+            let p_scaled_spot_space = p_scaled_object_space - spot_offset;
+            var dist_spot: f32;
+            if corner_radii.x < 0.0 {
+                dist_spot = sdf_ellipse(p_scaled_spot_space, rect_half_size);
+            } else {
+                dist_spot = sdf_g2_rounded_box(
+                    p_scaled_spot_space,
+                    rect_half_size,
+                    corner_radii,
+                    instance.corner_g2
+                );
+            }
+            let aa_width_spot = fwidth(dist_spot);
+            let mask_spot = 1.0 - smoothstep(-aa_width_spot, aa_width_spot, dist_spot);
+            let soft_spot = smoothstep(spot_smooth, 0.0, dist_spot);
+            spot_alpha = mask_spot * soft_spot;
+        }
 
-        // Softness/blur for the shadow
-        let shadow_soft_alpha = smoothstep(shadow_smoothness, 0.0, dist_shadow);
-
-        let combined_shadow_alpha = shadow_alpha * shadow_soft_alpha;
-
-        if combined_shadow_alpha <= 0.001 {
+        // Composite ambient then spot (premultiplied compositing)
+        let ambient_a = ambient_alpha * instance.shadow_ambient_color.a;
+        let spot_a = spot_alpha * instance.shadow_spot_color.a;
+        let out_a = ambient_a + spot_a * (1.0 - ambient_a);
+        if out_a <= 0.001 {
             discard;
         }
-        final_color = vec4f(shadow_color_uniform.rgb, shadow_color_uniform.a * combined_shadow_alpha);
+        let out_pm_rgb = instance.shadow_ambient_color.rgb * ambient_a + instance.shadow_spot_color.rgb * spot_a * (1.0 - ambient_a);
+        final_color = vec4f(out_pm_rgb / out_a, out_a);
 
     } else { // --- Draw Object (Fill or Outline) ---
         var dist_object: f32;

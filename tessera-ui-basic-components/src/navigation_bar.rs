@@ -16,7 +16,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    ShadowProps,
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     animation,
     column::{ColumnArgsBuilder, column},
@@ -548,11 +547,6 @@ pub fn navigation_bar_with_controller<F>(
         scope_config(&mut scope);
     }
     let scheme = use_context::<MaterialTheme>().get().color_scheme;
-    let container_shadow = ShadowProps {
-        color: scheme.shadow.with_alpha(0.16),
-        offset: [0.0, 3.0],
-        smoothness: 10.0,
-    };
 
     let animation_progress = controller
         .with_mut(|c| c.animation_progress())
@@ -564,7 +558,7 @@ pub fn navigation_bar_with_controller<F>(
         SurfaceArgsBuilder::default()
             .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
             .style(scheme.surface_container.into())
-            .shadow(container_shadow)
+            .elevation(Dp(3.0))
             .block_input(true)
             .build()
             .expect("SurfaceArgsBuilder failed with required fields set"),

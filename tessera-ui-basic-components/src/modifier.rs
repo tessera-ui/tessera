@@ -15,14 +15,80 @@ use tessera_ui::{
 };
 
 use crate::{
-    ShadowProps,
-    pipelines::shape::command::{ShapeCommand, ShadowLayers},
+    pipelines::shape::command::{ShadowLayers, ShapeCommand},
     pos_misc::is_position_in_rect,
     ripple_state::{RippleSpec, RippleState},
     shape_def::{ResolvedShape, Shape},
     surface::SurfaceDefaults,
     theme::MaterialTheme,
 };
+
+/// Arguments for the `shadow` modifier.
+#[derive(Clone, Debug)]
+pub struct ShadowArgs {
+    /// The elevation of the shadow.
+    pub elevation: Dp,
+    /// The shape of the shadow.
+    pub shape: Shape,
+    /// Whether to clip the content to the shape.
+    pub clip: bool,
+    /// Color of the ambient shadow. If None, uses the theme default.
+    pub ambient_color: Option<Color>,
+    /// Color of the spot shadow. If None, uses the theme default.
+    pub spot_color: Option<Color>,
+}
+
+impl Default for ShadowArgs {
+    fn default() -> Self {
+        Self {
+            elevation: Dp(0.0),
+            shape: Shape::RECTANGLE,
+            clip: false,
+            ambient_color: None,
+            spot_color: None,
+        }
+    }
+}
+
+impl ShadowArgs {
+    /// Creates a default `ShadowArgs` with the given elevation.
+    pub fn new(elevation: Dp) -> Self {
+        Self {
+            elevation,
+            ..Default::default()
+        }
+    }
+
+    /// Sets the shape.
+    pub fn shape(mut self, shape: Shape) -> Self {
+        self.shape = shape;
+        self
+    }
+
+    /// Sets whether to clip the content.
+    pub fn clip(mut self, clip: bool) -> Self {
+        self.clip = clip;
+        self
+    }
+
+    /// Sets the ambient shadow color.
+    pub fn ambient_color(mut self, color: Color) -> Self {
+        self.ambient_color = Some(color);
+        self
+    }
+
+    /// Sets the spot shadow color.
+    pub fn spot_color(mut self, color: Color) -> Self {
+        self.spot_color = Some(color);
+        self
+    }
+}
+
+impl From<Dp> for ShadowArgs {
+    fn from(elevation: Dp) -> Self {
+        Self::new(elevation)
+    }
+}
 
 /// Controls whether minimum interactive size wrappers are enforced.
 #[derive(Clone, Copy, Debug)]
@@ -366,25 +432,8 @@ pub trait ModifierExt {
     /// Draws a border stroke above the subtree using a custom shape.
     fn border_with_shape(self, width: Dp, color: Color, shape: Shape) -> Modifier;
 
-    /// Draws a shadow behind the subtree.
-    fn shadow(self, shadow: ShadowProps) -> Modifier;
-
-    /// Draws a shadow behind the subtree using a custom shape.
-    fn shadow_with_shape(self, shadow: ShadowProps, shape: Shape) -> Modifier;
-
-    /// Draws a set of shadow layers (ambient + spot) behind the subtree.
-    fn shadow_layers(self, layers: ShadowLayers) -> Modifier;
-
-    /// Draws a set of shadow layers (ambient + spot) behind the subtree using a custom shape.
-    fn shadow_layers_with_shape(self, layers: ShadowLayers, shape: Shape) -> Modifier;
-
-    /// Adds a shadow synthesized from a Material elevation hint using the
-    /// current `MaterialTheme` color scheme.
-    fn shadow_elevation(self, elevation: Dp) -> Modifier;
-
-    /// Adds a shadow synthesized from a Material elevation hint using the
-    /// current `MaterialTheme` color scheme and a custom `Shape`.
-    fn shadow_elevation_with_shape(self, elevation: Dp, shape: Shape) -> Modifier;
+    /// Adds a shadow with advanced configuration options.
+    fn shadow(self, args: impl Into<ShadowArgs>) -> Modifier;
 
     /// Constrains the content to an exact size when possible.
     fn size(self, width: Dp, height: Dp) -> Modifier;
@@ -524,47 +573,41 @@ impl ModifierExt for Modifier {
         })
     }
 
-    fn shadow(self, shadow: ShadowProps) -> Modifier {
-        self.shadow_with_shape(shadow, Shape::RECTANGLE)
-    }
+    fn shadow(self, args: impl Into<ShadowArgs>) -> Modifier {
+        let args = args.into();
 
-    fn shadow_with_shape(self, shadow: ShadowProps, shape: Shape) -> Modifier {
-        self.push_wrapper(move |child| {
-            move || {
-                modifier_shadow(shadow, shape, || {
-                    child();
-                });
+        // Synthesize ambient+spot layers using the current Material theme or overrides.
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let mut layers = SurfaceDefaults::synthesize_shadow_layers(args.elevation, &scheme);
+
+        if let Some(ambient) = args.ambient_color {
+            if let Some(ref mut layer) = layers.ambient {
+                layer.color = ambient;
             }
-        })
-    }
+        }
+        if let Some(spot) = args.spot_color {
+            if let Some(ref mut layer) = layers.spot {
+                layer.color = spot;
+            }
+        }
 
-    fn shadow_layers(self, layers: ShadowLayers) -> Modifier {
-        self.shadow_layers_with_shape(layers, Shape::RECTANGLE)
-    }
+        let mut modifier = self;
 
-    fn shadow_layers_with_shape(self, layers: ShadowLayers, shape: Shape) -> Modifier {
-        self.push_wrapper(move |child| {
-            let layers = layers.clone();
+        modifier = modifier.push_wrapper(move |child| {
+            let shape = args.shape;
             move || {
                 modifier_shadow_layers(layers, shape, || {
                     child();
                 });
             }
-        })
-    }
+        });
 
-    fn shadow_elevation(self, elevation: Dp) -> Modifier {
-        // Synthesize ambient+spot layers using the current Material theme.
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
-        let layers = SurfaceDefaults::synthesize_shadow_layers(elevation, &scheme);
-        self.shadow_layers(layers)
-    }
+        if args.clip {
+            // Very basic clipping support (rect only for now as per existing modifier)
+            modifier = modifier.clip_to_bounds();
+        }
 
-    fn shadow_elevation_with_shape(self, elevation: Dp, shape: Shape) -> Modifier {
-        // Synthesize ambient+spot layers using the current Material theme.
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
-        let layers = SurfaceDefaults::synthesize_shadow_layers(elevation, &scheme);
-        self.shadow_layers_with_shape(layers, shape)
+        modifier
     }
 
     fn size(self, width: Dp, height: Dp) -> Modifier {
@@ -1507,7 +1550,6 @@ fn shape_shadow_command_layers(shadow: ShadowLayers, shape: Shape, size: PxSize)
     }
 }
 
-
 #[tessera]
 fn modifier_background<F>(color: Color, shape: Shape, child: F)
 where
@@ -1590,15 +1632,6 @@ where
     }));
 
     child();
-}
-
-// Compatibility wrapper accepting the older `ShadowProps` single-layer API.
-#[tessera]
-fn modifier_shadow<F>(shadow: ShadowProps, shape: Shape, child: F)
-where
-    F: FnOnce(),
-{
-    modifier_shadow_layers(ShadowLayers::from(shadow), shape, child);
 }
 
 #[tessera]

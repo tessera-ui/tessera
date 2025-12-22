@@ -16,7 +16,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    ShadowProps,
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     animation,
     boxed::{BoxedArgsBuilder, boxed},
@@ -301,10 +300,7 @@ fn dialog_content_wrapper(
                                             .surface_container_high
                                             .into(),
                                     )
-                                    .shadow(ShadowProps {
-                                        color: Color::BLACK.with_alpha(alpha / 4.0),
-                                        ..Default::default()
-                                    })
+                                    .elevation(Dp(6.0))
                                     .shape(Shape::RoundedRectangle {
                                         top_left: RoundedCorner::manual(Dp(28.0), 3.0),
                                         top_right: RoundedCorner::manual(Dp(28.0), 3.0),

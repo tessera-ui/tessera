@@ -525,7 +525,7 @@ where
         .shape(shape)
         .modifier(args.modifier)
         .content_color(content_color)
-        .shadow_elevation(shadow_elevation)
+        .elevation(shadow_elevation)
         .tonal_elevation(shadow_elevation)
         .enabled(args.enabled);
 

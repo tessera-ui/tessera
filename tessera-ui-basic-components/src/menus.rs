@@ -14,7 +14,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    ShadowProps,
     alignment::CrossAxisAlignment,
     checkmark::{CheckmarkArgsBuilder, checkmark},
     column::{ColumnArgsBuilder, column},
@@ -54,15 +53,6 @@ fn default_max_height() -> Option<Px> {
 
 fn default_menu_shape() -> Shape {
     Shape::rounded_rectangle(Dp(4.0))
-}
-
-fn default_menu_shadow() -> Option<ShadowProps> {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
-    Some(ShadowProps {
-        color: scheme.shadow.with_alpha(0.12),
-        offset: [0.0, 3.0],
-        smoothness: 8.0,
-    })
 }
 
 fn default_menu_color() -> Color {
@@ -224,10 +214,9 @@ pub struct MenuProviderArgs {
     /// Shape of the menu container.
     #[builder(default = "default_menu_shape()")]
     pub shape: Shape,
-    /// Optional shadow representing elevation. Defaults to a soft Material
-    /// shadow.
-    #[builder(default = "default_menu_shadow()", setter(strip_option))]
-    pub shadow: Option<ShadowProps>,
+    /// Elevation of the menu. Defaults to level 2 (3.0.dp).
+    #[builder(default = "Dp(3.0)")]
+    pub elevation: Dp,
     /// Background color of the menu container.
     #[builder(default = "default_menu_color()")]
     pub container_color: Color,
@@ -555,7 +544,7 @@ pub fn menu_provider_with_controller(
     // Menu panel.
     surface(
         {
-            let mut builder = SurfaceArgsBuilder::default()
+            let builder = SurfaceArgsBuilder::default()
                 .style(SurfaceStyle::Filled {
                     color: args.container_color,
                 })
@@ -568,11 +557,8 @@ pub fn menu_provider_with_controller(
                     }),
                 ))
                 .accessibility_role(Role::Menu)
-                .block_input(true);
-
-            if let Some(shadow) = args.shadow {
-                builder = builder.shadow(shadow);
-            }
+                .block_input(true)
+                .elevation(args.elevation);
 
             builder.build().expect("builder construction failed")
         },

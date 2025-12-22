@@ -15,7 +15,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    RippleProps, ShadowProps,
+    RippleProps,
     alignment::Alignment,
     modifier::ModifierExt,
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
@@ -48,15 +48,32 @@ impl SurfaceDefaults {
         scheme.on_surface
     }
 
-    /// Synthesizes a shadow style for the provided elevation.
-    pub fn synthesize_shadow(elevation: Dp, scheme: &MaterialColorScheme) -> ShadowProps {
+    /// Synthesize ambient and spot shadow layers for the given elevation.
+    pub fn synthesize_shadow_layers(
+        elevation: Dp,
+        scheme: &MaterialColorScheme,
+    ) -> crate::pipelines::shape::command::ShadowLayers {
+        use crate::pipelines::shape::command::{ShadowLayer, ShadowLayers};
         let elevation_px = elevation.to_pixels_f32();
-        let offset_y = (elevation_px * 0.5).clamp(1.0, 12.0);
-        let smoothness = (elevation_px * 0.75).clamp(2.0, 24.0);
-        ShadowProps {
+        let spot_offset_y = (elevation_px * 0.5).clamp(1.0, 12.0);
+        let spot_smoothness = (elevation_px * 0.75).clamp(2.0, 24.0);
+        let ambient_smoothness = (elevation_px * 1.0).clamp(4.0, 36.0);
+
+        let spot = ShadowLayer {
             color: scheme.shadow.with_alpha(0.25),
-            offset: [0.0, offset_y],
-            smoothness,
+            offset: [0.0, spot_offset_y],
+            smoothness: spot_smoothness,
+        };
+
+        let ambient = ShadowLayer {
+            color: scheme.shadow.with_alpha(0.14),
+            offset: [0.0, 0.0],
+            smoothness: ambient_smoothness,
+        };
+
+        ShadowLayers {
+            ambient: Some(ambient),
+            spot: Some(spot),
         }
     }
 }
@@ -116,16 +133,12 @@ pub struct SurfaceArgs {
     /// variants).
     #[builder(default)]
     pub shape: Shape,
-    /// Optional shadow style rendered behind the surface.
-    #[builder(default, setter(strip_option))]
-    pub shadow: Option<ShadowProps>,
-    /// Optional elevation hint used to synthesize a shadow when `shadow` is not
-    /// provided.
+    /// Elevation of the surface.
     ///
-    /// This is a lightweight approximation intended to ease gradual migration
-    /// towards Material 3 style APIs.
+    /// This value determines the shadow cast by the surface and its tonal
+    /// elevation (if the color is `surface`).
     #[builder(default, setter(strip_option))]
-    pub shadow_elevation: Option<Dp>,
+    pub elevation: Option<Dp>,
     /// Tonal elevation for surfaces that use the theme `surface` color.
     ///
     /// When the container color equals `MaterialColorScheme.surface`, a tint is
@@ -278,10 +291,6 @@ fn apply_tonal_elevation_to_style(
         },
         SurfaceStyle::Outlined { .. } => style.clone(),
     }
-}
-
-fn synthesize_shadow_for_elevation(elevation: Dp, scheme: &MaterialColorScheme) -> ShadowProps {
-    SurfaceDefaults::synthesize_shadow(elevation, scheme)
 }
 
 fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<State<RippleState>>) -> RippleProps {
@@ -644,25 +653,20 @@ fn compute_surface_size(
 /// # component();
 /// ```
 pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) {
-    let mut args = args;
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
-
     let mut modifier = args.modifier;
     if args.on_click.is_some() {
         modifier = modifier.minimum_interactive_component_size();
     }
 
-    let shadow = args.shadow.or_else(|| {
-        args.shadow_elevation
-            .filter(|elevation| elevation.0 > 0.0)
-            .map(|elevation| synthesize_shadow_for_elevation(elevation, &scheme))
-    });
-    if let Some(shadow) = shadow {
-        modifier = modifier.shadow_with_shape(shadow, args.shape);
+    if let Some(elevation) = args.elevation {
+        if elevation.0 > 0.0 {
+            modifier = modifier.shadow(
+                crate::modifier::ShadowArgs::new(elevation)
+                    .shape(args.shape)
+                    .clip(false),
+            );
+        }
     }
-
-    args.shadow = None;
-    args.shadow_elevation = None;
 
     if args.block_input {
         modifier = modifier.block_touch_propagation();

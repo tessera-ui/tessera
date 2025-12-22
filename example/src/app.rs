@@ -7,7 +7,6 @@ use tessera_ui::{
     shard, tessera, use_context,
 };
 use tessera_ui_basic_components::{
-    ShadowProps,
     alignment::{Alignment, CrossAxisAlignment},
     bottom_sheet::{
         BottomSheetController, BottomSheetProviderArgsBuilder, BottomSheetStyle,
@@ -214,7 +213,9 @@ pub fn app() {
                     surface(
                         SurfaceArgs {
                             style: Color::TRANSPARENT.into(),
-                            modifier: Modifier::new().padding_all(Dp(16.0)),
+                            modifier: Modifier::new()
+                                .padding_all(Dp(16.0))
+                                .shadow(Dp(6.0)),
                             ..Default::default()
                         },
                         || {
@@ -557,7 +558,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
                     .primary_container,
             })
             .shape(Shape::rounded_rectangle(Dp(25.0)))
-            .shadow(ShadowProps::default())
+            .elevation(Dp(6.0))
             .build()
             .unwrap(),
         || {
@@ -601,7 +602,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
 fn top_app_bar() {
     surface(
         SurfaceArgsBuilder::default()
-            .shadow(ShadowProps::default())
+            .elevation(Dp(4.0))
             .modifier(Modifier::new().fill_max_width().height(Dp(55.0)))
             .block_input(true)
             .build()

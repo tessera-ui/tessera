@@ -78,7 +78,7 @@ pub mod lazy_list;
 pub mod material_icons;
 pub mod modifier;
 pub mod theme;
-pub use pipelines::shape::command::{RippleProps, ShadowProps};
+pub use pipelines::shape::command::RippleProps;
 pub use ripple_state::RippleState;
 pub mod menus;
 pub mod navigation_bar;
