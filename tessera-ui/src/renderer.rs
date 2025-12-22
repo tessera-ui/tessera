@@ -691,7 +691,7 @@ Fps: {:.2}
         let (new_commands, window_requests, draw_cost) =
             Self::compute_draw_commands(args, screen_size);
 
-        // --- Dirty Rectangle Logic ---
+        // Dirty Rectangle Detection
         let mut dirty = false;
         if args.resized || new_commands.len() != previous_commands.len() {
             dirty = true;

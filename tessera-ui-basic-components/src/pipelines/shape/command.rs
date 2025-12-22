@@ -3,6 +3,35 @@ use tessera_ui::{Color, DrawCommand, DrawRegion, PaddingRect, Px, PxPosition, Px
 
 use super::pipeline::ShapeUniforms;
 
+const SHADOW_AA_MARGIN_PX: f32 = 1.0;
+
+pub(crate) fn shadow_padding_xy(shadow: &ShadowLayers) -> (Px, Px) {
+    let mut pad_x = 0.0f32;
+    let mut pad_y = 0.0f32;
+
+    let update = |pad_x: &mut f32, pad_y: &mut f32, layer: &ShadowLayer| {
+        if layer.color.a <= 0.0 {
+            return;
+        }
+        let layer_pad_x = (layer.smoothness + layer.offset[0].abs() + SHADOW_AA_MARGIN_PX).max(0.0);
+        let layer_pad_y = (layer.smoothness + layer.offset[1].abs() + SHADOW_AA_MARGIN_PX).max(0.0);
+        *pad_x = (*pad_x).max(layer_pad_x);
+        *pad_y = (*pad_y).max(layer_pad_y);
+    };
+
+    if let Some(layer) = shadow.ambient {
+        update(&mut pad_x, &mut pad_y, &layer);
+    }
+    if let Some(layer) = shadow.spot {
+        update(&mut pad_x, &mut pad_y, &layer);
+    }
+
+    (
+        Px::new(pad_x.ceil() as i32).max(Px::ZERO),
+        Px::new(pad_y.ceil() as i32).max(Px::ZERO),
+    )
+}
+
 /// A single shadow layer (ambient or spot)
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShadowLayer {
@@ -145,6 +174,22 @@ pub enum ShapeCommand {
     },
 }
 
+impl ShapeCommand {
+    pub(crate) fn shadow(&self) -> Option<&ShadowLayers> {
+        match self {
+            ShapeCommand::Rect { shadow, .. }
+            | ShapeCommand::OutlinedRect { shadow, .. }
+            | ShapeCommand::RippleRect { shadow, .. }
+            | ShapeCommand::RippleOutlinedRect { shadow, .. }
+            | ShapeCommand::Ellipse { shadow, .. }
+            | ShapeCommand::OutlinedEllipse { shadow, .. }
+            | ShapeCommand::FilledOutlinedRect { shadow, .. }
+            | ShapeCommand::RippleFilledOutlinedRect { shadow, .. }
+            | ShapeCommand::FilledOutlinedEllipse { shadow, .. } => shadow.as_ref(),
+        }
+    }
+}
+
 impl DrawCommand for ShapeCommand {
     fn sample_region(&self) -> Option<tessera_ui::SampleRegion> {
         // No specific barrier requirements for shape commands
@@ -241,43 +286,17 @@ impl DrawCommand for ShapeCommand {
     }
 
     fn draw_region(&self) -> DrawRegion {
-        // Compute padding to account for shadows. Conservative estimation:
-        // padding = max(|offset.x|, |offset.y|) + smoothness * 2.0, then ceil to Px.
-        let mut max_pad: f32 = 0.0;
-        let mut consider_layer = |layer: &ShadowLayer| {
-            let pad = layer.offset[0].abs().max(layer.offset[1].abs()) + layer.smoothness * 2.0;
-            if pad > max_pad {
-                max_pad = pad;
-            }
+        let Some(layers) = self.shadow() else {
+            return DrawRegion::PaddedLocal(PaddingRect::ZERO);
         };
 
-        match self {
-            ShapeCommand::Rect { shadow, .. }
-            | ShapeCommand::OutlinedRect { shadow, .. }
-            | ShapeCommand::RippleRect { shadow, .. }
-            | ShapeCommand::RippleOutlinedRect { shadow, .. }
-            | ShapeCommand::FilledOutlinedRect { shadow, .. }
-            | ShapeCommand::RippleFilledOutlinedRect { shadow, .. }
-            | ShapeCommand::Ellipse { shadow, .. }
-            | ShapeCommand::OutlinedEllipse { shadow, .. }
-            | ShapeCommand::FilledOutlinedEllipse { shadow, .. } => {
-                if let Some(layers) = shadow {
-                    if let Some(ambient) = layers.ambient {
-                        consider_layer(&ambient);
-                    }
-                    if let Some(spot) = layers.spot {
-                        consider_layer(&spot);
-                    }
-                }
-            }
-        }
-
-        if max_pad <= 0.0 {
-            DrawRegion::PaddedLocal(PaddingRect::ZERO)
-        } else {
-            let padding_px = Px::new(max_pad.ceil() as i32);
-            DrawRegion::PaddedLocal(PaddingRect::uniform(padding_px))
-        }
+        let (pad_x, pad_y) = shadow_padding_xy(layers);
+        DrawRegion::PaddedLocal(PaddingRect {
+            top: pad_y,
+            right: pad_x,
+            bottom: pad_y,
+            left: pad_x,
+        })
     }
 }
 
@@ -516,10 +535,10 @@ pub(crate) fn rect_to_uniforms(
         primary_color: primary_color_rgba.to_array().into(),
         border_color: border_color_rgba.to_array().into(),
         shadow_ambient_color: ambient_color.to_array().into(),
-        shadow_ambient_params: [ambient_offset[0], ambient_offset[1], ambient_smooth, 0.0].into(),
+        shadow_ambient_params: [ambient_offset[0], ambient_offset[1], ambient_smooth].into(),
         shadow_spot_color: spot_color.to_array().into(),
-        shadow_spot_params: [spot_offset[0], spot_offset[1], spot_smooth, 0.0].into(),
-        render_params: [0.0, 0.0, 0.0, render_mode].into(),
+        shadow_spot_params: [spot_offset[0], spot_offset[1], spot_smooth].into(),
+        render_mode,
         ripple_params,
         ripple_color,
         border_width,
