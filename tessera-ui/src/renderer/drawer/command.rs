@@ -17,7 +17,7 @@ use crate::{
 /// # Example
 ///
 /// ```
-/// use tessera_ui::{BarrierRequirement, DrawCommand};
+/// use tessera_ui::DrawCommand;
 ///
 /// #[derive(PartialEq, Clone)]
 /// struct RectangleCommand {
@@ -26,9 +26,8 @@ use crate::{
 /// }
 ///
 /// impl DrawCommand for RectangleCommand {
-///     // Most commands don't need barriers
-///     fn barrier(&self) -> Option<BarrierRequirement> {
-///         None
+///     fn apply_opacity(&mut self, opacity: f32) {
+///         self.color[3] *= opacity.clamp(0.0, 1.0);
 ///     }
 /// }
 /// ```
