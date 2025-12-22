@@ -241,42 +241,6 @@ impl DrawCommand for ShapeCommand {
     }
 }
 
-/// Properties for a manual drop shadow (single layer).
-///
-/// Use this with `Modifier::drop_shadow` for simple, non-elevated shadows.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Shadow {
-    /// Color of the shadow (RGBA)
-    pub color: Color,
-    /// Offset of the shadow in the format [x, y]
-    pub offset: [f32; 2],
-    /// Smoothness / blur of the shadow
-    pub smoothness: f32,
-}
-
-impl Default for Shadow {
-    fn default() -> Self {
-        Self {
-            color: Color::BLACK.with_alpha(0.25),
-            offset: [0.0, 2.0],
-            smoothness: 4.0,
-        }
-    }
-}
-
-impl From<Shadow> for ShadowLayers {
-    fn from(props: Shadow) -> Self {
-        Self {
-            ambient: None,
-            spot: Some(ShadowLayer {
-                color: props.color,
-                offset: props.offset,
-                smoothness: props.smoothness,
-            }),
-        }
-    }
-}
-
 /// Properties for ripple effect animation
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RippleProps {
