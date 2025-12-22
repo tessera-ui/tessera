@@ -51,7 +51,7 @@
 //! let px_value = Px::from_dp(dp_value);
 //! ```
 
-use std::ops::{AddAssign, Neg};
+use std::ops::{AddAssign, Neg, SubAssign};
 
 use crate::dp::{Dp, SCALE_FACTOR};
 
@@ -1115,6 +1115,12 @@ impl From<PxPosition> for winit::dpi::Position {
 impl AddAssign for Px {
     fn add_assign(&mut self, rhs: Self) {
         self.0 += rhs.0;
+    }
+}
+
+impl SubAssign for Px {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
     }
 }
 
