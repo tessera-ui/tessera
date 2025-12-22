@@ -1,4 +1,4 @@
-use tessera_ui::{ComputeCommand, Px, renderer::command::BarrierRequirement};
+use tessera_ui::{ComputeCommand, Px, renderer::command::SampleRegion};
 
 /// A synchronous command to execute a gaussian blur.
 /// `BlurCommand` describes a single directional blur pass.
@@ -62,7 +62,7 @@ impl DualBlurCommand {
 }
 
 impl ComputeCommand for DualBlurCommand {
-    fn barrier(&self) -> BarrierRequirement {
+    fn barrier(&self) -> SampleRegion {
         // Calculate maximum radius from both passes to determine required padding
         // The barrier padding must be at least as large as the blur radius to ensure
         // all pixels needed for the blur are available in the captured background
@@ -81,6 +81,6 @@ impl ComputeCommand for DualBlurCommand {
         // The renderer still relies on the component bounds for dependency checks,
         // so orthogonal blur components can batch even if their sampling regions
         // overlap.
-        BarrierRequirement::uniform_padding_local(Px(sampling_padding))
+        SampleRegion::uniform_padding_local(Px(sampling_padding))
     }
 }

@@ -1,5 +1,5 @@
 use tessera_ui::{
-    BarrierRequirement,
+    SampleRegion,
     compute::{ComputeResourceRef, resource::ComputeResourceManager},
     renderer::compute::command::ComputeCommand,
     wgpu,
@@ -38,7 +38,7 @@ impl MeanCommand {
 }
 
 impl ComputeCommand for MeanCommand {
-    fn barrier(&self) -> BarrierRequirement {
-        BarrierRequirement::ZERO_PADDING_LOCAL
+    fn barrier(&self) -> SampleRegion {
+        SampleRegion::ZERO_PADDING_LOCAL
     }
 }

@@ -56,7 +56,7 @@ impl Default for CheckmarkCommand {
 }
 
 impl DrawCommand for CheckmarkCommand {
-    fn barrier(&self) -> Option<tessera_ui::BarrierRequirement> {
+    fn sample_region(&self) -> Option<tessera_ui::SampleRegion> {
         // No specific barrier requirements for checkmark commands
         None
     }

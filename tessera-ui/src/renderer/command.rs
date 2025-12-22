@@ -14,50 +14,26 @@ use crate::{
 /// Defines the sampling requirements for a rendering command that needs a
 /// barrier.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BarrierRequirement {
+pub enum SampleRegion {
     /// The command needs to sample from the entire previously rendered scene.
     /// This will cause a full-screen texture copy.
     Global,
-
     /// The command needs to sample from a region relative to its own bounding
     /// box.
-    ///
-    /// - Sampling padding: The region from which pixels are read (e.g., blur
-    ///   needs to read pixels outside the target area). This determines the
-    ///   texture region captured before the command executes, while the write
-    ///   target remains the component's measured size.
-    ///
-    /// For most cases without special batching requirements, set a uniform
-    /// padding value. For effects like blur that need large sampling areas
-    /// but have small target areas, use large sampling padding so enough
-    /// source pixels are available while batching still relies on the
-    /// component's bounds.
-    ///
-    /// # Examples
-    ///
-    /// Simple case (uniform sampling padding):
-    ///
-    /// ```
-    /// use tessera_ui::Px;
-    /// use tessera_ui::renderer::command::{BarrierRequirement, PaddingRect};
-    ///
-    /// let req = BarrierRequirement::PaddedLocal(PaddingRect::uniform(Px(10)));
-    /// let _ = req;
-    /// ```
-    ///
-    /// Blur optimization (large sampling area):
-    ///
-    /// ```
-    /// use tessera_ui::Px;
-    /// use tessera_ui::renderer::command::{BarrierRequirement, PaddingRect};
-    ///
-    /// let req = BarrierRequirement::PaddedLocal(PaddingRect::uniform(Px(75)));
-    /// let _ = req;
-    /// ```
     PaddedLocal(PaddingRect),
-
     /// The command needs to sample from a specific, absolute region of the
     /// screen.
+    Absolute(PxRect),
+}
+
+/// Defines the drawing region for a rendering command.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DrawRegion {
+    /// The command draws to the entire surface.
+    Global,
+    /// The command draws to a region relative to its own bounding box.
+    PaddedLocal(PaddingRect),
+    /// The command draws to a specific, absolute region of the screen.
     Absolute(PxRect),
 }
 
@@ -95,7 +71,7 @@ impl PaddingRect {
     }
 }
 
-impl BarrierRequirement {
+impl SampleRegion {
     /// A zero-padding local barrier requirement for commands that only sample
     /// within their bounds.
     pub const ZERO_PADDING_LOCAL: Self = Self::PaddedLocal(PaddingRect::ZERO);
@@ -147,9 +123,9 @@ impl Command {
     /// Commands that need to sample from previously rendered content
     /// should return a barrier requirement to ensure proper synchronization.
     #[must_use]
-    pub fn barrier(&self) -> Option<BarrierRequirement> {
+    pub fn barrier(&self) -> Option<SampleRegion> {
         match self {
-            Self::Draw(command) => command.barrier(),
+            Self::Draw(command) => command.sample_region(),
             // Currently, compute can only be used for after effects,
             Self::Compute(command) => Some(command.barrier()),
             Self::ClipPush(_) | Self::ClipPop => None, // Clipping commands do not require barriers

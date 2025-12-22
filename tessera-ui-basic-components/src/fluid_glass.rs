@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use tessera_ui::{
-    BarrierRequirement, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    GestureState, InputHandlerInput, Modifier, PressKeyEventType, Px, PxPosition, State,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
+    InputHandlerInput, Modifier, PressKeyEventType, Px, PxPosition, SampleRegion, State,
     accesskit::{Action, Role},
     remember,
     renderer::DrawCommand,
@@ -217,8 +217,8 @@ pub struct FluidGlassCommand {
 }
 
 impl DrawCommand for FluidGlassCommand {
-    fn barrier(&self) -> Option<BarrierRequirement> {
-        Some(BarrierRequirement::uniform_padding_local(Px(10)))
+    fn sample_region(&self) -> Option<SampleRegion> {
+        Some(SampleRegion::uniform_padding_local(Px(10)))
     }
 
     fn apply_opacity(&mut self, opacity: f32) {

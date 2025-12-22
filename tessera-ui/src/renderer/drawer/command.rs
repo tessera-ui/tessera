@@ -3,7 +3,10 @@
 //! This module defines the core traits and types for graphics rendering
 //! commands in the unified command system.
 
-use crate::{dyn_eq::DynPartialEqDraw, renderer::command::BarrierRequirement};
+use crate::{
+    dyn_eq::DynPartialEqDraw,
+    renderer::command::{DrawRegion, PaddingRect, SampleRegion},
+};
 
 /// Trait for graphics rendering commands that can be processed by draw
 /// pipelines.
@@ -30,26 +33,31 @@ use crate::{dyn_eq::DynPartialEqDraw, renderer::command::BarrierRequirement};
 /// }
 /// ```
 pub trait DrawCommand: DynPartialEqDraw + Send + Sync {
-    /// Specifies barrier requirements for this draw operation.
+    /// Specifies sample requirements for this draw operation.
     ///
-    /// Return `Some(BarrierRequirement::SampleBackground)` if your command
-    /// needs to sample from previously rendered content (e.g., for blur
-    /// effects or other post-processing operations).
+    /// As a default implementation, this returns `None`, indicating that
+    /// the command does not need to sample from previously rendered content.
     ///
-    /// # Returns
-    ///
-    /// - `None` for standard rendering operations (default)
-    /// - `Some(BarrierRequirement::SampleBackground)` for operations that
-    ///   sample previous content
-    fn barrier(&self) -> Option<BarrierRequirement> {
+    /// Override this method if your command requires sampling from prior
+    /// contents.
+    fn sample_region(&self) -> Option<SampleRegion> {
         None
+    }
+
+    /// Specifies the drawing region for this command.
+    ///
+    /// As a default implementation, this returns `DrawRegion::PaddedLocal` with
+    /// zero padding, indicating that the command draws within its own bounds.
+    ///
+    /// Override this method if your command draws to a different region but do
+    /// not want to affect layout calculations.
+    fn draw_region(&self) -> DrawRegion {
+        DrawRegion::PaddedLocal(PaddingRect::ZERO)
     }
 
     /// Applies an opacity multiplier to this command.
     ///
-    /// The default implementation is a no-op; override to scale internal color
-    /// data when group opacity is applied.
-    fn apply_opacity(&mut self, opacity: f32) {
-        let _ = opacity;
-    }
+    /// In most cases you must implement this on your command to support
+    /// opacity changes in the UI.
+    fn apply_opacity(&mut self, opacity: f32);
 }

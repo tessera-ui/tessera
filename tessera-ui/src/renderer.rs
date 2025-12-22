@@ -35,7 +35,7 @@ use crate::{
 };
 
 pub use app::WgpuApp;
-pub use command::{BarrierRequirement, Command};
+pub use command::{Command, DrawRegion, PaddingRect, SampleRegion};
 pub use compute::{
     ComputablePipeline, ComputeBatchItem, ComputePipelineRegistry, ErasedComputeBatchItem,
 };

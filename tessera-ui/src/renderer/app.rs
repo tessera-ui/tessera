@@ -20,7 +20,7 @@ use crate::{
     px::{PxRect, PxSize},
     renderer::{
         RenderCommand,
-        command::{AsAny, BarrierRequirement, Command},
+        command::{AsAny, Command, DrawRegion, SampleRegion},
     },
 };
 
@@ -716,24 +716,28 @@ impl WgpuApp {
                     DrawOrClip::Draw(cmd) => Some(cmd),
                     DrawOrClip::Clip(_) => None,
                 })
-                .map(|cmd| match (cmd.command.barrier(), command.barrier()) {
-                    (None, Some(_)) => true,
-                    (Some(_), Some(barrier)) => {
-                        let last_draw_rect =
-                            extract_sampling_rect(Some(barrier), size, start_pos, texture_size);
-                        !sampling_rects_in_pass
-                            .iter()
-                            .all(|dr| dr.is_orthogonal(&last_draw_rect))
-                    }
-                    (Some(_), None) => false,
-                    (None, None) => false,
-                })
+                .map(
+                    |cmd| match (cmd.command.sample_region(), command.barrier()) {
+                        (None, Some(_)) => true,
+                        (Some(_), Some(barrier)) => {
+                            let last_draw_rect =
+                                extract_sampling_rect(Some(barrier), size, start_pos, texture_size);
+                            !sampling_rects_in_pass
+                                .iter()
+                                .all(|dr| dr.is_orthogonal(&last_draw_rect))
+                        }
+                        (Some(_), None) => false,
+                        (None, None) => false,
+                    },
+                )
                 .unwrap_or(false);
 
             if need_new_pass {
                 let mut draw_target_rects: SmallVec<[PxRect; 8]> = SmallVec::new();
                 for rect in commands_in_pass.iter().filter_map(|command| match command {
-                    DrawOrClip::Draw(cmd) if cmd.command.barrier().is_some() => Some(cmd.draw_rect),
+                    DrawOrClip::Draw(cmd) if cmd.command.sample_region().is_some() => {
+                        Some(cmd.draw_rect)
+                    }
                     _ => None,
                 }) {
                     draw_target_rects.push(rect);
@@ -802,12 +806,15 @@ impl WgpuApp {
                 Command::Draw(mut cmd) => {
                     cmd.apply_opacity(opacity);
                     // Compute sampling area for copy and target rect for drawing
-                    if let Some(barrier) = cmd.barrier() {
+                    if let Some(barrier) = cmd.sample_region() {
                         let sampling_rect =
                             extract_sampling_rect(Some(barrier), size, start_pos, texture_size);
                         sampling_rects_in_pass.push(sampling_rect);
                     }
-                    let draw_rect = extract_target_rect(size, start_pos, texture_size);
+                    // Compute draw rect using command's declared draw region (may be larger
+                    // than the layout box).
+                    let draw_rect =
+                        extract_draw_rect(cmd.draw_region(), size, start_pos, texture_size);
                     // Add the command to the current pass
                     commands_in_pass.push(DrawOrClip::Draw(DrawCommandWithMetadata {
                         command: cmd,
@@ -847,7 +854,9 @@ impl WgpuApp {
         if !commands_in_pass.is_empty() {
             let mut draw_target_rects: SmallVec<[PxRect; 8]> = SmallVec::new();
             for rect in commands_in_pass.iter().filter_map(|command| match command {
-                DrawOrClip::Draw(cmd) if cmd.command.barrier().is_some() => Some(cmd.draw_rect),
+                DrawOrClip::Draw(cmd) if cmd.command.sample_region().is_some() => {
+                    Some(cmd.draw_rect)
+                }
                 _ => None,
             }) {
                 draw_target_rects.push(rect);
@@ -944,7 +953,10 @@ impl WgpuApp {
         let mut remaining = Vec::with_capacity(self.compute_commands.len());
 
         for pending in self.compute_commands.drain(..) {
-            if target_rects.iter().any(|rect| rect == &pending.target_rect) {
+            if target_rects
+                .iter()
+                .any(|rect| !rect.is_orthogonal(&pending.target_rect))
+            {
                 taken.push(pending);
             } else {
                 remaining.push(pending);
@@ -1169,19 +1181,19 @@ fn clamp_rect_to_texture(mut rect: PxRect, texture_size: wgpu::Extent3d) -> PxRe
 }
 
 fn extract_sampling_rect(
-    barrier: Option<BarrierRequirement>,
+    barrier: Option<SampleRegion>,
     size: PxSize,
     start_pos: PxPosition,
     texture_size: wgpu::Extent3d,
 ) -> PxRect {
     match barrier {
-        Some(BarrierRequirement::Global) => PxRect {
+        Some(SampleRegion::Global) => PxRect {
             x: Px(0),
             y: Px(0),
             width: Px(texture_size.width as i32),
             height: Px(texture_size.height as i32),
         },
-        Some(BarrierRequirement::PaddedLocal(sampling)) => {
+        Some(SampleRegion::PaddedLocal(sampling)) => {
             // For actual rendering/compute, use the sampling padding
             compute_padded_rect(
                 size,
@@ -1193,8 +1205,35 @@ fn extract_sampling_rect(
                 texture_size,
             )
         }
-        Some(BarrierRequirement::Absolute(rect)) => clamp_rect_to_texture(rect, texture_size),
+        Some(SampleRegion::Absolute(rect)) => clamp_rect_to_texture(rect, texture_size),
         None => extract_target_rect(size, start_pos, texture_size),
+    }
+}
+
+/// Compute the draw rectangle for a command based on its declared DrawRegion.
+fn extract_draw_rect(
+    region: DrawRegion,
+    size: PxSize,
+    start_pos: PxPosition,
+    texture_size: wgpu::Extent3d,
+) -> PxRect {
+    match region {
+        DrawRegion::Global => PxRect {
+            x: Px(0),
+            y: Px(0),
+            width: Px(texture_size.width as i32),
+            height: Px(texture_size.height as i32),
+        },
+        DrawRegion::PaddedLocal(padding) => compute_padded_rect(
+            size,
+            start_pos,
+            padding.top,
+            padding.right,
+            padding.bottom,
+            padding.left,
+            texture_size,
+        ),
+        DrawRegion::Absolute(rect) => clamp_rect_to_texture(rect, texture_size),
     }
 }
 

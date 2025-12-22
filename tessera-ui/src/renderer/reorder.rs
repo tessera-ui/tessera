@@ -18,7 +18,7 @@ use crate::{
     px::{Px, PxPosition, PxRect, PxSize},
     renderer::{
         RenderCommand,
-        command::{BarrierRequirement, Command},
+        command::{Command, SampleRegion},
     },
 };
 
@@ -66,19 +66,19 @@ impl InstructionInfo {
                 // requirement instead of always using global scope
                 let barrier_req = command.barrier();
                 let rect = match barrier_req {
-                    BarrierRequirement::Global => PxRect {
+                    SampleRegion::Global => PxRect {
                         x: Px(0),
                         y: Px(0),
                         width: Px(i32::MAX),
                         height: Px(i32::MAX),
                     },
-                    BarrierRequirement::PaddedLocal(_) => component_dependency_rect(position, size),
-                    BarrierRequirement::Absolute(rect) => rect,
+                    SampleRegion::PaddedLocal(_) => component_dependency_rect(position, size),
+                    SampleRegion::Absolute(rect) => rect,
                 };
                 (InstructionCategory::Compute, rect)
             }
             Command::Draw(draw_command) => {
-                let barrier = draw_command.barrier();
+                let barrier = draw_command.sample_region();
                 let category = if barrier.is_some() {
                     InstructionCategory::BarrierDraw
                 } else {
@@ -86,16 +86,14 @@ impl InstructionInfo {
                 };
 
                 let rect = match barrier {
-                    Some(BarrierRequirement::Global) => PxRect {
+                    Some(SampleRegion::Global) => PxRect {
                         x: Px(0),
                         y: Px(0),
                         width: Px(i32::MAX),
                         height: Px(i32::MAX),
                     },
-                    Some(BarrierRequirement::PaddedLocal(_)) => {
-                        component_dependency_rect(position, size)
-                    }
-                    Some(BarrierRequirement::Absolute(rect)) => rect,
+                    Some(SampleRegion::PaddedLocal(_)) => component_dependency_rect(position, size),
+                    Some(SampleRegion::Absolute(rect)) => rect,
                     None => PxRect {
                         x: position.x,
                         y: position.y,
@@ -361,53 +359,59 @@ mod tests {
     use super::*;
     use crate::{
         px::{Px, PxPosition, PxRect, PxSize},
-        renderer::{
-            BarrierRequirement, command::Command, compute::ComputeCommand, drawer::DrawCommand,
-        },
+        renderer::{SampleRegion, command::Command, compute::ComputeCommand, drawer::DrawCommand},
     };
     use std::any::TypeId;
     use std::fmt::Debug;
 
     #[derive(Debug, PartialEq, Clone)]
     struct MockDrawCommand {
-        barrier_req: Option<BarrierRequirement>,
+        barrier_req: Option<SampleRegion>,
     }
 
     impl DrawCommand for MockDrawCommand {
-        fn barrier(&self) -> Option<BarrierRequirement> {
+        fn sample_region(&self) -> Option<SampleRegion> {
             self.barrier_req
+        }
+
+        fn apply_opacity(&mut self, opacity: f32) {
+            let _ = opacity;
         }
     }
 
     #[derive(Debug, PartialEq, Clone)]
     struct MockDrawCommand2 {
-        barrier_req: Option<BarrierRequirement>,
+        barrier_req: Option<SampleRegion>,
     }
 
     impl DrawCommand for MockDrawCommand2 {
-        fn barrier(&self) -> Option<BarrierRequirement> {
+        fn sample_region(&self) -> Option<SampleRegion> {
             self.barrier_req
+        }
+
+        fn apply_opacity(&mut self, opacity: f32) {
+            let _ = opacity;
         }
     }
 
     #[derive(Debug, PartialEq, Clone)]
     struct MockComputeCommand {
-        barrier_req: BarrierRequirement,
+        barrier_req: SampleRegion,
     }
 
     impl ComputeCommand for MockComputeCommand {
-        fn barrier(&self) -> BarrierRequirement {
+        fn barrier(&self) -> SampleRegion {
             self.barrier_req
         }
     }
 
     #[derive(Debug, PartialEq, Clone)]
     struct MockComputeCommand2 {
-        barrier_req: BarrierRequirement,
+        barrier_req: SampleRegion,
     }
 
     impl ComputeCommand for MockComputeCommand2 {
-        fn barrier(&self) -> BarrierRequirement {
+        fn barrier(&self) -> SampleRegion {
             self.barrier_req
         }
     }
@@ -416,13 +420,13 @@ mod tests {
 
     fn create_cmd(
         pos: PxPosition,
-        barrier_req: Option<BarrierRequirement>,
+        barrier_req: Option<SampleRegion>,
         is_compute: bool,
     ) -> RenderCommand {
         let size = PxSize::new(Px(10), Px(10));
         if is_compute {
             let cmd = MockComputeCommand {
-                barrier_req: barrier_req.unwrap_or(BarrierRequirement::Global),
+                barrier_req: barrier_req.unwrap_or(SampleRegion::Global),
             };
             RenderCommand {
                 command: Command::Compute(Box::new(cmd)),
@@ -445,13 +449,13 @@ mod tests {
 
     fn create_cmd2(
         pos: PxPosition,
-        barrier_req: Option<BarrierRequirement>,
+        barrier_req: Option<SampleRegion>,
         is_compute: bool,
     ) -> RenderCommand {
         let size = PxSize::new(Px(10), Px(10));
         if is_compute {
             let cmd = MockComputeCommand2 {
-                barrier_req: barrier_req.unwrap_or(BarrierRequirement::Global),
+                barrier_req: barrier_req.unwrap_or(SampleRegion::Global),
             };
             RenderCommand {
                 command: Command::Compute(Box::new(cmd)),
@@ -500,12 +504,12 @@ mod tests {
         let commands = vec![
             create_cmd(
                 PxPosition::new(Px(0), Px(0)),
-                Some(BarrierRequirement::Global),
+                Some(SampleRegion::Global),
                 true,
             ), // 0: Compute
             create_cmd(
                 PxPosition::new(Px(20), Px(20)),
-                Some(BarrierRequirement::Global),
+                Some(SampleRegion::Global),
                 false,
             ), // 1: BarrierDraw
         ];
@@ -560,7 +564,7 @@ mod tests {
 
     #[test]
     fn compute_draw_pairs_remain_grouped_with_local_barrier() {
-        let padding = BarrierRequirement::uniform_padding_local(Px::new(10));
+        let padding = SampleRegion::uniform_padding_local(Px::new(10));
 
         let commands = vec![
             create_cmd(PxPosition::new(Px(0), Px(0)), Some(padding), true),
@@ -599,12 +603,12 @@ mod tests {
         let commands = vec![
             create_cmd(
                 PxPosition::new(Px(0), Px(0)),
-                Some(BarrierRequirement::Global),
+                Some(SampleRegion::Global),
                 false,
             ), // 0: BarrierDraw
             create_cmd(
                 PxPosition::new(Px(20), Px(20)),
-                Some(BarrierRequirement::Global),
+                Some(SampleRegion::Global),
                 true,
             ), // 1: Compute
         ];
@@ -628,7 +632,7 @@ mod tests {
             },
             create_cmd(
                 PxPosition::new(Px(5), Px(5)),
-                Some(BarrierRequirement::Global),
+                Some(SampleRegion::Global),
                 false,
             ),
             RenderCommand {
@@ -640,7 +644,7 @@ mod tests {
             },
             create_cmd2(
                 PxPosition::new(Px(60), Px(60)),
-                Some(BarrierRequirement::Global),
+                Some(SampleRegion::Global),
                 false,
             ),
         ];
@@ -655,12 +659,12 @@ mod tests {
         let commands = vec![
             create_cmd(
                 PxPosition::new(Px(100), Px(100)),
-                Some(BarrierRequirement::uniform_padding_local(Px(30))),
+                Some(SampleRegion::uniform_padding_local(Px(30))),
                 false,
             ),
             create_cmd(
                 PxPosition::new(Px(70), Px(70)),
-                Some(BarrierRequirement::Global),
+                Some(SampleRegion::Global),
                 false,
             ),
         ];
@@ -684,7 +688,7 @@ mod tests {
             },
             create_cmd(
                 PxPosition::new(Px(10), Px(10)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(10),
                     Px(10),
                     Px(20),
@@ -695,7 +699,7 @@ mod tests {
             create_cmd2(PxPosition::new(Px(220), Px(20)), None, false),
             create_cmd(
                 PxPosition::new(Px(150), Px(150)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(150),
                     Px(150),
                     Px(30),
@@ -705,7 +709,7 @@ mod tests {
             ),
             create_cmd2(
                 PxPosition::new(Px(155), Px(155)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(150),
                     Px(150),
                     Px(30),
@@ -716,7 +720,7 @@ mod tests {
             create_cmd(PxPosition::new(Px(260), Px(30)), None, false),
             create_cmd2(
                 PxPosition::new(Px(300), Px(60)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(300),
                     Px(60),
                     Px(25),
@@ -772,23 +776,21 @@ mod tests {
             }
         }
 
-        fn random_barrier(rng: &mut Lcg, allow_none: bool) -> Option<BarrierRequirement> {
+        fn random_barrier(rng: &mut Lcg, allow_none: bool) -> Option<SampleRegion> {
             let roll = rng.next_range(if allow_none { 4 } else { 3 });
             match roll {
                 0 if allow_none => None,
-                0 | 3 => Some(BarrierRequirement::Global),
+                0 | 3 => Some(SampleRegion::Global),
                 1 => {
                     let padding = Px(rng.next_range(20) as i32);
-                    Some(BarrierRequirement::uniform_padding_local(padding))
+                    Some(SampleRegion::uniform_padding_local(padding))
                 }
                 _ => {
                     let x = Px(rng.next_range(240) as i32);
                     let y = Px(rng.next_range(240) as i32);
                     let width = Px(10 + rng.next_range(80) as i32);
                     let height = Px(10 + rng.next_range(80) as i32);
-                    Some(BarrierRequirement::Absolute(PxRect::new(
-                        x, y, width, height,
-                    )))
+                    Some(SampleRegion::Absolute(PxRect::new(x, y, width, height)))
                 }
             }
         }
@@ -993,7 +995,7 @@ mod tests {
         let commands = vec![
             create_cmd(
                 PxPosition::new(Px(0), Px(0)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(0),
                     Px(0),
                     Px(10),
@@ -1003,7 +1005,7 @@ mod tests {
             ), // 0
             create_cmd(
                 PxPosition::new(Px(100), Px(100)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(100),
                     Px(100),
                     Px(10),
@@ -1032,7 +1034,7 @@ mod tests {
         let commands = vec![
             create_cmd(
                 PxPosition::new(Px(0), Px(0)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(0),
                     Px(0),
                     Px(30),
@@ -1043,7 +1045,7 @@ mod tests {
             create_cmd2(PxPosition::new(Px(150), Px(0)), None, false),
             create_cmd2(
                 PxPosition::new(Px(60), Px(0)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(60),
                     Px(0),
                     Px(30),
@@ -1053,7 +1055,7 @@ mod tests {
             ),
             create_cmd(
                 PxPosition::new(Px(120), Px(0)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(120),
                     Px(0),
                     Px(30),
@@ -1110,13 +1112,13 @@ mod tests {
             // 0: Compute. Must run first.
             create_cmd(
                 PxPosition::new(Px(0), Px(0)),
-                Some(BarrierRequirement::Global),
+                Some(SampleRegion::Global),
                 true,
             ),
             // 1: BarrierDraw. Depends on 0. Orthogonal to 4.
             create_cmd(
                 PxPosition::new(Px(50), Px(50)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(50),
                     Px(50),
                     Px(10),
@@ -1131,7 +1133,7 @@ mod tests {
             // 4: BarrierDraw. Depends on 0. Orthogonal to 1.
             create_cmd(
                 PxPosition::new(Px(80), Px(80)),
-                Some(BarrierRequirement::Absolute(PxRect::new(
+                Some(SampleRegion::Absolute(PxRect::new(
                     Px(80),
                     Px(80),
                     Px(10),
@@ -1177,27 +1179,27 @@ mod tests {
         let blur_commands = vec![
             create_cmd(
                 PxPosition::new(Px(0), Px(0)),
-                Some(BarrierRequirement::uniform_padding_local(Px(75))),
+                Some(SampleRegion::uniform_padding_local(Px(75))),
                 true, // Compute command
             ),
             create_cmd(
                 PxPosition::new(Px(200), Px(0)),
-                Some(BarrierRequirement::uniform_padding_local(Px(75))),
+                Some(SampleRegion::uniform_padding_local(Px(75))),
                 true,
             ),
             create_cmd(
                 PxPosition::new(Px(400), Px(0)),
-                Some(BarrierRequirement::uniform_padding_local(Px(75))),
+                Some(SampleRegion::uniform_padding_local(Px(75))),
                 true,
             ),
             create_cmd(
                 PxPosition::new(Px(600), Px(0)),
-                Some(BarrierRequirement::uniform_padding_local(Px(75))),
+                Some(SampleRegion::uniform_padding_local(Px(75))),
                 true,
             ),
             create_cmd(
                 PxPosition::new(Px(800), Px(0)),
-                Some(BarrierRequirement::uniform_padding_local(Px(75))),
+                Some(SampleRegion::uniform_padding_local(Px(75))),
                 true,
             ),
         ];

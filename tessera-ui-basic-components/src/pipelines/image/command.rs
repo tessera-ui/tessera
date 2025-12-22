@@ -50,7 +50,7 @@ pub struct ImageCommand {
 }
 
 impl DrawCommand for ImageCommand {
-    fn barrier(&self) -> Option<tessera_ui::BarrierRequirement> {
+    fn sample_region(&self) -> Option<tessera_ui::SampleRegion> {
         // This command does not require any specific barriers.
         None
     }

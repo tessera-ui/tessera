@@ -1,5 +1,5 @@
 use glam::{Vec2, Vec4};
-use tessera_ui::{Color, DrawCommand, PxPosition, PxSize};
+use tessera_ui::{Color, DrawCommand, DrawRegion, PaddingRect, Px, PxPosition, PxSize};
 
 use super::pipeline::ShapeUniforms;
 
@@ -146,7 +146,7 @@ pub enum ShapeCommand {
 }
 
 impl DrawCommand for ShapeCommand {
-    fn barrier(&self) -> Option<tessera_ui::BarrierRequirement> {
+    fn sample_region(&self) -> Option<tessera_ui::SampleRegion> {
         // No specific barrier requirements for shape commands
         None
     }
@@ -237,6 +237,46 @@ impl DrawCommand for ShapeCommand {
                 scale_color(border_color, factor);
                 scale_shadow(shadow, factor);
             }
+        }
+    }
+
+    fn draw_region(&self) -> DrawRegion {
+        // Compute padding to account for shadows. Conservative estimation:
+        // padding = max(|offset.x|, |offset.y|) + smoothness * 2.0, then ceil to Px.
+        let mut max_pad: f32 = 0.0;
+        let mut consider_layer = |layer: &ShadowLayer| {
+            let pad = layer.offset[0].abs().max(layer.offset[1].abs()) + layer.smoothness * 2.0;
+            if pad > max_pad {
+                max_pad = pad;
+            }
+        };
+
+        match self {
+            ShapeCommand::Rect { shadow, .. }
+            | ShapeCommand::OutlinedRect { shadow, .. }
+            | ShapeCommand::RippleRect { shadow, .. }
+            | ShapeCommand::RippleOutlinedRect { shadow, .. }
+            | ShapeCommand::FilledOutlinedRect { shadow, .. }
+            | ShapeCommand::RippleFilledOutlinedRect { shadow, .. }
+            | ShapeCommand::Ellipse { shadow, .. }
+            | ShapeCommand::OutlinedEllipse { shadow, .. }
+            | ShapeCommand::FilledOutlinedEllipse { shadow, .. } => {
+                if let Some(layers) = shadow {
+                    if let Some(ambient) = layers.ambient {
+                        consider_layer(&ambient);
+                    }
+                    if let Some(spot) = layers.spot {
+                        consider_layer(&spot);
+                    }
+                }
+            }
+        }
+
+        if max_pad <= 0.0 {
+            DrawRegion::PaddedLocal(PaddingRect::ZERO)
+        } else {
+            let padding_px = Px::new(max_pad.ceil() as i32);
+            DrawRegion::PaddedLocal(PaddingRect::uniform(padding_px))
         }
     }
 }

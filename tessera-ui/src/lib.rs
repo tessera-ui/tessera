@@ -248,7 +248,7 @@ pub use crate::{
     modifier::{Modifier, ModifierChild, ModifierWrapper},
     px::{Px, PxPosition, PxRect, PxSize},
     renderer::{
-        BarrierRequirement, Command, Renderer,
+        Command, DrawRegion, PaddingRect, Renderer, SampleRegion,
         compute::{
             self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry, ComputeResource,
             ComputeResourceManager, ComputeResourceRef,

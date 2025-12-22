@@ -1,5 +1,5 @@
 use tessera_ui::{
-    BarrierRequirement, compute::ComputeResourceRef, renderer::compute::command::ComputeCommand,
+    SampleRegion, compute::ComputeResourceRef, renderer::compute::command::ComputeCommand,
 };
 
 /// Command to apply a contrast adjustment using a pre-calculated mean
@@ -34,7 +34,7 @@ impl ContrastCommand {
 }
 
 impl ComputeCommand for ContrastCommand {
-    fn barrier(&self) -> tessera_ui::BarrierRequirement {
-        BarrierRequirement::ZERO_PADDING_LOCAL
+    fn barrier(&self) -> tessera_ui::SampleRegion {
+        SampleRegion::ZERO_PADDING_LOCAL
     }
 }

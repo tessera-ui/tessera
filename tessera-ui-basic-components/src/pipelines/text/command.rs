@@ -12,7 +12,7 @@ pub struct TextCommand {
 }
 
 impl DrawCommand for TextCommand {
-    fn barrier(&self) -> Option<tessera_ui::BarrierRequirement> {
+    fn sample_region(&self) -> Option<tessera_ui::SampleRegion> {
         // No specific barrier requirements for text commands
         None
     }
