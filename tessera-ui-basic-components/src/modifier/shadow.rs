@@ -9,7 +9,7 @@ use crate::{
     theme::MaterialTheme,
 };
 
-use super::{resolve_dimension, ModifierExt};
+use super::{ModifierExt, resolve_dimension};
 
 /// Arguments for the `shadow` modifier.
 #[derive(Clone, Debug)]
