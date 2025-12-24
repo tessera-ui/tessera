@@ -6,6 +6,7 @@
 
 mod interaction;
 mod layout;
+mod semantics;
 mod shadow;
 mod visual;
 
@@ -26,6 +27,7 @@ pub use interaction::{
     ClickableArgs, InteractionState, PointerEventContext, SelectableArgs, ToggleableArgs,
 };
 pub use layout::{MinimumInteractiveComponentEnforcement, Padding};
+pub use semantics::SemanticsArgs;
 pub use shadow::ShadowArgs;
 
 /// Extensions for composing reusable wrapper behavior around component
@@ -100,6 +102,12 @@ pub trait ModifierExt {
     /// Prevents cursor events from propagating to components behind this
     /// subtree.
     fn block_touch_propagation(self) -> Modifier;
+
+    /// Attaches accessibility semantics metadata to this subtree.
+    fn semantics(self, args: SemanticsArgs) -> Modifier;
+
+    /// Clears descendant semantics and applies the provided metadata.
+    fn clear_and_set_semantics(self, args: SemanticsArgs) -> Modifier;
 
     /// Makes the subtree clickable with optional ripple feedback and an
     /// accessibility click action.
@@ -357,6 +365,22 @@ impl ModifierExt for Modifier {
                 });
             }
         })
+    }
+
+    fn semantics(self, args: SemanticsArgs) -> Modifier {
+        self.push_wrapper(move |child| {
+            let args = args.clone();
+            move || {
+                semantics::modifier_semantics(args.clone(), || {
+                    child();
+                });
+            }
+        })
+    }
+
+    fn clear_and_set_semantics(self, mut args: SemanticsArgs) -> Modifier {
+        args.merge_descendants = false;
+        self.semantics(args)
     }
 
     fn clickable(self, args: ClickableArgs) -> Modifier {

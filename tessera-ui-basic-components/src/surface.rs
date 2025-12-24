@@ -7,16 +7,17 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, InputHandlerInput, Modifier, Px,
-    PxPosition, PxSize, State,
-    accesskit::{Action, Role},
-    provide_context, remember, tessera, use_context,
+    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, Px, PxPosition, PxSize, State,
+    accesskit::Role, provide_context, remember, tessera, use_context,
 };
 
 use crate::{
     RippleProps,
     alignment::Alignment,
-    modifier::{ClickableArgs, InteractionState, ModifierExt, PointerEventContext, ShadowArgs},
+    modifier::{
+        ClickableArgs, InteractionState, ModifierExt, PointerEventContext, SemanticsArgs,
+        ShadowArgs,
+    },
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
     pos_misc::is_position_in_component,
     ripple_state::{RippleSpec, RippleState},
@@ -672,6 +673,10 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) 
     } else {
         None
     };
+    let has_semantics = args.accessibility_role.is_some()
+        || args.accessibility_label.is_some()
+        || args.accessibility_description.is_some()
+        || args.accessibility_focusable;
 
     if clickable {
         modifier = modifier.minimum_interactive_component_size();
@@ -723,6 +728,26 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) 
         modifier = modifier.clickable(clickable_args);
     } else if args.block_input {
         modifier = modifier.block_touch_propagation();
+    }
+
+    if !interactive && has_semantics {
+        let mut semantics = SemanticsArgs::new();
+        if let Some(role) = args.accessibility_role {
+            semantics = semantics.role(role);
+        }
+        if let Some(label) = args.accessibility_label.clone() {
+            semantics = semantics.label(label);
+        }
+        if let Some(description) = args.accessibility_description.clone() {
+            semantics = semantics.description(description);
+        }
+        if args.accessibility_focusable {
+            semantics = semantics.focusable(true);
+        }
+        if !args.enabled {
+            semantics = semantics.disabled(true);
+        }
+        modifier = modifier.semantics(semantics);
     }
 
     if let Some(elevation) = args.elevation
@@ -877,76 +902,16 @@ fn surface_inner(
         Ok(ComputedData { width, height })
     }));
 
-    if !interactive {
-        let args = args;
+    if !interactive && args.block_input {
         input_handler(Box::new(move |mut input| {
-            // Apply accessibility metadata first
-            apply_surface_accessibility(&mut input, &args, false, args.enabled, None);
-
-            // Then handle input blocking if needed
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
                 .map(|pos| is_position_in_component(size, pos))
                 .unwrap_or(false);
-            if args.block_input && is_cursor_in_surface {
+            if is_cursor_in_surface {
                 input.block_all();
             }
         }));
-    }
-}
-
-fn apply_surface_accessibility(
-    input: &mut InputHandlerInput<'_>,
-    args: &SurfaceArgs,
-    interactive: bool,
-    enabled: bool,
-    on_click: Option<Arc<dyn Fn() + Send + Sync>>,
-) {
-    let has_metadata = args.accessibility_role.is_some()
-        || args.accessibility_label.is_some()
-        || args.accessibility_description.is_some()
-        || args.accessibility_focusable
-        || interactive;
-
-    if !has_metadata {
-        return;
-    }
-
-    let mut builder = input.accessibility();
-
-    let role = args
-        .accessibility_role
-        .or_else(|| interactive.then_some(Role::Button));
-    if let Some(role) = role {
-        builder = builder.role(role);
-    }
-    if let Some(label) = args.accessibility_label.as_ref() {
-        builder = builder.label(label.clone());
-    }
-    if let Some(description) = args.accessibility_description.as_ref() {
-        builder = builder.description(description.clone());
-    }
-    if !enabled {
-        builder = builder.disabled();
-    } else {
-        if args.accessibility_focusable || interactive {
-            builder = builder.focusable();
-        }
-        if interactive {
-            builder = builder.action(Action::Click);
-        }
-    }
-    builder.commit();
-
-    if enabled
-        && interactive
-        && let Some(on_click) = on_click
-    {
-        input.set_accessibility_action_handler(move |action| {
-            if action == Action::Click {
-                on_click();
-            }
-        });
     }
 }

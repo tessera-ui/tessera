@@ -8,16 +8,13 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, Px,
-    PxPosition, State,
-    accesskit::{Action, Role},
-    focus_state::Focus,
-    remember, tessera,
+    PxPosition, State, accesskit::Role, focus_state::Focus, remember, tessera,
     winit::window::CursorIcon,
 };
 
 use crate::{
     fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
-    modifier::ModifierExt as _,
+    modifier::{ModifierExt as _, SemanticsArgs},
     shape_def::Shape,
 };
 
@@ -331,7 +328,24 @@ pub fn glass_slider_with_controller(
     controller: State<GlassSliderController>,
 ) {
     let args: GlassSliderArgs = args.into();
-    let modifier = args.modifier;
+    let mut modifier = args.modifier;
+    let mut semantics = SemanticsArgs::new().role(Role::Slider);
+    if let Some(label) = args.accessibility_label.clone() {
+        semantics = semantics.label(label);
+    }
+    if let Some(description) = args.accessibility_description.clone() {
+        semantics = semantics.description(description);
+    }
+    semantics = semantics
+        .numeric_range(0.0, 1.0)
+        .numeric_value(args.value as f64)
+        .numeric_value_step(ACCESSIBILITY_STEP as f64);
+    semantics = if args.disabled {
+        semantics.disabled(true)
+    } else {
+        semantics.focusable(true)
+    };
+    modifier = modifier.semantics(semantics);
 
     modifier.run(move || glass_slider_inner(args, controller));
 }
@@ -359,7 +373,7 @@ fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderContro
     let on_change = args.on_change.clone();
     let args_for_handler = args.clone();
 
-    input_handler(Box::new(move |mut input| {
+    input_handler(Box::new(move |input| {
         if !args_for_handler.disabled {
             let is_in_component =
                 cursor_within_component(input.cursor_position_rel, &input.computed_data);
@@ -378,14 +392,24 @@ fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderContro
                 }
             }
         }
-
-        apply_glass_slider_accessibility(
-            &mut input,
-            &args_for_handler,
-            args_for_handler.value,
-            &args_for_handler.on_change,
-        );
     }));
+    let mut semantics = SemanticsArgs::new().role(Role::Slider);
+    if let Some(label) = args.accessibility_label.clone() {
+        semantics = semantics.label(label);
+    }
+    if let Some(description) = args.accessibility_description.clone() {
+        semantics = semantics.description(description);
+    }
+    semantics = semantics
+        .numeric_range(0.0, 1.0)
+        .numeric_value(args.value as f64)
+        .numeric_value_step(ACCESSIBILITY_STEP as f64);
+    semantics = if args.disabled {
+        semantics.disabled(true)
+    } else {
+        semantics.focusable(true)
+    };
+    let _modifier = Modifier::new().semantics(semantics);
 
     let track_height = args.track_height.to_px();
     let fallback_width = Dp(200.0).to_px();
@@ -416,54 +440,4 @@ fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderContro
             height: self_height,
         })
     }));
-}
-
-fn apply_glass_slider_accessibility(
-    input: &mut tessera_ui::InputHandlerInput<'_>,
-    args: &GlassSliderArgs,
-    current_value: f32,
-    on_change: &Arc<dyn Fn(f32) + Send + Sync>,
-) {
-    let mut builder = input.accessibility().role(Role::Slider);
-
-    if let Some(label) = args.accessibility_label.as_ref() {
-        builder = builder.label(label.clone());
-    }
-    if let Some(description) = args.accessibility_description.as_ref() {
-        builder = builder.description(description.clone());
-    }
-
-    builder = builder
-        .numeric_value(current_value as f64)
-        .numeric_range(0.0, 1.0);
-
-    if args.disabled {
-        builder = builder.disabled();
-    } else {
-        builder = builder
-            .action(Action::Increment)
-            .action(Action::Decrement)
-            .focusable();
-    }
-
-    builder.commit();
-
-    if args.disabled {
-        return;
-    }
-
-    let on_change = on_change.clone();
-    input.set_accessibility_action_handler(move |action| {
-        let new_value = match action {
-            Action::Increment => Some((current_value + ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
-            Action::Decrement => Some((current_value - ACCESSIBILITY_STEP).clamp(0.0, 1.0)),
-            _ => None,
-        };
-
-        if let Some(new_value) = new_value
-            && (new_value - current_value).abs() > f32::EPSILON
-        {
-            on_change(new_value);
-        }
-    });
 }

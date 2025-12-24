@@ -5,10 +5,12 @@
 //! Display labels, headings, and other text content.
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, Px, PxPosition, accesskit::Role, tessera, use_context,
+    Color, ComputedData, DimensionValue, Dp, Modifier, Px, PxPosition, accesskit::Role, tessera,
+    use_context,
 };
 
 use crate::{
+    modifier::{ModifierExt as _, SemanticsArgs},
     pipelines::text::{
         command::{TextCommand, TextConstraint},
         pipeline::TextData,
@@ -111,67 +113,62 @@ impl From<&str> for TextArgs {
 #[tessera]
 pub fn text(args: impl Into<TextArgs>) {
     let text_args: TextArgs = args.into();
-    let accessibility_label = text_args.accessibility_label.clone();
-    let accessibility_description = text_args.accessibility_description.clone();
-    let text_for_accessibility = text_args.text.clone();
     let inherited_style = use_context::<TextStyle>().get();
+    let accessibility_label = text_args
+        .accessibility_label
+        .clone()
+        .or_else(|| (!text_args.text.is_empty()).then(|| text_args.text.clone()));
+    let accessibility_description = text_args.accessibility_description.clone();
+    let mut semantics = SemanticsArgs::new().role(Role::Label);
+    if let Some(label) = accessibility_label {
+        semantics = semantics.label(label);
+    }
+    if let Some(description) = accessibility_description {
+        semantics = semantics.description(description);
+    }
 
-    input_handler(Box::new(move |input| {
-        let mut builder = input.accessibility().role(Role::Label);
+    Modifier::new().semantics(semantics).run(move || {
+        measure(Box::new(move |input| {
+            let max_width: Option<Px> = match input.parent_constraint.width() {
+                DimensionValue::Fixed(w) => Some(w),
+                DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
+                DimensionValue::Fill { max, .. } => max, // Use max from Fill
+            };
 
-        if let Some(label) = accessibility_label.as_ref() {
-            builder = builder.label(label.clone());
-        } else if !text_for_accessibility.is_empty() {
-            builder = builder.label(text_for_accessibility.clone());
-        }
+            let max_height: Option<Px> = match input.parent_constraint.height() {
+                DimensionValue::Fixed(h) => Some(h),
+                DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
+                DimensionValue::Fill { max, .. } => max, // Use max from Fill
+            };
 
-        if let Some(description) = accessibility_description.as_ref() {
-            builder = builder.description(description.clone());
-        }
+            let line_height = text_args
+                .line_height
+                .or(inherited_style.line_height)
+                .unwrap_or(Dp(text_args.size.0 * 1.2));
 
-        builder.commit();
-    }));
-    measure(Box::new(move |input| {
-        let max_width: Option<Px> = match input.parent_constraint.width() {
-            DimensionValue::Fixed(w) => Some(w),
-            DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
-            DimensionValue::Fill { max, .. } => max, // Use max from Fill
-        };
+            let text_data = TextData::new(
+                text_args.text.clone(),
+                text_args.color,
+                text_args.size.to_pixels_f32(),
+                line_height.to_pixels_f32(),
+                TextConstraint {
+                    max_width: max_width.map(|px| px.to_f32()),
+                    max_height: max_height.map(|px| px.to_f32()),
+                },
+            );
 
-        let max_height: Option<Px> = match input.parent_constraint.height() {
-            DimensionValue::Fixed(h) => Some(h),
-            DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
-            DimensionValue::Fill { max, .. } => max, // Use max from Fill
-        };
+            let size = text_data.size;
+            let drawable = TextCommand {
+                data: text_data,
+                offset: PxPosition::ZERO,
+            };
 
-        let line_height = text_args
-            .line_height
-            .or(inherited_style.line_height)
-            .unwrap_or(Dp(text_args.size.0 * 1.2));
+            input.metadata_mut().push_draw_command(drawable);
 
-        let text_data = TextData::new(
-            text_args.text.clone(),
-            text_args.color,
-            text_args.size.to_pixels_f32(),
-            line_height.to_pixels_f32(),
-            TextConstraint {
-                max_width: max_width.map(|px| px.to_f32()),
-                max_height: max_height.map(|px| px.to_f32()),
-            },
-        );
-
-        let size = text_data.size;
-        let drawable = TextCommand {
-            data: text_data,
-            offset: PxPosition::ZERO,
-        };
-
-        // Use the new unified command system to add the text rendering command
-        input.metadata_mut().push_draw_command(drawable);
-
-        Ok(ComputedData {
-            width: size[0].into(),
-            height: size[1].into(),
-        })
-    }));
+            Ok(ComputedData {
+                width: size[0].into(),
+                height: size[1].into(),
+            })
+        }));
+    });
 }

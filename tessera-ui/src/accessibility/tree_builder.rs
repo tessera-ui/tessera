@@ -95,18 +95,25 @@ fn traverse_and_collect(
 
     let mut has_accessible_descendants = false;
 
+    let merge_descendants = accessibility_node
+        .as_ref()
+        .map(|node| node.merge_descendants)
+        .unwrap_or(true);
+
     // Collect children with accessibility info
     let mut accessible_children = Vec::new();
-    for child_id in node_id.children(tree) {
-        // Recursively process child
-        let child_has_accessibility =
-            traverse_and_collect(tree, metadatas, child_id, nodes, focus, false, root_label);
+    if merge_descendants {
+        for child_id in node_id.children(tree) {
+            // Recursively process child
+            let child_has_accessibility =
+                traverse_and_collect(tree, metadatas, child_id, nodes, focus, false, root_label);
 
-        has_accessible_descendants |= child_has_accessibility;
+            has_accessible_descendants |= child_has_accessibility;
 
-        if child_has_accessibility {
-            let child_accesskit_id = AccessibilityId::from_component_node_id(child_id);
-            accessible_children.push(child_accesskit_id.to_accesskit_id());
+            if child_has_accessibility {
+                let child_accesskit_id = AccessibilityId::from_component_node_id(child_id);
+                accessible_children.push(child_accesskit_id.to_accesskit_id());
+            }
         }
     }
 
@@ -115,7 +122,13 @@ fn traverse_and_collect(
         let accesskit_id = AccessibilityId::from_component_node_id(node_id);
 
         // Build AccessKit Node
-        let mut node = Node::new(accessibility_node.role.unwrap_or(accesskit::Role::Unknown));
+        let mut node = Node::new(accessibility_node.role.unwrap_or_else(|| {
+            if accessibility_node.heading_level.is_some() {
+                accesskit::Role::Heading
+            } else {
+                accesskit::Role::Unknown
+            }
+        }));
 
         // Set label
         if let Some(label) = accessibility_node.label {
@@ -127,6 +140,26 @@ fn traverse_and_collect(
             node.set_description(description);
         }
 
+        if let Some(state_description) = accessibility_node.state_description {
+            node.set_state_description(state_description);
+        }
+
+        if let Some(role_description) = accessibility_node.role_description {
+            node.set_role_description(role_description);
+        }
+
+        if let Some(tooltip) = accessibility_node.tooltip {
+            node.set_tooltip(tooltip);
+        }
+
+        if let Some(live) = accessibility_node.live {
+            node.set_live(live);
+        }
+
+        if let Some(level) = accessibility_node.heading_level {
+            node.set_level(level as usize);
+        }
+
         // Set value
         if let Some(value) = accessibility_node.value {
             node.set_value(value);
@@ -135,6 +168,50 @@ fn traverse_and_collect(
         // Set numeric value
         if let Some(numeric_value) = accessibility_node.numeric_value {
             node.set_numeric_value(numeric_value);
+        }
+
+        if let Some(step) = accessibility_node.numeric_value_step {
+            node.set_numeric_value_step(step);
+        }
+
+        if let Some(jump) = accessibility_node.numeric_value_jump {
+            node.set_numeric_value_jump(jump);
+        }
+
+        if let Some((value, min, max)) = accessibility_node.scroll_x {
+            node.set_scroll_x(value);
+            node.set_scroll_x_min(min);
+            node.set_scroll_x_max(max);
+        }
+
+        if let Some((value, min, max)) = accessibility_node.scroll_y {
+            node.set_scroll_y(value);
+            node.set_scroll_y_min(min);
+            node.set_scroll_y_max(max);
+        }
+
+        if let Some((rows, cols, hierarchical)) = accessibility_node.collection_info {
+            node.set_row_count(rows);
+            node.set_column_count(cols);
+            if hierarchical {
+                node.set_level(1);
+            }
+        }
+
+        if let Some((row_index, row_span, col_index, col_span, heading)) =
+            accessibility_node.collection_item_info
+        {
+            node.set_row_index(row_index);
+            node.set_row_span(row_span);
+            node.set_column_index(col_index);
+            node.set_column_span(col_span);
+            if heading {
+                node.set_level(1);
+            }
+        }
+
+        if accessibility_node.is_editable_text {
+            node.set_live(accesskit::Live::Polite);
         }
 
         // Set focusable
@@ -172,7 +249,12 @@ fn traverse_and_collect(
             node.set_children(accessible_children);
         }
 
-        if let Some(bounds) = rect_from_geometry(abs_position, computed_data) {
+        let bounds = match accessibility_node.bounds_padding {
+            Some(padding) => rect_from_geometry_with_padding(abs_position, computed_data, padding),
+            None => rect_from_geometry(abs_position, computed_data),
+        };
+
+        if let Some(bounds) = bounds {
             node.set_bounds(bounds);
         }
 
@@ -218,6 +300,22 @@ fn rect_from_geometry(
     let y0 = position.y.0 as f64;
     let x1 = x0 + size.width.0 as f64;
     let y1 = y0 + size.height.0 as f64;
+
+    Some(Rect { x0, y0, x1, y1 })
+}
+
+fn rect_from_geometry_with_padding(
+    abs_position: Option<PxPosition>,
+    computed_data: Option<ComputedData>,
+    padding: crate::accessibility::AccessibilityPadding,
+) -> Option<Rect> {
+    let position = abs_position?;
+    let size = computed_data?;
+
+    let x0 = position.x.0 as f64 - padding.left.0 as f64;
+    let y0 = position.y.0 as f64 - padding.top.0 as f64;
+    let x1 = x0 + size.width.0 as f64 + (padding.left + padding.right).0 as f64;
+    let y1 = y0 + size.height.0 as f64 + (padding.top + padding.bottom).0 as f64;
 
     Some(Rect { x0, y0, x1, y1 })
 }

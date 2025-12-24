@@ -45,6 +45,8 @@ mod tree_builder;
 
 use accesskit::{Action, NodeId as AccessKitNodeId, Role, Toggled};
 
+use crate::Px;
+
 pub(crate) use tree_builder::{build_tree_update, dispatch_action};
 
 /// A stable identifier for accessibility nodes.
@@ -94,11 +96,36 @@ impl AccessibilityId {
     }
 }
 
+/// Padding applied to semantic bounds without affecting layout.
+#[derive(Debug, Clone, Copy)]
+pub struct AccessibilityPadding {
+    /// Left padding in physical pixels.
+    pub left: Px,
+    /// Top padding in physical pixels.
+    pub top: Px,
+    /// Right padding in physical pixels.
+    pub right: Px,
+    /// Bottom padding in physical pixels.
+    pub bottom: Px,
+}
+
+impl AccessibilityPadding {
+    /// Creates zero padding.
+    pub const fn zero() -> Self {
+        Self {
+            left: Px::ZERO,
+            top: Px::ZERO,
+            right: Px::ZERO,
+            bottom: Px::ZERO,
+        }
+    }
+}
+
 /// Semantic information for an accessibility node.
 ///
 /// This structure contains all the metadata that assistive technologies need
 /// to understand and interact with a UI component.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct AccessibilityNode {
     /// The role of this node (button, text input, etc.)
     pub role: Option<Role>,
@@ -128,6 +155,38 @@ pub struct AccessibilityNode {
     pub actions: Vec<Action>,
     /// Custom accessibility key provided by the component
     pub key: Option<String>,
+    /// Whether to merge child semantics into this node. When false, child
+    /// semantics are ignored, similar to Compose's `clearAndSetSemantics`.
+    pub merge_descendants: bool,
+    /// Optional padding applied to the semantic bounds without affecting
+    /// layout.
+    pub bounds_padding: Option<AccessibilityPadding>,
+    /// Optional state description announced in addition to the label.
+    pub state_description: Option<String>,
+    /// Optional custom role description for custom controls.
+    pub role_description: Option<String>,
+    /// Optional tooltip text exposed as a name override.
+    pub tooltip: Option<String>,
+    /// Live region politeness.
+    pub live: Option<accesskit::Live>,
+    /// Optional heading level (1-based). When set and no role is provided,
+    /// role will default to `Heading`.
+    pub heading_level: Option<u32>,
+    /// Optional scroll x value and range.
+    pub scroll_x: Option<(f64, f64, f64)>,
+    /// Optional scroll y value and range.
+    pub scroll_y: Option<(f64, f64, f64)>,
+    /// Optional numeric step for range-based controls.
+    pub numeric_value_step: Option<f64>,
+    /// Optional numeric jump value for range-based controls.
+    pub numeric_value_jump: Option<f64>,
+    /// Optional collection info: row_count, column_count, hierarchical.
+    pub collection_info: Option<(usize, usize, bool)>,
+    /// Optional collection item info: row_index, row_span, col_index, col_span,
+    /// heading.
+    pub collection_item_info: Option<(usize, usize, usize, usize, bool)>,
+    /// Optional editable text flag.
+    pub is_editable_text: bool,
 }
 
 impl AccessibilityNode {
@@ -219,6 +278,41 @@ impl AccessibilityNode {
     pub fn with_key(mut self, key: impl Into<String>) -> Self {
         self.key = Some(key.into());
         self
+    }
+}
+
+impl Default for AccessibilityNode {
+    fn default() -> Self {
+        Self {
+            role: None,
+            label: None,
+            description: None,
+            value: None,
+            numeric_value: None,
+            min_numeric_value: None,
+            max_numeric_value: None,
+            focusable: false,
+            focused: false,
+            toggled: None,
+            disabled: false,
+            hidden: false,
+            actions: Vec::new(),
+            key: None,
+            merge_descendants: true,
+            bounds_padding: None,
+            state_description: None,
+            role_description: None,
+            tooltip: None,
+            live: None,
+            heading_level: None,
+            scroll_x: None,
+            scroll_y: None,
+            numeric_value_step: None,
+            numeric_value_jump: None,
+            collection_info: None,
+            collection_item_info: None,
+            is_editable_text: false,
+        }
     }
 }
 

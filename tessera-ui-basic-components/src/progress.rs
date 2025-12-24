@@ -12,7 +12,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::ModifierExt as _,
+    modifier::{ModifierExt as _, SemanticsArgs},
     pipelines::progress_arc::command::{ProgressArcCap, ProgressArcCommand},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, surface},
@@ -370,188 +370,187 @@ fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
         }
     }
 
-    input_handler(Box::new(move |input| {
-        let mut builder = input.accessibility().role(Role::ProgressIndicator);
-        if let Some(label) = args_for_accessibility.accessibility_label.as_ref() {
-            builder = builder.label(label.clone());
-        }
-        if let Some(description) = args_for_accessibility.accessibility_description.as_ref() {
-            builder = builder.description(description.clone());
-        }
-        if let Some(progress) = args_for_accessibility.progress {
-            let progress = if progress.is_nan() {
-                0.0
-            } else {
-                progress.clamp(0.0, 1.0)
-            };
-            builder = builder
-                .numeric_range(0.0, 1.0)
-                .numeric_value(progress as f64);
-        }
-        builder.commit();
-    }));
-
-    measure(Box::new(move |input| {
-        let (self_width, self_height) = resolve_linear_size(input.parent_constraint);
-        let is_butt = args.stroke_cap.effective_is_butt(self_width, self_height);
-        let gap_fraction =
-            adjusted_linear_gap_fraction(self_width, self_height, args.gap_size, is_butt);
-        let child_height = self_height;
-
-        if let Some(progress) = args.progress {
-            let progress = if progress.is_nan() {
-                0.0
-            } else {
-                progress.clamp(0.0, 1.0)
-            };
-            let track_start = progress + progress.min(gap_fraction);
-
-            let track_id = input.children_ids[0];
-            let indicator_id = input.children_ids[1];
-            let stop_id = if args.draw_stop_indicator {
-                input.children_ids.get(2).copied()
-            } else {
-                None
-            };
-
-            if let Some((x, w)) =
-                linear_segment_bounds(0.0, progress, self_width, self_height, is_butt)
-            {
-                let constraint = Constraint::new(
-                    DimensionValue::Fixed(w),
-                    DimensionValue::Fixed(child_height),
-                );
-                input.measure_child(indicator_id, &constraint)?;
-                input.place_child(indicator_id, PxPosition::new(x, Px(0)));
-            } else {
-                let constraint = Constraint::new(
-                    DimensionValue::Fixed(Px(0)),
-                    DimensionValue::Fixed(child_height),
-                );
-                input.measure_child(indicator_id, &constraint)?;
-                input.place_child(indicator_id, PxPosition::new(Px(0), Px(0)));
-            }
-
-            if track_start <= 1.0
-                && let Some((x, w)) =
-                    linear_segment_bounds(track_start, 1.0, self_width, self_height, is_butt)
-            {
-                let constraint = Constraint::new(
-                    DimensionValue::Fixed(w),
-                    DimensionValue::Fixed(child_height),
-                );
-                input.measure_child(track_id, &constraint)?;
-                input.place_child(track_id, PxPosition::new(x, Px(0)));
-            } else {
-                let constraint = Constraint::new(
-                    DimensionValue::Fixed(Px(0)),
-                    DimensionValue::Fixed(child_height),
-                );
-                input.measure_child(track_id, &constraint)?;
-                input.place_child(track_id, PxPosition::new(Px(0), Px(0)));
-            }
-
-            if let Some(stop_id) = stop_id {
-                let (pos, stop_size) = stop_indicator_bounds(self_width, self_height);
-                let constraint = Constraint::new(
-                    DimensionValue::Fixed(stop_size),
-                    DimensionValue::Fixed(stop_size),
-                );
-                input.measure_child(stop_id, &constraint)?;
-                input.place_child(stop_id, pos);
-            }
+    let mut semantics = SemanticsArgs::new().role(Role::ProgressIndicator);
+    if let Some(label) = args_for_accessibility.accessibility_label.clone() {
+        semantics = semantics.label(label);
+    }
+    if let Some(description) = args_for_accessibility.accessibility_description.clone() {
+        semantics = semantics.description(description);
+    }
+    if let Some(progress) = args_for_accessibility.progress {
+        let progress = if progress.is_nan() {
+            0.0
         } else {
-            let cycle = linear_cycle_progress(animation_start.get(), 1750);
-            let first_head = keyframe_0_to_1(cycle, 0, 1000, 1750, emphasized_accelerate);
-            let first_tail = keyframe_0_to_1(cycle, 250, 1000, 1750, emphasized_accelerate);
-            let second_head = keyframe_0_to_1(cycle, 650, 850, 1750, emphasized_accelerate);
-            let second_tail = keyframe_0_to_1(cycle, 900, 850, 1750, emphasized_accelerate);
+            progress.clamp(0.0, 1.0)
+        };
+        semantics = semantics
+            .numeric_range(0.0, 1.0)
+            .numeric_value(progress as f64);
+    }
 
-            let ids = input.children_ids;
-            let track_before_id = ids[0];
-            let line1_id = ids[1];
-            let track_between_id = ids[2];
-            let line2_id = ids[3];
-            let track_after_id = ids[4];
+    Modifier::new().semantics(semantics).run(move || {
+        measure(Box::new(move |input| {
+            let (self_width, self_height) = resolve_linear_size(input.parent_constraint);
+            let is_butt = args.stroke_cap.effective_is_butt(self_width, self_height);
+            let gap_fraction =
+                adjusted_linear_gap_fraction(self_width, self_height, args.gap_size, is_butt);
+            let child_height = self_height;
 
-            let set_segment =
-                |node_id, start: f32, end: f32| -> Result<(), tessera_ui::MeasurementError> {
-                    if let Some((x, w)) =
-                        linear_segment_bounds(start, end, self_width, self_height, is_butt)
-                    {
-                        let constraint = Constraint::new(
-                            DimensionValue::Fixed(w),
-                            DimensionValue::Fixed(child_height),
-                        );
-                        input.measure_child(node_id, &constraint)?;
-                        input.place_child(node_id, PxPosition::new(x, Px(0)));
+            if let Some(progress) = args.progress {
+                let progress = if progress.is_nan() {
+                    0.0
+                } else {
+                    progress.clamp(0.0, 1.0)
+                };
+                let track_start = progress + progress.min(gap_fraction);
+
+                let track_id = input.children_ids[0];
+                let indicator_id = input.children_ids[1];
+                let stop_id = if args.draw_stop_indicator {
+                    input.children_ids.get(2).copied()
+                } else {
+                    None
+                };
+
+                if let Some((x, w)) =
+                    linear_segment_bounds(0.0, progress, self_width, self_height, is_butt)
+                {
+                    let constraint = Constraint::new(
+                        DimensionValue::Fixed(w),
+                        DimensionValue::Fixed(child_height),
+                    );
+                    input.measure_child(indicator_id, &constraint)?;
+                    input.place_child(indicator_id, PxPosition::new(x, Px(0)));
+                } else {
+                    let constraint = Constraint::new(
+                        DimensionValue::Fixed(Px(0)),
+                        DimensionValue::Fixed(child_height),
+                    );
+                    input.measure_child(indicator_id, &constraint)?;
+                    input.place_child(indicator_id, PxPosition::new(Px(0), Px(0)));
+                }
+
+                if track_start <= 1.0
+                    && let Some((x, w)) =
+                        linear_segment_bounds(track_start, 1.0, self_width, self_height, is_butt)
+                {
+                    let constraint = Constraint::new(
+                        DimensionValue::Fixed(w),
+                        DimensionValue::Fixed(child_height),
+                    );
+                    input.measure_child(track_id, &constraint)?;
+                    input.place_child(track_id, PxPosition::new(x, Px(0)));
+                } else {
+                    let constraint = Constraint::new(
+                        DimensionValue::Fixed(Px(0)),
+                        DimensionValue::Fixed(child_height),
+                    );
+                    input.measure_child(track_id, &constraint)?;
+                    input.place_child(track_id, PxPosition::new(Px(0), Px(0)));
+                }
+
+                if let Some(stop_id) = stop_id {
+                    let (pos, stop_size) = stop_indicator_bounds(self_width, self_height);
+                    let constraint = Constraint::new(
+                        DimensionValue::Fixed(stop_size),
+                        DimensionValue::Fixed(stop_size),
+                    );
+                    input.measure_child(stop_id, &constraint)?;
+                    input.place_child(stop_id, pos);
+                }
+            } else {
+                let cycle = linear_cycle_progress(animation_start.get(), 1750);
+                let first_head = keyframe_0_to_1(cycle, 0, 1000, 1750, emphasized_accelerate);
+                let first_tail = keyframe_0_to_1(cycle, 250, 1000, 1750, emphasized_accelerate);
+                let second_head = keyframe_0_to_1(cycle, 650, 850, 1750, emphasized_accelerate);
+                let second_tail = keyframe_0_to_1(cycle, 900, 850, 1750, emphasized_accelerate);
+
+                let ids = input.children_ids;
+                let track_before_id = ids[0];
+                let line1_id = ids[1];
+                let track_between_id = ids[2];
+                let line2_id = ids[3];
+                let track_after_id = ids[4];
+
+                let set_segment =
+                    |node_id, start: f32, end: f32| -> Result<(), tessera_ui::MeasurementError> {
+                        if let Some((x, w)) =
+                            linear_segment_bounds(start, end, self_width, self_height, is_butt)
+                        {
+                            let constraint = Constraint::new(
+                                DimensionValue::Fixed(w),
+                                DimensionValue::Fixed(child_height),
+                            );
+                            input.measure_child(node_id, &constraint)?;
+                            input.place_child(node_id, PxPosition::new(x, Px(0)));
+                        } else {
+                            let constraint = Constraint::new(
+                                DimensionValue::Fixed(Px(0)),
+                                DimensionValue::Fixed(child_height),
+                            );
+                            input.measure_child(node_id, &constraint)?;
+                            input.place_child(node_id, PxPosition::new(Px(0), Px(0)));
+                        }
+                        Ok(())
+                    };
+
+                if first_head < 1.0 - gap_fraction {
+                    let start = if first_head > 0.0 {
+                        first_head + gap_fraction
                     } else {
-                        let constraint = Constraint::new(
-                            DimensionValue::Fixed(Px(0)),
-                            DimensionValue::Fixed(child_height),
-                        );
-                        input.measure_child(node_id, &constraint)?;
-                        input.place_child(node_id, PxPosition::new(Px(0), Px(0)));
-                    }
-                    Ok(())
-                };
-
-            if first_head < 1.0 - gap_fraction {
-                let start = if first_head > 0.0 {
-                    first_head + gap_fraction
+                        0.0
+                    };
+                    set_segment(track_before_id, start, 1.0)?;
                 } else {
-                    0.0
-                };
-                set_segment(track_before_id, start, 1.0)?;
-            } else {
-                set_segment(track_before_id, 0.0, 0.0)?;
-            }
+                    set_segment(track_before_id, 0.0, 0.0)?;
+                }
 
-            if first_head - first_tail > 0.0 {
-                set_segment(line1_id, first_head, first_tail)?;
-            } else {
-                set_segment(line1_id, 0.0, 0.0)?;
-            }
-
-            if first_tail > gap_fraction {
-                let start = if second_head > 0.0 {
-                    second_head + gap_fraction
+                if first_head - first_tail > 0.0 {
+                    set_segment(line1_id, first_head, first_tail)?;
                 } else {
-                    0.0
-                };
-                let end = if first_tail < 1.0 {
-                    first_tail - gap_fraction
+                    set_segment(line1_id, 0.0, 0.0)?;
+                }
+
+                if first_tail > gap_fraction {
+                    let start = if second_head > 0.0 {
+                        second_head + gap_fraction
+                    } else {
+                        0.0
+                    };
+                    let end = if first_tail < 1.0 {
+                        first_tail - gap_fraction
+                    } else {
+                        1.0
+                    };
+                    set_segment(track_between_id, start, end)?;
                 } else {
-                    1.0
-                };
-                set_segment(track_between_id, start, end)?;
-            } else {
-                set_segment(track_between_id, 0.0, 0.0)?;
-            }
+                    set_segment(track_between_id, 0.0, 0.0)?;
+                }
 
-            if second_head - second_tail > 0.0 {
-                set_segment(line2_id, second_head, second_tail)?;
-            } else {
-                set_segment(line2_id, 0.0, 0.0)?;
-            }
-
-            if second_tail > gap_fraction {
-                let end = if second_tail < 1.0 {
-                    second_tail - gap_fraction
+                if second_head - second_tail > 0.0 {
+                    set_segment(line2_id, second_head, second_tail)?;
                 } else {
-                    1.0
-                };
-                set_segment(track_after_id, 0.0, end)?;
-            } else {
-                set_segment(track_after_id, 0.0, 0.0)?;
-            }
-        }
+                    set_segment(line2_id, 0.0, 0.0)?;
+                }
 
-        Ok(ComputedData {
-            width: self_width,
-            height: self_height,
-        })
-    }));
+                if second_tail > gap_fraction {
+                    let end = if second_tail < 1.0 {
+                        second_tail - gap_fraction
+                    } else {
+                        1.0
+                    };
+                    set_segment(track_after_id, 0.0, end)?;
+                } else {
+                    set_segment(track_after_id, 0.0, 0.0)?;
+                }
+            }
+
+            Ok(ComputedData {
+                width: self_width,
+                height: self_height,
+            })
+        }));
+    });
 }
 
 /// Arguments for configuring a Material Design circular progress indicator.
@@ -696,113 +695,116 @@ pub fn circular_progress_indicator(args: impl Into<CircularProgressIndicatorArgs
     let args_for_accessibility = args.clone();
     let animation_start = remember(Instant::now);
 
-    input_handler(Box::new(move |input| {
-        let mut builder = input.accessibility().role(Role::ProgressIndicator);
-        if let Some(label) = args_for_accessibility.accessibility_label.as_ref() {
-            builder = builder.label(label.clone());
-        }
-        if let Some(description) = args_for_accessibility.accessibility_description.as_ref() {
-            builder = builder.description(description.clone());
-        }
-        if let Some(progress) = args_for_accessibility.progress {
-            let progress = if progress.is_nan() {
-                0.0
-            } else {
-                progress.clamp(0.0, 1.0)
-            };
-            builder = builder
-                .numeric_range(0.0, 1.0)
-                .numeric_value(progress as f64);
-        }
-        builder.commit();
-    }));
-
-    measure(Box::new(move |input| {
-        let diameter_px = args.diameter.to_px();
-        let stroke_px = args.stroke_width.to_px();
-
-        let is_butt = args.stroke_cap.effective_is_butt(diameter_px, diameter_px);
-        let cap = if is_butt {
-            ProgressArcCap::Butt
+    let mut semantics = SemanticsArgs::new().role(Role::ProgressIndicator);
+    if let Some(label) = args_for_accessibility.accessibility_label.clone() {
+        semantics = semantics.label(label);
+    }
+    if let Some(description) = args_for_accessibility.accessibility_description.clone() {
+        semantics = semantics.description(description);
+    }
+    if let Some(progress) = args_for_accessibility.progress {
+        let progress = if progress.is_nan() {
+            0.0
         } else {
-            ProgressArcCap::Round
+            progress.clamp(0.0, 1.0)
         };
+        semantics = semantics
+            .numeric_range(0.0, 1.0)
+            .numeric_value(progress as f64);
+    }
 
-        let start_base = 270.0;
-        let gap_sweep =
-            circular_gap_sweep_degrees(args.diameter, args.stroke_width, args.gap_size, is_butt);
+    Modifier::new().semantics(semantics).run(move || {
+        measure(Box::new(move |input| {
+            let diameter_px = args.diameter.to_px();
+            let stroke_px = args.stroke_width.to_px();
 
-        if let Some(progress) = args.progress {
-            let progress = if progress.is_nan() {
-                0.0
+            let is_butt = args.stroke_cap.effective_is_butt(diameter_px, diameter_px);
+            let cap = if is_butt {
+                ProgressArcCap::Butt
             } else {
-                progress.clamp(0.0, 1.0)
+                ProgressArcCap::Round
             };
-            let sweep = progress * 360.0;
-            let gap = sweep.min(gap_sweep);
-            let track_start = start_base + sweep + gap;
-            let track_sweep = 360.0 - sweep - gap * 2.0;
 
-            if args.track_color.a > 0.0 && track_sweep > 0.0 {
-                input.metadata_mut().push_draw_command(ProgressArcCommand {
-                    color: args.track_color,
-                    stroke_width_px: stroke_px.to_f32(),
-                    start_angle_degrees: track_start,
-                    sweep_angle_degrees: track_sweep,
-                    cap,
-                });
+            let start_base = 270.0;
+            let gap_sweep = circular_gap_sweep_degrees(
+                args.diameter,
+                args.stroke_width,
+                args.gap_size,
+                is_butt,
+            );
+
+            if let Some(progress) = args.progress {
+                let progress = if progress.is_nan() {
+                    0.0
+                } else {
+                    progress.clamp(0.0, 1.0)
+                };
+                let sweep = progress * 360.0;
+                let gap = sweep.min(gap_sweep);
+                let track_start = start_base + sweep + gap;
+                let track_sweep = 360.0 - sweep - gap * 2.0;
+
+                if args.track_color.a > 0.0 && track_sweep > 0.0 {
+                    input.metadata_mut().push_draw_command(ProgressArcCommand {
+                        color: args.track_color,
+                        stroke_width_px: stroke_px.to_f32(),
+                        start_angle_degrees: track_start,
+                        sweep_angle_degrees: track_sweep,
+                        cap,
+                    });
+                }
+                if args.color.a > 0.0 && sweep > 0.0 {
+                    input.metadata_mut().push_draw_command(ProgressArcCommand {
+                        color: args.color,
+                        stroke_width_px: stroke_px.to_f32(),
+                        start_angle_degrees: start_base,
+                        sweep_angle_degrees: sweep,
+                        cap,
+                    });
+                }
+            } else {
+                let elapsed_ms = Instant::now()
+                    .saturating_duration_since(animation_start.get())
+                    .as_millis() as f32;
+                let cycle_ms = elapsed_ms % 6000.0;
+
+                let global_rotation = (cycle_ms / 6000.0) * 1080.0;
+                let additional_rotation = circular_additional_rotation_degrees(cycle_ms);
+                let rotation = global_rotation + additional_rotation;
+
+                let progress = circular_indeterminate_progress(cycle_ms);
+                let sweep = progress * 360.0;
+                let gap = sweep.min(gap_sweep);
+
+                let track_start = rotation + sweep + gap;
+                let track_sweep = 360.0 - sweep - gap * 2.0;
+
+                if args.track_color.a > 0.0 && track_sweep > 0.0 {
+                    input.metadata_mut().push_draw_command(ProgressArcCommand {
+                        color: args.track_color,
+                        stroke_width_px: stroke_px.to_f32(),
+                        start_angle_degrees: track_start,
+                        sweep_angle_degrees: track_sweep,
+                        cap,
+                    });
+                }
+                if args.color.a > 0.0 && sweep > 0.0 {
+                    input.metadata_mut().push_draw_command(ProgressArcCommand {
+                        color: args.color,
+                        stroke_width_px: stroke_px.to_f32(),
+                        start_angle_degrees: rotation,
+                        sweep_angle_degrees: sweep,
+                        cap,
+                    });
+                }
             }
-            if args.color.a > 0.0 && sweep > 0.0 {
-                input.metadata_mut().push_draw_command(ProgressArcCommand {
-                    color: args.color,
-                    stroke_width_px: stroke_px.to_f32(),
-                    start_angle_degrees: start_base,
-                    sweep_angle_degrees: sweep,
-                    cap,
-                });
-            }
-        } else {
-            let elapsed_ms = Instant::now()
-                .saturating_duration_since(animation_start.get())
-                .as_millis() as f32;
-            let cycle_ms = elapsed_ms % 6000.0;
 
-            let global_rotation = (cycle_ms / 6000.0) * 1080.0;
-            let additional_rotation = circular_additional_rotation_degrees(cycle_ms);
-            let rotation = global_rotation + additional_rotation;
-
-            let progress = circular_indeterminate_progress(cycle_ms);
-            let sweep = progress * 360.0;
-            let gap = sweep.min(gap_sweep);
-
-            let track_start = rotation + sweep + gap;
-            let track_sweep = 360.0 - sweep - gap * 2.0;
-
-            if args.track_color.a > 0.0 && track_sweep > 0.0 {
-                input.metadata_mut().push_draw_command(ProgressArcCommand {
-                    color: args.track_color,
-                    stroke_width_px: stroke_px.to_f32(),
-                    start_angle_degrees: track_start,
-                    sweep_angle_degrees: track_sweep,
-                    cap,
-                });
-            }
-            if args.color.a > 0.0 && sweep > 0.0 {
-                input.metadata_mut().push_draw_command(ProgressArcCommand {
-                    color: args.color,
-                    stroke_width_px: stroke_px.to_f32(),
-                    start_angle_degrees: rotation,
-                    sweep_angle_degrees: sweep,
-                    cap,
-                });
-            }
-        }
-
-        Ok(ComputedData {
-            width: diameter_px,
-            height: diameter_px,
-        })
-    }));
+            Ok(ComputedData {
+                width: diameter_px,
+                height: diameter_px,
+            })
+        }));
+    });
 }
 
 /// Arguments for the `progress` component.

@@ -16,8 +16,9 @@ use winit::window::CursorIcon;
 
 use crate::{
     Clipboard, ComputeCommand, ComputeResourceManager, DrawCommand, Px,
-    accessibility::{AccessibilityActionHandler, AccessibilityNode},
+    accessibility::{AccessibilityActionHandler, AccessibilityNode, AccessibilityPadding},
     cursor::CursorEvent,
+    dp::Dp,
     px::{PxPosition, PxSize},
     renderer::Command,
     runtime::{RuntimePhase, push_current_node, push_phase},
@@ -116,6 +117,121 @@ impl<'a> AccessibilityBuilderGuard<'a> {
     /// Sets a custom accessibility key for stable ID generation.
     pub fn key(mut self, key: impl Into<String>) -> Self {
         self.node.key = Some(key.into());
+        self
+    }
+
+    /// Sets a state description announced with the control.
+    pub fn state_description(mut self, description: impl Into<String>) -> Self {
+        self.node.state_description = Some(description.into());
+        self
+    }
+
+    /// Sets a custom role description for custom controls.
+    pub fn role_description(mut self, description: impl Into<String>) -> Self {
+        self.node.role_description = Some(description.into());
+        self
+    }
+
+    /// Sets tooltip text.
+    pub fn tooltip(mut self, tooltip: impl Into<String>) -> Self {
+        self.node.tooltip = Some(tooltip.into());
+        self
+    }
+
+    /// Sets the live region politeness.
+    pub fn live(mut self, live: accesskit::Live) -> Self {
+        self.node.live = Some(live);
+        self
+    }
+
+    /// Marks this node as a heading with an optional level (1-based).
+    pub fn heading_level(mut self, level: u32) -> Self {
+        self.node.heading_level = Some(level);
+        self
+    }
+
+    /// Sets scroll X value and range.
+    pub fn scroll_x(mut self, value: f64, min: f64, max: f64) -> Self {
+        self.node.scroll_x = Some((value, min, max));
+        self
+    }
+
+    /// Sets scroll Y value and range.
+    pub fn scroll_y(mut self, value: f64, min: f64, max: f64) -> Self {
+        self.node.scroll_y = Some((value, min, max));
+        self
+    }
+
+    /// Sets the numeric step value for range-based controls.
+    pub fn numeric_value_step(mut self, step: f64) -> Self {
+        self.node.numeric_value_step = Some(step);
+        self
+    }
+
+    /// Sets the numeric jump value for range-based controls.
+    pub fn numeric_value_jump(mut self, jump: f64) -> Self {
+        self.node.numeric_value_jump = Some(jump);
+        self
+    }
+
+    /// Sets collection info: (row_count, column_count, hierarchical).
+    pub fn collection_info(mut self, rows: usize, cols: usize, hierarchical: bool) -> Self {
+        self.node.collection_info = Some((rows, cols, hierarchical));
+        self
+    }
+
+    /// Sets collection item info: (row_index, row_span, col_index, col_span,
+    /// heading).
+    pub fn collection_item_info(
+        mut self,
+        row_index: usize,
+        row_span: usize,
+        col_index: usize,
+        col_span: usize,
+        heading: bool,
+    ) -> Self {
+        self.node.collection_item_info = Some((row_index, row_span, col_index, col_span, heading));
+        self
+    }
+
+    /// Marks this node as editable text.
+    pub fn editable_text(mut self, editable: bool) -> Self {
+        self.node.is_editable_text = editable;
+        self
+    }
+
+    /// Prevents child semantics from being merged, similar to Compose's
+    /// `clearAndSetSemantics`.
+    pub fn clear_and_set(mut self) -> Self {
+        self.node.merge_descendants = false;
+        self
+    }
+
+    /// Expands the semantic bounds by a fixed pixel padding.
+    pub fn bounds_padding_px(mut self, left: Px, top: Px, right: Px, bottom: Px) -> Self {
+        self.node.bounds_padding = Some(AccessibilityPadding {
+            left,
+            top,
+            right,
+            bottom,
+        });
+        self
+    }
+
+    /// Expands the semantic bounds by a density-independent padding.
+    pub fn bounds_padding_dp(mut self, left: Dp, top: Dp, right: Dp, bottom: Dp) -> Self {
+        self.node.bounds_padding = Some(AccessibilityPadding {
+            left: left.into(),
+            top: top.into(),
+            right: right.into(),
+            bottom: bottom.into(),
+        });
+        self
+    }
+
+    /// Sets a testing tag by assigning a stable accessibility key.
+    pub fn test_tag(mut self, tag: impl Into<String>) -> Self {
+        self.node.key = Some(tag.into());
         self
     }
 

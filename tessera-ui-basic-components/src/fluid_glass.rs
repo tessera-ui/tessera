@@ -8,15 +8,11 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, Px, PxPosition, SampleRegion,
-    State,
-    accesskit::{Action, Role},
-    remember,
-    renderer::DrawCommand,
-    tessera,
+    State, accesskit::Role, remember, renderer::DrawCommand, tessera,
 };
 
 use crate::{
-    modifier::{ClickableArgs, InteractionState, ModifierExt, PointerEventContext},
+    modifier::{ClickableArgs, InteractionState, ModifierExt, PointerEventContext, SemanticsArgs},
     padding_utils::remove_padding_from_dimension,
     pipelines::{
         blur::command::DualBlurCommand, contrast::ContrastCommand, mean::command::MeanCommand,
@@ -247,54 +243,6 @@ fn handle_block_input(input: &mut tessera_ui::InputHandlerInput) {
     }
 }
 
-fn apply_fluid_glass_accessibility(
-    input: &mut tessera_ui::InputHandlerInput<'_>,
-    args: &FluidGlassArgs,
-    on_click: &Option<Arc<dyn Fn() + Send + Sync>>,
-) {
-    let interactive = on_click.is_some();
-    let has_metadata = interactive
-        || args.accessibility_role.is_some()
-        || args.accessibility_label.is_some()
-        || args.accessibility_description.is_some()
-        || args.accessibility_focusable;
-
-    if !has_metadata {
-        return;
-    }
-
-    let mut builder = input.accessibility();
-
-    let role = args
-        .accessibility_role
-        .or_else(|| interactive.then_some(Role::Button));
-    if let Some(role) = role {
-        builder = builder.role(role);
-    }
-    if let Some(label) = args.accessibility_label.as_ref() {
-        builder = builder.label(label.clone());
-    }
-    if let Some(description) = args.accessibility_description.as_ref() {
-        builder = builder.description(description.clone());
-    }
-    if args.accessibility_focusable || interactive {
-        builder = builder.focusable();
-    }
-    if interactive {
-        builder = builder.action(Action::Click);
-    }
-
-    builder.commit();
-
-    if interactive && let Some(on_click) = on_click.clone() {
-        input.set_accessibility_action_handler(move |action| {
-            if action == Action::Click {
-                on_click();
-            }
-        });
-    }
-}
-
 /// # fluid_glass
 ///
 /// Renders a highly customizable surface with blur, tint, and other glass-like
@@ -337,6 +285,9 @@ pub fn fluid_glass(args: FluidGlassArgs, child: impl FnOnce() + Send + Sync + 's
     let interactive = args.on_click.is_some();
     let interaction_state = interactive.then(|| remember(InteractionState::new));
     let ripple_state = interactive.then(|| remember(RippleState::new));
+    let has_semantics = args.accessibility_role.is_some()
+        || args.accessibility_label.is_some()
+        || args.accessibility_description.is_some();
 
     if interactive {
         let press_handler = ripple_state.map(|state| {
@@ -380,6 +331,19 @@ pub fn fluid_glass(args: FluidGlassArgs, child: impl FnOnce() + Send + Sync + 's
         modifier = modifier.clickable(clickable_args);
     } else if args.block_input {
         modifier = modifier.block_touch_propagation();
+    }
+    if !interactive && has_semantics {
+        let mut semantics = SemanticsArgs::new();
+        if let Some(role) = args.accessibility_role {
+            semantics = semantics.role(role);
+        }
+        if let Some(label) = args.accessibility_label.clone() {
+            semantics = semantics.label(label);
+        }
+        if let Some(desc) = args.accessibility_description.clone() {
+            semantics = semantics.description(desc);
+        }
+        modifier = modifier.semantics(semantics);
     }
 
     modifier.run(move || fluid_glass_inner(args, ripple_state, child));
@@ -492,12 +456,9 @@ fn fluid_glass_inner(
         Ok(ComputedData { width, height })
     }));
 
-    if args.on_click.is_none() {
-        // For non-interactive glass, still expose accessibility metadata and optional
-        // blocking.
+    if args.on_click.is_none() && args.block_input {
         let args_for_handler = args.clone();
         input_handler(Box::new(move |mut input: tessera_ui::InputHandlerInput| {
-            apply_fluid_glass_accessibility(&mut input, &args_for_handler, &None);
             if args_for_handler.block_input {
                 handle_block_input(&mut input);
             }
