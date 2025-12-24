@@ -95,8 +95,8 @@ fn ease_out_cubic(t: f32) -> f32 {
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::ripple_state::RippleState;
-/// let mut s = RippleState::new();
+/// use tessera_ui_basic_components::interaction_state::InteractionState;
+/// let mut s = InteractionState::new();
 /// assert!(!s.is_hovered());
 /// s.set_hovered(true);
 /// assert!(s.is_hovered());
@@ -211,19 +211,29 @@ impl RippleState {
         }
     }
 
-    /// Returns the state-layer alpha derived from the current interactions.
-    pub fn state_layer_alpha(&self) -> f32 {
-        if self.is_dragged {
-            MaterialAlpha::DRAGGED
-        } else if self.is_pressed {
-            MaterialAlpha::PRESSED
-        } else if self.is_focused {
-            MaterialAlpha::FOCUSED
-        } else if self.is_hovered {
-            MaterialAlpha::HOVER
-        } else {
-            0.0
-        }
+    /// Returns the current progress of the ripple animation and the origin
+    /// position.
+    ///
+    /// Returns `Some((progress, [x, y]))` if the animation is active, where:
+    /// - `progress` is a value in `[0.0, 1.0)` representing the animation
+    ///   progress.
+    /// - `[x, y]` is the normalized origin of the ripple in 0.0..=1.0.
+    ///
+    /// Returns `None` if the animation is not active or has completed.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tessera_ui_basic_components::ripple_state::RippleState;
+    /// let mut state = RippleState::new();
+    /// state.start_animation([0.5, 0.5]);
+    /// if let Some((progress, center)) = state.get_animation_progress() {
+    ///     // Use progress and center for rendering
+    /// }
+    /// ```
+    pub fn get_animation_progress(&mut self) -> Option<(f32, [f32; 2])> {
+        self.animation()
+            .map(|animation| (animation.progress, animation.center))
     }
 
     /// Sets whether the component is hovered.
@@ -261,28 +271,19 @@ impl RippleState {
         self.is_pressed
     }
 
-    /// Returns the current progress of the ripple animation and the origin
-    /// position.
-    ///
-    /// Returns `Some((progress, [x, y]))` if the animation is active, where:
-    /// - `progress` is a value in `[0.0, 1.0)` representing the animation
-    ///   progress.
-    /// - `[x, y]` is the normalized origin of the ripple in 0.0..=1.0.
-    ///
-    /// Returns `None` if the animation is not active or has completed.
-    ///
-    /// # Example
-    /// ```
-    /// use tessera_ui_basic_components::ripple_state::RippleState;
-    /// let mut state = RippleState::new();
-    /// state.start_animation([0.5, 0.5]);
-    /// if let Some((progress, center)) = state.get_animation_progress() {
-    ///     // Use progress and center for rendering
-    /// }
-    /// ```
-    pub fn get_animation_progress(&mut self) -> Option<(f32, [f32; 2])> {
-        self.animation()
-            .map(|animation| (animation.progress, animation.center))
+    /// Returns the state-layer alpha derived from the current interactions.
+    pub fn state_layer_alpha(&self) -> f32 {
+        if self.is_dragged {
+            MaterialAlpha::DRAGGED
+        } else if self.is_pressed {
+            MaterialAlpha::PRESSED
+        } else if self.is_focused {
+            MaterialAlpha::FOCUSED
+        } else if self.is_hovered {
+            MaterialAlpha::HOVER
+        } else {
+            0.0
+        }
     }
 }
 

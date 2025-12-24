@@ -10,24 +10,22 @@ use std::{
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
-    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, PxSize, State, accesskit::Role,
-    provide_context, remember, tessera, use_context, winit::window::CursorIcon,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    PxPosition, PxSize, State, accesskit::Role, provide_context, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     animation,
     column::{ColumnArgsBuilder, column},
-    modifier::ModifierExt,
-    pos_misc::is_position_in_component,
+    modifier::{InteractionState, ModifierExt, PointerEventContext, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
     row::{RowArgsBuilder, row},
     shape_def::Shape,
     spacer::spacer,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
-    theme::{ContentColor, MaterialTheme, provide_text_style},
+    theme::{ContentColor, MaterialAlpha, MaterialTheme, provide_text_style},
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
@@ -38,7 +36,6 @@ const DIVIDER_HEIGHT: Dp = Dp(1.0);
 const ITEM_HORIZONTAL_SPACING: Dp = Dp(8.0);
 const INDICATOR_TO_LABEL_PADDING: Dp = Dp(4.0);
 const INDICATOR_VERTICAL_PADDING: Dp = Dp(4.0);
-const INDICATOR_VERTICAL_OFFSET: Dp = Dp(12.0);
 
 fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
     Color {
@@ -50,22 +47,18 @@ fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
 }
 
 #[tessera]
-fn navigation_bar_item(
-    controller: State<NavigationBarController>,
-    index: usize,
+fn navigation_bar_item_content(
     item: NavigationBarItem,
-    selected_index: usize,
-    previous_index: usize,
+    is_selected: bool,
+    was_selected: bool,
     animation_progress: f32,
+    interaction_state: State<InteractionState>,
+    ripple_state: State<RippleState>,
 ) {
     let theme = use_context::<MaterialTheme>().get();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
-    let interaction_state = remember(RippleState::new);
-
-    let is_selected = index == selected_index;
-    let was_selected = index == previous_index && selected_index != previous_index;
     let selection_fraction = if is_selected {
         animation_progress
     } else if was_selected {
@@ -123,20 +116,32 @@ fn navigation_bar_item(
         || {},
     );
 
-    surface(
-        SurfaceArgsBuilder::default()
-            .style(SurfaceStyle::Filled {
-                color: Color::TRANSPARENT,
-            })
-            .shape(Shape::capsule())
-            .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
-            .enabled(true)
-            .interaction_state(interaction_state)
-            .ripple_color(ripple_color)
-            .build()
-            .expect("builder construction failed"),
-        || {},
-    );
+    let indicator_args = SurfaceArgsBuilder::default()
+        .style(SurfaceStyle::Filled {
+            color: Color::TRANSPARENT,
+        })
+        .shape(Shape::capsule())
+        .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
+        .enabled(true)
+        .interaction_state(interaction_state)
+        .ripple_color(ripple_color)
+        .build()
+        .expect("builder construction failed");
+    surface(indicator_args, move || {
+        surface(
+            SurfaceArgsBuilder::default()
+                .style(SurfaceStyle::Filled {
+                    color: ripple_color.with_alpha(MaterialAlpha::PRESSED),
+                })
+                .shape(Shape::capsule())
+                .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
+                .enabled(true)
+                .ripple_state(ripple_state)
+                .build()
+                .expect("builder construction failed"),
+            || {},
+        );
+    });
 
     if let Some(draw_icon) = item.icon {
         provide_context(
@@ -154,97 +159,13 @@ fn navigation_bar_item(
         provide_text_style(typography.label_medium, move || {
             text(
                 TextArgsBuilder::default()
-                    .text(label)
+                    .text(label.clone())
                     .color(label_color)
                     .build()
                     .expect("builder construction failed"),
             );
         });
     }
-
-    let label_for_accessibility = item.label.clone();
-    let on_click = item.on_click;
-
-    input_handler(Box::new(move |input| {
-        let size = input.computed_data;
-        let cursor_pos_option = input.cursor_position_rel;
-        let is_cursor_in_item = cursor_pos_option
-            .map(|pos| is_position_in_component(size, pos))
-            .unwrap_or(false);
-
-        interaction_state.with_mut(|s| s.set_hovered(is_cursor_in_item));
-
-        if input.cursor_events.iter().any(|event| {
-            matches!(
-                event.content,
-                CursorEventContent::Released(PressKeyEventType::Left)
-            )
-        }) {
-            interaction_state.with_mut(|s| s.release());
-        }
-
-        if is_cursor_in_item {
-            input.requests.cursor_icon = CursorIcon::Pointer;
-        }
-
-        if is_cursor_in_item {
-            let pressed = input.cursor_events.iter().any(|event| {
-                matches!(
-                    event.content,
-                    CursorEventContent::Pressed(PressKeyEventType::Left)
-                )
-            });
-
-            if pressed {
-                if let Some(cursor_pos) = cursor_pos_option {
-                    let item_width_px = size.width.to_f32().max(1.0);
-                    let indicator_width_px = INDICATOR_WIDTH.to_px().to_f32().max(1.0);
-                    let indicator_height_px = INDICATOR_HEIGHT.to_px().to_f32().max(1.0);
-
-                    let delta_x = (item_width_px - indicator_width_px) / 2.0;
-                    let delta_y = INDICATOR_VERTICAL_OFFSET.to_px().to_f32();
-
-                    let normalized_x = (cursor_pos.x.to_f32() - delta_x) / indicator_width_px;
-                    let normalized_y = (cursor_pos.y.to_f32() - delta_y) / indicator_height_px;
-
-                    let spec = RippleSpec {
-                        bounded: true,
-                        radius: None,
-                    };
-
-                    interaction_state.with_mut(|s| {
-                        s.start_animation_with_spec(
-                            [normalized_x, normalized_y],
-                            PxSize::new(INDICATOR_WIDTH.to_px(), INDICATOR_HEIGHT.to_px()),
-                            spec,
-                        );
-                        s.set_pressed(true);
-                    });
-                }
-            }
-
-            let released = input.cursor_events.iter().any(|event| {
-                event.gesture_state == GestureState::TapCandidate
-                    && matches!(
-                        event.content,
-                        CursorEventContent::Released(PressKeyEventType::Left)
-                    )
-            });
-
-            if released {
-                if index != controller.with(|c| c.selected()) {
-                    controller.with_mut(|c| c.set_selected(index));
-                    on_click();
-                }
-            }
-        }
-
-        input
-            .accessibility()
-            .role(Role::Tab)
-            .label(label_for_accessibility.clone())
-            .commit();
-    }));
 
     measure(Box::new(
         move |input| -> Result<ComputedData, MeasurementError> {
@@ -392,6 +313,73 @@ fn navigation_bar_item(
             Ok(ComputedData { width, height })
         },
     ));
+}
+
+#[tessera]
+fn navigation_bar_item(
+    controller: State<NavigationBarController>,
+    index: usize,
+    item: NavigationBarItem,
+    selected_index: usize,
+    previous_index: usize,
+    animation_progress: f32,
+) {
+    let interaction_state = remember(InteractionState::new);
+    let ripple_state = remember(RippleState::new);
+
+    let is_selected = index == selected_index;
+    let was_selected = index == previous_index && selected_index != previous_index;
+    let label = item.label.clone();
+
+    let ripple_state_for_press = ripple_state;
+    let on_press: Arc<dyn Fn(PointerEventContext) + Send + Sync> =
+        Arc::new(move |ctx: PointerEventContext| {
+            let spec = RippleSpec {
+                bounded: true,
+                radius: None,
+            };
+            ripple_state_for_press.with_mut(|state| {
+                state.start_animation_with_spec(
+                    ctx.normalized_pos,
+                    PxSize::new(INDICATOR_WIDTH.to_px(), INDICATOR_HEIGHT.to_px()),
+                    spec,
+                );
+            });
+        });
+    let ripple_state_for_release = ripple_state;
+    let on_release: Arc<dyn Fn(PointerEventContext) + Send + Sync> =
+        Arc::new(move |_ctx: PointerEventContext| {
+            ripple_state_for_release.with_mut(|state| state.release());
+        });
+
+    let on_click_item = item.on_click.clone();
+    let controller_for_click = controller;
+    let on_click = Arc::new(move || {
+        controller_for_click.with_mut(|c| c.set_selected(index));
+        on_click_item();
+    });
+
+    let selectable_args = SelectableArgs::new(is_selected, on_click)
+        .enabled(true)
+        .role(Role::Tab)
+        .label(label)
+        .interaction_state(interaction_state)
+        .on_press(on_press)
+        .on_release(on_release);
+
+    Modifier::new().selectable(selectable_args).run({
+        let item = item.clone();
+        move || {
+            navigation_bar_item_content(
+                item,
+                is_selected,
+                was_selected,
+                animation_progress,
+                interaction_state,
+                ripple_state,
+            );
+        }
+    });
 }
 
 /// Controls label visibility for a navigation bar item.

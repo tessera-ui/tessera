@@ -7,17 +7,16 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, GestureState,
-    InputHandlerInput, Modifier, PressKeyEventType, Px, PxPosition, PxSize, State,
+    Color, ComputedData, Constraint, DimensionValue, Dp, InputHandlerInput, Modifier, Px,
+    PxPosition, PxSize, State,
     accesskit::{Action, Role},
     provide_context, remember, tessera, use_context,
-    winit::window::CursorIcon,
 };
 
 use crate::{
     RippleProps,
     alignment::Alignment,
-    modifier::ModifierExt,
+    modifier::{ClickableArgs, InteractionState, ModifierExt, PointerEventContext, ShadowArgs},
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
     pos_misc::is_position_in_component,
     ripple_state::{RippleSpec, RippleState},
@@ -177,19 +176,21 @@ pub struct SurfaceArgs {
     /// Optional explicit ripple radius for this surface.
     #[builder(default, setter(strip_option))]
     pub ripple_radius: Option<Dp>,
-    /// Optional shared interaction state used to render state layers and
-    /// ripples.
+    /// Optional shared interaction state used to render state layers.
     ///
     /// This can be used to render visual feedback in one place while driving
     /// interactions from another.
     #[builder(default, setter(strip_option))]
-    pub interaction_state: Option<State<RippleState>>,
+    pub interaction_state: Option<State<InteractionState>>,
     /// Whether to render the state-layer overlay for this surface.
     #[builder(default = "true")]
     pub show_state_layer: bool,
     /// Whether to render ripple animations for this surface.
     #[builder(default = "true")]
     pub show_ripple: bool,
+    /// Optional ripple animation state used for rendering ripples.
+    #[builder(default, setter(strip_option))]
+    pub ripple_state: Option<State<RippleState>>,
     /// If true, all input events inside the surface bounds are blocked (stop
     /// propagation), after (optionally) handling its own click logic.
     #[builder(default = "false")]
@@ -223,6 +224,12 @@ impl SurfaceArgsBuilder {
     pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
         self.on_click = Some(Some(on_click));
         self
+    }
+}
+
+impl SurfaceArgs {
+    pub(crate) fn set_ripple_state(&mut self, state: Option<State<RippleState>>) {
+        self.ripple_state = state;
     }
 }
 
@@ -654,28 +661,86 @@ fn compute_surface_size(
 /// ```
 pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) {
     let mut modifier = args.modifier;
-    if args.on_click.is_some() {
+    let clickable = args.on_click.is_some();
+    let interactive = args.enabled && clickable;
+    let interaction_state = args
+        .interaction_state
+        .or_else(|| interactive.then(|| remember(InteractionState::new)));
+    let ripple_state = if args.show_ripple {
+        args.ripple_state
+            .or_else(|| interactive.then(|| remember(RippleState::new)))
+    } else {
+        None
+    };
+
+    if clickable {
         modifier = modifier.minimum_interactive_component_size();
+    }
+
+    if interactive {
+        let ripple_spec = RippleSpec {
+            bounded: args.ripple_bounded,
+            radius: args.ripple_radius,
+        };
+        let press_handler = ripple_state.map(|state| {
+            let spec = ripple_spec;
+            Arc::new(move |ctx: PointerEventContext| {
+                state.with_mut(|s| {
+                    s.start_animation_with_spec(ctx.normalized_pos, ctx.size, spec);
+                });
+            })
+        });
+        let release_handler = ripple_state.map(|state| {
+            Arc::new(move |_ctx: PointerEventContext| state.with_mut(|s| s.release()))
+        });
+        let mut clickable_args = ClickableArgs::new(
+            args.on_click
+                .clone()
+                .expect("interactive implies on_click is set"),
+        )
+        .enabled(args.enabled)
+        .block_input(args.block_input);
+
+        if let Some(role) = args.accessibility_role {
+            clickable_args = clickable_args.role(role);
+        }
+        if let Some(label) = args.accessibility_label.clone() {
+            clickable_args = clickable_args.label(label);
+        }
+        if let Some(description) = args.accessibility_description.clone() {
+            clickable_args = clickable_args.description(description);
+        }
+        if let Some(state) = interaction_state {
+            clickable_args = clickable_args.interaction_state(state);
+        }
+        if let Some(handler) = press_handler {
+            clickable_args = clickable_args.on_press(handler);
+        }
+        if let Some(handler) = release_handler {
+            clickable_args = clickable_args.on_release(handler);
+        }
+
+        modifier = modifier.clickable(clickable_args);
+    } else if args.block_input {
+        modifier = modifier.block_touch_propagation();
     }
 
     if let Some(elevation) = args.elevation
         && elevation.0 > 0.0
     {
-        modifier = modifier.shadow(
-            crate::modifier::ShadowArgs::new(elevation)
-                .shape(args.shape)
-                .clip(false),
-        );
+        modifier = modifier.shadow(ShadowArgs::new(elevation).shape(args.shape).clip(false));
     }
 
-    if args.block_input {
-        modifier = modifier.block_touch_propagation();
-    }
-    modifier.run(move || surface_inner(args, child));
+    modifier.run(move || surface_inner(args, interaction_state, ripple_state, child));
 }
 
 #[tessera]
-fn surface_inner(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) {
+fn surface_inner(
+    args: SurfaceArgs,
+    interaction_state: Option<State<InteractionState>>,
+    ripple_state: Option<State<RippleState>>,
+    child: impl FnOnce() + Send + Sync + 'static,
+) {
     let scheme = use_context::<MaterialTheme>().get().color_scheme;
     let parent_absolute_elevation = use_context::<AbsoluteTonalElevation>().get().current;
     let absolute_tonal_elevation = Dp(parent_absolute_elevation.0 + args.tonal_elevation.0);
@@ -691,9 +756,6 @@ fn surface_inner(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static
     });
     let clickable = args.on_click.is_some();
     let interactive = args.enabled && clickable;
-    let interaction_state = args
-        .interaction_state
-        .or_else(|| interactive.then(|| remember(RippleState::new)));
 
     provide_context(
         AbsoluteTonalElevation {
@@ -792,7 +854,7 @@ fn surface_inner(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static
         }
 
         let ripple_state_for_draw = if args_measure.show_ripple {
-            interaction_state
+            ripple_state
         } else {
             None
         };
@@ -815,106 +877,7 @@ fn surface_inner(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static
         Ok(ComputedData { width, height })
     }));
 
-    if clickable {
-        let args = args;
-        input_handler(Box::new(move |mut input| {
-            // Apply accessibility metadata first.
-            apply_surface_accessibility(
-                &mut input,
-                &args,
-                true,
-                args.enabled,
-                args.on_click.clone(),
-            );
-
-            let size = input.computed_data;
-            let cursor_pos_option = input.cursor_position_rel;
-            let is_cursor_in_surface = cursor_pos_option
-                .map(|pos| is_position_in_component(size, pos))
-                .unwrap_or(false);
-
-            if interactive {
-                if let Some(ref state) = interaction_state {
-                    state.with_mut(|s| s.set_hovered(is_cursor_in_surface));
-                }
-
-                if input.cursor_events.iter().any(|event| {
-                    matches!(
-                        event.content,
-                        CursorEventContent::Released(PressKeyEventType::Left)
-                    )
-                }) {
-                    if let Some(ref state) = interaction_state {
-                        state.with_mut(|s| s.release());
-                    }
-                }
-
-                if is_cursor_in_surface {
-                    input.requests.cursor_icon = CursorIcon::Pointer;
-                }
-
-                if is_cursor_in_surface {
-                    let press_events: Vec<_> = input
-                        .cursor_events
-                        .iter()
-                        .filter(|event| {
-                            matches!(
-                                event.content,
-                                CursorEventContent::Pressed(PressKeyEventType::Left)
-                            )
-                        })
-                        .collect();
-
-                    let release_events: Vec<_> = input
-                        .cursor_events
-                        .iter()
-                        .filter(|event| event.gesture_state == GestureState::TapCandidate)
-                        .filter(|event| {
-                            matches!(
-                                event.content,
-                                CursorEventContent::Released(PressKeyEventType::Left)
-                            )
-                        })
-                        .collect();
-
-                    if !press_events.is_empty()
-                        && let Some(cursor_pos) = cursor_pos_option
-                        && let Some(state) = interaction_state.as_ref()
-                    {
-                        let denom_w = size.width.to_f32().max(1.0);
-                        let denom_h = size.height.to_f32().max(1.0);
-                        let normalized_x = (cursor_pos.x.to_f32() / denom_w).clamp(0.0, 1.0);
-                        let normalized_y = (cursor_pos.y.to_f32() / denom_h).clamp(0.0, 1.0);
-                        let spec = RippleSpec {
-                            bounded: args.ripple_bounded,
-                            radius: args.ripple_radius,
-                        };
-
-                        state.with_mut(|s| {
-                            s.start_animation_with_spec(
-                                [normalized_x, normalized_y],
-                                PxSize::new(size.width, size.height),
-                                spec,
-                            );
-                            s.set_pressed(true);
-                        });
-                    }
-
-                    if !release_events.is_empty()
-                        && let Some(ref on_click) = args.on_click
-                    {
-                        on_click();
-                    }
-
-                    if args.block_input {
-                        input.block_all();
-                    }
-                }
-            } else if args.block_input && is_cursor_in_surface {
-                input.block_all();
-            }
-        }));
-    } else {
+    if !interactive {
         let args = args;
         input_handler(Box::new(move |mut input| {
             // Apply accessibility metadata first

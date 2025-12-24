@@ -5,7 +5,7 @@
 //! Attach pointer/keyboard handling with accessibility and ripple feedback to
 //! subtrees.
 
-use std::{mem, sync::Arc};
+use std::sync::Arc;
 
 use tessera_ui::{
     ComputedData, CursorEventContent, GestureState, PressKeyEventType, PxPosition, PxSize, State,
@@ -14,10 +14,18 @@ use tessera_ui::{
     winit::window::CursorIcon,
 };
 
-use crate::{
-    pos_misc::is_position_in_rect,
-    ripple_state::{RippleSpec, RippleState},
-};
+use crate::{pos_misc::is_position_in_rect, theme::MaterialAlpha};
+
+/// Context for pointer press/release callbacks.
+#[derive(Clone, Copy, Debug)]
+pub struct PointerEventContext {
+    /// Pointer position normalized to `[0.0, 1.0]` within the element bounds.
+    pub normalized_pos: [f32; 2],
+    /// The element size in pixels.
+    pub size: PxSize,
+}
+
+type PressCallback = Arc<dyn Fn(PointerEventContext) + Send + Sync>;
 
 /// Arguments for the `clickable` modifier.
 #[derive(Clone)]
@@ -26,18 +34,21 @@ pub struct ClickableArgs {
     pub on_click: Arc<dyn Fn() + Send + Sync>,
     /// Whether the element is enabled for interaction.
     pub enabled: bool,
+    /// Whether to block input propagation when within bounds. Defaults to true
+    /// to match Compose's behavior of consuming click gestures.
+    pub block_input: bool,
+    /// Optional press callback with normalized position and element size.
+    pub on_press: Option<PressCallback>,
+    /// Optional release callback with normalized position and element size.
+    pub on_release: Option<PressCallback>,
     /// Optional accessibility role (defaults to `Button`).
     pub role: Option<accesskit::Role>,
     /// Optional accessibility label.
     pub label: Option<String>,
     /// Optional accessibility description.
     pub description: Option<String>,
-    /// Optional external ripple/interaction state.
-    pub interaction_state: Option<State<RippleState>>,
-    /// Optional ripple customization spec.
-    pub ripple_spec: Option<RippleSpec>,
-    /// Optional explicit ripple size.
-    pub ripple_size: Option<PxSize>,
+    /// Optional external interaction state (hover/pressed/focus).
+    pub interaction_state: Option<State<InteractionState>>,
 }
 
 impl ClickableArgs {
@@ -46,18 +57,37 @@ impl ClickableArgs {
         Self {
             on_click,
             enabled: true,
+            block_input: true,
+            on_press: None,
+            on_release: None,
             role: None,
             label: None,
             description: None,
             interaction_state: None,
-            ripple_spec: None,
-            ripple_size: None,
         }
     }
 
     /// Set whether the control is enabled.
     pub fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
+        self
+    }
+
+    /// Set whether to block input propagation when hovered.
+    pub fn block_input(mut self, block_input: bool) -> Self {
+        self.block_input = block_input;
+        self
+    }
+
+    /// Set a press callback.
+    pub fn on_press(mut self, on_press: PressCallback) -> Self {
+        self.on_press = Some(on_press);
+        self
+    }
+
+    /// Set a release callback.
+    pub fn on_release(mut self, on_release: PressCallback) -> Self {
+        self.on_release = Some(on_release);
         self
     }
 
@@ -79,21 +109,9 @@ impl ClickableArgs {
         self
     }
 
-    /// Attach an external ripple/interaction `State`.
-    pub fn interaction_state(mut self, state: State<RippleState>) -> Self {
+    /// Attach an external interaction `State`.
+    pub fn interaction_state(mut self, state: State<InteractionState>) -> Self {
         self.interaction_state = Some(state);
-        self
-    }
-
-    /// Provide a custom ripple spec.
-    pub fn ripple_spec(mut self, spec: RippleSpec) -> Self {
-        self.ripple_spec = Some(spec);
-        self
-    }
-
-    /// Provide an explicit ripple size.
-    pub fn ripple_size(mut self, size: PxSize) -> Self {
-        self.ripple_size = Some(size);
         self
     }
 }
@@ -113,12 +131,12 @@ pub struct ToggleableArgs {
     pub label: Option<String>,
     /// Optional accessibility description.
     pub description: Option<String>,
-    /// Optional external ripple/interaction state.
-    pub interaction_state: Option<State<RippleState>>,
-    /// Optional ripple customization spec.
-    pub ripple_spec: Option<RippleSpec>,
-    /// Optional explicit ripple size.
-    pub ripple_size: Option<PxSize>,
+    /// Optional external interaction state (hover/press/focus).
+    pub interaction_state: Option<State<InteractionState>>,
+    /// Optional press callback with normalized position and element size.
+    pub on_press: Option<PressCallback>,
+    /// Optional release callback with normalized position and element size.
+    pub on_release: Option<PressCallback>,
 }
 
 impl ToggleableArgs {
@@ -133,8 +151,8 @@ impl ToggleableArgs {
             label: None,
             description: None,
             interaction_state: None,
-            ripple_spec: None,
-            ripple_size: None,
+            on_press: None,
+            on_release: None,
         }
     }
 
@@ -162,21 +180,21 @@ impl ToggleableArgs {
         self
     }
 
-    /// Attach an external ripple/interaction `State`.
-    pub fn interaction_state(mut self, state: State<RippleState>) -> Self {
+    /// Attach an external interaction `State`.
+    pub fn interaction_state(mut self, state: State<InteractionState>) -> Self {
         self.interaction_state = Some(state);
         self
     }
 
-    /// Provide a custom ripple spec.
-    pub fn ripple_spec(mut self, spec: RippleSpec) -> Self {
-        self.ripple_spec = Some(spec);
+    /// Set a press callback.
+    pub fn on_press(mut self, on_press: PressCallback) -> Self {
+        self.on_press = Some(on_press);
         self
     }
 
-    /// Provide an explicit ripple size.
-    pub fn ripple_size(mut self, size: PxSize) -> Self {
-        self.ripple_size = Some(size);
+    /// Set a release callback.
+    pub fn on_release(mut self, on_release: PressCallback) -> Self {
+        self.on_release = Some(on_release);
         self
     }
 }
@@ -196,12 +214,12 @@ pub struct SelectableArgs {
     pub label: Option<String>,
     /// Optional accessibility description.
     pub description: Option<String>,
-    /// Optional external ripple/interaction state.
-    pub interaction_state: Option<State<RippleState>>,
-    /// Optional ripple customization spec.
-    pub ripple_spec: Option<RippleSpec>,
-    /// Optional explicit ripple size.
-    pub ripple_size: Option<PxSize>,
+    /// Optional external interaction state (hover/press/focus).
+    pub interaction_state: Option<State<InteractionState>>,
+    /// Optional press callback with normalized position and element size.
+    pub on_press: Option<PressCallback>,
+    /// Optional release callback with normalized position and element size.
+    pub on_release: Option<PressCallback>,
 }
 
 impl SelectableArgs {
@@ -216,8 +234,8 @@ impl SelectableArgs {
             label: None,
             description: None,
             interaction_state: None,
-            ripple_spec: None,
-            ripple_size: None,
+            on_press: None,
+            on_release: None,
         }
     }
 
@@ -245,34 +263,40 @@ impl SelectableArgs {
         self
     }
 
-    /// Attach an external ripple/interaction `State`.
-    pub fn interaction_state(mut self, state: State<RippleState>) -> Self {
+    /// Attach an external interaction `State`.
+    pub fn interaction_state(mut self, state: State<InteractionState>) -> Self {
         self.interaction_state = Some(state);
         self
     }
 
-    /// Provide a custom ripple spec.
-    pub fn ripple_spec(mut self, spec: RippleSpec) -> Self {
-        self.ripple_spec = Some(spec);
+    /// Set a press callback.
+    pub fn on_press(mut self, on_press: PressCallback) -> Self {
+        self.on_press = Some(on_press);
         self
     }
 
-    /// Provide an explicit ripple size.
-    pub fn ripple_size(mut self, size: PxSize) -> Self {
-        self.ripple_size = Some(size);
+    /// Set a release callback.
+    pub fn on_release(mut self, on_release: PressCallback) -> Self {
+        self.on_release = Some(on_release);
         self
     }
 }
 
-fn normalized_click_position(position: Option<PxPosition>, size: ComputedData) -> [f32; 2] {
+fn pointer_context(position: Option<PxPosition>, size: ComputedData) -> PointerEventContext {
     let Some(position) = position else {
-        return [0.5, 0.5];
+        return PointerEventContext {
+            normalized_pos: [0.5, 0.5],
+            size: PxSize::new(size.width, size.height),
+        };
     };
     let width = size.width.to_f32().max(1.0);
     let height = size.height.to_f32().max(1.0);
     let x = (position.x.to_f32() / width).clamp(0.0, 1.0);
     let y = (position.y.to_f32() / height).clamp(0.0, 1.0);
-    [x, y]
+    PointerEventContext {
+        normalized_pos: [x, y],
+        size: PxSize::new(size.width, size.height),
+    }
 }
 
 #[tessera]
@@ -283,38 +307,31 @@ where
     let ClickableArgs {
         on_click,
         enabled,
+        block_input,
+        on_press,
+        on_release,
         role,
         label,
         description,
         interaction_state,
-        ripple_spec,
-        ripple_size,
     } = args;
 
     child();
 
     let role = role.unwrap_or(accesskit::Role::Button);
-    input_handler(Box::new(move |input| {
-        let mut cursor_events = Vec::new();
-        mem::swap(&mut cursor_events, input.cursor_events);
-
-        let mut unhandled_events = Vec::new();
-        let mut processed_events = Vec::new();
-
-        for event in cursor_events {
-            if matches!(
-                event.content,
-                CursorEventContent::Pressed(PressKeyEventType::Left)
-                    | CursorEventContent::Released(PressKeyEventType::Left)
-            ) {
-                processed_events.push(event);
-            } else {
-                unhandled_events.push(event);
-            }
-        }
-
-        input.cursor_events.extend(unhandled_events);
-        let cursor_events = processed_events;
+    input_handler(Box::new(move |mut input| {
+        let cursor_events: Vec<_> = input
+            .cursor_events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event.content,
+                    CursorEventContent::Pressed(PressKeyEventType::Left)
+                        | CursorEventContent::Released(PressKeyEventType::Left)
+                )
+            })
+            .cloned()
+            .collect();
 
         let within_bounds = input
             .cursor_position_rel
@@ -371,6 +388,9 @@ where
                     on_click();
                 }
             }
+            if block_input && within_bounds {
+                input.block_all();
+            }
             return;
         };
 
@@ -384,15 +404,7 @@ where
             return;
         }
 
-        let spec = ripple_spec.unwrap_or(RippleSpec {
-            bounded: true,
-            radius: None,
-        });
-        let size = ripple_size.unwrap_or(PxSize::new(
-            input.computed_data.width,
-            input.computed_data.height,
-        ));
-        let click_pos = normalized_click_position(input.cursor_position_rel, input.computed_data);
+        let context = pointer_context(input.cursor_position_rel, input.computed_data);
 
         for event in cursor_events.iter() {
             if within_bounds
@@ -401,10 +413,10 @@ where
                     CursorEventContent::Pressed(PressKeyEventType::Left)
                 )
             {
-                interaction_state.with_mut(|s| {
-                    s.start_animation_with_spec(click_pos, size, spec);
-                    s.set_pressed(true);
-                });
+                if let Some(on_press) = on_press.as_ref() {
+                    on_press(context);
+                }
+                interaction_state.with_mut(|s| s.set_pressed(true));
             }
 
             if matches!(
@@ -412,6 +424,9 @@ where
                 CursorEventContent::Released(PressKeyEventType::Left)
             ) {
                 interaction_state.with_mut(|s| s.release());
+                if let Some(on_release) = on_release.as_ref() {
+                    on_release(context);
+                }
             }
 
             if within_bounds
@@ -430,6 +445,10 @@ where
                 s.release();
                 s.set_hovered(false);
             });
+        }
+
+        if block_input && within_bounds {
+            input.block_all();
         }
     }));
 }
@@ -473,34 +492,26 @@ where
         label,
         description,
         interaction_state,
-        ripple_spec,
-        ripple_size,
+        on_press,
+        on_release,
     } = args;
 
     child();
 
     let role = role.unwrap_or(accesskit::Role::CheckBox);
     input_handler(Box::new(move |input| {
-        let mut cursor_events = Vec::new();
-        mem::swap(&mut cursor_events, input.cursor_events);
-
-        let mut unhandled_events = Vec::new();
-        let mut processed_events = Vec::new();
-
-        for event in cursor_events {
-            if matches!(
-                event.content,
-                CursorEventContent::Pressed(PressKeyEventType::Left)
-                    | CursorEventContent::Released(PressKeyEventType::Left)
-            ) {
-                processed_events.push(event);
-            } else {
-                unhandled_events.push(event);
-            }
-        }
-
-        input.cursor_events.extend(unhandled_events);
-        let cursor_events = processed_events;
+        let cursor_events: Vec<_> = input
+            .cursor_events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event.content,
+                    CursorEventContent::Pressed(PressKeyEventType::Left)
+                        | CursorEventContent::Released(PressKeyEventType::Left)
+                )
+            })
+            .cloned()
+            .collect();
 
         let within_bounds = input
             .cursor_position_rel
@@ -557,15 +568,7 @@ where
             return;
         }
 
-        let spec = ripple_spec.unwrap_or(RippleSpec {
-            bounded: true,
-            radius: None,
-        });
-        let size = ripple_size.unwrap_or(PxSize::new(
-            input.computed_data.width,
-            input.computed_data.height,
-        ));
-        let click_pos = normalized_click_position(input.cursor_position_rel, input.computed_data);
+        let context = pointer_context(input.cursor_position_rel, input.computed_data);
 
         for event in cursor_events.iter() {
             if within_bounds
@@ -574,10 +577,10 @@ where
                     CursorEventContent::Pressed(PressKeyEventType::Left)
                 )
             {
-                interaction_state.with_mut(|s| {
-                    s.start_animation_with_spec(click_pos, size, spec);
-                    s.set_pressed(true);
-                });
+                if let Some(on_press) = on_press.as_ref() {
+                    on_press(context);
+                }
+                interaction_state.with_mut(|s| s.set_pressed(true));
             }
 
             if matches!(
@@ -585,6 +588,9 @@ where
                 CursorEventContent::Released(PressKeyEventType::Left)
             ) {
                 interaction_state.with_mut(|s| s.release());
+                if let Some(on_release) = on_release.as_ref() {
+                    on_release(context);
+                }
             }
 
             if within_bounds
@@ -620,34 +626,26 @@ where
         label,
         description,
         interaction_state,
-        ripple_spec,
-        ripple_size,
+        on_press,
+        on_release,
     } = args;
 
     child();
 
     let role = role.unwrap_or(accesskit::Role::Button);
     input_handler(Box::new(move |input| {
-        let mut cursor_events = Vec::new();
-        mem::swap(&mut cursor_events, input.cursor_events);
-
-        let mut unhandled_events = Vec::new();
-        let mut processed_events = Vec::new();
-
-        for event in cursor_events {
-            if matches!(
-                event.content,
-                CursorEventContent::Pressed(PressKeyEventType::Left)
-                    | CursorEventContent::Released(PressKeyEventType::Left)
-            ) {
-                processed_events.push(event);
-            } else {
-                unhandled_events.push(event);
-            }
-        }
-
-        input.cursor_events.extend(unhandled_events);
-        let cursor_events = processed_events;
+        let cursor_events: Vec<_> = input
+            .cursor_events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event.content,
+                    CursorEventContent::Pressed(PressKeyEventType::Left)
+                        | CursorEventContent::Released(PressKeyEventType::Left)
+                )
+            })
+            .cloned()
+            .collect();
 
         let within_bounds = input
             .cursor_position_rel
@@ -708,15 +706,7 @@ where
             return;
         }
 
-        let spec = ripple_spec.unwrap_or(RippleSpec {
-            bounded: true,
-            radius: None,
-        });
-        let size = ripple_size.unwrap_or(PxSize::new(
-            input.computed_data.width,
-            input.computed_data.height,
-        ));
-        let click_pos = normalized_click_position(input.cursor_position_rel, input.computed_data);
+        let context = pointer_context(input.cursor_position_rel, input.computed_data);
 
         for event in cursor_events.iter() {
             if within_bounds
@@ -725,10 +715,10 @@ where
                     CursorEventContent::Pressed(PressKeyEventType::Left)
                 )
             {
-                interaction_state.with_mut(|s| {
-                    s.start_animation_with_spec(click_pos, size, spec);
-                    s.set_pressed(true);
-                });
+                if let Some(on_press) = on_press.as_ref() {
+                    on_press(context);
+                }
+                interaction_state.with_mut(|s| s.set_pressed(true));
             }
 
             if matches!(
@@ -736,6 +726,9 @@ where
                 CursorEventContent::Released(PressKeyEventType::Left)
             ) {
                 interaction_state.with_mut(|s| s.release());
+                if let Some(on_release) = on_release.as_ref() {
+                    on_release(context);
+                }
             }
 
             if within_bounds
@@ -756,4 +749,80 @@ where
             });
         }
     }));
+}
+
+/// Tracks basic interaction flags and derives state-layer alpha.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct InteractionState {
+    is_hovered: bool,
+    is_focused: bool,
+    is_dragged: bool,
+    is_pressed: bool,
+}
+
+impl InteractionState {
+    /// Creates a new interaction state with all flags cleared.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Marks the component as no longer pressed.
+    pub fn release(&mut self) {
+        self.set_pressed(false);
+    }
+
+    /// Sets whether the component is hovered.
+    pub fn set_hovered(&mut self, hovered: bool) {
+        self.is_hovered = hovered;
+    }
+
+    /// Returns whether the component is hovered.
+    pub fn is_hovered(&self) -> bool {
+        self.is_hovered
+    }
+
+    /// Sets whether the component is focused.
+    pub fn set_focused(&mut self, focused: bool) {
+        self.is_focused = focused;
+    }
+
+    /// Returns whether the component is focused.
+    pub fn is_focused(&self) -> bool {
+        self.is_focused
+    }
+
+    /// Sets whether the component is dragged.
+    pub fn set_dragged(&mut self, dragged: bool) {
+        self.is_dragged = dragged;
+    }
+
+    /// Returns whether the component is dragged.
+    pub fn is_dragged(&self) -> bool {
+        self.is_dragged
+    }
+
+    /// Sets whether the component is pressed.
+    pub fn set_pressed(&mut self, pressed: bool) {
+        self.is_pressed = pressed;
+    }
+
+    /// Returns whether the component is pressed.
+    pub fn is_pressed(&self) -> bool {
+        self.is_pressed
+    }
+
+    /// Returns the state-layer alpha derived from the current interactions.
+    pub fn state_layer_alpha(&self) -> f32 {
+        if self.is_dragged {
+            MaterialAlpha::DRAGGED
+        } else if self.is_pressed {
+            MaterialAlpha::PRESSED
+        } else if self.is_focused {
+            MaterialAlpha::FOCUSED
+        } else if self.is_hovered {
+            MaterialAlpha::HOVER
+        } else {
+            0.0
+        }
+    }
 }

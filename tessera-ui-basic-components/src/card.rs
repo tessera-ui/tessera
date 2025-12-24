@@ -11,7 +11,7 @@ use tessera_ui::{Color, Dp, InputHandlerInput, Modifier, State, remember, tesser
 
 use crate::{
     column::{ColumnArgs, ColumnScope, column},
-    ripple_state::RippleState,
+    modifier::InteractionState,
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     theme::{ContentColor, MaterialAlpha, MaterialTheme, content_color_for},
@@ -189,7 +189,7 @@ impl CardElevation {
         self.default_elevation
     }
 
-    fn target(self, enabled: bool, interaction_state: Option<State<RippleState>>) -> Dp {
+    fn target(self, enabled: bool, interaction_state: Option<State<InteractionState>>) -> Dp {
         if !enabled {
             return self.disabled_elevation;
         }
@@ -361,7 +361,7 @@ pub struct CardArgs {
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Optional shared interaction state for elevation and state layers.
     #[builder(default, setter(strip_option))]
-    pub interaction_state: Option<State<RippleState>>,
+    pub interaction_state: Option<State<InteractionState>>,
     /// Optional container shape override.
     #[builder(default, setter(strip_option))]
     pub shape: Option<Shape>,
@@ -491,7 +491,7 @@ where
     let interaction_state = if clickable {
         Some(
             args.interaction_state
-                .unwrap_or_else(|| remember(RippleState::new)),
+                .unwrap_or_else(|| remember(InteractionState::new)),
         )
     } else {
         None

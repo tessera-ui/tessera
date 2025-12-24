@@ -18,7 +18,7 @@ use crate::{
     alignment::Alignment,
     animation,
     boxed::{BoxedArgsBuilder, boxed},
-    modifier::{ModifierExt, ToggleableArgs},
+    modifier::{InteractionState, ModifierExt, PointerEventContext, ToggleableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
@@ -271,7 +271,8 @@ fn switch_inner(
 
     let on_toggle = args.enabled.then(|| args.on_toggle.clone()).flatten();
     let interactive = on_toggle.is_some();
-    let interaction_state = interactive.then(|| remember(RippleState::new));
+    let interaction_state = interactive.then(|| remember(InteractionState::new));
+    let ripple_state = interactive.then(|| remember(RippleState::new));
     let checked = controller.with(|c| c.is_checked());
     if interactive {
         modifier = modifier.minimum_interactive_component_size();
@@ -284,6 +285,16 @@ fn switch_inner(
             SwitchDefaults::STATE_LAYER_SIZE.to_px(),
             SwitchDefaults::STATE_LAYER_SIZE.to_px(),
         );
+        let press_handler = ripple_state.map(|state| {
+            let spec = ripple_spec;
+            let size = ripple_size;
+            Arc::new(move |ctx: PointerEventContext| {
+                state.with_mut(|s| s.start_animation_with_spec(ctx.normalized_pos, size, spec));
+            })
+        });
+        let release_handler = ripple_state.map(|state| {
+            Arc::new(move |_ctx: PointerEventContext| state.with_mut(|s| s.release()))
+        });
         let mut toggle_args = ToggleableArgs::new(
             checked,
             Arc::new(move |_| {
@@ -305,9 +316,12 @@ fn switch_inner(
         if let Some(state) = interaction_state {
             toggle_args = toggle_args.interaction_state(state);
         }
-        toggle_args = toggle_args
-            .ripple_spec(ripple_spec)
-            .ripple_size(ripple_size);
+        if let Some(handler) = press_handler {
+            toggle_args = toggle_args.on_press(handler);
+        }
+        if let Some(handler) = release_handler {
+            toggle_args = toggle_args.on_release(handler);
+        }
         modifier = modifier.toggleable(toggle_args);
     }
 
@@ -380,12 +394,11 @@ fn switch_inner(
         if let Some(interaction_state) = interaction_state {
             state_layer_builder = state_layer_builder.interaction_state(interaction_state);
         }
-        surface(
-            state_layer_builder
-                .build()
-                .expect("builder construction failed"),
-            || {},
-        );
+        let mut state_layer_args = state_layer_builder
+            .build()
+            .expect("builder construction failed");
+        state_layer_args.set_ripple_state(ripple_state);
+        surface(state_layer_args, || {});
 
         let child = child;
         surface(

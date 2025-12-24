@@ -18,7 +18,7 @@ use crate::{
     alignment::Alignment,
     boxed::{BoxedArgsBuilder, boxed},
     checkmark::{CheckmarkArgsBuilder, checkmark},
-    modifier::{ModifierExt, ToggleableArgs},
+    modifier::{InteractionState, ModifierExt, PointerEventContext, ToggleableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
@@ -332,7 +332,8 @@ pub fn checkbox_with_controller(
     let shape = args.shape;
 
     let is_checked = controller.with(|c| c.is_checked());
-    let interaction_state = enabled.then(|| remember(RippleState::new));
+    let interaction_state = enabled.then(|| remember(InteractionState::new));
+    let ripple_state = enabled.then(|| remember(RippleState::new));
     let on_value_change = {
         let on_toggle = args.on_toggle.clone();
         Arc::new(move |checked| {
@@ -451,6 +452,7 @@ pub fn checkbox_with_controller(
         clone state_layer_base,
         clone interaction_state,
         clone render_checkbox_container,
+        clone ripple_state,
         || {
             let mut builder = SurfaceArgsBuilder::default()
                 .modifier(Modifier::new().size(
@@ -466,14 +468,14 @@ pub fn checkbox_with_controller(
                 .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
                 .ripple_color(state_layer_base);
 
-            if let Some(interaction_state) = interaction_state {
-                builder = builder.interaction_state(interaction_state);
+            if let Some(state) = interaction_state {
+                builder = builder.interaction_state(state);
             }
 
-            surface(
-                builder.build().expect("builder construction failed"),
-                render_checkbox_container,
-            );
+            let mut args = builder.build().expect("builder construction failed");
+            args.set_ripple_state(ripple_state);
+
+            surface(args, render_checkbox_container);
         }
     );
 
@@ -491,6 +493,16 @@ pub fn checkbox_with_controller(
             CheckboxDefaults::STATE_LAYER_SIZE.to_px(),
             CheckboxDefaults::STATE_LAYER_SIZE.to_px(),
         );
+        let press_handler = ripple_state.map(|state| {
+            let spec = ripple_spec;
+            let size = ripple_size;
+            Arc::new(move |ctx: PointerEventContext| {
+                state.with_mut(|s| s.start_animation_with_spec(ctx.normalized_pos, size, spec));
+            })
+        });
+        let release_handler = ripple_state.map(|state| {
+            Arc::new(move |_ctx: PointerEventContext| state.with_mut(|s| s.release()))
+        });
         let mut toggle_args = ToggleableArgs::new(is_checked, on_value_change)
             .enabled(true)
             .role(Role::CheckBox);
@@ -503,9 +515,12 @@ pub fn checkbox_with_controller(
         if let Some(state) = interaction_state {
             toggle_args = toggle_args.interaction_state(state);
         }
-        toggle_args = toggle_args
-            .ripple_spec(ripple_spec)
-            .ripple_size(ripple_size);
+        if let Some(handler) = press_handler {
+            toggle_args = toggle_args.on_press(handler);
+        }
+        if let Some(handler) = release_handler {
+            toggle_args = toggle_args.on_release(handler);
+        }
         modifier = modifier.toggleable(toggle_args);
     }
     boxed(

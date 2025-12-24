@@ -20,7 +20,7 @@ use crate::{
     alignment::Alignment,
     animation,
     boxed::{BoxedArgsBuilder, boxed},
-    modifier::{ModifierExt as _, SelectableArgs},
+    modifier::{InteractionState, ModifierExt as _, PointerEventContext, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
     surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
@@ -244,7 +244,8 @@ pub fn radio_button_with_controller(
     let progress = controller.with(|c| c.animation_progress());
     let eased_progress = animation::easing(progress);
     let is_selected = controller.with(|c| c.is_selected());
-    let interaction_state = args.enabled.then(|| remember(RippleState::new));
+    let interaction_state = args.enabled.then(|| remember(InteractionState::new));
+    let ripple_state = args.enabled.then(|| remember(RippleState::new));
 
     let target_size = Dp(args.touch_target_size.0.max(args.size.0));
 
@@ -298,13 +299,14 @@ pub fn radio_button_with_controller(
         .ripple_radius(state_layer_radius)
         .ripple_color(ripple_color);
 
-    if let Some(interaction_state) = interaction_state {
-        state_layer_builder = state_layer_builder.interaction_state(interaction_state);
+    if let Some(state) = interaction_state {
+        state_layer_builder = state_layer_builder.interaction_state(state);
     }
 
-    let state_layer_args = state_layer_builder
+    let mut state_layer_args = state_layer_builder
         .build()
         .expect("builder construction failed");
+    state_layer_args.set_ripple_state(ripple_state);
 
     let mut modifier = args.modifier.size(target_size, target_size);
     if args.enabled {
@@ -313,6 +315,16 @@ pub fn radio_button_with_controller(
             radius: Some(state_layer_radius),
         };
         let ripple_size = PxSize::new(state_layer_size.to_px(), state_layer_size.to_px());
+        let press_handler = ripple_state.map(|state| {
+            let spec = ripple_spec;
+            let size = ripple_size;
+            Arc::new(move |ctx: PointerEventContext| {
+                state.with_mut(|s| s.start_animation_with_spec(ctx.normalized_pos, size, spec));
+            })
+        });
+        let release_handler = ripple_state.map(|state| {
+            Arc::new(move |_ctx: PointerEventContext| state.with_mut(|s| s.release()))
+        });
         let mut selectable_args = SelectableArgs::new(is_selected, on_click.clone())
             .enabled(true)
             .role(Role::RadioButton);
@@ -325,9 +337,12 @@ pub fn radio_button_with_controller(
         if let Some(state) = interaction_state {
             selectable_args = selectable_args.interaction_state(state);
         }
-        selectable_args = selectable_args
-            .ripple_spec(ripple_spec)
-            .ripple_size(ripple_size);
+        if let Some(handler) = press_handler {
+            selectable_args = selectable_args.on_press(handler);
+        }
+        if let Some(handler) = release_handler {
+            selectable_args = selectable_args.on_release(handler);
+        }
         modifier = modifier.selectable(selectable_args);
     }
 

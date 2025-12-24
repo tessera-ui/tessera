@@ -74,6 +74,7 @@ pub mod icon;
 pub mod icon_button;
 pub mod image;
 pub mod image_vector;
+pub mod interaction_state;
 pub mod lazy_list;
 pub mod material_icons;
 pub mod modifier;

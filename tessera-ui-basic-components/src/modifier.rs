@@ -22,7 +22,9 @@ use layout::{
 };
 use visual::{modifier_alpha, modifier_background, modifier_border, modifier_clip_to_bounds};
 
-pub use interaction::{ClickableArgs, SelectableArgs, ToggleableArgs};
+pub use interaction::{
+    ClickableArgs, InteractionState, PointerEventContext, SelectableArgs, ToggleableArgs,
+};
 pub use layout::{MinimumInteractiveComponentEnforcement, Padding};
 pub use shadow::ShadowArgs;
 
