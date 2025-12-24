@@ -315,61 +315,6 @@ fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
         Shape::capsule()
     };
 
-    if args.progress.is_some() {
-        surface(
-            SurfaceArgsBuilder::default()
-                .style(args.track_color.into())
-                .shape(segment_shape)
-                .modifier(Modifier::new().fill_max_size())
-                .build()
-                .expect("builder construction failed"),
-            || {},
-        );
-        surface(
-            SurfaceArgsBuilder::default()
-                .style(args.color.into())
-                .shape(segment_shape)
-                .modifier(Modifier::new().fill_max_size())
-                .build()
-                .expect("builder construction failed"),
-            || {},
-        );
-        if args.draw_stop_indicator {
-            let stop_shape = if args.stroke_cap == ProgressStrokeCap::Butt {
-                Shape::RECTANGLE
-            } else {
-                Shape::Ellipse
-            };
-            surface(
-                SurfaceArgsBuilder::default()
-                    .style(args.color.into())
-                    .shape(stop_shape)
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .expect("builder construction failed"),
-                || {},
-            );
-        }
-    } else {
-        for (color, shape) in [
-            (args.track_color, segment_shape),
-            (args.color, segment_shape),
-            (args.track_color, segment_shape),
-            (args.color, segment_shape),
-            (args.track_color, segment_shape),
-        ] {
-            surface(
-                SurfaceArgsBuilder::default()
-                    .style(color.into())
-                    .shape(shape)
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .expect("builder construction failed"),
-                || {},
-            );
-        }
-    }
-
     let mut semantics = SemanticsArgs::new().role(Role::ProgressIndicator);
     if let Some(label) = args_for_accessibility.accessibility_label.clone() {
         semantics = semantics.label(label);
@@ -388,8 +333,68 @@ fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
             .numeric_value(progress as f64);
     }
 
+    let args_for_children = args.clone();
+    let args_for_measure = args;
+    let animation_start_for_measure = animation_start;
+
     Modifier::new().semantics(semantics).run(move || {
+        if args_for_children.progress.is_some() {
+            surface(
+                SurfaceArgsBuilder::default()
+                    .style(args_for_children.track_color.into())
+                    .shape(segment_shape)
+                    .modifier(Modifier::new().fill_max_size())
+                    .build()
+                    .expect("builder construction failed"),
+                || {},
+            );
+            surface(
+                SurfaceArgsBuilder::default()
+                    .style(args_for_children.color.into())
+                    .shape(segment_shape)
+                    .modifier(Modifier::new().fill_max_size())
+                    .build()
+                    .expect("builder construction failed"),
+                || {},
+            );
+            if args_for_children.draw_stop_indicator {
+                let stop_shape = if args_for_children.stroke_cap == ProgressStrokeCap::Butt {
+                    Shape::RECTANGLE
+                } else {
+                    Shape::Ellipse
+                };
+                surface(
+                    SurfaceArgsBuilder::default()
+                        .style(args_for_children.color.into())
+                        .shape(stop_shape)
+                        .modifier(Modifier::new().fill_max_size())
+                        .build()
+                        .expect("builder construction failed"),
+                    || {},
+                );
+            }
+        } else {
+            for (color, shape) in [
+                (args_for_children.track_color, segment_shape),
+                (args_for_children.color, segment_shape),
+                (args_for_children.track_color, segment_shape),
+                (args_for_children.color, segment_shape),
+                (args_for_children.track_color, segment_shape),
+            ] {
+                surface(
+                    SurfaceArgsBuilder::default()
+                        .style(color.into())
+                        .shape(shape)
+                        .modifier(Modifier::new().fill_max_size())
+                        .build()
+                        .expect("builder construction failed"),
+                    || {},
+                );
+            }
+        }
+
         measure(Box::new(move |input| {
+            let args = args_for_measure.clone();
             let (self_width, self_height) = resolve_linear_size(input.parent_constraint);
             let is_butt = args.stroke_cap.effective_is_butt(self_width, self_height);
             let gap_fraction =
@@ -459,7 +464,7 @@ fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
                     input.place_child(stop_id, pos);
                 }
             } else {
-                let cycle = linear_cycle_progress(animation_start.get(), 1750);
+                let cycle = linear_cycle_progress(animation_start_for_measure.get(), 1750);
                 let first_head = keyframe_0_to_1(cycle, 0, 1000, 1750, emphasized_accelerate);
                 let first_tail = keyframe_0_to_1(cycle, 250, 1000, 1750, emphasized_accelerate);
                 let second_head = keyframe_0_to_1(cycle, 650, 850, 1750, emphasized_accelerate);
