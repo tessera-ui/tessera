@@ -178,35 +178,40 @@ pub fn app() {
                                 });
                             });
                         },
-                        closure!(clone dialog_controller, |_alpha| {
+                        move |_alpha| {
                             basic_dialog(
                                 BasicDialogArgsBuilder::default()
                                     .headline("Basic Dialog")
                                     .supporting_text("This is a basic dialog component.")
                                     .icon(|| {
                                         let icon_content = filled::info_icon();
-                                        icon(IconArgsBuilder::default().content(icon_content).build().unwrap());
+                                        icon(
+                                            IconArgsBuilder::default()
+                                                .content(icon_content)
+                                                .build()
+                                                .unwrap(),
+                                        );
                                     })
-                                    .confirm_button(closure!(clone dialog_controller, || {
+                                    .confirm_button(move || {
                                         button(
-                                            ButtonArgs::text(closure!(clone dialog_controller, || {
+                                            ButtonArgs::text(move || {
                                                 dialog_controller.with_mut(|c| c.close());
-                                            })),
+                                            }),
                                             || text("Confirm"),
                                         );
-                                    }))
-                                    .dismiss_button(closure!(clone dialog_controller, || {
+                                    })
+                                    .dismiss_button(move || {
                                         button(
-                                            ButtonArgs::text(closure!(clone dialog_controller, || {
+                                            ButtonArgs::text(move || {
                                                 dialog_controller.with_mut(|c| c.close());
-                                            })),
+                                            }),
                                             || text("Dismiss"),
                                         );
-                                    }))
+                                    })
                                     .build()
                                     .unwrap(),
                             );
-                        }),
+                        },
                     );
                 },
                 || {
