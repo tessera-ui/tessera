@@ -7,9 +7,16 @@
   - [x] image_vector
   - [x] icon
   - [x] icon_button (and it's glass variant)
-  - [x] lazy_column
-  - [x] lazy_row
-  - [ ] [material design components](https://m3.material.io/components)
+- [x] lazy_column
+- [x] lazy_row
+- [ ] [material design components](https://m3.material.io/components)
+  - [ ] Foundation utilities: WindowInsets padding/size helpers, FlowRow/FlowColumn, pull-to-refresh, overscroll/swipe/drag/transformable gestures.
+  - [ ] Lists and grids: lazy vertical/horizontal grids, staggered grids, pager + snap/scroll behaviors.
+  - [ ] Text input: TextField/Outlined/Secure variants with defaults, context menu/input transforms, Material text selection colors.
+  - [ ] Layout containers: Scaffold, BackdropScaffold, modal vs. bottom sheet scaffold separation, BoxWithConstraints parity, Tooltip/Marquee, Canvas/Background/Border helpers.
+  - [ ] Material controls: AppBar/TopAppBar, FloatingActionButton, Chip, ListItem, NavigationRail, Snackbar/SnackbarHost, ExposedDropdownMenu, pull-refresh indicator, SwipeToDismiss.
+  - [ ] Material 3 extensions: NavigationDrawer/Wide/Short navigation rails, SearchBar, Segmented/Split/Toggle buttons, FloatingToolbar/FAB menu, Carousel, Date/Time pickers/dialogs, M3 Tooltip, DragHandle/SheetDefaults, Wavy/Loading progress indicators.
+  - [ ] Theme completeness: full Material 3 token coverage for ColorScheme/Typography/Shapes/ripple and preset schemes.
 - [ ] Documentation of pluggable graphics rendering pipelines
 - [x] CLI tool (`cargo-tessera`):
   - [x] Project scaffolding (`cargo tessera new`)
