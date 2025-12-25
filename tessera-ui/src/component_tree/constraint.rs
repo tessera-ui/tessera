@@ -295,6 +295,19 @@ impl DimensionValue {
         max: None,
     };
 
+    /// Returns the most "preferred" size of this dimension.
+    ///
+    /// For example, a filled dimension would prefer to be as large as possible,
+    /// while a wrapped dimension would prefer to be as small as possible and a
+    /// fixed dimension has a single preferred size.
+    pub fn resolve(&self) -> Px {
+        match self {
+            Self::Fixed(value) => *value,
+            Self::Wrap { min, .. } => min.unwrap_or(Px(0)),
+            Self::Fill { max, .. } => max.unwrap_or(Px(i32::MAX)),
+        }
+    }
+
     /// Returns the maximum value of this dimension, if defined.
     ///
     /// This method extracts the maximum constraint from a dimension value,

@@ -53,7 +53,10 @@
 
 use std::ops::{AddAssign, Neg, SubAssign};
 
-use crate::dp::{Dp, SCALE_FACTOR};
+use crate::{
+    ComputedData,
+    dp::{Dp, SCALE_FACTOR},
+};
 
 /// A physical pixel coordinate value.
 ///
@@ -1008,8 +1011,8 @@ impl From<winit::dpi::PhysicalSize<u32>> for PxSize {
     }
 }
 
-impl From<crate::component_tree::ComputedData> for PxSize {
-    fn from(data: crate::component_tree::ComputedData) -> Self {
+impl From<ComputedData> for PxSize {
+    fn from(data: ComputedData) -> Self {
         Self {
             width: data.width,
             height: data.height,
