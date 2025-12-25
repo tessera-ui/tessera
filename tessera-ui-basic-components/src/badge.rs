@@ -224,10 +224,12 @@ where
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::badge::BadgeArgs;
 ///
-/// let args = BadgeArgs::default()
-///     .container_color(Color::RED)
-///     .content_color(Color::WHITE);
-/// assert_eq!(args.container_color, Color::RED);
+/// let args = BadgeArgs {
+///     container_color: Color::RED,
+///     content_color: None,
+/// }
+/// .content_color(Color::WHITE);
+/// assert_eq!(args.content_color, Some(Color::WHITE));
 /// ```
 #[tessera]
 pub fn badge(args: impl Into<BadgeArgs>) {
@@ -290,10 +292,12 @@ pub fn badge(args: impl Into<BadgeArgs>) {
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::badge::BadgeArgs;
 ///
-/// let args = BadgeArgs::default()
-///     .container_color(Color::RED)
-///     .content_color(Color::WHITE);
-/// assert_eq!(args.content_color, Some(Color::WHITE));
+/// let args = BadgeArgs {
+///     container_color: Color::RED,
+///     content_color: None,
+/// }
+/// .content_color(Color::WHITE);
+/// assert_eq!(args.container_color, Color::RED);
 /// ```
 #[tessera]
 pub fn badge_with_content<F>(args: impl Into<BadgeArgs>, content: F)

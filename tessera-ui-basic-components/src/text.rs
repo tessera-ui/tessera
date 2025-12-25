@@ -93,19 +93,20 @@ impl From<&str> for TextArgs {
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui::{Color, Dp};
+/// use tessera_ui::{Color, Dp, tessera};
 /// use tessera_ui_basic_components::text::{TextArgs, text};
 ///
-/// // Simple text from a string literal
-/// text("Hello, world!");
-///
-/// // Styled text using fluent setters
-/// text(
-///     TextArgs::default()
-///         .text("Styled Text")
+/// #[tessera]
+/// fn demo() {
+///     let args = TextArgs::default()
+///         .text("Hello, world!")
 ///         .color(Color::new(0.2, 0.5, 0.8, 1.0))
-///         .size(Dp(32.0)),
-/// );
+///         .size(Dp(32.0));
+///     assert_eq!(args.text, "Hello, world!");
+///     text(args);
+/// }
+///
+/// demo();
 /// ```
 #[tessera]
 pub fn text(args: impl Into<TextArgs>) {

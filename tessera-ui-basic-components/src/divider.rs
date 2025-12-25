@@ -92,9 +92,10 @@ impl Default for DividerArgs {
 /// use tessera_ui::{Color, Dp};
 /// use tessera_ui_basic_components::divider::DividerArgs;
 ///
-/// let args = DividerArgs::default()
-///     .thickness(Dp::ZERO)
-///     .color(Color::BLACK);
+/// let args = DividerArgs {
+///     thickness: Dp::ZERO,
+///     color: Color::BLACK,
+/// };
 /// assert_eq!(args.thickness, Dp::ZERO);
 /// ```
 #[tessera]
@@ -137,9 +138,10 @@ pub fn horizontal_divider(args: impl Into<DividerArgs>) {
 /// use tessera_ui::{Color, Dp};
 /// use tessera_ui_basic_components::divider::DividerArgs;
 ///
-/// let args = DividerArgs::default()
-///     .thickness(Dp(2.0))
-///     .color(Color::BLACK);
+/// let args = DividerArgs {
+///     thickness: Dp(2.0),
+///     color: Color::BLACK,
+/// };
 /// assert_eq!(args.thickness, Dp(2.0));
 /// ```
 #[tessera]
