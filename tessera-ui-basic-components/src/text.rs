@@ -135,8 +135,7 @@ pub fn text(args: impl Into<TextArgs>) {
 }
 
 #[tessera]
-fn text_inner(args: TextArgs) {
-    let text_args: TextArgs = args.into();
+fn text_inner(text_args: TextArgs) {
     let inherited_style = use_context::<TextStyle>().get();
 
     measure(Box::new(move |input| {

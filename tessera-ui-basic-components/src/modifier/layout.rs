@@ -85,34 +85,6 @@ pub(crate) fn shrink_dimension(dimension: DimensionValue, before: Px, after: Px)
     }
 }
 
-pub(crate) fn resolve_dimension(dimension: DimensionValue, content: Px, axis: &'static str) -> Px {
-    match dimension {
-        DimensionValue::Fixed(value) => value,
-        DimensionValue::Wrap { min, max } => {
-            let mut value = content;
-            if let Some(min_value) = min {
-                value = value.max(min_value);
-            }
-            if let Some(max_value) = max {
-                value = value.min(max_value);
-            }
-            value
-        }
-        DimensionValue::Fill { min, max } => {
-            let Some(max_value) = max else {
-                panic!(
-                    "Seems that you are trying to fill an infinite dimension, which is not allowed\naxis = {axis}\nconstraint = {dimension:?}"
-                );
-            };
-            let mut value = max_value;
-            if let Some(min_value) = min {
-                value = value.max(min_value);
-            }
-            value
-        }
-    }
-}
-
 #[tessera]
 pub(crate) fn modifier_padding<F>(padding: Padding, child: F)
 where

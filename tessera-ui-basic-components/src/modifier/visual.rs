@@ -6,15 +6,13 @@
 //! borders.
 
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, PxSize, tessera,
+    Color, ComputedData, Constraint, DimensionValue, Dp, PxPosition, PxSize, tessera,
 };
 
 use crate::{
     pipelines::shape::command::ShapeCommand,
     shape_def::{ResolvedShape, Shape},
 };
-
-use super::layout::resolve_dimension;
 
 #[tessera]
 pub(crate) fn modifier_alpha<F>(alpha: f32, child: F)
@@ -27,28 +25,11 @@ where
             .first()
             .copied()
             .expect("modifier_alpha expects exactly one child");
-
-        let parent_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let child_measurements = input.measure_children(vec![(child_id, parent_constraint)])?;
-        let child_measurement = *child_measurements
-            .get(&child_id)
-            .expect("Child measurement missing");
-
-        let final_width =
-            resolve_dimension(parent_constraint.width, child_measurement.width, "width");
-        let final_height =
-            resolve_dimension(parent_constraint.height, child_measurement.height, "height");
-
+        let child_measurement = input.measure_child_in_parent_constraint(child_id)?;
         input.place_child(child_id, PxPosition::ZERO);
         input.multiply_opacity(alpha);
 
-        Ok(ComputedData {
-            width: final_width,
-            height: final_height,
-        })
+        Ok(child_measurement)
     }));
 
     child();
@@ -61,33 +42,14 @@ where
 {
     measure(Box::new(move |input| {
         input.enable_clipping();
-
         let child_id = input
             .children_ids
             .first()
             .copied()
             .expect("modifier_clip_to_bounds expects exactly one child");
-
-        let parent_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let child_measurements = input.measure_children(vec![(child_id, parent_constraint)])?;
-        let child_measurement = *child_measurements
-            .get(&child_id)
-            .expect("Child measurement missing");
-
-        let final_width =
-            resolve_dimension(parent_constraint.width, child_measurement.width, "width");
-        let final_height =
-            resolve_dimension(parent_constraint.height, child_measurement.height, "height");
-
+        let child_measurement = input.measure_child_in_parent_constraint(child_id)?;
         input.place_child(child_id, PxPosition::ZERO);
-
-        Ok(ComputedData {
-            width: final_width,
-            height: final_height,
-        })
+        Ok(child_measurement)
     }));
 
     child();
@@ -143,32 +105,16 @@ where
             .first()
             .copied()
             .expect("modifier_background expects exactly one child");
-
-        let parent_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let child_measurements = input.measure_children(vec![(child_id, parent_constraint)])?;
-        let child_measurement = *child_measurements
-            .get(&child_id)
-            .expect("Child measurement missing");
-
-        let final_width =
-            resolve_dimension(parent_constraint.width, child_measurement.width, "width");
-        let final_height =
-            resolve_dimension(parent_constraint.height, child_measurement.height, "height");
-        let size = PxSize::new(final_width, final_height);
-
+        let child_measurement = input.measure_child_in_parent_constraint(child_id)?;
         input
             .metadata_mut()
-            .push_draw_command(shape_background_command(color, shape, size));
-
+            .push_draw_command(shape_background_command(
+                color,
+                shape,
+                child_measurement.into(),
+            ));
         input.place_child(child_id, PxPosition::ZERO);
-
-        Ok(ComputedData {
-            width: final_width,
-            height: final_height,
-        })
+        Ok(child_measurement)
     }));
 
     child();
@@ -177,22 +123,19 @@ where
 #[tessera]
 fn modifier_border_overlay(width: Dp, color: Color, shape: Shape) {
     measure(Box::new(move |input| {
-        let parent_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let final_width = resolve_dimension(parent_constraint.width, Px(0), "width");
-        let final_height = resolve_dimension(parent_constraint.height, Px(0), "height");
-        let size = PxSize::new(final_width, final_height);
+        let size = ComputedData {
+            width: input.parent_constraint.width().resolve(),
+            height: input.parent_constraint.height().resolve(),
+        };
 
-        input
-            .metadata_mut()
-            .push_draw_command(shape_border_command(color, width, shape, size));
+        input.metadata_mut().push_draw_command(shape_border_command(
+            color,
+            width,
+            shape,
+            size.into(),
+        ));
 
-        Ok(ComputedData {
-            width: final_width,
-            height: final_height,
-        })
+        Ok(size)
     }));
 }
 
@@ -212,39 +155,15 @@ where
             .get(1)
             .copied()
             .expect("modifier_border expects exactly two children");
-
-        let parent_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let child_measurements = input.measure_children(vec![(content_id, parent_constraint)])?;
-        let child_measurement = *child_measurements
-            .get(&content_id)
-            .expect("Child measurement missing");
-
-        let final_width =
-            resolve_dimension(parent_constraint.width, child_measurement.width, "width");
-        let final_height =
-            resolve_dimension(parent_constraint.height, child_measurement.height, "height");
-
+        let child_measurement = input.measure_child_in_parent_constraint(content_id)?;
         input.place_child(content_id, PxPosition::ZERO);
-
         let overlay_constraint = Constraint::new(
-            DimensionValue::Fixed(final_width),
-            DimensionValue::Fixed(final_height),
+            DimensionValue::Fixed(child_measurement.width),
+            DimensionValue::Fixed(child_measurement.height),
         );
-        let overlay_measurements =
-            input.measure_children(vec![(overlay_id, overlay_constraint)])?;
-        overlay_measurements
-            .get(&overlay_id)
-            .expect("Overlay measurement missing");
-
+        let _ = input.measure_child(overlay_id, &overlay_constraint)?;
         input.place_child(overlay_id, PxPosition::ZERO);
-
-        Ok(ComputedData {
-            width: final_width,
-            height: final_height,
-        })
+        Ok(child_measurement)
     }));
 
     child();

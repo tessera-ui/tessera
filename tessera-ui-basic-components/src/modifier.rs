@@ -19,7 +19,6 @@ use interaction::{
 };
 use layout::{
     modifier_constraints, modifier_minimum_interactive_size, modifier_offset, modifier_padding,
-    resolve_dimension,
 };
 use visual::{modifier_alpha, modifier_background, modifier_border, modifier_clip_to_bounds};
 

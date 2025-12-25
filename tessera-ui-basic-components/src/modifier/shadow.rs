@@ -1,6 +1,4 @@
-use tessera_ui::{
-    Color, ComputedData, Constraint, Dp, Modifier, PxPosition, PxSize, tessera, use_context,
-};
+use tessera_ui::{Color, Dp, Modifier, PxPosition, PxSize, tessera, use_context};
 
 use crate::{
     pipelines::shape::command::{ShadowLayers, ShapeCommand},
@@ -9,7 +7,7 @@ use crate::{
     theme::MaterialTheme,
 };
 
-use super::{ModifierExt, resolve_dimension};
+use super::ModifierExt;
 
 /// Arguments for the `shadow` modifier.
 #[derive(Clone, Debug)]
@@ -121,32 +119,18 @@ where
             .first()
             .copied()
             .expect("modifier_shadow expects exactly one child");
-
-        let parent_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let child_measurements = input.measure_children(vec![(child_id, parent_constraint)])?;
-        let child_measurement = *child_measurements
-            .get(&child_id)
-            .expect("Child measurement missing");
-
-        let final_width =
-            resolve_dimension(parent_constraint.width, child_measurement.width, "width");
-        let final_height =
-            resolve_dimension(parent_constraint.height, child_measurement.height, "height");
-        let size = PxSize::new(final_width, final_height);
-
+        let child_measurement = input.measure_child_in_parent_constraint(child_id)?;
         input
             .metadata_mut()
-            .push_draw_command(shape_shadow_command_layers(shadow, shape, size));
+            .push_draw_command(shape_shadow_command_layers(
+                shadow,
+                shape,
+                child_measurement.into(),
+            ));
 
         input.place_child(child_id, PxPosition::ZERO);
 
-        Ok(ComputedData {
-            width: final_width,
-            height: final_height,
-        })
+        Ok(child_measurement)
     }));
 
     child();
