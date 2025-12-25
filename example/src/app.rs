@@ -32,7 +32,7 @@ use tessera_ui_basic_components::{
         side_bar_provider_with_controller,
     },
     spacer::spacer,
-    surface::{SurfaceArgs, SurfaceArgsBuilder, SurfaceStyle, surface},
+    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
     text::{TextArgsBuilder, text},
     theme::MaterialTheme,
 };
@@ -83,9 +83,9 @@ pub fn app() {
         move || {
             bottom_sheet_provider_with_controller(
                 BottomSheetProviderArgsBuilder::default()
-                    .on_close_request(closure!(clone bottom_sheet_controller, || {
+                    .on_close_request(move || {
                         bottom_sheet_controller.with_mut(|c| c.close());
-                    }))
+                    })
                     .style(BottomSheetStyle::Material)
                     .build()
                     .unwrap(),
@@ -93,9 +93,9 @@ pub fn app() {
                 move || {
                     dialog_provider_with_controller(
                         DialogProviderArgsBuilder::default()
-                            .on_close_request(closure!(clone dialog_controller, || {
+                            .on_close_request(move || {
                                 dialog_controller.with_mut(|c| c.close());
-                            }))
+                            })
                             .style(DialogStyle::Material)
                             .build()
                             .unwrap(),
@@ -215,21 +215,18 @@ pub fn app() {
                     );
                 },
                 || {
-                    surface(
-                        SurfaceArgs {
-                            style: Color::TRANSPARENT.into(),
-                            modifier: Modifier::new().padding_all(Dp(16.0)).shadow(Dp(6.0)),
+                    column(
+                        ColumnArgs {
+                            modifier: Modifier::new().padding_all(Dp(16.0)),
                             ..Default::default()
                         },
-                        || {
-                            column(ColumnArgs::default(), |scope| {
-                                scope.child(|| {
-                                    text("Hello from bottom sheet!");
-                                });
+                        |scope| {
+                            scope.child(|| {
+                                text("Hello from bottom sheet!");
+                            });
 
-                                scope.child(|| {
-                                    spacer(Modifier::new().height(Dp(250.0)));
-                                });
+                            scope.child(|| {
+                                spacer(Modifier::new().height(Dp(250.0)));
                             });
                         },
                     );
