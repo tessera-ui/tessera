@@ -68,7 +68,7 @@ impl ProgressArcPipeline {
         let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Progress Arc Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let pipeline = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -109,7 +109,7 @@ impl ProgressArcPipeline {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: pipeline_cache,
         });
 

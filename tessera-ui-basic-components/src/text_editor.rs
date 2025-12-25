@@ -168,9 +168,10 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
     let controller = remember(|| {
         let mut c = TextEditorController::new(args.font_size, args.line_height);
         if let Some(text) = &args.initial_text {
-            c.editor_mut().set_text_reactive(
-                text,
+            set_text_reactively(
+                c.editor_mut(),
                 &mut write_font_system(),
+                text,
                 &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
             );
         }
@@ -564,12 +565,52 @@ fn handle_action(
 
     // Update editor content
     state.with_mut(|c| {
-        c.editor_mut().set_text_reactive(
-            &new_content,
+        set_text_reactively(
+            c.editor_mut(),
             &mut write_font_system(),
+            &new_content,
             &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
         )
     });
+}
+
+fn set_text_reactively(
+    editor: &mut glyphon::Editor,
+    font_system: &mut glyphon::FontSystem,
+    text: &str,
+    attrs: &glyphon::Attrs,
+) {
+    let old_cursor = editor.cursor();
+
+    editor.with_buffer_mut(|buffer| {
+        buffer.set_text(font_system, text, attrs, glyphon::Shaping::Advanced, None);
+        buffer.set_redraw(true);
+    });
+
+    let new_cursor = editor.with_buffer(|buffer| {
+        let new_num_lines = buffer.lines.len();
+
+        if old_cursor.line < new_num_lines {
+            let line = &buffer.lines[old_cursor.line];
+            let new_line_len = line.text().len();
+
+            if old_cursor.index <= new_line_len {
+                old_cursor
+            } else {
+                glyphon::Cursor::new(old_cursor.line, new_line_len)
+            }
+        } else {
+            let last_line_index = new_num_lines.saturating_sub(1);
+            let last_line_len = buffer
+                .lines
+                .get(last_line_index)
+                .map_or(0, |l| l.text().len());
+            glyphon::Cursor::new(last_line_index, last_line_len)
+        }
+    });
+
+    editor.set_cursor(new_cursor);
+    editor.set_selection(glyphon::cosmic_text::Selection::None);
 }
 
 /// Create surface arguments based on editor configuration and state

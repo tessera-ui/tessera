@@ -328,7 +328,7 @@ impl WgpuApp {
         let blit_pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Blit Pipeline Layout"),
             bind_group_layouts: &[&blit_bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let blit_pipeline = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -349,7 +349,7 @@ impl WgpuApp {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: pipeline_cache.as_ref(),
         });
 
@@ -371,7 +371,7 @@ impl WgpuApp {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: pipeline_cache.as_ref(),
         });
 

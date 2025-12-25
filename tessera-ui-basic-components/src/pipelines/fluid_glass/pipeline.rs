@@ -128,7 +128,7 @@ impl FluidGlassSdfGenerator {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Fluid Glass SDF Cache Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -357,7 +357,7 @@ impl FluidGlassPipeline {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         })
     }
@@ -426,7 +426,7 @@ impl FluidGlassPipeline {
         let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Fluid Glass Pipeline Layout"),
             bind_group_layouts: &[bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -461,7 +461,7 @@ impl FluidGlassPipeline {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             cache: pipeline_cache,
         })
     }

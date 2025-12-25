@@ -187,7 +187,7 @@ impl ImageVectorPipeline {
                 &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("image_vector_raster_pipeline_layout"),
                     bind_group_layouts: &[&raster_bind_group_layout],
-                    push_constant_ranges: &[],
+                    immediate_size: 0,
                 }),
             ),
             vertex: wgpu::VertexState {
@@ -213,7 +213,7 @@ impl ImageVectorPipeline {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             cache: pipeline_cache,
         });
 
@@ -223,7 +223,7 @@ impl ImageVectorPipeline {
                 &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("image_vector_sample_pipeline_layout"),
                     bind_group_layouts: &[&sample_bind_group_layout],
-                    push_constant_ranges: &[],
+                    immediate_size: 0,
                 }),
             ),
             vertex: wgpu::VertexState {
@@ -249,7 +249,7 @@ impl ImageVectorPipeline {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             cache: pipeline_cache,
         });
 
@@ -260,7 +260,7 @@ impl ImageVectorPipeline {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
 
@@ -404,6 +404,7 @@ impl ImageVectorPipeline {
                     },
                 })],
                 depth_stencil_attachment: None,
+                multiview_mask: None,
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });

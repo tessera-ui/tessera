@@ -205,7 +205,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
 }
 
 /// Text data for rendering, including buffer and size.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct TextData {
     /// glyphon text buffer
     text_buffer: glyphon::Buffer,
@@ -223,6 +223,21 @@ pub struct TextData {
     font_size: f32,
     line_height: f32,
     constraint: TextConstraint,
+}
+
+impl PartialEq for TextData {
+    fn eq(&self, other: &Self) -> bool {
+        self.size == other.size
+            && self.first_baseline == other.first_baseline
+            && self.last_baseline == other.last_baseline
+            && self.line_count == other.line_count
+            && self.base_color == other.base_color
+            && self.current_color == other.current_color
+            && self.text == other.text
+            && self.font_size == other.font_size
+            && self.line_height == other.line_height
+            && self.constraint == other.constraint
+    }
 }
 
 impl TextData {

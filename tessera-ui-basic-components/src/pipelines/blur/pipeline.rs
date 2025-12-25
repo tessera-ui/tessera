@@ -191,7 +191,7 @@ impl BlurPipeline {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
 
@@ -351,18 +351,18 @@ impl BlurPipeline {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Blur Downsample Pipeline Layout"),
                 bind_group_layouts: &[&downsample_bind_group_layout],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
         let blur_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Blur Pipeline Layout"),
             bind_group_layouts: &[&blur_bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
         let upsample_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Blur Upsample Pipeline Layout"),
                 bind_group_layouts: &[&upsample_bind_group_layout],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         let downsample_pipeline =
