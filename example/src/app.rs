@@ -22,7 +22,7 @@ use tessera_ui_basic_components::{
     icon::{IconArgsBuilder, icon},
     lazy_list::{LazyColumnArgsBuilder, lazy_column},
     material_icons::filled,
-    modifier::ModifierExt as _,
+    modifier::{ModifierExt as _, Padding},
     navigation_bar::{NavigationBarItemBuilder, navigation_bar},
     row::{RowArgsBuilder, row},
     scrollable::ScrollableArgsBuilder,
@@ -666,31 +666,21 @@ fn about() {
             .build()
             .unwrap(),
         || {
-            boxed(
-                BoxedArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
-                    .alignment(Alignment::Center)
-                    .build()
-                    .unwrap(),
-                |scope| {
-                    scope.child(|| {
-                        text(
-                            TextArgsBuilder::default()
-                                .text(
-                                    r#"This is an example app of Tessera UI Framework.
+            text(
+                TextArgsBuilder::default()
+                    .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
+                    .text(
+                        r#"This is an example app of Tessera UI Framework.
 Made with ❤️ by tessera-ui devs.
 
 Copyright 2025 Tessera UI Framework Developers
 "#
-                                    .to_string(),
-                                )
-                                .size(Dp(20.0))
-                                .color(use_context::<MaterialTheme>().get().color_scheme.on_surface)
-                                .build()
-                                .unwrap(),
-                        );
-                    });
-                },
+                        .to_string(),
+                    )
+                    .size(Dp(20.0))
+                    .color(use_context::<MaterialTheme>().get().color_scheme.on_surface)
+                    .build()
+                    .unwrap(),
             );
         },
     );
