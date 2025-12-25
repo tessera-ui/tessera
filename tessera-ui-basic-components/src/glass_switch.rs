@@ -17,7 +17,7 @@ use tessera_ui::{
 use crate::{
     animation,
     fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
-    modifier::{ModifierExt as _, ToggleableArgs},
+    modifier::{InteractionState, ModifierExt as _, ToggleableArgs},
     shape_def::Shape,
 };
 
@@ -256,6 +256,7 @@ pub fn glass_switch_with_controller(
 
     let on_toggle = args.on_toggle.clone();
     let enabled = on_toggle.is_some();
+    let interaction_state = enabled.then(|| remember(InteractionState::new));
     let checked = controller.with(|c| c.is_checked());
     if enabled {
         modifier = modifier.minimum_interactive_component_size();
@@ -277,6 +278,9 @@ pub fn glass_switch_with_controller(
         }
         if let Some(desc) = args.accessibility_description.clone() {
             toggle_args = toggle_args.description(desc);
+        }
+        if let Some(state) = interaction_state {
+            toggle_args = toggle_args.interaction_state(state);
         }
         modifier = modifier.toggleable(toggle_args);
     }
