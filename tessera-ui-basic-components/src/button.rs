@@ -202,12 +202,6 @@ pub fn button(args: impl Into<ButtonArgs>, child: impl FnOnce() + Send + Sync + 
     // Create interactive surface for button
     surface(create_surface_args(&button_args), move || {
         Modifier::new()
-            .size_in(
-                Some(ButtonDefaults::MIN_WIDTH),
-                None,
-                Some(ButtonDefaults::MIN_HEIGHT),
-                None,
-            )
             .padding_all(button_args.padding)
             .run(move || {
                 provide_text_style(typography.label_large, child);
@@ -275,7 +269,12 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
     builder
         .style(style)
         .shape(args.shape)
-        .modifier(args.modifier)
+        .modifier(args.modifier.size_in(
+            Some(ButtonDefaults::MIN_WIDTH),
+            None,
+            Some(ButtonDefaults::MIN_HEIGHT),
+            None,
+        ))
         .ripple_color(args.ripple_color)
         .content_alignment(Alignment::Center)
         .content_color(content_color)
