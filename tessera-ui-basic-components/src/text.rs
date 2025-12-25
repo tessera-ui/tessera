@@ -131,7 +131,7 @@ pub fn text(args: impl Into<TextArgs>) {
 fn text_inner(text_args: TextArgs) {
     let inherited_style = use_context::<TextStyle>().get();
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let max_width: Option<Px> = match input.parent_constraint.width() {
             DimensionValue::Fixed(w) => Some(w),
             DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
@@ -172,5 +172,5 @@ fn text_inner(text_args: TextArgs) {
             width: size[0].into(),
             height: size[1].into(),
         })
-    }));
+    });
 }

@@ -324,7 +324,7 @@ pub fn glass_switch_with_controller(
         fluid_glass(thumb_args, || {});
 
         // Measurement and placement
-        measure(Box::new(move |input| {
+        measure(move |input| {
             // Expect track then thumb as children
             let track_id = input.children_ids[0];
             let thumb_id = input.children_ids[1];
@@ -381,6 +381,6 @@ pub fn glass_switch_with_controller(
                 width: self_width_px,
                 height: self_height_px,
             })
-        }));
+        });
     });
 }

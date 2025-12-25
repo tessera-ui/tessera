@@ -105,7 +105,7 @@ pub fn checkmark(args: impl Into<CheckmarkArgs>) {
         .with_padding(args.padding[0], args.padding[1]);
 
     // Measure the component and push the draw command within the measure function
-    measure(Box::new(move |input| {
+    measure(move |input| {
         // Push the draw command to the current node's metadata
         input.metadata_mut().push_draw_command(command);
 
@@ -113,5 +113,5 @@ pub fn checkmark(args: impl Into<CheckmarkArgs>) {
             width: Px::new(size_px.to_f32() as i32),
             height: Px::new(size_px.to_f32() as i32),
         })
-    }));
+    });
 }

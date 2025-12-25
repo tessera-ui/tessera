@@ -19,7 +19,7 @@ pub(crate) fn modifier_alpha<F>(alpha: f32, child: F)
 where
     F: FnOnce(),
 {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let child_id = input
             .children_ids
             .first()
@@ -30,7 +30,7 @@ where
         input.multiply_opacity(alpha);
 
         Ok(child_measurement)
-    }));
+    });
 
     child();
 }
@@ -40,7 +40,7 @@ pub(crate) fn modifier_clip_to_bounds<F>(child: F)
 where
     F: FnOnce(),
 {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         input.enable_clipping();
         let child_id = input
             .children_ids
@@ -50,7 +50,7 @@ where
         let child_measurement = input.measure_child_in_parent_constraint(child_id)?;
         input.place_child(child_id, PxPosition::ZERO);
         Ok(child_measurement)
-    }));
+    });
 
     child();
 }
@@ -99,7 +99,7 @@ pub(crate) fn modifier_background<F>(color: Color, shape: Shape, child: F)
 where
     F: FnOnce(),
 {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let child_id = input
             .children_ids
             .first()
@@ -115,14 +115,14 @@ where
             ));
         input.place_child(child_id, PxPosition::ZERO);
         Ok(child_measurement)
-    }));
+    });
 
     child();
 }
 
 #[tessera]
 fn modifier_border_overlay(width: Dp, color: Color, shape: Shape) {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let size = ComputedData {
             width: input.parent_constraint.width().resolve(),
             height: input.parent_constraint.height().resolve(),
@@ -136,7 +136,7 @@ fn modifier_border_overlay(width: Dp, color: Color, shape: Shape) {
         ));
 
         Ok(size)
-    }));
+    });
 }
 
 #[tessera]
@@ -144,7 +144,7 @@ pub(crate) fn modifier_border<F>(width: Dp, color: Color, shape: Shape, child: F
 where
     F: FnOnce(),
 {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let content_id = input
             .children_ids
             .first()
@@ -164,7 +164,7 @@ where
         let _ = input.measure_child(overlay_id, &overlay_constraint)?;
         input.place_child(overlay_id, PxPosition::ZERO);
         Ok(child_measurement)
-    }));
+    });
 
     child();
     modifier_border_overlay(width, color, shape);

@@ -56,19 +56,19 @@ use tessera::{ComputedData, Constraints};
 #[tessera]
 fn custom_component() {
     // Define custom layout behavior
-    measure(Box::new(|_| {
+    measure(|_| {
         // Custom measurement logic
         use tessera::{ComputedData, Px};
         Ok(ComputedData {
             width: Px(100),
             height: Px(50),
         })
-    }));
+    });
 
     // Handle user interactions
-    input_handler(Box::new(|_| {
+    input_handler(|_| {
         // Handle events like clicks, key presses, etc.
-    }));
+    });
 }
 ```
 
@@ -99,8 +99,8 @@ fn my_component() {
     TesseraRuntime::write().component_tree.add_node(ComponentNode { ... });
     
     // Inject measure and input_handler functions
-    let measure = |fun: Box<MeasureFn>| { /* ... */ };
-    let input_handler = |fun: Box<InputHandlerFn>| { /* ... */ };
+    let measure = |fun: impl Fn(&MeasureInput<'_>) -> Result<ComputedData, MeasurementError> + Send + Sync + 'static| { /* ... */ };
+    let input_handler = |fun: impl Fn(InputHandlerInput) + Send + Sync + 'static| { /* ... */ };
     
     // Execute original function body safely
     let result = {
@@ -148,7 +148,7 @@ use tessera::{ComputedData, Constraints, Px};
 
 #[tessera]
 fn custom_layout() {
-    measure(Box::new(|_| {
+    measure(|_| {
         // Custom measurement logic
         use tessera::{ComputedData, Px};
         
@@ -156,7 +156,7 @@ fn custom_layout() {
             width: Px(120),
             height: Px(80),
         })
-    }));
+    });
     
     // Child components
     text("Hello, World!");

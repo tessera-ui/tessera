@@ -503,7 +503,7 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
 pub fn text_edit_core(controller: State<TextEditorController>) {
     // text rendering with constraints from parent container
     {
-        measure(Box::new(move |input| {
+        measure(move |input| {
             // Enable clipping for clip to visible area
             input.enable_clipping();
 
@@ -577,7 +577,7 @@ pub fn text_edit_core(controller: State<TextEditorController>) {
                 width: Px::from(text_data.size[0]) + CURSOR_WIDRH.to_px(), // Add padding for cursor
                 height: constrained_height.into(),
             })
-        }));
+        });
     }
 
     // Selection highlighting

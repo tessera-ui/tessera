@@ -190,13 +190,13 @@
 //!
 //! #[tessera]
 //! fn component() {
-//!     measure(Box::new(|input| {
+//!     measure(|input| {
 //!         // measurement and layout implementation
 //!         # Ok(tessera_ui::ComputedData {
 //!         #     width: tessera_ui::Px::ZERO,
 //!         #       height: tessera_ui::Px::ZERO,
 //!         # })
-//!     }));
+//!     });
 //! }
 //! ```
 //!

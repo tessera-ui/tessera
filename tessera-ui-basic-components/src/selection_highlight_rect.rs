@@ -30,7 +30,7 @@ pub fn selection_highlight_rect(
     height: Px,
     color: Color, // RGBA color with alpha for transparency
 ) {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let drawable = ShapeCommand::Rect {
             color,
             corner_radii: glam::Vec4::ZERO.into(), // Sharp corners for text selection
@@ -42,5 +42,5 @@ pub fn selection_highlight_rect(
 
         // Return the specified size
         Ok(ComputedData { width, height })
-    }));
+    });
 }

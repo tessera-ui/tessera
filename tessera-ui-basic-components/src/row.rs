@@ -151,35 +151,33 @@ fn row_inner(
 ) {
     let n = child_closures.len();
 
-    measure(Box::new(
-        move |input| -> Result<ComputedData, MeasurementError> {
-            assert_eq!(
-                input.children_ids.len(),
-                n,
-                "Mismatch between children defined in scope and runtime children count"
+    measure(move |input| -> Result<ComputedData, MeasurementError> {
+        assert_eq!(
+            input.children_ids.len(),
+            n,
+            "Mismatch between children defined in scope and runtime children count"
+        );
+
+        let row_effective_constraint = Constraint::new(
+            input.parent_constraint.width(),
+            input.parent_constraint.height(),
+        );
+
+        let has_weighted_children = child_weights.iter().any(|w| w.unwrap_or(0.0) > 0.0);
+        let should_use_weight_for_width = has_weighted_children
+            && matches!(
+                row_effective_constraint.width,
+                DimensionValue::Fixed(_)
+                    | DimensionValue::Fill { max: Some(_), .. }
+                    | DimensionValue::Wrap { max: Some(_), .. }
             );
 
-            let row_effective_constraint = Constraint::new(
-                input.parent_constraint.width(),
-                input.parent_constraint.height(),
-            );
-
-            let has_weighted_children = child_weights.iter().any(|w| w.unwrap_or(0.0) > 0.0);
-            let should_use_weight_for_width = has_weighted_children
-                && matches!(
-                    row_effective_constraint.width,
-                    DimensionValue::Fixed(_)
-                        | DimensionValue::Fill { max: Some(_), .. }
-                        | DimensionValue::Wrap { max: Some(_), .. }
-                );
-
-            if should_use_weight_for_width {
-                measure_weighted_row(input, &args, &child_weights, &row_effective_constraint, n)
-            } else {
-                measure_unweighted_row(input, &args, &row_effective_constraint, n)
-            }
-        },
-    ));
+        if should_use_weight_for_width {
+            measure_weighted_row(input, &args, &child_weights, &row_effective_constraint, n)
+        } else {
+            measure_unweighted_row(input, &args, &row_effective_constraint, n)
+        }
+    });
 
     for child_closure in child_closures {
         child_closure();

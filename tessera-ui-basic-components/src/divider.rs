@@ -103,22 +103,20 @@ pub fn horizontal_divider(args: impl Into<DividerArgs>) {
     let thickness_px = resolve_thickness_px(args.thickness);
     let color = args.color;
 
-    measure(Box::new(
-        move |input| -> Result<ComputedData, MeasurementError> {
-            let intrinsic =
-                Constraint::new(DimensionValue::FILLED, DimensionValue::Fixed(thickness_px));
-            let effective = intrinsic.merge(input.parent_constraint);
+    measure(move |input| -> Result<ComputedData, MeasurementError> {
+        let intrinsic =
+            Constraint::new(DimensionValue::FILLED, DimensionValue::Fixed(thickness_px));
+        let effective = intrinsic.merge(input.parent_constraint);
 
-            let width = resolve_dimension(effective.width, Px(0));
-            let height = resolve_dimension(effective.height, thickness_px);
+        let width = resolve_dimension(effective.width, Px(0));
+        let height = resolve_dimension(effective.height, thickness_px);
 
-            input
-                .metadata_mut()
-                .push_draw_command(SimpleRectCommand { color });
+        input
+            .metadata_mut()
+            .push_draw_command(SimpleRectCommand { color });
 
-            Ok(ComputedData { width, height })
-        },
-    ));
+        Ok(ComputedData { width, height })
+    });
 }
 
 /// # vertical_divider
@@ -150,20 +148,18 @@ pub fn vertical_divider(args: impl Into<DividerArgs>) {
     let thickness_px = resolve_thickness_px(args.thickness);
     let color = args.color;
 
-    measure(Box::new(
-        move |input| -> Result<ComputedData, MeasurementError> {
-            let intrinsic =
-                Constraint::new(DimensionValue::Fixed(thickness_px), DimensionValue::FILLED);
-            let effective = intrinsic.merge(input.parent_constraint);
+    measure(move |input| -> Result<ComputedData, MeasurementError> {
+        let intrinsic =
+            Constraint::new(DimensionValue::Fixed(thickness_px), DimensionValue::FILLED);
+        let effective = intrinsic.merge(input.parent_constraint);
 
-            let width = resolve_dimension(effective.width, thickness_px);
-            let height = resolve_dimension(effective.height, Px(0));
+        let width = resolve_dimension(effective.width, thickness_px);
+        let height = resolve_dimension(effective.height, Px(0));
 
-            input
-                .metadata_mut()
-                .push_draw_command(SimpleRectCommand { color });
+        input
+            .metadata_mut()
+            .push_draw_command(SimpleRectCommand { color });
 
-            Ok(ComputedData { width, height })
-        },
-    ));
+        Ok(ComputedData { width, height })
+    });
 }

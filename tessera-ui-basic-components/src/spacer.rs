@@ -47,13 +47,11 @@ pub fn spacer(modifier: Modifier) {
 
 #[tessera]
 fn spacer_inner() {
-    measure(Box::new(
-        |input| -> Result<ComputedData, MeasurementError> {
-            let constraint = Constraint::new(
-                input.parent_constraint.width(),
-                input.parent_constraint.height(),
-            );
-            Ok(ComputedData::min_from_constraint(&constraint))
-        },
-    ));
+    measure(|input| -> Result<ComputedData, MeasurementError> {
+        let constraint = Constraint::new(
+            input.parent_constraint.width(),
+            input.parent_constraint.height(),
+        );
+        Ok(ComputedData::min_from_constraint(&constraint))
+    });
 }

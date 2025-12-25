@@ -289,7 +289,7 @@ where
 
     child();
 
-    input_handler(Box::new(move |input| {
+    input_handler(move |input| {
         let mut builder = input.accessibility();
 
         if let Some(role) = role {
@@ -377,5 +377,5 @@ where
         }
 
         builder.commit();
-    }));
+    });
 }

@@ -113,7 +113,7 @@ pub(super) fn modifier_shadow_layers<F>(shadow: ShadowLayers, shape: Shape, chil
 where
     F: FnOnce(),
 {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let child_id = input
             .children_ids
             .first()
@@ -131,7 +131,7 @@ where
         input.place_child(child_id, PxPosition::ZERO);
 
         Ok(child_measurement)
-    }));
+    });
 
     child();
 }

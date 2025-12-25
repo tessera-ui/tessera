@@ -363,7 +363,7 @@ fn fluid_glass_inner(
     }
     (child)();
     let args_measure_clone = args.clone();
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let effective_glass_constraint = Constraint::new(
             input.parent_constraint.width(),
             input.parent_constraint.height(),
@@ -451,14 +451,14 @@ fn fluid_glass_inner(
                 .max(min.unwrap_or(Px(0))),
         };
         Ok(ComputedData { width, height })
-    }));
+    });
 
     if args.on_click.is_none() && args.block_input {
         let args_for_handler = args.clone();
-        input_handler(Box::new(move |mut input: tessera_ui::InputHandlerInput| {
+        input_handler(move |mut input: tessera_ui::InputHandlerInput| {
             if args_for_handler.block_input {
                 handle_block_input(&mut input);
             }
-        }));
+        });
     }
 }

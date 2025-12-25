@@ -558,7 +558,7 @@ pub fn menu_provider_with_controller(
     let on_dismiss_for_handler = args.on_dismiss.clone();
     let close_on_escape = args.close_on_escape;
     let close_on_background = args.close_on_background;
-    input_handler(Box::new(move |mut input| {
+    input_handler(move |mut input| {
         let mut cursor_events: Vec<_> = Vec::new();
         std::mem::swap(&mut cursor_events, input.cursor_events);
         let cursor_position = input.cursor_position_rel;
@@ -585,11 +585,11 @@ pub fn menu_provider_with_controller(
         if should_close_click || should_close_escape {
             apply_close_action(controller, &on_dismiss_for_handler);
         }
-    }));
+    });
 
     // Measurement: place main content, background, and menu based on anchor.
     let args_for_measure = args.clone();
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let main_content_id = input
             .children_ids
             .first()
@@ -643,7 +643,7 @@ pub fn menu_provider_with_controller(
         });
 
         Ok(main_size)
-    }));
+    });
 }
 
 /// Convenience wrapper for rendering only the menu overlay without extra main

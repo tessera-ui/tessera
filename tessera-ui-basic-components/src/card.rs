@@ -498,7 +498,7 @@ where
     let elevation_spring = remember(|| CardElevationSpring::new(elevation.default_elevation()));
 
     let enabled = args.enabled;
-    input_handler(Box::new(move |_input: InputHandlerInput| {
+    input_handler(move |_input: InputHandlerInput| {
         let now = Instant::now();
         let target = elevation.target(enabled, interaction_state);
         elevation_spring.with_mut(|spring| {
@@ -508,7 +508,7 @@ where
             }
             spring.tick(now);
         });
-    }));
+    });
 
     let shadow_elevation = if clickable {
         elevation_spring.with(|s| s.value_dp())

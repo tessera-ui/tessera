@@ -45,38 +45,47 @@ fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_ma
 /// Helper: tokens to inject `measure`
 fn measure_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
-        let measure = {
+        #[allow(clippy::needless_pass_by_value)]
+        fn measure<F>(fun: F)
+        where
+            F: Fn(&#crate_path::MeasureInput<'_>) -> Result<#crate_path::ComputedData, #crate_path::MeasurementError>
+                + Send
+                + Sync
+                + 'static,
+        {
             use #crate_path::MeasureFn;
             use #crate_path::runtime::TesseraRuntime;
-            |fun: Box<MeasureFn>| {
-                TesseraRuntime::with_mut(|runtime| {
-                    runtime
-                        .component_tree
-                        .current_node_mut()
-                        .unwrap()
-                        .measure_fn = Some(fun)
-                });
-            }
-        };
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .current_node_mut()
+                    .unwrap()
+                    .measure_fn = Some(Box::new(fun) as Box<MeasureFn>)
+            });
+        }
     }
 }
 
 /// Helper: tokens to inject `input_handler`
 fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
-        let input_handler = {
+        #[allow(clippy::needless_pass_by_value)]
+        fn input_handler<F>(fun: F)
+        where
+            F: Fn(#crate_path::InputHandlerInput) + Send + Sync + 'static,
+        {
             use #crate_path::InputHandlerFn;
             use #crate_path::runtime::TesseraRuntime;
-            |fun: Box<InputHandlerFn>| {
-                TesseraRuntime::with_mut(|runtime| {
-                    runtime
-                        .component_tree
-                        .current_node_mut()
-                        .unwrap()
-                        .input_handler_fn = Some(fun)
-                });
-            }
-        };
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .current_node_mut()
+                    .unwrap()
+                    .input_handler_fn = Some(Box::new(fun) as Box<InputHandlerFn>)
+            });
+        }
     }
 }
 
@@ -228,9 +237,11 @@ impl VisitMut for ControlFlowInstrumenter {
 /// frame in an immediate‑mode pass) it:
 /// 1. Registers a new component node (push) into the global `ComponentTree`
 /// 2. Injects helper closures:
-///    * `measure(Box<MeasureFn>)` – supply layout measuring logic
-///    * `input_handler(Box<InputHandlerFn>)` – supply per‑frame interaction /
-///      event handling
+///    * `measure(impl Fn(&MeasureInput) -> Result<ComputedData,
+///      MeasurementError>)` – supply layout measuring logic (boxed
+///      automatically)
+///    * `input_handler(impl Fn(InputHandlerInput))` – supply per‑frame
+///      interaction / event handling (boxed automatically)
 ///    * `on_minimize(Box<dyn Fn(bool) + Send + Sync>)` – window minimize
 ///      life‑cycle hook
 ///    * `on_close(Box<dyn Fn() + Send + Sync>)` – window close life‑cycle hook

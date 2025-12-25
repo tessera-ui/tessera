@@ -446,7 +446,7 @@ fn switch_inner(
         let track_width = args.width;
         let track_height = args.height;
 
-        measure(Box::new(move |input| {
+        measure(move |input| {
             let track_id = input.children_ids[0];
             let state_layer_id = input.children_ids[1];
             let thumb_id = input.children_ids[2];
@@ -527,7 +527,7 @@ fn switch_inner(
                 width: self_width_px,
                 height: self_height_px,
             })
-        }));
+        });
     });
 }
 

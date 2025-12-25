@@ -319,7 +319,7 @@ where
     child();
 
     let role = role.unwrap_or(accesskit::Role::Button);
-    input_handler(Box::new(move |mut input| {
+    input_handler(move |mut input| {
         let cursor_events: Vec<_> = input
             .cursor_events
             .iter()
@@ -450,7 +450,7 @@ where
         if block_input && within_bounds {
             input.block_all();
         }
-    }));
+    });
 }
 
 #[tessera]
@@ -460,7 +460,7 @@ where
 {
     child();
 
-    input_handler(Box::new(move |mut input| {
+    input_handler(move |mut input| {
         let within_bounds = input
             .cursor_position_rel
             .map(|pos| {
@@ -476,7 +476,7 @@ where
         if within_bounds {
             input.block_cursor();
         }
-    }));
+    });
 }
 
 #[tessera]
@@ -499,7 +499,7 @@ where
     child();
 
     let role = role.unwrap_or(accesskit::Role::CheckBox);
-    input_handler(Box::new(move |input| {
+    input_handler(move |input| {
         let cursor_events: Vec<_> = input
             .cursor_events
             .iter()
@@ -610,7 +610,7 @@ where
                 s.set_hovered(false);
             });
         }
-    }));
+    });
 }
 
 #[tessera]
@@ -633,7 +633,7 @@ where
     child();
 
     let role = role.unwrap_or(accesskit::Role::Button);
-    input_handler(Box::new(move |input| {
+    input_handler(move |input| {
         let cursor_events: Vec<_> = input
             .cursor_events
             .iter()
@@ -748,7 +748,7 @@ where
                 s.set_hovered(false);
             });
         }
-    }));
+    });
 }
 
 /// Tracks basic interaction flags and derives state-layer alpha.

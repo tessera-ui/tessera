@@ -32,7 +32,7 @@ pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
         return;
     }
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         // Create a rectangular cursor shape with fixed width and variable height
         let drawable = ShapeCommand::Rect {
             color: Color::BLACK,
@@ -49,5 +49,5 @@ pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
             width: CURSOR_WIDRH.into(),
             height: height_px,
         })
-    }));
+    });
 }

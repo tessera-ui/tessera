@@ -408,7 +408,7 @@ fn scrollable_with_alongside_scrollbar(
         scrollbar_h(scrollbar_args_h, scrollbar_h_state);
     }
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         // Record the final size
         let mut final_size = ComputedData::ZERO;
         let mut content_contraint = Constraint::new(
@@ -464,7 +464,7 @@ fn scrollable_with_alongside_scrollbar(
         }
         // Return the computed data
         Ok(final_size)
-    }));
+    });
 }
 
 #[tessera]
@@ -550,7 +550,7 @@ fn scrollable_inner(
     child: impl FnOnce(),
 ) {
     {
-        measure(Box::new(move |input| {
+        measure(move |input| {
             input.enable_clipping();
             let merged_constraint = Constraint::new(
                 input.parent_constraint.width(),
@@ -609,11 +609,11 @@ fn scrollable_inner(
             controller.with_mut(|c| c.visible_size = computed_data);
             // Return the size of the scrollable area
             Ok(computed_data)
-        }));
+        });
     }
 
     // Handle scroll input and position updates
-    input_handler(Box::new(move |input| {
+    input_handler(move |input| {
         let size = input.computed_data;
         let cursor_pos_option = input.cursor_position_rel;
         let is_cursor_in_component = cursor_pos_option
@@ -693,7 +693,7 @@ fn scrollable_inner(
         // Update scroll position based on time (only once per frame, after handling
         // events)
         controller.with_mut(|c| c.update_scroll_position(args.scroll_smoothing));
-    }));
+    });
 
     // Add child component
     child();

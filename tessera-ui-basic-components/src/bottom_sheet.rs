@@ -439,9 +439,9 @@ fn drag_handler(args: DragHandlerArgs, child: impl FnOnce() + Send + Sync + 'sta
     let controller = args.controller;
     let on_close = args.on_close;
 
-    input_handler(Box::new(move |mut input| {
+    input_handler(move |mut input| {
         handle_drag_gestures(controller, &mut input, &on_close);
-    }));
+    });
 
     child();
 }

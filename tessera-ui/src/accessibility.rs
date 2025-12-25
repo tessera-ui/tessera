@@ -23,7 +23,7 @@
 //!
 //! #[tessera]
 //! fn my_button(label: String) {
-//!     input_handler(Box::new(move |input| {
+//!     input_handler(move |input| {
 //!         // Set accessibility information
 //!         input
 //!             .accessibility()
@@ -37,7 +37,7 @@
 //!                 // Handle click from assistive technology
 //!             }
 //!         });
-//!     }));
+//!     });
 //! }
 //! ```
 

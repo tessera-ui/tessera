@@ -710,7 +710,7 @@ fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderContro
     render_handle(layout, handle_width, &colors);
 
     let cloned_args = args.clone();
-    input_handler(Box::new(move |mut input| {
+    input_handler(move |mut input| {
         let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
         let base_handle_width = cloned_args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -728,9 +728,9 @@ fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderContro
             clamped_value,
             &cloned_args.on_change,
         );
-    }));
+    });
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let component_width = resolve_component_width(&args, input.parent_constraint);
         let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
         let base_handle_width = args.thumb_diameter.to_px();
@@ -750,7 +750,7 @@ fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderContro
             handle_width,
             args.steps,
         )
-    }));
+    });
 }
 
 fn measure_centered_slider(
@@ -1052,7 +1052,7 @@ pub fn centered_slider_with_controller(
     render_handle(layout.base, handle_width, &colors);
 
     let cloned_args = args.clone();
-    input_handler(Box::new(move |mut input| {
+    input_handler(move |mut input| {
         let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
         let base_handle_width = cloned_args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -1075,9 +1075,9 @@ pub fn centered_slider_with_controller(
             clamped_value,
             &cloned_args.on_change,
         );
-    }));
+    });
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let component_width = resolve_component_width(&args, input.parent_constraint);
         let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
         let base_handle_width = args.thumb_diameter.to_px();
@@ -1097,7 +1097,7 @@ pub fn centered_slider_with_controller(
             handle_width,
             args.steps,
         )
-    }));
+    });
 }
 
 fn measure_range_slider(
@@ -1424,7 +1424,7 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
     let start_val = start;
     let end_val = end;
 
-    input_handler(Box::new(move |mut input| {
+    input_handler(move |mut input| {
         let resolved_layout = range_slider_layout(&cloned_args, input.computed_data.width);
         let base_handle_width = cloned_args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -1459,9 +1459,9 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
             end_val,
             &cloned_args.on_change,
         );
-    }));
+    });
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let component_width = resolve_component_width(&dummy_for_measure, input.parent_constraint);
         let resolved_layout = range_slider_layout(&args, component_width);
         let base_handle_width = args.thumb_diameter.to_px();
@@ -1497,5 +1497,5 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
                 on_change: args.on_change.clone(),
             },
         )
-    }));
+    });
 }

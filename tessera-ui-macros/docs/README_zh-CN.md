@@ -56,19 +56,19 @@ use tessera::{ComputedData, Constraints};
 #[tessera]
 fn custom_component() {
     // 定义自定义布局行为
-    measure(Box::new(|_| {
+    measure(|_| {
         // 自定义测量逻辑
         use tessera::{ComputedData, Px};
         Ok(ComputedData {
             width: Px(100),
             height: Px(50),
         })
-    }));
+    });
 
     // 处理用户交互
-    input_handler(Box::new(|_| {
+    input_handler(|_| {
         // 处理点击、按键等事件
-    }));
+    });
 }
 ```
 
@@ -99,8 +99,8 @@ fn my_component() {
     TesseraRuntime::write().component_tree.add_node(ComponentNode { ... });
 
     // 注入 measure 和 input_handler 函数
-    let measure = |fun: Box<MeasureFn>| { /* ... */ };
-    let input_handler = |fun: Box<InputHandlerFn>| { /* ... */ };
+    let measure = |fun: impl Fn(&MeasureInput<'_>) -> Result<ComputedData, MeasurementError> + Send + Sync + 'static| { /* ... */ };
+    let input_handler = |fun: impl Fn(InputHandlerInput) + Send + Sync + 'static| { /* ... */ };
 
     // 安全地执行原始函数体
     let result = {
@@ -148,7 +148,7 @@ use tessera::{ComputedData, Constraints, Px};
 
 #[tessera]
 fn custom_layout() {
-    measure(Box::new(|_| {
+    measure(|_| {
         // 自定义测量逻辑
         use tessera::{ComputedData, Px};
 
@@ -156,7 +156,7 @@ fn custom_layout() {
             width: Px(120),
             height: Px(80),
         })
-    }));
+    });
 
     // 子组件
     text("Hello, World!");

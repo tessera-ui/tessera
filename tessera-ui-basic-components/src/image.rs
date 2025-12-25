@@ -120,7 +120,7 @@ pub fn image(args: impl Into<ImageArgs>) {
 
 #[tessera]
 fn image_inner(args: ImageArgs) {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let intrinsic_width = Px(args.data.width as i32);
         let intrinsic_height = Px(args.data.height as i32);
 
@@ -162,5 +162,5 @@ fn image_inner(args: ImageArgs) {
             .push_draw_command(image_command);
 
         Ok(ComputedData { width, height })
-    }));
+    });
 }

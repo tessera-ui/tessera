@@ -151,7 +151,7 @@ impl From<Arc<ImageData>> for IconArgs {
 pub fn icon(args: impl Into<IconArgs>) {
     let icon_args: IconArgs = args.into();
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let (intrinsic_width, intrinsic_height) = intrinsic_dimensions(&icon_args.content);
         let size_px = icon_args.size.to_px();
 
@@ -221,7 +221,7 @@ pub fn icon(args: impl Into<IconArgs>) {
         }
 
         Ok(ComputedData { width, height })
-    }));
+    });
 }
 
 fn intrinsic_dimensions(content: &IconContent) -> (Px, Px) {

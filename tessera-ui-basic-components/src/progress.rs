@@ -391,7 +391,7 @@ fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
             }
         }
 
-        measure(Box::new(move |input| {
+        measure(move |input| {
             let args = args_for_measure.clone();
             let (self_width, self_height) = resolve_linear_size(input.parent_constraint);
             let is_butt = args.stroke_cap.effective_is_butt(self_width, self_height);
@@ -552,7 +552,7 @@ fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
                 width: self_width,
                 height: self_height,
             })
-        }));
+        });
     });
 }
 
@@ -722,7 +722,7 @@ pub fn circular_progress_indicator(args: impl Into<CircularProgressIndicatorArgs
     }
 
     Modifier::new().semantics(semantics).run(move || {
-        measure(Box::new(move |input| {
+        measure(move |input| {
             let diameter_px = args.diameter.to_px();
             let stroke_px = args.stroke_width.to_px();
 
@@ -811,7 +811,7 @@ pub fn circular_progress_indicator(args: impl Into<CircularProgressIndicatorArgs
                 width: diameter_px,
                 height: diameter_px,
             })
-        }));
+        });
     });
 }
 

@@ -241,7 +241,7 @@ fn dialog_content_wrapper(
     padding: Dp,
     content: impl FnOnce() + Send + Sync + 'static,
 ) {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         input.set_opacity(alpha);
         let Some(child_id) = input.children_ids.first().copied() else {
             return Ok(ComputedData {
@@ -252,7 +252,7 @@ fn dialog_content_wrapper(
         let computed = input.measure_child_in_parent_constraint(child_id)?;
         input.place_child(child_id, PxPosition::ZERO);
         Ok(computed)
-    }));
+    });
 
     boxed(
         BoxedArgs::default()

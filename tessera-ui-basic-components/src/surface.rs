@@ -800,7 +800,7 @@ fn surface_inner(
     let args_measure = args.clone();
     let absolute_tonal_elevation_for_draw = absolute_tonal_elevation;
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let args_for_draw = args_measure.clone();
 
         let effective_surface_constraint = Constraint::new(
@@ -900,10 +900,10 @@ fn surface_inner(
         }
 
         Ok(ComputedData { width, height })
-    }));
+    });
 
     if !interactive && args.block_input {
-        input_handler(Box::new(move |mut input| {
+        input_handler(move |mut input| {
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
@@ -912,6 +912,6 @@ fn surface_inner(
             if is_cursor_in_surface {
                 input.block_all();
             }
-        }));
+        });
     }
 }

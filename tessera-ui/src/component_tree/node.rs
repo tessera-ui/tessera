@@ -581,7 +581,7 @@ impl InputHandlerInput<'_> {
     ///
     /// #[tessera]
     /// fn accessible_button() {
-    ///     input_handler(Box::new(|input| {
+    ///     input_handler(|input| {
     ///         input
     ///             .accessibility()
     ///             .role(Role::Button)
@@ -590,7 +590,7 @@ impl InputHandlerInput<'_> {
     ///             .action(Action::Click);
     ///
     ///         // Handle clicks...
-    ///     }));
+    ///     });
     /// }
     /// ```
     ///
@@ -618,13 +618,13 @@ impl InputHandlerInput<'_> {
     ///
     /// #[tessera]
     /// fn interactive_button() {
-    ///     input_handler(Box::new(|input| {
+    ///     input_handler(|input| {
     ///         input.set_accessibility_action_handler(|action| {
     ///             if action == Action::Click {
     ///                 // Handle click from assistive technology
     ///             }
     ///         });
-    ///     }));
+    ///     });
     /// }
     /// ```
     pub fn set_accessibility_action_handler(

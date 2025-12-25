@@ -254,7 +254,7 @@ pub fn text_editor_with_controller(
     // Event handling at the outermost layer - can access full surface area
 
     let args_for_handler = editor_args.clone();
-    input_handler(Box::new(move |mut input| {
+    input_handler(move |mut input| {
         let size = input.computed_data; // This is the full surface size
         let cursor_pos_option = input.cursor_position_rel;
         let is_cursor_in_editor = cursor_pos_option
@@ -530,7 +530,7 @@ pub fn text_editor_with_controller(
         }
 
         apply_text_editor_accessibility(&mut input, &args_for_handler, &controller);
-    }));
+    });
 }
 
 fn handle_action(

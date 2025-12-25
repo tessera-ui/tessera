@@ -140,69 +140,67 @@ where
     F1: FnOnce() + Send + Sync + 'static,
     F2: FnOnce() + Send + Sync + 'static,
 {
-    measure(Box::new(
-        move |input| -> Result<ComputedData, MeasurementError> {
-            debug_assert_eq!(
-                input.children_ids.len(),
-                2,
-                "badged_box expects exactly two children: anchor and badge",
-            );
+    measure(move |input| -> Result<ComputedData, MeasurementError> {
+        debug_assert_eq!(
+            input.children_ids.len(),
+            2,
+            "badged_box expects exactly two children: anchor and badge",
+        );
 
-            let parent_constraint = Constraint::new(
-                input.parent_constraint.width(),
-                input.parent_constraint.height(),
-            );
+        let parent_constraint = Constraint::new(
+            input.parent_constraint.width(),
+            input.parent_constraint.height(),
+        );
 
-            let badge_constraint = Constraint::new(
-                input.parent_constraint.width(),
-                relax_min_constraint(input.parent_constraint.height()),
-            );
+        let badge_constraint = Constraint::new(
+            input.parent_constraint.width(),
+            relax_min_constraint(input.parent_constraint.height()),
+        );
 
-            let anchor_id = input.children_ids[0];
-            let badge_id = input.children_ids[1];
+        let anchor_id = input.children_ids[0];
+        let badge_id = input.children_ids[1];
 
-            let to_measure = vec![(badge_id, badge_constraint), (anchor_id, parent_constraint)];
+        let to_measure = vec![(badge_id, badge_constraint), (anchor_id, parent_constraint)];
 
-            let results = input.measure_children(to_measure)?;
-            let anchor = results
-                .get(&anchor_id)
-                .copied()
-                .expect("badged_box anchor must be measured");
-            let badge_data = results
-                .get(&badge_id)
-                .copied()
-                .expect("badged_box badge must be measured");
+        let results = input.measure_children(to_measure)?;
+        let anchor = results
+            .get(&anchor_id)
+            .copied()
+            .expect("badged_box anchor must be measured");
+        let badge_data = results
+            .get(&badge_id)
+            .copied()
+            .expect("badged_box badge must be measured");
 
-            input.place_child(anchor_id, PxPosition::new(Px(0), Px(0)));
+        input.place_child(anchor_id, PxPosition::new(Px(0), Px(0)));
 
-            let badge_size_px = BadgeDefaults::SIZE.to_px();
-            let has_content = badge_data.width > badge_size_px;
+        let badge_size_px = BadgeDefaults::SIZE.to_px();
+        let has_content = badge_data.width > badge_size_px;
 
-            let horizontal_offset = if has_content {
-                BadgeDefaults::WITH_CONTENT_HORIZONTAL_OFFSET
-            } else {
-                BadgeDefaults::OFFSET
-            }
-            .to_px();
+        let horizontal_offset = if has_content {
+            BadgeDefaults::WITH_CONTENT_HORIZONTAL_OFFSET
+        } else {
+            BadgeDefaults::OFFSET
+        }
+        .to_px();
 
-            let vertical_offset = if has_content {
-                BadgeDefaults::WITH_CONTENT_VERTICAL_OFFSET
-            } else {
-                BadgeDefaults::OFFSET
-            }
-            .to_px();
+        let vertical_offset = if has_content {
+            BadgeDefaults::WITH_CONTENT_VERTICAL_OFFSET
+        } else {
+            BadgeDefaults::OFFSET
+        }
+        .to_px();
 
-            let badge_x = anchor.width - horizontal_offset;
-            let badge_y = -badge_data.height + vertical_offset;
+        let badge_x = anchor.width - horizontal_offset;
+        let badge_y = -badge_data.height + vertical_offset;
 
-            input.place_child(badge_id, PxPosition::new(badge_x, badge_y));
+        input.place_child(badge_id, PxPosition::new(badge_x, badge_y));
 
-            Ok(ComputedData {
-                width: anchor.width,
-                height: anchor.height,
-            })
-        },
-    ));
+        Ok(ComputedData {
+            width: anchor.width,
+            height: anchor.height,
+        })
+    });
 
     content();
     badge();
@@ -236,42 +234,40 @@ pub fn badge(args: impl Into<BadgeArgs>) {
     let args: BadgeArgs = args.into();
     let container_color = args.container_color;
 
-    measure(Box::new(
-        move |input| -> Result<ComputedData, MeasurementError> {
-            let size_px = BadgeDefaults::SIZE.to_px();
-            let intrinsic = Constraint::new(
-                DimensionValue::Wrap {
-                    min: Some(size_px),
-                    max: None,
-                },
-                DimensionValue::Wrap {
-                    min: Some(size_px),
-                    max: None,
-                },
-            );
-            let effective = intrinsic.merge(input.parent_constraint);
+    measure(move |input| -> Result<ComputedData, MeasurementError> {
+        let size_px = BadgeDefaults::SIZE.to_px();
+        let intrinsic = Constraint::new(
+            DimensionValue::Wrap {
+                min: Some(size_px),
+                max: None,
+            },
+            DimensionValue::Wrap {
+                min: Some(size_px),
+                max: None,
+            },
+        );
+        let effective = intrinsic.merge(input.parent_constraint);
 
-            let width = resolve_dimension(effective.width, size_px);
-            let height = resolve_dimension(effective.height, size_px);
+        let width = resolve_dimension(effective.width, size_px);
+        let height = resolve_dimension(effective.height, size_px);
 
-            let ResolvedShape::Rounded {
-                corner_radii,
-                corner_g2,
-            } = BadgeDefaults::SHAPE.resolve_for_size(PxSize::new(width, height))
-            else {
-                unreachable!("badge shape must resolve to a rounded rectangle");
-            };
+        let ResolvedShape::Rounded {
+            corner_radii,
+            corner_g2,
+        } = BadgeDefaults::SHAPE.resolve_for_size(PxSize::new(width, height))
+        else {
+            unreachable!("badge shape must resolve to a rounded rectangle");
+        };
 
-            input.metadata_mut().push_draw_command(ShapeCommand::Rect {
-                color: container_color,
-                corner_radii,
-                corner_g2,
-                shadow: None,
-            });
+        input.metadata_mut().push_draw_command(ShapeCommand::Rect {
+            color: container_color,
+            corner_radii,
+            corner_g2,
+            shadow: None,
+        });
 
-            Ok(ComputedData { width, height })
-        },
-    ));
+        Ok(ComputedData { width, height })
+    });
 }
 
 /// # badge_with_content
@@ -317,72 +313,70 @@ where
 
     let padding_px = BadgeDefaults::WITH_CONTENT_HORIZONTAL_PADDING.to_px();
 
-    measure(Box::new(
-        move |input| -> Result<ComputedData, MeasurementError> {
-            debug_assert_eq!(
-                input.children_ids.len(),
-                1,
-                "badge_with_content expects a single row child",
-            );
+    measure(move |input| -> Result<ComputedData, MeasurementError> {
+        debug_assert_eq!(
+            input.children_ids.len(),
+            1,
+            "badge_with_content expects a single row child",
+        );
 
-            let min_size_px = BadgeDefaults::LARGE_SIZE.to_px();
-            let intrinsic = Constraint::new(
-                DimensionValue::Wrap {
-                    min: Some(min_size_px),
-                    max: None,
-                },
-                DimensionValue::Wrap {
-                    min: Some(min_size_px),
-                    max: None,
-                },
-            );
-            let effective = intrinsic.merge(input.parent_constraint);
+        let min_size_px = BadgeDefaults::LARGE_SIZE.to_px();
+        let intrinsic = Constraint::new(
+            DimensionValue::Wrap {
+                min: Some(min_size_px),
+                max: None,
+            },
+            DimensionValue::Wrap {
+                min: Some(min_size_px),
+                max: None,
+            },
+        );
+        let effective = intrinsic.merge(input.parent_constraint);
 
-            let max_width = dimension_max(effective.width).map(|v| (v - padding_px * 2).max(Px(0)));
-            let max_height = dimension_max(effective.height);
+        let max_width = dimension_max(effective.width).map(|v| (v - padding_px * 2).max(Px(0)));
+        let max_height = dimension_max(effective.height);
 
-            let child_constraint = Constraint::new(
-                DimensionValue::Wrap {
-                    min: None,
-                    max: max_width,
-                },
-                DimensionValue::Wrap {
-                    min: None,
-                    max: max_height,
-                },
-            );
+        let child_constraint = Constraint::new(
+            DimensionValue::Wrap {
+                min: None,
+                max: max_width,
+            },
+            DimensionValue::Wrap {
+                min: None,
+                max: max_height,
+            },
+        );
 
-            let row_id = input.children_ids[0];
-            let row_data = input.measure_child(row_id, &child_constraint)?;
+        let row_id = input.children_ids[0];
+        let row_data = input.measure_child(row_id, &child_constraint)?;
 
-            let measured_width = (row_data.width + padding_px * 2).max(min_size_px);
-            let measured_height = row_data.height.max(min_size_px);
+        let measured_width = (row_data.width + padding_px * 2).max(min_size_px);
+        let measured_height = row_data.height.max(min_size_px);
 
-            let width = resolve_dimension(effective.width, measured_width);
-            let height = resolve_dimension(effective.height, measured_height);
+        let width = resolve_dimension(effective.width, measured_width);
+        let height = resolve_dimension(effective.height, measured_height);
 
-            let ResolvedShape::Rounded {
-                corner_radii,
-                corner_g2,
-            } = BadgeDefaults::SHAPE.resolve_for_size(PxSize::new(width, height))
-            else {
-                unreachable!("badge shape must resolve to a rounded rectangle");
-            };
+        let ResolvedShape::Rounded {
+            corner_radii,
+            corner_g2,
+        } = BadgeDefaults::SHAPE.resolve_for_size(PxSize::new(width, height))
+        else {
+            unreachable!("badge shape must resolve to a rounded rectangle");
+        };
 
-            input.metadata_mut().push_draw_command(ShapeCommand::Rect {
-                color: container_color,
-                corner_radii,
-                corner_g2,
-                shadow: None,
-            });
+        input.metadata_mut().push_draw_command(ShapeCommand::Rect {
+            color: container_color,
+            corner_radii,
+            corner_g2,
+            shadow: None,
+        });
 
-            let x = (width - row_data.width).max(Px(0)) / 2;
-            let y = (height - row_data.height).max(Px(0)) / 2;
-            input.place_child(row_id, PxPosition::new(x, y));
+        let x = (width - row_data.width).max(Px(0)) / 2;
+        let y = (height - row_data.height).max(Px(0)) / 2;
+        input.place_child(row_id, PxPosition::new(x, y));
 
-            Ok(ComputedData { width, height })
-        },
-    ));
+        Ok(ComputedData { width, height })
+    });
 
     provide_context(
         ContentColor {

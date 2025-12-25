@@ -176,7 +176,7 @@ fn boxed_inner(
 ) {
     let n = child_closures.len();
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         debug_assert_eq!(
             input.children_ids.len(),
             n,
@@ -230,7 +230,7 @@ fn boxed_inner(
             width: final_width,
             height: final_height,
         })
-    }));
+    });
 
     for child_closure in child_closures {
         child_closure();

@@ -126,69 +126,67 @@ fn column_inner(
 ) {
     let n = child_closures.len();
 
-    measure(Box::new(
-        move |input| -> Result<ComputedData, MeasurementError> {
-            assert_eq!(
-                input.children_ids.len(),
-                n,
-                "Mismatch between children defined in scope and runtime children count"
+    measure(move |input| -> Result<ComputedData, MeasurementError> {
+        assert_eq!(
+            input.children_ids.len(),
+            n,
+            "Mismatch between children defined in scope and runtime children count"
+        );
+
+        let column_effective_constraint = Constraint::new(
+            input.parent_constraint.width(),
+            input.parent_constraint.height(),
+        );
+
+        let mut children_sizes = vec![None; n];
+        let mut max_child_width = Px(0);
+
+        let has_weighted_children = child_weights.iter().any(|w| w.unwrap_or(0.0) > 0.0);
+        let should_use_weight_for_height = has_weighted_children
+            && matches!(
+                column_effective_constraint.height,
+                DimensionValue::Fixed(_)
+                    | DimensionValue::Fill { max: Some(_), .. }
+                    | DimensionValue::Wrap { max: Some(_), .. }
             );
 
-            let column_effective_constraint = Constraint::new(
-                input.parent_constraint.width(),
-                input.parent_constraint.height(),
-            );
+        let (final_column_width, final_column_height, total_measured_children_height) =
+            if should_use_weight_for_height {
+                measure_weighted_column(
+                    input,
+                    &args,
+                    &child_weights,
+                    &column_effective_constraint,
+                    &mut children_sizes,
+                    &mut max_child_width,
+                )?
+            } else {
+                measure_unweighted_column(
+                    input,
+                    &args,
+                    &column_effective_constraint,
+                    &mut children_sizes,
+                    &mut max_child_width,
+                )?
+            };
 
-            let mut children_sizes = vec![None; n];
-            let mut max_child_width = Px(0);
+        place_children_with_alignment(&PlaceChildrenArgs {
+            children_sizes: &children_sizes,
+            children_ids: input.children_ids,
+            input,
+            final_column_width,
+            final_column_height,
+            total_children_height: total_measured_children_height,
+            main_axis_alignment: args.main_axis_alignment,
+            cross_axis_alignment: args.cross_axis_alignment,
+            child_count: n,
+        });
 
-            let has_weighted_children = child_weights.iter().any(|w| w.unwrap_or(0.0) > 0.0);
-            let should_use_weight_for_height = has_weighted_children
-                && matches!(
-                    column_effective_constraint.height,
-                    DimensionValue::Fixed(_)
-                        | DimensionValue::Fill { max: Some(_), .. }
-                        | DimensionValue::Wrap { max: Some(_), .. }
-                );
-
-            let (final_column_width, final_column_height, total_measured_children_height) =
-                if should_use_weight_for_height {
-                    measure_weighted_column(
-                        input,
-                        &args,
-                        &child_weights,
-                        &column_effective_constraint,
-                        &mut children_sizes,
-                        &mut max_child_width,
-                    )?
-                } else {
-                    measure_unweighted_column(
-                        input,
-                        &args,
-                        &column_effective_constraint,
-                        &mut children_sizes,
-                        &mut max_child_width,
-                    )?
-                };
-
-            place_children_with_alignment(&PlaceChildrenArgs {
-                children_sizes: &children_sizes,
-                children_ids: input.children_ids,
-                input,
-                final_column_width,
-                final_column_height,
-                total_children_height: total_measured_children_height,
-                main_axis_alignment: args.main_axis_alignment,
-                cross_axis_alignment: args.cross_axis_alignment,
-                child_count: n,
-            });
-
-            Ok(ComputedData {
-                width: final_column_width,
-                height: final_column_height,
-            })
-        },
-    ));
+        Ok(ComputedData {
+            width: final_column_width,
+            height: final_column_height,
+        })
+    });
 
     for child_closure in child_closures {
         child_closure();

@@ -90,7 +90,7 @@ pub(crate) fn modifier_padding<F>(padding: Padding, child: F)
 where
     F: FnOnce(),
 {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let child_id = input
             .children_ids
             .first()
@@ -120,7 +120,7 @@ where
             width: content_width,
             height: content_height,
         })
-    }));
+    });
 
     child();
 }
@@ -130,7 +130,7 @@ pub(crate) fn modifier_offset<F>(x: Dp, y: Dp, child: F)
 where
     F: FnOnce(),
 {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let child_id = input
             .children_ids
             .first()
@@ -149,7 +149,7 @@ where
         input.place_child(child_id, PxPosition::new(x.into(), y.into()));
 
         Ok(child_measurement)
-    }));
+    });
 
     child();
 }
@@ -162,7 +162,7 @@ pub(crate) fn modifier_constraints<F>(
 ) where
     F: FnOnce(),
 {
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let child_id = input
             .children_ids
             .first()
@@ -181,7 +181,7 @@ pub(crate) fn modifier_constraints<F>(
         input.place_child(child_id, PxPosition::ZERO);
 
         Ok(child_measurement)
-    }));
+    });
 
     child();
 }
@@ -193,7 +193,7 @@ where
 {
     const MIN_SIZE: Dp = Dp(48.0);
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let child_id = input
             .children_ids
             .first()
@@ -214,7 +214,7 @@ where
             width: content_width,
             height: content_height,
         })
-    }));
+    });
 
     child();
 }

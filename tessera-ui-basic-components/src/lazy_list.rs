@@ -543,7 +543,7 @@ fn lazy_list_view(
     });
 
     if visible_children.is_empty() {
-        measure(Box::new(move |_| Ok(ComputedData::ZERO)));
+        measure(move |_| Ok(ComputedData::ZERO));
         return;
     }
 
@@ -555,74 +555,71 @@ fn lazy_list_view(
     let padding_cross = view_args.padding_cross;
     let visible_plan = visible_children.clone();
 
-    measure(Box::new(
-        move |input| -> Result<ComputedData, MeasurementError> {
-            if input.children_ids.len() != visible_plan.len() {
-                return Err(MeasurementError::MeasureFnFailed(
-                    "Lazy list measured child count mismatch".into(),
-                ));
+    measure(move |input| -> Result<ComputedData, MeasurementError> {
+        if input.children_ids.len() != visible_plan.len() {
+            return Err(MeasurementError::MeasureFnFailed(
+                "Lazy list measured child count mismatch".into(),
+            ));
+        }
+
+        let mut child_constraint = child_constraint_axis.child_constraint(input.parent_constraint);
+        apply_cross_padding(&mut child_constraint, child_constraint_axis, padding_cross);
+        let (placements, inner_cross, total_main) = controller.with_mut(|c| {
+            let mut placements = Vec::with_capacity(visible_plan.len());
+            let mut max_cross = Px::ZERO;
+
+            for (visible, child_id) in visible_plan.iter().zip(input.children_ids.iter()) {
+                let item_offset =
+                    c.cache
+                        .offset_for(visible.item_index, estimated_item_main, spacing);
+                let child_size = input.measure_child(*child_id, &child_constraint)?;
+
+                c.cache.record_measurement(
+                    visible.item_index,
+                    child_constraint_axis.main(&child_size),
+                    estimated_item_main,
+                );
+
+                max_cross = max_cross.max(child_constraint_axis.cross(&child_size));
+                placements.push(Placement {
+                    child_id: *child_id,
+                    offset_main: item_offset,
+                    size: child_size,
+                });
             }
 
-            let mut child_constraint =
-                child_constraint_axis.child_constraint(input.parent_constraint);
-            apply_cross_padding(&mut child_constraint, child_constraint_axis, padding_cross);
-            let (placements, inner_cross, total_main) = controller.with_mut(|c| {
-                let mut placements = Vec::with_capacity(visible_plan.len());
-                let mut max_cross = Px::ZERO;
+            let total_main = c.cache.total_main_size(estimated_item_main, spacing);
+            Ok::<_, MeasurementError>((placements, max_cross, total_main))
+        })?;
 
-                for (visible, child_id) in visible_plan.iter().zip(input.children_ids.iter()) {
-                    let item_offset =
-                        c.cache
-                            .offset_for(visible.item_index, estimated_item_main, spacing);
-                    let child_size = input.measure_child(*child_id, &child_constraint)?;
+        let total_main_with_padding = total_main + padding_main + padding_main;
+        let cross_with_padding = inner_cross + padding_cross + padding_cross;
+        let size = child_constraint_axis.pack_size(total_main_with_padding, cross_with_padding);
+        scroll_controller.with_mut(|c| c.override_child_size(size));
 
-                    c.cache.record_measurement(
-                        visible.item_index,
-                        child_constraint_axis.main(&child_size),
-                        estimated_item_main,
-                    );
+        let reported_main = clamp_reported_main(
+            child_constraint_axis,
+            input.parent_constraint,
+            total_main_with_padding,
+            viewport_limit,
+            view_args.max_viewport_main,
+        );
 
-                    max_cross = max_cross.max(child_constraint_axis.cross(&child_size));
-                    placements.push(Placement {
-                        child_id: *child_id,
-                        offset_main: item_offset,
-                        size: child_size,
-                    });
-                }
-
-                let total_main = c.cache.total_main_size(estimated_item_main, spacing);
-                Ok::<_, MeasurementError>((placements, max_cross, total_main))
-            })?;
-
-            let total_main_with_padding = total_main + padding_main + padding_main;
-            let cross_with_padding = inner_cross + padding_cross + padding_cross;
-            let size = child_constraint_axis.pack_size(total_main_with_padding, cross_with_padding);
-            scroll_controller.with_mut(|c| c.override_child_size(size));
-
-            let reported_main = clamp_reported_main(
-                child_constraint_axis,
-                input.parent_constraint,
-                total_main_with_padding,
-                viewport_limit,
-                view_args.max_viewport_main,
+        for placement in &placements {
+            let cross_offset = compute_cross_offset(
+                inner_cross,
+                child_constraint_axis.cross(&placement.size),
+                cross_alignment,
             );
+            let position = child_constraint_axis.position(
+                placement.offset_main + padding_main,
+                padding_cross + cross_offset,
+            );
+            input.place_child(placement.child_id, position);
+        }
 
-            for placement in &placements {
-                let cross_offset = compute_cross_offset(
-                    inner_cross,
-                    child_constraint_axis.cross(&placement.size),
-                    cross_alignment,
-                );
-                let position = child_constraint_axis.position(
-                    placement.offset_main + padding_main,
-                    padding_cross + cross_offset,
-                );
-                input.place_child(placement.child_id, position);
-            }
-
-            Ok(child_constraint_axis.pack_size(reported_main, cross_with_padding))
-        },
-    ));
+        Ok(child_constraint_axis.pack_size(reported_main, cross_with_padding))
+    });
 
     for child in visible_children {
         key(child.key_hash, || {

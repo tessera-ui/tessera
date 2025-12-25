@@ -267,7 +267,7 @@ fn glass_slider_progress_fill(value: f32, tint_color: Color, blur_radius: Dp) {
     );
 
     let clamped = value.clamp(0.0, 1.0);
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let available_width = match input.parent_constraint.width() {
             DimensionValue::Fixed(px) => px,
             DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
@@ -301,7 +301,7 @@ fn glass_slider_progress_fill(value: f32, tint_color: Color, blur_radius: Dp) {
             width: width_px,
             height: available_height,
         })
-    }));
+    });
 }
 
 /// # glass_slider_with_controller
@@ -389,7 +389,7 @@ fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderContro
     let on_change = args.on_change.clone();
     let args_for_handler = args.clone();
 
-    input_handler(Box::new(move |input| {
+    input_handler(move |input| {
         if !args_for_handler.disabled {
             let is_in_component =
                 cursor_within_component(input.cursor_position_rel, &input.computed_data);
@@ -408,7 +408,7 @@ fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderContro
                 }
             }
         }
-    }));
+    });
     let mut semantics = SemanticsArgs::new().role(Role::Slider);
     if let Some(label) = args.accessibility_label.clone() {
         semantics = semantics.label(label);
@@ -430,7 +430,7 @@ fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderContro
     let track_height = args.track_height.to_px();
     let fallback_width = Dp(200.0).to_px();
 
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let width_dim = input.parent_constraint.width();
         let self_width = match width_dim {
             DimensionValue::Fixed(px) => px,
@@ -455,5 +455,5 @@ fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderContro
             width: self_width,
             height: self_height,
         })
-    }));
+    });
 }

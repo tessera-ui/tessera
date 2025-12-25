@@ -155,152 +155,149 @@ fn navigation_bar_item_content(
         });
     }
 
-    measure(Box::new(
-        move |input| -> Result<ComputedData, MeasurementError> {
-            let parent_width = match input.parent_constraint.width() {
-                DimensionValue::Fixed(v) => v,
-                DimensionValue::Wrap { max, .. } => max.unwrap_or(Px::ZERO),
-                DimensionValue::Fill { max, .. } => max.unwrap_or(Px::ZERO),
-            };
+    measure(move |input| -> Result<ComputedData, MeasurementError> {
+        let parent_width = match input.parent_constraint.width() {
+            DimensionValue::Fixed(v) => v,
+            DimensionValue::Wrap { max, .. } => max.unwrap_or(Px::ZERO),
+            DimensionValue::Fill { max, .. } => max.unwrap_or(Px::ZERO),
+        };
 
-            let min_height = CONTAINER_HEIGHT.to_px();
-            let parent_height = match input.parent_constraint.height() {
-                DimensionValue::Fixed(v) => v.max(min_height),
-                DimensionValue::Wrap { min, .. } => min.unwrap_or(min_height).max(min_height),
-                DimensionValue::Fill { min, .. } => min.unwrap_or(min_height).max(min_height),
-            };
+        let min_height = CONTAINER_HEIGHT.to_px();
+        let parent_height = match input.parent_constraint.height() {
+            DimensionValue::Fixed(v) => v.max(min_height),
+            DimensionValue::Wrap { min, .. } => min.unwrap_or(min_height).max(min_height),
+            DimensionValue::Fill { min, .. } => min.unwrap_or(min_height).max(min_height),
+        };
 
-            let indicator_background_id = input.children_ids[0];
-            let indicator_ripple_id = input.children_ids[1];
-            let mut child_index = 2;
+        let indicator_background_id = input.children_ids[0];
+        let indicator_ripple_id = input.children_ids[1];
+        let mut child_index = 2;
 
-            let icon_id = if has_icon {
-                let id = input.children_ids[child_index];
-                child_index += 1;
-                Some(id)
-            } else {
-                None
-            };
+        let icon_id = if has_icon {
+            let id = input.children_ids[child_index];
+            child_index += 1;
+            Some(id)
+        } else {
+            None
+        };
 
-            let label_id = if has_label {
-                let id = input.children_ids[child_index];
-                Some(id)
-            } else {
-                None
-            };
+        let label_id = if has_label {
+            let id = input.children_ids[child_index];
+            Some(id)
+        } else {
+            None
+        };
 
-            let child_constraint = Constraint::new(
-                DimensionValue::Wrap {
-                    min: None,
-                    max: None,
-                },
-                DimensionValue::Wrap {
-                    min: None,
-                    max: None,
-                },
-            );
+        let child_constraint = Constraint::new(
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
+        );
 
-            let indicator_size = input.measure_child(indicator_background_id, &child_constraint)?;
-            let indicator_ripple_size =
-                input.measure_child(indicator_ripple_id, &child_constraint)?;
+        let indicator_size = input.measure_child(indicator_background_id, &child_constraint)?;
+        let indicator_ripple_size = input.measure_child(indicator_ripple_id, &child_constraint)?;
 
-            let icon_size = if let Some(icon_id) = icon_id {
-                Some(input.measure_child(icon_id, &child_constraint)?)
-            } else {
-                None
-            };
+        let icon_size = if let Some(icon_id) = icon_id {
+            Some(input.measure_child(icon_id, &child_constraint)?)
+        } else {
+            None
+        };
 
-            let label_size = if let Some(label_id) = label_id {
-                Some(input.measure_child(label_id, &child_constraint)?)
-            } else {
-                None
-            };
+        let label_size = if let Some(label_id) = label_id {
+            Some(input.measure_child(label_id, &child_constraint)?)
+        } else {
+            None
+        };
 
-            let width = parent_width;
-            let height = parent_height;
+        let width = parent_width;
+        let height = parent_height;
 
-            if !has_label {
-                let ripple_x = (width - indicator_ripple_size.width) / 2;
-                let ripple_y = (height - indicator_ripple_size.height) / 2;
-                let indicator_x = (width - indicator_size.width) / 2;
-                let indicator_y = (height - indicator_size.height) / 2;
-                input.place_child(
-                    indicator_background_id,
-                    PxPosition::new(indicator_x, indicator_y),
-                );
-                input.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
-
-                if let (Some(icon_id), Some(icon_size)) = (icon_id, icon_size) {
-                    let icon_x = (width - icon_size.width) / 2;
-                    let icon_y = (height - icon_size.height) / 2;
-                    input.place_child(icon_id, PxPosition::new(icon_x, icon_y));
-                }
-
-                return Ok(ComputedData { width, height });
-            }
-
-            let icon_size = icon_size.unwrap_or(ComputedData {
-                width: Px::ZERO,
-                height: Px::ZERO,
-            });
-            let label_size = label_size.unwrap_or(ComputedData {
-                width: Px::ZERO,
-                height: Px::ZERO,
-            });
-
-            let indicator_vertical_padding_px = INDICATOR_VERTICAL_PADDING.to_px();
-            let content_height = icon_size.height
-                + indicator_vertical_padding_px
-                + INDICATOR_TO_LABEL_PADDING.to_px()
-                + label_size.height;
-
-            let content_vertical_padding =
-                ((height - content_height) / 2).max(indicator_vertical_padding_px);
-            let selected_icon_y = content_vertical_padding;
-            let unselected_icon_y = if always_show_label {
-                selected_icon_y
-            } else {
-                (height - icon_size.height) / 2
-            };
-
-            let icon_distance = unselected_icon_y - selected_icon_y;
-            let offset = Px(((icon_distance.0 as f32) * (1.0 - selection_fraction)).round() as i32);
-
-            let icon_x = (width - icon_size.width) / 2;
-            let label_x = (width - label_size.width) / 2;
+        if !has_label {
             let ripple_x = (width - indicator_ripple_size.width) / 2;
+            let ripple_y = (height - indicator_ripple_size.height) / 2;
             let indicator_x = (width - indicator_size.width) / 2;
-
-            let ripple_y = selected_icon_y - indicator_vertical_padding_px;
-            let indicator_y = selected_icon_y - indicator_vertical_padding_px;
-            let icon_y = selected_icon_y;
-            let label_y = selected_icon_y
-                + icon_size.height
-                + indicator_vertical_padding_px
-                + INDICATOR_TO_LABEL_PADDING.to_px();
-
+            let indicator_y = (height - indicator_size.height) / 2;
             input.place_child(
                 indicator_background_id,
-                PxPosition::new(indicator_x, Px(indicator_y.0 + offset.0)),
+                PxPosition::new(indicator_x, indicator_y),
             );
-            input.place_child(
-                indicator_ripple_id,
-                PxPosition::new(ripple_x, Px(ripple_y.0 + offset.0)),
-            );
+            input.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
 
-            if let Some(icon_id) = icon_id {
-                input.place_child(icon_id, PxPosition::new(icon_x, Px(icon_y.0 + offset.0)));
+            if let (Some(icon_id), Some(icon_size)) = (icon_id, icon_size) {
+                let icon_x = (width - icon_size.width) / 2;
+                let icon_y = (height - icon_size.height) / 2;
+                input.place_child(icon_id, PxPosition::new(icon_x, icon_y));
             }
 
-            if always_show_label || selection_fraction != 0.0 {
-                if let Some(label_id) = label_id {
-                    input.place_child(label_id, PxPosition::new(label_x, Px(label_y.0 + offset.0)));
-                }
-            }
+            return Ok(ComputedData { width, height });
+        }
 
-            Ok(ComputedData { width, height })
-        },
-    ));
+        let icon_size = icon_size.unwrap_or(ComputedData {
+            width: Px::ZERO,
+            height: Px::ZERO,
+        });
+        let label_size = label_size.unwrap_or(ComputedData {
+            width: Px::ZERO,
+            height: Px::ZERO,
+        });
+
+        let indicator_vertical_padding_px = INDICATOR_VERTICAL_PADDING.to_px();
+        let content_height = icon_size.height
+            + indicator_vertical_padding_px
+            + INDICATOR_TO_LABEL_PADDING.to_px()
+            + label_size.height;
+
+        let content_vertical_padding =
+            ((height - content_height) / 2).max(indicator_vertical_padding_px);
+        let selected_icon_y = content_vertical_padding;
+        let unselected_icon_y = if always_show_label {
+            selected_icon_y
+        } else {
+            (height - icon_size.height) / 2
+        };
+
+        let icon_distance = unselected_icon_y - selected_icon_y;
+        let offset = Px(((icon_distance.0 as f32) * (1.0 - selection_fraction)).round() as i32);
+
+        let icon_x = (width - icon_size.width) / 2;
+        let label_x = (width - label_size.width) / 2;
+        let ripple_x = (width - indicator_ripple_size.width) / 2;
+        let indicator_x = (width - indicator_size.width) / 2;
+
+        let ripple_y = selected_icon_y - indicator_vertical_padding_px;
+        let indicator_y = selected_icon_y - indicator_vertical_padding_px;
+        let icon_y = selected_icon_y;
+        let label_y = selected_icon_y
+            + icon_size.height
+            + indicator_vertical_padding_px
+            + INDICATOR_TO_LABEL_PADDING.to_px();
+
+        input.place_child(
+            indicator_background_id,
+            PxPosition::new(indicator_x, Px(indicator_y.0 + offset.0)),
+        );
+        input.place_child(
+            indicator_ripple_id,
+            PxPosition::new(ripple_x, Px(ripple_y.0 + offset.0)),
+        );
+
+        if let Some(icon_id) = icon_id {
+            input.place_child(icon_id, PxPosition::new(icon_x, Px(icon_y.0 + offset.0)));
+        }
+
+        if always_show_label || selection_fraction != 0.0 {
+            if let Some(label_id) = label_id {
+                input.place_child(label_id, PxPosition::new(label_x, Px(label_y.0 + offset.0)));
+            }
+        }
+
+        Ok(ComputedData { width, height })
+    });
 }
 
 #[tessera]

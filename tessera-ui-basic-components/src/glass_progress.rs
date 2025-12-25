@@ -80,7 +80,7 @@ fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Sh
     );
 
     let value = value.clamp(0.0, 1.0);
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let available_width = match input.parent_constraint.width() {
             DimensionValue::Fixed(px) => px,
             DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
@@ -114,7 +114,7 @@ fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Sh
             width: width_px,
             height: available_height,
         })
-    }));
+    });
 }
 
 /// # glass_progress
@@ -175,7 +175,7 @@ fn glass_progress_inner(args: GlassProgressArgs) {
     );
 
     let height = args.height.to_px();
-    measure(Box::new(move |input| {
+    measure(move |input| {
         let track_id = input
             .children_ids
             .first()
@@ -188,5 +188,5 @@ fn glass_progress_inner(args: GlassProgressArgs) {
         let track_measurement = input.measure_child(track_id, &constraint)?;
         input.place_child(track_id, PxPosition::new(Px(0), Px(0)));
         Ok(track_measurement)
-    }));
+    });
 }
