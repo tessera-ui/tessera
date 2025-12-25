@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
     PxPosition, PxSize, State, accesskit::Role, provide_context, remember, tessera, use_context,
@@ -17,14 +17,14 @@ use tessera_ui::{
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     animation,
-    column::{ColumnArgsBuilder, column},
+    column::{ColumnArgs, column},
     modifier::{InteractionState, ModifierExt, PointerEventContext, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
-    row::{RowArgsBuilder, row},
+    row::{RowArgs, row},
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
-    text::{TextArgsBuilder, text},
+    surface::{SurfaceArgs, SurfaceStyle, surface},
+    text::{TextArgs, text},
     theme::{ContentColor, MaterialAlpha, MaterialTheme, provide_text_style},
 };
 
@@ -100,7 +100,7 @@ fn navigation_bar_item_content(
         .max(0.0) as i32);
 
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .style(SurfaceStyle::Filled {
                 color: indicator_color,
             })
@@ -110,13 +110,11 @@ fn navigation_bar_item_content(
                 Some(DimensionValue::Fixed(INDICATOR_HEIGHT.to_px())),
             ))
             .show_state_layer(false)
-            .show_ripple(false)
-            .build()
-            .expect("builder construction failed"),
+            .show_ripple(false),
         || {},
     );
 
-    let indicator_args = SurfaceArgsBuilder::default()
+    let indicator_args = SurfaceArgs::default()
         .style(SurfaceStyle::Filled {
             color: Color::TRANSPARENT,
         })
@@ -124,21 +122,17 @@ fn navigation_bar_item_content(
         .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
         .enabled(true)
         .interaction_state(interaction_state)
-        .ripple_color(ripple_color)
-        .build()
-        .expect("builder construction failed");
+        .ripple_color(ripple_color);
     surface(indicator_args, move || {
         surface(
-            SurfaceArgsBuilder::default()
+            SurfaceArgs::default()
                 .style(SurfaceStyle::Filled {
                     color: ripple_color.with_alpha(MaterialAlpha::PRESSED),
                 })
                 .shape(Shape::capsule())
                 .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
                 .enabled(true)
-                .ripple_state(ripple_state)
-                .build()
-                .expect("builder construction failed"),
+                .ripple_state(ripple_state),
             || {},
         );
     });
@@ -157,13 +151,7 @@ fn navigation_bar_item_content(
     if has_label {
         let label = item.label.clone();
         provide_text_style(typography.label_medium, move || {
-            text(
-                TextArgsBuilder::default()
-                    .text(label.clone())
-                    .color(label_color)
-                    .build()
-                    .expect("builder construction failed"),
-            );
+            text(TextArgs::default().text(label.clone()).color(label_color));
         });
     }
 
@@ -392,36 +380,44 @@ pub enum NavigationBarLabelBehavior {
 }
 
 /// Item configuration for [`navigation_bar`].
-#[derive(Clone, Builder)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct NavigationBarItem {
     /// Text label shown under the icon.
-    #[builder(setter(into))]
+    #[setters(into)]
     pub label: String,
     /// Optional icon rendered above the label.
-    #[builder(default, setter(custom, strip_option))]
+    #[setters(skip)]
     pub icon: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Callback invoked after selection changes to this item.
-    #[builder(default = "Arc::new(|| {})", setter(custom))]
+    #[setters(skip)]
     pub on_click: Arc<dyn Fn() + Send + Sync>,
     /// Whether the label is always visible or only appears when selected.
-    #[builder(default = "NavigationBarLabelBehavior::AlwaysShow")]
     pub label_behavior: NavigationBarLabelBehavior,
 }
 
-impl NavigationBarItemBuilder {
+impl NavigationBarItem {
+    /// Creates a navigation item with the required label.
+    pub fn new(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            icon: None,
+            on_click: Arc::new(|| {}),
+            label_behavior: NavigationBarLabelBehavior::AlwaysShow,
+        }
+    }
+
     /// Set the icon drawing callback.
     pub fn icon<F>(mut self, icon: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.icon = Some(Some(Arc::new(icon)));
+        self.icon = Some(Arc::new(icon));
         self
     }
 
     /// Set the icon drawing callback using a shared callback.
     pub fn icon_shared(mut self, icon: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.icon = Some(Some(icon));
+        self.icon = Some(icon);
         self
     }
 
@@ -430,14 +426,20 @@ impl NavigationBarItemBuilder {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Arc::new(on_click);
         self
     }
 
     /// Set the click handler using a shared callback.
     pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+        self.on_click = on_click;
         self
+    }
+}
+
+impl Default for NavigationBarItem {
+    fn default() -> Self {
+        Self::new("")
     }
 }
 
@@ -457,23 +459,13 @@ impl NavigationBarItemBuilder {
 ///
 /// ```
 /// use tessera_ui::tessera;
-/// use tessera_ui_basic_components::navigation_bar::{NavigationBarItemBuilder, navigation_bar};
+/// use tessera_ui_basic_components::navigation_bar::{NavigationBarItem, navigation_bar};
 ///
 /// #[tessera]
 /// fn demo() {
 ///     navigation_bar(|scope| {
-///         scope.item(
-///             NavigationBarItemBuilder::default()
-///                 .label("Home")
-///                 .build()
-///                 .unwrap(),
-///         );
-///         scope.item(
-///             NavigationBarItemBuilder::default()
-///                 .label("Search")
-///                 .build()
-///                 .unwrap(),
-///         );
+///         scope.item(NavigationBarItem::new("Home"));
+///         scope.item(NavigationBarItem::new("Search"));
 ///     });
 /// }
 /// ```
@@ -500,25 +492,15 @@ where
 /// ```
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::navigation_bar::{
-///     NavigationBarController, NavigationBarItemBuilder, navigation_bar_with_controller,
+///     NavigationBarController, NavigationBarItem, navigation_bar_with_controller,
 /// };
 ///
 /// #[tessera]
 /// fn controlled_demo() {
 ///     let controller = remember(|| NavigationBarController::new(0));
 ///     navigation_bar_with_controller(controller, |scope| {
-///         scope.item(
-///             NavigationBarItemBuilder::default()
-///                 .label("Home")
-///                 .build()
-///                 .unwrap(),
-///         );
-///         scope.item(
-///             NavigationBarItemBuilder::default()
-///                 .label("Search")
-///                 .build()
-///                 .unwrap(),
-///         );
+///         scope.item(NavigationBarItem::new("Home"));
+///         scope.item(NavigationBarItem::new("Search"));
 ///     });
 /// }
 /// ```
@@ -543,29 +525,23 @@ pub fn navigation_bar_with_controller<F>(
     let previous_index = controller.with(|c| c.previous_selected());
 
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
             .style(scheme.surface_container.into())
             .elevation(Dp(3.0))
-            .block_input(true)
-            .build()
-            .expect("SurfaceArgsBuilder failed with required fields set"),
+            .block_input(true),
         move || {
             let separator_color = scheme.outline_variant.with_alpha(0.12);
             column(
-                ColumnArgsBuilder::default()
+                ColumnArgs::default()
                     .modifier(Modifier::new().fill_max_size())
-                    .cross_axis_alignment(CrossAxisAlignment::Stretch)
-                    .build()
-                    .expect("ColumnArgsBuilder failed with required fields set"),
+                    .cross_axis_alignment(CrossAxisAlignment::Stretch),
                 move |column_scope| {
                     column_scope.child(move || {
                         surface(
-                            SurfaceArgsBuilder::default()
+                            SurfaceArgs::default()
                                 .modifier(Modifier::new().fill_max_width().height(DIVIDER_HEIGHT))
-                                .style(separator_color.into())
-                                .build()
-                                .expect("SurfaceArgsBuilder failed for divider"),
+                                .style(separator_color.into()),
                             || {},
                         );
                     });
@@ -573,12 +549,10 @@ pub fn navigation_bar_with_controller<F>(
                     column_scope.child_weighted(
                         move || {
                             row(
-                                RowArgsBuilder::default()
+                                RowArgs::default()
                                     .modifier(Modifier::new().fill_max_size())
                                     .main_axis_alignment(MainAxisAlignment::Start)
-                                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                                    .build()
-                                    .expect("RowArgsBuilder failed with required fields set"),
+                                    .cross_axis_alignment(CrossAxisAlignment::Center),
                                 move |row_scope| {
                                     let last_index = items.len().saturating_sub(1);
                                     for (index, item) in items.into_iter().enumerate() {

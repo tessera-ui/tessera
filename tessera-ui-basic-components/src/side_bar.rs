@@ -8,15 +8,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{Color, Dp, Modifier, Px, PxPosition, State, remember, tessera, winit};
 
 use crate::{
     animation,
-    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    fluid_glass::{FluidGlassArgs, fluid_glass},
     modifier::ModifierExt,
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgs, surface},
 };
 
 const ANIM_TIME: Duration = Duration::from_millis(300);
@@ -37,38 +37,45 @@ pub enum SideBarStyle {
 }
 
 /// Configuration arguments for the [`side_bar_provider`] component.
-#[derive(Builder)]
+#[derive(Setters)]
 pub struct SideBarProviderArgs {
     /// A callback that is invoked when the user requests to close the side bar.
     ///
     /// This can be triggered by clicking the scrim or pressing the `Escape`
     /// key. The callback is expected to close the side bar.
-    #[builder(setter(custom))]
+    #[setters(skip)]
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
     /// The visual style used by the provider. See [`SideBarStyle`].
-    #[builder(default)]
     pub style: SideBarStyle,
     /// Whether the side bar is initially open (for declarative usage).
-    #[builder(default = "false")]
     pub is_open: bool,
 }
 
-impl SideBarProviderArgsBuilder {
+impl SideBarProviderArgs {
+    /// Create args with a required close-request callback.
+    pub fn new(on_close_request: impl Fn() + Send + Sync + 'static) -> Self {
+        Self {
+            on_close_request: Arc::new(on_close_request),
+            style: SideBarStyle::default(),
+            is_open: false,
+        }
+    }
+
     /// Set the close-request callback.
-    pub fn on_close_request<F>(&mut self, on_close_request: F) -> &mut Self
+    pub fn on_close_request<F>(mut self, on_close_request: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_close_request = Some(Arc::new(on_close_request));
+        self.on_close_request = Arc::new(on_close_request);
         self
     }
 
     /// Set the close-request callback using a shared callback.
     pub fn on_close_request_shared(
-        &mut self,
+        mut self,
         on_close_request: Arc<dyn Fn() + Send + Sync>,
-    ) -> &mut Self {
-        self.on_close_request = Some(on_close_request);
+    ) -> Self {
+        self.on_close_request = on_close_request;
         self
     }
 }
@@ -215,7 +222,7 @@ fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) 
     let max_blur_radius = 5.0;
     let blur_radius = blur_radius_for(progress, is_open, max_blur_radius);
     fluid_glass(
-        FluidGlassArgsBuilder::default()
+        FluidGlassArgs::default()
             .on_click_shared(args.on_close_request.clone())
             .tint_color(Color::TRANSPARENT)
             .modifier(Modifier::new().fill_max_size())
@@ -230,9 +237,7 @@ fn render_glass_scrim(args: &SideBarProviderArgs, progress: f32, is_open: bool) 
                 bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
                 bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             })
-            .noise_amount(0.0)
-            .build()
-            .expect("builder construction failed"),
+            .noise_amount(0.0),
         || {},
     );
 }
@@ -241,13 +246,11 @@ fn render_material_scrim(args: &SideBarProviderArgs, progress: f32, is_open: boo
     // Material scrim: compute alpha and render a simple dark surface.
     let scrim_alpha = scrim_alpha_for(progress, is_open);
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .style(Color::BLACK.with_alpha(scrim_alpha).into())
             .on_click_shared(args.on_close_request.clone())
             .modifier(Modifier::new().fill_max_size())
-            .block_input(true)
-            .build()
-            .expect("builder construction failed"),
+            .block_input(true),
         || {},
     );
 }
@@ -322,14 +325,10 @@ fn place_side_bar_if_present(
 /// # Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::side_bar::{SideBarProviderArgsBuilder, side_bar_provider};
+/// use tessera_ui_basic_components::side_bar::{SideBarProviderArgs, side_bar_provider};
 ///
 /// side_bar_provider(
-///     SideBarProviderArgsBuilder::default()
-///         .is_open(true)
-///         .on_close_request(|| {})
-///         .build()
-///         .unwrap(),
+///     SideBarProviderArgs::new(|| {}).is_open(true),
 ///     || { /* main content */ },
 ///     || { /* side bar content */ },
 /// );
@@ -379,17 +378,14 @@ pub fn side_bar_provider(
 /// ```
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::side_bar::{
-///     SideBarController, SideBarProviderArgsBuilder, side_bar_provider_with_controller,
+///     SideBarController, SideBarProviderArgs, side_bar_provider_with_controller,
 /// };
 ///
 /// #[tessera]
 /// fn foo() {
 ///     let controller = remember(|| SideBarController::new(false));
 ///     side_bar_provider_with_controller(
-///         SideBarProviderArgsBuilder::default()
-///             .on_close_request(|| {})
-///             .build()
-///             .unwrap(),
+///         SideBarProviderArgs::new(|| {}),
 ///         controller,
 ///         || { /* main content */ },
 ///         || { /* side bar content */ },
@@ -459,7 +455,7 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
     match style {
         SideBarStyle::Glass => {
             fluid_glass(
-                FluidGlassArgsBuilder::default()
+                FluidGlassArgs::default()
                     .shape(Shape::RoundedRectangle {
                         top_left: RoundedCorner::manual(Dp(0.0), 3.0),
                         top_right: RoundedCorner::manual(Dp(25.0), 3.0),
@@ -470,15 +466,13 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                     .modifier(Modifier::new().width(Dp(250.0)).fill_max_height())
                     .blur_radius(Dp(10.0))
                     .padding(Dp(16.0))
-                    .block_input(true)
-                    .build()
-                    .expect("builder construction failed"),
+                    .block_input(true),
                 content,
             );
         }
         SideBarStyle::Material => {
             surface(
-                SurfaceArgsBuilder::default()
+                SurfaceArgs::default()
                     .style(Color::new(0.9, 0.9, 0.9, 1.0).into())
                     .modifier(Modifier::new().width(Dp(250.0)).fill_max_height())
                     .shape(Shape::RoundedRectangle {
@@ -487,9 +481,7 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                         bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
                         bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
-                    .block_input(true)
-                    .build()
-                    .expect("builder construction failed"),
+                    .block_input(true),
                 move || {
                     Modifier::new().padding_all(Dp(16.0)).run(content);
                 },

@@ -1,12 +1,12 @@
 use tessera_ui::{Dp, Modifier, shard, tessera, use_context};
 use tessera_ui_basic_components::{
-    column::{ColumnArgsBuilder, column},
+    column::{ColumnArgs, column},
     material_icons,
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgsBuilder, scrollable},
-    surface::{SurfaceArgsBuilder, surface},
-    tabs::{TabsArgsBuilder, TabsVariant, tabs},
-    text::{TextArgsBuilder, text},
+    scrollable::{ScrollableArgs, scrollable},
+    surface::{SurfaceArgs, surface},
+    tabs::{TabsArgs, TabsVariant, tabs},
+    text::{TextArgs, text},
     theme::MaterialTheme,
 };
 
@@ -14,22 +14,14 @@ use tessera_ui_basic_components::{
 #[shard]
 pub fn tabs_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_size()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             test_content();
                         },
@@ -43,28 +35,15 @@ pub fn tabs_showcase() {
 #[tessera]
 fn test_content() {
     column(
-        ColumnArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_width())
-            .build()
-            .unwrap(),
+        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
         |scope| {
-            scope.child(|| {
-                text(
-                    TextArgsBuilder::default()
-                        .text("Tabs Showcase")
-                        .size(Dp(20.0))
-                        .build()
-                        .unwrap(),
-                )
-            });
+            scope.child(|| text(TextArgs::default().text("Tabs Showcase").size(Dp(20.0))));
 
             scope.child(move || {
                 tabs(
-                    TabsArgsBuilder::default()
+                    TabsArgs::default()
                         .modifier(Modifier::new().fill_max_width())
-                        .variant(TabsVariant::Primary)
-                        .build()
-                        .unwrap(),
+                        .variant(TabsVariant::Primary),
                     |scope| {
                         scope.child_label_with_icon(
                             "Flights",
@@ -87,23 +66,19 @@ fn test_content() {
 
             scope.child(|| {
                 text(
-                    TextArgsBuilder::default()
+                    TextArgs::default()
                         .text("Secondary Tabs Showcase")
-                        .size(Dp(16.0))
-                        .build()
-                        .unwrap(),
+                        .size(Dp(16.0)),
                 )
             });
 
             scope.child(move || {
                 let scheme = use_context::<MaterialTheme>().get().color_scheme;
                 tabs(
-                    TabsArgsBuilder::default()
+                    TabsArgs::default()
                         .modifier(Modifier::new().fill_max_width())
                         .variant(TabsVariant::Secondary)
-                        .active_content_color(scheme.on_surface)
-                        .build()
-                        .unwrap(),
+                        .active_content_color(scheme.on_surface),
                     |scope| {
                         scope.child_label("Flights", || text("Fly in the air..."));
                         scope.child_label("Hotel", || text("Sleep well..."));
@@ -114,22 +89,18 @@ fn test_content() {
 
             scope.child(|| {
                 text(
-                    TextArgsBuilder::default()
+                    TextArgs::default()
                         .text("Scrollable Tabs Showcase")
-                        .size(Dp(16.0))
-                        .build()
-                        .unwrap(),
+                        .size(Dp(16.0)),
                 )
             });
 
             scope.child(move || {
                 tabs(
-                    TabsArgsBuilder::default()
+                    TabsArgs::default()
                         .modifier(Modifier::new().fill_max_width())
                         .scrollable(true)
-                        .variant(TabsVariant::Primary)
-                        .build()
-                        .unwrap(),
+                        .variant(TabsVariant::Primary),
                     |scope| {
                         for label in [
                             "Home",

@@ -5,11 +5,11 @@
 //! Use for compact actions where an icon is sufficient to convey the meaning.
 use std::sync::Arc;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{Color, Dp, Modifier, tessera, use_context};
 
 use crate::{
-    button::{ButtonArgsBuilder, ButtonDefaults, button},
+    button::{ButtonArgs, ButtonDefaults, button},
     glass_button::{GlassButtonArgs, glass_button},
     icon::{IconArgs, icon},
     modifier::ModifierExt,
@@ -32,55 +32,70 @@ pub enum IconButtonVariant {
 }
 
 /// Arguments for [`icon_button`].
-#[derive(Clone, Builder)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct IconButtonArgs {
     /// The variant of the icon button.
-    #[builder(default)]
     pub variant: IconButtonVariant,
     /// Icon that will be rendered at the center of the button.
-    #[builder(setter(into))]
+    #[setters(into)]
     pub icon: IconArgs,
     /// The click callback function.
-    #[builder(default, setter(custom))]
+    #[setters(skip)]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Whether the button is enabled.
-    #[builder(default = "true")]
     pub enabled: bool,
     /// Optional override for the container color.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub color: Option<Color>,
     /// Optional override for the content (icon) color.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub content_color: Option<Color>,
 }
 
-impl IconButtonArgsBuilder {
+impl IconButtonArgs {
+    /// Creates a new icon button configuration with the required icon.
+    pub fn new(icon: impl Into<IconArgs>) -> Self {
+        Self {
+            variant: IconButtonVariant::default(),
+            icon: icon.into(),
+            on_click: None,
+            enabled: true,
+            color: None,
+            content_color: None,
+        }
+    }
+
     /// Sets the on_click handler.
     pub fn on_click(mut self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        self.on_click = Some(Some(Arc::new(on_click)));
+        self.on_click = Some(Arc::new(on_click));
+        self
+    }
+
+    /// Sets the on_click handler using a shared callback.
+    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.on_click = Some(on_click);
         self
     }
 }
 
 /// Lifted [`glass_button`] counterpart for icon buttons.
-#[derive(Clone, Builder)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct GlassIconButtonArgs {
     /// Appearance/behavior settings for the underlying [`glass_button`].
-    #[builder(default = "GlassButtonArgs::default()", setter(custom))]
+    #[setters(into)]
     pub button: GlassButtonArgs,
     /// Icon rendered at the center of the glass button.
-    #[builder(setter(into))]
+    #[setters(into)]
     pub icon: IconArgs,
 }
 
-impl GlassIconButtonArgsBuilder {
-    /// Override the [`GlassButtonArgs`] using either a ready instance or a
-    /// builder-produced value.
-    pub fn button(mut self, button: impl Into<GlassButtonArgs>) -> Self {
-        self.button = Some(button.into());
-        self
+impl GlassIconButtonArgs {
+    /// Creates a new glass icon button configuration with the required icon.
+    pub fn new(icon: impl Into<IconArgs>) -> Self {
+        Self {
+            button: GlassButtonArgs::default(),
+            icon: icon.into(),
+        }
     }
 }
 
@@ -104,8 +119,8 @@ impl GlassIconButtonArgsBuilder {
 /// ```no_run
 /// use std::sync::Arc;
 /// use tessera_ui_basic_components::{
-///     icon::IconArgsBuilder,
-///     icon_button::{IconButtonArgsBuilder, IconButtonVariant, icon_button},
+///     icon::IconArgs,
+///     icon_button::{IconButtonArgs, IconButtonVariant, icon_button},
 ///     image_vector::{ImageVectorSource, load_image_vector_from_source},
 /// };
 ///
@@ -114,17 +129,9 @@ impl GlassIconButtonArgsBuilder {
 ///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
 ///
 /// icon_button(
-///     IconButtonArgsBuilder::default()
+///     IconButtonArgs::new(IconArgs::from(vector_data.clone()))
 ///         .variant(IconButtonVariant::Filled)
-///         .on_click(|| println!("Clicked!"))
-///         .icon(
-///             IconArgsBuilder::default()
-///                 .content(vector_data.clone())
-///                 .build()
-///                 .expect("builder construction failed"),
-///         )
-///         .build()
-///         .unwrap(),
+///         .on_click(|| println!("Clicked!")),
 /// );
 /// ```
 #[tessera]
@@ -161,7 +168,7 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
     let ripple_color = content_color;
 
     // Construct ButtonArgs
-    let mut button_builder = ButtonArgsBuilder::default()
+    let mut button_args = ButtonArgs::default()
         .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)))
         .padding(Dp(8.0))
         .shape(Shape::rounded_rectangle(Dp(20.0)))
@@ -180,11 +187,11 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
         .border_width(border_width);
 
     if let Some(bc) = border_color {
-        button_builder = button_builder.border_color(Some(bc));
+        button_args = button_args.border_color(Some(bc));
     }
 
     if let Some(on_click) = args.on_click {
-        button_builder = button_builder.on_click_shared(on_click);
+        button_args = button_args.on_click_shared(on_click);
     }
 
     // Prepare IconArgs
@@ -192,14 +199,9 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
     icon_args.size = Dp(24.0);
     icon_args.tint = content_color;
 
-    button(
-        button_builder
-            .build()
-            .expect("failed to build icon button args"),
-        move || {
-            icon(icon_args);
-        },
-    );
+    button(button_args, move || {
+        icon(icon_args);
+    });
 }
 
 /// # glass_icon_button
@@ -219,9 +221,9 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
 ///
 /// ```no_run
 /// use tessera_ui_basic_components::{
-///     glass_button::GlassButtonArgsBuilder,
-///     icon::IconArgsBuilder,
-///     icon_button::{GlassIconButtonArgsBuilder, glass_icon_button},
+///     glass_button::GlassButtonArgs,
+///     icon::IconArgs,
+///     icon_button::{GlassIconButtonArgs, glass_icon_button},
 ///     image_vector::{ImageVectorSource, load_image_vector_from_source},
 /// };
 ///
@@ -230,21 +232,8 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
 ///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
 ///
 /// glass_icon_button(
-///     GlassIconButtonArgsBuilder::default()
-///         .button(
-///             GlassButtonArgsBuilder::default()
-///                 .on_click(|| {})
-///                 .build()
-///                 .unwrap(),
-///         )
-///         .icon(
-///             IconArgsBuilder::default()
-///                 .content(vector_data)
-///                 .build()
-///                 .expect("builder construction failed"),
-///         )
-///         .build()
-///         .unwrap(),
+///     GlassIconButtonArgs::new(IconArgs::from(vector_data))
+///         .button(GlassButtonArgs::default().on_click(|| {})),
 /// );
 /// ```
 #[tessera]

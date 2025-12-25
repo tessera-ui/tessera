@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, PxPosition, PxSize, State,
     accesskit::Role, remember, tessera, use_context,
@@ -17,11 +17,11 @@ use tessera_ui::{
 use crate::{
     alignment::Alignment,
     animation,
-    boxed::{BoxedArgsBuilder, boxed},
+    boxed::{BoxedArgs, boxed},
     modifier::{InteractionState, ModifierExt, PointerEventContext, ToggleableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
-    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
+    surface::{SurfaceArgs, SurfaceStyle, surface},
     theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
@@ -191,71 +191,86 @@ impl Default for SwitchController {
 }
 
 /// Arguments for configuring the `switch` component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct SwitchArgs {
     /// Optional modifier chain applied to the switch subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// Optional callback invoked when the switch toggles.
-    #[builder(default, setter(strip_option))]
+    #[setters(skip)]
     pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
     /// Whether the control is enabled for user interaction.
     ///
     /// When `false`, the switch will not react to input and will expose a
     /// disabled state to accessibility services.
-    #[builder(default = "true")]
     pub enabled: bool,
     /// Initial checked state.
-    #[builder(default = "false")]
     pub checked: bool,
     /// Total width of the switch track.
-    #[builder(default = "SwitchDefaults::WIDTH")]
     pub width: Dp,
     /// Total height of the switch track (including padding).
-    #[builder(default = "SwitchDefaults::HEIGHT")]
     pub height: Dp,
     /// Track color when the switch is off.
-    #[builder(
-        default = "use_context::<MaterialTheme>().get().color_scheme.surface_container_highest"
-    )]
     pub track_color: Color,
     /// Track color when the switch is on.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub track_checked_color: Color,
     /// Outline color for the track when the switch is off.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.outline")]
     pub track_outline_color: Color,
     /// Border width for the track outline.
-    #[builder(default = "SwitchDefaults::TRACK_OUTLINE_WIDTH")]
     pub track_outline_width: Dp,
     /// Thumb color when the switch is off.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.outline")]
     pub thumb_color: Color,
     /// Thumb color when the switch is on.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_primary")]
     pub thumb_checked_color: Color,
     /// Icon color when the switch is on.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_primary_container")]
     pub thumb_checked_icon_color: Color,
     /// Icon color when the switch is off.
-    #[builder(
-        default = "use_context::<MaterialTheme>().get().color_scheme.surface_container_highest"
-    )]
     pub thumb_icon_color: Color,
     /// Optional accessibility label read by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+}
+
+impl SwitchArgs {
+    /// Sets the on_toggle handler.
+    pub fn on_toggle<F>(mut self, on_toggle: F) -> Self
+    where
+        F: Fn(bool) + Send + Sync + 'static,
+    {
+        self.on_toggle = Some(Arc::new(on_toggle));
+        self
+    }
+
+    /// Sets the on_toggle handler using a shared callback.
+    pub fn on_toggle_shared(mut self, on_toggle: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
+        self.on_toggle = Some(on_toggle);
+        self
+    }
 }
 
 impl Default for SwitchArgs {
     fn default() -> Self {
-        SwitchArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            modifier: Modifier::new(),
+            on_toggle: None,
+            enabled: true,
+            checked: false,
+            width: SwitchDefaults::WIDTH,
+            height: SwitchDefaults::HEIGHT,
+            track_color: scheme.surface_container_highest,
+            track_checked_color: scheme.primary,
+            track_outline_color: scheme.outline,
+            track_outline_width: SwitchDefaults::TRACK_OUTLINE_WIDTH,
+            thumb_color: scheme.outline,
+            thumb_checked_color: scheme.on_primary,
+            thumb_checked_icon_color: scheme.on_primary_container,
+            thumb_icon_color: scheme.surface_container_highest,
+            accessibility_label: None,
+            accessibility_description: None,
+        }
     }
 }
 
@@ -365,19 +380,17 @@ fn switch_inner(
         };
 
         surface(
-            SurfaceArgsBuilder::default()
+            SurfaceArgs::default()
                 .modifier(Modifier::new().size(args.width, args.height))
                 .style(track_style)
                 .shape(Shape::capsule())
                 .show_state_layer(false)
-                .show_ripple(false)
-                .build()
-                .expect("builder construction failed"),
+                .show_ripple(false),
             || {},
         );
 
         // A non-visual state layer for hover + ripple feedback.
-        let mut state_layer_builder = SurfaceArgsBuilder::default()
+        let mut state_layer_args = SurfaceArgs::default()
             .modifier(Modifier::new().size(
                 SwitchDefaults::STATE_LAYER_SIZE,
                 SwitchDefaults::STATE_LAYER_SIZE,
@@ -392,17 +405,15 @@ fn switch_inner(
             .ripple_radius(Dp(SwitchDefaults::STATE_LAYER_SIZE.0 / 2.0))
             .ripple_color(inherited_content_color);
         if let Some(interaction_state) = interaction_state {
-            state_layer_builder = state_layer_builder.interaction_state(interaction_state);
+            state_layer_args = state_layer_args.interaction_state(interaction_state);
         }
-        let mut state_layer_args = state_layer_builder
-            .build()
-            .expect("builder construction failed");
+        let mut state_layer_args = state_layer_args;
         state_layer_args.set_ripple_state(ripple_state);
         surface(state_layer_args, || {});
 
         let child = child;
         surface(
-            SurfaceArgsBuilder::default()
+            SurfaceArgs::default()
                 .modifier(Modifier::new().constrain(
                     Some(DimensionValue::Fixed(thumb_size_px)),
                     Some(DimensionValue::Fixed(thumb_size_px)),
@@ -411,20 +422,16 @@ fn switch_inner(
                     color: colors.thumb_color,
                 })
                 .shape(Shape::Ellipse)
-                .content_color(colors.icon_color)
-                .build()
-                .expect("builder construction failed"),
+                .content_color(colors.icon_color),
             move || {
                 if let Some(child) = child {
                     boxed(
-                        BoxedArgsBuilder::default()
+                        BoxedArgs::default()
                             .modifier(Modifier::new().constrain(
                                 Some(DimensionValue::Fixed(thumb_size_px)),
                                 Some(DimensionValue::Fixed(thumb_size_px)),
                             ))
-                            .alignment(Alignment::Center)
-                            .build()
-                            .expect("builder construction failed"),
+                            .alignment(Alignment::Center),
                         |scope| {
                             scope.child(move || {
                                 child();
@@ -542,17 +549,11 @@ fn switch_inner(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
-/// use tessera_ui_basic_components::switch::{SwitchArgsBuilder, switch};
+/// use tessera_ui_basic_components::switch::{SwitchArgs, switch};
 ///
-/// switch(
-///     SwitchArgsBuilder::default()
-///         .on_toggle(Arc::new(|checked| {
-///             assert!(checked || !checked);
-///         }))
-///         .build()
-///         .unwrap(),
-/// );
+/// switch(SwitchArgs::default().on_toggle(|checked| {
+///     assert!(checked || !checked);
+/// }));
 /// # }
 /// # component();
 /// ```
@@ -585,24 +586,15 @@ pub fn switch(args: impl Into<SwitchArgs>) {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
-/// use tessera_ui_basic_components::switch::{SwitchArgsBuilder, switch_with_child};
-/// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
+/// use tessera_ui_basic_components::switch::{SwitchArgs, switch_with_child};
+/// use tessera_ui_basic_components::text::{TextArgs, text};
 ///
 /// switch_with_child(
-///     SwitchArgsBuilder::default()
-///         .on_toggle(Arc::new(|checked| {
-///             assert!(checked || !checked);
-///         }))
-///         .build()
-///         .unwrap(),
+///     SwitchArgs::default().on_toggle(|checked| {
+///         assert!(checked || !checked);
+///     }),
 ///     || {
-///         text(
-///             TextArgsBuilder::default()
-///                 .text("✓".to_string())
-///                 .build()
-///                 .unwrap(),
-///         );
+///         text(TextArgs::default().text("✓"));
 ///     },
 /// );
 /// # }
@@ -639,31 +631,22 @@ pub fn switch_with_child(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::switch::{
-///     SwitchArgsBuilder, SwitchController, switch_with_child_and_controller,
+///     SwitchArgs, SwitchController, switch_with_child_and_controller,
 /// };
-/// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
+/// use tessera_ui_basic_components::text::{TextArgs, text};
 ///
 /// #[tessera]
 /// fn controlled_switch_example() {
 ///     let controller = remember(|| SwitchController::new(false));
 ///     switch_with_child_and_controller(
-///         SwitchArgsBuilder::default()
-///             .on_toggle(Arc::new(|checked| {
-///                 println!("Switch is now: {}", checked);
-///             }))
-///             .build()
-///             .unwrap(),
+///         SwitchArgs::default().on_toggle(|checked| {
+///             println!("Switch is now: {}", checked);
+///         }),
 ///         controller,
 ///         || {
-///             text(
-///                 TextArgsBuilder::default()
-///                     .text("✓".to_string())
-///                     .build()
-///                     .unwrap(),
-///             );
+///             text(TextArgs::default().text("✓"));
 ///         },
 ///     );
 /// }

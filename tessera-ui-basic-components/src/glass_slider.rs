@@ -5,7 +5,7 @@
 //! Use to select a value from a continuous range.
 use std::sync::Arc;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, Px,
     PxPosition, State, accesskit::Role, focus_state::Focus, remember, tessera,
@@ -13,7 +13,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
+    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
     modifier::{ModifierExt as _, SemanticsArgs},
     shape_def::Shape,
 };
@@ -68,50 +68,76 @@ impl Default for GlassSliderController {
 }
 
 /// Arguments for the `glass_slider` component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct GlassSliderArgs {
     /// The current value of the slider, ranging from 0.0 to 1.0.
-    #[builder(default = "0.0")]
     pub value: f32,
 
     /// Layout modifiers applied to the slider track.
-    #[builder(default = "default_slider_modifier()")]
     pub modifier: Modifier,
 
     /// Callback function triggered when the slider's value changes.
-    #[builder(default = "Arc::new(|_| {})")]
+    #[setters(skip)]
     pub on_change: Arc<dyn Fn(f32) + Send + Sync>,
 
     /// The height of the slider track.
-    #[builder(default = "Dp(12.0)")]
     pub track_height: Dp,
 
     /// Glass tint color for the track background.
-    #[builder(default = "Color::new(0.3, 0.3, 0.3, 0.15)")]
     pub track_tint_color: Color,
 
     /// Glass tint color for the progress fill.
-    #[builder(default = "Color::new(0.5, 0.7, 1.0, 0.25)")]
     pub progress_tint_color: Color,
 
     /// Glass blur radius for all components.
-    #[builder(default = "Dp(0.0)")]
     pub blur_radius: Dp,
 
     /// Border width for the track.
-    #[builder(default = "Dp(1.0)")]
     pub track_border_width: Dp,
 
     /// Disable interaction.
-    #[builder(default = "false")]
     pub disabled: bool,
     /// Optional accessibility label read by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+}
+
+impl GlassSliderArgs {
+    /// Sets the on_change handler.
+    pub fn on_change<F>(mut self, on_change: F) -> Self
+    where
+        F: Fn(f32) + Send + Sync + 'static,
+    {
+        self.on_change = Arc::new(on_change);
+        self
+    }
+
+    /// Sets the on_change handler using a shared callback.
+    pub fn on_change_shared(mut self, on_change: Arc<dyn Fn(f32) + Send + Sync>) -> Self {
+        self.on_change = on_change;
+        self
+    }
+}
+
+impl Default for GlassSliderArgs {
+    fn default() -> Self {
+        Self {
+            value: 0.0,
+            modifier: default_slider_modifier(),
+            on_change: Arc::new(|_| {}),
+            track_height: Dp(12.0),
+            track_tint_color: Color::new(0.3, 0.3, 0.3, 0.15),
+            progress_tint_color: Color::new(0.5, 0.7, 1.0, 0.25),
+            blur_radius: Dp(0.0),
+            track_border_width: Dp(1.0),
+            disabled: false,
+            accessibility_label: None,
+            accessibility_description: None,
+        }
+    }
 }
 
 fn default_slider_modifier() -> Modifier {
@@ -194,7 +220,7 @@ fn process_cursor_events(
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::glass_slider::{
-///     GlassSliderArgsBuilder, GlassSliderController, glass_slider_with_controller,
+///     GlassSliderArgs, GlassSliderController, glass_slider_with_controller,
 /// };
 ///
 /// #[tessera]
@@ -210,11 +236,9 @@ fn process_cursor_events(
 ///         })
 ///     };
 ///
-///     let args = GlassSliderArgsBuilder::default()
+///     let args = GlassSliderArgs::default()
 ///         .value(*slider_value.lock().unwrap())
-///         .on_change(on_change)
-///         .build()
-///         .unwrap();
+///         .on_change_shared(on_change);
 ///
 ///     glass_slider_with_controller(args, slider_controller);
 ///
@@ -234,13 +258,11 @@ pub fn glass_slider(args: impl Into<GlassSliderArgs>) {
 #[tessera]
 fn glass_slider_progress_fill(value: f32, tint_color: Color, blur_radius: Dp) {
     fluid_glass(
-        FluidGlassArgsBuilder::default()
+        FluidGlassArgs::default()
             .tint_color(tint_color)
             .blur_radius(blur_radius)
             .shape(Shape::capsule())
-            .refraction_amount(0.0)
-            .build()
-            .expect("builder construction failed"),
+            .refraction_amount(0.0),
         || {},
     );
 
@@ -304,20 +326,16 @@ fn glass_slider_progress_fill(value: f32, tint_color: Color, blur_radius: Dp) {
 /// use std::sync::Arc;
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::glass_slider::{
-///     GlassSliderArgsBuilder, GlassSliderController, glass_slider_with_controller,
+///     GlassSliderArgs, GlassSliderController, glass_slider_with_controller,
 /// };
 ///
 /// #[tessera]
 /// fn foo() {
 ///     let controller = remember(|| GlassSliderController::new());
 ///     glass_slider_with_controller(
-///         GlassSliderArgsBuilder::default()
-///             .value(0.3)
-///             .on_change(Arc::new(|v| {
-///                 println!("Slider value changed to {}", v);
-///             }))
-///             .build()
-///             .unwrap(),
+///         GlassSliderArgs::default().value(0.3).on_change(|v| {
+///             println!("Slider value changed to {}", v);
+///         }),
 ///         controller,
 ///     );
 /// }
@@ -354,15 +372,13 @@ pub fn glass_slider_with_controller(
 fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderController>) {
     // External track (background) with border - capsule shape
     fluid_glass(
-        FluidGlassArgsBuilder::default()
+        FluidGlassArgs::default()
             .modifier(Modifier::new().fill_max_size())
             .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
             .shape(Shape::capsule())
             .border(GlassBorder::new(args.track_border_width.into()))
-            .padding(args.track_border_width)
-            .build()
-            .expect("builder construction failed"),
+            .padding(args.track_border_width),
         move || {
             // Internal progress fill - capsule shape using surface
             // Child constraint already excludes padding from the track.

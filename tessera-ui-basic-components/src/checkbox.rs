@@ -9,19 +9,19 @@ use std::{
 };
 
 use closure::closure;
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, Dp, Modifier, PxSize, State, accesskit::Role, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
-    boxed::{BoxedArgsBuilder, boxed},
-    checkmark::{CheckmarkArgsBuilder, checkmark},
+    boxed::{BoxedArgs, boxed},
+    checkmark::{CheckmarkArgs, checkmark},
     modifier::{InteractionState, ModifierExt, PointerEventContext, ToggleableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
+    surface::{SurfaceArgs, SurfaceStyle, surface},
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
@@ -95,70 +95,54 @@ impl CheckboxController {
 }
 
 /// Arguments for the `checkbox` component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct CheckboxArgs {
     /// Optional modifier chain applied to the checkbox subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// Callback invoked when the checkbox is toggled.
-    #[builder(default = "Arc::new(|_| {})")]
+    #[setters(skip)]
     pub on_toggle: Arc<dyn Fn(bool) + Send + Sync>,
     /// Initial checked state for the checkbox.
-    #[builder(default = "false")]
     pub checked: bool,
     /// Size of the checkbox (width and height).
     ///
     /// Expressed in `Dp` (density-independent pixels). The checkbox will use
     /// the same value for width and height; default is `Dp(18.0)`.
-    #[builder(default = "CheckboxDefaults::GLYPH_SIZE")]
     pub size: Dp,
 
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_surface_variant")]
     /// Outline color when the checkbox is not checked.
     ///
     /// This sets the border color shown for the unchecked state.
     pub color: Color,
 
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     /// Background color used when the checkbox is checked.
     ///
     /// This color is shown behind the checkmark to indicate an active/selected
     /// state. Choose a higher-contrast color relative to `color`.
     pub checked_color: Color,
 
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_primary")]
     /// Color used to draw the checkmark icon inside the checkbox.
     ///
     /// This is applied on top of the `checked_color` surface.
     pub checkmark_color: Color,
 
-    #[builder(default = "2.5")]
     /// Stroke width in physical pixels used to render the checkmark path.
     ///
     /// Higher values produce a thicker checkmark. The default value is tuned
     /// for the default `size`.
     pub checkmark_stroke_width: f32,
 
-    #[builder(
-        default = "Shape::RoundedRectangle{ top_left: RoundedCorner::manual(Dp(2.0), 2.0), top_right: RoundedCorner::manual(Dp(2.0), 2.0), bottom_right: RoundedCorner::manual(Dp(2.0), 2.0), bottom_left: RoundedCorner::manual(Dp(2.0), 2.0) }"
-    )]
     /// Shape used for the outer checkbox surface (rounded rectangle, etc.).
     ///
     /// Use this to customize the corner radii or switch to alternate shapes.
     pub shape: Shape,
 
     /// Whether the checkbox is disabled.
-    #[builder(default = "false")]
     pub disabled: bool,
 
-    #[builder(
-        default = "use_context::<MaterialTheme>().get().color_scheme.on_surface.with_alpha(MaterialAlpha::DISABLED_CONTENT)"
-    )]
     /// Color used for the checkbox border/background when disabled.
     pub disabled_color: Color,
 
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.surface")]
     /// Color used for the checkmark icon when disabled.
     pub disabled_checkmark_color: Color,
 
@@ -166,21 +150,59 @@ pub struct CheckboxArgs {
     ///
     /// The label should be a short, human-readable string describing the
     /// purpose of the checkbox (for example "Enable auto-save").
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description read by assistive technologies.
     ///
     /// A longer description or contextual helper text that augments the
     /// `accessibility_label` for users of assistive technology.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+}
+
+impl CheckboxArgs {
+    /// Sets the on_toggle handler.
+    pub fn on_toggle<F>(mut self, on_toggle: F) -> Self
+    where
+        F: Fn(bool) + Send + Sync + 'static,
+    {
+        self.on_toggle = Arc::new(on_toggle);
+        self
+    }
+
+    /// Sets the on_toggle handler using a shared callback.
+    pub fn on_toggle_shared(mut self, on_toggle: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
+        self.on_toggle = on_toggle;
+        self
+    }
 }
 
 impl Default for CheckboxArgs {
     fn default() -> Self {
-        CheckboxArgsBuilder::default()
-            .build()
-            .expect("CheckboxArgsBuilder default build should succeed")
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            modifier: Modifier::new(),
+            on_toggle: Arc::new(|_| {}),
+            checked: false,
+            size: CheckboxDefaults::GLYPH_SIZE,
+            color: scheme.on_surface_variant,
+            checked_color: scheme.primary,
+            checkmark_color: scheme.on_primary,
+            checkmark_stroke_width: 2.5,
+            shape: Shape::RoundedRectangle {
+                top_left: RoundedCorner::manual(Dp(2.0), 2.0),
+                top_right: RoundedCorner::manual(Dp(2.0), 2.0),
+                bottom_right: RoundedCorner::manual(Dp(2.0), 2.0),
+                bottom_left: RoundedCorner::manual(Dp(2.0), 2.0),
+            },
+            disabled: false,
+            disabled_color: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+            disabled_checkmark_color: scheme.surface,
+            accessibility_label: None,
+            accessibility_description: None,
+        }
     }
 }
 
@@ -256,22 +278,19 @@ impl CheckmarkState {
 /// ## Examples
 ///
 /// ```
-/// use std::sync::Arc;
 /// use tessera_ui::{Dp, remember, tessera};
-/// use tessera_ui_basic_components::checkbox::{CheckboxArgsBuilder, checkbox};
+/// use tessera_ui_basic_components::checkbox::{CheckboxArgs, checkbox};
 ///
 /// // A tiny UI demo that shows a checkbox and a text label that reflects its state.
 /// #[tessera]
 /// fn checkbox_demo() {
 ///     let is_checked = remember(|| false);
-///     let on_toggle = Arc::new(move |new_value| is_checked.set(new_value));
-///
 ///     checkbox(
-///         CheckboxArgsBuilder::default()
+///         CheckboxArgs::default()
 ///             .checked(true)
-///             .on_toggle(on_toggle)
-///             .build()
-///             .unwrap(),
+///             .on_toggle(move |new_value| {
+///                 is_checked.set(new_value);
+///             }),
 ///     );
 /// }
 /// ```
@@ -303,19 +322,13 @@ pub fn checkbox(args: impl Into<CheckboxArgs>) {
 /// ```
 /// use tessera_ui::{Dp, remember, tessera};
 /// use tessera_ui_basic_components::checkbox::{
-///     CheckboxArgsBuilder, CheckboxController, checkbox_with_controller,
+///     CheckboxArgs, CheckboxController, checkbox_with_controller,
 /// };
 ///
 /// #[tessera]
 /// fn controlled_demo() {
 ///     let controller = remember(|| CheckboxController::new(false));
-///     checkbox_with_controller(
-///         CheckboxArgsBuilder::default()
-///             .size(Dp(20.0))
-///             .build()
-///             .unwrap(),
-///         controller,
-///     );
+///     checkbox_with_controller(CheckboxArgs::default().size(Dp(20.0)), controller);
 /// }
 /// ```
 #[tessera]
@@ -387,22 +400,18 @@ pub fn checkbox_with_controller(
         let progress = controller.with(|c| c.progress());
         if progress > 0.0 {
             boxed(
-                BoxedArgsBuilder::default()
+                BoxedArgs::default()
                     .alignment(Alignment::Center)
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .expect("builder construction failed"),
+                    .modifier(Modifier::new().fill_max_size()),
                 |scope| {
                     scope.child(move || {
                         checkmark(
-                            CheckmarkArgsBuilder::default()
+                            CheckmarkArgs::default()
                                 .color(icon_color)
                                 .stroke_width(checkmark_stroke_width)
                                 .progress(progress)
                                 .size(Dp(checkbox_size.0 * 0.8))
-                                .padding([0.0, 0.0])
-                                .build()
-                                .expect("builder construction failed"),
+                                .padding([0.0, 0.0]),
                         )
                     });
                 },
@@ -418,12 +427,10 @@ pub fn checkbox_with_controller(
         clone render_checkmark,
         || {
             surface(
-                SurfaceArgsBuilder::default()
+                SurfaceArgs::default()
                     .modifier(Modifier::new().size(size, size))
                     .shape(shape)
-                    .style(checkbox_style)
-                    .build()
-                    .expect("builder construction failed"),
+                    .style(checkbox_style),
                 render_checkmark,
             );
         }
@@ -434,11 +441,9 @@ pub fn checkbox_with_controller(
         clone render_checkbox_surface,
         || {
             boxed(
-                BoxedArgsBuilder::default()
+                BoxedArgs::default()
                     .alignment(Alignment::Center)
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .expect("builder construction failed"),
+                    .modifier(Modifier::new().fill_max_size()),
                 |scope| {
                     scope.child(render_checkbox_surface);
                 },
@@ -454,7 +459,7 @@ pub fn checkbox_with_controller(
         clone render_checkbox_container,
         clone ripple_state,
         || {
-            let mut builder = SurfaceArgsBuilder::default()
+            let mut surface_args = SurfaceArgs::default()
                 .modifier(Modifier::new().size(
                     CheckboxDefaults::STATE_LAYER_SIZE,
                     CheckboxDefaults::STATE_LAYER_SIZE,
@@ -469,13 +474,13 @@ pub fn checkbox_with_controller(
                 .ripple_color(state_layer_base);
 
             if let Some(state) = interaction_state {
-                builder = builder.interaction_state(state);
+                surface_args = surface_args.interaction_state(state);
             }
 
-            let mut args = builder.build().expect("builder construction failed");
-            args.set_ripple_state(ripple_state);
+            let mut surface_args = surface_args;
+            surface_args.set_ripple_state(ripple_state);
 
-            surface(args, render_checkbox_container);
+            surface(surface_args, render_checkbox_container);
         }
     );
 
@@ -524,11 +529,9 @@ pub fn checkbox_with_controller(
         modifier = modifier.toggleable(toggle_args);
     }
     boxed(
-        BoxedArgsBuilder::default()
+        BoxedArgs::default()
             .modifier(modifier)
-            .alignment(Alignment::Center)
-            .build()
-            .expect("builder construction failed"),
+            .alignment(Alignment::Center),
         closure!(
             clone render_state_layer,
             |scope| {

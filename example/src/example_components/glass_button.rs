@@ -3,18 +3,18 @@ use std::sync::Arc;
 use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment},
-    boxed::{BoxedArgsBuilder, boxed},
-    column::{ColumnArgs, ColumnArgsBuilder, column},
-    glass_button::{GlassButtonArgsBuilder, glass_button},
-    icon::{IconArgsBuilder, IconContent},
-    icon_button::{GlassIconButtonArgsBuilder, glass_icon_button},
-    image::{ImageArgsBuilder, ImageSource, image, load_image_from_source},
+    boxed::{BoxedArgs, boxed},
+    column::{ColumnArgs, column},
+    glass_button::{GlassButtonArgs, glass_button},
+    icon::IconArgs,
+    icon_button::{GlassIconButtonArgs, glass_icon_button},
+    image::{ImageArgs, ImageSource, image, load_image_from_source},
     image_vector::{ImageVectorSource, load_image_vector_from_source},
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgsBuilder, scrollable},
+    scrollable::{ScrollableArgs, scrollable},
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgs, surface},
     text::text,
 };
 
@@ -31,22 +31,14 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
 #[shard]
 pub fn glass_button_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_width())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0))),
                         move || {
                             test_content();
                         },
@@ -74,11 +66,9 @@ fn test_content() {
     });
 
     column(
-        ColumnArgsBuilder::default()
+        ColumnArgs::default()
             .modifier(Modifier::new().fill_max_width())
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .build()
-            .unwrap(),
+            .cross_axis_alignment(CrossAxisAlignment::Center),
         move |scope| {
             scope.child(|| text("Glass Button Showcase"));
 
@@ -87,19 +77,13 @@ fn test_content() {
             });
             scope.child(move || {
                 boxed(
-                    BoxedArgsBuilder::default()
-                        .alignment(Alignment::Center)
-                        .build()
-                        .unwrap(),
+                    BoxedArgs::default().alignment(Alignment::Center),
                     move |scope| {
                         scope.child(move || {
-                            image(
-                                ImageArgsBuilder::default()
-                                    .modifier(Modifier::new().size(Dp(250.0), Dp(250.0)))
-                                    .data(image_data.get())
-                                    .build()
-                                    .unwrap(),
-                            );
+                            image(ImageArgs {
+                                data: image_data.get(),
+                                modifier: Modifier::new().size(Dp(250.0), Dp(250.0)),
+                            });
                         });
 
                         scope.child(move || {
@@ -115,11 +99,9 @@ fn test_content() {
 
                                     scope.child(move || {
                                         glass_button(
-                                            GlassButtonArgsBuilder::default()
+                                            GlassButtonArgs::default()
                                                 .on_click_shared(on_click)
-                                                .shape(Shape::rounded_rectangle(Dp(25.0)))
-                                                .build()
-                                                .unwrap(),
+                                                .shape(Shape::rounded_rectangle(Dp(25.0))),
                                             || text("Click Me!"),
                                         );
                                     });
@@ -129,27 +111,18 @@ fn test_content() {
                                     });
 
                                     scope.child(move || {
-                                        let icon = IconArgsBuilder::default()
-                                            .content(IconContent::from(icon_data.get().clone()))
-                                            .size(Dp(28.0))
-                                            .build()
-                                            .unwrap();
+                                        let icon =
+                                            IconArgs::from(icon_data.get().clone()).size(Dp(28.0));
 
                                         let on_click = Arc::new(move || {
                                             counter.with_mut(|c| *c += 1);
                                         });
 
-                                        let args = GlassIconButtonArgsBuilder::default()
-                                            .button(
-                                                GlassButtonArgsBuilder::default()
-                                                    .on_click_shared(on_click)
-                                                    .shape(Shape::Ellipse)
-                                                    .build()
-                                                    .unwrap(),
-                                            )
-                                            .icon(icon)
-                                            .build()
-                                            .unwrap();
+                                        let args = GlassIconButtonArgs::new(icon).button(
+                                            GlassButtonArgs::default()
+                                                .on_click_shared(on_click)
+                                                .shape(Shape::Ellipse),
+                                        );
 
                                         glass_icon_button(args);
                                     });

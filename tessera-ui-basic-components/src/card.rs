@@ -6,14 +6,14 @@
 
 use std::{sync::Arc, time::Instant};
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{Color, Dp, InputHandlerInput, Modifier, State, remember, tessera, use_context};
 
 use crate::{
     column::{ColumnArgs, ColumnScope, column},
     modifier::InteractionState,
     shape_def::Shape,
-    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
+    surface::{SurfaceArgs, SurfaceStyle, surface},
     theme::{ContentColor, MaterialAlpha, MaterialTheme, content_color_for},
 };
 
@@ -344,51 +344,47 @@ impl CardDefaults {
 }
 
 /// Arguments for the [`card`] component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct CardArgs {
     /// Optional modifier chain applied to the card subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// Card variant controlling default tokens.
-    #[builder(default)]
     pub variant: CardVariant,
     /// Whether the card is enabled for user interaction.
-    #[builder(default = "true")]
     pub enabled: bool,
     /// Optional click handler for a clickable card.
-    #[builder(default, setter(custom, strip_option))]
+    #[setters(skip)]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Optional shared interaction state for elevation and state layers.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub interaction_state: Option<State<InteractionState>>,
     /// Optional container shape override.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub shape: Option<Shape>,
     /// Optional colors override.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub colors: Option<CardColors>,
     /// Optional elevation override.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub elevation: Option<CardElevation>,
     /// Optional border stroke for the card container.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub border: Option<CardBorder>,
 }
 
-impl CardArgsBuilder {
+impl CardArgs {
     /// Set the click handler.
     pub fn on_click<F>(mut self, on_click: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Some(Arc::new(on_click)));
+        self.on_click = Some(Arc::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
     pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(Some(on_click));
+        self.on_click = Some(on_click);
         self
     }
 }
@@ -396,33 +392,35 @@ impl CardArgsBuilder {
 impl CardArgs {
     /// Creates a filled card configuration using default tokens.
     pub fn filled() -> Self {
-        CardArgsBuilder::default()
-            .variant(CardVariant::Filled)
-            .build()
-            .expect("builder construction failed")
+        CardArgs::default().variant(CardVariant::Filled)
     }
 
     /// Creates an elevated card configuration using default tokens.
     pub fn elevated() -> Self {
-        CardArgsBuilder::default()
-            .variant(CardVariant::Elevated)
-            .build()
-            .expect("builder construction failed")
+        CardArgs::default().variant(CardVariant::Elevated)
     }
 
     /// Creates an outlined card configuration using default tokens.
     pub fn outlined() -> Self {
-        CardArgsBuilder::default()
+        CardArgs::default()
             .variant(CardVariant::Outlined)
             .border(CardDefaults::outlined_card_border(true))
-            .build()
-            .expect("builder construction failed")
     }
 }
 
 impl Default for CardArgs {
     fn default() -> Self {
-        Self::filled()
+        Self {
+            modifier: Modifier::new(),
+            variant: CardVariant::default(),
+            enabled: true,
+            on_click: None,
+            interaction_state: None,
+            shape: None,
+            colors: None,
+            elevation: None,
+            border: None,
+        }
     }
 }
 
@@ -521,7 +519,7 @@ where
     let container_color = colors.container_color(args.enabled);
     let content_color = colors.content_color(args.enabled);
 
-    let mut surface_builder = SurfaceArgsBuilder::default()
+    let mut surface_args = SurfaceArgs::default()
         .shape(shape)
         .modifier(args.modifier)
         .content_color(content_color)
@@ -539,22 +537,17 @@ where
             color: container_color,
         },
     };
-    surface_builder = surface_builder.style(style);
+    surface_args = surface_args.style(style);
 
     if let Some(state) = interaction_state {
-        surface_builder = surface_builder.interaction_state(state);
+        surface_args = surface_args.interaction_state(state);
     }
 
     if let Some(on_click) = args.on_click {
-        surface_builder = surface_builder.on_click_shared(on_click);
+        surface_args = surface_args.on_click_shared(on_click);
     }
 
-    surface(
-        surface_builder
-            .build()
-            .expect("builder construction failed"),
-        move || {
-            column(ColumnArgs::default(), content);
-        },
-    );
+    surface(surface_args, move || {
+        column(ColumnArgs::default(), content);
+    });
 }

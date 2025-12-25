@@ -4,7 +4,7 @@ use tessera_ui_basic_components::{
     lazy_list::{LazyColumnArgs, lazy_column},
     modifier::ModifierExt as _,
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
 
@@ -12,10 +12,7 @@ use tessera_ui_basic_components::{
 #[shard]
 pub fn button_group_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .expect("builder construction failed"),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             lazy_column(
                 LazyColumnArgs {

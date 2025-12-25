@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, PxPosition, State,
     accesskit::Role, remember, tessera,
@@ -16,7 +16,7 @@ use tessera_ui::{
 
 use crate::{
     animation,
-    fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
+    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
     modifier::{ModifierExt as _, ToggleableArgs},
     shape_def::Shape,
 };
@@ -84,65 +84,85 @@ impl Default for GlassSwitchController {
 }
 
 /// Arguments for the `glass_switch` component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct GlassSwitchArgs {
     /// Optional modifier chain applied to the switch subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// Optional callback invoked when the switch toggles.
-    #[builder(default, setter(strip_option))]
+    #[setters(skip)]
     pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
     /// Initial checked state.
-    #[builder(default = "false")]
     pub checked: bool,
 
     /// Total width of the switch track.
-    #[builder(default = "Dp(52.0)")]
     pub width: Dp,
 
     /// Total height of the switch track (including padding).
-    #[builder(default = "Dp(32.0)")]
     pub height: Dp,
 
     /// Track color when switch is ON
-    #[builder(default = "Color::new(0.2, 0.7, 1.0, 0.5)")]
     pub track_on_color: Color,
     /// Track color when switch is OFF
-    #[builder(default = "Color::new(0.8, 0.8, 0.8, 0.5)")]
     pub track_off_color: Color,
 
     /// Thumb alpha when switch is ON (opacity when ON)
-    #[builder(default = "0.5")]
     pub thumb_on_alpha: f32,
     /// Thumb alpha when switch is OFF (opacity when OFF)
-    #[builder(default = "1.0")]
     pub thumb_off_alpha: f32,
 
     /// Border for the thumb
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub thumb_border: Option<GlassBorder>,
 
     /// Border for the track
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub track_border: Option<GlassBorder>,
 
     /// Padding around the thumb
-    #[builder(default = "Dp(3.0)")]
     pub thumb_padding: Dp,
     /// Optional accessibility label read by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+}
+
+impl GlassSwitchArgs {
+    /// Sets the on_toggle handler.
+    pub fn on_toggle<F>(mut self, on_toggle: F) -> Self
+    where
+        F: Fn(bool) + Send + Sync + 'static,
+    {
+        self.on_toggle = Some(Arc::new(on_toggle));
+        self
+    }
+
+    /// Sets the on_toggle handler using a shared callback.
+    pub fn on_toggle_shared(mut self, on_toggle: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
+        self.on_toggle = Some(on_toggle);
+        self
+    }
 }
 
 impl Default for GlassSwitchArgs {
     fn default() -> Self {
-        GlassSwitchArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        Self {
+            modifier: Modifier::new(),
+            on_toggle: None,
+            checked: false,
+            width: Dp(52.0),
+            height: Dp(32.0),
+            track_on_color: Color::new(0.2, 0.7, 1.0, 0.5),
+            track_off_color: Color::new(0.8, 0.8, 0.8, 0.5),
+            thumb_on_alpha: 0.5,
+            thumb_off_alpha: 1.0,
+            thumb_border: None,
+            track_border: None,
+            thumb_padding: Dp(3.0),
+            accessibility_label: None,
+            accessibility_description: None,
+        }
     }
 }
 
@@ -173,7 +193,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 /// ```
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::glass_switch::{
-///     GlassSwitchArgsBuilder, GlassSwitchController, glass_switch_with_controller,
+///     GlassSwitchArgs, GlassSwitchController, glass_switch_with_controller,
 /// };
 ///
 /// #[tessera]
@@ -181,10 +201,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 ///     let controller = remember(|| GlassSwitchController::new(false));
 ///     assert!(!controller.with(|c| c.is_checked()));
 ///
-///     glass_switch_with_controller(
-///         GlassSwitchArgsBuilder::default().build().unwrap(),
-///         controller,
-///     );
+///     glass_switch_with_controller(GlassSwitchArgs::default(), controller);
 ///
 ///     controller.with_mut(|c| c.toggle());
 ///     assert!(controller.with(|c| c.is_checked()));
@@ -220,16 +237,13 @@ pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
 /// ```
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::glass_switch::{
-///     GlassSwitchArgsBuilder, GlassSwitchController, glass_switch_with_controller,
+///     GlassSwitchArgs, GlassSwitchController, glass_switch_with_controller,
 /// };
 ///
 /// #[tessera]
 /// fn foo() {
 ///     let controller = remember(|| GlassSwitchController::new(false));
-///     glass_switch_with_controller(
-///         GlassSwitchArgsBuilder::default().build().unwrap(),
-///         controller,
-///     );
+///     glass_switch_with_controller(GlassSwitchArgs::default(), controller);
 /// }
 /// ```
 #[tessera]
@@ -279,7 +293,7 @@ pub fn glass_switch_with_controller(
 
     modifier.run(move || {
         // Build and render track
-        let mut track_builder = FluidGlassArgsBuilder::default()
+        let mut track_args = FluidGlassArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(width_px)),
                 Some(DimensionValue::Fixed(height_px)),
@@ -288,18 +302,15 @@ pub fn glass_switch_with_controller(
             .shape(Shape::capsule())
             .blur_radius(8.0);
         if let Some(border) = args.track_border {
-            track_builder = track_builder.border(border);
+            track_args = track_args.border(border);
         }
-        fluid_glass(
-            track_builder.build().expect("builder construction failed"),
-            || {},
-        );
+        fluid_glass(track_args, || {});
 
         // Build and render thumb
         let thumb_alpha =
             args.thumb_off_alpha + (args.thumb_on_alpha - args.thumb_off_alpha) * progress;
         let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
-        let mut thumb_builder = FluidGlassArgsBuilder::default()
+        let mut thumb_args = FluidGlassArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(thumb_px)),
                 Some(DimensionValue::Fixed(thumb_px)),
@@ -308,12 +319,9 @@ pub fn glass_switch_with_controller(
             .refraction_height(1.0)
             .shape(Shape::Ellipse);
         if let Some(border) = args.thumb_border {
-            thumb_builder = thumb_builder.border(border);
+            thumb_args = thumb_args.border(border);
         }
-        fluid_glass(
-            thumb_builder.build().expect("builder construction failed"),
-            || {},
-        );
+        fluid_glass(thumb_args, || {});
 
         // Measurement and placement
         measure(Box::new(move |input| {

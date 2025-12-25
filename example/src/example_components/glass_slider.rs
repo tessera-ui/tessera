@@ -1,35 +1,25 @@
-use std::sync::Arc;
-
 use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
-    column::{ColumnArgsBuilder, column},
-    glass_slider::{GlassSliderArgsBuilder, GlassSliderController, glass_slider_with_controller},
+    column::{ColumnArgs, column},
+    glass_slider::{GlassSliderArgs, GlassSliderController, glass_slider_with_controller},
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgsBuilder, scrollable},
-    surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
+    scrollable::{ScrollableArgs, scrollable},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
 };
 
 #[tessera]
 #[shard]
 pub fn glass_slider_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_width())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             test_content();
                         },
@@ -46,34 +36,26 @@ fn test_content() {
     let slider_controller = remember(GlassSliderController::new);
 
     column(
-        ColumnArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_width())
-            .build()
-            .unwrap(),
+        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
         move |scope| {
             scope.child(|| text("Glass Slider Showcase"));
             scope.child(move || {
-                let on_change = Arc::new(move |new_value| {
-                    value.set(new_value);
-                });
                 glass_slider_with_controller(
-                    GlassSliderArgsBuilder::default()
+                    GlassSliderArgs::default()
                         .value(value.get())
-                        .on_change(on_change)
-                        .modifier(Modifier::new().width(Dp(250.0)))
-                        .build()
-                        .unwrap(),
+                        .on_change(move |new_value| {
+                            value.set(new_value);
+                        })
+                        .modifier(Modifier::new().width(Dp(250.0))),
                     slider_controller,
                 );
             });
 
             scope.child(move || {
                 text(
-                    TextArgsBuilder::default()
+                    TextArgs::default()
                         .text(format!("Value: {:.2}", value.get()))
-                        .size(Dp(16.0))
-                        .build()
-                        .unwrap(),
+                        .size(Dp(16.0)),
                 );
             });
         },

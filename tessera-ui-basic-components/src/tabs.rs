@@ -5,7 +5,7 @@
 //! Use to organize content into separate pages that can be switched between.
 use std::time::Instant;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
     Modifier, Px, PxPosition, State, remember, tessera, use_context,
@@ -13,14 +13,14 @@ use tessera_ui::{
 
 use crate::{
     alignment::Alignment,
-    icon::{IconArgsBuilder, IconContent, icon},
+    icon::{IconArgs, IconContent, icon},
     modifier::ModifierExt,
     pipelines::text::{
         command::{TextCommand, TextConstraint},
         pipeline::TextData,
     },
     shape_def::Shape,
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgs, surface},
     theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
@@ -314,86 +314,84 @@ impl Default for TabsController {
 }
 
 /// Configuration arguments for the [`tabs`] component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct TabsArgs {
     /// Optional modifier chain applied to the tabs subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// Visual variant for this tab row.
-    #[builder(default)]
     pub variant: TabsVariant,
     /// Initial active tab index (0-based). Ignored if a controller is provided
     /// with its own state.
-    #[builder(default = "0")]
     pub initial_active_tab: usize,
     /// Color of the active tab indicator.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub indicator_color: Color,
     /// Background color for the tab row container.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.surface")]
     pub container_color: Color,
     /// Color applied to active tab titles (Material on-surface).
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub active_content_color: Color,
     /// Color applied to inactive tab titles (Material on-surface-variant).
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_surface_variant")]
     pub inactive_content_color: Color,
     /// Height of the indicator bar in density-independent pixels.
-    #[builder(default = "TabsDefaults::INDICATOR_HEIGHT")]
     pub indicator_height: Dp,
     /// Minimum width for the indicator bar.
-    #[builder(default = "TabsDefaults::INDICATOR_MIN_WIDTH")]
     pub indicator_min_width: Dp,
     /// Optional maximum width for the indicator bar.
-    #[builder(default = "TabsDefaults::INDICATOR_MAX_WIDTH")]
+    #[setters(strip_option)]
     pub indicator_max_width: Option<Dp>,
     /// Minimum height for a tab (Material spec uses 48dp).
-    #[builder(default = "TabsDefaults::MIN_TAB_HEIGHT")]
     pub min_tab_height: Dp,
     /// Internal padding for each tab, applied symmetrically.
-    #[builder(default = "TabsDefaults::TAB_PADDING")]
     pub tab_padding: Dp,
     /// Whether the tab row is enabled for user interaction.
     ///
     /// When `false`, tabs will not react to input and will use disabled
     /// content colors.
-    #[builder(default = "true")]
     pub enabled: bool,
     /// Color used for hover/pressed state layers.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_surface")]
     pub state_layer_color: Color,
     /// Opacity applied to the state layer on hover.
-    #[builder(default = "TabsDefaults::HOVER_STATE_LAYER_OPACITY")]
     pub hover_state_layer_opacity: f32,
     /// Content color used when `enabled=false`.
-    #[builder(
-        default = "TabsDefaults::disabled_content_color(&use_context::<MaterialTheme>().get().color_scheme)"
-    )]
     pub disabled_content_color: Color,
     /// Divider color drawn at the bottom of the tab bar.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.surface_variant")]
     pub divider_color: Color,
     /// Whether the tab row is horizontally scrollable.
     ///
     /// When enabled, each tab is measured at its intrinsic width (subject to
     /// `min_scrollable_tab_width`) and the row will scroll to keep the selected
     /// tab visible.
-    #[builder(default = "false")]
     pub scrollable: bool,
     /// Edge padding for scrollable tab rows.
-    #[builder(default = "TabsDefaults::SCROLLABLE_EDGE_PADDING")]
     pub edge_padding: Dp,
     /// Minimum tab width for scrollable tab rows.
-    #[builder(default = "TabsDefaults::SCROLLABLE_MIN_TAB_WIDTH")]
     pub min_scrollable_tab_width: Dp,
 }
 
 impl Default for TabsArgs {
     fn default() -> Self {
-        TabsArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            modifier: Modifier::new(),
+            variant: TabsVariant::default(),
+            initial_active_tab: 0,
+            indicator_color: scheme.primary,
+            container_color: scheme.surface,
+            active_content_color: scheme.primary,
+            inactive_content_color: scheme.on_surface_variant,
+            indicator_height: TabsDefaults::INDICATOR_HEIGHT,
+            indicator_min_width: TabsDefaults::INDICATOR_MIN_WIDTH,
+            indicator_max_width: TabsDefaults::INDICATOR_MAX_WIDTH,
+            min_tab_height: TabsDefaults::MIN_TAB_HEIGHT,
+            tab_padding: TabsDefaults::TAB_PADDING,
+            enabled: true,
+            state_layer_color: scheme.on_surface,
+            hover_state_layer_opacity: TabsDefaults::HOVER_STATE_LAYER_OPACITY,
+            disabled_content_color: TabsDefaults::disabled_content_color(&scheme),
+            divider_color: scheme.surface_variant,
+            scrollable: false,
+            edge_padding: TabsDefaults::SCROLLABLE_EDGE_PADDING,
+            min_scrollable_tab_width: TabsDefaults::SCROLLABLE_MIN_TAB_WIDTH,
+        }
     }
 }
 
@@ -478,32 +476,31 @@ impl<'a> TabsScope<'a> {
 }
 
 /// Arguments for [`tab_label`].
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct TabLabelArgs {
     /// Text shown in the tab.
-    #[builder(setter(into))]
+    #[setters(into)]
     pub text: String,
     /// Optional icon shown above the text.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option, into)]
     pub icon: Option<IconContent>,
     /// Horizontal padding applied to the text area.
-    #[builder(default = "TabsDefaults::TAB_PADDING")]
     pub horizontal_text_padding: Dp,
     /// Height reserved for the active indicator when positioning text and icon.
-    #[builder(default = "TabsDefaults::INDICATOR_HEIGHT")]
     pub indicator_height: Dp,
     /// Size of the icon, when present.
-    #[builder(default = "Dp(24.0)")]
     pub icon_size: Dp,
 }
 
 impl Default for TabLabelArgs {
     fn default() -> Self {
-        TabLabelArgsBuilder::default()
-            .text("")
-            .build()
-            .expect("builder construction failed")
+        Self {
+            text: String::new(),
+            icon: None,
+            horizontal_text_padding: TabsDefaults::TAB_PADDING,
+            indicator_height: TabsDefaults::INDICATOR_HEIGHT,
+            icon_size: Dp(24.0),
+        }
     }
 }
 
@@ -525,19 +522,14 @@ impl Default for TabLabelArgs {
 /// ```
 /// use tessera_ui::{Dp, tessera};
 /// use tessera_ui_basic_components::{
-///     tabs::{TabLabelArgsBuilder, tab_label},
+///     tabs::{TabLabelArgs, tab_label},
 ///     theme::{MaterialTheme, material_theme},
 /// };
 ///
 /// #[tessera]
 /// fn demo() {
 ///     material_theme(MaterialTheme::default(), || {
-///         tab_label(
-///             TabLabelArgsBuilder::default()
-///                 .text("Home")
-///                 .build()
-///                 .expect("builder construction failed"),
-///         );
+///         tab_label(TabLabelArgs::default().text("Home"));
 ///     });
 /// }
 /// ```
@@ -548,13 +540,7 @@ pub fn tab_label(args: TabLabelArgs) {
     let content_color = use_context::<ContentColor>().get().current;
 
     if let Some(icon_content) = args.icon.clone() {
-        icon(
-            IconArgsBuilder::default()
-                .content(icon_content)
-                .size(args.icon_size)
-                .build()
-                .expect("builder construction failed"),
-        );
+        icon(IconArgs::from(icon_content).size(args.icon_size));
     }
 
     let args_for_measure = args.clone();
@@ -755,60 +741,36 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
 /// ```
 /// use tessera_ui::{Dp, tessera};
 /// use tessera_ui_basic_components::{
-///     tabs::{TabsArgsBuilder, tabs},
-///     text::{TextArgsBuilder, text},
+///     tabs::{TabsArgs, tabs},
+///     text::{TextArgs, text},
 /// };
 ///
 /// #[tessera]
 /// fn demo() {
-///     tabs(
-///         TabsArgsBuilder::default()
-///             .initial_active_tab(1)
-///             .build()
-///             .expect("builder construction failed"),
-///         |scope| {
-///             scope.child_with_color(
-///                 |color| {
-///                     text(
-///                         TextArgsBuilder::default()
-///                             .text("Flights".to_string())
-///                             .color(color)
-///                             .size(Dp(14.0))
-///                             .build()
-///                             .expect("builder construction failed"),
-///                     )
-///                 },
-///                 || {
-///                     text(
-///                         TextArgsBuilder::default()
-///                             .text("Content for Flights")
-///                             .build()
-///                             .expect("builder construction failed"),
-///                     )
-///                 },
-///             );
-///             scope.child_with_color(
-///                 |color| {
-///                     text(
-///                         TextArgsBuilder::default()
-///                             .text("Hotel".to_string())
-///                             .color(color)
-///                             .size(Dp(14.0))
-///                             .build()
-///                             .expect("builder construction failed"),
-///                     )
-///                 },
-///                 || {
-///                     text(
-///                         TextArgsBuilder::default()
-///                             .text("Content for Hotel")
-///                             .build()
-///                             .expect("builder construction failed"),
-///                     )
-///                 },
-///             );
-///         },
-///     );
+///     tabs(TabsArgs::default().initial_active_tab(1), |scope| {
+///         scope.child_with_color(
+///             |color| {
+///                 text(
+///                     TextArgs::default()
+///                         .text("Flights")
+///                         .color(color)
+///                         .size(Dp(14.0)),
+///                 )
+///             },
+///             || text(TextArgs::default().text("Content for Flights")),
+///         );
+///         scope.child_with_color(
+///             |color| {
+///                 text(
+///                     TextArgs::default()
+///                         .text("Hotel")
+///                         .color(color)
+///                         .size(Dp(14.0)),
+///                 )
+///             },
+///             || text(TextArgs::default().text("Content for Hotel")),
+///         );
+///     });
 /// }
 /// ```
 #[tessera]
@@ -843,59 +805,23 @@ where
 /// ```
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::{
-///     tabs::{TabsArgsBuilder, TabsController, tabs_with_controller},
-///     text::{TextArgsBuilder, text},
+///     tabs::{TabsArgs, TabsController, tabs_with_controller},
+///     text::{TextArgs, text},
 /// };
 ///
 /// #[tessera]
 /// fn demo() {
 ///     let controller = remember(|| TabsController::new(0));
-///     tabs_with_controller(
-///         TabsArgsBuilder::default()
-///             .build()
-///             .expect("builder construction failed"),
-///         controller,
-///         |scope| {
-///             scope.child_with_color(
-///                 |color| {
-///                     text(
-///                         TextArgsBuilder::default()
-///                             .text("A".to_string())
-///                             .color(color)
-///                             .build()
-///                             .expect("builder construction failed"),
-///                     )
-///                 },
-///                 || {
-///                     text(
-///                         TextArgsBuilder::default()
-///                             .text("Tab A")
-///                             .build()
-///                             .expect("builder construction failed"),
-///                     )
-///                 },
-///             );
-///             scope.child_with_color(
-///                 |color| {
-///                     text(
-///                         TextArgsBuilder::default()
-///                             .text("B".to_string())
-///                             .color(color)
-///                             .build()
-///                             .expect("builder construction failed"),
-///                     )
-///                 },
-///                 || {
-///                     text(
-///                         TextArgsBuilder::default()
-///                             .text("Tab B")
-///                             .build()
-///                             .expect("builder construction failed"),
-///                     )
-///                 },
-///             );
-///         },
-///     );
+///     tabs_with_controller(TabsArgs::default(), controller, |scope| {
+///         scope.child_with_color(
+///             |color| text(TextArgs::default().text("A").color(color)),
+///             || text(TextArgs::default().text("Tab A")),
+///         );
+///         scope.child_with_color(
+///             |color| text(TextArgs::default().text("B").color(color)),
+///             || text(TextArgs::default().text("Tab B")),
+///         );
+///     });
 /// }
 /// ```
 #[tessera]
@@ -919,22 +845,18 @@ where
         tabs.into_iter().map(|def| (def.title, def.content)).unzip();
 
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .style(args.container_color.into())
             .modifier(Modifier::new().fill_max_size())
-            .shape(Shape::RECTANGLE)
-            .build()
-            .expect("builder construction failed"),
+            .shape(Shape::RECTANGLE),
         || {},
     );
 
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .style(args.divider_color.into())
             .modifier(Modifier::new().fill_max_size())
-            .shape(Shape::RECTANGLE)
-            .build()
-            .expect("builder construction failed"),
+            .shape(Shape::RECTANGLE),
         || {},
     );
 
@@ -944,12 +866,10 @@ where
     };
 
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .style(args.indicator_color.into())
             .modifier(Modifier::new().fill_max_size())
-            .shape(indicator_shape)
-            .build()
-            .expect("builder construction failed"),
+            .shape(indicator_shape),
         || {},
     );
 
@@ -972,7 +892,7 @@ where
             _ => args.min_tab_height,
         };
 
-        let mut tab_surface = SurfaceArgsBuilder::default()
+        let mut tab_surface = SurfaceArgs::default()
             .style(Color::TRANSPARENT.into())
             .content_alignment(Alignment::Center)
             .content_color(label_color)
@@ -995,23 +915,20 @@ where
             });
         }
 
-        surface(
-            tab_surface.build().expect("builder construction failed"),
-            move || match child {
-                TabTitle::Custom(render) => render(),
-                TabTitle::Themed(render) => render(label_color),
-                TabTitle::Label { text, icon } => {
-                    let mut builder = TabLabelArgsBuilder::default();
-                    builder = builder.text(text);
-                    if let Some(icon) = icon {
-                        builder = builder.icon(icon);
-                    }
-                    builder = builder.horizontal_text_padding(args.tab_padding);
-                    builder = builder.indicator_height(args.indicator_height);
-                    tab_label(builder.build().expect("builder construction failed"));
+        surface(tab_surface, move || match child {
+            TabTitle::Custom(render) => render(),
+            TabTitle::Themed(render) => render(label_color),
+            TabTitle::Label { text, icon } => {
+                let mut label_args = TabLabelArgs::default()
+                    .text(text)
+                    .horizontal_text_padding(args.tab_padding)
+                    .indicator_height(args.indicator_height);
+                if let Some(icon) = icon {
+                    label_args = label_args.icon(icon);
                 }
-            },
-        );
+                tab_label(label_args);
+            }
+        });
     }
 
     let scroll_offset = controller.with(|c| c.content_scroll_px());

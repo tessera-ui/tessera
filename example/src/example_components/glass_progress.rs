@@ -1,15 +1,13 @@
-use std::sync::Arc;
-
 use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
-    column::{ColumnArgsBuilder, column},
-    glass_progress::{GlassProgressArgsBuilder, glass_progress},
+    column::{ColumnArgs, column},
+    glass_progress::{GlassProgressArgs, glass_progress},
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgsBuilder, scrollable},
-    slider::{SliderArgsBuilder, slider},
+    scrollable::{ScrollableArgs, scrollable},
+    slider::{SliderArgs, slider},
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
     theme::MaterialTheme,
 };
 
@@ -17,22 +15,14 @@ use tessera_ui_basic_components::{
 #[shard]
 pub fn glass_progress_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_width())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             test_content();
                         },
@@ -48,10 +38,7 @@ fn test_content() {
     let progress = remember(|| 0.5);
 
     column(
-        ColumnArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_width())
-            .build()
-            .unwrap(),
+        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
         move |scope| {
             scope.child(|| text("Glass Progress Showcase"));
 
@@ -60,7 +47,7 @@ fn test_content() {
             });
 
             scope.child(|| {
-                text(TextArgsBuilder::default()
+                text(TextArgs::default()
                     .text("This is the glass progress, adjust the slider below to change its value.")
                     .size(Dp(20.0))
                     .color(
@@ -69,17 +56,14 @@ fn test_content() {
                             .color_scheme
                             .on_surface_variant,
                     )
-                    .build()
-                    .unwrap());
+                    );
             });
 
             scope.child(move || {
                 glass_progress(
-                    GlassProgressArgsBuilder::default()
+                    GlassProgressArgs::default()
                         .value(progress.get())
-                        .modifier(Modifier::new().width(Dp(250.0)))
-                        .build()
-                        .unwrap(),
+                        .modifier(Modifier::new().width(Dp(250.0))),
                 );
             });
 
@@ -88,16 +72,13 @@ fn test_content() {
             });
 
             scope.child(move || {
-                let on_change = Arc::new(move |new_value| {
-                    progress.set(new_value);
-                });
                 slider(
-                    SliderArgsBuilder::default()
+                    SliderArgs::default()
                         .value(progress.get())
-                        .on_change(on_change)
-                        .modifier(Modifier::new().width(Dp(250.0)))
-                        .build()
-                        .unwrap(),
+                        .on_change(move |new_value| {
+                            progress.set(new_value);
+                        })
+                        .modifier(Modifier::new().width(Dp(250.0))),
                 );
             });
         },

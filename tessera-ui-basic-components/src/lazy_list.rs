@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, ParentConstraint, Px,
     PxPosition, State, key, remember, tessera,
@@ -44,76 +44,72 @@ impl LazyListController {
 }
 
 /// Arguments shared between lazy lists.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct LazyColumnArgs {
     /// Scroll container arguments. Vertical scrolling is enforced.
-    #[builder(default = "ScrollableArgs::default()")]
     pub scrollable: ScrollableArgs,
     /// How children are aligned along the cross axis (horizontal for columns).
-    #[builder(default = "CrossAxisAlignment::Start")]
     pub cross_axis_alignment: CrossAxisAlignment,
     /// Gap between successive items.
-    #[builder(default = "Dp(0.0)")]
     pub item_spacing: Dp,
     /// Number of extra items instantiated before/after the viewport.
-    #[builder(default = "2")]
     pub overscan: usize,
     /// Estimated main-axis size for each item, used before real measurements
     /// exist.
-    #[builder(default = "Dp(48.0)")]
     pub estimated_item_size: Dp,
     /// Symmetric padding applied around the lazy list content.
-    #[builder(default = "Dp(0.0)")]
     pub content_padding: Dp,
     /// Maximum viewport length reported back to parents. Prevents gigantic
     /// textures when nesting the list inside wrap/auto-sized surfaces.
-    #[builder(default = "Some(Px(8192))")]
     pub max_viewport_main: Option<Px>,
 }
 
 impl Default for LazyColumnArgs {
     fn default() -> Self {
-        LazyColumnArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        Self {
+            scrollable: ScrollableArgs::default(),
+            cross_axis_alignment: CrossAxisAlignment::Start,
+            item_spacing: Dp(0.0),
+            overscan: 2,
+            estimated_item_size: Dp(48.0),
+            content_padding: Dp(0.0),
+            max_viewport_main: Some(Px(8192)),
+        }
     }
 }
 
 /// Arguments for `lazy_row`. Identical to [`LazyColumnArgs`] but horizontal
 /// scrolling is enforced.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct LazyRowArgs {
     /// Scroll container arguments. Horizontal scrolling is enforced.
-    #[builder(default = "ScrollableArgs::default()")]
     pub scrollable: ScrollableArgs,
     /// How children are aligned along the cross axis (vertical for rows).
-    #[builder(default = "CrossAxisAlignment::Start")]
     pub cross_axis_alignment: CrossAxisAlignment,
     /// Gap between successive items.
-    #[builder(default = "Dp(0.0)")]
     pub item_spacing: Dp,
     /// Number of extra items instantiated before/after the viewport.
-    #[builder(default = "2")]
     pub overscan: usize,
     /// Estimated main-axis size for each item, used before real measurements
     /// exist.
-    #[builder(default = "Dp(48.0)")]
     pub estimated_item_size: Dp,
     /// Symmetric padding applied around the lazy list content.
-    #[builder(default = "Dp(0.0)")]
     pub content_padding: Dp,
     /// Maximum viewport length reported back to parents for horizontal lists.
-    #[builder(default = "Some(Px(8192))")]
     pub max_viewport_main: Option<Px>,
 }
 
 impl Default for LazyRowArgs {
     fn default() -> Self {
-        LazyRowArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        Self {
+            scrollable: ScrollableArgs::default(),
+            cross_axis_alignment: CrossAxisAlignment::Start,
+            item_spacing: Dp(0.0),
+            overscan: 2,
+            estimated_item_size: Dp(48.0),
+            content_padding: Dp(0.0),
+            max_viewport_main: Some(Px(8192)),
+        }
     }
 }
 
@@ -281,7 +277,7 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 /// use tessera_ui::tessera;
 /// use tessera_ui_basic_components::{
 ///     lazy_list::{LazyColumnArgs, lazy_column},
-///     text::{TextArgsBuilder, text},
+///     text::{TextArgs, text},
 /// };
 ///
 /// #[tessera]
@@ -289,12 +285,7 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 ///     lazy_column(LazyColumnArgs::default(), |scope| {
 ///         scope.items(1000, |i| {
 ///             let text_content = format!("Item #{i}");
-///             text(
-///                 TextArgsBuilder::default()
-///                     .text(text_content)
-///                     .build()
-///                     .expect("builder construction failed"),
-///             );
+///             text(TextArgs::default().text(text_content));
 ///         });
 ///     });
 /// }
@@ -332,7 +323,7 @@ where
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::{
 ///     lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
-///     text::{TextArgsBuilder, text},
+///     text::{TextArgs, text},
 /// };
 ///
 /// #[tessera]
@@ -341,12 +332,7 @@ where
 ///     lazy_column_with_controller(LazyColumnArgs::default(), controller, |scope| {
 ///         scope.items(5, |i| {
 ///             let text_content = format!("Row #{i}");
-///             text(
-///                 TextArgsBuilder::default()
-///                     .text(text_content)
-///                     .build()
-///                     .expect("builder construction failed"),
-///             );
+///             text(TextArgs::default().text(text_content));
 ///         });
 ///     });
 /// }
@@ -410,7 +396,7 @@ pub fn lazy_column_with_controller<F>(
 /// use tessera_ui::tessera;
 /// use tessera_ui_basic_components::{
 ///     lazy_list::{LazyRowArgs, lazy_row},
-///     text::{TextArgsBuilder, text},
+///     text::{TextArgs, text},
 /// };
 ///
 /// #[tessera]
@@ -418,12 +404,7 @@ pub fn lazy_column_with_controller<F>(
 ///     lazy_row(LazyRowArgs::default(), |scope| {
 ///         scope.items(100, |i| {
 ///             let text_content = format!("Item {i}");
-///             text(
-///                 TextArgsBuilder::default()
-///                     .text(text_content)
-///                     .build()
-///                     .expect("builder construction failed"),
-///             );
+///             text(TextArgs::default().text(text_content));
 ///         });
 ///     });
 /// }
@@ -461,7 +442,7 @@ where
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::{
 ///     lazy_list::{LazyListController, LazyRowArgs, lazy_row_with_controller},
-///     text::{TextArgsBuilder, text},
+///     text::{TextArgs, text},
 /// };
 ///
 /// #[tessera]
@@ -470,12 +451,7 @@ where
 ///     lazy_row_with_controller(LazyRowArgs::default(), controller, |scope| {
 ///         scope.items(3, |i| {
 ///             let text_content = format!("Card {i}");
-///             text(
-///                 TextArgsBuilder::default()
-///                     .text(text_content)
-///                     .build()
-///                     .expect("builder construction failed"),
-///             );
+///             text(TextArgs::default().text(text_content));
 ///         });
 ///     });
 /// }

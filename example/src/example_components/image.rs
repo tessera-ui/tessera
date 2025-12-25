@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use tessera_ui::{Dp, Modifier, shard, tessera};
 use tessera_ui_basic_components::{
-    column::{ColumnArgsBuilder, column},
-    icon::{IconArgsBuilder, icon},
-    image::{ImageArgsBuilder, ImageData, ImageSource, image, load_image_from_source},
+    column::{ColumnArgs, column},
+    icon::{IconArgs, icon},
+    image::{ImageArgs, ImageData, ImageSource, image, load_image_from_source},
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgsBuilder, scrollable},
+    scrollable::{ScrollableArgs, scrollable},
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgs, surface},
     text::text,
 };
 
@@ -50,22 +50,14 @@ impl Default for ImageShowcaseState {
 #[shard]
 pub fn image_showcase(#[state] state: ImageShowcaseState) {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_width())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             test_content(state);
                         },
@@ -79,10 +71,7 @@ pub fn image_showcase(#[state] state: ImageShowcaseState) {
 #[tessera]
 fn test_content(state: Arc<ImageShowcaseState>) {
     column(
-        ColumnArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_width())
-            .build()
-            .unwrap(),
+        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
         |scope| {
             scope.child(|| text("Image Showcase"));
 
@@ -92,10 +81,7 @@ fn test_content(state: Arc<ImageShowcaseState>) {
 
             scope.child(move || {
                 column(
-                    ColumnArgsBuilder::default()
-                        .modifier(Modifier::new().fill_max_width())
-                        .build()
-                        .unwrap(),
+                    ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
                     |column_scope| {
                         column_scope.child(|| text("Raster image"));
                         column_scope.child(|| {
@@ -103,12 +89,10 @@ fn test_content(state: Arc<ImageShowcaseState>) {
                         });
                         let raster = state.image_data.clone();
                         column_scope.child(move || {
-                            image(
-                                ImageArgsBuilder::default()
-                                    .data(raster.clone())
-                                    .build()
-                                    .unwrap(),
-                            )
+                            image(ImageArgs {
+                                data: raster.clone(),
+                                modifier: Modifier::new(),
+                            })
                         });
 
                         column_scope.child(|| {
@@ -120,15 +104,8 @@ fn test_content(state: Arc<ImageShowcaseState>) {
                             spacer(Modifier::new().height(Dp(8.0)));
                         });
                         let vector = state.image_vector_data.clone();
-                        column_scope.child(move || {
-                            icon(
-                                IconArgsBuilder::default()
-                                    .content(vector.clone())
-                                    .size(Dp(160.0))
-                                    .build()
-                                    .unwrap(),
-                            )
-                        });
+                        column_scope
+                            .child(move || icon(IconArgs::from(vector.clone()).size(Dp(160.0))));
                     },
                 )
             });
@@ -140,40 +117,23 @@ fn test_content(state: Arc<ImageShowcaseState>) {
 #[shard]
 pub fn icon_showcase(#[state] state: ImageShowcaseState) {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_width())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             column(
-                                ColumnArgsBuilder::default()
-                                    .modifier(Modifier::new().fill_max_width())
-                                    .build()
-                                    .unwrap(),
+                                ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
                                 |scope| {
                                     scope.child(|| text("Icon Showcase"));
                                     scope.child(|| spacer(Modifier::new().height(Dp(10.0))));
                                     let vector = state.image_vector_data.clone();
                                     scope.child(move || {
-                                        icon(
-                                            IconArgsBuilder::default()
-                                                .content(vector.clone())
-                                                .size(Dp(100.0))
-                                                .build()
-                                                .unwrap(),
-                                        )
+                                        icon(IconArgs::from(vector.clone()).size(Dp(100.0)))
                                     });
                                 },
                             );

@@ -3,28 +3,26 @@
 //! ## Usage
 //!
 //! Use to create layered UIs, overlays, or composite controls.
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{ComputedData, Constraint, DimensionValue, Modifier, Px, PxPosition, tessera};
 
 use crate::alignment::Alignment;
 
 /// Arguments for the `Boxed` component.
-#[derive(Clone, Debug, Builder)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Debug, Setters)]
 pub struct BoxedArgs {
     /// The alignment of children within the `Boxed` container.
-    #[builder(default)]
     pub alignment: Alignment,
     /// Modifier chain applied to the boxed subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
 }
 
 impl Default for BoxedArgs {
     fn default() -> Self {
-        BoxedArgsBuilder::default()
-            .build()
-            .expect("BoxedArgsBuilder default build should succeed")
+        Self {
+            alignment: Alignment::default(),
+            modifier: Modifier::new(),
+        }
     }
 }
 
@@ -131,7 +129,7 @@ fn compute_child_offset(
 /// ```
 /// use tessera_ui_basic_components::alignment::Alignment;
 /// use tessera_ui_basic_components::boxed::{BoxedArgs, boxed};
-/// use tessera_ui_basic_components::text::{TextArgsBuilder, text};
+/// use tessera_ui_basic_components::text::{TextArgs, text};
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
@@ -139,21 +137,11 @@ fn compute_child_offset(
 /// boxed(BoxedArgs::default(), |scope| {
 ///     // Add a child that will be in the background (rendered first).
 ///     scope.child(|| {
-///         text(
-///             TextArgsBuilder::default()
-///                 .text("Background".to_string())
-///                 .build()
-///                 .expect("builder construction failed"),
-///         );
+///         text(TextArgs::default().text("Background"));
 ///     });
 ///     // Add another child aligned to the center, which will appear on top.
 ///     scope.child_with_alignment(Alignment::Center, || {
-///         text(
-///             TextArgsBuilder::default()
-///                 .text("Foreground".to_string())
-///                 .build()
-///                 .expect("builder construction failed"),
-///         );
+///         text(TextArgs::default().text("Foreground"));
 ///     });
 /// });
 /// # }

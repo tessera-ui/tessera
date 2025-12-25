@@ -5,7 +5,7 @@
 //! Use to display a scalable icon from image or vector data.
 use std::sync::Arc;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, tessera, use_context};
 
 use crate::{
@@ -51,44 +51,44 @@ impl From<Arc<ImageData>> for IconContent {
 }
 
 /// Arguments for the [`icon`] component.
-#[derive(Debug, Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Debug, Setters, Clone)]
 pub struct IconArgs {
     /// Icon content, provided as either raster pixels or vector geometry.
-    #[builder(setter(into))]
+    #[setters(into)]
     pub content: IconContent,
     /// Logical size of the icon. Applied to both width and height unless
     /// explicit overrides are provided through [`width`](IconArgs::width) /
     /// [`height`](IconArgs::height).
-    #[builder(default = "Dp(24.0)")]
     pub size: Dp,
     /// Optional width override. Handy when the icon should `Fill` or `Wrap`
     /// differently from the default square sizing.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub width: Option<DimensionValue>,
     /// Optional height override. Handy when the icon should `Fill` or `Wrap`
     /// differently from the default square sizing.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub height: Option<DimensionValue>,
     /// Tint color applied to vector icons. Defaults to white so it preserves
     /// the original colors (multiplying by white is a no-op). Raster icons
     /// ignore this field.
-    #[builder(default = "use_context::<ContentColor>().get().current")]
     pub tint: Color,
     /// How the tint is applied to vector icons.
-    #[builder(default)]
     pub tint_mode: TintMode,
     /// Rotation angle in degrees.
-    #[builder(default = "0.0")]
     pub rotation: f32,
 }
 
 impl From<IconContent> for IconArgs {
     fn from(content: IconContent) -> Self {
-        IconArgsBuilder::default()
-            .content(content)
-            .build()
-            .expect("IconArgsBuilder failed with required fields set")
+        Self {
+            content,
+            size: Dp(24.0),
+            width: None,
+            height: None,
+            tint: use_context::<ContentColor>().get().current,
+            tint_mode: TintMode::default(),
+            rotation: 0.0,
+        }
     }
 }
 
@@ -135,7 +135,7 @@ impl From<Arc<ImageData>> for IconArgs {
 /// use std::sync::Arc;
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
-///     icon::{IconArgsBuilder, icon},
+///     icon::{IconArgs, icon},
 ///     image_vector::{ImageVectorSource, load_image_vector_from_source},
 /// };
 ///
@@ -145,13 +145,7 @@ impl From<Arc<ImageData>> for IconArgs {
 /// let vector_data =
 ///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
 ///
-/// icon(
-///     IconArgsBuilder::default()
-///         .content(vector_data)
-///         .tint(Color::new(0.2, 0.5, 0.8, 1.0))
-///         .build()
-///         .unwrap(),
-/// );
+/// icon(IconArgs::from(vector_data).tint(Color::new(0.2, 0.5, 0.8, 1.0)));
 /// ```
 #[tessera]
 pub fn icon(args: impl Into<IconArgs>) {

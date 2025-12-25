@@ -9,31 +9,30 @@ use tessera_ui::{
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment},
     bottom_sheet::{
-        BottomSheetController, BottomSheetProviderArgsBuilder, BottomSheetStyle,
+        BottomSheetController, BottomSheetProviderArgs, BottomSheetStyle,
         bottom_sheet_provider_with_controller,
     },
-    boxed::{BoxedArgsBuilder, boxed},
-    button::{ButtonArgs, ButtonArgsBuilder, button},
+    boxed::{BoxedArgs, boxed},
+    button::{ButtonArgs, button},
     column::{ColumnArgs, column},
     dialog::{
-        BasicDialogArgsBuilder, DialogController, DialogProviderArgsBuilder, DialogStyle,
-        basic_dialog, dialog_provider_with_controller,
+        BasicDialogArgs, DialogController, DialogProviderArgs, DialogStyle, basic_dialog,
+        dialog_provider_with_controller,
     },
-    icon::{IconArgsBuilder, icon},
-    lazy_list::{LazyColumnArgsBuilder, lazy_column},
+    icon::{IconArgs, icon},
+    lazy_list::{LazyColumnArgs, lazy_column},
     material_icons::filled,
     modifier::{ModifierExt as _, Padding},
-    navigation_bar::{NavigationBarItemBuilder, navigation_bar},
-    row::{RowArgsBuilder, row},
-    scrollable::ScrollableArgsBuilder,
+    navigation_bar::{NavigationBarItem, navigation_bar},
+    row::{RowArgs, row},
+    scrollable::ScrollableArgs,
     shape_def::Shape,
     side_bar::{
-        SideBarController, SideBarProviderArgsBuilder, SideBarStyle,
-        side_bar_provider_with_controller,
+        SideBarController, SideBarProviderArgs, SideBarStyle, side_bar_provider_with_controller,
     },
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
-    text::{TextArgsBuilder, text},
+    surface::{SurfaceArgs, SurfaceStyle, surface},
+    text::{TextArgs, text},
     theme::MaterialTheme,
 };
 
@@ -72,39 +71,28 @@ pub fn app() {
     let dialog_controller = remember(DialogController::default);
 
     side_bar_provider_with_controller(
-        SideBarProviderArgsBuilder::default()
-            .on_close_request(move || {
-                side_bar_controller.with_mut(|c| c.close());
-            })
-            .style(SideBarStyle::Glass)
-            .build()
-            .unwrap(),
+        SideBarProviderArgs::new(move || {
+            side_bar_controller.with_mut(|c| c.close());
+        })
+        .style(SideBarStyle::Glass),
         side_bar_controller,
         move || {
             bottom_sheet_provider_with_controller(
-                BottomSheetProviderArgsBuilder::default()
-                    .on_close_request(move || {
-                        bottom_sheet_controller.with_mut(|c| c.close());
-                    })
-                    .style(BottomSheetStyle::Material)
-                    .build()
-                    .unwrap(),
+                BottomSheetProviderArgs::new(move || {
+                    bottom_sheet_controller.with_mut(|c| c.close());
+                })
+                .style(BottomSheetStyle::Material),
                 bottom_sheet_controller,
                 move || {
                     dialog_provider_with_controller(
-                        DialogProviderArgsBuilder::default()
-                            .on_close_request(move || {
-                                dialog_controller.with_mut(|c| c.close());
-                            })
-                            .style(DialogStyle::Material)
-                            .build()
-                            .unwrap(),
+                        DialogProviderArgs::new(move || {
+                            dialog_controller.with_mut(|c| c.close());
+                        })
+                        .style(DialogStyle::Material),
                         dialog_controller,
                         move || {
                             column(ColumnArgs::default(), |scope| {
-                                scope.child(|| {
-                                    top_app_bar();
-                                });
+                                scope.child(top_app_bar);
                                 scope.child_weighted(
                                     move || {
                                         router_root(HomeDestination {
@@ -116,21 +104,12 @@ pub fn app() {
                                     1.0,
                                 );
                                 scope.child(move || {
-                                    let home_icon_content = filled::home_icon();
-                                    let home_icon_args = IconArgsBuilder::default()
-                                        .content(home_icon_content)
-                                        .build()
-                                        .unwrap();
-                                    let about_icon_content = filled::info_icon();
-                                    let about_icon_args = IconArgsBuilder::default()
-                                        .content(about_icon_content)
-                                        .build()
-                                        .unwrap();
+                                    let home_icon_args = IconArgs::from(filled::home_icon());
+                                    let about_icon_args = IconArgs::from(filled::info_icon());
 
                                     navigation_bar(move |scope| {
                                         scope.item(
-                                            NavigationBarItemBuilder::default()
-                                                .label("Home")
+                                            NavigationBarItem::new("Home")
                                                 .icon(closure!(
                                                     clone home_icon_args,
                                                     || {
@@ -145,14 +124,11 @@ pub fn app() {
                                                             dialog_controller,
                                                         });
                                                     });
-                                                })
-                                                .build()
-                                                .unwrap(),
+                                                }),
                                         );
 
                                         scope.item(
-                                            NavigationBarItemBuilder::default()
-                                                .label("About")
+                                            NavigationBarItem::new("About")
                                                 .icon(closure!(
                                                     clone about_icon_args,
                                                     || {
@@ -163,9 +139,7 @@ pub fn app() {
                                                     Router::with_mut(|router| {
                                                         router.reset_with(AboutDestination {});
                                                     });
-                                                })
-                                                .build()
-                                                .unwrap(),
+                                                }),
                                         );
                                     });
                                 });
@@ -173,17 +147,10 @@ pub fn app() {
                         },
                         move |_alpha| {
                             basic_dialog(
-                                BasicDialogArgsBuilder::default()
+                                BasicDialogArgs::new("This is a basic dialog component.")
                                     .headline("Basic Dialog")
-                                    .supporting_text("This is a basic dialog component.")
                                     .icon(|| {
-                                        let icon_content = filled::info_icon();
-                                        icon(
-                                            IconArgsBuilder::default()
-                                                .content(icon_content)
-                                                .build()
-                                                .unwrap(),
-                                        );
+                                        icon(IconArgs::from(filled::info_icon()));
                                     })
                                     .confirm_button(move || {
                                         button(
@@ -200,9 +167,7 @@ pub fn app() {
                                             }),
                                             || text("Dismiss"),
                                         );
-                                    })
-                                    .build()
-                                    .unwrap(),
+                                    }),
                             );
                         },
                     );
@@ -214,13 +179,8 @@ pub fn app() {
                             ..Default::default()
                         },
                         |scope| {
-                            scope.child(|| {
-                                text("Hello from bottom sheet!");
-                            });
-
-                            scope.child(|| {
-                                spacer(Modifier::new().height(Dp(250.0)));
-                            });
+                            scope.child(|| text("Hello from bottom sheet!"));
+                            scope.child(|| spacer(Modifier::new().height(Dp(250.0))));
                         },
                     );
                 },
@@ -503,26 +463,16 @@ fn home(
     ]);
 
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             lazy_column(
-                LazyColumnArgsBuilder::default()
-                    .scrollable(
-                        ScrollableArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_size())
-                            .build()
-                            .unwrap(),
-                    )
+                LazyColumnArgs::default()
+                    .scrollable(ScrollableArgs::default().modifier(Modifier::new().fill_max_size()))
                     .item_spacing(Dp(16.0))
                     .content_padding(Dp(8.0))
                     .cross_axis_alignment(CrossAxisAlignment::Stretch)
                     .estimated_item_size(Dp(140.0))
-                    .content_padding(Dp(16.0))
-                    .build()
-                    .unwrap(),
+                    .content_padding(Dp(16.0)),
                 move |scope| {
                     scope.items_from_iter(examples.iter().cloned(), move |_, example| {
                         let on_click = example.on_click.clone();
@@ -541,7 +491,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
     let title = title.to_string();
     let description = description.to_string();
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_width())
             .on_click_shared(on_click)
             .style(SurfaceStyle::Filled {
@@ -551,9 +501,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
                     .primary_container,
             })
             .shape(Shape::rounded_rectangle(Dp(25.0)))
-            .elevation(Dp(6.0))
-            .build()
-            .unwrap(),
+            .elevation(Dp(6.0)),
         || {
             column(
                 ColumnArgs {
@@ -562,27 +510,16 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
                 },
                 |scope| {
                     scope.child(move || {
-                        text(
-                            TextArgsBuilder::default()
-                                .text(title)
-                                .size(Dp(20.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        text(TextArgs::default().text(title).size(Dp(20.0)));
                     });
                     scope.child(move || {
                         text(
-                            TextArgsBuilder::default()
-                                .text(description)
-                                .size(Dp(14.0))
-                                .color(
-                                    use_context::<MaterialTheme>()
-                                        .get()
-                                        .color_scheme
-                                        .on_surface_variant,
-                                )
-                                .build()
-                                .unwrap(),
+                            TextArgs::default().text(description).size(Dp(14.0)).color(
+                                use_context::<MaterialTheme>()
+                                    .get()
+                                    .color_scheme
+                                    .on_surface_variant,
+                            ),
                         );
                     });
                 },
@@ -594,23 +531,19 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
 #[tessera]
 fn top_app_bar() {
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .elevation(Dp(4.0))
             .modifier(Modifier::new().fill_max_width().height(Dp(55.0)))
-            .block_input(true)
-            .build()
-            .unwrap(),
+            .block_input(true),
         move || {
             row(
-                RowArgsBuilder::default()
+                RowArgs::default()
                     .modifier(Modifier::new().fill_max_size().padding_all(Dp(5.0)))
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .build()
-                    .unwrap(),
+                    .cross_axis_alignment(CrossAxisAlignment::Center),
                 |scope| {
                     scope.child(move || {
                         let scheme = use_context::<MaterialTheme>().get().color_scheme;
-                        let mut button_args = ButtonArgsBuilder::default()
+                        let mut button_args = ButtonArgs::default()
                             .padding(Dp(5.0))
                             .shape(Shape::Ellipse)
                             .color(Color::TRANSPARENT)
@@ -625,21 +558,17 @@ fn top_app_bar() {
                             });
                         }
 
-                        button(button_args.build().unwrap(), || {
+                        button(button_args, || {
                             boxed(
-                                BoxedArgsBuilder::default()
+                                BoxedArgs::default()
                                     .modifier(Modifier::new().fill_max_size())
-                                    .alignment(Alignment::Center)
-                                    .build()
-                                    .unwrap(),
+                                    .alignment(Alignment::Center),
                                 |scope| {
                                     scope.child(|| {
                                         text(
-                                            TextArgsBuilder::default()
+                                            TextArgs::default()
                                                 .text("←".to_string())
-                                                .size(Dp(25.0))
-                                                .build()
-                                                .unwrap(),
+                                                .size(Dp(25.0)),
                                         );
                                     });
                                 },
@@ -656,26 +585,21 @@ fn top_app_bar() {
 #[shard]
 fn about() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         || {
             text(
-                TextArgsBuilder::default()
+                TextArgs::default()
                     .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
                     .text(
-                        r#"This is an example app of Tessera UI Framework.
-Made with ❤️ by tessera-ui devs.
+                        r#"This is an example app of Tessera UI Framework.,
+Made with ❤️ by tessera-ui devs.,
 
-Copyright 2025 Tessera UI Framework Developers
+Copyright 2025 Tessera UI Framework Developers,
 "#
                         .to_string(),
                     )
                     .size(Dp(20.0))
-                    .color(use_context::<MaterialTheme>().get().color_scheme.on_surface)
-                    .build()
-                    .unwrap(),
+                    .color(use_context::<MaterialTheme>().get().color_scheme.on_surface),
             );
         },
     );

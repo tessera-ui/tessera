@@ -4,7 +4,7 @@
 //!
 //! Highlight counts or status markers on top of icons and other UI elements.
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, PxPosition, PxSize,
     provide_context, tessera, use_context,
@@ -13,7 +13,7 @@ use tessera_ui::{
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     pipelines::shape::command::ShapeCommand,
-    row::{RowArgsBuilder, RowScope, row},
+    row::{RowArgs, RowScope, row},
     shape_def::{ResolvedShape, Shape},
     theme::{ContentColor, MaterialTheme, content_color_for, provide_text_style},
 };
@@ -92,24 +92,23 @@ impl BadgeDefaults {
 }
 
 /// Arguments for [`badge`] and [`badge_with_content`].
-#[derive(Builder, Clone, Debug)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Debug, Setters)]
 pub struct BadgeArgs {
     /// Background color of the badge.
-    #[builder(default = "BadgeDefaults::container_color()")]
     pub container_color: Color,
     /// Preferred content color for badge descendants.
     ///
     /// When `None`, the badge derives a matching content color from the theme.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub content_color: Option<Color>,
 }
 
 impl Default for BadgeArgs {
     fn default() -> Self {
-        BadgeArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        Self {
+            container_color: BadgeDefaults::container_color(),
+            content_color: None,
+        }
     }
 }
 
@@ -225,13 +224,11 @@ where
 ///
 /// ```
 /// use tessera_ui::Color;
-/// use tessera_ui_basic_components::badge::BadgeArgsBuilder;
+/// use tessera_ui_basic_components::badge::BadgeArgs;
 ///
-/// let args = BadgeArgsBuilder::default()
+/// let args = BadgeArgs::default()
 ///     .container_color(Color::RED)
-///     .content_color(Color::WHITE)
-///     .build()
-///     .expect("builder construction failed");
+///     .content_color(Color::WHITE);
 /// assert_eq!(args.container_color, Color::RED);
 /// ```
 #[tessera]
@@ -295,13 +292,11 @@ pub fn badge(args: impl Into<BadgeArgs>) {
 ///
 /// ```
 /// use tessera_ui::Color;
-/// use tessera_ui_basic_components::badge::BadgeArgsBuilder;
+/// use tessera_ui_basic_components::badge::BadgeArgs;
 ///
-/// let args = BadgeArgsBuilder::default()
+/// let args = BadgeArgs::default()
 ///     .container_color(Color::RED)
-///     .content_color(Color::WHITE)
-///     .build()
-///     .expect("builder construction failed");
+///     .content_color(Color::WHITE);
 /// assert_eq!(args.content_color, Some(Color::WHITE));
 /// ```
 #[tessera]
@@ -396,11 +391,9 @@ where
         || {
             provide_text_style(typography.label_small, || {
                 row(
-                    RowArgsBuilder::default()
+                    RowArgs::default()
                         .main_axis_alignment(MainAxisAlignment::Center)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .build()
-                        .expect("builder construction failed"),
+                        .cross_axis_alignment(CrossAxisAlignment::Center),
                     content,
                 );
             });

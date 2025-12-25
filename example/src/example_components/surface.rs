@@ -3,15 +3,15 @@ use std::{fmt::Display, sync::Arc};
 use tessera_ui::{Dp, Modifier, State, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    column::{ColumnArgsBuilder, column},
+    column::{ColumnArgs, column},
     modifier::ModifierExt as _,
-    row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, scrollable},
+    row::{RowArgs, row},
+    scrollable::{ScrollableArgs, scrollable},
     shape_def::{RoundedCorner, Shape},
-    slider::{SliderArgsBuilder, slider},
+    slider::{SliderArgs, slider},
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
-    text::{TextArgsBuilder, text},
+    surface::{SurfaceArgs, SurfaceStyle, surface},
+    text::{TextArgs, text},
     theme::MaterialTheme,
 };
 
@@ -68,22 +68,14 @@ impl Default for ExampleSurfaceState {
 pub fn surface_showcase() {
     let example_surface_state = remember(ExampleSurfaceState::default);
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_size()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0))),
                         move || {
                             test_content(example_surface_state);
                         },
@@ -97,11 +89,9 @@ pub fn surface_showcase() {
 #[tessera]
 fn test_content(state: State<ExampleSurfaceState>) {
     column(
-        ColumnArgsBuilder::default()
+        ColumnArgs::default()
             .modifier(Modifier::new().fill_max_width())
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .build()
-            .unwrap(),
+            .cross_axis_alignment(CrossAxisAlignment::Center),
         move |scope| {
             scope.child(move || {
                 let (corner_radius, width, height, border_width, state_string) = state.with(|s| {
@@ -115,12 +105,10 @@ fn test_content(state: State<ExampleSurfaceState>) {
                 });
 
                 row(
-                    RowArgsBuilder::default()
+                    RowArgs::default()
                         .modifier(Modifier::new().fill_max_width())
                         .main_axis_alignment(MainAxisAlignment::Center)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .build()
-                        .unwrap(),
+                        .cross_axis_alignment(CrossAxisAlignment::Center),
                     move |scope| {
                         scope.child(move || {
                             let style = if border_width.to_pixels_f32() > 0.1 {
@@ -144,7 +132,7 @@ fn test_content(state: State<ExampleSurfaceState>) {
                                 }
                             };
                             surface(
-                                SurfaceArgsBuilder::default()
+                                SurfaceArgs::default()
                                     .modifier(Modifier::new().size(width, height))
                                     .shape(Shape::RoundedRectangle {
                                         top_left: RoundedCorner::manual(corner_radius, 3.0),
@@ -155,9 +143,7 @@ fn test_content(state: State<ExampleSurfaceState>) {
                                     .style(style)
                                     .on_click(|| {
                                         println!("Surface clicked");
-                                    })
-                                    .build()
-                                    .unwrap(),
+                                    }),
                                 || {},
                             );
                         });
@@ -165,13 +151,7 @@ fn test_content(state: State<ExampleSurfaceState>) {
                         scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
 
                         scope.child(move || {
-                            text(
-                                TextArgsBuilder::default()
-                                    .text(state_string)
-                                    .size(Dp(16.0))
-                                    .build()
-                                    .unwrap(),
-                            );
+                            text(TextArgs::default().text(state_string).size(Dp(16.0)));
                         });
                     },
                 );
@@ -232,35 +212,25 @@ fn test_content(state: State<ExampleSurfaceState>) {
 fn surface_config_slider(label: &str, value: f32, on_change: Arc<dyn Fn(f32) + Send + Sync>) {
     let label = label.to_string();
     column(
-        ColumnArgsBuilder::default()
+        ColumnArgs::default()
             .main_axis_alignment(MainAxisAlignment::Center)
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .modifier(Modifier::new().fill_max_width())
-            .build()
-            .unwrap(),
+            .modifier(Modifier::new().fill_max_width()),
         move |scope| {
             scope.child(move || {
-                column(ColumnArgsBuilder::default().build().unwrap(), |scope| {
+                column(ColumnArgs::default(), |scope| {
                     scope.child(move || {
-                        text(
-                            TextArgsBuilder::default()
-                                .text(label)
-                                .size(Dp(16.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        text(TextArgs::default().text(label).size(Dp(16.0)));
                     });
 
                     scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
 
                     scope.child(move || {
                         slider(
-                            SliderArgsBuilder::default()
+                            SliderArgs::default()
                                 .value(value)
-                                .on_change(on_change)
-                                .modifier(Modifier::new().width(Dp(300.0)))
-                                .build()
-                                .unwrap(),
+                                .on_change_shared(on_change)
+                                .modifier(Modifier::new().width(Dp(300.0))),
                         );
                     });
                 });

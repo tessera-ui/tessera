@@ -1,36 +1,26 @@
-use std::sync::Arc;
-
 use tessera_ui::{Dp, Modifier, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
-    column::{ColumnArgsBuilder, column},
-    glass_switch::{GlassSwitchArgsBuilder, glass_switch},
+    column::{ColumnArgs, column},
+    glass_switch::{GlassSwitchArgs, glass_switch},
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgsBuilder, scrollable},
-    surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
+    scrollable::{ScrollableArgs, scrollable},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
 };
 
 #[tessera]
 #[shard]
 pub fn glass_switch_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_width())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             test_content();
                         },
@@ -44,37 +34,28 @@ pub fn glass_switch_showcase() {
 #[tessera]
 fn test_content() {
     column(
-        ColumnArgsBuilder::default()
+        ColumnArgs::default()
             .modifier(Modifier::new().fill_max_width())
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .build()
-            .unwrap(),
+            .cross_axis_alignment(CrossAxisAlignment::Start),
         move |scope| {
             scope.child(|| text("Glass Switch Showcase"));
 
             scope.child(move || {
-                glass_switch(
-                    GlassSwitchArgsBuilder::default()
-                        .on_toggle(Arc::new(|value| {
-                            println!("Glass Switch toggled to: {}", value);
-                        }))
-                        .build()
-                        .unwrap(),
-                );
+                glass_switch(GlassSwitchArgs::default().on_toggle(|value| {
+                    println!("Glass Switch toggled to: {}", value);
+                }));
             });
 
             scope.child(|| {
                 text(
-                    TextArgsBuilder::default()
+                    TextArgs::default()
                         .text("Disabled Glass Switch")
-                        .size(Dp(16.0))
-                        .build()
-                        .unwrap(),
+                        .size(Dp(16.0)),
                 )
             });
             scope.child(|| {
-                // Disabled by not providing on_change
-                glass_switch(GlassSwitchArgsBuilder::default().build().unwrap());
+                // Disabled by not providing on_change,
+                glass_switch(GlassSwitchArgs::default());
             });
         },
     )

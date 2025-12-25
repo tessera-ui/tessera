@@ -5,97 +5,109 @@
 //! Use for visually distinctive actions in layered or modern UIs.
 use std::sync::Arc;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{Color, Dp, Modifier, tessera};
 
 use crate::{
-    fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
+    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
     shape_def::{RoundedCorner, Shape},
 };
 
 /// Arguments for the `glass_button` component.
-#[derive(Builder, Clone, Default)]
-#[builder(pattern = "owned", setter(into, strip_option), default)]
+#[derive(Clone, Setters)]
+#[setters(into)]
 pub struct GlassButtonArgs {
     /// Optional modifier chain applied to the button node.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// The click callback function
-    #[builder(setter(custom, strip_option))]
+    #[setters(skip)]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// The ripple color (RGB) for the button.
-    #[builder(default = "Color::from_rgb(1.0, 1.0, 1.0)")]
     pub ripple_color: Color,
     /// The padding of the button.
-    #[builder(default = "Dp(12.0)")]
     pub padding: Dp,
     /// Tint color applied to the glass surface.
-    #[builder(default = "Color::new(0.5, 0.5, 0.5, 0.1)")]
     pub tint_color: Color,
     /// Shape used for the button background.
-    #[builder(default = "Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(Dp(25.0), 3.0),
-            top_right: RoundedCorner::manual(Dp(25.0), 3.0),
-            bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
-            bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
-        }")]
     pub shape: Shape,
     /// Blur radius applied to the captured background.
-    #[builder(default = "Dp(0.0)")]
     pub blur_radius: Dp,
     /// Virtual height of the chromatic dispersion effect.
-    #[builder(default = "Dp(25.0)")]
     pub dispersion_height: Dp,
     /// Multiplier controlling the strength of chromatic aberration.
-    #[builder(default = "1.1")]
     pub chroma_multiplier: f32,
     /// Virtual height used when calculating refraction distortion.
-    #[builder(default = "Dp(24.0)")]
     pub refraction_height: Dp,
     /// Amount of refraction to apply to the background.
-    #[builder(default = "32.0")]
     pub refraction_amount: f32,
     /// Strength of the grain/noise applied across the surface.
-    #[builder(default = "0.0")]
     pub noise_amount: f32,
     /// Scale factor for the generated noise texture.
-    #[builder(default = "1.0")]
     pub noise_scale: f32,
     /// Time value for animating noise or other procedural effects.
-    #[builder(default = "0.0")]
     pub time: f32,
     /// Optional contrast adjustment applied to the glass rendering.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub contrast: Option<f32>,
     /// Optional outline configuration for the glass shape.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub border: Option<GlassBorder>,
     /// Optional label announced by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional longer description for assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
     /// Whether the button should remain focusable even when no click handler is
     /// provided.
-    #[builder(default)]
     pub accessibility_focusable: bool,
 }
 
-impl GlassButtonArgsBuilder {
+impl GlassButtonArgs {
     /// Set the click handler.
     pub fn on_click<F>(mut self, on_click: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Some(Arc::new(on_click)));
+        self.on_click = Some(Arc::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
     pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(Some(on_click));
+        self.on_click = Some(on_click);
         self
+    }
+}
+
+impl Default for GlassButtonArgs {
+    fn default() -> Self {
+        Self {
+            modifier: Modifier::new(),
+            on_click: None,
+            ripple_color: Color::from_rgb(1.0, 1.0, 1.0),
+            padding: Dp(12.0),
+            tint_color: Color::new(0.5, 0.5, 0.5, 0.1),
+            shape: Shape::RoundedRectangle {
+                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
+            },
+            blur_radius: Dp(0.0),
+            dispersion_height: Dp(25.0),
+            chroma_multiplier: 1.1,
+            refraction_height: Dp(24.0),
+            refraction_amount: 32.0,
+            noise_amount: 0.0,
+            noise_scale: 1.0,
+            time: 0.0,
+            contrast: None,
+            border: None,
+            accessibility_label: None,
+            accessibility_description: None,
+            accessibility_focusable: false,
+        }
     }
 }
 
@@ -103,42 +115,34 @@ impl GlassButtonArgsBuilder {
 impl GlassButtonArgs {
     /// Create a primary glass button with default blue tint
     pub fn primary(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        GlassButtonArgsBuilder::default()
+        GlassButtonArgs::default()
             .on_click(on_click)
             .tint_color(Color::new(0.2, 0.5, 0.8, 0.2)) // Blue tint
             .border(GlassBorder::new(Dp(1.0).into()))
-            .build()
-            .expect("builder construction failed")
     }
 
     /// Create a secondary glass button with gray tint
     pub fn secondary(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        GlassButtonArgsBuilder::default()
+        GlassButtonArgs::default()
             .on_click(on_click)
             .tint_color(Color::new(0.6, 0.6, 0.6, 0.2)) // Gray tint
             .border(GlassBorder::new(Dp(1.0).into()))
-            .build()
-            .expect("builder construction failed")
     }
 
     /// Create a success glass button with green tint
     pub fn success(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        GlassButtonArgsBuilder::default()
+        GlassButtonArgs::default()
             .on_click(on_click)
             .tint_color(Color::new(0.1, 0.7, 0.3, 0.2)) // Green tint
             .border(GlassBorder::new(Dp(1.0).into()))
-            .build()
-            .expect("builder construction failed")
     }
 
     /// Create a danger glass button with red tint
     pub fn danger(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        GlassButtonArgsBuilder::default()
+        GlassButtonArgs::default()
             .on_click(on_click)
             .tint_color(Color::new(0.8, 0.2, 0.2, 0.2)) // Red tint
             .border(GlassBorder::new(Dp(1.0).into()))
-            .build()
-            .expect("builder construction failed")
     }
 }
 
@@ -163,27 +167,18 @@ impl GlassButtonArgs {
 /// ```
 /// use tessera_ui::Color;
 /// use tessera_ui_basic_components::{
-///     glass_button::{GlassButtonArgsBuilder, glass_button},
-///     text::{TextArgsBuilder, text},
+///     glass_button::{GlassButtonArgs, glass_button},
+///     text::{TextArgs, text},
 /// };
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
 /// glass_button(
-///     GlassButtonArgsBuilder::default()
+///     GlassButtonArgs::default()
 ///         .on_click(|| println!("Button clicked!"))
-///         .tint_color(Color::new(0.2, 0.3, 0.8, 0.3))
-///         .build()
-///         .expect("builder construction failed"),
-///     || {
-///         text(
-///             TextArgsBuilder::default()
-///                 .text("Click Me".to_string())
-///                 .build()
-///                 .expect("builder construction failed"),
-///         )
-///     },
+///         .tint_color(Color::new(0.2, 0.3, 0.8, 0.3)),
+///     || text(TextArgs::default().text("Click Me")),
 /// );
 /// # }
 /// # component();
@@ -195,12 +190,12 @@ pub fn glass_button(
 ) {
     let args: GlassButtonArgs = args.into();
 
-    let mut glass_args_builder = FluidGlassArgsBuilder::default();
+    let mut glass_args = FluidGlassArgs::default();
     if let Some(contrast) = args.contrast {
-        glass_args_builder = glass_args_builder.contrast(contrast);
+        glass_args = glass_args.contrast(contrast);
     }
 
-    let mut glass_args = glass_args_builder
+    let mut glass_args = glass_args
         .modifier(args.modifier)
         .tint_color(args.tint_color)
         .shape(args.shape)
@@ -233,8 +228,6 @@ pub fn glass_button(
     if args.accessibility_focusable {
         glass_args = glass_args.accessibility_focusable(true);
     }
-
-    let glass_args = glass_args.build().expect("builder construction failed");
 
     fluid_glass(glass_args, child);
 }

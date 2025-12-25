@@ -25,31 +25,17 @@ use tessera_ui::{ComputedData, Constraint, MeasurementError, Modifier, tessera};
 /// use tessera_ui_basic_components::{
 ///     row::{RowArgs, row},
 ///     spacer::spacer,
-///     text::{TextArgsBuilder, text},
+///     text::{TextArgs, text},
 /// };
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
 /// row(RowArgs::default(), |scope| {
-///     scope.child(|| {
-///         text(
-///             TextArgsBuilder::default()
-///                 .text("Left".to_string())
-///                 .build()
-///                 .expect("builder construction failed"),
-///         )
-///     });
+///     scope.child(|| text(TextArgs::default().text("Left")));
 ///     // Use weight to let the spacer expand and push the trailing content.
 ///     scope.child_weighted(|| spacer(Modifier::new()), 1.0);
-///     scope.child(|| {
-///         text(
-///             TextArgsBuilder::default()
-///                 .text("Right".to_string())
-///                 .build()
-///                 .expect("builder construction failed"),
-///         )
-///     });
+///     scope.child(|| text(TextArgs::default().text("Right")));
 /// });
 /// # }
 /// # component();

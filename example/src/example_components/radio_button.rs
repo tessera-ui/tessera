@@ -3,35 +3,27 @@ use std::sync::Arc;
 use tessera_ui::{Dp, Modifier, State, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
-    column::{ColumnArgsBuilder, column},
+    column::{ColumnArgs, column},
     modifier::ModifierExt as _,
-    radio_button::{RadioButtonArgsBuilder, RadioButtonController, radio_button_with_controller},
-    row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, scrollable},
-    surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
+    radio_button::{RadioButtonArgs, RadioButtonController, radio_button_with_controller},
+    row::{RowArgs, row},
+    scrollable::{ScrollableArgs, scrollable},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
 };
 
 #[tessera]
 #[shard]
 pub fn radio_button_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_width())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             content();
                         },
@@ -61,32 +53,26 @@ fn content() {
     });
 
     column(
-        ColumnArgsBuilder::default()
+        ColumnArgs::default()
             .modifier(Modifier::new().fill_max_width())
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .build()
-            .unwrap(),
+            .cross_axis_alignment(CrossAxisAlignment::Start),
         {
             let select = select.clone();
             move |scope| {
                 scope.child(|| {
                     text(
-                        TextArgsBuilder::default()
+                        TextArgs::default()
                             .text("Radio Button Showcase")
-                            .size(Dp(20.0))
-                            .build()
-                            .unwrap(),
+                            .size(Dp(20.0)),
                     )
                 });
 
                 let selected = selected_index.get();
                 scope.child(|| {
                     text(
-                        TextArgsBuilder::default()
+                        TextArgs::default()
                             .text("Pick a favorite animal:")
-                            .size(Dp(16.0))
-                            .build()
-                            .unwrap(),
+                            .size(Dp(16.0)),
                     );
                 });
 
@@ -139,22 +125,14 @@ fn content() {
                 };
                 scope.child(move || {
                     text(
-                        TextArgsBuilder::default()
+                        TextArgs::default()
                             .text(format!("Selected: {}", selected_label))
-                            .size(Dp(14.0))
-                            .build()
-                            .unwrap(),
+                            .size(Dp(14.0)),
                     );
                 });
 
                 scope.child(|| {
-                    text(
-                        TextArgsBuilder::default()
-                            .text("Disabled states")
-                            .size(Dp(16.0))
-                            .build()
-                            .unwrap(),
-                    );
+                    text(TextArgs::default().text("Disabled states").size(Dp(16.0)));
                 });
 
                 scope.child({
@@ -193,21 +171,16 @@ fn option_row(
     enabled: bool,
 ) {
     row(
-        RowArgsBuilder::default()
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .build()
-            .unwrap(),
+        RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
         move |scope| {
             let on_select = Arc::new(on_select);
             scope.child({
                 let on_select = on_select.clone();
                 move || {
                     radio_button_with_controller(
-                        RadioButtonArgsBuilder::default()
-                            .on_select(on_select)
-                            .enabled(enabled)
-                            .build()
-                            .unwrap(),
+                        RadioButtonArgs::default()
+                            .on_select_shared(on_select)
+                            .enabled(enabled),
                         controller,
                     );
                 }

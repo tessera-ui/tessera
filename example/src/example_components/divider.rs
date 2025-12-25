@@ -1,37 +1,26 @@
 use tessera_ui::{Dp, Modifier, shard, tessera};
 use tessera_ui_basic_components::{
-    column::{ColumnArgsBuilder, column},
-    divider::{DividerArgsBuilder, horizontal_divider, vertical_divider},
+    column::{ColumnArgs, column},
+    divider::{DividerArgs, horizontal_divider, vertical_divider},
     modifier::ModifierExt as _,
-    row::{RowArgsBuilder, row},
+    row::{RowArgs, row},
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
 };
 
 #[tessera]
 #[shard]
 pub fn divider_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             column(
-                ColumnArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
-                    .build()
-                    .unwrap(),
+                ColumnArgs::default()
+                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0))),
                 |scope| {
                     scope.child(|| {
-                        text(
-                            TextArgsBuilder::default()
-                                .text("Divider Showcase")
-                                .size(Dp(20.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        text(TextArgs::default().text("Divider Showcase").size(Dp(20.0)));
                     });
 
                     scope.child(|| {
@@ -40,16 +29,14 @@ pub fn divider_showcase() {
 
                     scope.child(|| {
                         text(
-                            TextArgsBuilder::default()
+                            TextArgs::default()
                                 .text("Horizontal (default)")
-                                .size(Dp(14.0))
-                                .build()
-                                .unwrap(),
+                                .size(Dp(14.0)),
                         );
                     });
 
                     scope.child(|| {
-                        horizontal_divider(DividerArgsBuilder::default().build().unwrap());
+                        horizontal_divider(DividerArgs::default());
                     });
 
                     scope.child(|| {
@@ -58,21 +45,14 @@ pub fn divider_showcase() {
 
                     scope.child(|| {
                         text(
-                            TextArgsBuilder::default()
+                            TextArgs::default()
                                 .text("Horizontal (hairline)")
-                                .size(Dp(14.0))
-                                .build()
-                                .unwrap(),
+                                .size(Dp(14.0)),
                         );
                     });
 
                     scope.child(|| {
-                        horizontal_divider(
-                            DividerArgsBuilder::default()
-                                .thickness(Dp::ZERO)
-                                .build()
-                                .unwrap(),
-                        );
+                        horizontal_divider(DividerArgs::default().thickness(Dp::ZERO));
                     });
 
                     scope.child(|| {
@@ -81,20 +61,16 @@ pub fn divider_showcase() {
 
                     scope.child(|| {
                         text(
-                            TextArgsBuilder::default()
+                            TextArgs::default()
                                 .text("Vertical (fixed row height)")
-                                .size(Dp(14.0))
-                                .build()
-                                .unwrap(),
+                                .size(Dp(14.0)),
                         );
                     });
 
                     scope.child(|| {
                         row(
-                            RowArgsBuilder::default()
-                                .modifier(Modifier::new().fill_max_width().height(Dp(56.0)))
-                                .build()
-                                .unwrap(),
+                            RowArgs::default()
+                                .modifier(Modifier::new().fill_max_width().height(Dp(56.0))),
                             |scope| {
                                 scope.child(|| {
                                     text("Left");
@@ -105,9 +81,7 @@ pub fn divider_showcase() {
                                 });
 
                                 scope.child(|| {
-                                    vertical_divider(
-                                        DividerArgsBuilder::default().build().unwrap(),
-                                    );
+                                    vertical_divider(DividerArgs::default());
                                 });
 
                                 scope.child(|| {

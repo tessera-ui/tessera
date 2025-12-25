@@ -5,7 +5,7 @@
 //! Use to indicate the completion of a task or a specific value in a range.
 use std::time::Instant;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, ParentConstraint, Px,
     PxPosition, accesskit::Role, remember, tessera, use_context,
@@ -15,7 +15,7 @@ use crate::{
     modifier::{ModifierExt as _, SemanticsArgs},
     pipelines::progress_arc::command::{ProgressArcCap, ProgressArcCommand},
     shape_def::Shape,
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgs, surface},
     theme::MaterialTheme,
 };
 
@@ -221,48 +221,59 @@ fn stop_indicator_bounds(width: Px, height: Px) -> (PxPosition, Px) {
 }
 
 /// Arguments for configuring a Material Design linear progress indicator.
-#[derive(Builder, Clone, Debug)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Debug, Setters)]
 pub struct LinearProgressIndicatorArgs {
     /// Current progress in the range 0.0..=1.0.
     ///
     /// When omitted, the indicator renders in an indeterminate mode.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub progress: Option<f32>,
 
     /// Modifier chain applied to the indicator subtree.
-    #[builder(
-        default = "Modifier::new().size(ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH, ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT)"
-    )]
     pub modifier: Modifier,
 
     /// Color of the active indicator.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub color: Color,
 
     /// Color of the inactive track.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.secondary_container")]
     pub track_color: Color,
 
     /// Stroke cap used for the indicator ends.
-    #[builder(default)]
     pub stroke_cap: ProgressStrokeCap,
 
     /// Size of the gap between the active indicator and the track.
-    #[builder(default = "ProgressIndicatorDefaults::LINEAR_INDICATOR_TRACK_GAP_SIZE")]
     pub gap_size: Dp,
 
     /// Whether to draw a stop indicator at the end of the track.
-    #[builder(default = "true")]
     pub draw_stop_indicator: bool,
 
     /// Optional accessibility label read by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
 
     /// Optional accessibility description.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+}
+
+impl Default for LinearProgressIndicatorArgs {
+    fn default() -> Self {
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            progress: None,
+            modifier: Modifier::new().size(
+                ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH,
+                ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT,
+            ),
+            color: scheme.primary,
+            track_color: scheme.secondary_container,
+            stroke_cap: ProgressStrokeCap::default(),
+            gap_size: ProgressIndicatorDefaults::LINEAR_INDICATOR_TRACK_GAP_SIZE,
+            draw_stop_indicator: true,
+            accessibility_label: None,
+            accessibility_description: None,
+        }
+    }
 }
 
 /// # linear_progress_indicator
@@ -285,15 +296,10 @@ pub struct LinearProgressIndicatorArgs {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_ui_basic_components::progress::{
-///     LinearProgressIndicatorArgsBuilder, linear_progress_indicator,
+///     LinearProgressIndicatorArgs, linear_progress_indicator,
 /// };
 ///
-/// linear_progress_indicator(
-///     LinearProgressIndicatorArgsBuilder::default()
-///         .progress(0.75)
-///         .build()
-///         .unwrap(),
-/// );
+/// linear_progress_indicator(LinearProgressIndicatorArgs::default().progress(0.75));
 /// # }
 /// # component();
 /// ```
@@ -340,21 +346,17 @@ fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
     Modifier::new().semantics(semantics).run(move || {
         if args_for_children.progress.is_some() {
             surface(
-                SurfaceArgsBuilder::default()
+                SurfaceArgs::default()
                     .style(args_for_children.track_color.into())
                     .shape(segment_shape)
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .expect("builder construction failed"),
+                    .modifier(Modifier::new().fill_max_size()),
                 || {},
             );
             surface(
-                SurfaceArgsBuilder::default()
+                SurfaceArgs::default()
                     .style(args_for_children.color.into())
                     .shape(segment_shape)
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .expect("builder construction failed"),
+                    .modifier(Modifier::new().fill_max_size()),
                 || {},
             );
             if args_for_children.draw_stop_indicator {
@@ -364,12 +366,10 @@ fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
                     Shape::Ellipse
                 };
                 surface(
-                    SurfaceArgsBuilder::default()
+                    SurfaceArgs::default()
                         .style(args_for_children.color.into())
                         .shape(stop_shape)
-                        .modifier(Modifier::new().fill_max_size())
-                        .build()
-                        .expect("builder construction failed"),
+                        .modifier(Modifier::new().fill_max_size()),
                     || {},
                 );
             }
@@ -382,12 +382,10 @@ fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
                 (args_for_children.track_color, segment_shape),
             ] {
                 surface(
-                    SurfaceArgsBuilder::default()
+                    SurfaceArgs::default()
                         .style(color.into())
                         .shape(shape)
-                        .modifier(Modifier::new().fill_max_size())
-                        .build()
-                        .expect("builder construction failed"),
+                        .modifier(Modifier::new().fill_max_size()),
                     || {},
                 );
             }
@@ -559,46 +557,56 @@ fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
 }
 
 /// Arguments for configuring a Material Design circular progress indicator.
-#[derive(Builder, Clone, Debug)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Debug, Setters)]
 pub struct CircularProgressIndicatorArgs {
     /// Current progress in the range 0.0..=1.0.
     ///
     /// When omitted, the indicator renders in an indeterminate mode.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub progress: Option<f32>,
 
     /// Diameter of the indicator.
-    #[builder(default = "ProgressIndicatorDefaults::CIRCULAR_INDICATOR_DIAMETER")]
     pub diameter: Dp,
 
     /// Stroke width of the indicator.
-    #[builder(default = "ProgressIndicatorDefaults::CIRCULAR_STROKE_WIDTH")]
     pub stroke_width: Dp,
 
     /// Color of the active indicator.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub color: Color,
 
     /// Color of the track behind the indicator.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.secondary_container")]
     pub track_color: Color,
 
     /// Stroke cap used for the arc ends.
-    #[builder(default)]
     pub stroke_cap: ProgressStrokeCap,
 
     /// Gap between the indicator and the track.
-    #[builder(default = "ProgressIndicatorDefaults::CIRCULAR_INDICATOR_TRACK_GAP_SIZE")]
     pub gap_size: Dp,
 
     /// Optional accessibility label read by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
 
     /// Optional accessibility description.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+}
+
+impl Default for CircularProgressIndicatorArgs {
+    fn default() -> Self {
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            progress: None,
+            diameter: ProgressIndicatorDefaults::CIRCULAR_INDICATOR_DIAMETER,
+            stroke_width: ProgressIndicatorDefaults::CIRCULAR_STROKE_WIDTH,
+            color: scheme.primary,
+            track_color: scheme.secondary_container,
+            stroke_cap: ProgressStrokeCap::default(),
+            gap_size: ProgressIndicatorDefaults::CIRCULAR_INDICATOR_TRACK_GAP_SIZE,
+            accessibility_label: None,
+            accessibility_description: None,
+        }
+    }
 }
 
 fn circular_gap_sweep_degrees(diameter: Dp, stroke_width: Dp, gap_size: Dp, is_butt: bool) -> f32 {
@@ -682,15 +690,10 @@ fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_ui_basic_components::progress::{
-///     CircularProgressIndicatorArgsBuilder, circular_progress_indicator,
+///     CircularProgressIndicatorArgs, circular_progress_indicator,
 /// };
 ///
-/// circular_progress_indicator(
-///     CircularProgressIndicatorArgsBuilder::default()
-///         .progress(0.6)
-///         .build()
-///         .unwrap(),
-/// );
+/// circular_progress_indicator(CircularProgressIndicatorArgs::default().progress(0.6));
 /// # }
 /// # component();
 /// ```
@@ -813,26 +816,34 @@ pub fn circular_progress_indicator(args: impl Into<CircularProgressIndicatorArgs
 }
 
 /// Arguments for the `progress` component.
-#[derive(Builder, Clone, Debug)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Debug, Setters)]
 pub struct ProgressArgs {
     /// The current value of the progress bar, ranging from 0.0 to 1.0.
-    #[builder(default = "0.0")]
     pub value: f32,
 
     /// Modifier chain applied to the progress bar subtree.
-    #[builder(
-        default = "Modifier::new().size(ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH, ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT)"
-    )]
     pub modifier: Modifier,
 
     /// The color of the active part of the track.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub progress_color: Color,
 
     /// The color of the inactive part of the track.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.surface_variant")]
     pub track_color: Color,
+}
+
+impl Default for ProgressArgs {
+    fn default() -> Self {
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            value: 0.0,
+            modifier: Modifier::new().size(
+                ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH,
+                ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT,
+            ),
+            progress_color: scheme.primary,
+            track_color: scheme.surface_variant,
+        }
+    }
 }
 
 /// # progress
@@ -855,10 +866,10 @@ pub struct ProgressArgs {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_ui_basic_components::progress::{ProgressArgsBuilder, progress};
+/// use tessera_ui_basic_components::progress::{ProgressArgs, progress};
 ///
 /// // Creates a progress bar that is 75% complete.
-/// progress(ProgressArgsBuilder::default().value(0.75).build().unwrap());
+/// progress(ProgressArgs::default().value(0.75));
 /// # }
 /// # component();
 /// ```
@@ -867,12 +878,10 @@ pub fn progress(args: impl Into<ProgressArgs>) {
     let args: ProgressArgs = args.into();
 
     linear_progress_indicator(
-        LinearProgressIndicatorArgsBuilder::default()
+        LinearProgressIndicatorArgs::default()
             .progress(args.value)
             .modifier(args.modifier)
             .color(args.progress_color)
-            .track_color(args.track_color)
-            .build()
-            .expect("builder construction failed"),
+            .track_color(args.track_color),
     );
 }

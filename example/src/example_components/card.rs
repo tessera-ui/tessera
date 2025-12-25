@@ -1,36 +1,25 @@
 use tessera_ui::{Dp, Modifier, shard, tessera};
 use tessera_ui_basic_components::{
-    card::{CardArgs, CardArgsBuilder, CardDefaults, CardVariant, card},
-    column::{ColumnArgsBuilder, column},
+    card::{CardArgs, CardDefaults, CardVariant, card},
+    column::{ColumnArgs, column},
     modifier::ModifierExt as _,
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
 };
 
 #[tessera]
 #[shard]
 pub fn card_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             column(
-                ColumnArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
-                    .build()
-                    .unwrap(),
+                ColumnArgs::default()
+                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0))),
                 |scope| {
                     scope.child(|| {
-                        text(
-                            TextArgsBuilder::default()
-                                .text("Card Showcase")
-                                .size(Dp(20.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        text(TextArgs::default().text("Card Showcase").size(Dp(20.0)));
                     });
 
                     scope.child(|| {
@@ -38,24 +27,16 @@ pub fn card_showcase() {
                     });
 
                     scope.child(|| {
-                        text(
-                            TextArgsBuilder::default()
-                                .text("Filled")
-                                .size(Dp(14.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        text(TextArgs::default().text("Filled").size(Dp(14.0)));
                     });
 
                     scope.child(|| {
                         card(CardArgs::filled(), |card_scope| {
                             card_scope.child(|| {
                                 surface(
-                                    SurfaceArgsBuilder::default()
+                                    SurfaceArgs::default()
                                         .style(tessera_ui::Color::TRANSPARENT.into())
-                                        .modifier(Modifier::new().padding_all(Dp(16.0)))
-                                        .build()
-                                        .unwrap(),
+                                        .modifier(Modifier::new().padding_all(Dp(16.0))),
                                     || {
                                         text("Filled card body");
                                     },
@@ -69,24 +50,16 @@ pub fn card_showcase() {
                     });
 
                     scope.child(|| {
-                        text(
-                            TextArgsBuilder::default()
-                                .text("Elevated")
-                                .size(Dp(14.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        text(TextArgs::default().text("Elevated").size(Dp(14.0)));
                     });
 
                     scope.child(|| {
                         card(CardArgs::elevated(), |card_scope| {
                             card_scope.child(|| {
                                 surface(
-                                    SurfaceArgsBuilder::default()
+                                    SurfaceArgs::default()
                                         .style(tessera_ui::Color::TRANSPARENT.into())
-                                        .modifier(Modifier::new().padding_all(Dp(16.0)))
-                                        .build()
-                                        .unwrap(),
+                                        .modifier(Modifier::new().padding_all(Dp(16.0))),
                                     || {
                                         text("Elevated card body");
                                     },
@@ -100,24 +73,16 @@ pub fn card_showcase() {
                     });
 
                     scope.child(|| {
-                        text(
-                            TextArgsBuilder::default()
-                                .text("Outlined")
-                                .size(Dp(14.0))
-                                .build()
-                                .unwrap(),
-                        );
+                        text(TextArgs::default().text("Outlined").size(Dp(14.0)));
                     });
 
                     scope.child(|| {
                         card(CardArgs::outlined(), |card_scope| {
                             card_scope.child(|| {
                                 surface(
-                                    SurfaceArgsBuilder::default()
+                                    SurfaceArgs::default()
                                         .style(tessera_ui::Color::TRANSPARENT.into())
-                                        .modifier(Modifier::new().padding_all(Dp(16.0)))
-                                        .build()
-                                        .unwrap(),
+                                        .modifier(Modifier::new().padding_all(Dp(16.0))),
                                     || {
                                         text("Outlined card body");
                                     },
@@ -132,30 +97,24 @@ pub fn card_showcase() {
 
                     scope.child(|| {
                         text(
-                            TextArgsBuilder::default()
+                            TextArgs::default()
                                 .text("Clickable (outlined)")
-                                .size(Dp(14.0))
-                                .build()
-                                .unwrap(),
+                                .size(Dp(14.0)),
                         );
                     });
 
                     scope.child(|| {
                         card(
-                            CardArgsBuilder::default()
+                            CardArgs::default()
                                 .variant(CardVariant::Outlined)
                                 .border(CardDefaults::outlined_card_border(true))
-                                .on_click(|| {})
-                                .build()
-                                .unwrap(),
+                                .on_click(|| {}),
                             |card_scope| {
                                 card_scope.child(|| {
                                     surface(
-                                        SurfaceArgsBuilder::default()
+                                        SurfaceArgs::default()
                                             .style(tessera_ui::Color::TRANSPARENT.into())
-                                            .modifier(Modifier::new().padding_all(Dp(16.0)))
-                                            .build()
-                                            .unwrap(),
+                                            .modifier(Modifier::new().padding_all(Dp(16.0))),
                                         || {
                                             text("Tap me");
                                         },

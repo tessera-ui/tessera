@@ -21,33 +21,27 @@
 //!
 //! See [`CheckmarkArgs`] for configuration options and usage examples in the
 //! [`checkmark`] function documentation.
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{Color, ComputedData, Dp, Px, tessera};
 
 use crate::pipelines::checkmark::command::CheckmarkCommand;
 
 /// Arguments for the `checkmark` component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct CheckmarkArgs {
     /// Color of the checkmark stroke
-    #[builder(default = "Color::new(0.0, 0.6, 0.0, 1.0)")]
     pub color: Color,
 
     /// Width of the checkmark stroke in pixels
-    #[builder(default = "5.0")]
     pub stroke_width: f32,
 
     /// Animation progress from 0.0 (not drawn) to 1.0 (fully drawn)
-    #[builder(default = "1.0")]
     pub progress: f32,
 
     /// Padding around the checkmark within its bounds
-    #[builder(default = "[2.0, 2.0]")]
     pub padding: [f32; 2], // [horizontal, vertical]
 
     /// Size of the checkmark area
-    #[builder(default = "Dp(20.0)")]
     pub size: Dp,
 }
 
@@ -65,9 +59,13 @@ impl std::fmt::Debug for CheckmarkArgs {
 
 impl Default for CheckmarkArgs {
     fn default() -> Self {
-        CheckmarkArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        Self {
+            color: Color::new(0.0, 0.6, 0.0, 1.0),
+            stroke_width: 5.0,
+            progress: 1.0,
+            padding: [2.0, 2.0],
+            size: Dp(20.0),
+        }
     }
 }
 
@@ -81,7 +79,7 @@ impl Default for CheckmarkArgs {
 /// # Arguments
 ///
 /// The `args` parameter accepts any value that can be converted into
-/// `CheckmarkArgs`, including a `CheckmarkArgs` struct or its builder.
+/// `CheckmarkArgs`, including a `CheckmarkArgs` struct.
 ///
 /// * `color`: The `Color` of the checkmark stroke. Defaults to a green color.
 /// * `stroke_width`: The width of the checkmark stroke in pixels. Defaults to

@@ -6,7 +6,7 @@
 
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Dp, Modifier, Px, PxPosition, remember, tessera, use_context,
 };
@@ -110,16 +110,13 @@ impl ButtonGroupsScope<'_> {
 }
 
 /// Arguments for the [`button_groups`] component.
-#[derive(Builder, Default)]
+#[derive(Default, Setters)]
 pub struct ButtonGroupsArgs {
     /// Size of the button group.
-    #[builder(default)]
     pub size: ButtonGroupsSize,
     /// Style of the button group.
-    #[builder(default)]
     pub style: ButtonGroupsStyle,
     /// Selection mode of the button group.
-    #[builder(default)]
     pub selection_mode: ButtonGroupsSelectionMode,
 }
 

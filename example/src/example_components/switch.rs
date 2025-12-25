@@ -1,41 +1,31 @@
-use std::sync::Arc;
-
 use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
-    column::{ColumnArgsBuilder, column},
-    icon::{IconArgsBuilder, icon},
+    column::{ColumnArgs, column},
+    icon::{IconArgs, icon},
     material_icons::round::check_icon,
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgsBuilder, scrollable},
-    surface::{SurfaceArgsBuilder, surface},
+    scrollable::{ScrollableArgs, scrollable},
+    surface::{SurfaceArgs, surface},
     switch::{
-        SwitchArgsBuilder, SwitchController, switch, switch_with_child_and_controller,
+        SwitchArgs, SwitchController, switch, switch_with_child_and_controller,
         switch_with_controller,
     },
-    text::{TextArgsBuilder, text},
+    text::{TextArgs, text},
 };
 
 #[tessera]
 #[shard]
 pub fn switch_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_size()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             test_content();
                         },
@@ -49,68 +39,38 @@ pub fn switch_showcase() {
 #[tessera]
 fn test_content() {
     column(
-        ColumnArgsBuilder::default()
+        ColumnArgs::default()
             .modifier(Modifier::new().fill_max_width())
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .build()
-            .unwrap(),
+            .cross_axis_alignment(CrossAxisAlignment::Start),
         move |scope| {
-            scope.child(|| {
-                text(
-                    TextArgsBuilder::default()
-                        .text("Switch Showcase")
-                        .size(Dp(20.0))
-                        .build()
-                        .unwrap(),
-                )
-            });
+            scope.child(|| text(TextArgs::default().text("Switch Showcase").size(Dp(20.0))));
 
             scope.child(move || {
                 let controller = remember(|| SwitchController::new(false));
                 if controller.with(|c| c.is_checked()) {
                     switch_with_child_and_controller(
-                        SwitchArgsBuilder::default()
-                            .on_toggle(Arc::new(|value| {
-                                println!("Switch toggled to: {}", value);
-                            }))
-                            .build()
-                            .unwrap(),
+                        SwitchArgs::default().on_toggle(|value| {
+                            println!("Switch toggled to: {}", value);
+                        }),
                         controller,
                         move || {
-                            icon(
-                                IconArgsBuilder::default()
-                                    .content(check_icon())
-                                    .size(Dp(16.0))
-                                    .build()
-                                    .unwrap(),
-                            );
+                            icon(IconArgs::from(check_icon()).size(Dp(16.0)));
                         },
                     );
                 } else {
                     switch_with_controller(
-                        SwitchArgsBuilder::default()
-                            .on_toggle(Arc::new(|value| {
-                                println!("Switch toggled to: {}", value);
-                            }))
-                            .build()
-                            .unwrap(),
+                        SwitchArgs::default().on_toggle(|value| {
+                            println!("Switch toggled to: {}", value);
+                        }),
                         controller,
                     );
                 }
             });
 
-            scope.child(|| {
-                text(
-                    TextArgsBuilder::default()
-                        .text("Disabled Switch")
-                        .size(Dp(16.0))
-                        .build()
-                        .unwrap(),
-                )
-            });
+            scope.child(|| text(TextArgs::default().text("Disabled Switch").size(Dp(16.0))));
             scope.child(move || {
-                // Disabled by not providing on_change
-                switch(SwitchArgsBuilder::default().build().unwrap());
+                // Disabled by not providing on_change,
+                switch(SwitchArgs::default());
             });
         },
     )

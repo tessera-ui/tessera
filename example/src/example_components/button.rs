@@ -4,16 +4,16 @@ use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
     button::{ButtonArgs, button},
-    column::{ColumnArgsBuilder, column},
-    icon::{IconArgsBuilder, IconContent},
-    icon_button::{IconButtonArgsBuilder, IconButtonVariant, icon_button},
+    column::{ColumnArgs, column},
+    icon::IconArgs,
+    icon_button::{IconButtonArgs, IconButtonVariant, icon_button},
     image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
     modifier::ModifierExt as _,
-    row::{RowArgsBuilder, row},
-    scrollable::{ScrollableArgsBuilder, scrollable},
+    row::{RowArgs, row},
+    scrollable::{ScrollableArgs, scrollable},
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
     theme::MaterialTheme,
 };
 
@@ -49,57 +49,36 @@ impl Default for ButtonShowcaseState {
 pub fn button_showcase(#[state] state: ButtonShowcaseState) {
     let counter = remember(|| 0i32);
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_size()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             column(
-                                ColumnArgsBuilder::default()
-                                    .cross_axis_alignment(CrossAxisAlignment::Start)
-                                    .build()
-                                    .unwrap(),
+                                ColumnArgs::default()
+                                    .cross_axis_alignment(CrossAxisAlignment::Start),
                                 move |scope| {
                                     scope.child(|| {
                                         text(
-                                            TextArgsBuilder::default()
+                                            TextArgs::default()
                                                 .text("Button Showcase")
-                                                .size(Dp(20.0))
-                                                .build()
-                                                .unwrap(),
+                                                .size(Dp(20.0)),
                                         )
                                     });
 
                                     scope.child(|| {
-                                        text(
-                                            TextArgsBuilder::default()
-                                                .text("Icon Button")
-                                                .size(Dp(16.0))
-                                                .build()
-                                                .unwrap(),
-                                        )
+                                        text(TextArgs::default().text("Icon Button").size(Dp(16.0)))
                                     });
 
                                     scope.child(move || {
-                                        let icon = IconArgsBuilder::default()
-                                            .content(IconContent::from(state.icon_data.clone()))
-                                            .size(Dp(24.0))
-                                            .build()
-                                            .unwrap();
+                                        let icon =
+                                            IconArgs::from(state.icon_data.clone()).size(Dp(24.0));
 
-                                        let button_args = IconButtonArgsBuilder::default()
+                                        let button_args = IconButtonArgs::new(icon)
                                             .variant(IconButtonVariant::Filled)
                                             .color(
                                                 use_context::<MaterialTheme>()
@@ -110,10 +89,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                             .on_click(move || {
                                                 counter.with_mut(|count| *count += 1);
                                                 println!("Icon button clicked!");
-                                            })
-                                            .icon(icon)
-                                            .build()
-                                            .unwrap();
+                                            });
 
                                         icon_button(button_args);
                                     });
@@ -124,16 +100,14 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
 
                                     scope.child(|| {
                                         text(
-                                            TextArgsBuilder::default()
+                                            TextArgs::default()
                                                 .text("Button Styles")
-                                                .size(Dp(20.0))
-                                                .build()
-                                                .unwrap(),
+                                                .size(Dp(20.0)),
                                         )
                                     });
 
                                     scope.child(|| {
-                                        row(RowArgsBuilder::default().build().unwrap(), |scope| {
+                                        row(RowArgs::default(), |scope| {
                                             scope.child(|| {
                                                 button(
                                                     ButtonArgs::filled(|| {
@@ -141,16 +115,14 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                     }),
                                                     || {
                                                         text(
-                                                            TextArgsBuilder::default()
+                                                            TextArgs::default()
                                                                 .text("Filled")
                                                                 .color(
                                                                     use_context::<MaterialTheme>()
                                                                         .get()
                                                                         .color_scheme
                                                                         .on_primary,
-                                                                )
-                                                                .build()
-                                                                .unwrap(),
+                                                                ),
                                                         );
                                                     },
                                                 );
@@ -164,16 +136,14 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                     }),
                                                     || {
                                                         text(
-                                                            TextArgsBuilder::default()
+                                                            TextArgs::default()
                                                                 .text("Elevated")
                                                                 .color(
                                                                     use_context::<MaterialTheme>()
                                                                         .get()
                                                                         .color_scheme
                                                                         .primary,
-                                                                )
-                                                                .build()
-                                                                .unwrap(),
+                                                                ),
                                                         );
                                                     },
                                                 );
@@ -185,16 +155,14 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                     ButtonArgs::tonal(|| println!("Tonal clicked")),
                                                     || {
                                                         text(
-                                                            TextArgsBuilder::default()
+                                                            TextArgs::default()
                                                                 .text("Tonal")
                                                                 .color(
                                                                     use_context::<MaterialTheme>()
                                                                         .get()
                                                                         .color_scheme
                                                                         .on_secondary_container,
-                                                                )
-                                                                .build()
-                                                                .unwrap(),
+                                                                ),
                                                         );
                                                     },
                                                 );
@@ -205,57 +173,44 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                     scope.child(|| spacer(Modifier::new().height(Dp(8.0))));
 
                                     scope.child(|| {
-                                        row(
-                                            RowArgsBuilder::default().build().unwrap(),
-                                            move |scope| {
-                                                scope.child(|| {
-                                                    button(
-                                                        ButtonArgs::outlined(|| {
-                                                            println!("Outlined clicked")
-                                                        }),
-                                                        || {
-                                                            text(
-                                                                TextArgsBuilder::default()
-                                                                    .text("Outlined")
-                                                                    .color(
-                                                                        use_context::<MaterialTheme>()
-                                                                            .get()
-                                                                            .color_scheme
-                                                                            .primary,
-                                                                    )
-                                                                    .build()
-                                                                    .unwrap(),
-                                                            );
-                                                        },
-                                                    );
-                                                });
-                                                scope.child(|| {
-                                                    spacer(Modifier::new().width(Dp(8.0)))
-                                                });
+                                        row(RowArgs::default(), move |scope| {
+                                            scope.child(|| {
+                                                button(
+                                                    ButtonArgs::outlined(|| {
+                                                        println!("Outlined clicked")
+                                                    }),
+                                                    || {
+                                                        text(
+                                                            TextArgs::default()
+                                                                .text("Outlined")
+                                                                .color(
+                                                                    use_context::<MaterialTheme>()
+                                                                        .get()
+                                                                        .color_scheme
+                                                                        .primary,
+                                                                ),
+                                                        );
+                                                    },
+                                                );
+                                            });
+                                            scope.child(|| spacer(Modifier::new().width(Dp(8.0))));
 
-                                                scope.child(|| {
-                                                    button(
-                                                        ButtonArgs::text(|| {
-                                                            println!("Text clicked")
-                                                        }),
-                                                        || {
-                                                            text(
-                                                                TextArgsBuilder::default()
-                                                                    .text("Text")
-                                                                    .color(
-                                                                        use_context::<MaterialTheme>()
-                                                                            .get()
-                                                                            .color_scheme
-                                                                            .primary,
-                                                                    )
-                                                                    .build()
-                                                                    .unwrap(),
-                                                            );
-                                                        },
-                                                    );
-                                                });
-                                            },
-                                        );
+                                            scope.child(|| {
+                                                button(
+                                                    ButtonArgs::text(|| println!("Text clicked")),
+                                                    || {
+                                                        text(
+                                                            TextArgs::default().text("Text").color(
+                                                                use_context::<MaterialTheme>()
+                                                                    .get()
+                                                                    .color_scheme
+                                                                    .primary,
+                                                            ),
+                                                        );
+                                                    },
+                                                );
+                                            });
+                                        });
                                     });
                                 },
                             )

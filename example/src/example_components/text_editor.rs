@@ -1,36 +1,26 @@
-use std::sync::Arc;
-
 use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
-    column::{ColumnArgsBuilder, column},
+    column::{ColumnArgs, column},
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgsBuilder, scrollable},
+    scrollable::{ScrollableArgs, scrollable},
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
-    text_editor::{TextEditorArgsBuilder, TextEditorController, text_editor_with_controller},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
+    text_editor::{TextEditorArgs, TextEditorController, text_editor_with_controller},
 };
 
 #[tessera]
 #[shard]
 pub fn text_editor_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_size())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_size()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             test_content();
                         },
@@ -46,18 +36,13 @@ fn test_content() {
     let editor_state = remember(|| TextEditorController::new(Dp(22.0), None));
 
     column(
-        ColumnArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_width())
-            .build()
-            .unwrap(),
+        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
         move |scope| {
             scope.child(|| {
                 text(
-                    TextArgsBuilder::default()
+                    TextArgs::default()
                         .text("Text Editor Showcase")
-                        .size(Dp(20.0))
-                        .build()
-                        .unwrap(),
+                        .size(Dp(20.0)),
                 )
             });
 
@@ -65,11 +50,9 @@ fn test_content() {
 
             scope.child(move || {
                 text_editor_with_controller(
-                    TextEditorArgsBuilder::default()
+                    TextEditorArgs::default()
                         .modifier(Modifier::new().fill_max_width().height(Dp(200.0)))
-                        .on_change(Arc::new(move |v| v))
-                        .build()
-                        .unwrap(),
+                        .on_change(move |v| v),
                     editor_state,
                 );
             });

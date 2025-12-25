@@ -1,17 +1,17 @@
 use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
-    button::{ButtonArgsBuilder, button},
-    column::{ColumnArgsBuilder, column},
+    button::{ButtonArgs, button},
+    column::{ColumnArgs, column},
     menus::{
-        MenuAnchor, MenuController, MenuItemArgsBuilder, MenuPlacement, MenuProviderArgsBuilder,
+        MenuAnchor, MenuController, MenuItemArgs, MenuPlacement, MenuProviderArgs,
         menu_provider_with_controller,
     },
     modifier::ModifierExt as _,
-    row::{RowArgsBuilder, row},
+    row::{RowArgs, row},
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
     theme::MaterialTheme,
 };
 
@@ -25,40 +25,27 @@ pub fn menus_showcase() {
     let anchor = MenuAnchor::from_dp((Dp(20.0), Dp(72.0)), (Dp(180.0), Dp(48.0)));
 
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .expect("builder construction failed"),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             menu_provider_with_controller(
-                MenuProviderArgsBuilder::default()
+                MenuProviderArgs::default()
                     .placement(MenuPlacement::BelowStart)
-                    .offset([Dp(0.0), Dp(6.0)])
-                    .build()
-                    .expect("builder construction failed"),
+                    .offset([Dp(0.0), Dp(6.0)]),
                 menu_controller,
                 {
                     move || {
                         column(
-                            ColumnArgsBuilder::default()
+                            ColumnArgs::default()
                                 .modifier(Modifier::new().fill_max_size().padding_all(Dp(20.0)))
-                                .cross_axis_alignment(CrossAxisAlignment::Start)
-                                .build()
-                                .expect("builder construction failed"),
+                                .cross_axis_alignment(CrossAxisAlignment::Start),
                             |scope| {
                                 scope.child(|| {
-                                    text(
-                                        TextArgsBuilder::default()
-                                            .text("Menus Showcase")
-                                            .size(Dp(20.0))
-                                            .build()
-                                            .expect("builder construction failed"),
-                                    );
+                                    text(TextArgs::default().text("Menus Showcase").size(Dp(20.0)));
                                 });
 
                                 scope.child(move || {
                                     text(
-                                        TextArgsBuilder::default()
+                                        TextArgs::default()
                                             .text(format!(
                                                 "Selected: {} | Pinned: {}",
                                                 selected_label.get(),
@@ -70,9 +57,7 @@ pub fn menus_showcase() {
                                                     .get()
                                                     .color_scheme
                                                     .on_surface_variant,
-                                            )
-                                            .build()
-                                            .expect("builder construction failed"),
+                                            ),
                                     );
                                 });
 
@@ -82,21 +67,17 @@ pub fn menus_showcase() {
 
                                 scope.child(move || {
                                     row(
-                                        RowArgsBuilder::default()
-                                            .modifier(Modifier::new().fill_max_width())
-                                            .build()
-                                            .expect("builder construction failed"),
+                                        RowArgs::default()
+                                            .modifier(Modifier::new().fill_max_width()),
                                         |row_scope| {
                                             row_scope.child(move || {
                                                 button(
-                                                    ButtonArgsBuilder::default()
+                                                    ButtonArgs::default()
                                                         .modifier(Modifier::new().width(Dp(180.0)))
                                                         .on_click(move || {
                                                             menu_controller
                                                                 .with_mut(|c| c.open_at(anchor));
-                                                        })
-                                                        .build()
-                                                        .expect("builder construction failed"),
+                                                        }),
                                                     || {
                                                         text("Open anchored menu");
                                                     },
@@ -109,20 +90,16 @@ pub fn menus_showcase() {
 
                                             row_scope.child(|| {
                                                 text(
-                                            TextArgsBuilder::default()
-                                                .text(
-                                                    "Click to open at the button's anchor point.",
-                                                )
-                                                .size(Dp(14.0))
-                                                .color(
-                                                    use_context::<MaterialTheme>()
-                                                        .get()
-                                                        .color_scheme
-                                                        .on_surface_variant,
-                                                )
-                                                .build()
-                                                .expect("builder construction failed"),
-                                        );
+                                                    TextArgs::default()
+                                                        .text("Click to open at the button's anchor point.")
+                                                        .size(Dp(14.0))
+                                                        .color(
+                                                            use_context::<MaterialTheme>()
+                                                                .get()
+                                                                .color_scheme
+                                                                .on_surface_variant,
+                                                        ),
+                                                );
                                             });
                                         },
                                     );
@@ -132,28 +109,20 @@ pub fn menus_showcase() {
                     }
                 },
                 move |menu_scope| {
-                    menu_scope.menu_item(
-                        MenuItemArgsBuilder::default()
-                            .label("Revert")
-                            .on_click(move || {
-                                selected_label.set("Revert".to_string());
-                            })
-                            .build()
-                            .expect("builder construction failed"),
-                    );
+                    menu_scope.menu_item(MenuItemArgs::default().label("Revert").on_click(
+                        move || {
+                            selected_label.set("Revert".to_string());
+                        },
+                    ));
+
+                    menu_scope.menu_item(MenuItemArgs::default().label("Settings").on_click(
+                        move || {
+                            selected_label.set("Settings".to_string());
+                        },
+                    ));
 
                     menu_scope.menu_item(
-                        MenuItemArgsBuilder::default()
-                            .label("Settings")
-                            .on_click(move || {
-                                selected_label.set("Settings".to_string());
-                            })
-                            .build()
-                            .expect("builder construction failed"),
-                    );
-
-                    menu_scope.menu_item(
-                        MenuItemArgsBuilder::default()
+                        MenuItemArgs::default()
                             .label("Send Feedback")
                             .selected(pinned.get())
                             .on_click(move || {
@@ -166,17 +135,10 @@ pub fn menus_showcase() {
                                 } else {
                                     "Unpinned".to_string()
                                 });
-                            })
-                            .build()
-                            .expect("builder construction failed"),
+                            }),
                     );
 
-                    menu_scope.menu_item(
-                        MenuItemArgsBuilder::default()
-                            .label("Help")
-                            .build()
-                            .expect("builder construction failed"),
-                    );
+                    menu_scope.menu_item(MenuItemArgs::default().label("Help"));
                 },
             );
         },

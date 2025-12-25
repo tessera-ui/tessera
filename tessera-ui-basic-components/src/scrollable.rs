@@ -6,7 +6,7 @@
 mod scrollbar;
 use std::time::Instant;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, Px,
     PxPosition, State, remember, tessera,
@@ -14,44 +14,35 @@ use tessera_ui::{
 
 use crate::{
     alignment::Alignment,
-    boxed::{BoxedArgsBuilder, boxed},
+    boxed::{BoxedArgs, boxed},
     modifier::ModifierExt,
     pos_misc::is_position_in_component,
     scrollable::scrollbar::{ScrollBarArgs, ScrollBarState, scrollbar_h, scrollbar_v},
 };
 
 /// Arguments for the `scrollable` container.
-#[derive(Debug, Builder, Clone)]
+#[derive(Debug, Setters, Clone)]
 pub struct ScrollableArgs {
     /// Modifier chain applied to the scrollable subtree.
-    #[builder(default = "Modifier::new().fill_max_size()")]
     pub modifier: Modifier,
     /// Is vertical scrollable?
     /// Defaults to `true` since most scrollable areas are vertical.
-    #[builder(default = "true")]
     pub vertical: bool,
     /// Is horizontal scrollable?
     /// Defaults to `false` since most scrollable areas are not horizontal.
-    #[builder(default = "false")]
     pub horizontal: bool,
     /// Scroll smoothing factor (0.0 = instant, 1.0 = very smooth).
     /// Defaults to 0.05 for very responsive but still smooth scrolling.
-    #[builder(default = "0.05")]
     pub scroll_smoothing: f32,
     /// The behavior of the scrollbar visibility.
-    #[builder(default = "ScrollBarBehavior::AlwaysVisible")]
     pub scrollbar_behavior: ScrollBarBehavior,
     /// The color of the scrollbar track.
-    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.1)")]
     pub scrollbar_track_color: Color,
     /// The color of the scrollbar thumb.
-    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.3)")]
     pub scrollbar_thumb_color: Color,
     /// The color of the scrollbar thumb when hovered.
-    #[builder(default = "Color::new(0.0, 0.0, 0.0, 0.5)")]
     pub scrollbar_thumb_hover_color: Color,
     /// The layout of the scrollbar relative to the content.
-    #[builder(default = "ScrollBarLayout::Alongside")]
     pub scrollbar_layout: ScrollBarLayout,
 }
 
@@ -78,9 +69,17 @@ pub enum ScrollBarLayout {
 
 impl Default for ScrollableArgs {
     fn default() -> Self {
-        ScrollableArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        Self {
+            modifier: Modifier::new().fill_max_size(),
+            vertical: true,
+            horizontal: false,
+            scroll_smoothing: 0.05,
+            scrollbar_behavior: ScrollBarBehavior::AlwaysVisible,
+            scrollbar_track_color: Color::new(0.0, 0.0, 0.0, 0.1),
+            scrollbar_thumb_color: Color::new(0.0, 0.0, 0.0, 0.3),
+            scrollbar_thumb_hover_color: Color::new(0.0, 0.0, 0.0, 0.5),
+            scrollbar_layout: ScrollBarLayout::Alongside,
+        }
     }
 }
 
@@ -243,7 +242,7 @@ impl ScrollableController {
 ///     column::{ColumnArgs, column},
 ///     modifier::ModifierExt as _,
 ///     scrollable::{ScrollableArgs, scrollable},
-///     text::{TextArgsBuilder, text},
+///     text::{TextArgs, text},
 /// };
 ///
 /// #[tessera]
@@ -258,12 +257,7 @@ impl ScrollableController {
 ///                 for i in 0..20 {
 ///                     let text_content = format!("Item #{}", i + 1);
 ///                     scope.child(|| {
-///                         text(
-///                             TextArgsBuilder::default()
-///                                 .text(text_content)
-///                                 .build()
-///                                 .expect("builder construction failed"),
-///                         );
+///                         text(TextArgs::default().text(text_content));
 ///                     });
 ///                 }
 ///             });
@@ -302,7 +296,7 @@ pub fn scrollable(args: impl Into<ScrollableArgs>, child: impl FnOnce() + Send +
 ///     column::{ColumnArgs, column},
 ///     modifier::ModifierExt as _,
 ///     scrollable::{ScrollableArgs, ScrollableController, scrollable_with_controller},
-///     text::{TextArgsBuilder, text},
+///     text::{TextArgs, text},
 /// };
 ///
 /// #[tessera]
@@ -319,12 +313,7 @@ pub fn scrollable(args: impl Into<ScrollableArgs>, child: impl FnOnce() + Send +
 ///                 for i in 0..10 {
 ///                     let text_content = format!("Row #{i}");
 ///                     scope.child(|| {
-///                         text(
-///                             TextArgsBuilder::default()
-///                                 .text(text_content)
-///                                 .build()
-///                                 .expect("builder construction failed"),
-///                         );
+///                         text(TextArgs::default().text(text_content));
 ///                     });
 ///                 }
 ///             });
@@ -487,11 +476,9 @@ fn scrollable_with_overlay_scrollbar(
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
     boxed(
-        BoxedArgsBuilder::default()
+        BoxedArgs::default()
             .modifier(Modifier::new().fill_max_size())
-            .alignment(Alignment::BottomEnd)
-            .build()
-            .expect("builder construction failed"),
+            .alignment(Alignment::BottomEnd),
         |scope| {
             scope.child({
                 let args = args.clone();

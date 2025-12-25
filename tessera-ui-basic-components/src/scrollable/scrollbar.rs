@@ -12,7 +12,7 @@ use crate::{
     modifier::ModifierExt as _,
     scrollable::{ScrollBarBehavior, ScrollableController},
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgs, surface},
 };
 
 #[derive(Clone, Copy)]
@@ -179,7 +179,7 @@ fn compute_thumb_color(state_lock: &ScrollBarState, args: &ScrollBarArgs) -> Col
 /// Render a rounded surface for a vertical track (radius based on width).
 fn render_track_surface_v(width: Px, height: Px, color: Color) {
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(width)),
                 Some(DimensionValue::Fixed(height)),
@@ -190,9 +190,7 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
                 top_right: RoundedCorner::ZERO,
                 bottom_left: RoundedCorner::Capsule,
                 bottom_right: RoundedCorner::ZERO,
-            })
-            .build()
-            .expect("builder construction failed"),
+            }),
         || {},
     );
 }
@@ -200,7 +198,7 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
 /// Render a rounded surface for a vertical thumb (radius based on width).
 fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(width)),
                 Some(DimensionValue::Fixed(height)),
@@ -211,9 +209,7 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
                 bottom_left: RoundedCorner::Capsule,
                 bottom_right: RoundedCorner::ZERO,
             })
-            .style(color.into())
-            .build()
-            .expect("builder construction failed"),
+            .style(color.into()),
         || {},
     );
 }
@@ -221,7 +217,7 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
 /// Render a rounded surface for a horizontal track (radius based on height).
 fn render_track_surface_h(width: Px, height: Px, color: Color) {
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(width)),
                 Some(DimensionValue::Fixed(height)),
@@ -232,9 +228,7 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
                 top_right: RoundedCorner::Capsule,
                 bottom_left: RoundedCorner::ZERO,
                 bottom_right: RoundedCorner::ZERO,
-            })
-            .build()
-            .expect("builder construction failed"),
+            }),
         || {},
     );
 }
@@ -242,7 +236,7 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
 /// Render a rounded surface for a horizontal thumb (radius based on height).
 fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(width)),
                 Some(DimensionValue::Fixed(height)),
@@ -253,9 +247,7 @@ fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
                 bottom_left: RoundedCorner::ZERO,
                 bottom_right: RoundedCorner::ZERO,
             })
-            .style(color.into())
-            .build()
-            .expect("builder construction failed"),
+            .style(color.into()),
         || {},
     );
 }

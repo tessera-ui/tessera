@@ -5,7 +5,7 @@
 //! Use as a base for buttons, cards, or any styled and interactive region.
 use std::sync::Arc;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, Px, PxPosition, PxSize, State,
     accesskit::Role, provide_context, remember, tessera, use_context,
@@ -120,45 +120,38 @@ impl From<Color> for SurfaceStyle {
 }
 
 /// Arguments for the `surface` component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct SurfaceArgs {
     /// Optional modifier chain applied to the surface subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// Defines the visual style of the surface (fill, outline, or both).
-    #[builder(default)]
     pub style: SurfaceStyle,
     /// Geometric outline of the surface (rounded rectangle / ellipse / capsule
     /// variants).
-    #[builder(default)]
     pub shape: Shape,
     /// Elevation of the surface.
     ///
     /// This value determines the shadow cast by the surface and its tonal
     /// elevation (if the color is `surface`).
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub elevation: Option<Dp>,
     /// Tonal elevation for surfaces that use the theme `surface` color.
     ///
     /// When the container color equals `MaterialColorScheme.surface`, a tint is
     /// overlaid to simulate Material 3 tonal elevation.
-    #[builder(default = "Dp(0.0)")]
     pub tonal_elevation: Dp,
     /// Optional explicit content color override for descendants.
     ///
     /// When `None`, the surface derives its content color from the theme using
     /// [`content_color_for`].
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub content_color: Option<Color>,
     /// Aligns child content within the surface bounds.
-    #[builder(default)]
     pub content_alignment: Alignment,
     /// Whether this surface is enabled for user interaction.
     ///
     /// When disabled, it will not react to input, will not show hover/ripple
     /// feedback, and will expose a disabled state to accessibility services.
-    #[builder(default = "true")]
     pub enabled: bool,
     /// Optional click handler. Presence of this value makes the surface
     /// interactive:
@@ -166,64 +159,58 @@ pub struct SurfaceArgs {
     /// * Cursor changes to pointer when hovered
     /// * Press / release events are captured
     /// * Ripple animation starts on press
-    #[builder(default, setter(custom, strip_option))]
+    #[setters(skip)]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Color of the ripple effect (used when interactive).
-    #[builder(default = "use_context::<ContentColor>().get().current")]
     pub ripple_color: Color,
     /// Whether ripples are bounded to the surface shape.
-    #[builder(default = "true")]
     pub ripple_bounded: bool,
     /// Optional explicit ripple radius for this surface.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub ripple_radius: Option<Dp>,
     /// Optional shared interaction state used to render state layers.
     ///
     /// This can be used to render visual feedback in one place while driving
     /// interactions from another.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub interaction_state: Option<State<InteractionState>>,
     /// Whether to render the state-layer overlay for this surface.
-    #[builder(default = "true")]
     pub show_state_layer: bool,
     /// Whether to render ripple animations for this surface.
-    #[builder(default = "true")]
     pub show_ripple: bool,
     /// Optional ripple animation state used for rendering ripples.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub ripple_state: Option<State<RippleState>>,
     /// If true, all input events inside the surface bounds are blocked (stop
     /// propagation), after (optionally) handling its own click logic.
-    #[builder(default = "false")]
     pub block_input: bool,
     /// Optional explicit accessibility role. Defaults to `Role::Button` when
     /// interactive.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub accessibility_role: Option<Role>,
     /// Optional label read by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional description read by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
     /// Whether this surface should be focusable even when not interactive.
-    #[builder(default)]
     pub accessibility_focusable: bool,
 }
 
-impl SurfaceArgsBuilder {
+impl SurfaceArgs {
     /// Set the click handler.
     pub fn on_click<F>(mut self, on_click: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Some(Arc::new(on_click)));
+        self.on_click = Some(Arc::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
     pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(Some(on_click));
+        self.on_click = Some(on_click);
         self
     }
 }
@@ -236,9 +223,29 @@ impl SurfaceArgs {
 
 impl Default for SurfaceArgs {
     fn default() -> Self {
-        SurfaceArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        Self {
+            modifier: Modifier::new(),
+            style: SurfaceStyle::default(),
+            shape: Shape::default(),
+            elevation: None,
+            tonal_elevation: Dp(0.0),
+            content_color: None,
+            content_alignment: Alignment::default(),
+            enabled: true,
+            on_click: None,
+            ripple_color: use_context::<ContentColor>().get().current,
+            ripple_bounded: true,
+            ripple_radius: None,
+            interaction_state: None,
+            show_state_layer: true,
+            show_ripple: true,
+            ripple_state: None,
+            block_input: false,
+            accessibility_role: None,
+            accessibility_label: None,
+            accessibility_description: None,
+            accessibility_focusable: false,
+        }
     }
 }
 
@@ -638,23 +645,16 @@ fn compute_surface_size(
 /// use tessera_ui::{Dp, Modifier};
 /// use tessera_ui_basic_components::{
 ///     modifier::{ModifierExt, Padding},
-///     surface::{SurfaceArgsBuilder, surface},
-///     text::{TextArgsBuilder, text},
+///     surface::{SurfaceArgs, surface},
+///     text::{TextArgs, text},
 /// };
 ///
 /// surface(
-///     SurfaceArgsBuilder::default()
+///     SurfaceArgs::default()
 ///         .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
-///         .on_click(|| println!("Surface was clicked!"))
-///         .build()
-///         .unwrap(),
+///         .on_click(|| println!("Surface was clicked!")),
 ///     || {
-///         text(
-///             TextArgsBuilder::default()
-///                 .text("Click me".to_string())
-///                 .build()
-///                 .expect("builder construction failed"),
-///         );
+///         text(TextArgs::default().text("Click me"));
 ///     },
 /// );
 /// # }

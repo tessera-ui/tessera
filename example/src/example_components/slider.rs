@@ -1,13 +1,11 @@
-use std::sync::Arc;
-
 use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
-    column::{ColumnArgsBuilder, column},
+    column::{ColumnArgs, column},
     material_icons::filled,
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgsBuilder, scrollable},
-    slider::{RangeSliderArgsBuilder, SliderArgsBuilder, centered_slider, range_slider, slider},
-    surface::{SurfaceArgsBuilder, surface},
+    scrollable::{ScrollableArgs, scrollable},
+    slider::{RangeSliderArgs, SliderArgs, centered_slider, range_slider, slider},
+    surface::{SurfaceArgs, surface},
     text::text,
 };
 
@@ -15,22 +13,14 @@ use tessera_ui_basic_components::{
 #[shard]
 pub fn slider_showcase() {
     surface(
-        SurfaceArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_size())
-            .build()
-            .unwrap(),
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgsBuilder::default()
-                    .modifier(Modifier::new().fill_max_width())
-                    .build()
-                    .unwrap(),
+                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
                 move || {
                     surface(
-                        SurfaceArgsBuilder::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0)))
-                            .build()
-                            .unwrap(),
+                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                         move || {
                             test_content();
                         },
@@ -51,22 +41,16 @@ fn test_content() {
     let step_range_value = remember(|| (0.2, 0.8));
 
     column(
-        ColumnArgsBuilder::default()
-            .modifier(Modifier::new().fill_max_width())
-            .build()
-            .unwrap(),
+        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
         move |scope| {
             scope.child(|| text("Slider Showcase"));
 
             scope.child(move || {
-                let on_change = Arc::new(move |new_value| value.set(new_value));
                 slider(
-                    SliderArgsBuilder::default()
+                    SliderArgs::default()
                         .value(value.get())
-                        .on_change(on_change)
-                        .modifier(Modifier::new().width(Dp(250.0)))
-                        .build()
-                        .unwrap(),
+                        .on_change(move |new_value| value.set(new_value))
+                        .modifier(Modifier::new().width(Dp(250.0))),
                 );
             });
 
@@ -75,20 +59,17 @@ fn test_content() {
                 text(format!("Current value: {:.2}", current_value));
             });
 
-            // Centered Slider Showcase
+            // Centered Slider Showcase,
             scope.child(|| text("Centered Slider Showcase"));
 
             scope.child(move || {
-                let on_change = Arc::new(move |new_value| {
-                    centered_value.set(new_value);
-                });
                 centered_slider(
-                    SliderArgsBuilder::default()
+                    SliderArgs::default()
                         .value(centered_value.get())
-                        .on_change(on_change)
-                        .modifier(Modifier::new().width(Dp(250.0)))
-                        .build()
-                        .unwrap(),
+                        .on_change(move |new_value| {
+                            centered_value.set(new_value);
+                        })
+                        .modifier(Modifier::new().width(Dp(250.0))),
                 );
             });
 
@@ -97,20 +78,17 @@ fn test_content() {
                 text(format!("Centered value: {:.2}", current_centered_value));
             });
 
-            // Range Slider Showcase
+            // Range Slider Showcase,
             scope.child(|| text("Range Slider Showcase"));
 
             scope.child(move || {
-                let on_change = Arc::new(move |new_value| {
-                    range_value.set(new_value);
-                });
                 range_slider(
-                    RangeSliderArgsBuilder::default()
+                    RangeSliderArgs::default()
                         .value(range_value.get())
-                        .on_change(on_change)
-                        .modifier(Modifier::new().width(Dp(250.0)))
-                        .build()
-                        .unwrap(),
+                        .on_change(move |new_value| {
+                            range_value.set(new_value);
+                        })
+                        .modifier(Modifier::new().width(Dp(250.0))),
                 );
             });
 
@@ -119,19 +97,16 @@ fn test_content() {
                 text(format!("Range value: {:.2} - {:.2}", start, end));
             });
 
-            // Discrete Slider Showcase
+            // Discrete Slider Showcase,
             scope.child(|| text("Discrete Slider Showcase"));
 
             scope.child(move || {
-                let on_change = Arc::new(move |new_value| step_value.set(new_value));
                 slider(
-                    SliderArgsBuilder::default()
+                    SliderArgs::default()
                         .value(step_value.get())
                         .steps(5)
-                        .on_change(on_change)
-                        .modifier(Modifier::new().width(Dp(250.0)))
-                        .build()
-                        .unwrap(),
+                        .on_change(move |new_value| step_value.set(new_value))
+                        .modifier(Modifier::new().width(Dp(250.0))),
                 );
             });
 
@@ -143,15 +118,12 @@ fn test_content() {
             scope.child(|| text("Discrete Range Slider Showcase"));
 
             scope.child(move || {
-                let on_change = Arc::new(move |new_value| step_range_value.set(new_value));
                 range_slider(
-                    RangeSliderArgsBuilder::default()
+                    RangeSliderArgs::default()
                         .value(step_range_value.get())
                         .steps(5)
-                        .on_change(on_change)
-                        .modifier(Modifier::new().width(Dp(250.0)))
-                        .build()
-                        .unwrap(),
+                        .on_change(move |new_value| step_range_value.set(new_value))
+                        .modifier(Modifier::new().width(Dp(250.0))),
                 );
             });
 
@@ -163,22 +135,19 @@ fn test_content() {
                 ));
             });
 
-            // Slider with Inset Icon Showcase
+            // Slider with Inset Icon Showcase,
             scope.child(|| text("Slider with Inset Icon Showcase"));
 
             scope.child(move || {
-                let on_change = Arc::new(move |new_value| {
-                    icon_slider_value.set(new_value);
-                });
                 slider(
-                    SliderArgsBuilder::default()
+                    SliderArgs::default()
                         .value(icon_slider_value.get())
-                        .on_change(on_change)
+                        .on_change(move |new_value| {
+                            icon_slider_value.set(new_value);
+                        })
                         .modifier(Modifier::new().width(Dp(250.0)))
                         .size(tessera_ui_basic_components::slider::SliderSize::Medium)
-                        .inset_icon(filled::volume_up_icon())
-                        .build()
-                        .unwrap(),
+                        .inset_icon(filled::volume_up_icon()),
                 );
             });
 

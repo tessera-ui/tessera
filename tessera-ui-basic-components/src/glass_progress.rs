@@ -3,48 +3,54 @@
 //! ## Usage
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, Px, PxPosition, tessera,
 };
 
 use crate::{
-    fluid_glass::{FluidGlassArgsBuilder, GlassBorder, fluid_glass},
+    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
     modifier::ModifierExt as _,
     shape_def::{RoundedCorner, Shape},
 };
 
 /// Arguments for the `glass_progress` component.
-#[derive(Builder, Clone, Debug)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Debug, Setters)]
 pub struct GlassProgressArgs {
     /// The current value of the progress bar, ranging from 0.0 to 1.0.
-    #[builder(default = "0.0")]
     pub value: f32,
 
     /// Layout modifiers applied to the progress bar.
-    #[builder(default = "default_progress_modifier()")]
     pub modifier: Modifier,
 
     /// The height of the progress bar.
-    #[builder(default = "Dp(12.0)")]
     pub height: Dp,
 
     /// Glass tint color for the track background.
-    #[builder(default = "Color::new(0.3, 0.3, 0.3, 0.15)")]
     pub track_tint_color: Color,
 
     /// Glass tint color for the progress fill.
-    #[builder(default = "Color::new(0.5, 0.7, 1.0, 0.25)")]
     pub progress_tint_color: Color,
 
     /// Glass blur radius for all components.
-    #[builder(default = "Dp(8.0)")]
     pub blur_radius: Dp,
 
     /// Border width for the track.
-    #[builder(default = "Dp(1.0)")]
     pub track_border_width: Dp,
+}
+
+impl Default for GlassProgressArgs {
+    fn default() -> Self {
+        Self {
+            value: 0.0,
+            modifier: default_progress_modifier(),
+            height: Dp(12.0),
+            track_tint_color: Color::new(0.3, 0.3, 0.3, 0.15),
+            progress_tint_color: Color::new(0.5, 0.7, 1.0, 0.25),
+            blur_radius: Dp(8.0),
+            track_border_width: Dp(1.0),
+        }
+    }
 }
 
 fn default_progress_modifier() -> Modifier {
@@ -65,13 +71,11 @@ fn capsule_shape_for_height(height: Dp) -> Shape {
 #[tessera]
 fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Shape) {
     fluid_glass(
-        FluidGlassArgsBuilder::default()
+        FluidGlassArgs::default()
             .tint_color(tint_color)
             .blur_radius(blur_radius)
             .shape(shape)
-            .refraction_amount(0.0)
-            .build()
-            .expect("builder construction failed"),
+            .refraction_amount(0.0),
         || {},
     );
 
@@ -130,18 +134,13 @@ fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Sh
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::glass_progress::{GlassProgressArgsBuilder, glass_progress};
+/// use tessera_ui_basic_components::glass_progress::{GlassProgressArgs, glass_progress};
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
 /// // Render a progress bar at 75% completion.
-/// glass_progress(
-///     GlassProgressArgsBuilder::default()
-///         .value(0.75)
-///         .build()
-///         .unwrap(),
-/// );
+/// glass_progress(GlassProgressArgs::default().value(0.75));
 /// # }
 /// # component();
 /// ```
@@ -159,14 +158,12 @@ fn glass_progress_inner(args: GlassProgressArgs) {
     let fill_shape = capsule_shape_for_height(effective_height);
 
     fluid_glass(
-        FluidGlassArgsBuilder::default()
+        FluidGlassArgs::default()
             .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
             .shape(capsule_shape_for_height(args.height))
             .border(GlassBorder::new(args.track_border_width.into()))
-            .padding(args.track_border_width)
-            .build()
-            .expect("builder construction failed"),
+            .padding(args.track_border_width),
         move || {
             glass_progress_fill(
                 args.value,

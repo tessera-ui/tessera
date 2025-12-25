@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, PressKeyEventType, Px,
     PxPosition, State, remember, tessera, use_context, winit,
@@ -17,12 +17,12 @@ use tessera_ui::{
 use crate::{
     alignment::CrossAxisAlignment,
     animation,
-    column::{ColumnArgsBuilder, column},
-    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    column::{ColumnArgs, column},
+    fluid_glass::{FluidGlassArgs, fluid_glass},
     modifier::ModifierExt,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgs, surface},
     theme::MaterialTheme,
 };
 
@@ -44,38 +44,45 @@ pub enum BottomSheetStyle {
 }
 
 /// Configuration arguments for the [`bottom_sheet_provider`].
-#[derive(Builder)]
+#[derive(Setters)]
 pub struct BottomSheetProviderArgs {
     /// A callback that is invoked when the user requests to close the sheet.
     ///
     /// This can be triggered by clicking the scrim or pressing the `Escape`
     /// key. The callback is responsible for closing the sheet.
-    #[builder(setter(custom))]
+    #[setters(skip)]
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
     /// The visual style of the scrim. See [`BottomSheetStyle`].
-    #[builder(default)]
     pub style: BottomSheetStyle,
     /// Whether the sheet is initially open (for declarative usage).
-    #[builder(default = "false")]
     pub is_open: bool,
 }
 
-impl BottomSheetProviderArgsBuilder {
+impl BottomSheetProviderArgs {
+    /// Create args with a required close-request callback.
+    pub fn new(on_close_request: impl Fn() + Send + Sync + 'static) -> Self {
+        Self {
+            on_close_request: Arc::new(on_close_request),
+            style: BottomSheetStyle::default(),
+            is_open: false,
+        }
+    }
+
     /// Set the close-request callback.
-    pub fn on_close_request<F>(&mut self, on_close_request: F) -> &mut Self
+    pub fn on_close_request<F>(mut self, on_close_request: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_close_request = Some(Arc::new(on_close_request));
+        self.on_close_request = Arc::new(on_close_request);
         self
     }
 
     /// Set the close-request callback using a shared callback.
     pub fn on_close_request_shared(
-        &mut self,
+        mut self,
         on_close_request: Arc<dyn Fn() + Send + Sync>,
-    ) -> &mut Self {
-        self.on_close_request = Some(on_close_request);
+    ) -> Self {
+        self.on_close_request = on_close_request;
         self
     }
 }
@@ -247,7 +254,7 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
     let max_blur_radius = 5.0;
     let blur_radius = blur_radius_for(progress, is_open, max_blur_radius);
     fluid_glass(
-        FluidGlassArgsBuilder::default()
+        FluidGlassArgs::default()
             .on_click_shared(args.on_close_request.clone())
             .tint_color(Color::TRANSPARENT)
             .modifier(Modifier::new().fill_max_size())
@@ -262,9 +269,7 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
                 bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
                 bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             })
-            .noise_amount(0.0)
-            .build()
-            .expect("FluidGlassArgsBuilder failed with required fields set"),
+            .noise_amount(0.0),
         || {},
     );
 }
@@ -274,13 +279,11 @@ fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open:
     let scrim_alpha = scrim_alpha_for(progress, is_open);
     let scrim_color = use_context::<MaterialTheme>().get().color_scheme.scrim;
     surface(
-        SurfaceArgsBuilder::default()
+        SurfaceArgs::default()
             .style(scrim_color.with_alpha(scrim_alpha).into())
             .on_click_shared(args.on_close_request.clone())
             .modifier(Modifier::new().fill_max_size())
-            .block_input(true)
-            .build()
-            .expect("SurfaceArgsBuilder failed with required fields set"),
+            .block_input(true),
         || {},
     );
 }
@@ -457,18 +460,16 @@ fn render_content(
             },
             || {
                 column(
-                    ColumnArgsBuilder::default()
+                    ColumnArgs::default()
                         .modifier(Modifier::new().fill_max_width())
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .build()
-                        .expect("ColumnArgsBuilder failed"),
+                        .cross_axis_alignment(CrossAxisAlignment::Center),
                     |scope| {
                         scope.child(|| {
                             spacer(Modifier::new().height(Dp(22.0)));
                         });
                         scope.child(|| {
                             surface(
-                                SurfaceArgsBuilder::default()
+                                SurfaceArgs::default()
                                     .style(
                                         use_context::<MaterialTheme>()
                                             .get()
@@ -478,9 +479,7 @@ fn render_content(
                                             .into(),
                                     )
                                     .shape(Shape::capsule())
-                                    .modifier(Modifier::new().size(Dp(32.0), Dp(4.0)))
-                                    .build()
-                                    .expect("SurfaceArgsBuilder failed"),
+                                    .modifier(Modifier::new().size(Dp(32.0), Dp(4.0))),
                                 || {},
                             );
                         });
@@ -497,7 +496,7 @@ fn render_content(
     match style {
         BottomSheetStyle::Glass => {
             fluid_glass(
-                FluidGlassArgsBuilder::default()
+                FluidGlassArgs::default()
                     .shape(Shape::RoundedRectangle {
                         top_left: RoundedCorner::manual(Dp(28.0), 3.0),
                         top_right: RoundedCorner::manual(Dp(28.0), 3.0),
@@ -508,15 +507,13 @@ fn render_content(
                     .modifier(Modifier::new().fill_max_width())
                     .refraction_amount(32.0)
                     .blur_radius(Dp(5.0))
-                    .block_input(true)
-                    .build()
-                    .expect("FluidGlassArgsBuilder failed with required fields set"),
+                    .block_input(true),
                 content_wrapper,
             );
         }
         BottomSheetStyle::Material => {
             surface(
-                SurfaceArgsBuilder::default()
+                SurfaceArgs::default()
                     .style(
                         use_context::<MaterialTheme>()
                             .get()
@@ -531,9 +528,7 @@ fn render_content(
                         bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
                     .modifier(Modifier::new().fill_max_width())
-                    .block_input(true)
-                    .build()
-                    .expect("SurfaceArgsBuilder failed with required fields set"),
+                    .block_input(true),
                 content_wrapper,
             );
         }
@@ -561,15 +556,11 @@ fn render_content(
 ///
 /// ```
 /// use tessera_ui_basic_components::bottom_sheet::{
-///     BottomSheetProviderArgsBuilder, bottom_sheet_provider,
+///     BottomSheetProviderArgs, bottom_sheet_provider,
 /// };
 ///
 /// bottom_sheet_provider(
-///     BottomSheetProviderArgsBuilder::default()
-///         .is_open(true)
-///         .on_close_request(|| {})
-///         .build()
-///         .unwrap(),
+///     BottomSheetProviderArgs::new(|| {}).is_open(true),
 ///     || { /* main content */ },
 ///     || { /* bottom sheet content */ },
 /// );

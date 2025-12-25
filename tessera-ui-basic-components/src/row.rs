@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! Use to stack children horizontally.
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, MeasureInput, MeasurementError, Modifier, NodeId, Px,
     PxPosition, tessera,
@@ -15,27 +15,24 @@ use crate::{
 };
 
 /// Arguments for the `row` component.
-#[derive(Builder, Clone, Debug)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Debug, Setters)]
 pub struct RowArgs {
     /// Modifier chain applied to the row subtree.
-    #[builder(
-        default = "Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))"
-    )]
     pub modifier: Modifier,
     /// Main axis alignment (horizontal alignment).
-    #[builder(default = "MainAxisAlignment::Start")]
     pub main_axis_alignment: MainAxisAlignment,
     /// Cross axis alignment (vertical alignment).
-    #[builder(default = "CrossAxisAlignment::Start")]
     pub cross_axis_alignment: CrossAxisAlignment,
 }
 
 impl Default for RowArgs {
     fn default() -> Self {
-        RowArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        Self {
+            modifier: Modifier::new()
+                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP)),
+            main_axis_alignment: MainAxisAlignment::Start,
+            cross_axis_alignment: CrossAxisAlignment::Start,
+        }
     }
 }
 
@@ -111,30 +108,16 @@ struct MeasureWeightedChildrenArgs<'a> {
 /// use tessera_ui_basic_components::{
 ///     row::{RowArgs, row},
 ///     spacer::spacer,
-///     text::{TextArgsBuilder, text},
+///     text::{TextArgs, text},
 /// };
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
 /// row(RowArgs::default(), |scope| {
-///     scope.child(|| {
-///         text(
-///             TextArgsBuilder::default()
-///                 .text("First".to_string())
-///                 .build()
-///                 .expect("builder construction failed"),
-///         )
-///     });
+///     scope.child(|| text(TextArgs::default().text("First")));
 ///     scope.child_weighted(|| spacer(Modifier::new()), 1.0); // Flexible space
-///     scope.child(|| {
-///         text(
-///             TextArgsBuilder::default()
-///                 .text("Last".to_string())
-///                 .build()
-///                 .expect("builder construction failed"),
-///         )
-///     });
+///     scope.child(|| text(TextArgs::default().text("Last")));
 /// });
 /// # }
 /// # component();

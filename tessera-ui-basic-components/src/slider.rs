@@ -5,7 +5,7 @@
 //! Use to allow users to select a value from a continuous range.
 use std::sync::Arc;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasureInput, MeasurementError, Modifier,
     Px, PxPosition, State,
@@ -205,111 +205,165 @@ pub enum SliderSize {
 }
 
 /// Arguments for the `slider` component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct SliderArgs {
     /// Modifier chain applied to the slider subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// The current value of the slider, ranging from 0.0 to 1.0.
-    #[builder(default = "0.0")]
     pub value: f32,
     /// Callback function triggered when the slider's value changes.
-    #[builder(default = "Arc::new(|_| {})")]
+    #[setters(skip)]
     pub on_change: Arc<dyn Fn(f32) + Send + Sync>,
     /// Size variant of the slider.
-    #[builder(default)]
     pub size: SliderSize,
     /// The color of the active part of the track (progress fill).
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub active_track_color: Color,
     /// The color of the inactive part of the track (background).
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.secondary_container")]
     pub inactive_track_color: Color,
     /// The thickness of the handle indicator.
-    #[builder(default = "Dp(4.0)")]
     pub thumb_diameter: Dp,
     /// Color of the handle indicator.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub thumb_color: Color,
     /// Disable interaction.
-    #[builder(default = "false")]
     pub disabled: bool,
     /// Optional accessibility label read by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
     /// Whether to show the stop indicators at the ends of the track.
-    #[builder(default = "true")]
     pub show_stop_indicator: bool,
     /// Number of discrete steps between 0.0 and 1.0.
     ///
     /// When set to a value greater than 0, the slider value snaps to
     /// `steps + 2` evenly spaced tick positions (including both ends).
-    #[builder(default = "0")]
     pub steps: usize,
     /// Optional icon content to display at the start of the slider (only for
     /// Medium sizes and above).
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub inset_icon: Option<crate::icon::IconContent>,
 }
 
+impl SliderArgs {
+    /// Sets the on_change handler.
+    pub fn on_change<F>(mut self, on_change: F) -> Self
+    where
+        F: Fn(f32) + Send + Sync + 'static,
+    {
+        self.on_change = Arc::new(on_change);
+        self
+    }
+
+    /// Sets the on_change handler using a shared callback.
+    pub fn on_change_shared(mut self, on_change: Arc<dyn Fn(f32) + Send + Sync>) -> Self {
+        self.on_change = on_change;
+        self
+    }
+}
+
+impl Default for SliderArgs {
+    fn default() -> Self {
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            modifier: Modifier::new(),
+            value: 0.0,
+            on_change: Arc::new(|_| {}),
+            size: SliderSize::default(),
+            active_track_color: scheme.primary,
+            inactive_track_color: scheme.secondary_container,
+            thumb_diameter: Dp(4.0),
+            thumb_color: scheme.primary,
+            disabled: false,
+            accessibility_label: None,
+            accessibility_description: None,
+            show_stop_indicator: true,
+            steps: 0,
+            inset_icon: None,
+        }
+    }
+}
 /// Arguments for the `range_slider` component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct RangeSliderArgs {
     /// Modifier chain applied to the range slider subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// The current range values (start, end), each between 0.0 and 1.0.
-    #[builder(default = "(0.0, 1.0)")]
     pub value: (f32, f32),
 
     /// Callback function triggered when the range values change.
-    #[builder(default = "Arc::new(|_| {})")]
+    #[setters(skip)]
     pub on_change: Arc<dyn Fn((f32, f32)) + Send + Sync>,
 
     /// Size variant of the slider.
-    #[builder(default)]
     pub size: SliderSize,
 
     /// The color of the active part of the track (range fill).
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub active_track_color: Color,
 
     /// The color of the inactive part of the track (background).
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.secondary_container")]
     pub inactive_track_color: Color,
 
     /// The thickness of the handle indicators.
-    #[builder(default = "Dp(4.0)")]
     pub thumb_diameter: Dp,
 
     /// Color of the handle indicators.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub thumb_color: Color,
 
     /// Disable interaction.
-    #[builder(default = "false")]
     pub disabled: bool,
     /// Optional accessibility label.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
 
     /// Whether to show the stop indicators at the ends of the track.
-    #[builder(default = "true")]
     pub show_stop_indicator: bool,
     /// Number of discrete steps between 0.0 and 1.0.
     ///
     /// When set to a value greater than 0, the slider values snap to
     /// `steps + 2` evenly spaced tick positions (including both ends).
-    #[builder(default = "0")]
     pub steps: usize,
+}
+
+impl RangeSliderArgs {
+    /// Sets the on_change handler.
+    pub fn on_change<F>(mut self, on_change: F) -> Self
+    where
+        F: Fn((f32, f32)) + Send + Sync + 'static,
+    {
+        self.on_change = Arc::new(on_change);
+        self
+    }
+
+    /// Sets the on_change handler using a shared callback.
+    pub fn on_change_shared(mut self, on_change: Arc<dyn Fn((f32, f32)) + Send + Sync>) -> Self {
+        self.on_change = on_change;
+        self
+    }
+}
+
+impl Default for RangeSliderArgs {
+    fn default() -> Self {
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            modifier: Modifier::new(),
+            value: (0.0, 1.0),
+            on_change: Arc::new(|_| {}),
+            size: SliderSize::default(),
+            active_track_color: scheme.primary,
+            inactive_track_color: scheme.secondary_container,
+            thumb_diameter: Dp(4.0),
+            thumb_color: scheme.primary,
+            disabled: false,
+            accessibility_label: None,
+            accessibility_description: None,
+            show_stop_indicator: true,
+            steps: 0,
+        }
+    }
 }
 
 fn measure_slider(
@@ -532,21 +586,18 @@ fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
 /// use tessera_ui::{Dp, Modifier};
 /// use tessera_ui_basic_components::modifier::ModifierExt as _;
-/// use tessera_ui_basic_components::slider::{SliderArgsBuilder, slider};
+/// use tessera_ui_basic_components::slider::{SliderArgs, slider};
 ///
 /// slider(
-///     SliderArgsBuilder::default()
+///     SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(0.5)
-///         .on_change(Arc::new(|new_value| {
+///         .on_change(|new_value| {
 ///             // In a real app, you would update your state here.
 ///             println!("Slider value changed to: {}", new_value);
-///         }))
-///         .build()
-///         .unwrap(),
+///         }),
 /// );
 /// # }
 /// # component();
@@ -578,23 +629,20 @@ pub fn slider(args: impl Into<SliderArgs>) {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
 /// use tessera_ui::{Dp, Modifier, remember};
 /// use tessera_ui_basic_components::modifier::ModifierExt as _;
 /// use tessera_ui_basic_components::slider::{
-///     SliderArgsBuilder, SliderController, slider_with_controller,
+///     SliderArgs, SliderController, slider_with_controller,
 /// };
 ///
 /// let controller = remember(|| SliderController::new());
 /// slider_with_controller(
-///     SliderArgsBuilder::default()
+///     SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(0.5)
-///         .on_change(Arc::new(|new_value| {
+///         .on_change(|new_value| {
 ///             println!("Slider value changed to: {}", new_value);
-///         }))
-///         .build()
-///         .unwrap(),
+///         }),
 ///     controller,
 /// );
 /// # }
@@ -638,13 +686,10 @@ fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderContro
         };
 
         crate::icon::icon(
-            crate::icon::IconArgsBuilder::default()
-                .content(inset_icon.clone())
+            crate::icon::IconArgs::from(inset_icon.clone())
                 .tint(tint)
                 .tint_mode(VectorTintMode::Solid)
-                .size(icon_size)
-                .build()
-                .expect("Failed to build icon args"),
+                .size(icon_size),
         );
     }
 
@@ -888,8 +933,7 @@ fn measure_centered_slider(
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui::{Dp, Modifier};
 /// use tessera_ui_basic_components::modifier::ModifierExt as _;
-/// use tessera_ui_basic_components::modifier::ModifierExt as _;
-/// use tessera_ui_basic_components::slider::{SliderArgsBuilder, centered_slider};
+/// use tessera_ui_basic_components::slider::{SliderArgs, centered_slider};
 /// let current_value = Arc::new(Mutex::new(0.5));
 ///
 /// // Simulate a value change
@@ -900,16 +944,14 @@ fn measure_centered_slider(
 /// }
 ///
 /// centered_slider(
-///     SliderArgsBuilder::default()
+///     SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(*current_value.lock().unwrap())
-///         .on_change(Arc::new(move |new_value| {
+///         .on_change(move |new_value| {
 ///             // In a real app, you would update your state here.
 ///             // For this example, we'll just check it after the simulated change.
 ///             println!("Centered slider value changed to: {}", new_value);
-///         }))
-///         .build()
-///         .unwrap(),
+///         }),
 /// );
 ///
 /// // Simulate another value change and check the state
@@ -953,19 +995,17 @@ pub fn centered_slider(args: impl Into<SliderArgs>) {
 /// use tessera_ui::{Dp, Modifier, remember};
 /// use tessera_ui_basic_components::modifier::ModifierExt as _;
 /// use tessera_ui_basic_components::slider::{
-///     SliderArgsBuilder, SliderController, centered_slider_with_controller,
+///     SliderArgs, SliderController, centered_slider_with_controller,
 /// };
 ///
 /// let controller = remember(SliderController::new);
 /// centered_slider_with_controller(
-///     SliderArgsBuilder::default()
+///     SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(0.5)
-///         .on_change(Arc::new(|new_value| {
+///         .on_change(|new_value| {
 ///             println!("Centered slider value changed to: {}", new_value);
-///         }))
-///         .build()
-///         .unwrap(),
+///         }),
 ///     controller,
 /// );
 /// # }
@@ -1297,18 +1337,16 @@ fn measure_range_slider(
 /// use std::sync::{Arc, Mutex};
 /// use tessera_ui::{Dp, Modifier};
 /// use tessera_ui_basic_components::modifier::ModifierExt as _;
-/// use tessera_ui_basic_components::slider::{RangeSliderArgsBuilder, range_slider};
+/// use tessera_ui_basic_components::slider::{RangeSliderArgs, range_slider};
 /// let range_value = Arc::new(Mutex::new((0.2, 0.8)));
 ///
 /// range_slider(
-///     RangeSliderArgsBuilder::default()
+///     RangeSliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(*range_value.lock().unwrap())
-///         .on_change(Arc::new(move |(start, end)| {
+///         .on_change(move |(start, end)| {
 ///             println!("Range changed: {} - {}", start, end);
-///         }))
-///         .build()
-///         .unwrap(),
+///         }),
 /// );
 /// # }
 /// # component();
@@ -1333,11 +1371,9 @@ pub fn range_slider_with_controller(
 
 #[tessera]
 fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeSliderController>) {
-    let dummy_slider_args = SliderArgsBuilder::default()
+    let dummy_slider_args = SliderArgs::default()
         .size(args.size)
-        .show_stop_indicator(args.show_stop_indicator)
-        .build()
-        .expect("Failed to build dummy args");
+        .show_stop_indicator(args.show_stop_indicator);
     let initial_width = fallback_component_width(&dummy_slider_args);
     let dummy_for_measure = dummy_slider_args.clone();
     let layout = range_slider_layout(&args, initial_width);

@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, DimensionValue, Dp, Modifier, Px, PxPosition, State, provide_context,
     remember, tessera, use_context, winit,
@@ -18,15 +18,15 @@ use tessera_ui::{
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     animation,
-    boxed::{BoxedArgsBuilder, boxed},
-    column::{ColumnArgsBuilder, column},
-    fluid_glass::{FluidGlassArgsBuilder, fluid_glass},
+    boxed::{BoxedArgs, boxed},
+    column::{ColumnArgs, column},
+    fluid_glass::{FluidGlassArgs, fluid_glass},
     modifier::ModifierExt,
-    row::{RowArgsBuilder, row},
+    row::{RowArgs, row},
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    surface::{SurfaceArgsBuilder, surface},
-    text::{TextArgsBuilder, text},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
     theme::{ContentColor, MaterialTheme},
 };
 
@@ -75,31 +75,37 @@ pub enum DialogStyle {
 }
 
 /// Arguments for the [`dialog_provider`] component.
-#[derive(Builder)]
-#[builder(pattern = "owned")]
+#[derive(Setters)]
 pub struct DialogProviderArgs {
     /// Callback function triggered when a close request is made, for example by
     /// clicking the scrim or pressing the `ESC` key.
-    #[builder(setter(custom))]
+    #[setters(skip)]
     pub on_close_request: Arc<dyn Fn() + Send + Sync>,
     /// Padding around the dialog content.
-    #[builder(default = "Dp(24.0)")]
     pub padding: Dp,
     /// The visual style of the dialog's scrim.
-    #[builder(default)]
     pub style: DialogStyle,
     /// Whether the dialog is initially open (for declarative usage).
-    #[builder(default = "false")]
     pub is_open: bool,
 }
 
-impl DialogProviderArgsBuilder {
+impl DialogProviderArgs {
+    /// Create args with a required close-request callback.
+    pub fn new(on_close_request: impl Fn() + Send + Sync + 'static) -> Self {
+        Self {
+            on_close_request: Arc::new(on_close_request),
+            padding: Dp(24.0),
+            style: DialogStyle::default(),
+            is_open: false,
+        }
+    }
+
     /// Set the close-request callback.
     pub fn on_close_request<F>(mut self, on_close_request: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_close_request = Some(Arc::new(on_close_request));
+        self.on_close_request = Arc::new(on_close_request);
         self
     }
 
@@ -108,7 +114,7 @@ impl DialogProviderArgsBuilder {
         mut self,
         on_close_request: Arc<dyn Fn() + Send + Sync>,
     ) -> Self {
-        self.on_close_request = Some(on_close_request);
+        self.on_close_request = on_close_request;
         self
     }
 }
@@ -179,7 +185,7 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
         DialogStyle::Glass => {
             let blur_radius = blur_radius_for(progress, is_open, 5.0);
             fluid_glass(
-                FluidGlassArgsBuilder::default()
+                FluidGlassArgs::default()
                     .on_click_shared(args.on_close_request.clone())
                     .tint_color(Color::TRANSPARENT)
                     .modifier(Modifier::new().fill_max_size())
@@ -194,9 +200,7 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
                         bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
                         bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                     })
-                    .noise_amount(0.0)
-                    .build()
-                    .expect("builder construction failed"),
+                    .noise_amount(0.0),
                 || {},
             );
         }
@@ -204,13 +208,11 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
             let alpha = scrim_alpha_for(progress, is_open);
             let scrim_color = use_context::<MaterialTheme>().get().color_scheme.scrim;
             surface(
-                SurfaceArgsBuilder::default()
+                SurfaceArgs::default()
                     .style(scrim_color.with_alpha(alpha).into())
                     .on_click_shared(args.on_close_request.clone())
                     .modifier(Modifier::new().fill_max_size())
-                    .block_input(true)
-                    .build()
-                    .expect("builder construction failed"),
+                    .block_input(true),
                 || {},
             );
         }
@@ -253,27 +255,23 @@ fn dialog_content_wrapper(
     }));
 
     boxed(
-        BoxedArgsBuilder::default()
+        BoxedArgs::default()
             .modifier(Modifier::new().fill_max_size())
-            .alignment(Alignment::Center)
-            .build()
-            .expect("builder construction failed"),
+            .alignment(Alignment::Center),
         |scope| {
             scope.child(move || {
                 surface(
-                    SurfaceArgsBuilder::default()
+                    SurfaceArgs::default()
                         .style(Color::TRANSPARENT.into())
                         .modifier(
                             Modifier::new()
                                 .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
                                 .padding_all(Dp(24.0)),
-                        )
-                        .build()
-                        .expect("builder construction failed"),
+                        ),
                     move || match style {
                         DialogStyle::Glass => {
                             fluid_glass(
-                                FluidGlassArgsBuilder::default()
+                                FluidGlassArgs::default()
                                     .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
                                     .blur_radius(Dp(5.0 * alpha as f64))
                                     .shape(Shape::RoundedRectangle {
@@ -284,15 +282,13 @@ fn dialog_content_wrapper(
                                     })
                                     .refraction_amount(32.0 * alpha)
                                     .block_input(true)
-                                    .padding(padding)
-                                    .build()
-                                    .expect("builder construction failed"),
+                                    .padding(padding),
                                 content,
                             );
                         }
                         DialogStyle::Material => {
                             surface(
-                                SurfaceArgsBuilder::default()
+                                SurfaceArgs::default()
                                     .style(
                                         use_context::<MaterialTheme>()
                                             .get()
@@ -307,9 +303,7 @@ fn dialog_content_wrapper(
                                         bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
                                         bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
                                     })
-                                    .block_input(true)
-                                    .build()
-                                    .expect("builder construction failed"),
+                                    .block_input(true),
                                 move || {
                                     Modifier::new().padding_all(padding).run(content);
                                 },
@@ -343,23 +337,15 @@ fn dialog_content_wrapper(
 ///
 /// ```
 /// use tessera_ui_basic_components::dialog::{
-///     BasicDialogArgsBuilder, DialogProviderArgsBuilder, basic_dialog, dialog_provider,
+///     BasicDialogArgs, DialogProviderArgs, basic_dialog, dialog_provider,
 /// };
 ///
 /// dialog_provider(
-///     DialogProviderArgsBuilder::default()
-///         .is_open(true)
-///         .on_close_request(|| {})
-///         .build()
-///         .unwrap(),
+///     DialogProviderArgs::new(|| {}).is_open(true),
 ///     || { /* main content */ },
 ///     |alpha| {
 ///         basic_dialog(
-///             BasicDialogArgsBuilder::default()
-///                 .headline("Dialog Title")
-///                 .supporting_text("This is the dialog body text.")
-///                 .build()
-///                 .unwrap(),
+///             BasicDialogArgs::new("This is the dialog body text.").headline("Dialog Title"),
 ///         );
 ///     },
 /// );
@@ -407,7 +393,7 @@ pub fn dialog_provider(
 /// ```
 /// use tessera_ui::{remember, tessera};
 /// use tessera_ui_basic_components::dialog::{
-///     BasicDialogArgsBuilder, DialogController, DialogProviderArgsBuilder, basic_dialog,
+///     BasicDialogArgs, DialogController, DialogProviderArgs, basic_dialog,
 ///     dialog_provider_with_controller,
 /// };
 ///
@@ -416,21 +402,14 @@ pub fn dialog_provider(
 ///     let dialog_controller = remember(|| DialogController::new(false));
 ///
 ///     dialog_provider_with_controller(
-///         DialogProviderArgsBuilder::default()
-///             .on_close_request(|| {
-///                 // Handle close request
-///             })
-///             .build()
-///             .unwrap(),
+///         DialogProviderArgs::new(|| {
+///             // Handle close request
+///         }),
 ///         dialog_controller,
 ///         || { /* main content */ },
 ///         |alpha| {
 ///             basic_dialog(
-///                 BasicDialogArgsBuilder::default()
-///                     .headline("Dialog Title")
-///                     .supporting_text("This is the dialog body text.")
-///                     .build()
-///                     .unwrap(),
+///                 BasicDialogArgs::new("This is the dialog body text.").headline("Dialog Title"),
 ///             );
 ///         },
 ///     );
@@ -474,41 +453,51 @@ pub fn dialog_provider_with_controller(
 }
 
 /// Arguments for the [`basic_dialog`] component.
-#[derive(Builder)]
-#[builder(pattern = "owned")]
+#[derive(Setters)]
 pub struct BasicDialogArgs {
     /// Optional icon to display at the top of the dialog.
-    #[builder(default, setter(custom, strip_option))]
+    #[setters(skip)]
     pub icon: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Optional headline text.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub headline: Option<String>,
     /// The supporting text of the dialog.
-    #[builder(setter(into))]
+    #[setters(into)]
     pub supporting_text: String,
     /// The button used to confirm a proposed action, thus resolving what
     /// triggered the dialog.
-    #[builder(default, setter(custom))]
+    #[setters(skip)]
     pub confirm_button: Option<Arc<dyn Fn() + Send + Sync>>,
     /// The button used to dismiss a proposed action, thus resolving what
     /// triggered the dialog.
-    #[builder(default, setter(custom))]
+    #[setters(skip)]
     pub dismiss_button: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
-impl BasicDialogArgsBuilder {
+impl BasicDialogArgs {
+    /// Create args with required supporting text.
+    pub fn new(supporting_text: impl Into<String>) -> Self {
+        Self {
+            icon: None,
+            headline: None,
+            supporting_text: supporting_text.into(),
+            confirm_button: None,
+            dismiss_button: None,
+        }
+    }
+
     /// Sets the optional icon drawing callback.
     pub fn icon<F>(mut self, icon: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.icon = Some(Some(Arc::new(icon)));
+        self.icon = Some(Arc::new(icon));
         self
     }
 
     /// Sets the optional icon drawing callback using a shared callback.
     pub fn icon_shared(mut self, icon: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.icon = Some(Some(icon));
+        self.icon = Some(icon);
         self
     }
 
@@ -517,7 +506,13 @@ impl BasicDialogArgsBuilder {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.confirm_button = Some(Some(Arc::new(f)));
+        self.confirm_button = Some(Arc::new(f));
+        self
+    }
+
+    /// Sets the confirm button content using a shared callback.
+    pub fn confirm_button_shared(mut self, f: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.confirm_button = Some(f);
         self
     }
 
@@ -526,7 +521,13 @@ impl BasicDialogArgsBuilder {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.dismiss_button = Some(Some(Arc::new(f)));
+        self.dismiss_button = Some(Arc::new(f));
+        self
+    }
+
+    /// Sets the dismiss button content using a shared callback.
+    pub fn dismiss_button_shared(mut self, f: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.dismiss_button = Some(f);
         self
     }
 }
@@ -547,18 +548,15 @@ impl BasicDialogArgsBuilder {
 ///
 /// ```
 /// use tessera_ui_basic_components::button::{ButtonArgs, button};
-/// use tessera_ui_basic_components::dialog::{BasicDialogArgsBuilder, basic_dialog};
+/// use tessera_ui_basic_components::dialog::{BasicDialogArgs, basic_dialog};
 /// use tessera_ui_basic_components::text::text;
 ///
 /// basic_dialog(
-///     BasicDialogArgsBuilder::default()
+///     BasicDialogArgs::new("This is the dialog body text.")
 ///         .headline("Dialog Title")
-///         .supporting_text("This is the dialog body text.")
 ///         .confirm_button(|| {
 ///             button(ButtonArgs::filled(|| {}), || text("Confirm"));
-///         })
-///         .build()
-///         .unwrap(),
+///         }),
 /// );
 /// ```
 #[tessera]
@@ -572,7 +570,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
     };
 
     column(
-        ColumnArgsBuilder::default()
+        ColumnArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Wrap {
                     min: Some(Dp(280.0).into()),
@@ -580,9 +578,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                 }),
                 Some(DimensionValue::WRAP),
             ))
-            .cross_axis_alignment(alignment)
-            .build()
-            .expect("builder construction failed"),
+            .cross_axis_alignment(alignment),
         move |scope| {
             // Icon
             if let Some(icon) = args.icon {
@@ -606,12 +602,10 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
             if let Some(headline) = args.headline {
                 scope.child(move || {
                     text(
-                        TextArgsBuilder::default()
+                        TextArgs::default()
                             .text(headline)
                             .size(Dp(24.0))
-                            .color(scheme.on_surface)
-                            .build()
-                            .expect("failed to build headline text args"),
+                            .color(scheme.on_surface),
                     );
                 });
                 scope.child(|| {
@@ -622,12 +616,10 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
             // Supporting Text
             scope.child(move || {
                 text(
-                    TextArgsBuilder::default()
+                    TextArgs::default()
                         .text(args.supporting_text)
                         .size(Dp(14.0))
-                        .color(scheme.on_surface_variant)
-                        .build()
-                        .expect("failed to build supporting text args"),
+                        .color(scheme.on_surface_variant),
                 );
             });
 
@@ -647,11 +639,9 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                         },
                         || {
                             row(
-                                RowArgsBuilder::default()
+                                RowArgs::default()
                                     .modifier(Modifier::new().fill_max_width())
-                                    .main_axis_alignment(MainAxisAlignment::End)
-                                    .build()
-                                    .expect("failed to build actions row args"),
+                                    .main_axis_alignment(MainAxisAlignment::End),
                                 |s| {
                                     let has_dismiss = dismiss_button.is_some();
                                     let has_confirm = confirm_button.is_some();

@@ -5,7 +5,7 @@
 //! Use as a background for buttons, panels, or other UI elements.
 use std::sync::Arc;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, Px, PxPosition, SampleRegion,
     State, accesskit::Role, remember, renderer::DrawCommand, tessera,
@@ -48,103 +48,82 @@ impl GlassBorder {
 /// Arguments for the `fluid_glass` component, providing extensive control over
 /// its appearance.
 ///
-/// This struct uses the builder pattern for easy construction.
-#[derive(Builder, Clone)]
-#[builder(build_fn(validate = "Self::validate"), pattern = "owned", setter(into))]
+/// This struct uses fluent setters for easy construction.
+#[derive(Clone, Setters)]
+#[setters(into)]
 pub struct FluidGlassArgs {
     /// The tint color of the glass.
     /// The alpha channel uniquely and directly controls the tint strength.
     /// `A=0.0` means no tint (100% background visibility).
     /// `A=1.0` means full tint (100% color visibility).
-    #[builder(default = "Color::TRANSPARENT")]
     pub tint_color: Color,
     /// The shape of the component, an enum that can be `RoundedRectangle` or
     /// `Ellipse`.
-    #[builder(default = "Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(Dp(25.0), 3.0),
-            top_right: RoundedCorner::manual(Dp(25.0), 3.0),
-            bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
-            bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
-        }")]
     pub shape: Shape,
     /// The radius for the background blur effect. A value of `0.0` disables the
     /// blur.
-    #[builder(default = "Dp(0.0)")]
     pub blur_radius: Dp,
     /// The height of the chromatic dispersion effect.
-    #[builder(default = "Dp(25.0)")]
     pub dispersion_height: Dp,
     /// Multiplier for the chromatic aberration, enhancing the color separation
     /// effect.
-    #[builder(default = "1.1")]
     pub chroma_multiplier: f32,
     /// The height of the refraction effect, simulating light bending through
     /// the glass.
-    #[builder(default = "Dp(24.0)")]
     pub refraction_height: Dp,
     /// The amount of refraction to apply.
-    #[builder(default = "32.0")]
     pub refraction_amount: f32,
     /// Controls the shape and eccentricity of the highlight.
-    #[builder(default = "0.2")]
     pub eccentric_factor: f32,
     /// The amount of noise to apply over the surface, adding texture.
-    #[builder(default = "0.0")]
     pub noise_amount: f32,
     /// The scale of the noise pattern.
-    #[builder(default = "1.0")]
     pub noise_scale: f32,
     /// A time value, typically used to animate the noise or other effects.
-    #[builder(default = "0.0")]
     pub time: f32,
     /// The contrast adjustment factor.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub contrast: Option<f32>,
     /// Optional modifier chain applied to the glass node.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// Padding inside the glass component.
-    #[builder(default = "Dp(0.0)")]
     pub padding: Dp,
     /// Optional normalized center (x, y) for the ripple animation on click.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub ripple_center: Option<[f32; 2]>,
     /// Optional ripple radius, expressed in normalized coordinates relative to
     /// the surface.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub ripple_radius: Option<f32>,
     /// Optional ripple tint alpha (0.0 = transparent, 1.0 = opaque).
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub ripple_alpha: Option<f32>,
     /// Strength multiplier for the ripple distortion.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub ripple_strength: Option<f32>,
 
     /// Optional click callback for interactive glass surfaces.
-    #[builder(default, setter(custom, strip_option))]
+    #[setters(skip)]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
 
     /// Optional border defining the outline thickness for the glass.
-    #[builder(default = "Some(GlassBorder { width: Dp(1.35).into() })")]
     pub border: Option<GlassBorder>,
 
     /// Whether to block input events on the glass surface.
     /// When `true`, the surface will consume all input events, preventing
     /// interaction with underlying components.
-    #[builder(default = "false")]
     pub block_input: bool,
     /// Optional accessibility role override; defaults to `Role::Button` when
     /// interactive.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub accessibility_role: Option<Role>,
     /// Optional label announced by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional description announced by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
     /// Whether the surface should be focusable even when not interactive.
-    #[builder(default)]
     pub accessibility_focusable: bool,
 }
 
@@ -172,36 +151,59 @@ impl PartialEq for FluidGlassArgs {
     }
 }
 
-impl FluidGlassArgsBuilder {
-    fn validate(&self) -> Result<(), String> {
-        Ok(())
-    }
-}
-
-impl FluidGlassArgsBuilder {
+impl FluidGlassArgs {
     /// Set the click handler.
     pub fn on_click<F>(mut self, on_click: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Some(Arc::new(on_click)));
+        self.on_click = Some(Arc::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
     pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(Some(on_click));
+        self.on_click = Some(on_click);
         self
     }
 }
 
-// Manual implementation of Default because derive_builder's default conflicts
-// with our specific defaults
 impl Default for FluidGlassArgs {
     fn default() -> Self {
-        FluidGlassArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        Self {
+            tint_color: Color::TRANSPARENT,
+            shape: Shape::RoundedRectangle {
+                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
+            },
+            blur_radius: Dp(0.0),
+            dispersion_height: Dp(25.0),
+            chroma_multiplier: 1.1,
+            refraction_height: Dp(24.0),
+            refraction_amount: 32.0,
+            eccentric_factor: 0.2,
+            noise_amount: 0.0,
+            noise_scale: 1.0,
+            time: 0.0,
+            contrast: None,
+            modifier: Modifier::new(),
+            padding: Dp(0.0),
+            ripple_center: None,
+            ripple_radius: None,
+            ripple_alpha: None,
+            ripple_strength: None,
+            on_click: None,
+            border: Some(GlassBorder {
+                width: Dp(1.35).into(),
+            }),
+            block_input: false,
+            accessibility_role: None,
+            accessibility_label: None,
+            accessibility_description: None,
+            accessibility_focusable: false,
+        }
     }
 }
 
@@ -262,19 +264,14 @@ fn handle_block_input(input: &mut tessera_ui::InputHandlerInput) {
 /// ```
 /// use tessera_ui_basic_components::{
 ///     fluid_glass::{FluidGlassArgs, fluid_glass},
-///     text::{TextArgsBuilder, text},
+///     text::{TextArgs, text},
 /// };
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
 /// fluid_glass(FluidGlassArgs::default(), || {
-///     text(
-///         TextArgsBuilder::default()
-///             .text("Content on glass".to_string())
-///             .build()
-///             .expect("builder construction failed"),
-///     );
+///     text(TextArgs::default().text("Content on glass"));
 /// });
 /// # }
 /// # component();

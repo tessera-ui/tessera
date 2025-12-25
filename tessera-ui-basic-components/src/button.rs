@@ -5,14 +5,14 @@
 //! Trigger actions, submit forms, or navigate.
 use std::sync::Arc;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{Color, Dp, Modifier, accesskit::Role, tessera, use_context};
 
 use crate::{
     alignment::Alignment,
     modifier::ModifierExt,
     shape_def::Shape,
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgs, surface},
     theme::{
         ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for,
         provide_text_style,
@@ -65,95 +65,92 @@ impl ButtonDefaults {
 }
 
 /// Arguments for the `button` component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct ButtonArgs {
     /// Whether the button is enabled for user interaction.
-    #[builder(default = "true")]
     pub enabled: bool,
     /// Optional modifier chain applied to the button subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// The fill color of the button (RGBA).
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub color: Color,
     /// Optional explicit content color override for descendants.
     ///
     /// When `None`, the button derives its content color from the theme.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub content_color: Option<Color>,
     /// The shape of the button.
-    #[builder(default = "Shape::capsule()")]
     pub shape: Shape,
     /// The padding of the button.
-    #[builder(default = "ButtonDefaults::CONTENT_VERTICAL_PADDING")]
     pub padding: Dp,
     /// The click callback function
-    #[builder(default, setter(custom, strip_option))]
+    #[setters(skip)]
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     /// The ripple color (RGB) for the button.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_primary")]
     pub ripple_color: Color,
     /// Width of the border. If > 0, an outline will be drawn.
-    #[builder(default = "Dp(0.0)")]
     pub border_width: Dp,
     /// Optional color for the border (RGBA). If None and border_width > 0,
     /// `color` will be used.
-    #[builder(default)]
     pub border_color: Option<Color>,
     /// Optional shadow elevation hint forwarded to the underlying surface.
-    #[builder(default, setter(strip_option))]
+    #[setters(strip_option)]
     pub elevation: Option<Dp>,
     /// Tonal elevation forwarded to the underlying surface.
-    #[builder(default = "Dp(0.0)")]
     pub tonal_elevation: Dp,
     /// Container color used when `enabled=false`.
-    #[builder(
-        default = "ButtonDefaults::disabled_container_color(&use_context::<MaterialTheme>().get().color_scheme)"
-    )]
     pub disabled_container_color: Color,
     /// Content color used when `enabled=false`.
-    #[builder(
-        default = "ButtonDefaults::disabled_content_color(&use_context::<MaterialTheme>().get().color_scheme)"
-    )]
     pub disabled_content_color: Color,
     /// Border color used when `enabled=false` and an outline is drawn.
-    #[builder(
-        default = "ButtonDefaults::disabled_border_color(&use_context::<MaterialTheme>().get().color_scheme)"
-    )]
     pub disabled_border_color: Color,
     /// Optional label announced by assistive technologies (e.g., screen
     /// readers).
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional longer description or hint for assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
 }
 
-impl ButtonArgsBuilder {
+impl ButtonArgs {
     /// Set the click handler.
     pub fn on_click<F>(mut self, on_click: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Some(Arc::new(on_click)));
+        self.on_click = Some(Arc::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
     pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(Some(on_click));
+        self.on_click = Some(on_click);
         self
     }
 }
 
 impl Default for ButtonArgs {
     fn default() -> Self {
-        ButtonArgsBuilder::default()
-            .on_click(|| {})
-            .build()
-            .expect("ButtonArgsBuilder default build should succeed")
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            enabled: true,
+            modifier: Modifier::new(),
+            color: scheme.primary,
+            content_color: None,
+            shape: Shape::capsule(),
+            padding: ButtonDefaults::CONTENT_VERTICAL_PADDING,
+            on_click: Some(Arc::new(|| {})),
+            ripple_color: scheme.on_primary,
+            border_width: Dp(0.0),
+            border_color: None,
+            elevation: None,
+            tonal_elevation: Dp(0.0),
+            disabled_container_color: ButtonDefaults::disabled_container_color(&scheme),
+            disabled_content_color: ButtonDefaults::disabled_content_color(&scheme),
+            disabled_border_color: ButtonDefaults::disabled_border_color(&scheme),
+            accessibility_label: None,
+            accessibility_description: None,
+        }
     }
 }
 
@@ -180,16 +177,11 @@ impl Default for ButtonArgs {
 /// # fn component() {
 /// use tessera_ui_basic_components::{
 ///     button::{ButtonArgs, button},
-///     text::{TextArgsBuilder, text},
+///     text::{TextArgs, text},
 /// };
 ///
 /// button(ButtonArgs::filled(|| {}), || {
-///     text(
-///         TextArgsBuilder::default()
-///             .text("Click Me".to_string())
-///             .build()
-///             .expect("builder construction failed"),
-///     );
+///     text(TextArgs::default().text("Click Me"));
 /// });
 /// # }
 /// # component();
@@ -245,28 +237,28 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         }
     };
 
-    let mut builder = SurfaceArgsBuilder::default();
+    let mut surface_args = SurfaceArgs::default();
 
     if let Some(elevation) = args.elevation {
-        builder = builder.elevation(elevation);
+        surface_args = surface_args.elevation(elevation);
     }
 
     // Set on_click handler if available
     if args.enabled
         && let Some(on_click) = args.on_click.clone()
     {
-        builder = builder.on_click_shared(on_click);
+        surface_args = surface_args.on_click_shared(on_click);
     }
 
     if let Some(label) = args.accessibility_label.clone() {
-        builder = builder.accessibility_label(label);
+        surface_args = surface_args.accessibility_label(label);
     }
 
     if let Some(description) = args.accessibility_description.clone() {
-        builder = builder.accessibility_description(description);
+        surface_args = surface_args.accessibility_description(description);
     }
 
-    builder
+    surface_args
         .style(style)
         .shape(args.shape)
         .modifier(args.modifier.size_in(
@@ -282,8 +274,6 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
         .tonal_elevation(args.tonal_elevation)
         .accessibility_role(Role::Button)
         .accessibility_focusable(true)
-        .build()
-        .expect("SurfaceArgsBuilder failed with required button fields set")
 }
 
 /// Convenience constructors for standard Material Design 3 button styles
@@ -292,7 +282,7 @@ impl ButtonArgs {
     /// Uses Primary color for container and OnPrimary for content.
     pub fn filled(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         let scheme = use_context::<MaterialTheme>().get().color_scheme;
-        ButtonArgsBuilder::default()
+        ButtonArgs::default()
             .color(scheme.primary)
             .content_color(scheme.on_primary)
             .ripple_color(scheme.on_primary)
@@ -307,15 +297,13 @@ impl ButtonArgs {
                     .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
             )
             .on_click(on_click)
-            .build()
-            .expect("ButtonArgsBuilder failed for filled button")
     }
 
     /// Create an "Elevated" button (Medium emphasis).
     /// Uses Surface color (or SurfaceContainerLow if available) with a shadow.
     pub fn elevated(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         let scheme = use_context::<MaterialTheme>().get().color_scheme;
-        ButtonArgsBuilder::default()
+        ButtonArgs::default()
             .color(scheme.surface_container_low)
             .content_color(scheme.primary)
             .ripple_color(scheme.primary)
@@ -331,8 +319,6 @@ impl ButtonArgs {
                     .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
             )
             .on_click(on_click)
-            .build()
-            .expect("ButtonArgsBuilder failed for elevated button")
     }
 
     /// Create a "Tonal" button (Medium emphasis).
@@ -340,7 +326,7 @@ impl ButtonArgs {
     /// content.
     pub fn tonal(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         let scheme = use_context::<MaterialTheme>().get().color_scheme;
-        ButtonArgsBuilder::default()
+        ButtonArgs::default()
             .color(scheme.secondary_container)
             .content_color(scheme.on_secondary_container)
             .ripple_color(scheme.on_secondary_container)
@@ -355,15 +341,13 @@ impl ButtonArgs {
                     .with_alpha(ButtonDefaults::DISABLED_CONTENT_ALPHA),
             )
             .on_click(on_click)
-            .build()
-            .expect("ButtonArgsBuilder failed for tonal button")
     }
 
     /// Create an "Outlined" button (Medium emphasis).
     /// Transparent container with an Outline border.
     pub fn outlined(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         let scheme = use_context::<MaterialTheme>().get().color_scheme;
-        ButtonArgsBuilder::default()
+        ButtonArgs::default()
             .color(Color::TRANSPARENT)
             .content_color(scheme.on_surface_variant)
             .disabled_container_color(Color::TRANSPARENT)
@@ -381,15 +365,13 @@ impl ButtonArgs {
                     .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
             )
             .on_click(on_click)
-            .build()
-            .expect("ButtonArgsBuilder failed for outlined button")
     }
 
     /// Create a "Text" button (Low emphasis).
     /// Transparent container and no border.
     pub fn text(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         let scheme = use_context::<MaterialTheme>().get().color_scheme;
-        ButtonArgsBuilder::default()
+        ButtonArgs::default()
             .color(Color::TRANSPARENT)
             .content_color(scheme.primary)
             .disabled_container_color(Color::TRANSPARENT)
@@ -400,8 +382,6 @@ impl ButtonArgs {
                     .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
             )
             .on_click(on_click)
-            .build()
-            .expect("ButtonArgsBuilder failed for text button")
     }
 }
 

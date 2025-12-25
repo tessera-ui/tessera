@@ -10,7 +10,7 @@ use std::{
 };
 
 use closure::closure;
-use derive_builder::Builder;
+use derive_setters::Setters;
 use tessera_ui::{
     Color, DimensionValue, Dp, Modifier, Px, PxSize, State, accesskit::Role, remember, tessera,
     use_context,
@@ -19,11 +19,11 @@ use tessera_ui::{
 use crate::{
     alignment::Alignment,
     animation,
-    boxed::{BoxedArgsBuilder, boxed},
+    boxed::{BoxedArgs, boxed},
     modifier::{InteractionState, ModifierExt as _, PointerEventContext, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
-    surface::{SurfaceArgsBuilder, SurfaceStyle, surface},
+    surface::{SurfaceArgs, SurfaceStyle, surface},
     theme::{MaterialAlpha, MaterialTheme},
 };
 
@@ -112,63 +112,82 @@ impl RadioButtonController {
 }
 
 /// Arguments for configuring the `radio_button` component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct RadioButtonArgs {
     /// Optional modifier chain applied to the radio button subtree.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// Callback invoked when the radio transitions to the selected state.
-    #[builder(default = "Arc::new(|_| {})")]
+    #[setters(skip)]
     pub on_select: Arc<dyn Fn(bool) + Send + Sync>,
     /// Whether the radio button is currently selected.
-    #[builder(default = "false")]
     pub selected: bool,
     /// Visual diameter of the radio glyph (outer ring) in density-independent
     /// pixels.
-    #[builder(default = "Dp(20.0)")]
     pub size: Dp,
     /// Minimum interactive touch target for the control.
-    #[builder(default = "Dp(48.0)")]
     pub touch_target_size: Dp,
     /// Stroke width applied to the outer ring.
-    #[builder(default = "Dp(2.0)")]
     pub stroke_width: Dp,
     /// Diameter of the inner dot when fully selected.
-    #[builder(default = "Dp(10.0)")]
     pub dot_size: Dp,
     /// Ring and dot color when selected.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.primary")]
     pub selected_color: Color,
     /// Ring color when not selected.
-    #[builder(default = "use_context::<MaterialTheme>().get().color_scheme.on_surface_variant")]
     pub unselected_color: Color,
     /// Ring and dot color when disabled but selected.
-    #[builder(
-        default = "use_context::<MaterialTheme>().get().color_scheme.on_surface.with_alpha(MaterialAlpha::DISABLED_CONTENT)"
-    )]
     pub disabled_selected_color: Color,
     /// Ring color when disabled and not selected.
-    #[builder(
-        default = "use_context::<MaterialTheme>().get().color_scheme.on_surface.with_alpha(MaterialAlpha::DISABLED_CONTENT)"
-    )]
     pub disabled_unselected_color: Color,
     /// Whether the control is interactive.
-    #[builder(default = "true")]
     pub enabled: bool,
     /// Optional accessibility label read by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+}
+
+impl RadioButtonArgs {
+    /// Sets the on_select handler.
+    pub fn on_select<F>(mut self, on_select: F) -> Self
+    where
+        F: Fn(bool) + Send + Sync + 'static,
+    {
+        self.on_select = Arc::new(on_select);
+        self
+    }
+
+    /// Sets the on_select handler using a shared callback.
+    pub fn on_select_shared(mut self, on_select: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
+        self.on_select = on_select;
+        self
+    }
 }
 
 impl Default for RadioButtonArgs {
     fn default() -> Self {
-        RadioButtonArgsBuilder::default()
-            .build()
-            .expect("RadioButtonArgsBuilder default build should succeed")
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            modifier: Modifier::new(),
+            on_select: Arc::new(|_| {}),
+            selected: false,
+            size: Dp(20.0),
+            touch_target_size: Dp(48.0),
+            stroke_width: Dp(2.0),
+            dot_size: Dp(10.0),
+            selected_color: scheme.primary,
+            unselected_color: scheme.on_surface_variant,
+            disabled_selected_color: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+            disabled_unselected_color: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+            enabled: true,
+            accessibility_label: None,
+            accessibility_description: None,
+        }
     }
 }
 
@@ -200,16 +219,11 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 ///
 /// ```
 /// use tessera_ui::tessera;
-/// use tessera_ui_basic_components::radio_button::{RadioButtonArgsBuilder, radio_button};
+/// use tessera_ui_basic_components::radio_button::{RadioButtonArgs, radio_button};
 ///
 /// #[tessera]
 /// fn radio_demo() {
-///     radio_button(
-///         RadioButtonArgsBuilder::default()
-///             .selected(true)
-///             .build()
-///             .unwrap(),
-///     );
+///     radio_button(RadioButtonArgs::default().selected(true));
 /// }
 /// ```
 #[tessera]
@@ -288,7 +302,7 @@ pub fn radio_button_with_controller(
     let state_layer_size = RadioButtonDefaults::STATE_LAYER_SIZE;
     let state_layer_radius = Dp(state_layer_size.0 / 2.0);
 
-    let mut state_layer_builder = SurfaceArgsBuilder::default()
+    let mut state_layer_args = SurfaceArgs::default()
         .modifier(Modifier::new().size(state_layer_size, state_layer_size))
         .shape(Shape::Ellipse)
         .enabled(args.enabled)
@@ -300,12 +314,10 @@ pub fn radio_button_with_controller(
         .ripple_color(ripple_color);
 
     if let Some(state) = interaction_state {
-        state_layer_builder = state_layer_builder.interaction_state(state);
+        state_layer_args = state_layer_args.interaction_state(state);
     }
 
-    let mut state_layer_args = state_layer_builder
-        .build()
-        .expect("builder construction failed");
+    let mut state_layer_args = state_layer_args;
     state_layer_args.set_ripple_state(ripple_state);
 
     let mut modifier = args.modifier.size(target_size, target_size);
@@ -347,33 +359,27 @@ pub fn radio_button_with_controller(
     }
 
     boxed(
-        BoxedArgsBuilder::default()
+        BoxedArgs::default()
             .modifier(modifier)
-            .alignment(Alignment::Center)
-            .build()
-            .expect("builder construction failed"),
+            .alignment(Alignment::Center),
         move |scope| {
             let args = args.clone();
             let ring_style = ring_style.clone();
             scope.child(move || {
                 surface(state_layer_args, move || {
                     boxed(
-                        BoxedArgsBuilder::default()
+                        BoxedArgs::default()
                             .alignment(Alignment::Center)
-                            .modifier(Modifier::new().fill_max_size())
-                            .build()
-                            .expect("builder construction failed"),
+                            .modifier(Modifier::new().fill_max_size()),
                         move |center| {
                             let args = args.clone();
                             let ring_style = ring_style.clone();
                             center.child(move || {
                                 surface(
-                                    SurfaceArgsBuilder::default()
+                                    SurfaceArgs::default()
                                         .modifier(Modifier::new().size(args.size, args.size))
                                         .shape(Shape::Ellipse)
-                                        .style(ring_style)
-                                        .build()
-                                        .expect("builder construction failed"),
+                                        .style(ring_style),
                                     {
                                         let dot_size_px = args.dot_size.to_px();
                                         move || {
@@ -382,20 +388,18 @@ pub fn radio_button_with_controller(
                                                     as i32;
                                             if animated_size > 0 {
                                                 boxed(
-                                                    BoxedArgsBuilder::default()
+                                                    BoxedArgs::default()
                                                         .alignment(Alignment::Center)
                                                         .modifier(Modifier::new().size(
                                                             args.size,
                                                             args.size,
-                                                        ))
-                                                        .build()
-                                                        .expect("builder construction failed"),
+                                                        )),
                                                     |dot_scope| {
                                                         dot_scope.child({
                                                             let dot_color = active_dot_color;
                                                             move || {
                                                                 surface(
-                                                                    SurfaceArgsBuilder::default()
+                                                                    SurfaceArgs::default()
                                                                         .modifier(
                                                                             Modifier::new().constrain(
                                                                                 Some(
@@ -415,10 +419,6 @@ pub fn radio_button_with_controller(
                                                                             SurfaceStyle::Filled {
                                                                                 color: dot_color,
                                                                             },
-                                                                        )
-                                                                        .build()
-                                                                        .expect(
-                                                                            "builder construction failed",
                                                                         ),
                                                                     || {},
                                                                 );

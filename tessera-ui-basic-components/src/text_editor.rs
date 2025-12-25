@@ -5,7 +5,7 @@
 //! Use for text input fields, forms, or any place that requires editable text.
 use std::sync::Arc;
 
-use derive_builder::Builder;
+use derive_setters::Setters;
 use glyphon::{Action as GlyphonAction, Edit};
 use tessera_ui::{
     Color, CursorEventContent, Dp, ImeRequest, Modifier, Px, PxPosition, State, accesskit::Role,
@@ -17,7 +17,7 @@ use crate::{
     pipelines::text::pipeline::write_font_system,
     pos_misc::is_position_in_component,
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceArgsBuilder, surface},
+    surface::{SurfaceArgs, surface},
     text_edit_core::{ClickType, text_edit_core},
     theme::MaterialTheme,
 };
@@ -27,78 +27,107 @@ use crate::{
 pub use crate::text_edit_core::TextEditorController;
 
 /// Arguments for configuring the [`text_editor`] component.
-#[derive(Builder, Clone)]
-#[builder(pattern = "owned")]
+#[derive(Clone, Setters)]
 pub struct TextEditorArgs {
     /// Optional modifier chain applied to the editor container.
-    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
     /// Called when the text content changes. The closure receives the new text
     /// content and returns the updated content.
-    #[builder(default = "Arc::new(|_| { String::new() })")]
+    #[setters(skip)]
     pub on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
     /// Minimum width in density-independent pixels. Defaults to 120dp if not
     /// specified.
-    #[builder(default = "None")]
+    #[setters(strip_option)]
     pub min_width: Option<Dp>,
     /// Minimum height in density-independent pixels. Defaults to line height +
     /// padding if not specified.
-    #[builder(default = "None")]
+    #[setters(strip_option)]
     pub min_height: Option<Dp>,
     /// Background color of the text editor (RGBA). Defaults to light gray.
-    #[builder(default = "Some(use_context::<MaterialTheme>().get().color_scheme.surface_variant)")]
+    #[setters(strip_option)]
     pub background_color: Option<Color>,
     /// Border width in Dp. Defaults to 1.0 Dp.
-    #[builder(default = "Dp(1.0)")]
     pub border_width: Dp,
     /// Border color (RGBA). Defaults to gray.
-    #[builder(default = "Some(use_context::<MaterialTheme>().get().color_scheme.outline_variant)")]
+    #[setters(strip_option)]
     pub border_color: Option<Color>,
     /// The shape of the text editor container.
-    #[builder(default = "Shape::RoundedRectangle {
-                            top_left: RoundedCorner::manual(Dp(4.0), 3.0),
-                            top_right: RoundedCorner::manual(Dp(4.0), 3.0),
-                            bottom_right: RoundedCorner::manual(Dp(4.0), 3.0),
-                            bottom_left: RoundedCorner::manual(Dp(4.0), 3.0),
-                        }")]
     pub shape: Shape,
     /// Padding inside the text editor. Defaults to 5.0 Dp.
-    #[builder(default = "Dp(5.0)")]
     pub padding: Dp,
     /// Border color when focused (RGBA). Defaults to blue.
-    #[builder(default = "Some(use_context::<MaterialTheme>().get().color_scheme.primary)")]
+    #[setters(strip_option)]
     pub focus_border_color: Option<Color>,
     /// Background color when focused (RGBA). Defaults to white.
-    #[builder(default = "Some(use_context::<MaterialTheme>().get().color_scheme.surface)")]
+    #[setters(strip_option)]
     pub focus_background_color: Option<Color>,
     /// Color for text selection highlight (RGBA). Defaults to light blue with
     /// transparency.
-    #[builder(
-        default = "Some(use_context::<MaterialTheme>().get().color_scheme.primary.with_alpha(0.35))"
-    )]
+    #[setters(strip_option)]
     pub selection_color: Option<Color>,
     /// Optional label announced by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional description announced by assistive technologies.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
     /// Initial text content.
-    #[builder(default, setter(strip_option, into))]
+    #[setters(strip_option, into)]
     pub initial_text: Option<String>,
     /// Font size in Dp. Defaults to 14.0.
-    #[builder(default = "Dp(14.0)")]
     pub font_size: Dp,
     /// Line height in Dp. Defaults to None (1.2x font size).
-    #[builder(default = "None")]
+    #[setters(strip_option)]
     pub line_height: Option<Dp>,
+}
+
+impl TextEditorArgs {
+    /// Set the text change handler.
+    pub fn on_change<F>(mut self, on_change: F) -> Self
+    where
+        F: Fn(String) -> String + Send + Sync + 'static,
+    {
+        self.on_change = Arc::new(on_change);
+        self
+    }
+
+    /// Set the text change handler using a shared callback.
+    pub fn on_change_shared(
+        mut self,
+        on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
+    ) -> Self {
+        self.on_change = on_change;
+        self
+    }
 }
 
 impl Default for TextEditorArgs {
     fn default() -> Self {
-        TextEditorArgsBuilder::default()
-            .build()
-            .expect("builder construction failed")
+        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        Self {
+            modifier: Modifier::new(),
+            on_change: Arc::new(|_| String::new()),
+            min_width: None,
+            min_height: None,
+            background_color: Some(scheme.surface_variant),
+            border_width: Dp(1.0),
+            border_color: Some(scheme.outline_variant),
+            shape: Shape::RoundedRectangle {
+                top_left: RoundedCorner::manual(Dp(4.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(4.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(4.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(4.0), 3.0),
+            },
+            padding: Dp(5.0),
+            focus_border_color: Some(scheme.primary),
+            focus_background_color: Some(scheme.surface),
+            selection_color: Some(scheme.primary.with_alpha(0.35)),
+            accessibility_label: None,
+            accessibility_description: None,
+            initial_text: None,
+            font_size: Dp(14.0),
+            line_height: None,
+        }
     }
 }
 
@@ -123,14 +152,12 @@ impl Default for TextEditorArgs {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_ui::Dp;
-/// use tessera_ui_basic_components::text_editor::{TextEditorArgsBuilder, text_editor};
+/// use tessera_ui_basic_components::text_editor::{TextEditorArgs, text_editor};
 ///
 /// text_editor(
-///     TextEditorArgsBuilder::default()
+///     TextEditorArgs::default()
 ///         .padding(Dp(8.0))
-///         .initial_text("Hello World")
-///         .build()
-///         .unwrap(),
+///         .initial_text("Hello World"),
 /// );
 /// # }
 /// # component();
@@ -180,7 +207,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
 /// use tessera_ui::remember;
 /// use tessera_ui_basic_components::{
 ///     text::write_font_system,
-///     text_editor::{TextEditorArgsBuilder, TextEditorController, text_editor_with_controller},
+///     text_editor::{TextEditorArgs, TextEditorController, text_editor_with_controller},
 /// };
 ///
 /// let controller = remember(|| TextEditorController::new(Dp(14.0), None));
@@ -192,13 +219,7 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
 ///     );
 /// });
 ///
-/// text_editor_with_controller(
-///     TextEditorArgsBuilder::default()
-///         .padding(Dp(8.0))
-///         .build()
-///         .unwrap(),
-///     controller,
-/// );
+/// text_editor_with_controller(TextEditorArgs::default().padding(Dp(8.0)), controller);
 /// # }
 /// # component();
 /// ```
@@ -569,12 +590,10 @@ fn create_surface_args(
         }
     };
 
-    SurfaceArgsBuilder::default()
+    SurfaceArgs::default()
         .style(style)
         .shape(args.shape)
         .modifier(args.modifier)
-        .build()
-        .expect("builder construction failed")
 }
 
 /// Determine background color based on focus state
@@ -632,29 +651,27 @@ impl TextEditorArgs {
     /// # component();
     /// ```
     pub fn simple() -> Self {
-        TextEditorArgsBuilder::default()
-            .min_width(Some(Dp(120.0)))
-            .background_color(Some(
+        TextEditorArgs::default()
+            .min_width(Dp(120.0))
+            .background_color(
                 use_context::<MaterialTheme>()
                     .get()
                     .color_scheme
                     .surface_variant,
-            ))
+            )
             .border_width(Dp(1.0))
-            .border_color(Some(
+            .border_color(
                 use_context::<MaterialTheme>()
                     .get()
                     .color_scheme
                     .outline_variant,
-            ))
+            )
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(Dp(0.0), 3.0),
                 top_right: RoundedCorner::manual(Dp(0.0), 3.0),
                 bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
                 bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             })
-            .build()
-            .expect("builder construction failed")
     }
 
     /// Creates a text editor with an emphasized border for better visibility.
@@ -692,17 +709,15 @@ impl TextEditorArgs {
     /// # component();
     /// ```
     pub fn minimal() -> Self {
-        TextEditorArgsBuilder::default()
-            .min_width(Some(Dp(120.0)))
-            .background_color(Some(Color::WHITE))
+        TextEditorArgs::default()
+            .min_width(Dp(120.0))
+            .background_color(Color::WHITE)
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(Dp(0.0), 3.0),
                 top_right: RoundedCorner::manual(Dp(0.0), 3.0),
                 bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
                 bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             })
-            .build()
-            .expect("builder construction failed")
     }
 }
 
