@@ -139,22 +139,14 @@ where
             shrink_dimension(parent_constraint.height, top_px, bottom_px),
         );
 
-        let child_measurements = input.measure_children(vec![(child_id, constraint)])?;
-        let child_measurement = *child_measurements
-            .get(&child_id)
-            .expect("Child measurement missing");
-
+        let child_measurement = input.measure_child(child_id, &constraint)?;
         let content_width = child_measurement.width + left_px + right_px;
         let content_height = child_measurement.height + top_px + bottom_px;
-
-        let final_width = resolve_dimension(parent_constraint.width, content_width, "width");
-        let final_height = resolve_dimension(parent_constraint.height, content_height, "height");
-
         input.place_child(child_id, PxPosition::new(left_px, top_px));
 
         Ok(ComputedData {
-            width: final_width,
-            height: final_height,
+            width: content_width,
+            height: content_height,
         })
     }));
 
@@ -213,20 +205,10 @@ pub(crate) fn modifier_constraints<F>(
         )
         .merge(input.parent_constraint);
 
-        let child_measurements = input.measure_children(vec![(child_id, constraint)])?;
-        let child_measurement = *child_measurements
-            .get(&child_id)
-            .expect("Child measurement missing");
-
-        let final_width = resolve_dimension(constraint.width, child_measurement.width, "width");
-        let final_height = resolve_dimension(constraint.height, child_measurement.height, "height");
-
+        let child_measurement = input.measure_child(child_id, &constraint)?;
         input.place_child(child_id, PxPosition::ZERO);
 
-        Ok(ComputedData {
-            width: final_width,
-            height: final_height,
-        })
+        Ok(child_measurement)
     }));
 
     child();
@@ -246,29 +228,19 @@ where
             .copied()
             .expect("modifier_minimum_interactive_size expects exactly one child");
 
-        let parent_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let child_measurements = input.measure_children(vec![(child_id, parent_constraint)])?;
-        let child_measurement = *child_measurements
-            .get(&child_id)
-            .expect("Child measurement missing");
+        let child_measurement = input.measure_child_in_parent_constraint(child_id)?;
 
         let min_px: Px = MIN_SIZE.into();
         let content_width = child_measurement.width.max(min_px);
         let content_height = child_measurement.height.max(min_px);
 
-        let final_width = resolve_dimension(parent_constraint.width, content_width, "width");
-        let final_height = resolve_dimension(parent_constraint.height, content_height, "height");
-
-        let x = ((final_width - child_measurement.width) / 2).max(Px(0));
-        let y = ((final_height - child_measurement.height) / 2).max(Px(0));
+        let x = ((content_width - child_measurement.width) / 2).max(Px(0));
+        let y = ((content_height - child_measurement.height) / 2).max(Px(0));
         input.place_child(child_id, PxPosition::new(x, y));
 
         Ok(ComputedData {
-            width: final_width,
-            height: final_height,
+            width: content_width,
+            height: content_height,
         })
     }));
 

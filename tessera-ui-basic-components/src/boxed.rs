@@ -6,7 +6,7 @@
 use derive_builder::Builder;
 use tessera_ui::{ComputedData, Constraint, DimensionValue, Modifier, Px, PxPosition, tessera};
 
-use crate::{alignment::Alignment, modifier::ModifierExt as _};
+use crate::alignment::Alignment;
 
 /// Arguments for the `Boxed` component.
 #[derive(Clone, Debug, Builder)]
@@ -16,9 +16,7 @@ pub struct BoxedArgs {
     #[builder(default)]
     pub alignment: Alignment,
     /// Modifier chain applied to the boxed subtree.
-    #[builder(
-        default = "Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))"
-    )]
+    #[builder(default = "Modifier::new()")]
     pub modifier: Modifier,
 }
 
