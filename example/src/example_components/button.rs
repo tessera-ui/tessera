@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use closure::closure;
 use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
 use tessera_ui_basic_components::{
     alignment::CrossAxisAlignment,
@@ -93,7 +92,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                         )
                                     });
 
-                                    scope.child(closure!(|| {
+                                    scope.child(move || {
                                         let icon = IconArgsBuilder::default()
                                             .content(IconContent::from(state.icon_data.clone()))
                                             .size(Dp(24.0))
@@ -108,19 +107,16 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                     .color_scheme
                                                     .surface_variant,
                                             )
-                                            .on_click(closure!(
-                                                clone counter,
-                                                || {
-                                                    counter.with_mut(|count| *count += 1);
-                                                    println!("Icon button clicked!");
-                                                }
-                                            ))
+                                            .on_click(move || {
+                                                counter.with_mut(|count| *count += 1);
+                                                println!("Icon button clicked!");
+                                            })
                                             .icon(icon)
                                             .build()
                                             .unwrap();
 
                                         icon_button(button_args);
-                                    }));
+                                    });
 
                                     scope.child(|| {
                                         spacer(Modifier::new().height(Dp(20.0)));
@@ -208,11 +204,11 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
 
                                     scope.child(|| spacer(Modifier::new().height(Dp(8.0))));
 
-                                    scope.child(closure!(|| {
+                                    scope.child(|| {
                                         row(
                                             RowArgsBuilder::default().build().unwrap(),
                                             move |scope| {
-                                                scope.child(closure!(|| {
+                                                scope.child(|| {
                                                     button(
                                                         ButtonArgs::outlined(|| {
                                                             println!("Outlined clicked")
@@ -232,12 +228,12 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                             );
                                                         },
                                                     );
-                                                }));
+                                                });
                                                 scope.child(|| {
                                                     spacer(Modifier::new().width(Dp(8.0)))
                                                 });
 
-                                                scope.child(closure!(|| {
+                                                scope.child(|| {
                                                     button(
                                                         ButtonArgs::text(|| {
                                                             println!("Text clicked")
@@ -257,10 +253,10 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                             );
                                                         },
                                                     );
-                                                }));
+                                                });
                                             },
                                         );
-                                    }));
+                                    });
                                 },
                             )
                         },

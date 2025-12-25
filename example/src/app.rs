@@ -73,9 +73,9 @@ pub fn app() {
 
     side_bar_provider_with_controller(
         SideBarProviderArgsBuilder::default()
-            .on_close_request(closure!(clone side_bar_controller, || {
+            .on_close_request(move || {
                 side_bar_controller.with_mut(|c| c.close());
-            }))
+            })
             .style(SideBarStyle::Glass)
             .build()
             .unwrap(),
@@ -127,7 +127,7 @@ pub fn app() {
                                         .build()
                                         .unwrap();
 
-                                    navigation_bar(|scope| {
+                                    navigation_bar(move |scope| {
                                         scope.item(
                                             NavigationBarItemBuilder::default()
                                                 .label("Home")
@@ -137,22 +137,15 @@ pub fn app() {
                                                         icon(home_icon_args.clone());
                                                     }
                                                 ))
-                                                .on_click(closure!(
-                                                    clone bottom_sheet_controller,
-                                                    clone side_bar_controller,
-                                                    clone dialog_controller,
-                                                    || {
-                                                        Router::with_mut(|router| {
-                                                            router.reset_with(
-                                                                HomeDestination {
-                                                                    bottom_sheet_controller,
-                                                                    side_bar_controller,
-                                                                    dialog_controller,
-                                                                },
-                                                            );
+                                                .on_click(move || {
+                                                    Router::with_mut(|router| {
+                                                        router.reset_with(HomeDestination {
+                                                            bottom_sheet_controller,
+                                                            side_bar_controller,
+                                                            dialog_controller,
                                                         });
-                                                    }
-                                                ))
+                                                    });
+                                                })
                                                 .build()
                                                 .unwrap(),
                                         );

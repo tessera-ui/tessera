@@ -1,6 +1,5 @@
 use std::{fmt::Display, sync::Arc};
 
-use closure::closure;
 use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
@@ -242,9 +241,9 @@ fn test_content() {
                 glass_config_slider(
                     "Width",
                     state.with(|s| s.width.value.0 as f32 / 500.0),
-                    Arc::new(closure!(clone state, |value| {
+                    Arc::new(move |value| {
                         state.with_mut(|s| s.width.value = Dp(f64::from(value) * 500.0));
-                    })),
+                    }),
                 );
             });
 
@@ -254,9 +253,9 @@ fn test_content() {
                 glass_config_slider(
                     "Height",
                     state.with(|s| s.height.value.0 as f32 / 500.0),
-                    Arc::new(closure!(clone state, |value| {
+                    Arc::new(move |value| {
                         state.with_mut(|s| s.height.value = Dp(f64::from(value) * 500.0));
-                    })),
+                    }),
                 );
             });
 
@@ -266,9 +265,9 @@ fn test_content() {
                 glass_config_slider(
                     "Corner Radius",
                     state.with(|s| s.corner_radius.value.0 / 100.0),
-                    Arc::new(closure!(clone state, |value| {
+                    Arc::new(move |value| {
                         state.with_mut(|s| s.corner_radius.value = CornerRadius(value * 100.0));
-                    })),
+                    }),
                 );
             });
 
@@ -278,9 +277,9 @@ fn test_content() {
                 glass_config_slider(
                     "Border Width",
                     state.with(|s| s.border_width.value.0 as f32 / 20.0),
-                    Arc::new(closure!(clone state, |value| {
+                    Arc::new(move |value| {
                         state.with_mut(|s| s.border_width.value = Dp(f64::from(value) * 20.0));
-                    })),
+                    }),
                 );
             });
 
@@ -290,9 +289,9 @@ fn test_content() {
                 glass_config_slider(
                     "Refraction Strength",
                     state.with(|s| s.refraction_amount.value / 100.0),
-                    Arc::new(closure!(clone state, |value| {
+                    Arc::new(move |value| {
                         state.with_mut(|s| s.refraction_amount.value = value * 100.0);
-                    })),
+                    }),
                 );
             });
 
@@ -302,9 +301,9 @@ fn test_content() {
                 glass_config_slider(
                     "Refraction Height",
                     state.with(|s| s.refraction_height.value.0 as f32 / 50.0),
-                    Arc::new(closure!(clone state, |value| {
-                        state.with_mut(|s| s.refraction_height.value = Dp(f64::from(value * 50.0)));
-                    })),
+                    Arc::new(move |value| {
+                        state.with_mut(|s| s.refraction_height.value = Dp(f64::from(value * 50.0)))
+                    }),
                 );
             });
 
@@ -314,9 +313,9 @@ fn test_content() {
                 glass_config_slider(
                     "Blur Radius",
                     state.with(|s| s.blur_radius.value.0 as f32 / 100.0),
-                    Arc::new(closure!(clone state, |value| {
+                    Arc::new(move |value| {
                         state.with_mut(|s| s.blur_radius.value = Dp(f64::from(value * 100.0)));
-                    })),
+                    }),
                 );
             });
         },
