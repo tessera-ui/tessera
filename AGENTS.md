@@ -129,8 +129,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 ## Component Documentation Guidelines
 
 This project uses a strict, concise doc style for modules and component functions to
-improve readability and enable testable examples. Add the following to `llm/instructions.md`
-so all contributors follow the same conventions.
+improve readability and enable testable examples.
 
 ### Module docs
 
