@@ -102,11 +102,11 @@ impl<'a> FlowRowScope<'a> {
 /// fn demo() {
 ///     let rendered = remember(|| 0usize);
 ///     flow_row(FlowRowArgs::default(), |scope| {
-///         scope.child(|| {
+///         scope.child(move || {
 ///             rendered.with_mut(|count| *count += 1);
 ///             text("First");
 ///         });
-///         scope.child(|| {
+///         scope.child(move || {
 ///             rendered.with_mut(|count| *count += 1);
 ///             text("Second");
 ///         });

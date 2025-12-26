@@ -102,12 +102,12 @@ impl<'a> FlowColumnScope<'a> {
 /// #[tessera]
 /// fn demo() {
 ///     let rendered = remember(|| 0usize);
-///     flow_column(FlowColumnArgs::default(), |scope| {
-///         scope.child(|| {
+///     flow_column(FlowColumnArgs::default(), move |scope| {
+///         scope.child(move || {
 ///             rendered.with_mut(|count| *count += 1);
 ///             text("Alpha");
 ///         });
-///         scope.child(|| {
+///         scope.child(move || {
 ///             rendered.with_mut(|count| *count += 1);
 ///             text("Beta");
 ///         });
