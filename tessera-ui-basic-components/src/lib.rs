@@ -62,6 +62,7 @@ pub mod button_groups;
 pub mod card;
 pub mod checkbox;
 mod checkmark;
+pub mod chip;
 pub mod column;
 pub mod dialog;
 pub mod divider;

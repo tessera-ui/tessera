@@ -42,6 +42,7 @@ use crate::example_components::{
     button_group::ButtonGroupShowcaseDestination,
     card::CardShowcaseDestination,
     checkbox::CheckboxShowcaseDestination,
+    chip::ChipShowcaseDestination,
     divider::DividerShowcaseDestination,
     fluid_glass::FluidGlassShowcaseDestination,
     glass_button::GlassButtonShowcaseDestination,
@@ -259,6 +260,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(BadgeShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Chip",
+            "Material 3 chips for actions, filters, and input tokens.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(ChipShowcaseDestination {});
                 });
             },
         ),

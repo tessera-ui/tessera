@@ -19,7 +19,7 @@
   - [ ] TextField/Outlined/Secure variants with defaults, context menu/input transforms, Material text selection colors.
   - [ ] Appbar/TopAppBar
   - [ ] FloatingActionButton
-  - [ ] Chip
+  - [x] Chip
   - [ ] ListItem
   - [ ] NavigationRail
   - [ ] Snackbar/SnackbarHost
