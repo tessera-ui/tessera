@@ -411,8 +411,8 @@ fn home(
             },
         ),
         ComponentExampleDesc::new(
-            "Layouts (Row, Column, Boxed)",
-            "Components for arranging items horizontally, vertically, and with alignment.",
+            "Layouts (Row, Column, Flow, Boxed)",
+            "Components for arranging items in rows, columns, and wrapping layouts.",
             || {
                 Router::with_mut(|router| {
                     router.push(LayoutsShowcaseDestination {});
