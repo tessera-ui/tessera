@@ -146,13 +146,9 @@ impl TextEditorController {
         self.line_height
     }
 
-    /// Returns the current text buffer as `TextData`, applying the given layout
-    /// constraints.
-    ///
-    /// # Arguments
-    ///
-    /// * `constraint` - Layout constraints for text rendering.
-    pub fn text_data(&mut self, constraint: TextConstraint) -> TextData {
+    // Returns the current text buffer as `TextData`, applying the given layout
+    // constraints.
+    fn text_data(&mut self, constraint: TextConstraint) -> TextData {
         self.editor.with_buffer_mut(|buffer| {
             buffer.set_size(
                 &mut write_font_system(),
@@ -171,13 +167,13 @@ impl TextEditorController {
         TextData::from_buffer(text_buffer)
     }
 
-    /// Returns a reference to the internal focus handler.
-    pub fn focus_handler(&self) -> &Focus {
+    // Returns a reference to the internal focus handler.
+    pub(crate) fn focus_handler(&self) -> &Focus {
         &self.focus_handler
     }
 
-    /// Returns a mutable reference to the internal focus handler.
-    pub fn focus_handler_mut(&mut self) -> &mut Focus {
+    // Returns a mutable reference to the internal focus handler.
+    pub(crate) fn focus_handler_mut(&mut self) -> &mut Focus {
         &mut self.focus_handler
     }
 
@@ -191,24 +187,14 @@ impl TextEditorController {
         &mut self.editor
     }
 
-    /// Returns the current blink timer instant (for cursor blinking).
-    pub fn blink_timer(&self) -> Instant {
+    // Returns the current blink timer instant (for cursor blinking).
+    fn blink_timer(&self) -> Instant {
         self.blink_timer
-    }
-
-    /// Resets the blink timer to the current instant.
-    pub fn update_blink_timer(&mut self) {
-        self.blink_timer = Instant::now();
     }
 
     /// Returns the current selection highlight color.
     pub fn selection_color(&self) -> Color {
         self.selection_color
-    }
-
-    /// Returns a reference to the current selection rectangles.
-    pub fn current_selection_rects(&self) -> &Vec<RectDef> {
-        &self.current_selection_rects
     }
 
     /// Sets the selection highlight color.
@@ -220,20 +206,9 @@ impl TextEditorController {
         self.selection_color = color;
     }
 
-    /// Handles a mouse click event and determines the click type (single,
-    /// double, triple).
-    ///
-    /// Used for text selection and word/line selection logic.
-    ///
-    /// # Arguments
-    ///
-    /// * `position` - The position of the click in pixels.
-    /// * `timestamp` - The time the click occurred.
-    ///
-    /// # Returns
-    ///
-    /// The detected ClickType.
-    pub fn handle_click(&mut self, position: PxPosition, timestamp: Instant) -> ClickType {
+    // Handles a mouse click event and determines the click type (single,
+    // double, triple).
+    pub(crate) fn handle_click(&mut self, position: PxPosition, timestamp: Instant) -> ClickType {
         const DOUBLE_CLICK_TIME_MS: u128 = 500; // 500ms for double click
         const CLICK_DISTANCE_THRESHOLD: Px = Px(5); // 5 pixels tolerance for position
 
@@ -269,8 +244,8 @@ impl TextEditorController {
         click_type
     }
 
-    /// Starts a drag operation (for text selection).
-    pub fn start_drag(&mut self) {
+    // Starts a drag operation (for text selection).
+    pub(crate) fn start_drag(&mut self) {
         self.is_dragging = true;
     }
 
@@ -279,22 +254,18 @@ impl TextEditorController {
         self.is_dragging
     }
 
-    /// Stops the current drag operation.
-    pub fn stop_drag(&mut self) {
+    // Stops the current drag operation.
+    pub(crate) fn stop_drag(&mut self) {
         self.is_dragging = false;
     }
 
-    /// Returns the last click position, if any.
-    pub fn last_click_position(&self) -> Option<PxPosition> {
+    // Returns the last click position, if any.
+    pub(crate) fn last_click_position(&self) -> Option<PxPosition> {
         self.last_click_position
     }
 
-    /// Updates the last click position (used for drag tracking).
-    ///
-    /// # Arguments
-    ///
-    /// * `position` - The new last click position.
-    pub fn update_last_click_position(&mut self, position: PxPosition) {
+    // Updates the last click position (used for drag tracking).
+    pub(crate) fn update_last_click_position(&mut self, position: PxPosition) {
         self.last_click_position = Some(position);
     }
 
@@ -431,6 +402,53 @@ impl TextEditorController {
             }
             _ => None,
         }
+    }
+
+    /// Sets the entire text content of the editor, preserving cursor position
+    /// as much as possible.
+    ///
+    /// # Arguments
+    ///
+    /// - `text` - The new text content to set in the editor.
+    pub fn set_text(&mut self, text: &str) {
+        let old_cursor = self.editor.cursor();
+
+        self.editor.with_buffer_mut(|buffer| {
+            buffer.set_text(
+                &mut write_font_system(),
+                text,
+                &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
+                glyphon::Shaping::Advanced,
+                None,
+            );
+            buffer.set_redraw(true);
+        });
+
+        let new_cursor = self.editor.with_buffer(|buffer| {
+            let new_num_lines = buffer.lines.len();
+
+            if old_cursor.line < new_num_lines {
+                let line = &buffer.lines[old_cursor.line];
+                let new_line_len = line.text().len();
+
+                if old_cursor.index <= new_line_len {
+                    old_cursor
+                } else {
+                    glyphon::Cursor::new(old_cursor.line, new_line_len)
+                }
+            } else {
+                let last_line_index = new_num_lines.saturating_sub(1);
+                let last_line_len = buffer
+                    .lines
+                    .get(last_line_index)
+                    .map_or(0, |l| l.text().len());
+                glyphon::Cursor::new(last_line_index, last_line_len)
+            }
+        });
+
+        self.editor.set_cursor(new_cursor);
+        self.editor
+            .set_selection(glyphon::cosmic_text::Selection::None);
     }
 }
 
