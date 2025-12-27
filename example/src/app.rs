@@ -32,7 +32,7 @@ use tessera_ui_basic_components::{
     spacer::spacer,
     surface::{SurfaceArgs, SurfaceStyle, surface},
     text::{TextArgs, text},
-    theme::{ContentColor, MaterialTheme},
+    theme::MaterialTheme,
 };
 
 use crate::example_components::{
@@ -563,13 +563,9 @@ fn top_app_bar() {
     let args = TopAppBarArgs::new("Tessera UI")
         .app_bar(app_bar_args)
         .navigation_icon(|| {
-            let content_color = use_context::<ContentColor>().get().current;
             let mut button_args = ButtonArgs::default()
                 .padding(Dp(5.0))
-                .shape(Shape::Ellipse)
                 .color(Color::TRANSPARENT)
-                .content_color(content_color)
-                .ripple_color(content_color)
                 .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)));
 
             if Router::with(|router| router.len()) > 1 {
@@ -581,7 +577,7 @@ fn top_app_bar() {
             }
 
             button(button_args, || {
-                text(TextArgs::default().text("←").size(Dp(25.0)));
+                icon(IconArgs::from(filled::arrow_back_icon()).size(Dp(20.0)));
             });
         });
 
