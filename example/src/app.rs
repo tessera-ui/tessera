@@ -7,12 +7,12 @@ use tessera_ui::{
     shard, tessera, use_context,
 };
 use tessera_ui_basic_components::{
-    alignment::{Alignment, CrossAxisAlignment},
+    alignment::CrossAxisAlignment,
+    app_bar::{AppBarArgs, TopAppBarArgs, top_app_bar as material_top_app_bar},
     bottom_sheet::{
         BottomSheetController, BottomSheetProviderArgs, BottomSheetStyle,
         bottom_sheet_provider_with_controller,
     },
-    boxed::{BoxedArgs, boxed},
     button::{ButtonArgs, button},
     column::{ColumnArgs, column},
     dialog::{
@@ -24,7 +24,6 @@ use tessera_ui_basic_components::{
     material_icons::filled,
     modifier::{ModifierExt as _, Padding},
     navigation_bar::{NavigationBarItem, navigation_bar},
-    row::{RowArgs, row},
     scrollable::ScrollableArgs,
     shape_def::Shape,
     side_bar::{
@@ -33,7 +32,7 @@ use tessera_ui_basic_components::{
     spacer::spacer,
     surface::{SurfaceArgs, SurfaceStyle, surface},
     text::{TextArgs, text},
-    theme::MaterialTheme,
+    theme::{ContentColor, MaterialTheme},
 };
 
 use crate::example_components::{
@@ -560,55 +559,33 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
 
 #[tessera]
 fn top_app_bar() {
-    surface(
-        SurfaceArgs::default()
-            .elevation(Dp(4.0))
-            .modifier(Modifier::new().fill_max_width().height(Dp(55.0)))
-            .block_input(true),
-        move || {
-            row(
-                RowArgs::default()
-                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(5.0)))
-                    .cross_axis_alignment(CrossAxisAlignment::Center),
-                |scope| {
-                    scope.child(move || {
-                        let scheme = use_context::<MaterialTheme>().get().color_scheme;
-                        let mut button_args = ButtonArgs::default()
-                            .padding(Dp(5.0))
-                            .shape(Shape::Ellipse)
-                            .color(Color::TRANSPARENT)
-                            .content_color(scheme.on_surface)
-                            .ripple_color(scheme.on_surface)
-                            .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)));
-                        if Router::with(|router| router.len()) > 1 {
-                            button_args = button_args.on_click(|| {
-                                Router::with_mut(|router| {
-                                    router.pop();
-                                });
-                            });
-                        }
+    let app_bar_args = AppBarArgs::default().elevation(Dp(4.0));
+    let args = TopAppBarArgs::new("Tessera UI")
+        .app_bar(app_bar_args)
+        .navigation_icon(|| {
+            let content_color = use_context::<ContentColor>().get().current;
+            let mut button_args = ButtonArgs::default()
+                .padding(Dp(5.0))
+                .shape(Shape::Ellipse)
+                .color(Color::TRANSPARENT)
+                .content_color(content_color)
+                .ripple_color(content_color)
+                .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)));
 
-                        button(button_args, || {
-                            boxed(
-                                BoxedArgs::default()
-                                    .modifier(Modifier::new().fill_max_size())
-                                    .alignment(Alignment::Center),
-                                |scope| {
-                                    scope.child(|| {
-                                        text(
-                                            TextArgs::default()
-                                                .text("←".to_string())
-                                                .size(Dp(25.0)),
-                                        );
-                                    });
-                                },
-                            );
-                        });
+            if Router::with(|router| router.len()) > 1 {
+                button_args = button_args.on_click(|| {
+                    Router::with_mut(|router| {
+                        router.pop();
                     });
-                },
-            );
-        },
-    );
+                });
+            }
+
+            button(button_args, || {
+                text(TextArgs::default().text("←").size(Dp(25.0)));
+            });
+        });
+
+    material_top_app_bar(args);
 }
 
 #[tessera]

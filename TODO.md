@@ -17,7 +17,7 @@
   - [x] Staggered grids
   - [ ] Pager
   - [ ] TextField/Outlined/Secure variants with defaults, context menu/input transforms, Material text selection colors.
-  - [ ] Appbar/TopAppBar
+  - [x] Appbar/TopAppBar
   - [ ] FloatingActionButton
   - [x] Chip
   - [ ] ListItem
