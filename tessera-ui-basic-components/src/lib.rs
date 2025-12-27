@@ -79,6 +79,7 @@ pub mod image_vector;
 pub mod interaction_state;
 pub mod lazy_grid;
 pub mod lazy_list;
+pub mod lazy_staggered_grid;
 pub mod material_icons;
 pub mod modifier;
 pub mod theme;

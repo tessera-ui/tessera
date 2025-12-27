@@ -59,6 +59,7 @@ use crate::example_components::{
     radio_button::RadioButtonShowcaseDestination,
     slider::SliderShowcaseDestination,
     spacer::SpacerShowcaseDestination,
+    staggered_grids::StaggeredGridsShowcaseDestination,
     surface::SurfaceShowcaseDestination,
     switch::SwitchShowcaseDestination,
     tabs::TabsShowcaseDestination,
@@ -445,6 +446,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(LazyGridsShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Staggered Grids",
+            "Masonry-style grids for variable-size tiles.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(StaggeredGridsShowcaseDestination {});
                 });
             },
         ),

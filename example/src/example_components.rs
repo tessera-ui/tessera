@@ -20,6 +20,7 @@ pub mod progress_indicator;
 pub mod radio_button;
 pub mod slider;
 pub mod spacer;
+pub mod staggered_grids;
 pub mod surface;
 pub mod switch;
 pub mod tabs;
