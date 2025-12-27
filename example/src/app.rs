@@ -51,6 +51,7 @@ use crate::example_components::{
     glass_switch::GlassSwitchShowcaseDestination,
     image::{IconShowcaseDestination, ImageShowcaseDestination},
     layouts::LayoutsShowcaseDestination,
+    lazy_grids::LazyGridsShowcaseDestination,
     lazy_lists::LazyListsShowcaseDestination,
     menus::MenusShowcaseDestination,
     progress::ProgressShowcaseDestination,
@@ -435,6 +436,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(LazyListsShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Lazy Grids",
+            "Virtualized grids for tiled content and galleries.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(LazyGridsShowcaseDestination {});
                 });
             },
         ),

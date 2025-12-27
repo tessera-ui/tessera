@@ -13,7 +13,7 @@
   - [ ] WindowInsets padding/size helpers
   - [x] FlowRow/FlowColumn
   - [ ] Pull-to-refresh
-  - [ ] Lazy vertical/horizontal grids
+  - [x] Lazy vertical/horizontal grids
   - [ ] Staggered grids
   - [ ] Pager
   - [ ] TextField/Outlined/Secure variants with defaults, context menu/input transforms, Material text selection colors.
