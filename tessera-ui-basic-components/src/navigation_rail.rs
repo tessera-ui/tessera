@@ -25,7 +25,7 @@ use crate::{
     spacer::spacer,
     surface::{SurfaceArgs, SurfaceStyle, surface},
     text::{TextArgs, text},
-    theme::{ContentColor, MaterialAlpha, MaterialTheme, provide_text_style},
+    theme::{ContentColor, MaterialTheme, provide_text_style},
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
@@ -161,11 +161,13 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
         surface(
             SurfaceArgs::default()
                 .style(SurfaceStyle::Filled {
-                    color: ripple_color.with_alpha(MaterialAlpha::PRESSED),
+                    color: Color::TRANSPARENT,
                 })
                 .shape(Shape::capsule())
                 .modifier(Modifier::new().size(indicator_base_width, indicator_height))
                 .enabled(true)
+                .ripple_color(ripple_color)
+                .show_state_layer(false)
                 .ripple_state(ripple_state),
             || {},
         );
