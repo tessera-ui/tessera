@@ -48,6 +48,7 @@ use crate::example_components::{
     card::CardShowcaseDestination,
     checkbox::CheckboxShowcaseDestination,
     chip::ChipShowcaseDestination,
+    date_time_picker::DateTimePickerShowcaseDestination,
     divider::DividerShowcaseDestination,
     floating_action_button::FloatingActionButtonShowcaseDestination,
     fluid_glass::FluidGlassShowcaseDestination,
@@ -543,6 +544,15 @@ fn home(
             "A modal window that appears on top of the main content.",
             move || {
                 dialog_controller.with_mut(|c| c.open());
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Date & Time Pickers",
+            "Calendar and clock pickers with inline and dialog variants.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(DateTimePickerShowcaseDestination {});
+                });
             },
         ),
         ComponentExampleDesc::new(

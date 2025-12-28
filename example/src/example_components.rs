@@ -4,6 +4,7 @@ pub mod button_group;
 pub mod card;
 pub mod checkbox;
 pub mod chip;
+pub mod date_time_picker;
 pub mod divider;
 pub mod floating_action_button;
 pub mod fluid_glass;

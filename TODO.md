@@ -24,7 +24,7 @@
   - [x] NavigationRail
   - [ ] Snackbar/SnackbarHost
   - [ ] ExposedDropdownMenu
-  - [ ] Date/Time pickers/dialogs
+  - [x] Date/Time pickers/dialogs
 - [ ] Documentation of pluggable graphics rendering pipelines
 - [x] CLI tool (`cargo-tessera`):
   - [x] Project scaffolding (`cargo tessera new`)
