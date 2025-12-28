@@ -5,6 +5,7 @@ pub mod card;
 pub mod checkbox;
 pub mod chip;
 pub mod divider;
+pub mod floating_action_button;
 pub mod fluid_glass;
 pub mod glass_button;
 pub mod glass_progress;

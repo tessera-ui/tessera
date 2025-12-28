@@ -18,7 +18,7 @@
   - [ ] Pager
   - [ ] TextField/Outlined/Secure variants with defaults, context menu/input transforms, Material text selection colors.
   - [x] Appbar/TopAppBar
-  - [ ] FloatingActionButton
+  - [x] FloatingActionButton
   - [x] Chip
   - [ ] ListItem
   - [x] NavigationRail

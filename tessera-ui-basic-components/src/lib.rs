@@ -67,6 +67,7 @@ pub mod chip;
 pub mod column;
 pub mod dialog;
 pub mod divider;
+pub mod floating_action_button;
 pub mod flow_column;
 pub mod fluid_glass;
 pub mod glass_button;

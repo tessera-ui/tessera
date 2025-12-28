@@ -49,6 +49,7 @@ use crate::example_components::{
     checkbox::CheckboxShowcaseDestination,
     chip::ChipShowcaseDestination,
     divider::DividerShowcaseDestination,
+    floating_action_button::FloatingActionButtonShowcaseDestination,
     fluid_glass::FluidGlassShowcaseDestination,
     glass_button::GlassButtonShowcaseDestination,
     glass_progress::GlassProgressShowcaseDestination,
@@ -577,6 +578,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(ButtonGroupShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Floating Action Button",
+            "Material 3 floating action button for primary actions.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(FloatingActionButtonShowcaseDestination {});
                 });
             },
         ),
