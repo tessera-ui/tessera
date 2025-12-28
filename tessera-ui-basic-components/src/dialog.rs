@@ -330,8 +330,7 @@ fn dialog_content_wrapper(
 /// - `args` — configuration for dialog appearance and the `on_close_request`
 ///   callback; see [`DialogProviderArgs`].
 /// - `main_content` — closure that renders the always-visible base UI.
-/// - `dialog_content` — closure that renders dialog content; receives a `f32`
-///   alpha for animation.
+/// - `dialog_content` — closure that renders dialog content.
 ///
 /// # Examples
 ///
@@ -343,7 +342,7 @@ fn dialog_content_wrapper(
 /// dialog_provider(
 ///     DialogProviderArgs::new(|| {}).is_open(true),
 ///     || { /* main content */ },
-///     |alpha| {
+///     || {
 ///         basic_dialog(
 ///             BasicDialogArgs::new("This is the dialog body text.").headline("Dialog Title"),
 ///         );
@@ -354,7 +353,7 @@ fn dialog_content_wrapper(
 pub fn dialog_provider(
     args: impl Into<DialogProviderArgs>,
     main_content: impl FnOnce(),
-    dialog_content: impl FnOnce(f32) + Send + Sync + 'static,
+    dialog_content: impl FnOnce() + Send + Sync + 'static,
 ) {
     let args: DialogProviderArgs = args.into();
     let controller = remember(|| DialogController::new(args.is_open));
@@ -407,7 +406,7 @@ pub fn dialog_provider(
 ///         }),
 ///         dialog_controller,
 ///         || { /* main content */ },
-///         |alpha| {
+///         || {
 ///             basic_dialog(
 ///                 BasicDialogArgs::new("This is the dialog body text.").headline("Dialog Title"),
 ///             );
@@ -420,7 +419,7 @@ pub fn dialog_provider_with_controller(
     args: impl Into<DialogProviderArgs>,
     controller: State<DialogController>,
     main_content: impl FnOnce(),
-    dialog_content: impl FnOnce(f32) + Send + Sync + 'static,
+    dialog_content: impl FnOnce() + Send + Sync + 'static,
 ) {
     let args: DialogProviderArgs = args.into();
 
@@ -446,9 +445,7 @@ pub fn dialog_provider_with_controller(
         let handler = make_keyboard_input_handler(args.on_close_request.clone());
         input_handler(handler);
 
-        dialog_content_wrapper(args.style, content_alpha, args.padding, move || {
-            dialog_content(content_alpha);
-        });
+        dialog_content_wrapper(args.style, content_alpha, args.padding, dialog_content);
     }
 }
 

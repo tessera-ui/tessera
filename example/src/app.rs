@@ -315,7 +315,7 @@ pub fn app() {
                                 }
                             });
                         },
-                        move |_alpha| {
+                        move || {
                             basic_dialog(
                                 BasicDialogArgs::new("This is a basic dialog component.")
                                     .headline("Basic Dialog")
