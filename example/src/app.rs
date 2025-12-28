@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use closure::closure;
 use tessera_ui::{
-    Color, Dp, Modifier, State, remember,
+    Color, ComputedData, Constraint, Dp, MeasurementError, Modifier, Px, PxPosition, State,
+    remember,
     router::{Router, router_root},
     shard, tessera, use_context,
 };
@@ -20,10 +21,15 @@ use tessera_ui_basic_components::{
         dialog_provider_with_controller,
     },
     icon::{IconArgs, icon},
+    icon_button::{IconButtonArgs, icon_button},
     lazy_list::{LazyColumnArgs, lazy_column},
-    material_icons::filled,
+    material_icons::filled::{self, menu_icon, menu_open_icon},
     modifier::{ModifierExt as _, Padding},
     navigation_bar::{NavigationBarItem, navigation_bar},
+    navigation_rail::{
+        NavigationRailController, NavigationRailItem, navigation_rail_with_controller,
+    },
+    row::{RowArgs, row},
     scrollable::ScrollableArgs,
     shape_def::Shape,
     side_bar::{
@@ -66,11 +72,54 @@ use crate::example_components::{
     text_editor::TextEditorShowcaseDestination,
 };
 
+const NAVIGATION_RAIL_BREAKPOINT: Dp = Dp(600.0);
+
+#[tessera]
+fn measure_parent_width(width_state: State<Dp>, child: impl FnOnce() + Send + Sync + 'static) {
+    measure(move |input| -> Result<ComputedData, MeasurementError> {
+        if input.children_ids.is_empty() {
+            return Ok(ComputedData::ZERO);
+        }
+
+        let child_constraint = Constraint::new(
+            input.parent_constraint.width(),
+            input.parent_constraint.height(),
+        );
+        let children_to_measure: Vec<_> = input
+            .children_ids
+            .iter()
+            .map(|&child_id| (child_id, child_constraint))
+            .collect();
+        let children_results = input.measure_children(children_to_measure)?;
+
+        let mut max_child_width = Px::ZERO;
+        let mut max_child_height = Px::ZERO;
+        for &child_id in input.children_ids.iter() {
+            if let Some(child_size) = children_results.get(&child_id) {
+                max_child_width = max_child_width.max(child_size.width);
+                max_child_height = max_child_height.max(child_size.height);
+            }
+            input.place_child(child_id, PxPosition::new(Px::ZERO, Px::ZERO));
+        }
+
+        width_state.set(Dp::from(max_child_width));
+
+        Ok(ComputedData {
+            width: max_child_width,
+            height: max_child_height,
+        })
+    });
+
+    child();
+}
+
 #[tessera]
 pub fn app() {
     let side_bar_controller = remember(SideBarController::default);
     let bottom_sheet_controller = remember(BottomSheetController::default);
     let dialog_controller = remember(DialogController::default);
+    let navigation_width = remember(|| Dp::ZERO);
+    let navigation_rail_controller = remember(|| NavigationRailController::new(0));
 
     side_bar_provider_with_controller(
         SideBarProviderArgs::new(move || {
@@ -93,32 +142,23 @@ pub fn app() {
                         .style(DialogStyle::Material),
                         dialog_controller,
                         move || {
-                            column(ColumnArgs::default(), |scope| {
-                                scope.child(top_app_bar);
-                                scope.child_weighted(
-                                    move || {
-                                        router_root(HomeDestination {
-                                            bottom_sheet_controller,
-                                            side_bar_controller,
-                                            dialog_controller,
-                                        });
-                                    },
-                                    1.0,
-                                );
-                                scope.child(move || {
-                                    let home_icon_args = IconArgs::from(filled::home_icon());
-                                    let about_icon_args = IconArgs::from(filled::info_icon());
+                            measure_parent_width(navigation_width, move || {
+                                let use_navigation_rail =
+                                    navigation_width.get().0 >= NAVIGATION_RAIL_BREAKPOINT.0;
 
-                                    navigation_bar(move |scope| {
-                                        scope.item(
-                                            NavigationBarItem::new("Home")
-                                                .icon(closure!(
-                                                    clone home_icon_args,
-                                                    || {
-                                                        icon(home_icon_args.clone());
-                                                    }
-                                                ))
-                                                .on_click(move || {
+                                if use_navigation_rail {
+                                    row(
+                                        RowArgs::default()
+                                            .modifier(Modifier::new().fill_max_size())
+                                            .cross_axis_alignment(CrossAxisAlignment::Stretch),
+                                        move |row_scope| {
+                                            row_scope.child(move || {
+                                                let home_icon_args =
+                                                    IconArgs::from(filled::home_icon());
+                                                let about_icon_args =
+                                                    IconArgs::from(filled::info_icon());
+
+                                                let home_action = Arc::new(move || {
                                                     Router::with_mut(|router| {
                                                         router.reset_with(HomeDestination {
                                                             bottom_sheet_controller,
@@ -126,25 +166,153 @@ pub fn app() {
                                                             dialog_controller,
                                                         });
                                                     });
-                                                }),
-                                        );
-
-                                        scope.item(
-                                            NavigationBarItem::new("About")
-                                                .icon(closure!(
-                                                    clone about_icon_args,
-                                                    || {
-                                                        icon(about_icon_args.clone());
-                                                    }
-                                                ))
-                                                .on_click(|| {
+                                                });
+                                                let about_action = Arc::new(|| {
                                                     Router::with_mut(|router| {
                                                         router.reset_with(AboutDestination {});
                                                     });
-                                                }),
+                                                });
+
+                                                navigation_rail_with_controller(
+                                                    navigation_rail_controller,
+                                                    move |scope| {
+                                                        scope.header(move || {
+                                                            let is_expanded =
+                                                                navigation_rail_controller
+                                                                    .with(|c| c.is_expanded());
+                                                            let icon_button_args = if is_expanded {
+                                                                IconButtonArgs::new(
+                                                                    menu_open_icon(),
+                                                                )
+                                                            } else {
+                                                                IconButtonArgs::new(menu_icon())
+                                                            };
+                                                            icon_button(icon_button_args.on_click(
+                                                                move || {
+                                                                    navigation_rail_controller
+                                                                        .with_mut(|c| c.toggle());
+                                                                },
+                                                            ));
+                                                        });
+
+                                                        scope.item(
+                                                            NavigationRailItem::new("Home")
+                                                                .icon(closure!(
+                                                                    clone home_icon_args,
+                                                                    || {
+                                                                        icon(
+                                                                            home_icon_args.clone(),
+                                                                        );
+                                                                    }
+                                                                ))
+                                                                .on_click_shared(
+                                                                    home_action.clone(),
+                                                                ),
+                                                        );
+
+                                                        scope.item(
+                                                            NavigationRailItem::new("About")
+                                                                .icon(closure!(
+                                                                    clone about_icon_args,
+                                                                    || {
+                                                                        icon(
+                                                                            about_icon_args.clone(),
+                                                                        );
+                                                                    }
+                                                                ))
+                                                                .on_click_shared(
+                                                                    about_action.clone(),
+                                                                ),
+                                                        );
+                                                    },
+                                                );
+                                            });
+
+                                            row_scope.child_weighted(
+                                                move || {
+                                                    column(
+                                                        ColumnArgs::default().modifier(
+                                                            Modifier::new().fill_max_size(),
+                                                        ),
+                                                        |scope| {
+                                                            scope.child(top_app_bar);
+                                                            scope.child_weighted(
+                                                                move || {
+                                                                    router_root(HomeDestination {
+                                                                        bottom_sheet_controller,
+                                                                        side_bar_controller,
+                                                                        dialog_controller,
+                                                                    });
+                                                                },
+                                                                1.0,
+                                                            );
+                                                        },
+                                                    );
+                                                },
+                                                1.0,
+                                            );
+                                        },
+                                    );
+                                } else {
+                                    column(ColumnArgs::default(), |scope| {
+                                        scope.child(top_app_bar);
+                                        scope.child_weighted(
+                                            move || {
+                                                router_root(HomeDestination {
+                                                    bottom_sheet_controller,
+                                                    side_bar_controller,
+                                                    dialog_controller,
+                                                });
+                                            },
+                                            1.0,
                                         );
+                                        scope.child(move || {
+                                            let home_icon_args =
+                                                IconArgs::from(filled::home_icon());
+                                            let about_icon_args =
+                                                IconArgs::from(filled::info_icon());
+
+                                            let home_action = Arc::new(move || {
+                                                Router::with_mut(|router| {
+                                                    router.reset_with(HomeDestination {
+                                                        bottom_sheet_controller,
+                                                        side_bar_controller,
+                                                        dialog_controller,
+                                                    });
+                                                });
+                                            });
+                                            let about_action = Arc::new(|| {
+                                                Router::with_mut(|router| {
+                                                    router.reset_with(AboutDestination {});
+                                                });
+                                            });
+
+                                            navigation_bar(move |scope| {
+                                                scope.item(
+                                                    NavigationBarItem::new("Home")
+                                                        .icon(closure!(
+                                                            clone home_icon_args,
+                                                            || {
+                                                                icon(home_icon_args.clone());
+                                                            }
+                                                        ))
+                                                        .on_click_shared(home_action.clone()),
+                                                );
+
+                                                scope.item(
+                                                    NavigationBarItem::new("About")
+                                                        .icon(closure!(
+                                                            clone about_icon_args,
+                                                            || {
+                                                                icon(about_icon_args.clone());
+                                                            }
+                                                        ))
+                                                        .on_click_shared(about_action.clone()),
+                                                );
+                                            });
+                                        });
                                     });
-                                });
+                                }
                             });
                         },
                         move |_alpha| {

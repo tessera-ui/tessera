@@ -89,6 +89,7 @@ pub use ripple_state::RippleState;
 pub mod flow_row;
 pub mod menus;
 pub mod navigation_bar;
+pub mod navigation_rail;
 pub mod pipelines;
 pub mod pos_misc;
 pub mod progress;

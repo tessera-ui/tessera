@@ -21,7 +21,7 @@
   - [ ] FloatingActionButton
   - [x] Chip
   - [ ] ListItem
-  - [ ] NavigationRail
+  - [x] NavigationRail
   - [ ] Snackbar/SnackbarHost
   - [ ] ExposedDropdownMenu
   - [ ] Date/Time pickers/dialogs
