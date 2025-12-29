@@ -1,4 +1,4 @@
-//! Frame profiler output for offline analysis.
+//! Frame profiler for offline analysis.
 //!
 //! ## Usage
 //!
