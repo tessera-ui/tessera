@@ -1,0 +1,605 @@
+//! Frame profiler output for offline analysis.
+//!
+//! ## Usage
+//!
+//! Stream JSONL frame timing for external analyzer tools.
+//!
+//! ## Format
+//!
+//! Here is an example of the output file:
+//!
+//! Note that the frame record shown here is formatted for readability. The
+//! actual output file contains one JSON object per line to support streaming
+//! processing and parsing.
+//!
+//! ```jsonl
+//! {"version":1,"format":"tessera-profiler","generated_at":"1767008877"}
+//! {
+//!   "frame": 0,
+//!   "render_time_ns": 1349800,
+//!   "frame_total_ns": 57486200,
+//!   "components": [
+//!     {
+//!       "id": "1",
+//!       "fn_name": "entry_wrapper",
+//!       "abs_pos": { "x": 0, "y": 0 },
+//!       "size": { "w": 51, "h": 48 },
+//!       "phases": { "build_ns": 55548600, "measure_ns": 55549000 },
+//!       "children": [
+//!         {
+//!           "id": "2",
+//!           "fn_name": "app",
+//!           "abs_pos": { "x": 0, "y": 0 },
+//!           "size": { "w": 51, "h": 48 },
+//!           "phases": { "build_ns": 54978700, "measure_ns": 54979600 },
+//!           "children": [
+//!             {
+//!               "id": "3",
+//!               "fn_name": "text",
+//!               "abs_pos": { "x": 0, "y": 0 },
+//!               "size": { "w": 51, "h": 48 },
+//!               "phases": { "build_ns": 54976500, "measure_ns": 54977000 },
+//!               "children": [
+//!                 {
+//!                   "id": "4",
+//!                   "fn_name": "modifier_semantics",
+//!                   "abs_pos": { "x": 0, "y": 0 },
+//!                   "size": { "w": 51, "h": 48 },
+//!                   "phases": {
+//!                     "build_ns": 8500,
+//!                     "measure_ns": 54974800,
+//!                     "input_ns": 7300
+//!                   },
+//!                   "children": [
+//!                     {
+//!                       "id": "5",
+//!                       "fn_name": "text_inner",
+//!                       "abs_pos": { "x": 0, "y": 0 },
+//!                       "size": { "w": 51, "h": 48 },
+//!                       "phases": {
+//!                         "build_ns": 54948400,
+//!                         "measure_ns": 54960100
+//!                       },
+//!                       "children": []
+//!                     }
+//!                   ]
+//!                 }
+//!               ]
+//!             }
+//!           ]
+//!         }
+//!       ]
+//!     }
+//!   ]
+//! }
+//! ```
+//!
+//! ### Frame Header
+//!
+//! The first line is a header that describes the profiler output format,
+//! including version and generation timestamp.
+//!
+//! See [`FrameHeader`] for equivalent Rust structure.
+//!
+//! ### Frame Record
+//!
+//! Each subsequent line is a frame record containing timing data for a single
+//! frame.
+//!
+//! See [`FrameRecord`] and [`ComponentRecord`] for equivalent Rust structures.
+use std::{
+    collections::HashMap,
+    fs::{File, OpenOptions},
+    io::{BufWriter, Write},
+    path::{Path, PathBuf},
+    sync::{
+        OnceLock,
+        atomic::{AtomicU64, Ordering},
+        mpsc,
+    },
+    thread,
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
+
+use indextree::NodeId;
+use serde::Serialize;
+use serde_json;
+
+/// Profiling phases that can be emitted.
+#[derive(Clone, Copy)]
+pub enum Phase {
+    /// Component build/render stage.
+    Build,
+    /// Layout measurement stage.
+    Measure,
+    /// Input handling stage.
+    Input,
+    /// GPU render stage (frame-level).
+    RenderFrame,
+}
+
+#[derive(Clone)]
+struct Sample {
+    phase: Phase,
+    frame_idx: u64,
+    node_id: Option<NodeId>,
+    parent_node_id: Option<NodeId>,
+    fn_name: Option<String>,
+    abs_pos: Option<(i32, i32)>,
+    start: Instant,
+    end: Instant,
+    computed_size: Option<(i32, i32)>,
+}
+
+/// Metadata about a component node collected after a frame is computed.
+pub struct NodeMeta {
+    /// Unique node identifier.
+    pub node_id: String,
+    /// Parent node identifier if present.
+    pub parent: Option<String>,
+    /// Human-readable function name.
+    pub fn_name: Option<String>,
+    /// Absolute position of the node.
+    pub abs_pos: Option<(i32, i32)>,
+    /// Computed size of the node.
+    pub size: Option<(i32, i32)>,
+}
+
+/// Frame-level metadata dispatched after the component tree has been built and
+/// measured.
+pub struct FrameMeta {
+    /// Frame index.
+    pub frame_idx: u64,
+    /// Render duration for the frame.
+    pub render_time_ns: Option<u128>,
+    /// Total duration for the frame.
+    pub frame_total_ns: Option<u128>,
+    /// All nodes observed in the frame.
+    pub nodes: Vec<NodeMeta>,
+}
+
+/// # Examples
+/// A minimal frame record written to the profiler output:
+///
+/// ```json
+/// {"frame":1,"render_time_ns":1000000,"frame_total_ns":2000000,"components":[{"id":"1","fn_name":"root","abs_pos":{"x":0,"y":0},"size":{"w":100,"h":50},"phases":{"build_ns":5000},"children":[]}]}
+/// ```
+
+enum Message {
+    Sample(Sample),
+    FrameMeta(FrameMeta),
+}
+
+struct ProfilerRuntime {
+    sender: mpsc::Sender<Message>,
+}
+
+struct WorkerState {
+    frames: HashMap<u64, Vec<Sample>>,
+    writer: BufWriter<File>,
+    header_written: bool,
+}
+
+static RUNTIME: OnceLock<ProfilerRuntime> = OnceLock::new();
+static FRAME_INDEX: AtomicU64 = AtomicU64::new(0);
+static OUTPUT_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+fn output_path() -> PathBuf {
+    OUTPUT_PATH
+        .get()
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from("tessera-profiler.jsonl"))
+}
+
+/// Set profiler output path. Must be called before any profiling begins.
+pub fn set_output_path(path: impl AsRef<Path>) {
+    let _ = OUTPUT_PATH.set(path.as_ref().to_path_buf());
+}
+
+fn profiler_runtime() -> &'static ProfilerRuntime {
+    RUNTIME.get_or_init(|| {
+        let (sender, receiver) = mpsc::channel::<Message>();
+        let _ = thread::Builder::new()
+            .name("tessera-profiler".to_string())
+            .spawn(move || worker_loop(receiver))
+            .expect("failed to spawn profiler worker");
+        ProfilerRuntime { sender }
+    })
+}
+
+fn worker_loop(receiver: mpsc::Receiver<Message>) {
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(output_path())
+        .expect("failed to open profiler output file");
+    let mut state = WorkerState {
+        frames: HashMap::new(),
+        writer: BufWriter::new(file),
+        header_written: false,
+    };
+
+    for msg in receiver {
+        match msg {
+            Message::Sample(sample) => {
+                state
+                    .frames
+                    .entry(sample.frame_idx)
+                    .or_default()
+                    .push(sample);
+            }
+            Message::FrameMeta(frame_meta) => {
+                let samples = state
+                    .frames
+                    .remove(&frame_meta.frame_idx)
+                    .unwrap_or_default();
+                flush_frame(&mut state, frame_meta, samples);
+            }
+        };
+    }
+}
+
+fn flush_frame(state: &mut WorkerState, frame_meta: FrameMeta, samples: Vec<Sample>) {
+    if !state.header_written {
+        let header = FrameHeader::new();
+        if serde_json::to_writer(&mut state.writer, &header).is_ok() {
+            let _ = state.writer.write_all(b"\n");
+            state.header_written = true;
+        }
+    }
+
+    if let Some(record) = build_frame_record(frame_meta, samples)
+        && serde_json::to_writer(&mut state.writer, &record).is_ok()
+    {
+        let _ = state.writer.write_all(b"\n");
+    }
+    let _ = state.writer.flush();
+}
+
+/// Reset the active frame index.
+pub fn begin_frame(frame_idx: u64) {
+    FRAME_INDEX.store(frame_idx, Ordering::Relaxed);
+}
+
+/// Samples are sent immediately; no-op for compatibility.
+pub fn end_frame() {}
+
+fn current_frame_idx() -> u64 {
+    FRAME_INDEX.load(Ordering::Relaxed)
+}
+
+fn push_sample(sample: Sample) {
+    if let Err(err) = profiler_runtime().sender.send(Message::Sample(sample)) {
+        eprintln!("tessera profiler channel send failed: {err}");
+    }
+}
+
+/// Profiler output frame header.
+#[derive(Serialize)]
+pub struct FrameHeader {
+    /// Profiler output format version.
+    version: u32,
+    /// File format identifier.
+    format: &'static str,
+    /// Timestamp when the profiler output was generated.
+    generated_at: String,
+}
+
+impl FrameHeader {
+    fn new() -> Self {
+        let generated_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| format!("{}", d.as_secs()))
+            .unwrap_or_else(|_| String::from("unknown"));
+        Self {
+            version: 1,
+            format: "tessera-profiler",
+            generated_at,
+        }
+    }
+}
+
+/// Profiler output frame record.
+#[derive(Serialize)]
+pub struct FrameRecord {
+    /// Frame index.
+    frame: u64,
+    /// Render duration for the frame.
+    render_time_ns: Option<u128>,
+    /// Total duration for the frame.
+    frame_total_ns: Option<u128>,
+    /// Component tree records.
+    components: Vec<ComponentRecord>,
+}
+
+/// Component record within a frame.
+#[derive(Serialize)]
+pub struct ComponentRecord {
+    /// Unique(in this frame) node identifier.
+    id: String,
+    /// The name of the component function.
+    fn_name: Option<String>,
+    /// Absolute position of the component on window.
+    abs_pos: Option<Pos>,
+    /// Size of the component.
+    size: Option<Size>,
+    /// How long each phase took.
+    phases: PhaseDurations,
+    /// Child components' records.
+    children: Vec<ComponentRecord>,
+}
+
+#[derive(Serialize)]
+struct Pos {
+    x: i32,
+    y: i32,
+}
+
+#[derive(Serialize)]
+struct Size {
+    w: i32,
+    h: i32,
+}
+
+#[derive(Serialize, Default)]
+struct PhaseDurations {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    build_ns: Option<u128>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    measure_ns: Option<u128>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_ns: Option<u128>,
+}
+
+struct ComponentRecordBuilder {
+    id: String,
+    parent: Option<String>,
+    fn_name: Option<String>,
+    abs_pos: Option<Pos>,
+    size: Option<Size>,
+    phases: PhaseDurations,
+    children: Vec<String>,
+}
+
+fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<FrameRecord> {
+    let mut nodes: HashMap<String, ComponentRecordBuilder> = HashMap::new();
+
+    for node in frame_meta.nodes {
+        let id = node.node_id.clone();
+        let parent = node.parent.clone();
+        let entry = nodes
+            .entry(id.clone())
+            .or_insert_with(|| ComponentRecordBuilder {
+                id: id.clone(),
+                parent: parent.clone(),
+                fn_name: node.fn_name.clone(),
+                abs_pos: node.abs_pos.map(|(x, y)| Pos { x, y }),
+                size: node.size.map(|(w, h)| Size { w, h }),
+                phases: PhaseDurations::default(),
+                children: Vec::new(),
+            });
+
+        if entry.fn_name.is_none() {
+            entry.fn_name = node.fn_name.clone();
+        }
+        if entry.abs_pos.is_none() {
+            entry.abs_pos = node.abs_pos.map(|(x, y)| Pos { x, y });
+        }
+        if entry.size.is_none() {
+            entry.size = node.size.map(|(w, h)| Size { w, h });
+        }
+
+        if let Some(parent_id) = parent {
+            let parent_entry =
+                nodes
+                    .entry(parent_id.clone())
+                    .or_insert_with(|| ComponentRecordBuilder {
+                        id: parent_id.clone(),
+                        parent: None,
+                        fn_name: None,
+                        abs_pos: None,
+                        size: None,
+                        phases: PhaseDurations::default(),
+                        children: Vec::new(),
+                    });
+            if !parent_entry.children.contains(&id) {
+                parent_entry.children.push(id.clone());
+            }
+        }
+    }
+
+    for sample in samples {
+        let duration_ns = sample.end.duration_since(sample.start).as_nanos();
+        let Some(node_id) = sample.node_id else {
+            continue;
+        };
+        let node_key = node_id.to_string();
+        let parent_key = sample.parent_node_id.map(|p| p.to_string());
+
+        let entry = nodes
+            .entry(node_key.clone())
+            .or_insert_with(|| ComponentRecordBuilder {
+                id: node_key.clone(),
+                parent: parent_key.clone(),
+                fn_name: sample.fn_name.clone(),
+                abs_pos: sample.abs_pos.map(|(x, y)| Pos { x, y }),
+                size: sample.computed_size.map(|(w, h)| Size { w, h }),
+                phases: PhaseDurations::default(),
+                children: Vec::new(),
+            });
+
+        if entry.fn_name.is_none() {
+            entry.fn_name = sample.fn_name.clone();
+        }
+        if entry.abs_pos.is_none() {
+            entry.abs_pos = sample.abs_pos.map(|(x, y)| Pos { x, y });
+        }
+        if entry.size.is_none() {
+            entry.size = sample.computed_size.map(|(w, h)| Size { w, h });
+        }
+
+        match sample.phase {
+            Phase::Build => entry.phases.build_ns = Some(duration_ns),
+            Phase::Measure => entry.phases.measure_ns = Some(duration_ns),
+            Phase::Input => entry.phases.input_ns = Some(duration_ns),
+            Phase::RenderFrame => {}
+        }
+
+        if let Some(parent) = parent_key {
+            let parent_entry =
+                nodes
+                    .entry(parent.clone())
+                    .or_insert_with(|| ComponentRecordBuilder {
+                        id: parent.clone(),
+                        parent: None,
+                        fn_name: None,
+                        abs_pos: None,
+                        size: None,
+                        phases: PhaseDurations::default(),
+                        children: Vec::new(),
+                    });
+            if !parent_entry.children.contains(&node_key) {
+                parent_entry.children.push(node_key.clone());
+            }
+        }
+    }
+
+    if nodes.is_empty() {
+        return Some(FrameRecord {
+            frame: frame_meta.frame_idx,
+            render_time_ns: frame_meta.render_time_ns,
+            frame_total_ns: frame_meta.frame_total_ns,
+            components: Vec::new(),
+        });
+    }
+
+    // Determine roots: nodes whose parent is None or parent not present.
+    let mut roots = Vec::new();
+    for (id, builder) in nodes.iter() {
+        let parent_missing = match &builder.parent {
+            Some(pid) => !nodes.contains_key(pid),
+            None => true,
+        };
+        if parent_missing {
+            roots.push(id.clone());
+        }
+    }
+
+    fn build_tree(id: &str, map: &mut HashMap<String, ComponentRecordBuilder>) -> ComponentRecord {
+        let builder = map.remove(id).unwrap_or_else(|| ComponentRecordBuilder {
+            id: id.to_string(),
+            parent: None,
+            fn_name: None,
+            abs_pos: None,
+            size: None,
+            phases: PhaseDurations::default(),
+            children: Vec::new(),
+        });
+        let children_ids = builder.children.clone();
+        let children = children_ids
+            .iter()
+            .map(|child_id| build_tree(child_id, map))
+            .collect();
+
+        ComponentRecord {
+            id: builder.id,
+            fn_name: builder.fn_name,
+            abs_pos: builder.abs_pos,
+            size: builder.size,
+            phases: builder.phases,
+            children,
+        }
+    }
+
+    let mut map_for_build = nodes;
+    let components = roots
+        .iter()
+        .map(|id| build_tree(id, &mut map_for_build))
+        .collect();
+
+    Some(FrameRecord {
+        frame: frame_meta.frame_idx,
+        render_time_ns: frame_meta.render_time_ns,
+        frame_total_ns: frame_meta.frame_total_ns,
+        components,
+    })
+}
+
+/// RAII guard that records a single scoped timing sample.
+pub struct ScopeGuard {
+    sample: Option<Sample>,
+}
+
+/// Submit frame-level metadata after the component tree has finished computing.
+pub fn submit_frame_meta(frame_meta: FrameMeta) {
+    if let Err(err) = profiler_runtime()
+        .sender
+        .send(Message::FrameMeta(frame_meta))
+    {
+        eprintln!("tessera profiler frame meta send failed: {err}");
+    }
+}
+
+/// Construct a build-phase scope guard using the provided function name.
+pub fn make_build_scope_guard(
+    node_id: NodeId,
+    parent_node_id: Option<NodeId>,
+    fn_name: &str,
+) -> Option<ScopeGuard> {
+    Some(ScopeGuard::new(
+        Phase::Build,
+        Some(node_id),
+        parent_node_id,
+        Some(fn_name),
+    ))
+}
+
+impl ScopeGuard {
+    /// Create a new profiling scope for the given phase and component metadata.
+    pub fn new(
+        phase: Phase,
+        node_id: Option<NodeId>,
+        parent_node_id: Option<NodeId>,
+        fn_name: Option<&str>,
+    ) -> Self {
+        let frame_idx = current_frame_idx();
+        let fn_name_owned = fn_name.map(ToOwned::to_owned);
+        let sample = Sample {
+            phase,
+            frame_idx,
+            node_id,
+            parent_node_id,
+            fn_name: fn_name_owned,
+            abs_pos: None,
+            start: Instant::now(),
+            end: Instant::now(),
+            computed_size: None,
+        };
+        Self {
+            sample: Some(sample),
+        }
+    }
+
+    /// Attach the measured size for layout samples.
+    pub fn set_computed_size(&mut self, width: i32, height: i32) {
+        if let Some(sample) = &mut self.sample {
+            sample.computed_size = Some((width, height));
+        }
+    }
+
+    /// Attach positional info for layout/debug.
+    pub fn set_positions(&mut self, abs_pos: Option<(i32, i32)>) {
+        if let Some(sample) = &mut self.sample {
+            sample.abs_pos = abs_pos;
+        }
+    }
+}
+
+impl Drop for ScopeGuard {
+    fn drop(&mut self) {
+        if let Some(mut sample) = self.sample.take() {
+            sample.end = Instant::now();
+            push_sample(sample);
+        }
+    }
+}

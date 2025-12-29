@@ -217,6 +217,8 @@ mod ime_state;
 mod keyboard_state;
 pub mod modifier;
 pub(crate) mod pipeline_cache;
+#[cfg(feature = "profiling")]
+pub mod profiler;
 pub mod px;
 pub mod renderer;
 #[doc(hidden)]

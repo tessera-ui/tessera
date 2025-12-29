@@ -41,6 +41,14 @@ pub use compute::{
 };
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
 
+#[cfg(feature = "profiling")]
+use crate::profiler::{
+    FrameMeta, Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard,
+    begin_frame as profiler_begin_frame, end_frame as profiler_end_frame, submit_frame_meta,
+};
+#[cfg(feature = "profiling")]
+use std::path::PathBuf;
+
 #[cfg(target_os = "android")]
 use winit::platform::android::{
     ActiveEventLoopExtAndroid, EventLoopBuilderExtAndroid, activity::AndroidApp,
@@ -112,6 +120,9 @@ pub struct TesseraConfig {
     /// The title of the application window.
     /// Defaults to "Tessera" if not specified.
     pub window_title: String,
+    /// Path to write profiler output when `profiling` is enabled.
+    #[cfg(feature = "profiling")]
+    pub profiler_output_path: PathBuf,
 }
 
 impl Default for TesseraConfig {
@@ -121,6 +132,8 @@ impl Default for TesseraConfig {
         Self {
             sample_count: 1,
             window_title: "Tessera".to_string(),
+            #[cfg(feature = "profiling")]
+            profiler_output_path: PathBuf::from("tessera-profiler.jsonl"),
         }
     }
 }
@@ -245,6 +258,8 @@ pub struct Renderer<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> {
     accessibility_adapter: Option<AccessKitAdapter>,
     /// Event loop proxy for sending accessibility events
     event_loop_proxy: Option<winit::event_loop::EventLoopProxy<AccessKitEvent>>,
+    /// Incrementing frame index for profiling and debugging.
+    frame_index: u64,
     #[cfg(target_os = "android")]
     /// Android-specific state tracking whether the soft keyboard is currently
     /// open
@@ -349,6 +364,8 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
         let clipboard = Clipboard::new();
+        #[cfg(feature = "profiling")]
+        crate::profiler::set_output_path(&config.profiler_output_path);
         let mut renderer = Self {
             app,
             entry_point,
@@ -361,6 +378,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             previous_commands: Vec::new(),
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
+            frame_index: 0,
         };
         thread_utils::set_thread_name("TesseraMain");
         event_loop.run_app(&mut renderer)
@@ -465,6 +483,8 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
         let clipboard = Clipboard::new(android_app);
+        #[cfg(feature = "profiling")]
+        crate::profiler::set_output_path(&config.profiler_output_path);
         let mut renderer = Self {
             app,
             entry_point,
@@ -478,6 +498,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             previous_commands: Vec::new(),
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
+            frame_index: 0,
         };
         thread_utils::set_thread_name("TesseraMain");
         event_loop.run_app(&mut renderer)
@@ -636,6 +657,9 @@ Fps: {:.2}
         args: &mut RenderFrameArgs<'a>,
         commands: impl IntoIterator<Item = RenderCommand>,
     ) -> std::time::Duration {
+        #[cfg(feature = "profiling")]
+        let _profiler_guard =
+            ProfilerScopeGuard::new(ProfilerPhase::RenderFrame, None, None, Some("render_frame"));
         let render_timer = Instant::now();
 
         // skip actual rendering if window is minimized
@@ -673,7 +697,12 @@ Fps: {:.2}
         previous_commands: &mut Vec<RenderCommand>,
         accessibility_enabled: bool,
         window_label: &str,
+        frame_idx: u64,
     ) -> Option<TreeUpdate> {
+        #[cfg(feature = "profiling")]
+        let frame_timer = std::time::Instant::now();
+        #[cfg(feature = "profiling")]
+        profiler_begin_frame(frame_idx);
         // notify the windowing system before rendering
         // this will help winit to properly schedule and make assumptions about its
         // internal state
@@ -691,6 +720,8 @@ Fps: {:.2}
         let (new_commands, window_requests, draw_cost) =
             Self::compute_draw_commands(args, screen_size);
 
+        #[cfg(feature = "profiling")]
+        let mut render_duration_ns: Option<u128> = None;
         // Dirty Rectangle Detection
         let mut dirty = false;
         if args.resized || new_commands.len() != previous_commands.len() {
@@ -743,8 +774,24 @@ Fps: {:.2}
             let render_cost = Self::perform_render(args, new_commands.clone());
             // Log frame statistics
             Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
+            #[cfg(feature = "profiling")]
+            {
+                render_duration_ns = Some(render_cost.as_nanos());
+            }
         } else {
             thread::sleep(std::time::Duration::from_millis(4)); // Sleep briefly to avoid busy-waiting
+        }
+
+        #[cfg(feature = "profiling")]
+        {
+            let frame_total_ns = frame_timer.elapsed().as_nanos();
+            let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
+            submit_frame_meta(FrameMeta {
+                frame_idx,
+                render_time_ns: render_duration_ns,
+                frame_total_ns: Some(frame_total_ns),
+                nodes,
+            });
         }
 
         // Prepare accessibility tree update before clearing the component tree if
@@ -754,6 +801,9 @@ Fps: {:.2}
         } else {
             None
         };
+
+        #[cfg(feature = "profiling")]
+        profiler_end_frame();
 
         // Clear the component tree (free for next frame)
         TesseraRuntime::with_mut(|rt| rt.component_tree.clear());
@@ -999,7 +1049,10 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
             &mut self.previous_commands,
             self.accessibility_adapter.is_some(),
             &self.config.window_title,
+            self.frame_index,
         );
+
+        self.frame_index = self.frame_index.wrapping_add(1);
 
         if let Some(tree_update) = accessibility_update {
             self.push_accessibility_update(tree_update);

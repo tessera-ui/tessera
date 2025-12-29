@@ -12,6 +12,7 @@ readme = "../README.md"
 [features]
 default = ["shard"]
 shard = ["tessera-ui-shard"]
+profiling = ["serde", "serde_json"]
 
 [dependencies]
 bytemuck = { version = "1.24.0", features = ["derive"] }
@@ -31,6 +32,8 @@ accesskit_winit = "0.29.2"
 smallvec = "1.15.1"
 dirs = "6.0.0"
 im = "15.1.0"
+serde = { version = "1.0.228", features = ["derive"], optional = true }
+serde_json = { version = "1.0.148", optional = true }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = "0.2.178"

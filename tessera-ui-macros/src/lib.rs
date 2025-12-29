@@ -307,6 +307,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 use #crate_path::runtime::{RuntimePhase, push_phase};
                 push_phase(RuntimePhase::Build)
             };
+            let __tessera_fn_name: &str = stringify!(#fn_name);
             let __tessera_node_id = #register_tokens;
 
             // Inject guard to pop component node on function exit
@@ -324,7 +325,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             // Track current node for control-flow instrumentation
             let _node_ctx_guard = {
                 use #crate_path::runtime::push_current_node;
-                push_current_node(__tessera_node_id, __tessera_logic_id)
+                push_current_node(__tessera_node_id, __tessera_logic_id, __tessera_fn_name)
             };
 
             // Inject helper tokens

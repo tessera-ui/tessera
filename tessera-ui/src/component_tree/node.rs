@@ -26,6 +26,9 @@ use crate::{
 
 use super::constraint::{Constraint, DimensionValue, ParentConstraint};
 
+#[cfg(feature = "profiling")]
+use crate::profiler::{Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
+
 /// A guard that manages accessibility node building and automatically
 /// commits the result to the metadata when dropped.
 pub struct AccessibilityBuilderGuard<'a> {
@@ -696,6 +699,13 @@ pub(crate) fn measure_node(
         .get(node_id)
         .ok_or(MeasurementError::NodeNotFoundInTree)?;
     let node_data = node_data_ref.get();
+    #[cfg(feature = "profiling")]
+    let mut profiler_guard = Some(ProfilerScopeGuard::new(
+        ProfilerPhase::Measure,
+        Some(node_id),
+        node_data_ref.parent(),
+        Some(node_data.fn_name.as_str()),
+    ));
 
     let children: Vec<_> = node_id.children(tree).collect(); // No .as_ref() needed for &Arena
     let timer = Instant::now();
@@ -709,7 +719,8 @@ pub(crate) fn measure_node(
 
     // Ensure thread-local current node context for nested control-flow
     // instrumentation.
-    let _node_ctx_guard = push_current_node(node_id, node_data.logic_id);
+    let _node_ctx_guard =
+        push_current_node(node_id, node_data.logic_id, node_data.fn_name.as_str());
     let _phase_guard = push_phase(RuntimePhase::Measure);
 
     let size = if let Some(measure_fn) = &node_data.measure_fn {
@@ -740,6 +751,11 @@ pub(crate) fn measure_node(
         timer.elapsed(),
         size
     );
+
+    #[cfg(feature = "profiling")]
+    if let Some(guard) = &mut profiler_guard {
+        guard.set_computed_size(size.width.0, size.height.0);
+    }
 
     let mut metadata = component_node_metadatas.entry(node_id).or_default();
     metadata.computed_data = Some(size);

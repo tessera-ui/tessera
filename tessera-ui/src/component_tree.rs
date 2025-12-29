@@ -23,6 +23,9 @@ pub use node::{
     WindowRequests,
 };
 
+#[cfg(feature = "profiling")]
+use crate::profiler::{NodeMeta, Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
+
 #[derive(Debug, Clone, Copy)]
 struct ScreenSize {
     width: i32,
@@ -140,6 +143,46 @@ impl ComponentTree {
     /// needs.
     pub(crate) fn metadatas(&self) -> &ComponentNodeMetaDatas {
         &self.metadatas
+    }
+
+    /// Collect per-node metadata for profiling output.
+    #[cfg(feature = "profiling")]
+    pub fn profiler_nodes(&self) -> Vec<NodeMeta> {
+        let Some(root_node) = self
+            .tree
+            .get_node_id_at(NonZero::new(1).expect("root node index must be non-zero"))
+        else {
+            return Vec::new();
+        };
+
+        let mut stack = vec![root_node];
+        let mut nodes = Vec::new();
+        while let Some(node_id) = stack.pop() {
+            if let Some(node) = self.tree.get(node_id) {
+                let parent = node.parent().map(|p| p.to_string());
+                let fn_name = node.get().fn_name.clone();
+                let metadata = self.metadatas.get(&node_id);
+                let abs_pos = metadata
+                    .as_ref()
+                    .and_then(|m| m.abs_position)
+                    .map(|p| (p.x.0, p.y.0));
+                let size = metadata
+                    .as_ref()
+                    .and_then(|m| m.computed_data)
+                    .map(|d| (d.width.0, d.height.0));
+
+                nodes.push(NodeMeta {
+                    node_id: node_id.to_string(),
+                    parent,
+                    fn_name: Some(fn_name.clone()),
+                    abs_pos,
+                    size,
+                });
+            }
+            stack.extend(node_id.children(&self.tree));
+        }
+
+        nodes
     }
 
     /// Compute the ComponentTree into a list of rendering commands
@@ -269,7 +312,26 @@ impl ComponentTree {
                     .get(node_id)
                     .map(|n| n.get().logic_id)
                     .unwrap_or_default();
-                let _node_ctx_guard = push_current_node(node_id, logic_id);
+                #[cfg(feature = "profiling")]
+                let mut profiler_guard = {
+                    let parent_id = self.tree.get(node_id).and_then(|n| n.parent());
+                    let fn_name = self
+                        .tree
+                        .get(node_id)
+                        .map(|n| n.get().fn_name.as_str().to_owned());
+                    Some(ProfilerScopeGuard::new(
+                        ProfilerPhase::Input,
+                        Some(node_id),
+                        parent_id,
+                        fn_name.as_deref(),
+                    ))
+                };
+                let fn_name = self
+                    .tree
+                    .get(node_id)
+                    .map(|n| n.get().fn_name.as_str())
+                    .unwrap_or("");
+                let _node_ctx_guard = push_current_node(node_id, logic_id, fn_name);
                 let _phase_guard = push_phase(RuntimePhase::Input);
                 let input = InputHandlerInput {
                     computed_data: node_computed_data,
@@ -285,6 +347,14 @@ impl ComponentTree {
                     metadatas: &self.metadatas,
                 };
                 input_handler(input);
+                #[cfg(feature = "profiling")]
+                {
+                    let abs_tuple = (abs_pos.x.0, abs_pos.y.0);
+                    if let Some(g) = &mut profiler_guard {
+                        g.set_positions(Some(abs_tuple));
+                    }
+                    let _ = profiler_guard.take();
+                }
                 // if input_handler set ime request, it's position must be None, and we set it
                 // here
                 if let Some(ref mut ime_request) = window_requests.ime_request

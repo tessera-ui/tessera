@@ -277,6 +277,8 @@ impl TesseraRuntime {
 pub struct NodeContextGuard {
     popped: bool,
     logic_id_popped: bool,
+    #[cfg(feature = "profiling")]
+    profiling_guard: Option<crate::profiler::ScopeGuard>,
 }
 
 /// Execution phase for `remember` usage checks.
@@ -330,6 +332,10 @@ impl NodeContextGuard {
 
 impl Drop for NodeContextGuard {
     fn drop(&mut self) {
+        #[cfg(feature = "profiling")]
+        {
+            let _ = self.profiling_guard.take();
+        }
         if !self.popped {
             pop_current_node();
             self.popped = true;
@@ -342,8 +348,16 @@ impl Drop for NodeContextGuard {
 }
 
 /// Push the given node id as the current executing component for this thread.
-pub fn push_current_node(node_id: NodeId, base_logic_id: u64) -> NodeContextGuard {
-    NODE_CONTEXT_STACK.with(|stack| stack.borrow_mut().push(node_id));
+pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> NodeContextGuard {
+    #[cfg(not(feature = "profiling"))]
+    let _ = fn_name;
+    #[allow(unused_variables)]
+    let parent_node_id = NODE_CONTEXT_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        let parent = stack.last().copied();
+        stack.push(node_id);
+        parent
+    });
 
     // Get the parent's call index and increment it
     // This distinguishes multiple calls to the same component (e.g., foo(1);
@@ -374,9 +388,14 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64) -> NodeContextGuar
     // Push a new call counter layer for this component's internal remember calls
     CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
 
+    #[cfg(feature = "profiling")]
+    let profiling_guard = crate::profiler::make_build_scope_guard(node_id, parent_node_id, fn_name);
+
     NodeContextGuard {
         popped: false,
         logic_id_popped: false,
+        #[cfg(feature = "profiling")]
+        profiling_guard,
     }
 }
 
