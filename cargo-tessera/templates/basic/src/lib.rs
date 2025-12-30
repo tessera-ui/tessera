@@ -1,7 +1,7 @@
 use std::{thread, time::Duration};
 
 use parking_lot::deadlock;
-use tessera_ui::{DimensionValue, Renderer, tessera};
+use tessera_ui::{Renderer, tessera};
 use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::text,
@@ -15,12 +15,7 @@ use tessera_ui::winit::platform::android::activity::AndroidApp;
 #[tessera]
 fn app() {
     surface(
-        SurfaceArgs {
-            width: DimensionValue::FILLED,
-            height: DimensionValue::FILLED,
-            ..Default::default()
-        },
-        None,
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         || {
             text("Hello Tessera!");
         },
