@@ -231,25 +231,6 @@ impl VisitMut for ControlFlowInstrumenter {
 
 /// Transforms a regular Rust function into a Tessera UI component.
 ///
-/// # What It Generates
-///
-/// The macro rewrites the function body so that on every invocation (every
-/// frame in an immediate‑mode pass) it:
-/// 1. Registers a new component node (push) into the global `ComponentTree`
-/// 2. Injects helper closures:
-///    * `measure(impl Fn(&MeasureInput) -> Result<ComputedData,
-///      MeasurementError>)` – supply layout measuring logic (boxed
-///      automatically)
-///    * `input_handler(impl Fn(InputHandlerInput))` – supply per‑frame
-///      interaction / event handling (boxed automatically)
-///    * `on_minimize(Box<dyn Fn(bool) + Send + Sync>)` – window minimize
-///      life‑cycle hook
-///    * `on_close(Box<dyn Fn() + Send + Sync>)` – window close life‑cycle hook
-/// 3. Executes the original user code inside an inner closure to prevent early
-///    `return` from skipping cleanup
-/// 4. Pops (removes) the component node (ensuring balanced push/pop even with
-///    early return)
-///
 /// # Usage
 ///
 /// Annotate a free function (no captured self) with `#[tessera]`. You may then
@@ -274,10 +255,10 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Parse the input function that will be transformed into a component
     let mut input_fn = parse_macro_input!(item as ItemFn);
-    let fn_name = &input_fn.sig.ident; // Function name for component identification
-    let fn_vis = &input_fn.vis; // Visibility (pub, pub(crate), etc.)
-    let fn_attrs = &input_fn.attrs; // Attributes like #[doc], #[allow], etc.
-    let fn_sig = &input_fn.sig; // Function signature (parameters, return type)
+    let fn_name = &input_fn.sig.ident;
+    let fn_vis = &input_fn.vis;
+    let fn_attrs = &input_fn.attrs;
+    let fn_sig = &input_fn.sig;
 
     // Generate a stable hash seed based on function name in order to avoid ID
     // collisions
@@ -342,7 +323,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-#[cfg(feature = "shard")]
 /// Transforms a function into a *shard component* that can be navigated to via
 /// the routing system and (optionally) provided with a lazily‑initialized
 /// per‑shard state.
@@ -357,6 +337,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * Produces a stable shard ID: `module_path!()::function_name`
 ///
 /// # Lifecycle
+///
 /// Controlled by the generated destination (via `#[state(...)]`).
 /// * Default: `Shard` – state is removed when the destination is `pop()`‑ed
 /// * Override: `#[state(app)]` (or `#[state(application)]`) – persist for the
@@ -366,6 +347,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// registry entry is removed, freeing the state.
 ///
 /// # Parameter Transformation
+///
 /// * At most one parameter may be annotated with `#[state]`.
 /// * That parameter is removed from the *generated* function signature and
 ///   supplied implicitly.
@@ -402,6 +384,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * Panics at compile time if multiple `#[state]` parameters are used or
 ///   unsupported pattern forms are encountered.
+#[cfg(feature = "shard")]
 #[proc_macro_attribute]
 pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     use heck::ToUpperCamelCase;
@@ -413,12 +396,11 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         syn::parse(attr).expect("Expected a valid path like `crate` or `tessera_ui`")
     };
 
-    // 1. Parse the function marked by the macro
     let mut func = parse_macro_input!(input as ItemFn);
 
-    // 2. Handle #[state] parameters, ensuring it's unique and removing it from the
-    //    signature Also parse optional lifecycle argument: #[state(app)] or
-    //    #[state(shard)]
+    // Handle #[state] parameters, ensuring it's unique and removing it from the
+    // signature Also parse optional lifecycle argument: #[state(app)] or
+    // #[state(shard)]
     let mut state_param = None;
     let mut state_lifecycle: Option<proc_macro2::TokenStream> = None;
     let mut new_inputs = syn::punctuated::Punctuated::new();
@@ -464,7 +446,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     }
     func.sig.inputs = new_inputs;
 
-    // 3. Extract the name and type of the state parameter
     let (state_name, state_type) = if let Some(state_param) = state_param {
         let name = match *state_param.pat {
             Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
@@ -477,11 +458,9 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         (None, None)
     };
 
-    // 4. Save the original function body and function name
     let func_body = func.block;
     let func_name_str = func.sig.ident.to_string();
 
-    // 5. Get the remaining function attributes and the modified signature
     let func_attrs = &func.attrs;
     let func_vis = &func.vis;
     let func_sig_modified = &func.sig;
@@ -520,8 +499,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    // 6. Use quote! to generate the new TokenStream code Prepare optional lifecycle
-    //    override method for RouterDestination impl.
     let lifecycle_method_tokens = if let Some(lc) = state_lifecycle.clone() {
         quote! {
             fn life_cycle(&self) -> #crate_path::tessera_ui_shard::ShardStateLifeCycle {
@@ -542,12 +519,10 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         if let Some(state_type) = state_type {
             let state_name = state_name.as_ref().unwrap();
             quote! {
-                // Generate a RouterDestination struct for the function
                 #func_vis struct #struct_name {
                     #(#dest_fields),*
                 }
 
-                // Implement the RouterDestination trait for the generated struct
                 impl #crate_path::tessera_ui_shard::router::RouterDestination for #struct_name {
                     fn exec_component(&self) {
                         #func_name(
@@ -564,7 +539,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     #lifecycle_method_tokens
                 }
 
-                // Rebuild the function, keeping its attributes and visibility, but using the modified signature
                 #(#func_attrs)*
                 #func_vis #func_sig_modified {
                     // Generate a stable unique ID at the call site
@@ -583,12 +557,10 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
             }
         } else {
             quote! {
-                // Generate a RouterDestination struct for the function
                 #func_vis struct #struct_name {
                     #(#dest_fields),*
                 }
 
-                // Implement the RouterDestination trait for the generated struct
                 impl #crate_path::tessera_ui_shard::router::RouterDestination for #struct_name {
                     fn exec_component(&self) {
                         #func_name(
@@ -605,7 +577,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     #lifecycle_method_tokens
                 }
 
-                // Rebuild the function, keeping its attributes and visibility, but using the modified signature
                 #(#func_attrs)*
                 #func_vis #func_sig_modified {
                     #func_body
@@ -614,6 +585,5 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         }
     };
 
-    // 7. Return the generated code as a TokenStream
     TokenStream::from(expanded)
 }
