@@ -30,7 +30,8 @@ tessera 是一个专注于性能与可扩展性的跨平台 UI 库。
 - 实现任意视觉效果(自定义着色器的原生支持)
 - 独立的基本组件库(包括text_editor，scrollable和更多)
 - 并行布局支持
-- 即时模式
+- 跨平台支持（TODO：移动端和平台特定功能）
+- 现代化性能分析系统
 
 tessera是一个实验性的框架，如果您在使用过程中遇到任何问题，请随时[提交 issue](https://github.com/tessera-ui/tessera/issues)。
 
