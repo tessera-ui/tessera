@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Gui Rust In Rust."
+description = "Tessera is a cross-platform UI library for rust, focused on performance and extensibility."
 readme = "../README.md"
 
 [features]

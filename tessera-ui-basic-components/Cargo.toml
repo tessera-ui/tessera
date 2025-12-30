@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Basic components for tessera-ui"
+description = "Basic components for tessera-ui, using md3e design principles."
 build = "build.rs"
 
 [dependencies]
