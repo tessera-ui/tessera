@@ -56,26 +56,12 @@ Then we write its UI logic:
 #[tessera]
 fn app() {
     surface(
-        SurfaceArgs {
-            width: DimensionValue::FILLED,
-            height: DimensionValue::FILLED,
-            ..Default::default()
-        },
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         || {
             column(ColumnArgs::default(), |scope| {
-                scope.child(|| {
-                    button(
-                        ButtonArgs::filled(|| {}),
-                        || text("+"),
-                    )
-                });
+                scope.child(|| button(ButtonArgs::filled(|| {}), || text("+")));
                 scope.child(|| text("count: 0"));
-                scope.child(|| {
-                    button(
-                        ButtonArgs::filled(|| {}),
-                        || text("-"),
-                    )
-                });
+                scope.child(|| button(ButtonArgs::filled(|| {}), || text("-")));
             });
         },
     );
@@ -88,11 +74,7 @@ Next, to actually implement the counter we need to use `remember` to store the c
 #[tessera]
 fn app() {
     surface(
-        SurfaceArgs {
-            width: DimensionValue::FILLED,
-            height: DimensionValue::FILLED,
-            ..Default::default()
-        },
+        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         || {
             let count = remember(|| 0);
             column(ColumnArgs::default(), move |scope| {
