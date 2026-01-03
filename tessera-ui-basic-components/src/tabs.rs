@@ -8,7 +8,9 @@ use std::time::Instant;
 use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
-    Modifier, Px, PxPosition, State, remember, tessera, use_context,
+    Modifier, Px, PxPosition, State,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -28,7 +30,7 @@ const DEFAULT_SPATIAL_DAMPING_RATIO: f32 = 0.9;
 const DEFAULT_SPATIAL_STIFFNESS: f32 = 700.0;
 
 /// Visual variants supported by [`tabs`].
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TabsVariant {
     /// Primary tabs.
     #[default]
@@ -539,29 +541,128 @@ pub fn tab_label(args: TabLabelArgs) {
     let style = typography.title_small;
     let content_color = use_context::<ContentColor>().get().current;
 
-    if let Some(icon_content) = args.icon.clone() {
+    let icon_content = args.icon.clone();
+    let has_icon = icon_content.is_some();
+    if let Some(icon_content) = icon_content {
         icon(IconArgs::from(icon_content).size(args.icon_size));
     }
 
-    let args_for_measure = args.clone();
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
-        let padding_px: Px = args_for_measure.horizontal_text_padding.into();
-        let indicator_height_px: Px = args_for_measure.indicator_height.into();
+    let line_height = style.line_height.unwrap_or(Dp(style.font_size.0 * 1.2));
 
-        let icon_id = input.children_ids.first().copied();
-        let has_icon = icon_id.is_some();
-        let has_text = !args_for_measure.text.is_empty();
+    layout(TabLabelLayout {
+        text: args.text,
+        icon_size: args.icon_size,
+        has_icon,
+        horizontal_text_padding: args.horizontal_text_padding,
+        indicator_height: args.indicator_height,
+        font_size: style.font_size,
+        line_height,
+        color: content_color,
+    });
+}
+
+#[derive(Clone, PartialEq)]
+struct TabLabelLayout {
+    text: String,
+    icon_size: Dp,
+    has_icon: bool,
+    horizontal_text_padding: Dp,
+    indicator_height: Dp,
+    font_size: Dp,
+    line_height: Dp,
+    color: Color,
+}
+
+struct TabLabelPositions {
+    text_x: Px,
+    text_y: Px,
+    icon_x: Px,
+    icon_y: Px,
+}
+
+#[derive(Clone, Copy)]
+struct TabLabelPositionInput {
+    width: Px,
+    height: Px,
+    padding_px: Px,
+    indicator_height_px: Px,
+    icon_size: ComputedData,
+    text_width: Px,
+    text_height: Px,
+    first_baseline: f32,
+    last_baseline: f32,
+    line_count: u32,
+    has_icon: bool,
+    has_text: bool,
+}
+
+fn tab_label_positions(input: TabLabelPositionInput) -> TabLabelPositions {
+    let text_area_width = (input.width - input.padding_px * 2).max(Px(0));
+    let text_x = Px::saturating_from_f32(
+        input.padding_px.to_f32()
+            + ((text_area_width.to_f32() - input.text_width.to_f32()).max(0.0) / 2.0),
+    );
+
+    let icon_distance_from_baseline: Px = Dp(20.0).into();
+    let (text_y, icon_x, icon_y) = if input.has_icon && input.has_text {
+        let is_single_line =
+            input.line_count <= 1 || (input.first_baseline - input.last_baseline).abs() < 0.5;
+        let baseline_offset: Px = if is_single_line {
+            Dp(14.0).into()
+        } else {
+            Dp(6.0).into()
+        };
+        let text_offset = baseline_offset + input.indicator_height_px;
+        let text_y = input.height - Px::saturating_from_f32(input.last_baseline) - text_offset;
+
+        let icon_offset = input.icon_size.height + icon_distance_from_baseline
+            - Px::saturating_from_f32(input.first_baseline);
+        let icon_y = text_y - icon_offset;
+        let icon_x =
+            Px::saturating_from_f32((input.width.to_f32() - input.icon_size.width.to_f32()) / 2.0);
+        (text_y, icon_x, icon_y)
+    } else {
+        let text_y =
+            Px::saturating_from_f32((input.height.to_f32() - input.text_height.to_f32()) / 2.0);
+        let icon_x =
+            Px::saturating_from_f32((input.width.to_f32() - input.icon_size.width.to_f32()) / 2.0);
+        let icon_y = Px::saturating_from_f32(
+            (input.height.to_f32() - input.icon_size.height.to_f32()) / 2.0,
+        );
+        (text_y, icon_x, icon_y)
+    };
+
+    TabLabelPositions {
+        text_x,
+        text_y,
+        icon_x,
+        icon_y,
+    }
+}
+
+impl LayoutSpec for TabLabelLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let padding_px: Px = self.horizontal_text_padding.into();
+        let indicator_height_px: Px = self.indicator_height.into();
+
+        let icon_id = input.children_ids().first().copied();
+        let has_icon = self.has_icon && icon_id.is_some();
+        let has_text = !self.text.is_empty();
         let icon_size = if let Some(icon_id) = icon_id {
             let icon_constraint = Constraint::new(
-                DimensionValue::Fixed(args_for_measure.icon_size.into()),
-                DimensionValue::Fixed(args_for_measure.icon_size.into()),
+                DimensionValue::Fixed(self.icon_size.into()),
+                DimensionValue::Fixed(self.icon_size.into()),
             );
             input.measure_child(icon_id, &icon_constraint)?
         } else {
             ComputedData::ZERO
         };
 
-        let max_width_px = match input.parent_constraint.width() {
+        let max_width_px = match input.parent_constraint().width() {
             DimensionValue::Fixed(w) => Some(w),
             DimensionValue::Wrap { max, .. } => max,
             DimensionValue::Fill { max, .. } => max,
@@ -570,38 +671,30 @@ pub fn tab_label(args: TabLabelArgs) {
             .map(|w| (w - padding_px * 2).max(Px(0)))
             .map(|w| w.to_f32());
 
-        let line_height = style
-            .line_height
-            .unwrap_or(Dp(style.font_size.0 * 1.2))
-            .to_pixels_f32();
-        let (text_data, text_width, text_height, first_baseline, last_baseline, line_count) =
-            if has_text {
-                let text_data = TextData::new(
-                    args_for_measure.text.clone(),
-                    content_color,
-                    style.font_size.to_pixels_f32(),
-                    line_height,
-                    TextConstraint {
-                        max_width: text_max_width,
-                        max_height: None,
-                    },
-                );
-                let text_width: Px = text_data.size[0].into();
-                let text_height: Px = text_data.size[1].into();
-                let first_baseline = text_data.first_baseline;
-                let last_baseline = text_data.last_baseline;
-                let line_count = text_data.line_count;
-                (
-                    Some(text_data),
-                    text_width,
-                    text_height,
-                    first_baseline,
-                    last_baseline,
-                    line_count,
-                )
-            } else {
-                (None, Px(0), Px(0), 0.0, 0.0, 0)
-            };
+        let line_height = self.line_height.to_pixels_f32();
+        let (text_width, text_height, first_baseline, last_baseline, line_count) = if has_text {
+            let text_data = TextData::new(
+                self.text.clone(),
+                self.color,
+                self.font_size.to_pixels_f32(),
+                line_height,
+                TextConstraint {
+                    max_width: text_max_width,
+                    max_height: None,
+                },
+            );
+            let text_width: Px = text_data.size[0].into();
+            let text_height: Px = text_data.size[1].into();
+            (
+                text_width,
+                text_height,
+                text_data.first_baseline,
+                text_data.last_baseline,
+                text_data.line_count,
+            )
+        } else {
+            (Px(0), Px(0), 0.0, 0.0, 0)
+        };
 
         let text_container_width = if has_text {
             text_width + padding_px * 2
@@ -609,83 +702,123 @@ pub fn tab_label(args: TabLabelArgs) {
             Px(0)
         };
         let content_width_measure = text_container_width.max(icon_size.width);
-        let width = resolve_dimension(input.parent_constraint.width(), content_width_measure);
+        let width = resolve_dimension(input.parent_constraint().width(), content_width_measure);
 
         let small_height: Px = Dp(48.0).into();
         let large_height: Px = Dp(72.0).into();
-        let icon_distance_from_baseline: Px = Dp(20.0).into();
         let base_height = if has_icon && has_text {
             large_height
         } else {
             small_height
         };
         let combined_height = if has_icon && has_text {
-            icon_size.height + text_height + icon_distance_from_baseline
+            icon_size.height + text_height + Dp(20.0).into()
         } else {
             icon_size.height.max(text_height)
         };
         let height = resolve_dimension(
-            input.parent_constraint.height(),
+            input.parent_constraint().height(),
             base_height.max(combined_height),
         );
 
-        let text_area_width = (width - padding_px * 2).max(Px(0));
-        let text_x = Px::saturating_from_f32(
-            padding_px.to_f32() + ((text_area_width.to_f32() - text_width.to_f32()).max(0.0) / 2.0),
-        );
-
-        let (text_y, icon_x, icon_y) = if has_icon && has_text {
-            let is_single_line = line_count <= 1 || (first_baseline - last_baseline).abs() < 0.5;
-            let baseline_offset: Px = if is_single_line {
-                Dp(14.0).into()
-            } else {
-                Dp(6.0).into()
-            };
-            let text_offset = baseline_offset + indicator_height_px;
-            let text_y = height - Px::saturating_from_f32(last_baseline) - text_offset;
-
-            let icon_offset = icon_size.height + icon_distance_from_baseline
-                - Px::saturating_from_f32(first_baseline);
-            let icon_y = text_y - icon_offset;
-            let icon_x = Px::saturating_from_f32((width.to_f32() - icon_size.width.to_f32()) / 2.0);
-            (text_y, icon_x, icon_y)
-        } else {
-            let text_y = Px::saturating_from_f32((height.to_f32() - text_height.to_f32()) / 2.0);
-            let icon_x = Px::saturating_from_f32((width.to_f32() - icon_size.width.to_f32()) / 2.0);
-            let icon_y =
-                Px::saturating_from_f32((height.to_f32() - icon_size.height.to_f32()) / 2.0);
-            (text_y, icon_x, icon_y)
-        };
+        let positions = tab_label_positions(TabLabelPositionInput {
+            width,
+            height,
+            padding_px,
+            indicator_height_px,
+            icon_size,
+            text_width,
+            text_height,
+            first_baseline,
+            last_baseline,
+            line_count,
+            has_icon,
+            has_text,
+        });
 
         if let Some(icon_id) = icon_id {
-            input.place_child(icon_id, PxPosition::new(icon_x, icon_y));
-        }
-
-        if let Some(text_data) = text_data {
-            let drawable = TextCommand {
-                data: text_data,
-                offset: PxPosition::new(text_x, text_y),
-            };
-            input.metadata_mut().push_draw_command(drawable);
+            output.place_child(icon_id, PxPosition::new(positions.icon_x, positions.icon_y));
         }
 
         Ok(ComputedData { width, height })
-    });
-}
-
-#[tessera]
-fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Send + Sync>>) {
-    for child in children {
-        child();
     }
 
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
-        input.enable_clipping();
+    fn record(&self, input: &RenderInput<'_>) {
+        if self.text.is_empty() {
+            return;
+        }
 
+        let padding_px: Px = self.horizontal_text_padding.into();
+        let indicator_height_px: Px = self.indicator_height.into();
+        let icon_size_px: Px = self.icon_size.into();
+        let icon_size = ComputedData {
+            width: icon_size_px,
+            height: icon_size_px,
+        };
+
+        let mut metadata = input.metadata_mut();
+        let size = metadata
+            .computed_data
+            .expect("Tab label must have computed size before record");
+
+        let text_data = TextData::new(
+            self.text.clone(),
+            self.color,
+            self.font_size.to_pixels_f32(),
+            self.line_height.to_pixels_f32(),
+            TextConstraint {
+                max_width: Some((size.width - padding_px * 2).max(Px(0)).to_f32()),
+                max_height: Some(size.height.to_f32()),
+            },
+        );
+
+        let text_width: Px = text_data.size[0].into();
+        let text_height: Px = text_data.size[1].into();
+
+        let positions = tab_label_positions(TabLabelPositionInput {
+            width: size.width,
+            height: size.height,
+            padding_px,
+            indicator_height_px,
+            icon_size,
+            text_width,
+            text_height,
+            first_baseline: text_data.first_baseline,
+            last_baseline: text_data.last_baseline,
+            line_count: text_data.line_count,
+            has_icon: self.has_icon,
+            has_text: true,
+        });
+
+        let drawable = TextCommand {
+            data: text_data,
+            offset: PxPosition::new(positions.text_x, positions.text_y),
+        };
+        metadata.push_draw_command(drawable);
+    }
+}
+
+#[derive(Clone)]
+struct TabsContentLayout {
+    scroll_offset: Px,
+}
+
+impl PartialEq for TabsContentLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.scroll_offset == other.scroll_offset
+    }
+}
+
+impl LayoutSpec for TabsContentLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
         let mut max_height = Px(0);
-        let container_width = resolve_dimension(input.parent_constraint.width(), Px(0));
+        let container_width = resolve_dimension(input.parent_constraint().width(), Px(0));
 
-        for &child_id in input.children_ids.iter() {
+        for &child_id in input.children_ids().iter() {
             let child_constraint = Constraint::new(
                 DimensionValue::Fixed(container_width),
                 DimensionValue::Wrap {
@@ -697,9 +830,9 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
             max_height = max_height.max(child_size.height);
         }
 
-        let mut current_x = scroll_offset;
-        for &child_id in input.children_ids.iter() {
-            input.place_child(child_id, PxPosition::new(current_x, Px(0)));
+        let mut current_x = self.scroll_offset;
+        for &child_id in input.children_ids().iter() {
+            output.place_child(child_id, PxPosition::new(current_x, Px(0)));
             current_x += container_width;
         }
 
@@ -707,7 +840,405 @@ fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Se
             width: container_width,
             height: max_height,
         })
-    });
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        input.metadata_mut().clips_children = true;
+    }
+}
+
+#[tessera]
+fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Send + Sync>>) {
+    for child in children {
+        child();
+    }
+
+    layout(TabsContentLayout { scroll_offset });
+}
+
+#[derive(Clone)]
+struct TabsLayout {
+    args: TabsArgs,
+    num_tabs: usize,
+    active_tab: usize,
+    controller: State<TabsController>,
+    tab_row_scroll_px: Px,
+    indicator_x_px: Px,
+    indicator_width_px: Px,
+}
+
+impl PartialEq for TabsLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.num_tabs == other.num_tabs
+            && self.active_tab == other.active_tab
+            && self.tab_row_scroll_px == other.tab_row_scroll_px
+            && self.indicator_x_px == other.indicator_x_px
+            && self.indicator_width_px == other.indicator_width_px
+            && self.args.variant == other.args.variant
+            && self.args.indicator_height == other.args.indicator_height
+            && self.args.indicator_min_width == other.args.indicator_min_width
+            && self.args.indicator_max_width == other.args.indicator_max_width
+            && self.args.min_tab_height == other.args.min_tab_height
+            && self.args.tab_padding == other.args.tab_padding
+            && self.args.scrollable == other.args.scrollable
+            && self.args.edge_padding == other.args.edge_padding
+            && self.args.min_scrollable_tab_width == other.args.min_scrollable_tab_width
+    }
+}
+
+impl LayoutSpec for TabsLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let tabs_effective_constraint = Constraint::new(
+            input.parent_constraint().width(),
+            input.parent_constraint().height(),
+        );
+
+        let container_id = input.children_ids()[0];
+        let divider_id = input.children_ids()[1];
+        let indicator_id = input.children_ids()[2];
+        let title_ids = &input.children_ids()[3..=self.num_tabs + 2];
+        let content_container_id = input.children_ids()[self.num_tabs + 3];
+
+        let horizontal_padding = self.args.tab_padding.to_px().to_f32() * 2.0;
+        let indicator_min_width: Px = self.args.indicator_min_width.into();
+        let available_width = match tabs_effective_constraint.width {
+            DimensionValue::Fixed(v) => Some(v),
+            DimensionValue::Wrap { max, .. } => max,
+            DimensionValue::Fill { max, .. } => max,
+        };
+
+        let is_scrollable = self.args.scrollable || available_width.is_none();
+        let match_content_size = matches!(self.args.variant, TabsVariant::Primary);
+
+        let (
+            final_width,
+            strip_width_total,
+            tab_widths,
+            tab_lefts,
+            indicator_widths,
+            titles_max_height,
+            scroll_target,
+        ) = if !is_scrollable {
+            let final_width = available_width.unwrap_or(Px(0));
+            let tab_width = if self.num_tabs == 0 {
+                Px(0)
+            } else {
+                Px(final_width.0 / self.num_tabs as i32)
+            };
+
+            let measure_constraints: Vec<_> = title_ids
+                .iter()
+                .map(|&id| {
+                    (
+                        id,
+                        Constraint::new(
+                            DimensionValue::Fixed(tab_width),
+                            DimensionValue::Wrap {
+                                min: None,
+                                max: None,
+                            },
+                        ),
+                    )
+                })
+                .collect();
+            let title_results = input.measure_children_untracked(measure_constraints)?;
+
+            let mut titles_max_height = Px(0);
+            for &title_id in title_ids {
+                if let Some(result) = title_results.get(&title_id) {
+                    titles_max_height = titles_max_height.max(result.height);
+                }
+            }
+
+            let intrinsic_constraints: Vec<_> = title_ids
+                .iter()
+                .map(|&id| {
+                    (
+                        id,
+                        Constraint::new(
+                            DimensionValue::Wrap {
+                                min: None,
+                                max: Some(tab_width),
+                            },
+                            DimensionValue::Fixed(titles_max_height),
+                        ),
+                    )
+                })
+                .collect();
+            let intrinsic_results = input.measure_children_untracked(intrinsic_constraints)?;
+
+            let indicator_widths: Vec<Px> = title_ids
+                .iter()
+                .map(|id| {
+                    if match_content_size {
+                        let intrinsic_width = intrinsic_results
+                            .get(id)
+                            .map_or(Px(0), |s| s.width)
+                            .min(tab_width);
+                        let content_width =
+                            (intrinsic_width.to_f32() - horizontal_padding).max(0.0);
+                        Px::saturating_from_f32(content_width).max(indicator_min_width)
+                    } else {
+                        tab_width
+                    }
+                })
+                .collect();
+
+            let tab_widths = vec![tab_width; self.num_tabs];
+            let tab_lefts: Vec<Px> = (0..self.num_tabs)
+                .map(|index| Px(index as i32 * tab_width.0))
+                .collect();
+
+            (
+                final_width,
+                final_width,
+                tab_widths,
+                tab_lefts,
+                indicator_widths,
+                titles_max_height,
+                Px(0),
+            )
+        } else {
+            let min_tab_width: Px = self.args.min_scrollable_tab_width.into();
+            let edge_padding: Px = self.args.edge_padding.into();
+
+            let measure_constraints: Vec<_> = title_ids
+                .iter()
+                .map(|&id| {
+                    (
+                        id,
+                        Constraint::new(
+                            DimensionValue::Wrap {
+                                min: Some(min_tab_width),
+                                max: None,
+                            },
+                            DimensionValue::Wrap {
+                                min: None,
+                                max: None,
+                            },
+                        ),
+                    )
+                })
+                .collect();
+            let title_results = input.measure_children_untracked(measure_constraints)?;
+
+            let mut tab_widths = Vec::with_capacity(self.num_tabs);
+            let mut titles_max_height = Px(0);
+            for &title_id in title_ids {
+                if let Some(result) = title_results.get(&title_id) {
+                    tab_widths.push(result.width);
+                    titles_max_height = titles_max_height.max(result.height);
+                }
+            }
+
+            let intrinsic_constraints: Vec<_> = title_ids
+                .iter()
+                .map(|&id| {
+                    (
+                        id,
+                        Constraint::new(
+                            DimensionValue::Wrap {
+                                min: None,
+                                max: None,
+                            },
+                            DimensionValue::Fixed(titles_max_height),
+                        ),
+                    )
+                })
+                .collect();
+            let intrinsic_results = input.measure_children_untracked(intrinsic_constraints)?;
+
+            let mut indicator_widths = Vec::with_capacity(self.num_tabs);
+            for (idx, &title_id) in title_ids.iter().enumerate() {
+                let tab_width = tab_widths.get(idx).copied().unwrap_or(Px(0));
+                if match_content_size {
+                    let intrinsic_width = intrinsic_results
+                        .get(&title_id)
+                        .map_or(Px(0), |s| s.width)
+                        .min(tab_width);
+                    let content_width = (intrinsic_width.to_f32() - horizontal_padding).max(0.0);
+                    let indicator_width =
+                        Px::saturating_from_f32(content_width).max(indicator_min_width);
+                    indicator_widths.push(indicator_width);
+                } else {
+                    indicator_widths.push(tab_width);
+                }
+            }
+
+            let mut tab_lefts = Vec::with_capacity(self.num_tabs);
+            let mut left = edge_padding;
+            for width in &tab_widths {
+                tab_lefts.push(left);
+                left += *width;
+            }
+
+            let strip_width_total = left + edge_padding;
+            let final_width = available_width.unwrap_or(strip_width_total);
+
+            let max_scroll = (strip_width_total - final_width).max(Px(0));
+            self.controller
+                .with_mut(|c| c.set_tab_row_scroll_bounds(max_scroll));
+
+            let selected_left = tab_lefts
+                .get(self.active_tab)
+                .copied()
+                .unwrap_or(edge_padding);
+            let selected_width = tab_widths.get(self.active_tab).copied().unwrap_or(Px(0));
+            let selected_center = selected_left + Px(selected_width.0.saturating_div(2));
+            let target_scroll_f = (selected_center.to_f32() - final_width.to_f32() / 2.0)
+                .clamp(0.0, max_scroll.to_f32());
+            let scroll_target = Px::saturating_from_f32(target_scroll_f);
+
+            (
+                final_width,
+                strip_width_total,
+                tab_widths,
+                tab_lefts,
+                indicator_widths,
+                titles_max_height,
+                scroll_target,
+            )
+        };
+
+        let content_container_constraint = Constraint::new(
+            DimensionValue::Fixed(final_width),
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
+        );
+        let content_container_size =
+            input.measure_child(content_container_id, &content_container_constraint)?;
+
+        let page_width = content_container_size.width;
+        let target_offset = -Px(self.active_tab as i32 * page_width.0);
+        self.controller
+            .with_mut(|c| c.set_content_scroll_target(target_offset));
+
+        if is_scrollable {
+            self.controller.with_mut(|c| {
+                if !c.tab_row_scroll_user_overridden {
+                    c.set_tab_row_scroll_target(scroll_target);
+                }
+            });
+        }
+
+        let current_scroll_px = if is_scrollable {
+            self.controller.with(|c| c.tab_row_scroll_px())
+        } else {
+            Px(0)
+        };
+
+        let (indicator_width, indicator_x) = {
+            let desired_width = indicator_widths
+                .get(self.active_tab)
+                .copied()
+                .unwrap_or(Px(0));
+            let clamped_width = clamp_px(
+                desired_width,
+                self.args.indicator_min_width.into(),
+                self.args.indicator_max_width.map(|v| v.into()),
+            );
+
+            let tab_left = tab_lefts.get(self.active_tab).copied().unwrap_or(Px(0));
+            let tab_width = tab_widths.get(self.active_tab).copied().unwrap_or(Px(0));
+
+            let centered_x = tab_left + Px((tab_width.0 - clamped_width.0) / 2);
+
+            self.controller
+                .with_mut(|c| c.set_indicator_targets(clamped_width, centered_x));
+            (
+                self.controller.with(|c| c.indicator_width_px()),
+                self.controller.with(|c| c.indicator_x_px()),
+            )
+        };
+
+        let indicator_height: Px = self.args.indicator_height.into();
+        let indicator_constraint = Constraint::new(
+            DimensionValue::Fixed(indicator_width),
+            DimensionValue::Fixed(indicator_height),
+        );
+        let _ = input.measure_child(indicator_id, &indicator_constraint)?;
+
+        let divider_height: Px = TabsDefaults::DIVIDER_HEIGHT.into();
+        let divider_width = if is_scrollable {
+            strip_width_total
+        } else {
+            final_width
+        };
+        let divider_constraint = Constraint::new(
+            DimensionValue::Fixed(divider_width),
+            DimensionValue::Fixed(divider_height),
+        );
+        let _ = input.measure_child(divider_id, &divider_constraint)?;
+
+        let tab_bar_height = titles_max_height.max(self.args.min_tab_height.into());
+        self.controller
+            .with_mut(|c| c.set_tab_bar_height(tab_bar_height));
+        let final_height = tab_bar_height + content_container_size.height;
+        let title_offset_y = Px((tab_bar_height.0 - titles_max_height.0) / 2).max(Px(0));
+
+        let title_constraints: Vec<_> = title_ids
+            .iter()
+            .enumerate()
+            .map(|(idx, &id)| {
+                (
+                    id,
+                    Constraint::new(
+                        DimensionValue::Fixed(tab_widths.get(idx).copied().unwrap_or(Px(0))),
+                        DimensionValue::Fixed(tab_bar_height),
+                    ),
+                )
+            })
+            .collect();
+        let _ = input.measure_children(title_constraints)?;
+
+        let container_constraint = Constraint::new(
+            DimensionValue::Fixed(final_width),
+            DimensionValue::Fixed(tab_bar_height),
+        );
+        let _ = input.measure_child(container_id, &container_constraint)?;
+
+        for (i, &title_id) in title_ids.iter().enumerate() {
+            let x = tab_lefts.get(i).copied().unwrap_or(Px(0)) - current_scroll_px;
+            output.place_child(title_id, PxPosition::new(x, title_offset_y));
+        }
+
+        output.place_child(container_id, PxPosition::new(Px(0), Px(0)));
+        output.place_child(
+            divider_id,
+            PxPosition::new(
+                if is_scrollable {
+                    -current_scroll_px
+                } else {
+                    Px(0)
+                },
+                tab_bar_height - divider_height,
+            ),
+        );
+        output.place_child(
+            indicator_id,
+            PxPosition::new(
+                indicator_x - current_scroll_px,
+                tab_bar_height - indicator_height,
+            ),
+        );
+
+        output.place_child(content_container_id, PxPosition::new(Px(0), tab_bar_height));
+
+        Ok(ComputedData {
+            width: final_width,
+            height: final_height,
+        })
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        input.metadata_mut().clips_children = true;
+    }
 }
 
 /// # tabs
@@ -922,16 +1453,20 @@ where
         });
     }
 
+    controller.with_mut(|c| c.tick(Instant::now()));
     let scroll_offset = controller.with(|c| c.content_scroll_px());
+    let tab_row_scroll_px = controller.with(|c| c.tab_row_scroll_px());
+    let indicator_x_px = controller.with(|c| c.indicator_x_px());
+    let indicator_width_px = controller.with(|c| c.indicator_width_px());
 
     tabs_content_container(scroll_offset, content_closures);
 
+    let layout_args = args.clone();
     input_handler(move |input| {
         input
             .accessibility()
             .role(tessera_ui::accesskit::Role::TabList)
             .commit();
-        controller.with_mut(|c| c.tick(Instant::now()));
 
         let is_scrollable = args.scrollable || controller.with(|c| c.tab_row_scroll_max() > Px(0));
         if is_scrollable {
@@ -980,344 +1515,13 @@ where
         }
     });
 
-    let tabs_args = args.clone();
-
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
-        let tabs_effective_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-
-        let container_id = input.children_ids[0];
-        let divider_id = input.children_ids[1];
-        let indicator_id = input.children_ids[2];
-        let title_ids = &input.children_ids[3..=num_tabs + 2];
-        let content_container_id = input.children_ids[num_tabs + 3];
-
-        let horizontal_padding = tabs_args.tab_padding.to_px().to_f32() * 2.0;
-        let indicator_min_width: Px = tabs_args.indicator_min_width.into();
-        let available_width = match tabs_effective_constraint.width {
-            DimensionValue::Fixed(v) => Some(v),
-            DimensionValue::Wrap { max, .. } => max,
-            DimensionValue::Fill { max, .. } => max,
-        };
-
-        let is_scrollable = tabs_args.scrollable || available_width.is_none();
-        let match_content_size = matches!(tabs_args.variant, TabsVariant::Primary);
-
-        if is_scrollable {
-            input.enable_clipping();
-        }
-
-        let (
-            final_width,
-            strip_width_total,
-            tab_widths,
-            tab_lefts,
-            indicator_widths,
-            titles_max_height,
-            scroll_target,
-        ) = if !is_scrollable {
-            let final_width = available_width.unwrap_or(Px(0));
-            let tab_width = if num_tabs == 0 {
-                Px(0)
-            } else {
-                Px(final_width.0 / num_tabs as i32)
-            };
-
-            let measure_constraints: Vec<_> = title_ids
-                .iter()
-                .map(|&id| {
-                    (
-                        id,
-                        Constraint::new(
-                            DimensionValue::Fixed(tab_width),
-                            DimensionValue::Wrap {
-                                min: None,
-                                max: None,
-                            },
-                        ),
-                    )
-                })
-                .collect();
-            let title_results = input.measure_children(measure_constraints)?;
-
-            let mut titles_max_height = Px(0);
-            for &title_id in title_ids {
-                if let Some(result) = title_results.get(&title_id) {
-                    titles_max_height = titles_max_height.max(result.height);
-                }
-            }
-
-            let intrinsic_constraints: Vec<_> = title_ids
-                .iter()
-                .map(|&id| {
-                    (
-                        id,
-                        Constraint::new(
-                            DimensionValue::Wrap {
-                                min: None,
-                                max: Some(tab_width),
-                            },
-                            DimensionValue::Fixed(titles_max_height),
-                        ),
-                    )
-                })
-                .collect();
-            let intrinsic_results = input.measure_children(intrinsic_constraints)?;
-
-            let indicator_widths: Vec<Px> = title_ids
-                .iter()
-                .map(|id| {
-                    if match_content_size {
-                        let intrinsic_width = intrinsic_results
-                            .get(id)
-                            .map_or(Px(0), |s| s.width)
-                            .min(tab_width);
-                        let content_width =
-                            (intrinsic_width.to_f32() - horizontal_padding).max(0.0);
-                        Px::saturating_from_f32(content_width).max(indicator_min_width)
-                    } else {
-                        tab_width
-                    }
-                })
-                .collect();
-
-            let tab_widths = vec![tab_width; num_tabs];
-            let tab_lefts: Vec<Px> = (0..num_tabs)
-                .map(|index| Px(index as i32 * tab_width.0))
-                .collect();
-
-            (
-                final_width,
-                final_width,
-                tab_widths,
-                tab_lefts,
-                indicator_widths,
-                titles_max_height,
-                Px(0),
-            )
-        } else {
-            let min_tab_width: Px = tabs_args.min_scrollable_tab_width.into();
-            let edge_padding: Px = tabs_args.edge_padding.into();
-
-            let measure_constraints: Vec<_> = title_ids
-                .iter()
-                .map(|&id| {
-                    (
-                        id,
-                        Constraint::new(
-                            DimensionValue::Wrap {
-                                min: Some(min_tab_width),
-                                max: None,
-                            },
-                            DimensionValue::Wrap {
-                                min: None,
-                                max: None,
-                            },
-                        ),
-                    )
-                })
-                .collect();
-            let title_results = input.measure_children(measure_constraints)?;
-
-            let mut tab_widths = Vec::with_capacity(num_tabs);
-            let mut titles_max_height = Px(0);
-            for &title_id in title_ids {
-                if let Some(result) = title_results.get(&title_id) {
-                    tab_widths.push(result.width);
-                    titles_max_height = titles_max_height.max(result.height);
-                }
-            }
-
-            let intrinsic_constraints: Vec<_> = title_ids
-                .iter()
-                .map(|&id| {
-                    (
-                        id,
-                        Constraint::new(
-                            DimensionValue::Wrap {
-                                min: None,
-                                max: None,
-                            },
-                            DimensionValue::Fixed(titles_max_height),
-                        ),
-                    )
-                })
-                .collect();
-            let intrinsic_results = input.measure_children(intrinsic_constraints)?;
-
-            let mut indicator_widths = Vec::with_capacity(num_tabs);
-            for (idx, &title_id) in title_ids.iter().enumerate() {
-                let tab_width = tab_widths.get(idx).copied().unwrap_or(Px(0));
-                if match_content_size {
-                    let intrinsic_width = intrinsic_results
-                        .get(&title_id)
-                        .map_or(Px(0), |s| s.width)
-                        .min(tab_width);
-                    let content_width = (intrinsic_width.to_f32() - horizontal_padding).max(0.0);
-                    let indicator_width =
-                        Px::saturating_from_f32(content_width).max(indicator_min_width);
-                    indicator_widths.push(indicator_width);
-                } else {
-                    indicator_widths.push(tab_width);
-                }
-            }
-
-            let mut tab_lefts = Vec::with_capacity(num_tabs);
-            let mut left = edge_padding;
-            for width in &tab_widths {
-                tab_lefts.push(left);
-                left += *width;
-            }
-
-            let strip_width_total = left + edge_padding;
-            let final_width = available_width.unwrap_or(strip_width_total);
-
-            let max_scroll = (strip_width_total - final_width).max(Px(0));
-            controller.with_mut(|c| c.set_tab_row_scroll_bounds(max_scroll));
-
-            let selected_left = tab_lefts.get(active_tab).copied().unwrap_or(edge_padding);
-            let selected_width = tab_widths.get(active_tab).copied().unwrap_or(Px(0));
-            let selected_center = selected_left + Px(selected_width.0.saturating_div(2));
-            let target_scroll_f = (selected_center.to_f32() - final_width.to_f32() / 2.0)
-                .clamp(0.0, max_scroll.to_f32());
-            let scroll_target = Px::saturating_from_f32(target_scroll_f);
-
-            (
-                final_width,
-                strip_width_total,
-                tab_widths,
-                tab_lefts,
-                indicator_widths,
-                titles_max_height,
-                scroll_target,
-            )
-        };
-
-        let content_container_constraint = Constraint::new(
-            DimensionValue::Fixed(final_width),
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
-        );
-        let content_container_size =
-            input.measure_child(content_container_id, &content_container_constraint)?;
-
-        let page_width = content_container_size.width;
-        let target_offset = -Px(active_tab as i32 * page_width.0);
-        controller.with_mut(|c| c.set_content_scroll_target(target_offset));
-
-        if is_scrollable {
-            controller.with_mut(|c| {
-                if !c.tab_row_scroll_user_overridden {
-                    c.set_tab_row_scroll_target(scroll_target);
-                }
-            });
-        }
-
-        let current_scroll_px = if is_scrollable {
-            controller.with(|c| c.tab_row_scroll_px())
-        } else {
-            Px(0)
-        };
-
-        let (indicator_width, indicator_x) = {
-            let desired_width = indicator_widths.get(active_tab).copied().unwrap_or(Px(0));
-            let clamped_width = clamp_px(
-                desired_width,
-                tabs_args.indicator_min_width.into(),
-                tabs_args.indicator_max_width.map(|v| v.into()),
-            );
-
-            let tab_left = tab_lefts.get(active_tab).copied().unwrap_or(Px(0));
-            let tab_width = tab_widths.get(active_tab).copied().unwrap_or(Px(0));
-
-            let centered_x = tab_left + Px((tab_width.0 - clamped_width.0) / 2);
-
-            controller.with_mut(|c| c.set_indicator_targets(clamped_width, centered_x));
-            (
-                controller.with(|c| c.indicator_width_px()),
-                controller.with(|c| c.indicator_x_px()),
-            )
-        };
-
-        let indicator_height: Px = tabs_args.indicator_height.into();
-        let indicator_constraint = Constraint::new(
-            DimensionValue::Fixed(indicator_width),
-            DimensionValue::Fixed(indicator_height),
-        );
-        let _ = input.measure_child(indicator_id, &indicator_constraint)?;
-
-        let divider_height: Px = TabsDefaults::DIVIDER_HEIGHT.into();
-        let divider_width = if is_scrollable {
-            strip_width_total
-        } else {
-            final_width
-        };
-        let divider_constraint = Constraint::new(
-            DimensionValue::Fixed(divider_width),
-            DimensionValue::Fixed(divider_height),
-        );
-        let _ = input.measure_child(divider_id, &divider_constraint)?;
-
-        let tab_bar_height = titles_max_height.max(tabs_args.min_tab_height.into());
-        controller.with_mut(|c| c.set_tab_bar_height(tab_bar_height));
-        let final_height = tab_bar_height + content_container_size.height;
-        let title_offset_y = Px((tab_bar_height.0 - titles_max_height.0) / 2).max(Px(0));
-
-        let title_constraints: Vec<_> = title_ids
-            .iter()
-            .enumerate()
-            .map(|(idx, &id)| {
-                (
-                    id,
-                    Constraint::new(
-                        DimensionValue::Fixed(tab_widths.get(idx).copied().unwrap_or(Px(0))),
-                        DimensionValue::Fixed(tab_bar_height),
-                    ),
-                )
-            })
-            .collect();
-        let _ = input.measure_children(title_constraints)?;
-
-        let container_constraint = Constraint::new(
-            DimensionValue::Fixed(final_width),
-            DimensionValue::Fixed(tab_bar_height),
-        );
-        let _ = input.measure_child(container_id, &container_constraint)?;
-
-        for (i, &title_id) in title_ids.iter().enumerate() {
-            let x = tab_lefts.get(i).copied().unwrap_or(Px(0)) - current_scroll_px;
-            input.place_child(title_id, PxPosition::new(x, title_offset_y));
-        }
-
-        input.place_child(container_id, PxPosition::new(Px(0), Px(0)));
-        input.place_child(
-            divider_id,
-            PxPosition::new(
-                if is_scrollable {
-                    -current_scroll_px
-                } else {
-                    Px(0)
-                },
-                tab_bar_height - divider_height,
-            ),
-        );
-        input.place_child(
-            indicator_id,
-            PxPosition::new(
-                indicator_x - current_scroll_px,
-                tab_bar_height - indicator_height,
-            ),
-        );
-
-        input.place_child(content_container_id, PxPosition::new(Px(0), tab_bar_height));
-
-        Ok(ComputedData {
-            width: final_width,
-            height: final_height,
-        })
+    layout(TabsLayout {
+        args: layout_args,
+        num_tabs,
+        active_tab,
+        controller,
+        tab_row_scroll_px,
+        indicator_x_px,
+        indicator_width_px,
     });
 }

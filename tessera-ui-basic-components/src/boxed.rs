@@ -4,7 +4,10 @@
 //!
 //! Use to create layered UIs, overlays, or composite controls.
 use derive_setters::Setters;
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Modifier, Px, PxPosition, tessera};
+use tessera_ui::{
+    ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutSpec,
+    MeasurementError, Modifier, Px, PxPosition, tessera,
+};
 
 use crate::alignment::Alignment;
 
@@ -174,18 +177,38 @@ fn boxed_inner(
     child_closures: Vec<Box<dyn FnOnce() + Send + Sync>>,
     child_alignments: Vec<Option<Alignment>>,
 ) {
-    let n = child_closures.len();
+    layout(BoxedLayout {
+        alignment: args.alignment,
+        child_alignments,
+    });
 
-    measure(move |input| {
+    for child_closure in child_closures {
+        child_closure();
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct BoxedLayout {
+    alignment: Alignment,
+    child_alignments: Vec<Option<Alignment>>,
+}
+
+impl LayoutSpec for BoxedLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let n = self.child_alignments.len();
         debug_assert_eq!(
-            input.children_ids.len(),
+            input.children_ids().len(),
             n,
             "Mismatch between children defined in scope and runtime children count"
         );
 
         let effective_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
+            input.parent_constraint().width(),
+            input.parent_constraint().height(),
         );
 
         let mut max_child_width = Px(0);
@@ -193,14 +216,14 @@ fn boxed_inner(
         let mut children_sizes = vec![None; n];
 
         let children_to_measure: Vec<_> = input
-            .children_ids
+            .children_ids()
             .iter()
             .map(|&child_id| (child_id, effective_constraint))
             .collect();
 
         let children_results = input.measure_children(children_to_measure)?;
 
-        for (i, &child_id) in input.children_ids.iter().enumerate().take(n) {
+        for (i, &child_id) in input.children_ids().iter().enumerate().take(n) {
             if let Some(child_result) = children_results.get(&child_id) {
                 max_child_width = max_child_width.max(child_result.width);
                 max_child_height = max_child_height.max(child_result.height);
@@ -213,8 +236,8 @@ fn boxed_inner(
 
         for (i, child_size_opt) in children_sizes.iter().enumerate() {
             if let Some(child_size) = child_size_opt {
-                let child_id = input.children_ids[i];
-                let child_alignment = child_alignments[i].unwrap_or(args.alignment);
+                let child_id = input.children_ids()[i];
+                let child_alignment = self.child_alignments[i].unwrap_or(self.alignment);
                 let (x, y) = compute_child_offset(
                     child_alignment,
                     final_width,
@@ -222,7 +245,7 @@ fn boxed_inner(
                     child_size.width,
                     child_size.height,
                 );
-                input.place_child(child_id, PxPosition::new(x, y));
+                output.place_child(child_id, PxPosition::new(x, y));
             }
         }
 
@@ -230,9 +253,5 @@ fn boxed_inner(
             width: final_width,
             height: final_height,
         })
-    });
-
-    for child_closure in child_closures {
-        child_closure();
     }
 }

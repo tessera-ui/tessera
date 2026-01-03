@@ -6,7 +6,11 @@
 use std::sync::Arc;
 
 use derive_setters::Setters;
-use tessera_ui::{Color, ComputedData, Constraint, DimensionValue, Dp, Px, tessera, use_context};
+use tessera_ui::{
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    tessera, use_context,
+};
 
 use crate::{
     image_vector::TintMode,
@@ -18,7 +22,7 @@ use crate::{
 };
 
 /// Icon content can be provided either as vector geometry or raster pixels.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IconContent {
     /// Render the icon via the vector pipeline.
     Vector(Arc<ImageVectorData>),
@@ -116,6 +120,94 @@ impl From<Arc<ImageData>> for IconArgs {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct IconLayout {
+    content: IconContent,
+    size: Dp,
+    width: Option<DimensionValue>,
+    height: Option<DimensionValue>,
+    tint: Color,
+    tint_mode: TintMode,
+    rotation: f32,
+}
+
+impl LayoutSpec for IconLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let (intrinsic_width, intrinsic_height) = intrinsic_dimensions(&self.content);
+        let size_px = self.size.to_px();
+
+        let preferred_width = self.width.unwrap_or(DimensionValue::Fixed(size_px));
+        let preferred_height = self.height.unwrap_or(DimensionValue::Fixed(size_px));
+
+        let constraint = Constraint::new(preferred_width, preferred_height);
+        let effective_constraint = constraint.merge(input.parent_constraint());
+
+        let width = match effective_constraint.width {
+            DimensionValue::Fixed(value) => value,
+            DimensionValue::Wrap { min, max } => min
+                .unwrap_or(Px(0))
+                .max(intrinsic_width)
+                .min(max.unwrap_or(Px::MAX)),
+            DimensionValue::Fill { min, max } => {
+                let parent_max = input
+                    .parent_constraint()
+                    .width()
+                    .get_max()
+                    .unwrap_or(Px::MAX);
+                max.unwrap_or(parent_max)
+                    .max(min.unwrap_or(Px(0)))
+                    .max(intrinsic_width)
+            }
+        };
+
+        let height = match effective_constraint.height {
+            DimensionValue::Fixed(value) => value,
+            DimensionValue::Wrap { min, max } => min
+                .unwrap_or(Px(0))
+                .max(intrinsic_height)
+                .min(max.unwrap_or(Px::MAX)),
+            DimensionValue::Fill { min, max } => {
+                let parent_max = input
+                    .parent_constraint()
+                    .height()
+                    .get_max()
+                    .unwrap_or(Px::MAX);
+                max.unwrap_or(parent_max)
+                    .max(min.unwrap_or(Px(0)))
+                    .max(intrinsic_height)
+            }
+        };
+
+        Ok(ComputedData { width, height })
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        let mut metadata = input.metadata_mut();
+        match &self.content {
+            IconContent::Vector(data) => {
+                let command = ImageVectorCommand {
+                    data: data.clone(),
+                    tint: self.tint,
+                    tint_mode: self.tint_mode,
+                    rotation: self.rotation,
+                };
+                metadata.push_draw_command(command);
+            }
+            IconContent::Raster(data) => {
+                let command = ImageCommand {
+                    data: data.clone(),
+                    opacity: 1.0,
+                };
+                metadata.push_draw_command(command);
+            }
+        }
+    }
+}
+
 /// # icon
 ///
 /// Renders an icon with consistent sizing and optional tinting for vectors.
@@ -151,76 +243,14 @@ impl From<Arc<ImageData>> for IconArgs {
 pub fn icon(args: impl Into<IconArgs>) {
     let icon_args: IconArgs = args.into();
 
-    measure(move |input| {
-        let (intrinsic_width, intrinsic_height) = intrinsic_dimensions(&icon_args.content);
-        let size_px = icon_args.size.to_px();
-
-        let preferred_width = icon_args.width.unwrap_or(DimensionValue::Fixed(size_px));
-        let preferred_height = icon_args.height.unwrap_or(DimensionValue::Fixed(size_px));
-
-        let constraint = Constraint::new(preferred_width, preferred_height);
-        let effective_constraint = constraint.merge(input.parent_constraint);
-
-        let width = match effective_constraint.width {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(intrinsic_width)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => {
-                let parent_max = input.parent_constraint.width().get_max().unwrap_or(Px::MAX);
-                max.unwrap_or(parent_max)
-                    .max(min.unwrap_or(Px(0)))
-                    .max(intrinsic_width)
-            }
-        };
-
-        let height = match effective_constraint.height {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(intrinsic_height)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => {
-                let parent_max = input
-                    .parent_constraint
-                    .height()
-                    .get_max()
-                    .unwrap_or(Px::MAX);
-                max.unwrap_or(parent_max)
-                    .max(min.unwrap_or(Px(0)))
-                    .max(intrinsic_height)
-            }
-        };
-
-        match &icon_args.content {
-            IconContent::Vector(data) => {
-                let command = ImageVectorCommand {
-                    data: data.clone(),
-                    tint: icon_args.tint,
-                    tint_mode: icon_args.tint_mode,
-                    rotation: icon_args.rotation,
-                };
-                input
-                    .metadatas
-                    .entry(input.current_node_id)
-                    .or_default()
-                    .push_draw_command(command);
-            }
-            IconContent::Raster(data) => {
-                let command = ImageCommand {
-                    data: data.clone(),
-                    opacity: 1.0,
-                };
-                input
-                    .metadatas
-                    .entry(input.current_node_id)
-                    .or_default()
-                    .push_draw_command(command);
-            }
-        }
-
-        Ok(ComputedData { width, height })
+    layout(IconLayout {
+        content: icon_args.content,
+        size: icon_args.size,
+        width: icon_args.width,
+        height: icon_args.height,
+        tint: icon_args.tint,
+        tint_mode: icon_args.tint_mode,
+        rotation: icon_args.rotation,
     });
 }
 

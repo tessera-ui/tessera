@@ -5,8 +5,9 @@
 //! Wrap tall lists or cards into multiple columns.
 use derive_setters::Setters;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasureInput, MeasurementError, Modifier, Px,
-    PxPosition, tessera,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px, PxPosition,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    tessera,
 };
 
 use crate::{
@@ -144,23 +145,54 @@ fn flow_column_inner(
     child_closures: Vec<Box<dyn FnOnce() + Send + Sync>>,
     child_weights: Vec<Option<f32>>,
 ) {
-    let n = child_closures.len();
+    let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
+    let line_spacing = sanitize_spacing(Px::from(args.line_spacing));
+    layout(FlowColumnLayout {
+        main_axis_alignment: args.main_axis_alignment,
+        cross_axis_alignment: args.cross_axis_alignment,
+        line_alignment: args.line_alignment,
+        item_spacing,
+        line_spacing,
+        max_items_per_line: args.max_items_per_line,
+        max_lines: args.max_lines,
+        child_weights,
+    });
 
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
+    for child_closure in child_closures {
+        child_closure();
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct FlowColumnLayout {
+    main_axis_alignment: MainAxisAlignment,
+    cross_axis_alignment: CrossAxisAlignment,
+    line_alignment: MainAxisAlignment,
+    item_spacing: Px,
+    line_spacing: Px,
+    max_items_per_line: usize,
+    max_lines: usize,
+    child_weights: Vec<Option<f32>>,
+}
+
+impl LayoutSpec for FlowColumnLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let n = self.child_weights.len();
+        let children_ids = input.children_ids();
         assert_eq!(
-            input.children_ids.len(),
+            children_ids.len(),
             n,
             "Mismatch between children defined in scope and runtime children count"
         );
 
         let flow_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
+            input.parent_constraint().width(),
+            input.parent_constraint().height(),
         );
-        let max_items_per_line = args.max_items_per_line;
-        let max_lines = args.max_lines;
-        let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
-        let line_spacing = sanitize_spacing(Px::from(args.line_spacing));
         let max_height = flow_constraint.height.get_max();
 
         let child_constraint = Constraint::new(
@@ -171,16 +203,45 @@ fn flow_column_inner(
             },
         );
 
-        let children_to_measure: Vec<_> = input
-            .children_ids
-            .iter()
-            .map(|&child_id| (child_id, child_constraint))
-            .collect();
-        let children_results = input.measure_children(children_to_measure)?;
+        let use_weighted_remeasure = max_height.is_some();
+        let mut unweighted_nodes = Vec::new();
+        let mut weighted_nodes = Vec::new();
+        for (idx, &child_id) in children_ids.iter().enumerate().take(n) {
+            let weight = self
+                .child_weights
+                .get(idx)
+                .copied()
+                .flatten()
+                .unwrap_or(0.0);
+            if weight > 0.0 && use_weighted_remeasure {
+                weighted_nodes.push((child_id, child_constraint));
+            } else {
+                unweighted_nodes.push((child_id, child_constraint));
+            }
+        }
+
+        let unweighted_results = if unweighted_nodes.is_empty() {
+            None
+        } else {
+            Some(input.measure_children(unweighted_nodes)?)
+        };
+        let weighted_results = if weighted_nodes.is_empty() {
+            None
+        } else {
+            Some(input.measure_children_untracked(weighted_nodes)?)
+        };
 
         let mut children_sizes = vec![None; n];
-        for (i, &child_id) in input.children_ids.iter().enumerate().take(n) {
-            if let Some(child_size) = children_results.get(&child_id) {
+        for (i, &child_id) in children_ids.iter().enumerate().take(n) {
+            if let Some(results) = &unweighted_results
+                && let Some(child_size) = results.get(&child_id)
+            {
+                children_sizes[i] = Some(*child_size);
+                continue;
+            }
+            if let Some(results) = &weighted_results
+                && let Some(child_size) = results.get(&child_id)
+            {
                 children_sizes[i] = Some(*child_size);
             }
         }
@@ -188,26 +249,27 @@ fn flow_column_inner(
         let lines = build_column_lines(
             &children_sizes,
             max_height,
-            item_spacing,
-            max_items_per_line,
-            max_lines,
+            self.item_spacing,
+            self.max_items_per_line,
+            self.max_lines,
         );
 
         if let Some(max_height) = max_height {
-            apply_weighted_children_column(
+            apply_weighted_children_column(WeightedColumnMeasureInput {
                 input,
-                &flow_constraint,
-                &lines,
-                &mut children_sizes,
-                &child_weights,
-                item_spacing,
+                children_ids,
+                flow_constraint: &flow_constraint,
+                lines: &lines,
+                children_sizes: &mut children_sizes,
+                child_weights: &self.child_weights,
+                item_spacing: self.item_spacing,
                 max_height,
-            )?;
+            })?;
         }
 
-        let line_metrics = compute_column_line_metrics(&lines, &children_sizes, item_spacing);
+        let line_metrics = compute_column_line_metrics(&lines, &children_sizes, self.item_spacing);
         let (content_width, content_height) =
-            compute_column_content_size(&line_metrics, line_spacing);
+            compute_column_content_size(&line_metrics, self.line_spacing);
 
         let final_width =
             resolve_dimension(flow_constraint.width, content_width, "FlowColumn width");
@@ -215,15 +277,16 @@ fn flow_column_inner(
             resolve_dimension(flow_constraint.height, content_height, "FlowColumn height");
 
         place_flow_column(
-            input,
+            output,
+            children_ids,
             &lines,
             &children_sizes,
             &line_metrics,
-            args.main_axis_alignment,
-            args.cross_axis_alignment,
-            args.line_alignment,
-            item_spacing,
-            line_spacing,
+            self.main_axis_alignment,
+            self.cross_axis_alignment,
+            self.line_alignment,
+            self.item_spacing,
+            self.line_spacing,
             final_width,
             final_height,
         );
@@ -232,10 +295,6 @@ fn flow_column_inner(
             width: final_width,
             height: final_height,
         })
-    });
-
-    for child_closure in child_closures {
-        child_closure();
     }
 }
 
@@ -301,15 +360,30 @@ fn build_column_lines(
     lines
 }
 
-fn apply_weighted_children_column(
-    input: &MeasureInput,
-    flow_constraint: &Constraint,
-    lines: &[Vec<usize>],
-    children_sizes: &mut [Option<ComputedData>],
-    child_weights: &[Option<f32>],
+struct WeightedColumnMeasureInput<'a, 'b> {
+    input: &'a LayoutInput<'b>,
+    children_ids: &'a [tessera_ui::NodeId],
+    flow_constraint: &'a Constraint,
+    lines: &'a [Vec<usize>],
+    children_sizes: &'a mut [Option<ComputedData>],
+    child_weights: &'a [Option<f32>],
     item_spacing: Px,
     max_height: Px,
+}
+
+fn apply_weighted_children_column(
+    args: WeightedColumnMeasureInput<'_, '_>,
 ) -> Result<(), MeasurementError> {
+    let WeightedColumnMeasureInput {
+        input,
+        children_ids,
+        flow_constraint,
+        lines,
+        children_sizes,
+        child_weights,
+        item_spacing,
+        max_height,
+    } = args;
     let mut allocations: Vec<(usize, Px)> = Vec::new();
 
     for line in lines {
@@ -359,7 +433,7 @@ fn apply_weighted_children_column(
         .iter()
         .map(|(idx, allocated)| {
             (
-                input.children_ids[*idx],
+                children_ids[*idx],
                 Constraint::new(flow_constraint.width, DimensionValue::Fixed(*allocated)),
             )
         })
@@ -367,7 +441,7 @@ fn apply_weighted_children_column(
     let weighted_results = input.measure_children(weighted_constraints)?;
 
     for (idx, _) in allocations {
-        let child_id = input.children_ids[idx];
+        let child_id = children_ids[idx];
         if let Some(child_size) = weighted_results.get(&child_id) {
             children_sizes[idx] = Some(*child_size);
         }
@@ -421,7 +495,8 @@ fn compute_column_content_size(line_metrics: &[LineMetric], line_spacing: Px) ->
 
 #[allow(clippy::too_many_arguments)]
 fn place_flow_column(
-    input: &MeasureInput,
+    output: &mut LayoutOutput<'_>,
+    children_ids: &[tessera_ui::NodeId],
     lines: &[Vec<usize>],
     children_sizes: &[Option<ComputedData>],
     line_metrics: &[LineMetric],
@@ -461,13 +536,13 @@ fn place_flow_column(
         let mut current_y = start_main;
         for (pos, idx) in line.iter().enumerate() {
             if let Some(child_size) = children_sizes[*idx] {
-                let child_id = input.children_ids[*idx];
+                let child_id = children_ids[*idx];
                 let x_offset = calculate_cross_axis_offset(
                     child_size.width,
                     line_metric.cross,
                     cross_axis_alignment,
                 );
-                input.place_child(child_id, PxPosition::new(current_x + x_offset, current_y));
+                output.place_child(child_id, PxPosition::new(current_x + x_offset, current_y));
                 current_y += child_size.height;
                 if pos + 1 < line.len() {
                     current_y += item_gap;

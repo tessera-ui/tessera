@@ -7,11 +7,11 @@ use std::sync::Arc;
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasureInput, MeasurementError, Modifier,
-    Px, PxPosition, State,
-    accessibility::AccessibilityNode,
+    Color, ComputedData, Constraint, DimensionValue, Dp, InputHandlerInput, MeasurementError,
+    Modifier, Px, PxPosition, State,
     accesskit::{Action, Role},
     focus_state::Focus,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
     remember, tessera, use_context,
 };
 
@@ -53,10 +53,10 @@ fn tick_fractions(steps: usize) -> Vec<f32> {
     (0..=steps + 1).map(|i| i as f32 / denom).collect()
 }
 
-struct RangeThumbAccessibilityArgs<'a> {
+struct RangeThumbAccessibilityArgs {
     key: &'static str,
-    label: Option<&'a String>,
-    description: Option<&'a String>,
+    label: Option<String>,
+    description: Option<String>,
     fallback_description: &'static str,
     steps: usize,
     disabled: bool,
@@ -66,60 +66,72 @@ struct RangeThumbAccessibilityArgs<'a> {
     on_change: Arc<dyn Fn(f32) + Send + Sync>,
 }
 
-fn set_range_thumb_accessibility(
-    input: &MeasureInput,
-    thumb_id: tessera_ui::NodeId,
-    args: RangeThumbAccessibilityArgs<'_>,
-) {
-    let mut node = AccessibilityNode::new()
-        .with_role(Role::Slider)
-        .with_numeric_value(args.value as f64)
-        .with_numeric_range(args.min as f64, args.max as f64)
-        .focusable()
-        .with_key(args.key);
+fn apply_range_thumb_accessibility(input: &InputHandlerInput, args: &RangeThumbAccessibilityArgs) {
+    let mut builder = input.accessibility().role(Role::Slider).key(args.key);
 
-    if let Some(label) = args.label {
-        node = node.with_label(label.clone());
+    if let Some(label) = args.label.as_ref() {
+        builder = builder.label(label.clone());
     }
 
     let description = args
         .description
+        .as_ref()
         .map(|d| format!("{d} ({})", args.fallback_description))
         .unwrap_or_else(|| args.fallback_description.to_string());
-    node = node.with_description(description);
+    builder = builder.description(description);
+
+    builder = builder
+        .numeric_value(args.value as f64)
+        .numeric_range(args.min as f64, args.max as f64);
 
     if args.disabled {
-        node.disabled = true;
+        builder = builder.disabled();
     } else {
-        node.actions = vec![Action::Increment, Action::Decrement];
+        builder = builder
+            .focusable()
+            .action(Action::Increment)
+            .action(Action::Decrement);
     }
 
-    if let Some(mut metadata) = input.metadatas.get_mut(&thumb_id) {
-        metadata.accessibility = Some(node);
-        metadata.accessibility_action_handler = if args.disabled {
-            None
-        } else {
-            let delta = if args.steps == 0 {
-                ACCESSIBILITY_STEP
-            } else {
-                1.0 / (args.steps as f32 + 1.0)
-            };
-            let value = args.value;
-            let min = args.min;
-            let max = args.max;
-            let steps = args.steps;
-            let on_change = args.on_change.clone();
-            Some(Box::new(move |action| {
-                let next = match action {
-                    Action::Increment => value + delta,
-                    Action::Decrement => value - delta,
-                    _ => return,
-                };
-                let next = snap_fraction(next, steps).clamp(min, max);
-                on_change(next);
-            }))
-        };
+    builder.commit();
+
+    if args.disabled {
+        return;
     }
+
+    let delta = if args.steps == 0 {
+        ACCESSIBILITY_STEP
+    } else {
+        1.0 / (args.steps as f32 + 1.0)
+    };
+    let value = args.value;
+    let min = args.min;
+    let max = args.max;
+    let steps = args.steps;
+    let on_change = args.on_change.clone();
+    input.set_accessibility_action_handler(move |action| {
+        let next = match action {
+            Action::Increment => value + delta,
+            Action::Decrement => value - delta,
+            _ => return,
+        };
+        let next = snap_fraction(next, steps).clamp(min, max);
+        on_change(next);
+    });
+}
+
+#[tessera]
+fn range_slider_thumb(
+    thumb_layout: SliderLayout,
+    handle_width: Px,
+    colors: SliderColors,
+    accessibility: RangeThumbAccessibilityArgs,
+) {
+    render_handle(thumb_layout, handle_width, &colors);
+
+    input_handler(move |input| {
+        apply_range_thumb_accessibility(&input, &accessibility);
+    });
 }
 
 struct RangeSliderMeasureArgs {
@@ -128,10 +140,129 @@ struct RangeSliderMeasureArgs {
     start_handle_width: Px,
     end_handle_width: Px,
     steps: usize,
-    disabled: bool,
-    accessibility_label: Option<String>,
-    accessibility_description: Option<String>,
-    on_change: Arc<dyn Fn((f32, f32)) + Send + Sync>,
+}
+
+#[derive(Clone)]
+struct SliderLayoutSpec {
+    args: SliderArgs,
+    clamped_value: f32,
+    handle_width: Px,
+    has_inset_icon: bool,
+}
+
+impl PartialEq for SliderLayoutSpec {
+    fn eq(&self, other: &Self) -> bool {
+        self.args.size == other.args.size
+            && self.args.show_stop_indicator == other.args.show_stop_indicator
+            && self.args.steps == other.args.steps
+            && self.clamped_value == other.clamped_value
+            && self.handle_width == other.handle_width
+            && self.has_inset_icon == other.has_inset_icon
+    }
+}
+
+impl LayoutSpec for SliderLayoutSpec {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let component_width = resolve_component_width(&self.args, input.parent_constraint());
+        let resolved_layout =
+            slider_layout_with_handle_width(&self.args, component_width, self.handle_width);
+        measure_slider(
+            input,
+            output,
+            resolved_layout,
+            self.clamped_value,
+            self.has_inset_icon,
+            self.handle_width,
+            self.args.steps,
+        )
+    }
+}
+
+#[derive(Clone)]
+struct CenteredSliderLayoutSpec {
+    args: SliderArgs,
+    clamped_value: f32,
+    handle_width: Px,
+}
+
+impl PartialEq for CenteredSliderLayoutSpec {
+    fn eq(&self, other: &Self) -> bool {
+        self.args.size == other.args.size
+            && self.args.show_stop_indicator == other.args.show_stop_indicator
+            && self.args.steps == other.args.steps
+            && self.clamped_value == other.clamped_value
+            && self.handle_width == other.handle_width
+    }
+}
+
+impl LayoutSpec for CenteredSliderLayoutSpec {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let component_width = resolve_component_width(&self.args, input.parent_constraint());
+        let resolved_layout = CenteredSliderLayout {
+            base: slider_layout_with_handle_width(&self.args, component_width, self.handle_width),
+        };
+        measure_centered_slider(
+            input,
+            output,
+            resolved_layout,
+            self.clamped_value,
+            self.handle_width,
+            self.args.steps,
+        )
+    }
+}
+
+#[derive(Clone)]
+struct RangeSliderLayoutSpec {
+    args: RangeSliderArgs,
+    slider_args: SliderArgs,
+    start: f32,
+    end: f32,
+    start_handle_width: Px,
+    end_handle_width: Px,
+}
+
+impl PartialEq for RangeSliderLayoutSpec {
+    fn eq(&self, other: &Self) -> bool {
+        self.args.size == other.args.size
+            && self.args.show_stop_indicator == other.args.show_stop_indicator
+            && self.args.steps == other.args.steps
+            && self.start == other.start
+            && self.end == other.end
+            && self.start_handle_width == other.start_handle_width
+            && self.end_handle_width == other.end_handle_width
+    }
+}
+
+impl LayoutSpec for RangeSliderLayoutSpec {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let component_width = resolve_component_width(&self.slider_args, input.parent_constraint());
+        let resolved_layout = range_slider_layout(&self.args, component_width);
+        measure_range_slider(
+            input,
+            output,
+            resolved_layout,
+            RangeSliderMeasureArgs {
+                start: self.start,
+                end: self.end,
+                start_handle_width: self.start_handle_width,
+                end_handle_width: self.end_handle_width,
+                steps: self.args.steps,
+            },
+        )
+    }
 }
 
 /// Controller for the `slider` component.
@@ -367,7 +498,8 @@ impl Default for RangeSliderArgs {
 }
 
 fn measure_slider(
-    input: &MeasureInput,
+    input: &LayoutInput<'_>,
+    output: &mut LayoutOutput<'_>,
     layout: SliderLayout,
     clamped_value: f32,
     has_inset_icon: bool,
@@ -377,14 +509,14 @@ fn measure_slider(
     let self_width = layout.component_width;
     let self_height = layout.component_height;
 
-    let active_id = input.children_ids[0];
-    let inactive_id = input.children_ids[1];
+    let active_id = input.children_ids()[0];
+    let inactive_id = input.children_ids()[1];
 
     // Order in render: active, inactive, [icon], [ticks], [stop], handle
     let mut current_index = 2;
 
     let icon_id = if has_inset_icon {
-        let id = input.children_ids.get(current_index).copied();
+        let id = input.children_ids().get(current_index).copied();
         current_index += 1;
         id
     } else {
@@ -392,18 +524,18 @@ fn measure_slider(
     };
 
     let tick_count = if steps == 0 { 0 } else { steps + 2 };
-    let tick_ids = &input.children_ids[current_index..current_index + tick_count];
+    let tick_ids = &input.children_ids()[current_index..current_index + tick_count];
     current_index += tick_count;
 
     let stop_id = if layout.show_stop_indicator {
-        let id = input.children_ids.get(current_index).copied();
+        let id = input.children_ids().get(current_index).copied();
         current_index += 1;
         id
     } else {
         None
     };
 
-    let handle_id = input.children_ids[current_index];
+    let handle_id = input.children_ids()[current_index];
 
     let active_width = layout.active_width(clamped_value);
     let inactive_width = layout.inactive_width(clamped_value);
@@ -413,14 +545,14 @@ fn measure_slider(
         DimensionValue::Fixed(layout.track_height),
     );
     input.measure_child(active_id, &active_constraint)?;
-    input.place_child(active_id, PxPosition::new(Px(0), layout.track_y));
+    output.place_child(active_id, PxPosition::new(Px(0), layout.track_y));
 
     let inactive_constraint = Constraint::new(
         DimensionValue::Fixed(inactive_width),
         DimensionValue::Fixed(layout.track_height),
     );
     input.measure_child(inactive_id, &inactive_constraint)?;
-    input.place_child(
+    output.place_child(
         inactive_id,
         PxPosition::new(
             Px(active_width.0 + layout.handle_gap.0 * 2 + handle_width.0),
@@ -436,7 +568,7 @@ fn measure_slider(
 
     let handle_center = layout.handle_center(clamped_value);
     let handle_offset = layout.center_child_offset(handle_width);
-    input.place_child(
+    output.place_child(
         handle_id,
         PxPosition::new(Px(handle_center.x.0 - handle_offset.0), layout.handle_y),
     );
@@ -452,7 +584,7 @@ fn measure_slider(
         let inactive_start = active_width.0 + layout.handle_gap.0 * 2 + handle_width.0;
         let corner = layout.track_corner_radius.to_px();
         let stop_center_x = Px(inactive_start + inactive_width.0 - corner.0);
-        input.place_child(
+        output.place_child(
             stop_id,
             PxPosition::new(Px(stop_center_x.0 - stop_offset.0), layout.stop_indicator_y),
         );
@@ -477,7 +609,7 @@ fn measure_slider(
         // track
         let icon_padding = Dp(8.0).to_px();
         let icon_y = layout.track_y + Px((layout.track_height.0 - icon_measured.height.0) / 2);
-        input.place_child(icon_id, PxPosition::new(icon_padding, icon_y));
+        output.place_child(icon_id, PxPosition::new(icon_padding, icon_y));
     }
 
     if steps > 0 {
@@ -492,7 +624,7 @@ fn measure_slider(
             input.measure_child(tick_id, &tick_constraint)?;
             let fraction = i as f32 / (steps as f32 + 1.0);
             let tick_center_x = start_x + fraction * layout.track_total_width.to_f32();
-            input.place_child(
+            output.place_child(
                 tick_id,
                 PxPosition::new(
                     Px(tick_center_x.round() as i32 - tick_offset.0),
@@ -667,13 +799,13 @@ fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderContro
     } else {
         base_handle_width
     };
-    let layout = slider_layout_with_handle_width(&args, initial_width, handle_width);
+    let slider_layout = slider_layout_with_handle_width(&args, initial_width, handle_width);
     let colors = slider_colors(&args);
 
-    render_active_segment(layout, &colors);
-    render_inactive_segment(layout, &colors);
+    render_active_segment(slider_layout, &colors);
+    render_inactive_segment(slider_layout, &colors);
 
-    if let Some(icon_size) = layout.icon_size
+    if let Some(icon_size) = slider_layout.icon_size
         && let Some(inset_icon) = args.inset_icon.as_ref()
     {
         let scheme = use_context::<MaterialTheme>().get().color_scheme;
@@ -701,13 +833,13 @@ fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderContro
             } else {
                 colors.active_track
             };
-            render_tick(layout.stop_indicator_diameter, color);
+            render_tick(slider_layout.stop_indicator_diameter, color);
         }
     }
-    if layout.show_stop_indicator {
-        render_stop_indicator(layout, &colors);
+    if slider_layout.show_stop_indicator {
+        render_stop_indicator(slider_layout, &colors);
     }
-    render_handle(layout, handle_width, &colors);
+    render_handle(slider_layout, handle_width, &colors);
 
     let cloned_args = args.clone();
     input_handler(move |mut input| {
@@ -730,31 +862,18 @@ fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderContro
         );
     });
 
-    measure(move |input| {
-        let component_width = resolve_component_width(&args, input.parent_constraint);
-        let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
-        let base_handle_width = args.thumb_diameter.to_px();
-        let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
-        let handle_width = if is_dragging || is_focused {
-            pressed_handle_width
-        } else {
-            base_handle_width
-        };
-        let resolved_layout = slider_layout_with_handle_width(&args, component_width, handle_width);
-        let has_inset_icon = args.inset_icon.is_some();
-        measure_slider(
-            input,
-            resolved_layout,
-            clamped_value,
-            has_inset_icon,
-            handle_width,
-            args.steps,
-        )
+    let has_inset_icon = args.inset_icon.is_some();
+    layout(SliderLayoutSpec {
+        args,
+        clamped_value,
+        handle_width,
+        has_inset_icon,
     });
 }
 
 fn measure_centered_slider(
-    input: &MeasureInput,
+    input: &LayoutInput<'_>,
+    output: &mut LayoutOutput<'_>,
     layout: CenteredSliderLayout,
     value: f32,
     handle_width: Px,
@@ -764,23 +883,23 @@ fn measure_centered_slider(
     let self_height = layout.base.component_height;
     let track_y = layout.base.track_y;
 
-    let left_inactive_id = input.children_ids[0];
-    let active_id = input.children_ids[1];
-    let right_inactive_id = input.children_ids[2];
+    let left_inactive_id = input.children_ids()[0];
+    let active_id = input.children_ids()[1];
+    let right_inactive_id = input.children_ids()[2];
     let mut current_index = 3;
     let tick_count = if steps == 0 { 0 } else { steps + 2 };
-    let tick_ids = &input.children_ids[current_index..current_index + tick_count];
+    let tick_ids = &input.children_ids()[current_index..current_index + tick_count];
     current_index += tick_count;
 
     let (left_stop_id, right_stop_id) = if layout.base.show_stop_indicator {
-        let left = input.children_ids[current_index];
-        let right = input.children_ids[current_index + 1];
+        let left = input.children_ids()[current_index];
+        let right = input.children_ids()[current_index + 1];
         current_index += 2;
         (Some(left), Some(right))
     } else {
         (None, None)
     };
-    let handle_id = input.children_ids[current_index];
+    let handle_id = input.children_ids()[current_index];
 
     let segments = layout.segments(value);
 
@@ -792,7 +911,7 @@ fn measure_centered_slider(
             DimensionValue::Fixed(layout.base.track_height),
         ),
     )?;
-    input.place_child(
+    output.place_child(
         left_inactive_id,
         PxPosition::new(segments.left_inactive.0, track_y),
     );
@@ -805,7 +924,7 @@ fn measure_centered_slider(
             DimensionValue::Fixed(layout.base.track_height),
         ),
     )?;
-    input.place_child(active_id, PxPosition::new(segments.active.0, track_y));
+    output.place_child(active_id, PxPosition::new(segments.active.0, track_y));
 
     // 3. Right Inactive
     input.measure_child(
@@ -815,7 +934,7 @@ fn measure_centered_slider(
             DimensionValue::Fixed(layout.base.track_height),
         ),
     )?;
-    input.place_child(
+    output.place_child(
         right_inactive_id,
         PxPosition::new(segments.right_inactive.0, track_y),
     );
@@ -829,7 +948,7 @@ fn measure_centered_slider(
             DimensionValue::Fixed(layout.base.handle_height),
         ),
     )?;
-    input.place_child(
+    output.place_child(
         handle_id,
         PxPosition::new(
             Px(segments.handle_center.x.0 - handle_offset.0),
@@ -856,7 +975,7 @@ fn measure_centered_slider(
 
         let left_stop_x = Px(stop_padding.0);
 
-        input.place_child(
+        output.place_child(
             left_stop_id,
             PxPosition::new(
                 Px(left_stop_x.0 - stop_offset.0),
@@ -868,7 +987,7 @@ fn measure_centered_slider(
         input.measure_child(right_stop_id, &stop_constraint)?;
         let right_stop_x = Px(self_width.0 - stop_padding.0);
 
-        input.place_child(
+        output.place_child(
             right_stop_id,
             PxPosition::new(
                 Px(right_stop_x.0 - stop_offset.0),
@@ -889,7 +1008,7 @@ fn measure_centered_slider(
             input.measure_child(tick_id, &tick_constraint)?;
             let fraction = i as f32 / (steps as f32 + 1.0);
             let tick_center_x = start_x + fraction * layout.base.track_total_width.to_f32();
-            input.place_child(
+            output.place_child(
                 tick_id,
                 PxPosition::new(
                     Px(tick_center_x.round() as i32 - tick_offset.0),
@@ -1027,12 +1146,12 @@ pub fn centered_slider_with_controller(
     } else {
         base_handle_width
     };
-    let layout = CenteredSliderLayout {
+    let centered_layout = CenteredSliderLayout {
         base: slider_layout_with_handle_width(&args, initial_width, handle_width),
     };
     let colors = slider_colors(&args);
 
-    render_centered_tracks(layout, &colors);
+    render_centered_tracks(centered_layout, &colors);
     if args.steps > 0 {
         let active_start = clamped_value.min(0.5);
         let active_end = clamped_value.max(0.5);
@@ -1043,13 +1162,13 @@ pub fn centered_slider_with_controller(
             } else {
                 colors.active_track
             };
-            render_tick(layout.base.stop_indicator_diameter, color);
+            render_tick(centered_layout.base.stop_indicator_diameter, color);
         }
     }
-    if layout.base.show_stop_indicator {
-        render_centered_stops(layout, &colors);
+    if centered_layout.base.show_stop_indicator {
+        render_centered_stops(centered_layout, &colors);
     }
-    render_handle(layout.base, handle_width, &colors);
+    render_handle(centered_layout.base, handle_width, &colors);
 
     let cloned_args = args.clone();
     input_handler(move |mut input| {
@@ -1077,31 +1196,16 @@ pub fn centered_slider_with_controller(
         );
     });
 
-    measure(move |input| {
-        let component_width = resolve_component_width(&args, input.parent_constraint);
-        let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
-        let base_handle_width = args.thumb_diameter.to_px();
-        let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
-        let handle_width = if is_dragging || is_focused {
-            pressed_handle_width
-        } else {
-            base_handle_width
-        };
-        let resolved_layout = CenteredSliderLayout {
-            base: slider_layout_with_handle_width(&args, component_width, handle_width),
-        };
-        measure_centered_slider(
-            input,
-            resolved_layout,
-            clamped_value,
-            handle_width,
-            args.steps,
-        )
+    layout(CenteredSliderLayoutSpec {
+        args,
+        clamped_value,
+        handle_width,
     });
 }
 
 fn measure_range_slider(
-    input: &MeasureInput,
+    input: &LayoutInput<'_>,
+    output: &mut LayoutOutput<'_>,
     layout: RangeSliderLayout,
     args: RangeSliderMeasureArgs,
 ) -> Result<ComputedData, MeasurementError> {
@@ -1109,25 +1213,25 @@ fn measure_range_slider(
     let self_height = layout.base.component_height;
     let track_y = layout.base.track_y;
 
-    let left_inactive_id = input.children_ids[0];
-    let active_id = input.children_ids[1];
-    let right_inactive_id = input.children_ids[2];
+    let left_inactive_id = input.children_ids()[0];
+    let active_id = input.children_ids()[1];
+    let right_inactive_id = input.children_ids()[2];
     let mut current_index = 3;
     let tick_count = if args.steps == 0 { 0 } else { args.steps + 2 };
-    let tick_ids = &input.children_ids[current_index..current_index + tick_count];
+    let tick_ids = &input.children_ids()[current_index..current_index + tick_count];
     current_index += tick_count;
 
     let (stop_start_id, stop_end_id) = if layout.base.show_stop_indicator {
-        let start_id = input.children_ids.get(current_index).copied();
-        let end_id = input.children_ids.get(current_index + 1).copied();
+        let start_id = input.children_ids().get(current_index).copied();
+        let end_id = input.children_ids().get(current_index + 1).copied();
         current_index += 2;
         (start_id, end_id)
     } else {
         (None, None)
     };
 
-    let handle_start_id = input.children_ids[current_index];
-    let handle_end_id = input.children_ids[current_index + 1];
+    let handle_start_id = input.children_ids()[current_index];
+    let handle_end_id = input.children_ids()[current_index + 1];
 
     let segments = layout.segments(
         args.start,
@@ -1143,7 +1247,7 @@ fn measure_range_slider(
             DimensionValue::Fixed(layout.base.track_height),
         ),
     )?;
-    input.place_child(
+    output.place_child(
         left_inactive_id,
         PxPosition::new(segments.left_inactive.0, track_y),
     );
@@ -1155,7 +1259,7 @@ fn measure_range_slider(
             DimensionValue::Fixed(layout.base.track_height),
         ),
     )?;
-    input.place_child(active_id, PxPosition::new(segments.active.0, track_y));
+    output.place_child(active_id, PxPosition::new(segments.active.0, track_y));
 
     input.measure_child(
         right_inactive_id,
@@ -1164,7 +1268,7 @@ fn measure_range_slider(
             DimensionValue::Fixed(layout.base.track_height),
         ),
     )?;
-    input.place_child(
+    output.place_child(
         right_inactive_id,
         PxPosition::new(segments.right_inactive.0, track_y),
     );
@@ -1181,7 +1285,7 @@ fn measure_range_slider(
     let end_handle_offset = layout.base.center_child_offset(args.end_handle_width);
 
     input.measure_child(handle_start_id, &start_handle_constraint)?;
-    input.place_child(
+    output.place_child(
         handle_start_id,
         PxPosition::new(
             Px(segments.start_handle_center.x.0 - start_handle_offset.0),
@@ -1190,53 +1294,12 @@ fn measure_range_slider(
     );
 
     input.measure_child(handle_end_id, &end_handle_constraint)?;
-    input.place_child(
+    output.place_child(
         handle_end_id,
         PxPosition::new(
             Px(segments.end_handle_center.x.0 - end_handle_offset.0),
             layout.base.handle_y,
         ),
-    );
-
-    let start_value = args.start;
-    let end_value = args.end;
-    set_range_thumb_accessibility(
-        input,
-        handle_start_id,
-        RangeThumbAccessibilityArgs {
-            key: "range_slider_start_thumb",
-            label: args.accessibility_label.as_ref(),
-            description: args.accessibility_description.as_ref(),
-            fallback_description: "range start",
-            steps: args.steps,
-            disabled: args.disabled,
-            value: start_value,
-            min: 0.0,
-            max: end_value,
-            on_change: Arc::new({
-                let on_change = args.on_change.clone();
-                move |new_start| (on_change)((new_start, end_value))
-            }),
-        },
-    );
-    set_range_thumb_accessibility(
-        input,
-        handle_end_id,
-        RangeThumbAccessibilityArgs {
-            key: "range_slider_end_thumb",
-            label: args.accessibility_label.as_ref(),
-            description: args.accessibility_description.as_ref(),
-            fallback_description: "range end",
-            steps: args.steps,
-            disabled: args.disabled,
-            value: end_value,
-            min: start_value,
-            max: 1.0,
-            on_change: Arc::new({
-                let on_change = args.on_change.clone();
-                move |new_end| (on_change)((start_value, new_end))
-            }),
-        },
     );
 
     if args.steps > 0 {
@@ -1257,7 +1320,7 @@ fn measure_range_slider(
             input.measure_child(tick_id, &tick_constraint)?;
             let fraction = i as f32 / (args.steps as f32 + 1.0);
             let tick_center_x = start_x + fraction * track_total;
-            input.place_child(
+            output.place_child(
                 tick_id,
                 PxPosition::new(
                     Px(tick_center_x.round() as i32 - tick_offset.0),
@@ -1285,7 +1348,7 @@ fn measure_range_slider(
         let corner = layout.base.track_corner_radius.to_px();
         let start_stop_x = corner;
 
-        input.place_child(
+        output.place_child(
             stop_start_id,
             PxPosition::new(
                 Px(start_stop_x.0 - stop_offset.0),
@@ -1296,7 +1359,7 @@ fn measure_range_slider(
         input.measure_child(stop_end_id, &stop_constraint)?;
         let end_stop_x = Px(self_width.0 - corner.0);
 
-        input.place_child(
+        output.place_child(
             stop_end_id,
             PxPosition::new(
                 Px(end_stop_x.0 - stop_offset.0),
@@ -1376,7 +1439,7 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
         .show_stop_indicator(args.show_stop_indicator);
     let initial_width = fallback_component_width(&dummy_slider_args);
     let dummy_for_measure = dummy_slider_args.clone();
-    let layout = range_slider_layout(&args, initial_width);
+    let range_layout = range_slider_layout(&args, initial_width);
 
     let start = args.value.0.clamp(0.0, 1.0);
     let end = args.value.1.clamp(start, 1.0);
@@ -1402,7 +1465,7 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
 
     let colors = range_slider_colors(&args);
 
-    render_range_tracks(layout, &colors);
+    render_range_tracks(range_layout, &colors);
     if args.steps > 0 {
         for fraction in tick_fractions(args.steps) {
             let is_active = fraction >= start && fraction <= end;
@@ -1411,14 +1474,52 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
             } else {
                 colors.active_track
             };
-            render_tick(layout.base.stop_indicator_diameter, color);
+            render_tick(range_layout.base.stop_indicator_diameter, color);
         }
     }
-    if layout.base.show_stop_indicator {
-        render_range_stops(layout, &colors);
+    if range_layout.base.show_stop_indicator {
+        render_range_stops(range_layout, &colors);
     }
-    render_handle(layout.base, start_handle_width, &colors);
-    render_handle(layout.base, end_handle_width, &colors);
+    range_slider_thumb(
+        range_layout.base,
+        start_handle_width,
+        colors,
+        RangeThumbAccessibilityArgs {
+            key: "range_slider_start_thumb",
+            label: args.accessibility_label.clone(),
+            description: args.accessibility_description.clone(),
+            fallback_description: "range start",
+            steps: args.steps,
+            disabled: args.disabled,
+            value: start,
+            min: 0.0,
+            max: end,
+            on_change: Arc::new({
+                let on_change = args.on_change.clone();
+                move |new_start| (on_change)((new_start, end))
+            }),
+        },
+    );
+    range_slider_thumb(
+        range_layout.base,
+        end_handle_width,
+        colors,
+        RangeThumbAccessibilityArgs {
+            key: "range_slider_end_thumb",
+            label: args.accessibility_label.clone(),
+            description: args.accessibility_description.clone(),
+            fallback_description: "range end",
+            steps: args.steps,
+            disabled: args.disabled,
+            value: end,
+            min: start,
+            max: 1.0,
+            on_change: Arc::new({
+                let on_change = args.on_change.clone();
+                move |new_end| (on_change)((start, new_end))
+            }),
+        },
+    );
 
     let cloned_args = args.clone();
     let start_val = start;
@@ -1461,41 +1562,12 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
         );
     });
 
-    measure(move |input| {
-        let component_width = resolve_component_width(&dummy_for_measure, input.parent_constraint);
-        let resolved_layout = range_slider_layout(&args, component_width);
-        let base_handle_width = args.thumb_diameter.to_px();
-        let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
-        let (start_interacting, end_interacting) = state.with(|s| {
-            (
-                s.is_dragging_start || s.focus_start.is_focused(),
-                s.is_dragging_end || s.focus_end.is_focused(),
-            )
-        });
-        let start_handle_width = if start_interacting {
-            pressed_handle_width
-        } else {
-            base_handle_width
-        };
-        let end_handle_width = if end_interacting {
-            pressed_handle_width
-        } else {
-            base_handle_width
-        };
-        measure_range_slider(
-            input,
-            resolved_layout,
-            RangeSliderMeasureArgs {
-                start,
-                end,
-                start_handle_width,
-                end_handle_width,
-                steps: args.steps,
-                disabled: args.disabled,
-                accessibility_label: args.accessibility_label.clone(),
-                accessibility_description: args.accessibility_description.clone(),
-                on_change: args.on_change.clone(),
-            },
-        )
+    layout(RangeSliderLayoutSpec {
+        args,
+        slider_args: dummy_for_measure,
+        start,
+        end,
+        start_handle_width,
+        end_handle_width,
     });
 }

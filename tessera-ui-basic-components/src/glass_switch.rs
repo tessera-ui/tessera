@@ -10,8 +10,11 @@ use std::{
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, PxPosition, State,
-    accesskit::Role, remember, tessera,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    PxPosition, State,
+    accesskit::Role,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    remember, tessera,
 };
 
 use crate::{
@@ -328,63 +331,68 @@ pub fn glass_switch_with_controller(
         fluid_glass(thumb_args, || {});
 
         // Measurement and placement
-        measure(move |input| {
-            // Expect track then thumb as children
-            let track_id = input.children_ids[0];
-            let thumb_id = input.children_ids[1];
-
-            let track_constraint = Constraint::new(
-                DimensionValue::Fixed(width_px),
-                DimensionValue::Fixed(height_px),
-            );
-            let thumb_constraint = Constraint::new(
-                DimensionValue::Wrap {
-                    min: None,
-                    max: None,
-                },
-                DimensionValue::Wrap {
-                    min: None,
-                    max: None,
-                },
-            );
-
-            // Measure both children
-            let nodes_constraints =
-                vec![(track_id, track_constraint), (thumb_id, thumb_constraint)];
-            let sizes_map = input.measure_children(nodes_constraints)?;
-
-            let _track_size = sizes_map
-                .get(&track_id)
-                .expect("track size should be measured");
-            let thumb_size = sizes_map
-                .get(&thumb_id)
-                .expect("thumb size should be measured");
-            let self_width_px = width_px;
-            let self_height_px = height_px;
-            let thumb_padding_px = args.thumb_padding.to_px();
-
-            // Use eased progress for placement
-            let eased_progress = animation::easing(progress);
-
-            input.place_child(
-                track_id,
-                PxPosition::new(tessera_ui::Px(0), tessera_ui::Px(0)),
-            );
-
-            let start_x = thumb_padding_px;
-            let end_x = self_width_px - thumb_size.width - thumb_padding_px;
-            let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * eased_progress;
-            let thumb_y = (self_height_px - thumb_size.height) / 2;
-
-            input.place_child(
-                thumb_id,
-                PxPosition::new(tessera_ui::Px(thumb_x as i32), thumb_y),
-            );
-
-            Ok(ComputedData {
-                width: self_width_px,
-                height: self_height_px,
-            })
+        layout(GlassSwitchLayout {
+            width: width_px,
+            height: height_px,
+            thumb_padding: args.thumb_padding.to_px(),
+            progress,
         });
     });
+}
+
+#[derive(Clone, PartialEq)]
+struct GlassSwitchLayout {
+    width: Px,
+    height: Px,
+    thumb_padding: Px,
+    progress: f32,
+}
+
+impl LayoutSpec for GlassSwitchLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let track_id = input.children_ids()[0];
+        let thumb_id = input.children_ids()[1];
+
+        let track_constraint = Constraint::new(
+            DimensionValue::Fixed(self.width),
+            DimensionValue::Fixed(self.height),
+        );
+        let thumb_constraint = Constraint::new(
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
+        );
+
+        let nodes_constraints = vec![(track_id, track_constraint), (thumb_id, thumb_constraint)];
+        let sizes_map = input.measure_children(nodes_constraints)?;
+
+        let thumb_size = sizes_map
+            .get(&thumb_id)
+            .expect("thumb size should be measured");
+
+        let eased_progress = animation::easing(self.progress);
+
+        output.place_child(track_id, PxPosition::new(Px(0), Px(0)));
+
+        let start_x = self.thumb_padding;
+        let end_x = self.width - thumb_size.width - self.thumb_padding;
+        let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * eased_progress;
+        let thumb_y = (self.height - thumb_size.height) / 2;
+
+        output.place_child(thumb_id, PxPosition::new(Px(thumb_x as i32), thumb_y));
+
+        Ok(ComputedData {
+            width: self.width,
+            height: self.height,
+        })
+    }
 }

@@ -5,7 +5,10 @@
 //! Apply padding, sizing, or minimum touch target adjustments to component
 //! subtrees.
 
-use tessera_ui::{ComputedData, Constraint, DimensionValue, Dp, Px, PxPosition, tessera};
+use tessera_ui::{
+    ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
+    MeasurementError, Px, PxPosition, tessera,
+};
 
 /// Controls whether minimum interactive size wrappers are enforced.
 #[derive(Clone, Copy, Debug)]
@@ -22,7 +25,7 @@ impl Default for MinimumInteractiveComponentEnforcement {
 }
 
 /// Padding values in density-independent pixels.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Padding {
     /// Left padding.
     pub left: Dp,
@@ -90,37 +93,7 @@ pub(crate) fn modifier_padding<F>(padding: Padding, child: F)
 where
     F: FnOnce(),
 {
-    measure(move |input| {
-        let child_id = input
-            .children_ids
-            .first()
-            .copied()
-            .expect("modifier_padding expects exactly one child");
-
-        let left_px: Px = padding.left.into();
-        let top_px: Px = padding.top.into();
-        let right_px: Px = padding.right.into();
-        let bottom_px: Px = padding.bottom.into();
-
-        let parent_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let constraint = Constraint::new(
-            shrink_dimension(parent_constraint.width, left_px, right_px),
-            shrink_dimension(parent_constraint.height, top_px, bottom_px),
-        );
-
-        let child_measurement = input.measure_child(child_id, &constraint)?;
-        let content_width = child_measurement.width + left_px + right_px;
-        let content_height = child_measurement.height + top_px + bottom_px;
-        input.place_child(child_id, PxPosition::new(left_px, top_px));
-
-        Ok(ComputedData {
-            width: content_width,
-            height: content_height,
-        })
-    });
+    layout(PaddingLayout { padding });
 
     child();
 }
@@ -130,26 +103,7 @@ pub(crate) fn modifier_offset<F>(x: Dp, y: Dp, child: F)
 where
     F: FnOnce(),
 {
-    measure(move |input| {
-        let child_id = input
-            .children_ids
-            .first()
-            .copied()
-            .expect("modifier_offset expects exactly one child");
-
-        let parent_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let child_measurements = input.measure_children(vec![(child_id, parent_constraint)])?;
-        let child_measurement = *child_measurements
-            .get(&child_id)
-            .expect("Child measurement missing");
-
-        input.place_child(child_id, PxPosition::new(x.into(), y.into()));
-
-        Ok(child_measurement)
-    });
+    layout(OffsetLayout { x, y });
 
     child();
 }
@@ -162,25 +116,9 @@ pub(crate) fn modifier_constraints<F>(
 ) where
     F: FnOnce(),
 {
-    measure(move |input| {
-        let child_id = input
-            .children_ids
-            .first()
-            .copied()
-            .expect("modifier_constraints expects exactly one child");
-
-        let parent_width = input.parent_constraint.width();
-        let parent_height = input.parent_constraint.height();
-        let constraint = Constraint::new(
-            width_override.unwrap_or(parent_width),
-            height_override.unwrap_or(parent_height),
-        )
-        .merge(input.parent_constraint);
-
-        let child_measurement = input.measure_child(child_id, &constraint)?;
-        input.place_child(child_id, PxPosition::ZERO);
-
-        Ok(child_measurement)
+    layout(ConstraintLayout {
+        width_override,
+        height_override,
     });
 
     child();
@@ -191,11 +129,132 @@ pub(crate) fn modifier_minimum_interactive_size<F>(child: F)
 where
     F: FnOnce(),
 {
-    const MIN_SIZE: Dp = Dp(48.0);
+    layout(MinimumInteractiveLayout);
 
-    measure(move |input| {
+    child();
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct PaddingLayout {
+    padding: Padding,
+}
+
+impl LayoutSpec for PaddingLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
         let child_id = input
-            .children_ids
+            .children_ids()
+            .first()
+            .copied()
+            .expect("modifier_padding expects exactly one child");
+
+        let left_px: Px = self.padding.left.into();
+        let top_px: Px = self.padding.top.into();
+        let right_px: Px = self.padding.right.into();
+        let bottom_px: Px = self.padding.bottom.into();
+
+        let parent_constraint = Constraint::new(
+            input.parent_constraint().width(),
+            input.parent_constraint().height(),
+        );
+        let constraint = Constraint::new(
+            shrink_dimension(parent_constraint.width, left_px, right_px),
+            shrink_dimension(parent_constraint.height, top_px, bottom_px),
+        );
+
+        let child_measurement = input.measure_child(child_id, &constraint)?;
+        let content_width = child_measurement.width + left_px + right_px;
+        let content_height = child_measurement.height + top_px + bottom_px;
+        output.place_child(child_id, PxPosition::new(left_px, top_px));
+
+        Ok(ComputedData {
+            width: content_width,
+            height: content_height,
+        })
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct OffsetLayout {
+    x: Dp,
+    y: Dp,
+}
+
+impl LayoutSpec for OffsetLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let child_id = input
+            .children_ids()
+            .first()
+            .copied()
+            .expect("modifier_offset expects exactly one child");
+
+        let parent_constraint = Constraint::new(
+            input.parent_constraint().width(),
+            input.parent_constraint().height(),
+        );
+        let child_measurements = input.measure_children(vec![(child_id, parent_constraint)])?;
+        let child_measurement = *child_measurements
+            .get(&child_id)
+            .expect("Child measurement missing");
+
+        output.place_child(child_id, PxPosition::new(self.x.into(), self.y.into()));
+
+        Ok(child_measurement)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct ConstraintLayout {
+    width_override: Option<DimensionValue>,
+    height_override: Option<DimensionValue>,
+}
+
+impl LayoutSpec for ConstraintLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let child_id = input
+            .children_ids()
+            .first()
+            .copied()
+            .expect("modifier_constraints expects exactly one child");
+
+        let parent_width = input.parent_constraint().width();
+        let parent_height = input.parent_constraint().height();
+        let constraint = Constraint::new(
+            self.width_override.unwrap_or(parent_width),
+            self.height_override.unwrap_or(parent_height),
+        )
+        .merge(input.parent_constraint());
+
+        let child_measurement = input.measure_child(child_id, &constraint)?;
+        output.place_child(child_id, PxPosition::ZERO);
+
+        Ok(child_measurement)
+    }
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
+struct MinimumInteractiveLayout;
+
+impl LayoutSpec for MinimumInteractiveLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        const MIN_SIZE: Dp = Dp(48.0);
+        let child_id = input
+            .children_ids()
             .first()
             .copied()
             .expect("modifier_minimum_interactive_size expects exactly one child");
@@ -208,13 +267,11 @@ where
 
         let x = ((content_width - child_measurement.width) / 2).max(Px(0));
         let y = ((content_height - child_measurement.height) / 2).max(Px(0));
-        input.place_child(child_id, PxPosition::new(x, y));
+        output.place_child(child_id, PxPosition::new(x, y));
 
         Ok(ComputedData {
             width: content_width,
             height: content_height,
         })
-    });
-
-    child();
+    }
 }

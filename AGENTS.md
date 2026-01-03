@@ -30,11 +30,11 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 - Components are stateless Rust functions annotated with `#[tessera]`. Persistent UI state is created with `remember` (returned as `State<T>`) and can be passed around as `State<T>`.
 - Inside the component function:
-  - `measure`: Custom layout and measurement logic (optional)
+  - `layout`: Provide a layout spec for measurement (optional)
   - `input_handler`: Event and interaction handling (optional)
   - All child component closures must be executed to build the complete component tree
 
-**Automatic Injection**: `measure` and `input_handler` are injected by the macro and do not require manual import.
+**Automatic Injection**: `layout` and `input_handler` are injected by the macro and do not require manual import.
 
 ### Component Tree & Node Metadata
 
@@ -47,7 +47,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 - Use `Constraint` and `DimensionValue` to describe size constraints.
 - `measure_nodes` supports parallel measurement of multiple child nodes.
 - `place_node` is used to position child nodes.
-- Default layout: If `measure` is not called, all child nodes are stacked at (0,0), and the container size is the minimal bounding rectangle.
+- Default layout: If `layout` is not called, `DefaultLayoutSpec` stacks children at (0,0), and the container size is the minimal bounding rectangle.
 
 ---
 

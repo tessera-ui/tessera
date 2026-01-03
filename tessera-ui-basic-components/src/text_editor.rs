@@ -303,37 +303,43 @@ pub fn text_editor_with_controller(
                             ClickType::Single => {
                                 // Single click: position cursor
                                 controller.with_mut(|s| {
-                                    s.editor_mut().action(
-                                        &mut write_font_system(),
-                                        GlyphonAction::Click {
-                                            x: text_relative_pos.x.0,
-                                            y: text_relative_pos.y.0,
-                                        },
-                                    );
+                                    s.with_editor_mut(|editor| {
+                                        editor.action(
+                                            &mut write_font_system(),
+                                            GlyphonAction::Click {
+                                                x: text_relative_pos.x.0,
+                                                y: text_relative_pos.y.0,
+                                            },
+                                        );
+                                    });
                                 });
                             }
                             ClickType::Double => {
                                 // Double click: select word
                                 controller.with_mut(|s| {
-                                    s.editor_mut().action(
-                                        &mut write_font_system(),
-                                        GlyphonAction::DoubleClick {
-                                            x: text_relative_pos.x.0,
-                                            y: text_relative_pos.y.0,
-                                        },
-                                    );
+                                    s.with_editor_mut(|editor| {
+                                        editor.action(
+                                            &mut write_font_system(),
+                                            GlyphonAction::DoubleClick {
+                                                x: text_relative_pos.x.0,
+                                                y: text_relative_pos.y.0,
+                                            },
+                                        );
+                                    });
                                 });
                             }
                             ClickType::Triple => {
                                 // Triple click: select line
                                 controller.with_mut(|s| {
-                                    s.editor_mut().action(
-                                        &mut write_font_system(),
-                                        GlyphonAction::TripleClick {
-                                            x: text_relative_pos.x.0,
-                                            y: text_relative_pos.y.0,
-                                        },
-                                    );
+                                    s.with_editor_mut(|editor| {
+                                        editor.action(
+                                            &mut write_font_system(),
+                                            GlyphonAction::TripleClick {
+                                                x: text_relative_pos.x.0,
+                                                y: text_relative_pos.y.0,
+                                            },
+                                        );
+                                    });
                                 });
                             }
                         }
@@ -362,13 +368,15 @@ pub fn text_editor_with_controller(
                     if last_pos_px != Some(current_pos_px) {
                         // Extend selection by dragging
                         controller.with_mut(|s| {
-                            s.editor_mut().action(
-                                &mut write_font_system(),
-                                GlyphonAction::Drag {
-                                    x: current_pos_px.x.0,
-                                    y: current_pos_px.y.0,
-                                },
-                            );
+                            s.with_editor_mut(|editor| {
+                                editor.action(
+                                    &mut write_font_system(),
+                                    GlyphonAction::Drag {
+                                        x: current_pos_px.x.0,
+                                        y: current_pos_px.y.0,
+                                    },
+                                );
+                            });
                         });
 
                         // Update last position to current position
@@ -402,7 +410,9 @@ pub fn text_editor_with_controller(
                     // Scroll up for positive, down for negative
                     let action = GlyphonAction::Scroll { pixels: scroll };
                     controller.with_mut(|s| {
-                        s.editor_mut().action(&mut write_font_system(), action);
+                        s.with_editor_mut(|editor| {
+                            editor.action(&mut write_font_system(), action);
+                        });
                     });
                 }
             }
@@ -431,19 +441,20 @@ pub fn text_editor_with_controller(
 
             if let Some(_index) = select_all_event_index {
                 controller.with_mut(|s| {
-                    let editor = s.editor_mut();
-                    // Set cursor to the beginning of the document
-                    editor.set_cursor(glyphon::Cursor::new(0, 0));
-                    // Set selection to start from the beginning
-                    editor.set_selection(glyphon::cosmic_text::Selection::Normal(
-                        glyphon::Cursor::new(0, 0),
-                    ));
-                    // Move cursor to the end, which extends the selection (use BufferEnd for full
-                    // document)
-                    editor.action(
-                        &mut write_font_system(),
-                        GlyphonAction::Motion(glyphon::cosmic_text::Motion::BufferEnd),
-                    );
+                    s.with_editor_mut(|editor| {
+                        // Set cursor to the beginning of the document
+                        editor.set_cursor(glyphon::Cursor::new(0, 0));
+                        // Set selection to start from the beginning
+                        editor.set_selection(glyphon::cosmic_text::Selection::Normal(
+                            glyphon::Cursor::new(0, 0),
+                        ));
+                        // Move cursor to the end, which extends the selection (use BufferEnd for
+                        // full document)
+                        editor.action(
+                            &mut write_font_system(),
+                            GlyphonAction::Motion(glyphon::cosmic_text::Motion::BufferEnd),
+                        );
+                    });
                 });
             } else {
                 // Original logic for other keys
@@ -549,7 +560,7 @@ fn handle_action(
     new_editor.action(&mut write_font_system(), action);
     let content_after_action = get_editor_content(&new_editor);
 
-    state.with_mut(|c| c.editor_mut().action(&mut write_font_system(), action));
+    state.with_mut(|c| c.with_editor_mut(|editor| editor.action(&mut write_font_system(), action)));
     let new_content = on_change(content_after_action);
 
     // Update editor content

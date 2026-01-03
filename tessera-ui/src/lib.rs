@@ -61,7 +61,7 @@
 //!
 //! Memoized state is implemented via macro-based control-flow analysis and
 //! cannot be used outside of functions marked with `#[tessera]`. It also must
-//! not be used inside measurement closures or event handler implementations.
+//! not be used inside layout specs or event handler implementations.
 //!
 //! `remember` handles most control flow situations, but it cannot guarantee
 //! stable identity inside loops. If you need to use memoized state within a
@@ -183,24 +183,59 @@
 //!
 //! # Layout
 //!
-//! Implement a measure closure to define a component's layout behavior.
+//! Implement a layout spec to define a component's layout behavior.
 //!
 //! ```
-//! use tessera_ui::tessera;
+//! use tessera_ui::{
+//!     Constraint, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px, PxPosition,
+//!     tessera,
+//! };
+//!
+//! #[derive(Clone, PartialEq)]
+//! struct DefaultLayout;
+//!
+//! impl LayoutSpec for DefaultLayout {
+//!     fn measure(
+//!         &self,
+//!         input: &LayoutInput<'_>,
+//!         output: &mut LayoutOutput<'_>,
+//!     ) -> Result<tessera_ui::ComputedData, MeasurementError> {
+//!         let parent_constraint = Constraint::new(
+//!             input.parent_constraint().width(),
+//!             input.parent_constraint().height(),
+//!         );
+//!         if input.children_ids().is_empty() {
+//!             return Ok(tessera_ui::ComputedData::min_from_constraint(
+//!                 &parent_constraint,
+//!             ));
+//!         }
+//!         let nodes_to_measure = input
+//!             .children_ids()
+//!             .iter()
+//!             .map(|&child_id| (child_id, parent_constraint))
+//!             .collect();
+//!         let sizes = input.measure_children(nodes_to_measure)?;
+//!         let mut final_width = Px(0);
+//!         let mut final_height = Px(0);
+//!         for (child_id, size) in sizes {
+//!             output.place_child(child_id, PxPosition::ZERO);
+//!             final_width = final_width.max(size.width);
+//!             final_height = final_height.max(size.height);
+//!         }
+//!         Ok(tessera_ui::ComputedData {
+//!             width: final_width,
+//!             height: final_height,
+//!         })
+//!     }
+//! }
 //!
 //! #[tessera]
 //! fn component() {
-//!     measure(|input| {
-//!         // measurement and layout implementation
-//!         # Ok(tessera_ui::ComputedData {
-//!         #     width: tessera_ui::Px::ZERO,
-//!         #       height: tessera_ui::Px::ZERO,
-//!         # })
-//!     });
+//!     layout(DefaultLayout);
 //! }
 //! ```
 //!
-//! For more details, see the [Layout Guide](https://tessera-ui.github.io/guide/component.html#measure-place).
+//! For more details, see the [Layout Guide](https://tessera-ui.github.io/guide/component.html#layout).
 #![deny(missing_docs, clippy::unwrap_used)]
 
 pub mod accessibility;
@@ -215,6 +250,7 @@ pub mod dyn_eq_compute;
 pub mod focus_state;
 mod ime_state;
 mod keyboard_state;
+pub mod layout;
 pub mod modifier;
 pub(crate) mod pipeline_cache;
 #[cfg(feature = "profiling")]
@@ -227,6 +263,9 @@ mod thread_utils;
 
 #[cfg(feature = "shard")]
 pub mod router;
+
+#[cfg(test)]
+mod test;
 
 pub use accesskit;
 pub use indextree::{Arena, NodeId};
@@ -241,12 +280,13 @@ pub use crate::{
     component_tree::{
         ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
         ComponentTree, ComputedData, Constraint, DimensionValue, ImeRequest, InputHandlerFn,
-        InputHandlerInput, MeasureFn, MeasureInput, MeasurementError, ParentConstraint,
+        InputHandlerInput, MeasurementError, ParentConstraint,
     },
     context::{Context, provide_context, use_context},
     cursor::{CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent},
     dp::Dp,
     focus_state::Focus,
+    layout::{DefaultLayoutSpec, LayoutInput, LayoutOutput, LayoutResult, LayoutSpec, RenderInput},
     modifier::{Modifier, ModifierChild, ModifierWrapper},
     px::{Px, PxPosition, PxRect, PxSize},
     renderer::{

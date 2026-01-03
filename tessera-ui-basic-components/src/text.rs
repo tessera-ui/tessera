@@ -5,8 +5,9 @@
 //! Display labels, headings, and other text content.
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, Modifier, Px, PxPosition, accesskit::Role, tessera,
-    use_context,
+    Color, ComputedData, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
+    MeasurementError, Modifier, Px, PxPosition, RenderInput, State, accesskit::Role, remember,
+    tessera, use_context,
 };
 
 use crate::{
@@ -132,29 +133,67 @@ pub fn text(args: impl Into<TextArgs>) {
 fn text_inner(text_args: TextArgs) {
     let inherited_style = use_context::<TextStyle>().get();
 
-    measure(move |input| {
-        let max_width: Option<Px> = match input.parent_constraint.width() {
+    let line_height = text_args
+        .line_height
+        .or(inherited_style.line_height)
+        .unwrap_or(Dp(text_args.size.0 * 1.2));
+    let cache = remember(TextLayoutCache::default);
+
+    layout(TextLayout {
+        text: text_args.text,
+        color: text_args.color,
+        size: text_args.size,
+        line_height,
+        cache,
+    });
+}
+
+#[derive(Clone, Default)]
+struct TextLayoutCache {
+    data: Option<TextData>,
+}
+
+#[derive(Clone)]
+struct TextLayout {
+    text: String,
+    color: Color,
+    size: Dp,
+    line_height: Dp,
+    cache: State<TextLayoutCache>,
+}
+
+impl PartialEq for TextLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text
+            && self.color == other.color
+            && self.size == other.size
+            && self.line_height == other.line_height
+    }
+}
+
+impl LayoutSpec for TextLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let max_width: Option<Px> = match input.parent_constraint().width() {
             DimensionValue::Fixed(w) => Some(w),
-            DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
-            DimensionValue::Fill { max, .. } => max, // Use max from Fill
+            DimensionValue::Wrap { max, .. } => max,
+            DimensionValue::Fill { max, .. } => max,
         };
 
-        let max_height: Option<Px> = match input.parent_constraint.height() {
+        let max_height: Option<Px> = match input.parent_constraint().height() {
             DimensionValue::Fixed(h) => Some(h),
-            DimensionValue::Wrap { max, .. } => max, // Use max from Wrap
-            DimensionValue::Fill { max, .. } => max, // Use max from Fill
+            DimensionValue::Wrap { max, .. } => max,
+            DimensionValue::Fill { max, .. } => max,
         };
-
-        let line_height = text_args
-            .line_height
-            .or(inherited_style.line_height)
-            .unwrap_or(Dp(text_args.size.0 * 1.2));
 
         let text_data = TextData::new(
-            text_args.text.clone(),
-            text_args.color,
-            text_args.size.to_pixels_f32(),
-            line_height.to_pixels_f32(),
+            self.text.clone(),
+            self.color,
+            self.size.to_pixels_f32(),
+            self.line_height.to_pixels_f32(),
             TextConstraint {
                 max_width: max_width.map(|px| px.to_f32()),
                 max_height: max_height.map(|px| px.to_f32()),
@@ -162,16 +201,23 @@ fn text_inner(text_args: TextArgs) {
         );
 
         let size = text_data.size;
-        let drawable = TextCommand {
-            data: text_data,
-            offset: PxPosition::ZERO,
-        };
-
-        input.metadata_mut().push_draw_command(drawable);
-
+        self.cache.with_mut(|cache| cache.data = Some(text_data));
         Ok(ComputedData {
             width: size[0].into(),
             height: size[1].into(),
         })
-    });
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        let mut metadata = input.metadata_mut();
+        let text_data = self
+            .cache
+            .with(|cache| cache.data.clone())
+            .expect("Text cache must be populated before record");
+        let drawable = TextCommand {
+            data: text_data,
+            offset: PxPosition::ZERO,
+        };
+        metadata.push_draw_command(drawable);
+    }
 }

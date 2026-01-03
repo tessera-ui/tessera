@@ -5,7 +5,8 @@
 //! Separate sections in lists, menus, and settings screens.
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px, tessera, use_context,
+    Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
+    MeasurementError, Px, RenderInput, tessera, use_context,
 };
 
 use crate::{pipelines::simple_rect::command::SimpleRectCommand, theme::MaterialTheme};
@@ -74,6 +75,58 @@ impl Default for DividerArgs {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum DividerOrientation {
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct DividerLayout {
+    thickness: Px,
+    color: Color,
+    orientation: DividerOrientation,
+}
+
+impl LayoutSpec for DividerLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let intrinsic = match self.orientation {
+            DividerOrientation::Horizontal => Constraint::new(
+                DimensionValue::FILLED,
+                DimensionValue::Fixed(self.thickness),
+            ),
+            DividerOrientation::Vertical => Constraint::new(
+                DimensionValue::Fixed(self.thickness),
+                DimensionValue::FILLED,
+            ),
+        };
+        let effective = intrinsic.merge(input.parent_constraint());
+
+        let (width, height) = match self.orientation {
+            DividerOrientation::Horizontal => (
+                resolve_dimension(effective.width, Px(0)),
+                resolve_dimension(effective.height, self.thickness),
+            ),
+            DividerOrientation::Vertical => (
+                resolve_dimension(effective.width, self.thickness),
+                resolve_dimension(effective.height, Px(0)),
+            ),
+        };
+
+        Ok(ComputedData { width, height })
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        input
+            .metadata_mut()
+            .push_draw_command(SimpleRectCommand { color: self.color });
+    }
+}
+
 /// # horizontal_divider
 ///
 /// Renders a horizontal divider line that fills the available width.
@@ -104,19 +157,10 @@ pub fn horizontal_divider(args: impl Into<DividerArgs>) {
     let thickness_px = resolve_thickness_px(args.thickness);
     let color = args.color;
 
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
-        let intrinsic =
-            Constraint::new(DimensionValue::FILLED, DimensionValue::Fixed(thickness_px));
-        let effective = intrinsic.merge(input.parent_constraint);
-
-        let width = resolve_dimension(effective.width, Px(0));
-        let height = resolve_dimension(effective.height, thickness_px);
-
-        input
-            .metadata_mut()
-            .push_draw_command(SimpleRectCommand { color });
-
-        Ok(ComputedData { width, height })
+    layout(DividerLayout {
+        thickness: thickness_px,
+        color,
+        orientation: DividerOrientation::Horizontal,
     });
 }
 
@@ -150,18 +194,9 @@ pub fn vertical_divider(args: impl Into<DividerArgs>) {
     let thickness_px = resolve_thickness_px(args.thickness);
     let color = args.color;
 
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
-        let intrinsic =
-            Constraint::new(DimensionValue::Fixed(thickness_px), DimensionValue::FILLED);
-        let effective = intrinsic.merge(input.parent_constraint);
-
-        let width = resolve_dimension(effective.width, thickness_px);
-        let height = resolve_dimension(effective.height, Px(0));
-
-        input
-            .metadata_mut()
-            .push_draw_command(SimpleRectCommand { color });
-
-        Ok(ComputedData { width, height })
+    layout(DividerLayout {
+        thickness: thickness_px,
+        color,
+        orientation: DividerOrientation::Vertical,
     });
 }

@@ -4,7 +4,10 @@
 //! size and color, suitable for marking text selections or other highlighted
 //! areas. For multi-line or complex selections, multiple highlight rectangles
 //! can be composed to cover the desired region.
-use tessera_ui::{Color, ComputedData, Px, tessera};
+use tessera_ui::{
+    Color, ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px, RenderInput,
+    tessera,
+};
 
 use crate::pipelines::shape::command::ShapeCommand;
 
@@ -30,17 +33,39 @@ pub fn selection_highlight_rect(
     height: Px,
     color: Color, // RGBA color with alpha for transparency
 ) {
-    measure(move |input| {
+    layout(SelectionHighlightLayout {
+        width,
+        height,
+        color,
+    });
+}
+#[derive(Clone, PartialEq)]
+struct SelectionHighlightLayout {
+    width: Px,
+    height: Px,
+    color: Color,
+}
+
+impl LayoutSpec for SelectionHighlightLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        Ok(ComputedData {
+            width: self.width,
+            height: self.height,
+        })
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
         let drawable = ShapeCommand::Rect {
-            color,
-            corner_radii: glam::Vec4::ZERO.into(), // Sharp corners for text selection
-            corner_g2: [3.0; 4],                   // g2-like corners
-            shadow: None,                          // No shadow for selection highlight
+            color: self.color,
+            corner_radii: glam::Vec4::ZERO.into(),
+            corner_g2: [3.0; 4],
+            shadow: None,
         };
 
         input.metadata_mut().push_draw_command(drawable);
-
-        // Return the specified size
-        Ok(ComputedData { width, height })
-    });
+    }
 }

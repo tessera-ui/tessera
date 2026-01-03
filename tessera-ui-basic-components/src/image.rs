@@ -7,7 +7,11 @@ use std::sync::Arc;
 
 use derive_setters::Setters;
 use image::GenericImageView;
-use tessera_ui::{ComputedData, DimensionValue, Modifier, Px, tessera};
+use tessera_ui::{
+    ComputedData, DimensionValue, MeasurementError, Modifier, Px,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    tessera,
+};
 
 use crate::pipelines::image::command::ImageCommand;
 
@@ -80,6 +84,58 @@ impl From<ImageData> for ImageArgs {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct ImageLayout {
+    data: Arc<ImageData>,
+}
+
+impl LayoutSpec for ImageLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let intrinsic_width = Px(self.data.width as i32);
+        let intrinsic_height = Px(self.data.height as i32);
+
+        let width = match input.parent_constraint().width() {
+            DimensionValue::Fixed(value) => value,
+            DimensionValue::Wrap { min, max } => min
+                .unwrap_or(Px(0))
+                .max(intrinsic_width)
+                .min(max.unwrap_or(Px::MAX)),
+            DimensionValue::Fill { min, max } => max
+                .expect("Seems that you are trying to fill an infinite width, which is not allowed")
+                .max(min.unwrap_or(Px(0)))
+                .max(intrinsic_width),
+        };
+
+        let height = match input.parent_constraint().height() {
+            DimensionValue::Fixed(value) => value,
+            DimensionValue::Wrap { min, max } => min
+                .unwrap_or(Px(0))
+                .max(intrinsic_height)
+                .min(max.unwrap_or(Px::MAX)),
+            DimensionValue::Fill { min, max } => max
+                .expect(
+                    "Seems that you are trying to fill an infinite height, which is not allowed",
+                )
+                .max(min.unwrap_or(Px(0)))
+                .max(intrinsic_height),
+        };
+
+        Ok(ComputedData { width, height })
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        let image_command = ImageCommand {
+            data: self.data.clone(),
+            opacity: 1.0,
+        };
+        input.metadata_mut().push_draw_command(image_command);
+    }
+}
+
 /// # image
 ///
 /// Renders a raster image, fitting it to the available space or its intrinsic
@@ -120,47 +176,6 @@ pub fn image(args: impl Into<ImageArgs>) {
 
 #[tessera]
 fn image_inner(args: ImageArgs) {
-    measure(move |input| {
-        let intrinsic_width = Px(args.data.width as i32);
-        let intrinsic_height = Px(args.data.height as i32);
-
-        let width = match input.parent_constraint.width() {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(intrinsic_width)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => max
-                .expect("Seems that you are trying to fill an infinite width, which is not allowed")
-                .max(min.unwrap_or(Px(0)))
-                .max(intrinsic_width),
-        };
-
-        let height = match input.parent_constraint.height() {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(intrinsic_height)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => max
-                .expect(
-                    "Seems that you are trying to fill an infinite height, which is not allowed",
-                )
-                .max(min.unwrap_or(Px(0)))
-                .max(intrinsic_height),
-        };
-
-        let image_command = ImageCommand {
-            data: args.data.clone(),
-            opacity: 1.0,
-        };
-
-        input
-            .metadatas
-            .entry(input.current_node_id)
-            .or_default()
-            .push_draw_command(image_command);
-
-        Ok(ComputedData { width, height })
-    });
+    let data = args.data;
+    layout(ImageLayout { data });
 }

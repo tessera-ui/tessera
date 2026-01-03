@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use closure::closure;
 use tessera_ui::{
-    Color, ComputedData, Constraint, Dp, MeasurementError, Modifier, Px, PxPosition, State,
-    remember,
+    Color, Dp, Modifier, State, remember,
     router::{Router, router_root},
     shard, tessera, use_context,
 };
@@ -78,38 +77,11 @@ const NAVIGATION_RAIL_BREAKPOINT: Dp = Dp(600.0);
 
 #[tessera]
 fn measure_parent_width(width_state: State<Dp>, child: impl FnOnce() + Send + Sync + 'static) {
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
-        if input.children_ids.is_empty() {
-            return Ok(ComputedData::ZERO);
+    input_handler(move |input| {
+        let width = Dp::from(input.computed_data.width);
+        if width_state.get() != width {
+            width_state.set(width);
         }
-
-        let child_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        let children_to_measure: Vec<_> = input
-            .children_ids
-            .iter()
-            .map(|&child_id| (child_id, child_constraint))
-            .collect();
-        let children_results = input.measure_children(children_to_measure)?;
-
-        let mut max_child_width = Px::ZERO;
-        let mut max_child_height = Px::ZERO;
-        for &child_id in input.children_ids.iter() {
-            if let Some(child_size) = children_results.get(&child_id) {
-                max_child_width = max_child_width.max(child_size.width);
-                max_child_height = max_child_height.max(child_size.height);
-            }
-            input.place_child(child_id, PxPosition::new(Px::ZERO, Px::ZERO));
-        }
-
-        width_state.set(Dp::from(max_child_width));
-
-        Ok(ComputedData {
-            width: max_child_width,
-            height: max_child_height,
-        })
     });
 
     child();

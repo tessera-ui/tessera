@@ -11,8 +11,9 @@ use std::{
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, Modifier, Px, PxPosition, State, provide_context,
-    remember, tessera, use_context, winit,
+    Color, ComputedData, DimensionValue, Dp, MeasurementError, Modifier, Px, PxPosition, State,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    provide_context, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -241,18 +242,7 @@ fn dialog_content_wrapper(
     padding: Dp,
     content: impl FnOnce() + Send + Sync + 'static,
 ) {
-    measure(move |input| {
-        input.set_opacity(alpha);
-        let Some(child_id) = input.children_ids.first().copied() else {
-            return Ok(ComputedData {
-                width: Px(0),
-                height: Px(0),
-            });
-        };
-        let computed = input.measure_child_in_parent_constraint(child_id)?;
-        input.place_child(child_id, PxPosition::ZERO);
-        Ok(computed)
-    });
+    layout(DialogContentLayout { alpha });
 
     boxed(
         BoxedArgs::default()
@@ -314,6 +304,33 @@ fn dialog_content_wrapper(
             });
         },
     );
+}
+
+#[derive(Clone, PartialEq)]
+struct DialogContentLayout {
+    alpha: f32,
+}
+
+impl LayoutSpec for DialogContentLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let Some(child_id) = input.children_ids().first().copied() else {
+            return Ok(ComputedData {
+                width: Px(0),
+                height: Px(0),
+            });
+        };
+        let computed = input.measure_child_in_parent_constraint(child_id)?;
+        output.place_child(child_id, PxPosition::ZERO);
+        Ok(computed)
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        input.metadata_mut().opacity *= self.alpha;
+    }
 }
 
 /// # dialog_provider

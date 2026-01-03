@@ -7,8 +7,13 @@ use std::sync::Arc;
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, Px, PxPosition, SampleRegion,
-    State, accesskit::Role, remember, renderer::DrawCommand, tessera,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    PxPosition, SampleRegion, State,
+    accesskit::Role,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    remember,
+    renderer::DrawCommand,
+    tessera,
 };
 
 use crate::{
@@ -362,32 +367,53 @@ fn fluid_glass_inner(
         args.ripple_strength = Some(progress);
     }
     (child)();
-    let args_measure_clone = args.clone();
-    measure(move |input| {
+    layout(FluidGlassLayout { args: args.clone() });
+
+    if args.on_click.is_none() && args.block_input {
+        let args_for_handler = args.clone();
+        input_handler(move |mut input: tessera_ui::InputHandlerInput| {
+            if args_for_handler.block_input {
+                handle_block_input(&mut input);
+            }
+        });
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct FluidGlassLayout {
+    args: FluidGlassArgs,
+}
+
+impl LayoutSpec for FluidGlassLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
         let effective_glass_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
+            input.parent_constraint().width(),
+            input.parent_constraint().height(),
         );
 
         let child_constraint = Constraint::new(
             remove_padding_from_dimension(
                 effective_glass_constraint.width,
-                args_measure_clone.padding.into(),
+                self.args.padding.into(),
             ),
             remove_padding_from_dimension(
                 effective_glass_constraint.height,
-                args_measure_clone.padding.into(),
+                self.args.padding.into(),
             ),
         );
 
-        let child_measurement = if !input.children_ids.is_empty() {
+        let child_measurement = if !input.children_ids().is_empty() {
             let child_measurement =
-                input.measure_child(input.children_ids[0], &child_constraint)?;
-            input.place_child(
-                input.children_ids[0],
+                input.measure_child(input.children_ids()[0], &child_constraint)?;
+            output.place_child(
+                input.children_ids()[0],
                 PxPosition {
-                    x: args.padding.into(),
-                    y: args.padding.into(),
+                    x: self.args.padding.into(),
+                    y: self.args.padding.into(),
                 },
             );
             child_measurement
@@ -398,32 +424,7 @@ fn fluid_glass_inner(
             }
         };
 
-        if args.blur_radius > Dp(0.0) {
-            let blur_command =
-                DualBlurCommand::horizontal_then_vertical(args.blur_radius.to_pixels_f32());
-            let mut metadata = input.metadata_mut();
-            metadata.push_compute_command(blur_command);
-        }
-
-        if let Some(contrast_value) = args.contrast
-            && contrast_value != 1.0
-        {
-            let mean_command =
-                MeanCommand::new(input.gpu, &mut input.compute_resource_manager.write());
-            let contrast_command =
-                ContrastCommand::new(contrast_value, mean_command.result_buffer_ref());
-            let mut metadata = input.metadata_mut();
-            metadata.push_compute_command(mean_command);
-            metadata.push_compute_command(contrast_command);
-        }
-
-        let drawable = FluidGlassCommand {
-            args: args_measure_clone.clone(),
-        };
-
-        input.metadata_mut().push_draw_command(drawable);
-
-        let padding_px: Px = args_measure_clone.padding.into();
+        let padding_px: Px = self.args.padding.into();
         let min_width = child_measurement.width + padding_px * 2;
         let min_height = child_measurement.height + padding_px * 2;
         let width = match effective_glass_constraint.width {
@@ -450,15 +451,34 @@ fn fluid_glass_inner(
                 .max(min_height)
                 .max(min.unwrap_or(Px(0))),
         };
-        Ok(ComputedData { width, height })
-    });
 
-    if args.on_click.is_none() && args.block_input {
-        let args_for_handler = args.clone();
-        input_handler(move |mut input: tessera_ui::InputHandlerInput| {
-            if args_for_handler.block_input {
-                handle_block_input(&mut input);
-            }
-        });
+        Ok(ComputedData { width, height })
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        if self.args.blur_radius > Dp(0.0) {
+            let blur_command =
+                DualBlurCommand::horizontal_then_vertical(self.args.blur_radius.to_pixels_f32());
+            let mut metadata = input.metadata_mut();
+            metadata.push_compute_command(blur_command);
+        }
+
+        if let Some(contrast_value) = self.args.contrast
+            && contrast_value != 1.0
+        {
+            let mean_command =
+                MeanCommand::new(input.gpu, &mut input.compute_resource_manager.write());
+            let contrast_command =
+                ContrastCommand::new(contrast_value, mean_command.result_buffer_ref());
+            let mut metadata = input.metadata_mut();
+            metadata.push_compute_command(mean_command);
+            metadata.push_compute_command(contrast_command);
+        }
+
+        let drawable = FluidGlassCommand {
+            args: self.args.clone(),
+        };
+
+        input.metadata_mut().push_draw_command(drawable);
     }
 }

@@ -10,8 +10,10 @@ use std::{
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, PressKeyEventType, Px,
-    PxPosition, State, remember, tessera, use_context, winit,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
+    Modifier, PressKeyEventType, Px, PxPosition, State,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -366,18 +368,24 @@ fn handle_drag_gestures(
 /// Place bottom sheet if present. Extracted to reduce complexity of the parent
 /// function.
 fn place_bottom_sheet_if_present(
-    input: &tessera_ui::MeasureInput<'_>,
-    controller_for_measure: State<BottomSheetController>,
+    input: &LayoutInput<'_>,
+    output: &mut LayoutOutput<'_>,
+    is_open: bool,
+    drag_offset: f32,
     progress: f32,
 ) {
-    if input.children_ids.len() <= 2 {
+    if input.children_ids().len() <= 2 {
         return;
     }
 
-    let bottom_sheet_id = input.children_ids[2];
+    let bottom_sheet_id = input.children_ids()[2];
 
-    let parent_width = input.parent_constraint.width().get_max().unwrap_or(Px(0));
-    let parent_height = input.parent_constraint.height().get_max().unwrap_or(Px(0));
+    let parent_width = input.parent_constraint().width().get_max().unwrap_or(Px(0));
+    let parent_height = input
+        .parent_constraint()
+        .height()
+        .get_max()
+        .unwrap_or(Px(0));
 
     // M3 Spec: Max width 640dp.
     let max_width_px = Dp(640.0).to_px();
@@ -410,12 +418,11 @@ fn place_bottom_sheet_if_present(
         Err(_) => return,
     };
 
-    let (current_is_open, _, drag_offset) = controller_for_measure.with(|c| c.snapshot());
     let y = compute_bottom_sheet_y(
         parent_height,
         child_size.height,
         progress,
-        current_is_open,
+        is_open,
         drag_offset,
     );
 
@@ -425,7 +432,7 @@ fn place_bottom_sheet_if_present(
         Px(0)
     };
 
-    input.place_child(bottom_sheet_id, PxPosition::new(x, Px(y)));
+    output.place_child(bottom_sheet_id, PxPosition::new(x, Px(y)));
 }
 
 #[derive(Clone)]
@@ -618,7 +625,7 @@ pub fn bottom_sheet_provider_with_controller(
     main_content();
 
     // Snapshot state to minimize locking overhead.
-    let (is_open, timer_opt, _) = controller.with(|c| c.snapshot());
+    let (is_open, timer_opt, drag_offset) = controller.with(|c| c.snapshot());
 
     if !(is_open || timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME)) {
         return;
@@ -639,21 +646,38 @@ pub fn bottom_sheet_provider_with_controller(
         args.on_close_request.clone(),
     );
 
-    let measure_closure = Box::new(move |input: &tessera_ui::MeasureInput<'_>| {
-        let main_content_id = input.children_ids[0];
-        let main_content_size = input.measure_child_in_parent_constraint(main_content_id)?;
-        input.place_child(main_content_id, PxPosition::new(Px(0), Px(0)));
+    layout(BottomSheetLayout {
+        progress,
+        is_open,
+        drag_offset,
+    });
+}
 
-        if input.children_ids.len() > 1 {
-            let scrim_id = input.children_ids[1];
+#[derive(Clone, PartialEq)]
+struct BottomSheetLayout {
+    progress: f32,
+    is_open: bool,
+    drag_offset: f32,
+}
+
+impl LayoutSpec for BottomSheetLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let main_content_id = input.children_ids()[0];
+        let main_content_size = input.measure_child_in_parent_constraint(main_content_id)?;
+        output.place_child(main_content_id, PxPosition::new(Px(0), Px(0)));
+
+        if input.children_ids().len() > 1 {
+            let scrim_id = input.children_ids()[1];
             input.measure_child_in_parent_constraint(scrim_id)?;
-            input.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
+            output.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
         }
 
-        place_bottom_sheet_if_present(input, controller, progress);
+        place_bottom_sheet_if_present(input, output, self.is_open, self.drag_offset, self.progress);
 
-        // Return main content size to satisfy closure type.
         Ok(main_content_size)
-    });
-    measure(measure_closure);
+    }
 }

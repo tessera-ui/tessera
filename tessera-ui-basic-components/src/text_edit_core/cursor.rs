@@ -5,12 +5,49 @@
 //! blinks at regular intervals to maintain user attention.
 use std::time::Instant;
 
-use tessera_ui::{Color, ComputedData, Dp, Px, tessera};
+use tessera_ui::{
+    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px,
+    RenderInput, tessera,
+};
 
 use crate::pipelines::shape::command::ShapeCommand;
 
 /// Width of the text cursor in device-independent pixels.
 pub(crate) const CURSOR_WIDRH: Dp = Dp(2.5);
+
+#[derive(Clone, PartialEq)]
+struct CursorLayout {
+    height: Px,
+    visible: bool,
+}
+
+impl LayoutSpec for CursorLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        Ok(ComputedData {
+            width: CURSOR_WIDRH.into(),
+            height: self.height,
+        })
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        if !self.visible {
+            return;
+        }
+
+        let drawable = ShapeCommand::Rect {
+            color: Color::BLACK,
+            corner_radii: glam::Vec4::ZERO.into(),
+            corner_g2: [3.0; 4],
+            shadow: None,
+        };
+
+        input.metadata_mut().push_draw_command(drawable);
+    }
+}
 
 /// A blinking cursor component for text editing interfaces.
 ///
@@ -26,28 +63,10 @@ pub(crate) const CURSOR_WIDRH: Dp = Dp(2.5);
 /// * `bink_timer` - Timer used to control the blinking animation cycle
 #[tessera]
 pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
-    // Skip rendering the cursor during the "off" phase of the blink cycle
-    // to create the blinking effect (visible for 500ms, hidden for 500ms)
-    if bink_timer.elapsed().as_millis() % 1000 < 500 {
-        return;
-    }
+    let visible = bink_timer.elapsed().as_millis() % 1000 >= 500;
 
-    measure(move |input| {
-        // Create a rectangular cursor shape with fixed width and variable height
-        let drawable = ShapeCommand::Rect {
-            color: Color::BLACK,
-            corner_radii: glam::Vec4::ZERO.into(),
-            corner_g2: [3.0; 4], // Use G2-like corners
-            shadow: None,
-        };
-
-        // Add the cursor drawable to the component's metadata for rendering
-        input.metadata_mut().push_draw_command(drawable);
-
-        // Return the computed dimensions for layout calculation
-        Ok(ComputedData {
-            width: CURSOR_WIDRH.into(),
-            height: height_px,
-        })
+    layout(CursorLayout {
+        height: height_px,
+        visible,
     });
 }

@@ -8,9 +8,11 @@ use std::sync::Arc;
 use derive_setters::Setters;
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, CursorEvent, CursorEventContent, DimensionValue, Dp, Modifier,
-    ParentConstraint, Px, PxPosition, PxSize, State, accesskit::Role, remember, tessera,
-    use_context, winit,
+    Color, ComputedData, CursorEvent, CursorEventContent, DimensionValue, Dp, MeasurementError,
+    Modifier, ParentConstraint, Px, PxPosition, PxSize, State,
+    accesskit::Role,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -281,6 +283,75 @@ impl Default for MenuBounds {
     }
 }
 
+#[derive(Clone)]
+struct MenuLayout {
+    placement: MenuPlacement,
+    offset: [Dp; 2],
+    anchor: Option<MenuAnchor>,
+    bounds: Arc<RwLock<Option<MenuBounds>>>,
+}
+
+impl PartialEq for MenuLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.placement == other.placement
+            && self.offset == other.offset
+            && self.anchor == other.anchor
+    }
+}
+
+impl LayoutSpec for MenuLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let main_content_id = input
+            .children_ids()
+            .first()
+            .copied()
+            .expect("main content should exist");
+        let main_size = input.measure_child_in_parent_constraint(main_content_id)?;
+        output.place_child(main_content_id, PxPosition::new(Px::ZERO, Px::ZERO));
+
+        let background_id = input
+            .children_ids()
+            .get(1)
+            .copied()
+            .expect("menu background should exist");
+        let menu_id = input
+            .children_ids()
+            .get(2)
+            .copied()
+            .expect("menu surface should exist");
+
+        let background_size = input.measure_child_in_parent_constraint(background_id)?;
+        output.place_child(background_id, PxPosition::new(Px::ZERO, Px::ZERO));
+
+        let menu_size = input.measure_child_in_parent_constraint(menu_id)?;
+        let available = if background_size.width > Px::ZERO && background_size.height > Px::ZERO {
+            background_size
+        } else {
+            extract_available_size(input.parent_constraint())
+        };
+        let anchor = self.anchor.unwrap_or_else(|| {
+            MenuAnchor::new(
+                PxPosition::ZERO,
+                PxSize::new(main_size.width, main_size.height),
+            )
+        });
+        let menu_position =
+            resolve_menu_position(anchor, self.placement, menu_size, available, self.offset);
+        output.place_child(menu_id, menu_position);
+
+        *self.bounds.write() = Some(MenuBounds {
+            origin: menu_position,
+            size: menu_size,
+        });
+
+        Ok(main_size)
+    }
+}
+
 fn resolve_menu_position(
     anchor: MenuAnchor,
     placement: MenuPlacement,
@@ -527,13 +598,17 @@ pub fn menu_provider_with_controller(
                     color: args.container_color,
                 })
                 .shape(args.shape)
-                .modifier(args.modifier.constrain(
-                    None,
-                    Some(DimensionValue::Wrap {
-                        min: None,
-                        max: args.max_height,
-                    }),
-                ))
+                .modifier(
+                    args.modifier
+                        .constrain(
+                            None,
+                            Some(DimensionValue::Wrap {
+                                min: None,
+                                max: args.max_height,
+                            }),
+                        )
+                        .clip_to_bounds(),
+                )
                 .accessibility_role(Role::Menu)
                 .block_input(true)
                 .elevation(args.elevation)
@@ -588,61 +663,11 @@ pub fn menu_provider_with_controller(
     });
 
     // Measurement: place main content, background, and menu based on anchor.
-    let args_for_measure = args.clone();
-    measure(move |input| {
-        let main_content_id = input
-            .children_ids
-            .first()
-            .copied()
-            .expect("main content should exist");
-        let main_size = input.measure_child_in_parent_constraint(main_content_id)?;
-        input.place_child(main_content_id, PxPosition::new(Px::ZERO, Px::ZERO));
-
-        let background_id = input
-            .children_ids
-            .get(1)
-            .copied()
-            .expect("menu background should exist");
-        let menu_id = input
-            .children_ids
-            .get(2)
-            .copied()
-            .expect("menu surface should exist");
-
-        let background_size = input.measure_child_in_parent_constraint(background_id)?;
-        input.place_child(background_id, PxPosition::new(Px::ZERO, Px::ZERO));
-
-        let menu_size = input.measure_child_in_parent_constraint(menu_id)?;
-        let available = if background_size.width > Px::ZERO && background_size.height > Px::ZERO {
-            background_size
-        } else {
-            extract_available_size(input.parent_constraint)
-        };
-        let anchor = anchor.unwrap_or_else(|| {
-            MenuAnchor::new(
-                PxPosition::ZERO,
-                PxSize::new(main_size.width, main_size.height),
-            )
-        });
-        let menu_position = resolve_menu_position(
-            anchor,
-            args_for_measure.placement,
-            menu_size,
-            available,
-            args_for_measure.offset,
-        );
-        input.place_child(menu_id, menu_position);
-
-        if let Some(mut metadata) = input.metadatas.get_mut(&menu_id) {
-            metadata.clips_children = true;
-        }
-
-        *bounds.write() = Some(MenuBounds {
-            origin: menu_position,
-            size: menu_size,
-        });
-
-        Ok(main_size)
+    layout(MenuLayout {
+        placement: args.placement,
+        offset: args.offset,
+        anchor,
+        bounds,
     });
 }
 

@@ -19,12 +19,16 @@ use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityNode, AccessibilityPadding},
     cursor::CursorEvent,
     dp::Dp,
+    layout::{LayoutInput, LayoutOutput, LayoutResult, LayoutSpecDyn},
     px::{PxPosition, PxSize},
     renderer::Command,
-    runtime::{RuntimePhase, push_current_node, push_phase},
+    runtime::{LayoutCacheEntry, RuntimePhase, push_current_node, push_phase},
 };
 
-use super::constraint::{Constraint, DimensionValue, ParentConstraint};
+use super::{
+    LayoutContext,
+    constraint::{Constraint, DimensionValue, ParentConstraint},
+};
 
 #[cfg(feature = "profiling")]
 use crate::profiler::{Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
@@ -261,13 +265,13 @@ pub struct ComponentNode {
     pub fn_name: String,
     /// Stable logic identifier for the component function.
     pub logic_id: u64,
-    /// Describes the component in layout.
-    /// None means using default measure policy which places children at the
-    /// top-left corner of the parent node, with no offset.
-    pub measure_fn: Option<Box<MeasureFn>>,
+    /// Stable instance identifier for this node in the current frame.
+    pub instance_key: u64,
     /// Describes the input handler for the component.
     /// This is used to handle state changes.
     pub input_handler_fn: Option<Box<InputHandlerFn>>,
+    /// Pure layout spec for skipping and record passes.
+    pub layout_spec: Box<dyn LayoutSpecDyn>,
 }
 
 /// Contains metadata of the component node.
@@ -275,6 +279,8 @@ pub struct ComponentNodeMetaData {
     /// The computed data (size) of the node.
     /// None if the node is not computed yet.
     pub computed_data: Option<ComputedData>,
+    /// Whether the layout cache was hit for this node in the current frame.
+    pub layout_cache_hit: bool,
     /// The node's start position, relative to its parent.
     /// None if the node is not placed yet.
     pub rel_position: Option<PxPosition>,
@@ -307,6 +313,7 @@ impl ComponentNodeMetaData {
     pub fn none() -> Self {
         Self {
             computed_data: None,
+            layout_cache_hit: false,
             rel_position: None,
             abs_position: None,
             event_clip_rect: None,
@@ -363,136 +370,13 @@ pub enum MeasurementError {
     /// Indicates that metadata for the specified node was not found (currently
     /// not a primary error source in measure_node).
     NodeNotFoundInMeta,
-    /// Indicates that the custom measure function (`MeasureFn`) for a node
-    /// failed. Contains a string detailing the failure.
+    /// Indicates that the layout spec for a node failed. Contains a string
+    /// detailing the failure.
     MeasureFnFailed(String),
-    /// Indicates that the measurement of a child node failed during a parent's
-    /// layout calculation (e.g., in `DEFAULT_LAYOUT_DESC`). Contains the
-    /// `NodeId` of the child that failed.
+    /// Indicates that the measurement of a child node failed during a
+    /// parent's layout calculation. Contains the `NodeId` of the child
+    /// that failed.
     ChildMeasurementFailed(NodeId),
-}
-
-/// A `MeasureFn` is a function that takes an input `Constraint` and its
-/// children nodes, finishes placementing inside, and returns its size
-/// (`ComputedData`) or an error.
-pub type MeasureFn =
-    dyn Fn(&MeasureInput<'_>) -> Result<ComputedData, MeasurementError> + Send + Sync;
-
-/// Input for the measure function (`MeasureFn`).
-pub struct MeasureInput<'a> {
-    /// The `NodeId` of the current node being measured.
-    pub current_node_id: indextree::NodeId,
-    /// The component tree containing all nodes.
-    pub tree: &'a ComponentNodeTree,
-    /// The effective constraint for this node, merged with its parent's
-    /// constraint.
-    pub parent_constraint: ParentConstraint<'a>,
-    /// The children nodes of the current node.
-    pub children_ids: &'a [indextree::NodeId],
-    /// Metadata for all component nodes, used to access cached data and
-    /// constraints.
-    pub metadatas: &'a ComponentNodeMetaDatas,
-    /// Compute resources manager
-    pub compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
-    /// Gpu device
-    pub gpu: &'a wgpu::Device,
-}
-
-impl<'a> MeasureInput<'a> {
-    /// Returns a mutable reference to the metadata of the current node.
-    ///
-    /// This is a convenience method that simplifies accessing the current
-    /// node's metadata from within a `measure` function. It encapsulates
-    /// the `DashMap::get_mut` call and panics if the metadata is not found,
-    /// as it's an invariant that it must exist.
-    pub fn metadata_mut(&self) -> dashmap::mapref::one::RefMut<'_, NodeId, ComponentNodeMetaData> {
-        self.metadatas
-            .get_mut(&self.current_node_id)
-            .expect("Metadata for current node must exist during measure")
-    }
-
-    /// Measures all specified child nodes under the given constraint.
-    ///
-    /// Returns a map of each child's computed layout data, or the first
-    /// measurement error encountered.
-    pub fn measure_children(
-        &self,
-        nodes_to_measure: Vec<(NodeId, Constraint)>,
-    ) -> Result<HashMap<NodeId, ComputedData>, MeasurementError> {
-        let results = measure_nodes(
-            nodes_to_measure,
-            self.tree,
-            self.metadatas,
-            self.compute_resource_manager.clone(),
-            self.gpu,
-        );
-
-        let mut successful_results = HashMap::new();
-        for (child_id, result) in results {
-            match result {
-                Ok(size) => successful_results.insert(child_id, size),
-                Err(e) => {
-                    debug!("Measurement error for child {child_id:?}: {e:?}");
-                    return Err(e);
-                }
-            };
-        }
-        Ok(successful_results)
-    }
-
-    /// Measures a single child node under the given constraint.
-    ///
-    /// Returns the computed layout data or a measurement error.
-    pub fn measure_child(
-        &self,
-        child_id: NodeId,
-        constraint: &Constraint,
-    ) -> Result<ComputedData, MeasurementError> {
-        measure_node(
-            child_id,
-            constraint,
-            self.tree,
-            self.metadatas,
-            self.compute_resource_manager.clone(),
-            self.gpu,
-        )
-    }
-
-    /// Measures a single child node using this node's inherited constraint.
-    pub fn measure_child_in_parent_constraint(
-        &self,
-        child_id: NodeId,
-    ) -> Result<ComputedData, MeasurementError> {
-        self.measure_child(child_id, self.parent_constraint.as_ref())
-    }
-
-    /// Sets the relative position of a child node.
-    pub fn place_child(&self, child_id: NodeId, position: PxPosition) {
-        place_node(child_id, position, self.metadatas);
-    }
-
-    /// Enables clipping for the current node.
-    pub fn enable_clipping(&self) {
-        // Set the clipping flag to true for this node.
-        self.metadata_mut().clips_children = true;
-    }
-
-    /// Disables clipping for the current node.
-    pub fn disable_clipping(&self) {
-        // Set the clipping flag to false for this node.
-        self.metadata_mut().clips_children = false;
-    }
-
-    /// Sets the opacity multiplier for the current node.
-    pub fn set_opacity(&self, opacity: f32) {
-        self.metadata_mut().opacity = opacity.clamp(0.0, 1.0);
-    }
-
-    /// Multiplies the current opacity by the provided factor.
-    pub fn multiply_opacity(&self, opacity: f32) {
-        let mut metadata = self.metadata_mut();
-        metadata.opacity = (metadata.opacity * opacity).clamp(0.0, 1.0);
-    }
 }
 
 /// A `InputHandlerFn` is a function that handles state changes for a component.
@@ -679,6 +563,28 @@ impl ImeRequest {
     }
 }
 
+fn apply_layout_placements(
+    placements: &[(u64, PxPosition)],
+    tree: &ComponentNodeTree,
+    children: &[NodeId],
+    component_node_metadatas: &ComponentNodeMetaDatas,
+) {
+    if placements.is_empty() || children.is_empty() {
+        return;
+    }
+    let mut child_map = HashMap::new();
+    for child_id in children {
+        if let Some(child) = tree.get(*child_id) {
+            child_map.insert(child.get().instance_key, *child_id);
+        }
+    }
+    for (instance_key, position) in placements {
+        if let Some(child_id) = child_map.get(instance_key) {
+            place_node(*child_id, *position, component_node_metadatas);
+        }
+    }
+}
+
 /// Measures a single node recursively, returning its size or an error.
 ///
 /// See [`measure_nodes`] for concurrent measurement of multiple nodes.
@@ -691,10 +597,8 @@ pub(crate) fn measure_node(
     component_node_metadatas: &ComponentNodeMetaDatas,
     compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
     gpu: &wgpu::Device,
+    layout_ctx: Option<&LayoutContext<'_>>,
 ) -> Result<ComputedData, MeasurementError> {
-    // Make sure metadata and default value exists for the node.
-    component_node_metadatas.insert(node_id, Default::default());
-
     let node_data_ref = tree
         .get(node_id)
         .ok_or(MeasurementError::NodeNotFoundInTree)?;
@@ -723,27 +627,152 @@ pub(crate) fn measure_node(
         push_current_node(node_id, node_data.logic_id, node_data.fn_name.as_str());
     let _phase_guard = push_phase(RuntimePhase::Measure);
 
-    let size = if let Some(measure_fn) = &node_data.measure_fn {
-        measure_fn(&MeasureInput {
-            current_node_id: node_id,
-            tree,
-            parent_constraint: ParentConstraint::new(parent_constraint),
-            children_ids: &children,
-            metadatas: component_node_metadatas,
-            compute_resource_manager,
-            gpu,
-        })
-    } else {
-        DEFAULT_LAYOUT_DESC(&MeasureInput {
-            current_node_id: node_id,
-            tree,
-            parent_constraint: ParentConstraint::new(parent_constraint),
-            children_ids: &children,
-            metadatas: component_node_metadatas,
-            compute_resource_manager,
-            gpu,
-        })
-    }?;
+    let resolve_instance_key = |child_id: NodeId| {
+        if let Some(child) = tree.get(child_id) {
+            child.get().instance_key
+        } else {
+            debug_assert!(
+                false,
+                "Child node must exist when resolving layout placements"
+            );
+            0
+        }
+    };
+    let child_keys: Vec<u64> = children
+        .iter()
+        .map(|&child_id| resolve_instance_key(child_id))
+        .collect();
+
+    let layout_spec = &node_data.layout_spec;
+    if let Some(layout_ctx) = layout_ctx
+        && let Some(entry) = layout_ctx.cache.get(&node_data.instance_key)
+    {
+        let frame_gap = layout_ctx.frame_index.saturating_sub(entry.last_seen_frame);
+        if frame_gap > 1 {
+            drop(entry);
+            layout_ctx.cache.remove(&node_data.instance_key);
+        } else {
+            let can_try_reuse = entry.constraint_key == *parent_constraint
+                && entry.layout_spec.dyn_eq(layout_spec.as_ref())
+                && entry.child_keys == child_keys
+                && entry.child_constraints.len() == child_keys.len()
+                && entry.child_sizes.len() == child_keys.len();
+            if can_try_reuse {
+                let cached_constraints = entry.child_constraints.clone();
+                let cached_sizes = entry.child_sizes.clone();
+                let cached_result = entry.layout_result.clone();
+                drop(entry);
+
+                let nodes_to_measure = children
+                    .iter()
+                    .zip(cached_constraints.iter())
+                    .map(|(child_id, constraint)| (*child_id, *constraint))
+                    .collect();
+                let measured = measure_nodes(
+                    nodes_to_measure,
+                    tree,
+                    component_node_metadatas,
+                    compute_resource_manager.clone(),
+                    gpu,
+                    Some(layout_ctx),
+                );
+                let mut sizes_match = true;
+                for (index, child_id) in children.iter().enumerate() {
+                    let Some(result) = measured.get(child_id) else {
+                        sizes_match = false;
+                        break;
+                    };
+                    match result {
+                        Ok(size) => {
+                            if *size != cached_sizes[index] {
+                                sizes_match = false;
+                                break;
+                            }
+                        }
+                        Err(err) => return Err(err.clone()),
+                    }
+                }
+                if sizes_match {
+                    component_node_metadatas.insert(node_id, Default::default());
+                    apply_layout_placements(
+                        &cached_result.placements,
+                        tree,
+                        &children,
+                        component_node_metadatas,
+                    );
+                    if let Some(mut metadata) = component_node_metadatas.get_mut(&node_id) {
+                        metadata.computed_data = Some(cached_result.size);
+                        metadata.layout_cache_hit = true;
+                    }
+                    if let Some(mut entry) = layout_ctx.cache.get_mut(&node_data.instance_key) {
+                        entry.last_seen_frame = layout_ctx.frame_index;
+                    }
+                    return Ok(cached_result.size);
+                }
+            }
+        }
+    }
+
+    component_node_metadatas.insert(node_id, Default::default());
+    let input = LayoutInput::new(
+        tree,
+        ParentConstraint::new(parent_constraint),
+        &children,
+        component_node_metadatas,
+        compute_resource_manager,
+        gpu,
+        layout_ctx,
+    );
+    let mut output = LayoutOutput::new(&resolve_instance_key);
+    let size = layout_spec.measure_dyn(&input, &mut output)?;
+    let measured_children = input.take_measured_children();
+    let placements = output.finish();
+    apply_layout_placements(&placements, tree, &children, component_node_metadatas);
+
+    component_node_metadatas
+        .entry(node_id)
+        .or_default()
+        .computed_data = Some(size);
+
+    #[cfg(feature = "profiling")]
+    if let Some(guard) = &mut profiler_guard {
+        guard.set_computed_size(size.width.0, size.height.0);
+    }
+
+    if let Some(layout_ctx) = layout_ctx {
+        let mut cacheable = true;
+        let mut child_constraints = Vec::with_capacity(children.len());
+        let mut child_sizes = Vec::with_capacity(children.len());
+        for child_id in &children {
+            let Some(measurement) = measured_children.get(child_id) else {
+                cacheable = false;
+                break;
+            };
+            if !measurement.consistent {
+                cacheable = false;
+                break;
+            }
+            child_constraints.push(measurement.constraint);
+            child_sizes.push(measurement.size);
+        }
+        if cacheable {
+            let layout_result = LayoutResult { size, placements };
+            layout_ctx.cache.insert(
+                node_data.instance_key,
+                LayoutCacheEntry {
+                    constraint_key: *parent_constraint,
+                    layout_spec: layout_spec.clone(),
+                    layout_result,
+                    child_keys,
+                    child_constraints,
+                    child_sizes,
+                    last_seen_frame: layout_ctx.frame_index,
+                },
+            );
+        } else {
+            layout_ctx.cache.remove(&node_data.instance_key);
+        }
+    }
 
     debug!(
         "Measured node {} in {:?} with size {:?}",
@@ -756,9 +785,6 @@ pub(crate) fn measure_node(
     if let Some(guard) = &mut profiler_guard {
         guard.set_computed_size(size.width.0, size.height.0);
     }
-
-    let mut metadata = component_node_metadatas.entry(node_id).or_default();
-    metadata.computed_data = Some(size);
 
     Ok(size)
 }
@@ -775,38 +801,6 @@ pub(crate) fn place_node(
         .rel_position = Some(rel_position);
 }
 
-/// A default layout descriptor (`MeasureFn`) that places children at the
-/// top-left corner ([0,0]) of the parent node with no offset.
-pub const DEFAULT_LAYOUT_DESC: &MeasureFn = &|input| {
-    if input.children_ids.is_empty() {
-        return Ok(ComputedData::min_from_constraint(
-            input.parent_constraint.as_ref(),
-        ));
-    }
-
-    let nodes_to_measure: Vec<(NodeId, Constraint)> = input
-        .children_ids
-        .iter()
-        .map(|&child_id| {
-            let constraint = *input.parent_constraint.as_ref();
-            (child_id, constraint)
-        })
-        .collect();
-    let sizes = input.measure_children(nodes_to_measure)?;
-    let mut final_width = Px(0);
-    let mut final_height = Px(0);
-    for (child_id, size) in sizes {
-        input.place_child(child_id, PxPosition::ZERO);
-        final_width = final_width.max(size.width);
-        final_height = final_height.max(size.height);
-    }
-
-    Ok(ComputedData {
-        width: final_width,
-        height: final_height,
-    })
-};
-
 /// Concurrently measures multiple nodes using Rayon for parallelism.
 pub(crate) fn measure_nodes(
     nodes_to_measure: Vec<(NodeId, Constraint)>,
@@ -814,6 +808,7 @@ pub(crate) fn measure_nodes(
     component_node_metadatas: &ComponentNodeMetaDatas,
     compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
     gpu: &wgpu::Device,
+    layout_ctx: Option<&LayoutContext<'_>>,
 ) -> HashMap<NodeId, Result<ComputedData, MeasurementError>> {
     if nodes_to_measure.is_empty() {
         return HashMap::new();
@@ -832,6 +827,7 @@ pub(crate) fn measure_nodes(
                 component_node_metadatas,
                 compute_resource_manager.clone(),
                 gpu,
+                layout_ctx,
             );
             (node_id, result)
         })

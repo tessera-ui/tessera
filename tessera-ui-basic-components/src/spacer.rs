@@ -3,7 +3,27 @@
 //! ## Usage
 //!
 //! Use to add gaps between components or to create flexible, expanding regions.
-use tessera_ui::{ComputedData, Constraint, MeasurementError, Modifier, tessera};
+use tessera_ui::{
+    ComputedData, Constraint, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Modifier,
+    tessera,
+};
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
+struct SpacerLayout;
+
+impl LayoutSpec for SpacerLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let constraint = Constraint::new(
+            input.parent_constraint().width(),
+            input.parent_constraint().height(),
+        );
+        Ok(ComputedData::min_from_constraint(&constraint))
+    }
+}
 
 /// # spacer
 ///
@@ -47,11 +67,5 @@ pub fn spacer(modifier: Modifier) {
 
 #[tessera]
 fn spacer_inner() {
-    measure(|input| -> Result<ComputedData, MeasurementError> {
-        let constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        Ok(ComputedData::min_from_constraint(&constraint))
-    });
+    layout(SpacerLayout);
 }

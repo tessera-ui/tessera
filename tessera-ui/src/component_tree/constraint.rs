@@ -101,8 +101,8 @@
 //!
 //! ```
 //! # use tessera_ui::Px;
-//! # use tessera_ui::{Constraint, DimensionValue, MeasureInput};
-//! fn merge_example(input: &MeasureInput<'_>) {
+//! # use tessera_ui::{Constraint, DimensionValue, LayoutInput};
+//! fn merge_example(input: &LayoutInput<'_>) {
 //!     let child = Constraint::new(
 //!         DimensionValue::Fill {
 //!             min: Some(Px(50)),
@@ -113,7 +113,7 @@
 //!             max: None,
 //!         },
 //!     );
-//!     let _merged = child.merge(input.parent_constraint);
+//!     let _merged = child.merge(input.parent_constraint());
 //! }
 //! ```
 
@@ -640,8 +640,8 @@ impl Constraint {
     ///
     /// ```
     /// # use tessera_ui::Px;
-    /// # use tessera_ui::{Constraint, DimensionValue, MeasureInput};
-    /// fn merge_example(input: &MeasureInput<'_>) {
+    /// # use tessera_ui::{Constraint, DimensionValue, LayoutInput};
+    /// fn merge_example(input: &LayoutInput<'_>) {
     ///     let child = Constraint::new(
     ///         DimensionValue::Wrap {
     ///             min: None,
@@ -652,7 +652,7 @@ impl Constraint {
     ///             max: None,
     ///         },
     ///     );
-    ///     let _merged = child.merge(input.parent_constraint);
+    ///     let _merged = child.merge(input.parent_constraint());
     /// }
     /// ```
     pub fn merge(&self, parent_constraint: ParentConstraint<'_>) -> Self {

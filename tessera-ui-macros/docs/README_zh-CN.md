@@ -14,7 +14,7 @@
 ## 特性
 
 - **组件集成**: 自动将函数注册为 Tessera 组件树中的组件
-- **运行时注入**: 在组件函数内提供对 `measure` 和 `input_handler` 函数的访问
+- **运行时注入**: 在组件函数内提供对 `layout` 和 `input_handler` 函数的访问
 - **简洁的语法**: 以最少的样板代码实现声明式组件定义
 - **树管理**: 自动处理组件树节点的创建和清理
 
@@ -29,7 +29,7 @@ use tessera_macros::tessera;
 fn my_component() {
     // 你的组件逻辑在这里
     // 宏自动提供对以下内容的访问：
-    // - measure: 用于自定义布局逻辑
+    // - layout: 用于自定义布局逻辑
     // - input_handler: 用于处理用户交互
 }
 ```
@@ -47,23 +47,32 @@ fn button_component(label: String, on_click: Arc<dyn Fn()>) {
 }
 ```
 
-### 使用 Measure 和 Input Handler
+### 使用 Layout 和 Input Handler
 
 ```rust
 use tessera_macros::tessera;
-use tessera::{ComputedData, Constraints};
+use tessera_ui::{ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px};
 
-#[tessera]
-fn custom_component() {
-    // 定义自定义布局行为
-    measure(|_| {
-        // 自定义测量逻辑
-        use tessera::{ComputedData, Px};
+#[derive(Clone, PartialEq)]
+struct FixedLayout;
+
+impl LayoutSpec for FixedLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
         Ok(ComputedData {
             width: Px(100),
             height: Px(50),
         })
-    });
+    }
+}
+
+#[tessera]
+fn custom_component() {
+    // 定义自定义布局行为
+    layout(FixedLayout);
 
     // 处理用户交互
     input_handler(|_| {
@@ -78,7 +87,7 @@ fn custom_component() {
 
 1. **组件注册**: 将函数以其名称添加到组件树中
 2. **运行时访问**: 注入代码以访问 Tessera 运行时
-3. **函数注入**: 在组件作用域内提供 `measure` 和 `input_handler` 函数
+3. **函数注入**: 在组件作用域内提供 `layout` 和 `input_handler` 函数
 4. **树管理**: 处理从组件树中推入和弹出节点
 5. **错误安全**: 包装原始函数体，以防止提前返回破坏组件树
 
@@ -98,8 +107,8 @@ fn my_component() {
     // 组件树注册
     TesseraRuntime::write().component_tree.add_node(ComponentNode { ... });
 
-    // 注入 measure 和 input_handler 函数
-    let measure = |fun: impl Fn(&MeasureInput<'_>) -> Result<ComputedData, MeasurementError> + Send + Sync + 'static| { /* ... */ };
+    // 注入 layout 和 input_handler 函数
+    let layout = |spec: impl LayoutSpec| { /* ... */ };
     let input_handler = |fun: impl Fn(InputHandlerInput) + Send + Sync + 'static| { /* ... */ };
 
     // 安全地执行原始函数体
@@ -144,19 +153,27 @@ fn counter_component() {
 
 ```rust
 use tessera_macros::tessera;
-use tessera::{ComputedData, Constraints, Px};
+use tessera_ui::{ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px};
 
-#[tessera]
-fn custom_layout() {
-    measure(|_| {
-        // 自定义测量逻辑
-        use tessera::{ComputedData, Px};
+#[derive(Clone, PartialEq)]
+struct FixedLayout;
 
+impl LayoutSpec for FixedLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
         Ok(ComputedData {
             width: Px(120),
             height: Px(80),
         })
-    });
+    }
+}
+
+#[tessera]
+fn custom_layout() {
+    layout(FixedLayout);
 
     // 子组件
     text("Hello, World!");

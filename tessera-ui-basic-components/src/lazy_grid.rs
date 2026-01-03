@@ -13,7 +13,9 @@ use std::{
 use derive_setters::Setters;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, ParentConstraint, Px,
-    PxPosition, State, key, remember, tessera,
+    PxPosition, State, key,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    remember, tessera,
 };
 
 use crate::{
@@ -624,6 +626,167 @@ struct LazyGridViewArgs {
     padding_cross: Px,
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+struct ZeroLayout;
+
+impl LayoutSpec for ZeroLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        Ok(ComputedData::ZERO)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct VisibleGridLayoutItem {
+    line_index: usize,
+    slot_index: usize,
+}
+
+#[derive(Clone)]
+struct LazyGridLayout {
+    axis: LazyGridAxis,
+    item_alignment: CrossAxisAlignment,
+    estimated_line_main: Px,
+    main_spacing: Px,
+    max_viewport_main: Option<Px>,
+    padding_main: Px,
+    padding_cross: Px,
+    viewport_limit: Px,
+    line_range: Range<usize>,
+    slots: GridSlots,
+    visible_items: Vec<VisibleGridLayoutItem>,
+    controller: State<LazyGridController>,
+    scroll_controller: State<ScrollableController>,
+}
+
+impl PartialEq for LazyGridLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.axis == other.axis
+            && self.item_alignment == other.item_alignment
+            && self.estimated_line_main == other.estimated_line_main
+            && self.main_spacing == other.main_spacing
+            && self.max_viewport_main == other.max_viewport_main
+            && self.padding_main == other.padding_main
+            && self.padding_cross == other.padding_cross
+            && self.viewport_limit == other.viewport_limit
+            && self.line_range == other.line_range
+            && self.slots == other.slots
+            && self.visible_items == other.visible_items
+    }
+}
+
+impl LayoutSpec for LazyGridLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        if input.children_ids().len() != self.visible_items.len() {
+            return Err(MeasurementError::MeasureFnFailed(
+                "Lazy grid measured child count mismatch".into(),
+            ));
+        }
+
+        let mut measured_items = Vec::with_capacity(self.visible_items.len());
+        let line_count = self.line_range.end.saturating_sub(self.line_range.start);
+        let mut line_max = vec![Px::ZERO; line_count];
+
+        for (visible, child_id) in self.visible_items.iter().zip(input.children_ids().iter()) {
+            let cell_cross = self
+                .slots
+                .sizes
+                .get(visible.slot_index)
+                .copied()
+                .unwrap_or(Px::ZERO);
+            let child_constraint = self.axis.child_constraint(cell_cross, self.item_alignment);
+            let child_size = input.measure_child(*child_id, &child_constraint)?;
+            let line_idx = visible.line_index - self.line_range.start;
+            if let Some(line_value) = line_max.get_mut(line_idx) {
+                *line_value = (*line_value).max(self.axis.main(&child_size));
+            }
+            measured_items.push(MeasuredGridItem {
+                child_id: *child_id,
+                line_index: visible.line_index,
+                slot_index: visible.slot_index,
+                size: child_size,
+            });
+        }
+
+        let (placements, total_main) = self.controller.with_mut(|c| {
+            for (offset, line_main) in line_max.iter().enumerate() {
+                let line_index = self.line_range.start + offset;
+                c.cache
+                    .record_line_measurement(line_index, *line_main, self.estimated_line_main);
+            }
+
+            let mut placements = Vec::with_capacity(measured_items.len());
+            for item in &measured_items {
+                let line_offset = c.cache.offset_for_line(
+                    item.line_index,
+                    self.estimated_line_main,
+                    self.main_spacing,
+                );
+                let cell_cross = self
+                    .slots
+                    .sizes
+                    .get(item.slot_index)
+                    .copied()
+                    .unwrap_or(Px::ZERO);
+                let cell_offset = compute_cell_offset(
+                    cell_cross,
+                    self.axis.cross(&item.size),
+                    self.item_alignment,
+                );
+                let cross_offset = self.padding_cross
+                    + self
+                        .slots
+                        .positions
+                        .get(item.slot_index)
+                        .copied()
+                        .unwrap_or(Px::ZERO)
+                    + cell_offset;
+                let position = self
+                    .axis
+                    .position(line_offset + self.padding_main, cross_offset);
+                placements.push(GridPlacement {
+                    child_id: item.child_id,
+                    position,
+                });
+            }
+
+            let total_main = c
+                .cache
+                .total_main_size(self.estimated_line_main, self.main_spacing);
+            Ok::<_, MeasurementError>((placements, total_main))
+        })?;
+
+        let total_main_with_padding = total_main + self.padding_main + self.padding_main;
+        let cross_with_padding = self.slots.cross_size + self.padding_cross + self.padding_cross;
+        let size = self
+            .axis
+            .pack_size(total_main_with_padding, cross_with_padding);
+        self.scroll_controller
+            .with_mut(|c| c.override_child_size(size));
+
+        let reported_main = clamp_reported_main(
+            self.axis,
+            input.parent_constraint(),
+            total_main_with_padding,
+            self.viewport_limit,
+            self.max_viewport_main,
+        );
+
+        for placement in placements {
+            output.place_child(placement.child_id, placement.position);
+        }
+
+        Ok(self.axis.pack_size(reported_main, cross_with_padding))
+    }
+}
+
 #[tessera]
 fn lazy_grid_view(
     view_args: LazyGridViewArgs,
@@ -646,6 +809,20 @@ fn lazy_grid_view(
     let slots_per_line = grid_slots.len();
 
     controller.with_mut(|c| c.cache.set_item_count(total_count, slots_per_line));
+    let total_main = controller.with(|c| {
+        c.cache
+            .total_main_size(view_args.estimated_line_main, view_args.main_axis_spacing)
+    });
+    let total_main_with_padding = total_main + view_args.padding_main + view_args.padding_main;
+    let cross_with_padding =
+        grid_slots.cross_size + view_args.padding_cross + view_args.padding_cross;
+    scroll_controller.with_mut(|c| {
+        c.override_child_size(
+            view_args
+                .axis
+                .pack_size(total_main_with_padding, cross_with_padding),
+        );
+    });
 
     let scroll_offset = view_args
         .axis
@@ -673,106 +850,34 @@ fn lazy_grid_view(
     });
 
     if visible_plan.items.is_empty() {
-        measure(move |_| Ok(ComputedData::ZERO));
+        layout(ZeroLayout);
         return;
     }
 
     let viewport_limit = viewport_span + padding_main + padding_main;
-    let axis = view_args.axis;
-    let item_alignment = view_args.item_alignment;
-    let estimated_line_main = view_args.estimated_line_main;
-    let main_spacing = view_args.main_axis_spacing;
-    let padding_cross = view_args.padding_cross;
-    let visible_items = visible_plan.items.clone();
-    let line_range = visible_plan.line_range.clone();
-    let slots = grid_slots.clone();
+    let visible_layout_items = visible_plan
+        .items
+        .iter()
+        .map(|item| VisibleGridLayoutItem {
+            line_index: item.line_index,
+            slot_index: item.slot_index,
+        })
+        .collect();
 
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
-        if input.children_ids.len() != visible_items.len() {
-            return Err(MeasurementError::MeasureFnFailed(
-                "Lazy grid measured child count mismatch".into(),
-            ));
-        }
-
-        let mut measured_items = Vec::with_capacity(visible_items.len());
-        let line_count = line_range.end.saturating_sub(line_range.start);
-        let mut line_max = vec![Px::ZERO; line_count];
-
-        for (visible, child_id) in visible_items.iter().zip(input.children_ids.iter()) {
-            let cell_cross = slots
-                .sizes
-                .get(visible.slot_index)
-                .copied()
-                .unwrap_or(Px::ZERO);
-            let child_constraint = axis.child_constraint(cell_cross, item_alignment);
-            let child_size = input.measure_child(*child_id, &child_constraint)?;
-            let line_idx = visible.line_index - line_range.start;
-            if let Some(line_value) = line_max.get_mut(line_idx) {
-                *line_value = (*line_value).max(axis.main(&child_size));
-            }
-            measured_items.push(MeasuredGridItem {
-                child_id: *child_id,
-                line_index: visible.line_index,
-                slot_index: visible.slot_index,
-                size: child_size,
-            });
-        }
-
-        let (placements, total_main) = controller.with_mut(|c| {
-            for (offset, line_main) in line_max.iter().enumerate() {
-                let line_index = line_range.start + offset;
-                c.cache
-                    .record_line_measurement(line_index, *line_main, estimated_line_main);
-            }
-
-            let mut placements = Vec::with_capacity(measured_items.len());
-            for item in &measured_items {
-                let line_offset =
-                    c.cache
-                        .offset_for_line(item.line_index, estimated_line_main, main_spacing);
-                let cell_cross = slots
-                    .sizes
-                    .get(item.slot_index)
-                    .copied()
-                    .unwrap_or(Px::ZERO);
-                let cell_offset =
-                    compute_cell_offset(cell_cross, axis.cross(&item.size), item_alignment);
-                let cross_offset = padding_cross
-                    + slots
-                        .positions
-                        .get(item.slot_index)
-                        .copied()
-                        .unwrap_or(Px::ZERO)
-                    + cell_offset;
-                let position = axis.position(line_offset + padding_main, cross_offset);
-                placements.push(GridPlacement {
-                    child_id: item.child_id,
-                    position,
-                });
-            }
-
-            let total_main = c.cache.total_main_size(estimated_line_main, main_spacing);
-            Ok::<_, MeasurementError>((placements, total_main))
-        })?;
-
-        let total_main_with_padding = total_main + padding_main + padding_main;
-        let cross_with_padding = slots.cross_size + padding_cross + padding_cross;
-        let size = axis.pack_size(total_main_with_padding, cross_with_padding);
-        scroll_controller.with_mut(|c| c.override_child_size(size));
-
-        let reported_main = clamp_reported_main(
-            axis,
-            input.parent_constraint,
-            total_main_with_padding,
-            viewport_limit,
-            view_args.max_viewport_main,
-        );
-
-        for placement in placements {
-            input.place_child(placement.child_id, placement.position);
-        }
-
-        Ok(axis.pack_size(reported_main, cross_with_padding))
+    layout(LazyGridLayout {
+        axis: view_args.axis,
+        item_alignment: view_args.item_alignment,
+        estimated_line_main: view_args.estimated_line_main,
+        main_spacing: view_args.main_axis_spacing,
+        max_viewport_main: view_args.max_viewport_main,
+        padding_main,
+        padding_cross: view_args.padding_cross,
+        viewport_limit,
+        line_range: visible_plan.line_range.clone(),
+        slots: grid_slots.clone(),
+        visible_items: visible_layout_items,
+        controller,
+        scroll_controller,
     });
 
     for child in visible_plan.items {
@@ -872,7 +977,7 @@ fn compute_cell_offset(cell_cross: Px, child_cross: Px, alignment: CrossAxisAlig
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum LazyGridAxis {
     Vertical,
     Horizontal,
@@ -969,7 +1074,7 @@ impl LazyGridAxis {
         }
     }
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct GridSlots {
     sizes: Vec<Px>,
     positions: Vec<Px>,

@@ -5,7 +5,10 @@
 //! Use to indicate the completion of a task or a specific value in a range.
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, Px, PxPosition, tessera,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    PxPosition,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    tessera,
 };
 
 use crate::{
@@ -80,15 +83,28 @@ fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Sh
     );
 
     let value = value.clamp(0.0, 1.0);
-    measure(move |input| {
-        let available_width = match input.parent_constraint.width() {
+    layout(GlassProgressFillLayout { value });
+}
+
+#[derive(Clone, PartialEq)]
+struct GlassProgressFillLayout {
+    value: f32,
+}
+
+impl LayoutSpec for GlassProgressFillLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let available_width = match input.parent_constraint().width() {
             DimensionValue::Fixed(px) => px,
             DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
             DimensionValue::Fill { max, .. } => max.expect(
                 "Seems that you are trying to fill an infinite width, which is not allowed",
             ),
         };
-        let available_height = match input.parent_constraint.height() {
+        let available_height = match input.parent_constraint().height() {
             DimensionValue::Fixed(px) => px,
             DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
             DimensionValue::Fill { max, .. } => max.expect(
@@ -96,9 +112,9 @@ fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Sh
             ),
         };
 
-        let width_px = Px((available_width.to_f32() * value).round() as i32);
+        let width_px = Px((available_width.to_f32() * self.value).round() as i32);
         let child_id = input
-            .children_ids
+            .children_ids()
             .first()
             .copied()
             .expect("progress fill child should exist");
@@ -108,13 +124,13 @@ fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Sh
             DimensionValue::Fixed(available_height),
         );
         input.measure_child(child_id, &child_constraint)?;
-        input.place_child(child_id, PxPosition::new(Px(0), Px(0)));
+        output.place_child(child_id, PxPosition::new(Px(0), Px(0)));
 
         Ok(ComputedData {
             width: width_px,
             height: available_height,
         })
-    });
+    }
 }
 
 /// # glass_progress
@@ -175,18 +191,31 @@ fn glass_progress_inner(args: GlassProgressArgs) {
     );
 
     let height = args.height.to_px();
-    measure(move |input| {
+    layout(GlassProgressLayout { height });
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct GlassProgressLayout {
+    height: Px,
+}
+
+impl LayoutSpec for GlassProgressLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
         let track_id = input
-            .children_ids
+            .children_ids()
             .first()
             .copied()
             .expect("track should exist");
         let constraint = Constraint::new(
-            input.parent_constraint.width(),
-            DimensionValue::Fixed(height),
+            input.parent_constraint().width(),
+            DimensionValue::Fixed(self.height),
         );
         let track_measurement = input.measure_child(track_id, &constraint)?;
-        input.place_child(track_id, PxPosition::new(Px(0), Px(0)));
+        output.place_child(track_id, PxPosition::new(Px(0), Px(0)));
         Ok(track_measurement)
-    });
+    }
 }

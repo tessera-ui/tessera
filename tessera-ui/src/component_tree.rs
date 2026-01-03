@@ -9,19 +9,20 @@ use tracing::{debug, warn};
 
 use crate::{
     Clipboard, ComputeResourceManager, Px, PxRect,
-    component_tree::node::measure_node,
     cursor::CursorEvent,
+    layout::RenderInput,
     px::{PxPosition, PxSize},
     renderer::{Command, RenderCommand},
-    runtime::{RuntimePhase, push_current_node, push_phase},
+    runtime::{LayoutCache, RuntimePhase, TraceEntry, push_current_node, push_phase},
 };
 
 pub use constraint::{Constraint, DimensionValue, ParentConstraint};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
-    ImeRequest, InputHandlerFn, InputHandlerInput, MeasureFn, MeasureInput, MeasurementError,
-    WindowRequests,
+    ImeRequest, InputHandlerFn, InputHandlerInput, MeasurementError, WindowRequests,
 };
+
+pub(crate) use node::{measure_node, measure_nodes};
 
 #[cfg(feature = "profiling")]
 use crate::profiler::{NodeMeta, Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
@@ -38,8 +39,13 @@ struct DrawTraversalContext<'a> {
     screen_size: ScreenSize,
 }
 
+pub(crate) struct LayoutContext<'a> {
+    pub cache: &'a dashmap::DashMap<u64, crate::runtime::LayoutCacheEntry>,
+    pub frame_index: u64,
+}
+
 /// Parameters for the compute function
-pub struct ComputeParams<'a> {
+pub(crate) struct ComputeParams<'a> {
     pub screen_size: PxSize,
     pub cursor_position: Option<PxPosition>,
     pub cursor_events: Vec<CursorEvent>,
@@ -49,6 +55,9 @@ pub struct ComputeParams<'a> {
     pub compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
     pub gpu: &'a wgpu::Device,
     pub clipboard: &'a mut Clipboard,
+    pub layout_cache: &'a mut LayoutCache,
+    pub frame_trace: Vec<TraceEntry>,
+    pub frame_index: u64,
 }
 
 /// Respents a component tree
@@ -112,7 +121,8 @@ impl ComponentTree {
 
     /// Add a new node to the tree
     /// Nodes now store their intrinsic constraints in their metadata.
-    /// The `node_component` itself primarily holds the measure_fn.
+    /// The `node_component` itself primarily holds the layout spec and
+    /// handlers.
     pub fn add_node(&mut self, node_component: ComponentNode) -> indextree::NodeId {
         let new_node_id = self.tree.new_node(node_component);
         if let Some(current_node_id) = self.node_queue.last_mut() {
@@ -170,6 +180,7 @@ impl ComponentTree {
                     .as_ref()
                     .and_then(|m| m.computed_data)
                     .map(|d| (d.width.0, d.height.0));
+                let layout_cache_hit = metadata.as_ref().map(|m| m.layout_cache_hit);
 
                 nodes.push(NodeMeta {
                     node_id: node_id.to_string(),
@@ -177,6 +188,7 @@ impl ComponentTree {
                     fn_name: Some(fn_name.clone()),
                     abs_pos,
                     size,
+                    layout_cache_hit,
                 });
             }
             stack.extend(node_id.children(&self.tree));
@@ -195,7 +207,10 @@ impl ComponentTree {
     /// Returns a tuple of (commands, window_requests) where commands contain
     /// the rendering instructions with their associated sizes and positions.
     #[tracing::instrument(level = "debug", skip(self, params))]
-    pub fn compute(&mut self, params: ComputeParams<'_>) -> (Vec<RenderCommand>, WindowRequests) {
+    pub(crate) fn compute(
+        &mut self,
+        params: ComputeParams<'_>,
+    ) -> (Vec<RenderCommand>, WindowRequests) {
         let ComputeParams {
             screen_size,
             mut cursor_position,
@@ -206,6 +221,9 @@ impl ComponentTree {
             compute_resource_manager,
             gpu,
             clipboard,
+            layout_cache,
+            frame_trace: _frame_trace,
+            frame_index,
         } = params;
         let Some(root_node) = self
             .tree
@@ -218,6 +236,11 @@ impl ComponentTree {
             DimensionValue::Fixed(screen_size.height),
         );
 
+        let layout_ctx = LayoutContext {
+            cache: &layout_cache.entries,
+            frame_index,
+        };
+
         let measure_timer = Instant::now();
         debug!("Start measuring the component tree...");
 
@@ -228,8 +251,9 @@ impl ComponentTree {
             &screen_constraint,
             &self.tree,
             &self.metadatas,
-            compute_resource_manager,
+            compute_resource_manager.clone(),
             gpu,
+            Some(&layout_ctx),
         ) {
             Ok(_root_computed_data) => {
                 debug!("Component tree measured in {:?}", measure_timer.elapsed());
@@ -240,6 +264,14 @@ impl ComponentTree {
                 );
             }
         }
+
+        record_layout_commands(
+            root_node,
+            &self.tree,
+            &self.metadatas,
+            compute_resource_manager.clone(),
+            gpu,
+        );
 
         let compute_draw_timer = Instant::now();
         debug!("Start computing draw commands...");
@@ -375,6 +407,24 @@ impl ComponentTree {
             input_handler_timer.elapsed()
         );
         (commands, window_requests)
+    }
+}
+
+fn record_layout_commands(
+    root_node: indextree::NodeId,
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
+    gpu: &wgpu::Device,
+) {
+    let mut stack = vec![root_node];
+    while let Some(node_id) = stack.pop() {
+        let Some(node) = tree.get(node_id) else {
+            continue;
+        };
+        let input = RenderInput::new(node_id, metadatas, compute_resource_manager.clone(), gpu);
+        node.get().layout_spec.record_dyn(&input);
+        stack.extend(node_id.children(tree));
     }
 }
 

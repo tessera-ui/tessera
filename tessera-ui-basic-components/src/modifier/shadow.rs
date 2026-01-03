@@ -1,4 +1,8 @@
-use tessera_ui::{Color, Dp, Modifier, PxPosition, PxSize, tessera, use_context};
+use tessera_ui::{
+    Color, ComputedData, Dp, MeasurementError, Modifier, PxPosition, PxSize,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    tessera, use_context,
+};
 
 use crate::{
     pipelines::shape::command::{ShadowLayers, ShapeCommand},
@@ -108,30 +112,47 @@ pub(super) fn apply_shadow_modifier(base: Modifier, args: ShadowArgs) -> Modifie
     modifier
 }
 
+#[derive(Clone, PartialEq)]
+struct ShadowLayout {
+    shadow: ShadowLayers,
+    shape: Shape,
+}
+
+impl LayoutSpec for ShadowLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let child_id = input
+            .children_ids()
+            .first()
+            .copied()
+            .expect("modifier_shadow expects exactly one child");
+        let child_measurement = input.measure_child_in_parent_constraint(child_id)?;
+        output.place_child(child_id, PxPosition::ZERO);
+        Ok(child_measurement)
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        let mut metadata = input.metadata_mut();
+        let Some(size) = metadata.computed_data else {
+            return;
+        };
+        metadata.push_draw_command(shape_shadow_command_layers(
+            self.shadow,
+            self.shape,
+            size.into(),
+        ));
+    }
+}
+
 #[tessera]
 pub(super) fn modifier_shadow_layers<F>(shadow: ShadowLayers, shape: Shape, child: F)
 where
     F: FnOnce(),
 {
-    measure(move |input| {
-        let child_id = input
-            .children_ids
-            .first()
-            .copied()
-            .expect("modifier_shadow expects exactly one child");
-        let child_measurement = input.measure_child_in_parent_constraint(child_id)?;
-        input
-            .metadata_mut()
-            .push_draw_command(shape_shadow_command_layers(
-                shadow,
-                shape,
-                child_measurement.into(),
-            ));
-
-        input.place_child(child_id, PxPosition::ZERO);
-
-        Ok(child_measurement)
-    });
+    layout(ShadowLayout { shadow, shape });
 
     child();
 }

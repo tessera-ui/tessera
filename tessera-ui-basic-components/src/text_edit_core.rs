@@ -28,7 +28,9 @@ use glyphon::{
     cosmic_text::{self, Selection},
 };
 use tessera_ui::{
-    Clipboard, Color, ComputedData, DimensionValue, Dp, Px, PxPosition, State, focus_state::Focus,
+    Clipboard, Color, ComputedData, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
+    focus_state::Focus,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     tessera, winit,
 };
 use winit::keyboard::NamedKey;
@@ -87,6 +89,8 @@ pub struct TextEditorController {
     focus_handler: Focus,
     pub(crate) selection_color: Color,
     pub(crate) current_selection_rects: Vec<RectDef>,
+    current_text_data: Option<TextData>,
+    layout_version: u64,
     // Click tracking for double/triple click detection
     last_click_time: Option<Instant>,
     last_click_position: Option<PxPosition>,
@@ -133,6 +137,8 @@ impl TextEditorController {
             focus_handler: Focus::new(),
             selection_color,
             current_selection_rects: Vec::new(),
+            current_text_data: None,
+            layout_version: 0,
             last_click_time: None,
             last_click_position: None,
             click_count: 0,
@@ -164,7 +170,9 @@ impl TextEditorController {
             glyphon::cosmic_text::BufferRef::Arc(buffer) => (**buffer).clone(),
         };
 
-        TextData::from_buffer(text_buffer)
+        let text_data = TextData::from_buffer(text_buffer);
+        self.current_text_data = Some(text_data.clone());
+        text_data
     }
 
     // Returns a reference to the internal focus handler.
@@ -182,9 +190,14 @@ impl TextEditorController {
         &self.editor
     }
 
-    /// Returns a mutable reference to the underlying `glyphon::Editor`.
-    pub fn editor_mut(&mut self) -> &mut glyphon::Editor<'static> {
-        &mut self.editor
+    /// Mutates the underlying `glyphon::Editor` and refreshes layout state.
+    pub fn with_editor_mut<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut glyphon::Editor<'static>) -> R,
+    {
+        let result = f(&mut self.editor);
+        self.bump_layout_version();
+        result
     }
 
     // Returns the current blink timer instant (for cursor blinking).
@@ -449,6 +462,15 @@ impl TextEditorController {
         self.editor.set_cursor(new_cursor);
         self.editor
             .set_selection(glyphon::cosmic_text::Selection::None);
+        self.bump_layout_version();
+    }
+
+    pub(crate) fn layout_version(&self) -> u64 {
+        self.layout_version
+    }
+
+    pub(crate) fn bump_layout_version(&mut self) {
+        self.layout_version = self.layout_version.wrapping_add(1);
     }
 }
 
@@ -507,6 +529,96 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
         .collect()
 }
 
+#[derive(Clone)]
+struct TextEditLayout {
+    controller: State<TextEditorController>,
+    layout_version: u64,
+}
+
+impl PartialEq for TextEditLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.layout_version == other.layout_version
+    }
+}
+
+impl LayoutSpec for TextEditLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let max_width_pixels: Option<Px> = match input.parent_constraint().width() {
+            DimensionValue::Fixed(w) => Some(w),
+            DimensionValue::Wrap { max, .. } => max,
+            DimensionValue::Fill { max, .. } => max,
+        };
+
+        let max_height_pixels: Option<Px> = match input.parent_constraint().height() {
+            DimensionValue::Fixed(h) => Some(h),
+            DimensionValue::Wrap { max, .. } => max,
+            DimensionValue::Fill { max, .. } => max,
+        };
+
+        let text_data = self.controller.with_mut(|c| {
+            c.text_data(TextConstraint {
+                max_width: max_width_pixels.map(|px| px.to_f32()),
+                max_height: max_height_pixels.map(|px| px.to_f32()),
+            })
+        });
+
+        let mut selection_rects = self
+            .controller
+            .with(|c| compute_selection_rects(c.editor()));
+
+        let selection_rects_len = selection_rects.len();
+
+        for (i, rect_def) in selection_rects.iter().enumerate() {
+            if let Some(rect_node_id) = input.children_ids().get(i).copied() {
+                input.measure_child_in_parent_constraint(rect_node_id)?;
+                output.place_child(rect_node_id, PxPosition::new(rect_def.x, rect_def.y));
+            }
+        }
+
+        let visible_x1 = max_width_pixels.unwrap_or(Px(i32::MAX));
+        let visible_y1 = max_height_pixels.unwrap_or(Px(i32::MAX));
+        selection_rects = clip_and_take_visible(selection_rects, visible_x1, visible_y1);
+        self.controller
+            .with_mut(|c| c.current_selection_rects = selection_rects.clone());
+
+        if let Some(cursor_pos_raw) = self.controller.with(|c| c.editor().cursor_position()) {
+            let cursor_pos = PxPosition::new(Px(cursor_pos_raw.0), Px(cursor_pos_raw.1));
+            let cursor_node_index = selection_rects_len;
+            if let Some(cursor_node_id) = input.children_ids().get(cursor_node_index).copied() {
+                input.measure_child_in_parent_constraint(cursor_node_id)?;
+                output.place_child(cursor_node_id, cursor_pos);
+            }
+        }
+
+        let constrained_height = if let Some(max_h) = max_height_pixels {
+            text_data.size[1].min(max_h.abs())
+        } else {
+            text_data.size[1]
+        };
+
+        Ok(ComputedData {
+            width: Px::from(text_data.size[0]) + CURSOR_WIDRH.to_px(),
+            height: constrained_height.into(),
+        })
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        let mut metadata = input.metadata_mut();
+        metadata.clips_children = true;
+        if let Some(text_data) = self.controller.with(|c| c.current_text_data.clone()) {
+            let drawable = TextCommand {
+                data: text_data,
+                offset: PxPosition::ZERO,
+            };
+            metadata.push_draw_command(drawable);
+        }
+    }
+}
+
 /// Core text editing component for rendering text, selection, and cursor.
 ///
 /// This component is responsible for rendering the text buffer, selection
@@ -520,83 +632,11 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
 #[tessera]
 pub fn text_edit_core(controller: State<TextEditorController>) {
     // text rendering with constraints from parent container
-    {
-        measure(move |input| {
-            // Enable clipping for clip to visible area
-            input.enable_clipping();
-
-            // surface provides constraints that should be respected for text layout
-            let max_width_pixels: Option<Px> = match input.parent_constraint.width() {
-                DimensionValue::Fixed(w) => Some(w),
-                DimensionValue::Wrap { max, .. } => max,
-                DimensionValue::Fill { max, .. } => max,
-            };
-
-            // For proper scrolling behavior, we need to respect height constraints
-            // When max height is specified, content should be clipped and scrollable
-            let max_height_pixels: Option<Px> = match input.parent_constraint.height() {
-                DimensionValue::Fixed(h) => Some(h), // Respect explicit fixed heights
-                DimensionValue::Wrap { max, .. } => max, // Respect max height for wrapping
-                DimensionValue::Fill { max, .. } => max,
-            };
-
-            let text_data = controller.with_mut(|c| {
-                c.text_data(TextConstraint {
-                    max_width: max_width_pixels.map(|px| px.to_f32()),
-                    max_height: max_height_pixels.map(|px| px.to_f32()),
-                })
-            });
-
-            // Simplified selection rectangle computation using helper functions to reduce
-            // complexity.
-            let mut selection_rects = controller.with(|c| compute_selection_rects(c.editor()));
-
-            // Record length before moving (used to place cursor node after rects)
-            let selection_rects_len = selection_rects.len();
-
-            // Handle selection rectangle positioning
-            for (i, rect_def) in selection_rects.iter().enumerate() {
-                if let Some(rect_node_id) = input.children_ids.get(i).copied() {
-                    input.measure_child_in_parent_constraint(rect_node_id)?;
-                    input.place_child(rect_node_id, PxPosition::new(rect_def.x, rect_def.y));
-                }
-            }
-
-            // Clip to visible area and write filtered rects to state
-            let visible_x1 = max_width_pixels.unwrap_or(Px(i32::MAX));
-            let visible_y1 = max_height_pixels.unwrap_or(Px(i32::MAX));
-            selection_rects = clip_and_take_visible(selection_rects, visible_x1, visible_y1);
-            controller.with_mut(|c| c.current_selection_rects = selection_rects.clone());
-
-            // Handle cursor positioning (cursor comes after selection rects)
-            if let Some(cursor_pos_raw) = controller.with(|c| c.editor().cursor_position()) {
-                let cursor_pos = PxPosition::new(Px(cursor_pos_raw.0), Px(cursor_pos_raw.1));
-                let cursor_node_index = selection_rects_len;
-                if let Some(cursor_node_id) = input.children_ids.get(cursor_node_index).copied() {
-                    input.measure_child_in_parent_constraint(cursor_node_id)?;
-                    input.place_child(cursor_node_id, cursor_pos);
-                }
-            }
-
-            let drawable = TextCommand {
-                data: text_data.clone(),
-                offset: PxPosition::ZERO,
-            };
-            input.metadata_mut().push_draw_command(drawable);
-
-            // Return constrained size - respect maximum height to prevent overflow
-            let constrained_height = if let Some(max_h) = max_height_pixels {
-                text_data.size[1].min(max_h.abs())
-            } else {
-                text_data.size[1]
-            };
-
-            Ok(ComputedData {
-                width: Px::from(text_data.size[0]) + CURSOR_WIDRH.to_px(), // Add padding for cursor
-                height: constrained_height.into(),
-            })
-        });
-    }
+    let layout_version = controller.with(|c| c.layout_version());
+    layout(TextEditLayout {
+        controller,
+        layout_version,
+    });
 
     // Selection highlighting
     {

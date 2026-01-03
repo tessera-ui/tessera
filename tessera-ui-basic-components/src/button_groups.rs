@@ -8,7 +8,8 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Dp, Modifier, Px, PxPosition, remember, tessera, use_context,
+    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Modifier, Px,
+    PxPosition, remember, tessera, use_context,
 };
 
 use crate::{
@@ -418,15 +419,28 @@ fn elastic_container(
 ) {
     child();
     let progress = state.with_mut(|s| s.item_state_mut(index).elastic_state.update());
-    measure(move |input| {
-        let child_id = input.children_ids[0];
+    layout(ElasticContainerLayout { progress })
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct ElasticContainerLayout {
+    progress: f32,
+}
+
+impl LayoutSpec for ElasticContainerLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let child_id = input.children_ids()[0];
         let child_size = input.measure_child_in_parent_constraint(child_id)?;
-        let additional_width = child_size.width.mul_f32(0.15 * progress);
-        input.place_child(child_id, PxPosition::new(additional_width / 2, Px::ZERO));
+        let additional_width = child_size.width.mul_f32(0.15 * self.progress);
+        output.place_child(child_id, PxPosition::new(additional_width / 2, Px::ZERO));
 
         Ok(ComputedData {
             width: child_size.width + additional_width,
             height: child_size.height,
         })
-    })
+    }
 }

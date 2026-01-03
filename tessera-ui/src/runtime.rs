@@ -9,9 +9,14 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+use dashmap::DashMap;
 use parking_lot::RwLock;
 
-use crate::{NodeId, component_tree::ComponentTree};
+use crate::{
+    ComputedData, Constraint, NodeId,
+    component_tree::ComponentTree,
+    layout::{LayoutResult, LayoutSpec, LayoutSpecDyn},
+};
 
 thread_local! {
     /// Stack of currently executing component node ids for the current thread.
@@ -207,6 +212,34 @@ pub struct TesseraRuntime {
     on_close_callbacks: Vec<Box<dyn Fn() + Send + Sync>>,
     /// Whether the window is currently minimized.
     pub(crate) window_minimized: bool,
+    /// Per-frame control-flow trace.
+    frame_trace: Vec<TraceEntry>,
+    /// Layout cache for pure layout specs.
+    pub(crate) layout_cache: LayoutCache,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum TraceEntry {
+    Begin {
+        #[allow(dead_code)]
+        instance_key: u64,
+    },
+    End,
+}
+
+pub(crate) struct LayoutCacheEntry {
+    pub constraint_key: Constraint,
+    pub layout_spec: Box<dyn LayoutSpecDyn>,
+    pub layout_result: LayoutResult,
+    pub child_keys: Vec<u64>,
+    pub child_constraints: Vec<Constraint>,
+    pub child_sizes: Vec<ComputedData>,
+    pub last_seen_frame: u64,
+}
+
+#[derive(Default)]
+pub(crate) struct LayoutCache {
+    pub entries: DashMap<u64, LayoutCacheEntry>,
 }
 
 impl TesseraRuntime {
@@ -254,6 +287,53 @@ impl TesseraRuntime {
         self.on_close_callbacks.clear();
     }
 
+    /// Sets the instance key for the current component node.
+    #[doc(hidden)]
+    pub fn set_current_instance_key(&mut self, instance_key: u64) {
+        if let Some(node) = self.component_tree.current_node_mut() {
+            node.instance_key = instance_key;
+        } else {
+            debug_assert!(
+                false,
+                "set_current_instance_key must be called inside a component build"
+            );
+        }
+    }
+
+    /// Sets the layout spec for the current component node.
+    #[doc(hidden)]
+    pub fn set_current_layout_spec<S>(&mut self, spec: S)
+    where
+        S: LayoutSpec,
+    {
+        if let Some(node) = self.component_tree.current_node_mut() {
+            node.layout_spec = Box::new(spec) as Box<dyn LayoutSpecDyn>;
+        } else {
+            debug_assert!(
+                false,
+                "set_current_layout_spec must be called inside a component build"
+            );
+        }
+    }
+
+    /// Clears the per-frame control-flow trace.
+    pub(crate) fn begin_frame_trace(&mut self) {
+        self.frame_trace.clear();
+    }
+
+    /// Returns and clears the current frame trace.
+    pub(crate) fn take_frame_trace(&mut self) -> Vec<TraceEntry> {
+        std::mem::take(&mut self.frame_trace)
+    }
+
+    pub(crate) fn trace_begin(&mut self, instance_key: u64) {
+        self.frame_trace.push(TraceEntry::Begin { instance_key });
+    }
+
+    pub(crate) fn trace_end(&mut self) {
+        self.frame_trace.push(TraceEntry::End);
+    }
+
     /// Triggers all registered callbacks (global and per-frame).
     /// Called by the event loop when a minimize event is detected.
     pub fn trigger_minimize_callbacks(&self, minimized: bool) {
@@ -270,6 +350,18 @@ impl TesseraRuntime {
             callback();
         }
     }
+}
+
+/// Records the start of a component instance in the frame trace.
+#[doc(hidden)]
+pub fn trace_begin(instance_key: u64) {
+    TesseraRuntime::with_mut(|runtime| runtime.trace_begin(instance_key));
+}
+
+/// Records the end of a component instance in the frame trace.
+#[doc(hidden)]
+pub fn trace_end() {
+    TesseraRuntime::with_mut(|runtime| runtime.trace_end());
 }
 
 /// Guard that records the current component node id for the calling thread.
@@ -427,6 +519,15 @@ fn current_logic_id() -> Option<u64> {
     LOGIC_ID_STACK.with(|stack| stack.borrow().last().copied())
 }
 
+/// Returns the instance key for the current component call site.
+#[doc(hidden)]
+pub fn current_instance_key() -> u64 {
+    let logic_id =
+        current_logic_id().expect("current_instance_key must be called inside a component");
+    let group_path_hash = current_group_path_hash();
+    hash_components(&[&logic_id, &group_path_hash])
+}
+
 fn pop_logic_id() {
     LOGIC_ID_STACK.with(|stack| {
         let mut stack = stack.borrow_mut();
@@ -479,6 +580,11 @@ pub(crate) fn pop_group_id(expected_group_id: u64) {
 /// Get a clone of the current control-flow path.
 fn current_group_path() -> Vec<u64> {
     GROUP_PATH_STACK.with(|stack| stack.borrow().clone())
+}
+
+fn current_group_path_hash() -> u64 {
+    let group_path = current_group_path();
+    hash_components(&[&group_path])
 }
 
 /// RAII guard that tracks control-flow grouping for the current component node.

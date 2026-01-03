@@ -13,7 +13,9 @@ use std::{
 use derive_setters::Setters;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, ParentConstraint, Px,
-    PxPosition, State, key, remember, tessera,
+    PxPosition, State, key,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    remember, tessera,
 };
 
 use crate::{
@@ -571,6 +573,148 @@ struct LazyStaggeredGridViewArgs {
     padding_cross: Px,
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+struct ZeroLayout;
+
+impl LayoutSpec for ZeroLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        Ok(ComputedData::ZERO)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct VisibleStaggeredLayoutItem {
+    item_index: usize,
+}
+
+#[derive(Clone)]
+struct LazyStaggeredGridLayout {
+    axis: StaggeredGridAxis,
+    item_alignment: CrossAxisAlignment,
+    estimated_item_main: Px,
+    main_spacing: Px,
+    max_viewport_main: Option<Px>,
+    padding_main: Px,
+    padding_cross: Px,
+    viewport_limit: Px,
+    total_count: usize,
+    slots: GridSlots,
+    visible_items: Vec<VisibleStaggeredLayoutItem>,
+    controller: State<LazyStaggeredGridController>,
+    scroll_controller: State<ScrollableController>,
+}
+
+impl PartialEq for LazyStaggeredGridLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.axis == other.axis
+            && self.item_alignment == other.item_alignment
+            && self.estimated_item_main == other.estimated_item_main
+            && self.main_spacing == other.main_spacing
+            && self.max_viewport_main == other.max_viewport_main
+            && self.padding_main == other.padding_main
+            && self.padding_cross == other.padding_cross
+            && self.viewport_limit == other.viewport_limit
+            && self.total_count == other.total_count
+            && self.slots == other.slots
+            && self.visible_items == other.visible_items
+    }
+}
+
+impl LayoutSpec for LazyStaggeredGridLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        if input.children_ids().len() != self.visible_items.len() {
+            return Err(MeasurementError::MeasureFnFailed(
+                "Lazy staggered grid measured child count mismatch".into(),
+            ));
+        }
+
+        let (placements, total_main) = self.controller.with_mut(|c| {
+            let mut placements = Vec::with_capacity(self.visible_items.len());
+            let mut visible_iter = self
+                .visible_items
+                .iter()
+                .zip(input.children_ids().iter())
+                .peekable();
+
+            let mut lane_offsets = vec![Px::ZERO; self.slots.len()];
+
+            for index in 0..self.total_count {
+                if self.slots.len() == 0 {
+                    break;
+                }
+
+                let lane = find_shortest_lane(&lane_offsets);
+                let lane_cross = self.slots.sizes.get(lane).copied().unwrap_or(Px::ZERO);
+                let item_start = lane_offsets[lane];
+                let mut item_main = c.cache.item_main(index).unwrap_or(self.estimated_item_main);
+
+                if let Some((visible, child_id)) = visible_iter.peek()
+                    && visible.item_index == index
+                {
+                    let child_constraint =
+                        self.axis.child_constraint(lane_cross, self.item_alignment);
+                    let child_size = input.measure_child(**child_id, &child_constraint)?;
+                    item_main = self.axis.main(&child_size);
+                    c.cache.record_measurement(index, item_main);
+
+                    let cell_offset = compute_cell_offset(
+                        lane_cross,
+                        self.axis.cross(&child_size),
+                        self.item_alignment,
+                    );
+                    let cross_offset = self.padding_cross
+                        + self.slots.positions.get(lane).copied().unwrap_or(Px::ZERO)
+                        + cell_offset;
+                    let position = self
+                        .axis
+                        .position(item_start + self.padding_main, cross_offset);
+                    placements.push(StaggeredPlacement {
+                        child_id: **child_id,
+                        position,
+                    });
+
+                    visible_iter.next();
+                }
+
+                lane_offsets[lane] = item_start + item_main + self.main_spacing;
+            }
+
+            let total_main = finalize_lane_offsets(&lane_offsets, self.main_spacing);
+            Ok::<_, MeasurementError>((placements, total_main))
+        })?;
+
+        let total_main_with_padding = total_main + self.padding_main + self.padding_main;
+        let cross_with_padding = self.slots.cross_size + self.padding_cross + self.padding_cross;
+        let size = self
+            .axis
+            .pack_size(total_main_with_padding, cross_with_padding);
+        self.scroll_controller
+            .with_mut(|c| c.override_child_size(size));
+
+        let reported_main = clamp_reported_main(
+            self.axis,
+            input.parent_constraint(),
+            total_main_with_padding,
+            self.viewport_limit,
+            self.max_viewport_main,
+        );
+
+        for placement in placements {
+            output.place_child(placement.child_id, placement.position);
+        }
+
+        Ok(self.axis.pack_size(reported_main, cross_with_padding))
+    }
+}
+
 #[tessera]
 fn lazy_staggered_grid_view(
     view_args: LazyStaggeredGridViewArgs,
@@ -593,6 +737,31 @@ fn lazy_staggered_grid_view(
     let lane_count = grid_slots.len();
 
     controller.with_mut(|c| c.cache.set_item_count(total_count));
+    let total_main = controller.with(|c| {
+        if lane_count == 0 || total_count == 0 {
+            return Px::ZERO;
+        }
+        let mut lane_offsets = vec![Px::ZERO; lane_count];
+        for index in 0..total_count {
+            let lane = find_shortest_lane(&lane_offsets);
+            let item_main = c
+                .cache
+                .item_main(index)
+                .unwrap_or(view_args.estimated_item_main);
+            lane_offsets[lane] = lane_offsets[lane] + item_main + view_args.main_axis_spacing;
+        }
+        finalize_lane_offsets(&lane_offsets, view_args.main_axis_spacing)
+    });
+    let total_main_with_padding = total_main + view_args.padding_main + view_args.padding_main;
+    let cross_with_padding =
+        grid_slots.cross_size + view_args.padding_cross + view_args.padding_cross;
+    scroll_controller.with_mut(|c| {
+        c.override_child_size(
+            view_args
+                .axis
+                .pack_size(total_main_with_padding, cross_with_padding),
+        );
+    });
 
     let scroll_offset = view_args
         .axis
@@ -620,95 +789,32 @@ fn lazy_staggered_grid_view(
     let visible_items = plan.visible_items(visible_range);
 
     if visible_items.is_empty() {
-        measure(move |_| Ok(ComputedData::ZERO));
+        layout(ZeroLayout);
         return;
     }
 
     let viewport_limit = viewport_span + padding_main + padding_main;
-    let axis = view_args.axis;
-    let item_alignment = view_args.item_alignment;
-    let estimated_item_main = view_args.estimated_item_main;
-    let main_spacing = view_args.main_axis_spacing;
-    let padding_cross = view_args.padding_cross;
-    let visible_plan = visible_items.clone();
-    let slots = grid_slots.clone();
+    let visible_layout_items = visible_items
+        .iter()
+        .map(|item| VisibleStaggeredLayoutItem {
+            item_index: item.item_index,
+        })
+        .collect();
 
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
-        if input.children_ids.len() != visible_plan.len() {
-            return Err(MeasurementError::MeasureFnFailed(
-                "Lazy staggered grid measured child count mismatch".into(),
-            ));
-        }
-
-        let (placements, total_main) = controller.with_mut(|c| {
-            let mut placements = Vec::with_capacity(visible_plan.len());
-            let mut visible_iter = visible_plan
-                .iter()
-                .zip(input.children_ids.iter())
-                .peekable();
-
-            let mut lane_offsets = vec![Px::ZERO; slots.len()];
-
-            for index in 0..total_count {
-                if slots.len() == 0 {
-                    break;
-                }
-
-                let lane = find_shortest_lane(&lane_offsets);
-                let lane_cross = slots.sizes.get(lane).copied().unwrap_or(Px::ZERO);
-                let item_start = lane_offsets[lane];
-                let mut item_main = c.cache.item_main(index).unwrap_or(estimated_item_main);
-
-                if let Some((visible, child_id)) = visible_iter.peek() {
-                    if visible.item_index == index {
-                        let child_constraint = axis.child_constraint(lane_cross, item_alignment);
-                        let child_size = input.measure_child(**child_id, &child_constraint)?;
-                        item_main = axis.main(&child_size);
-                        c.cache.record_measurement(index, item_main);
-
-                        let cell_offset = compute_cell_offset(
-                            lane_cross,
-                            axis.cross(&child_size),
-                            item_alignment,
-                        );
-                        let cross_offset = padding_cross
-                            + slots.positions.get(lane).copied().unwrap_or(Px::ZERO)
-                            + cell_offset;
-                        let position = axis.position(item_start + padding_main, cross_offset);
-                        placements.push(StaggeredPlacement {
-                            child_id: **child_id,
-                            position,
-                        });
-
-                        visible_iter.next();
-                    }
-                }
-
-                lane_offsets[lane] = item_start + item_main + main_spacing;
-            }
-
-            let total_main = finalize_lane_offsets(&lane_offsets, main_spacing);
-            Ok::<_, MeasurementError>((placements, total_main))
-        })?;
-
-        let total_main_with_padding = total_main + padding_main + padding_main;
-        let cross_with_padding = slots.cross_size + padding_cross + padding_cross;
-        let size = axis.pack_size(total_main_with_padding, cross_with_padding);
-        scroll_controller.with_mut(|c| c.override_child_size(size));
-
-        let reported_main = clamp_reported_main(
-            axis,
-            input.parent_constraint,
-            total_main_with_padding,
-            viewport_limit,
-            view_args.max_viewport_main,
-        );
-
-        for placement in placements {
-            input.place_child(placement.child_id, placement.position);
-        }
-
-        Ok(axis.pack_size(reported_main, cross_with_padding))
+    layout(LazyStaggeredGridLayout {
+        axis: view_args.axis,
+        item_alignment: view_args.item_alignment,
+        estimated_item_main: view_args.estimated_item_main,
+        main_spacing: view_args.main_axis_spacing,
+        max_viewport_main: view_args.max_viewport_main,
+        padding_main,
+        padding_cross: view_args.padding_cross,
+        viewport_limit,
+        total_count,
+        slots: grid_slots.clone(),
+        visible_items: visible_layout_items,
+        controller,
+        scroll_controller,
     });
 
     for child in visible_items {
@@ -806,7 +912,7 @@ fn compute_cell_offset(cell_cross: Px, child_cross: Px, alignment: CrossAxisAlig
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum StaggeredGridAxis {
     Vertical,
     Horizontal,
@@ -904,7 +1010,7 @@ impl StaggeredGridAxis {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct GridSlots {
     sizes: Vec<Px>,
     positions: Vec<Px>,

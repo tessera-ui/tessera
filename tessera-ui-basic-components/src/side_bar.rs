@@ -9,7 +9,11 @@ use std::{
 };
 
 use derive_setters::Setters;
-use tessera_ui::{Color, Dp, Modifier, Px, PxPosition, State, remember, tessera, winit};
+use tessera_ui::{
+    Color, ComputedData, Dp, MeasurementError, Modifier, Px, PxPosition, State,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    remember, tessera, winit,
+};
 
 use crate::{
     animation,
@@ -284,24 +288,24 @@ fn make_keyboard_closure(
 /// Place side bar if present. Extracted to reduce complexity of the parent
 /// function.
 fn place_side_bar_if_present(
-    input: &tessera_ui::MeasureInput<'_>,
-    controller: State<SideBarController>,
+    input: &LayoutInput<'_>,
+    output: &mut LayoutOutput<'_>,
+    is_open: bool,
     progress: f32,
 ) {
-    if input.children_ids.len() <= 2 {
+    if input.children_ids().len() <= 2 {
         return;
     }
 
-    let side_bar_id = input.children_ids[2];
+    let side_bar_id = input.children_ids()[2];
 
     let child_size = match input.measure_child_in_parent_constraint(side_bar_id) {
         Ok(s) => s,
         Err(_) => return,
     };
 
-    let current_is_open = controller.with(|c| c.is_open());
-    let x = compute_side_bar_x(child_size.width, progress, current_is_open);
-    input.place_child(side_bar_id, PxPosition::new(Px(x), Px(0)));
+    let x = compute_side_bar_x(child_size.width, progress, is_open);
+    output.place_child(side_bar_id, PxPosition::new(Px(x), Px(0)));
 }
 
 /// # side_bar_provider
@@ -427,27 +431,7 @@ pub fn side_bar_provider_with_controller(
     side_bar_content_wrapper(args.style, side_bar_content);
 
     // Measurement: place main content, scrim and side bar.
-    let measure_closure = Box::new(move |input: &tessera_ui::MeasureInput<'_>| {
-        // Place main content at origin.
-        let main_content_id = input.children_ids[0];
-        let main_content_size = input.measure_child_in_parent_constraint(main_content_id)?;
-        input.place_child(main_content_id, PxPosition::new(Px(0), Px(0)));
-
-        // Place scrim (if present) covering the whole parent.
-        if input.children_ids.len() > 1 {
-            let scrim_id = input.children_ids[1];
-            input.measure_child_in_parent_constraint(scrim_id)?;
-            input.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
-        }
-
-        // Place side bar (if present) using extracted helper.
-        place_side_bar_if_present(input, controller, progress);
-
-        // Return the main content size (best-effort; unwrap used above to satisfy
-        // closure type).
-        Ok(main_content_size)
-    });
-    measure(measure_closure);
+    layout(SideBarLayout { progress, is_open });
 }
 
 #[tessera]
@@ -487,5 +471,33 @@ fn side_bar_content_wrapper(style: SideBarStyle, content: impl FnOnce() + Send +
                 },
             );
         }
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct SideBarLayout {
+    progress: f32,
+    is_open: bool,
+}
+
+impl LayoutSpec for SideBarLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let main_content_id = input.children_ids()[0];
+        let main_content_size = input.measure_child_in_parent_constraint(main_content_id)?;
+        output.place_child(main_content_id, PxPosition::new(Px(0), Px(0)));
+
+        if input.children_ids().len() > 1 {
+            let scrim_id = input.children_ids()[1];
+            input.measure_child_in_parent_constraint(scrim_id)?;
+            output.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
+        }
+
+        place_side_bar_if_present(input, output, self.is_open, self.progress);
+
+        Ok(main_content_size)
     }
 }

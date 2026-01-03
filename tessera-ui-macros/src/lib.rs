@@ -26,6 +26,7 @@ fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_ma
     quote! {
         {
             use #crate_path::ComponentNode;
+            use #crate_path::layout::DefaultLayoutSpec;
             use #crate_path::runtime::TesseraRuntime;
 
             TesseraRuntime::with_mut(|runtime| {
@@ -33,8 +34,9 @@ fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_ma
                     ComponentNode {
                         fn_name: stringify!(#fn_name).to_string(),
                         logic_id: __tessera_logic_id,
-                        measure_fn: None,
+                        instance_key: 0,
                         input_handler_fn: None,
+                        layout_spec: Box::new(DefaultLayoutSpec::default()),
                     }
                 )
             })
@@ -42,27 +44,17 @@ fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_ma
     }
 }
 
-/// Helper: tokens to inject `measure`
-fn measure_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
+/// Helper: tokens to inject `layout`
+fn layout_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
         #[allow(clippy::needless_pass_by_value)]
-        fn measure<F>(fun: F)
+        fn layout<S>(spec: S)
         where
-            F: Fn(&#crate_path::MeasureInput<'_>) -> Result<#crate_path::ComputedData, #crate_path::MeasurementError>
-                + Send
-                + Sync
-                + 'static,
+            S: #crate_path::layout::LayoutSpec,
         {
-            use #crate_path::MeasureFn;
             use #crate_path::runtime::TesseraRuntime;
 
-            TesseraRuntime::with_mut(|runtime| {
-                runtime
-                    .component_tree
-                    .current_node_mut()
-                    .unwrap()
-                    .measure_fn = Some(Box::new(fun) as Box<MeasureFn>)
-            });
+            TesseraRuntime::with_mut(|runtime| runtime.set_current_layout_spec(spec));
         }
     }
 }
@@ -273,7 +265,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Prepare token fragments using helpers to keep function small and readable
     let register_tokens = register_node_tokens(&crate_path, fn_name);
-    let measure_tokens = measure_inject_tokens(&crate_path);
+    let layout_tokens = layout_inject_tokens(&crate_path);
     let state_tokens = input_handler_inject_tokens(&crate_path);
     let on_minimize_tokens = on_minimize_inject_tokens(&crate_path);
     let on_close_tokens = on_close_inject_tokens(&crate_path);
@@ -309,8 +301,26 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 push_current_node(__tessera_node_id, __tessera_logic_id, __tessera_fn_name)
             };
 
+            let __tessera_instance_key: u64 = #crate_path::runtime::current_instance_key();
+            {
+                use #crate_path::runtime::TesseraRuntime;
+                TesseraRuntime::with_mut(|runtime| {
+                    runtime.set_current_instance_key(__tessera_instance_key);
+                });
+            }
+            let _trace_guard = {
+                struct TraceGuard;
+                impl Drop for TraceGuard {
+                    fn drop(&mut self) {
+                        #crate_path::runtime::trace_end();
+                    }
+                }
+                #crate_path::runtime::trace_begin(__tessera_instance_key);
+                TraceGuard
+            };
+
             // Inject helper tokens
-            #measure_tokens
+            #layout_tokens
             #state_tokens
             #on_minimize_tokens
             #on_close_tokens

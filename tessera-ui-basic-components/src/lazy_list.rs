@@ -13,7 +13,9 @@ use std::{
 use derive_setters::Setters;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, ParentConstraint, Px,
-    PxPosition, State, key, remember, tessera,
+    PxPosition, State, key,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    remember, tessera,
 };
 
 use crate::{
@@ -528,6 +530,22 @@ fn lazy_list_view(
         view_args.item_spacing,
     );
     let viewport_span = (viewport_span - (padding_main * 2)).max(Px::ZERO);
+    let total_main = controller.with(|c| {
+        c.cache
+            .total_main_size(view_args.estimated_item_main, view_args.item_spacing)
+    });
+    let total_main_with_padding = total_main + padding_main + padding_main;
+    let visible_cross = view_args
+        .axis
+        .cross(&scroll_controller.with(|s| s.visible_size()));
+    let cross_with_padding = visible_cross + view_args.padding_cross + view_args.padding_cross;
+    scroll_controller.with_mut(|c| {
+        c.override_child_size(
+            view_args
+                .axis
+                .pack_size(total_main_with_padding, cross_with_padding),
+        );
+    });
 
     let visible_children = controller.with(|c| {
         compute_visible_children(
@@ -543,44 +561,114 @@ fn lazy_list_view(
     });
 
     if visible_children.is_empty() {
-        measure(move |_| Ok(ComputedData::ZERO));
+        layout(ZeroLayout);
         return;
     }
 
     let viewport_limit = viewport_span + padding_main + padding_main;
-    let child_constraint_axis = view_args.axis;
-    let estimated_item_main = view_args.estimated_item_main;
-    let spacing = view_args.item_spacing;
-    let cross_alignment = view_args.cross_axis_alignment;
-    let padding_cross = view_args.padding_cross;
-    let visible_plan = visible_children.clone();
+    let visible_item_indices = visible_children
+        .iter()
+        .map(|visible| visible.item_index)
+        .collect();
 
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
-        if input.children_ids.len() != visible_plan.len() {
+    layout(LazyListLayout {
+        axis: view_args.axis,
+        cross_axis_alignment: view_args.cross_axis_alignment,
+        item_spacing: view_args.item_spacing,
+        estimated_item_main: view_args.estimated_item_main,
+        max_viewport_main: view_args.max_viewport_main,
+        padding_main,
+        padding_cross: view_args.padding_cross,
+        viewport_limit,
+        visible_item_indices,
+        controller,
+        scroll_controller,
+    });
+
+    for child in visible_children {
+        key(child.key_hash, || {
+            (child.builder)(child.local_index);
+        });
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct ZeroLayout;
+
+impl LayoutSpec for ZeroLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        Ok(ComputedData::ZERO)
+    }
+}
+
+#[derive(Clone)]
+struct LazyListLayout {
+    axis: LazyListAxis,
+    cross_axis_alignment: CrossAxisAlignment,
+    item_spacing: Px,
+    estimated_item_main: Px,
+    max_viewport_main: Option<Px>,
+    padding_main: Px,
+    padding_cross: Px,
+    viewport_limit: Px,
+    visible_item_indices: Vec<usize>,
+    controller: State<LazyListController>,
+    scroll_controller: State<ScrollableController>,
+}
+
+impl PartialEq for LazyListLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.axis == other.axis
+            && self.cross_axis_alignment == other.cross_axis_alignment
+            && self.item_spacing == other.item_spacing
+            && self.estimated_item_main == other.estimated_item_main
+            && self.max_viewport_main == other.max_viewport_main
+            && self.padding_main == other.padding_main
+            && self.padding_cross == other.padding_cross
+            && self.viewport_limit == other.viewport_limit
+            && self.visible_item_indices == other.visible_item_indices
+    }
+}
+
+impl LayoutSpec for LazyListLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        if input.children_ids().len() != self.visible_item_indices.len() {
             return Err(MeasurementError::MeasureFnFailed(
                 "Lazy list measured child count mismatch".into(),
             ));
         }
 
-        let mut child_constraint = child_constraint_axis.child_constraint(input.parent_constraint);
-        apply_cross_padding(&mut child_constraint, child_constraint_axis, padding_cross);
-        let (placements, inner_cross, total_main) = controller.with_mut(|c| {
-            let mut placements = Vec::with_capacity(visible_plan.len());
+        let mut child_constraint = self.axis.child_constraint(input.parent_constraint());
+        apply_cross_padding(&mut child_constraint, self.axis, self.padding_cross);
+        let (placements, inner_cross, total_main) = self.controller.with_mut(|c| {
+            let mut placements = Vec::with_capacity(self.visible_item_indices.len());
             let mut max_cross = Px::ZERO;
 
-            for (visible, child_id) in visible_plan.iter().zip(input.children_ids.iter()) {
+            for (item_index, child_id) in self
+                .visible_item_indices
+                .iter()
+                .zip(input.children_ids().iter())
+            {
                 let item_offset =
                     c.cache
-                        .offset_for(visible.item_index, estimated_item_main, spacing);
+                        .offset_for(*item_index, self.estimated_item_main, self.item_spacing);
                 let child_size = input.measure_child(*child_id, &child_constraint)?;
 
                 c.cache.record_measurement(
-                    visible.item_index,
-                    child_constraint_axis.main(&child_size),
-                    estimated_item_main,
+                    *item_index,
+                    self.axis.main(&child_size),
+                    self.estimated_item_main,
                 );
 
-                max_cross = max_cross.max(child_constraint_axis.cross(&child_size));
+                max_cross = max_cross.max(self.axis.cross(&child_size));
                 placements.push(Placement {
                     child_id: *child_id,
                     offset_main: item_offset,
@@ -588,43 +676,42 @@ fn lazy_list_view(
                 });
             }
 
-            let total_main = c.cache.total_main_size(estimated_item_main, spacing);
+            let total_main = c
+                .cache
+                .total_main_size(self.estimated_item_main, self.item_spacing);
             Ok::<_, MeasurementError>((placements, max_cross, total_main))
         })?;
 
-        let total_main_with_padding = total_main + padding_main + padding_main;
-        let cross_with_padding = inner_cross + padding_cross + padding_cross;
-        let size = child_constraint_axis.pack_size(total_main_with_padding, cross_with_padding);
-        scroll_controller.with_mut(|c| c.override_child_size(size));
+        let total_main_with_padding = total_main + self.padding_main + self.padding_main;
+        let cross_with_padding = inner_cross + self.padding_cross + self.padding_cross;
+        let size = self
+            .axis
+            .pack_size(total_main_with_padding, cross_with_padding);
+        self.scroll_controller
+            .with_mut(|c| c.override_child_size(size));
 
         let reported_main = clamp_reported_main(
-            child_constraint_axis,
-            input.parent_constraint,
+            self.axis,
+            input.parent_constraint(),
             total_main_with_padding,
-            viewport_limit,
-            view_args.max_viewport_main,
+            self.viewport_limit,
+            self.max_viewport_main,
         );
 
         for placement in &placements {
             let cross_offset = compute_cross_offset(
                 inner_cross,
-                child_constraint_axis.cross(&placement.size),
-                cross_alignment,
+                self.axis.cross(&placement.size),
+                self.cross_axis_alignment,
             );
-            let position = child_constraint_axis.position(
-                placement.offset_main + padding_main,
-                padding_cross + cross_offset,
+            let position = self.axis.position(
+                placement.offset_main + self.padding_main,
+                self.padding_cross + cross_offset,
             );
-            input.place_child(placement.child_id, position);
+            output.place_child(placement.child_id, position);
         }
 
-        Ok(child_constraint_axis.pack_size(reported_main, cross_with_padding))
-    });
-
-    for child in visible_children {
-        key(child.key_hash, || {
-            (child.builder)(child.local_index);
-        });
+        Ok(self.axis.pack_size(reported_main, cross_with_padding))
     }
 }
 
@@ -689,7 +776,7 @@ fn compute_cross_offset(final_cross: Px, child_cross: Px, alignment: CrossAxisAl
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum LazyListAxis {
     Vertical,
     Horizontal,

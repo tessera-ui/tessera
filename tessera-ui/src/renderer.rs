@@ -584,6 +584,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let tree_timer = Instant::now();
         debug!("Building component tree...");
         begin_frame_slots();
+        TesseraRuntime::with_mut(|rt| rt.begin_frame_trace());
         entry_wrapper(entry_point);
         let build_tree_cost = tree_timer.elapsed();
         debug!("Component tree built in {build_tree_cost:?}");
@@ -619,6 +620,7 @@ Fps: {:.2}
     fn compute_draw_commands<'a>(
         args: &mut RenderFrameArgs<'a>,
         screen_size: PxSize,
+        frame_idx: u64,
     ) -> RenderComputationOutput {
         let draw_timer = Instant::now();
         debug!("Computing draw commands...");
@@ -631,18 +633,23 @@ Fps: {:.2}
         args.app.resource_manager.write().clear();
 
         let (commands, window_requests) = TesseraRuntime::with_mut(|rt| {
-            rt.component_tree
-                .compute(crate::component_tree::ComputeParams {
-                    screen_size,
-                    cursor_position,
-                    cursor_events,
-                    keyboard_events,
-                    ime_events,
-                    modifiers: args.keyboard_state.modifiers(),
-                    compute_resource_manager: args.app.resource_manager.clone(),
-                    gpu: &args.app.gpu,
-                    clipboard: args.clipboard,
-                })
+            let frame_trace = rt.take_frame_trace();
+            let layout_cache = &mut rt.layout_cache;
+            let component_tree = &mut rt.component_tree;
+            component_tree.compute(crate::component_tree::ComputeParams {
+                screen_size,
+                cursor_position,
+                cursor_events,
+                keyboard_events,
+                ime_events,
+                modifiers: args.keyboard_state.modifiers(),
+                compute_resource_manager: args.app.resource_manager.clone(),
+                gpu: &args.app.gpu,
+                clipboard: args.clipboard,
+                layout_cache,
+                frame_trace,
+                frame_index: frame_idx,
+            })
         });
 
         let draw_cost = draw_timer.elapsed();
@@ -718,7 +725,7 @@ Fps: {:.2}
         // Compute draw commands
         let screen_size: PxSize = args.app.size().into();
         let (new_commands, window_requests, draw_cost) =
-            Self::compute_draw_commands(args, screen_size);
+            Self::compute_draw_commands(args, screen_size, frame_idx);
 
         #[cfg(feature = "profiling")]
         let mut render_duration_ns: Option<u128> = None;

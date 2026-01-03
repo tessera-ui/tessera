@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, PressKeyEventType, Px,
-    PxPosition, State,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
+    Modifier, PressKeyEventType, Px, PxPosition, State,
     accesskit::{Action, Role},
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
     tessera,
 };
 
@@ -19,6 +20,52 @@ use crate::{
 enum ScrollOrientation {
     Vertical,
     Horizontal,
+}
+
+#[derive(Clone, PartialEq)]
+struct ScrollBarVLayout {
+    thumb_offset: Px,
+}
+
+impl LayoutSpec for ScrollBarVLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let track_node_id = input.children_ids()[0];
+        let size = input.measure_child(track_node_id, &Constraint::NONE)?;
+        output.place_child(track_node_id, PxPosition::ZERO);
+
+        let thumb_node_id = input.children_ids()[1];
+        input.measure_child(thumb_node_id, &Constraint::NONE)?;
+        output.place_child(thumb_node_id, PxPosition::new(Px::ZERO, self.thumb_offset));
+
+        Ok(size)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct ScrollBarHLayout {
+    thumb_offset: Px,
+}
+
+impl LayoutSpec for ScrollBarHLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let track_node_id = input.children_ids()[0];
+        let size = input.measure_child(track_node_id, &Constraint::NONE)?;
+        output.place_child(track_node_id, PxPosition::ZERO);
+
+        let thumb_node_id = input.children_ids()[1];
+        input.measure_child(thumb_node_id, &Constraint::NONE)?;
+        output.place_child(thumb_node_id, PxPosition::new(self.thumb_offset, Px::ZERO));
+
+        Ok(size)
+    }
 }
 
 #[derive(Clone)]
@@ -678,19 +725,8 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
     let progress = compute_thumb_progress(args.offset, args.total);
     let thumb_y = args.visible.to_f32() * progress;
 
-    measure(move |input| {
-        // measure track
-        let track_node_id = input.children_ids[0];
-        let size = input.measure_child(track_node_id, &Constraint::NONE)?; // No constraints need since it's size is fixed
-        // place track at the top left corner
-        input.place_child(track_node_id, [0, 0].into());
-        // measure thumb
-        let thumb_node_id = input.children_ids[1];
-        input.measure_child(thumb_node_id, &Constraint::NONE)?; // No constraints need since it's size is fixed
-        // place thumb
-        input.place_child(thumb_node_id, [0, thumb_y as i32].into());
-        // Return the size of the scrollbar track
-        Ok(size)
+    layout(ScrollBarVLayout {
+        thumb_offset: Px::from_f32(thumb_y),
     });
 
     let args_for_handler = args.clone();
@@ -755,19 +791,8 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
     let progress = compute_thumb_progress(args.offset, args.total);
     let thumb_x = args.visible.to_f32() * progress;
 
-    measure(move |input| {
-        // measure track
-        let track_node_id = input.children_ids[0];
-        let size = input.measure_child(track_node_id, &Constraint::NONE)?;
-        // place track at the top left corner
-        input.place_child(track_node_id, [0, 0].into());
-        // measure thumb
-        let thumb_node_id = input.children_ids[1];
-        input.measure_child(thumb_node_id, &Constraint::NONE)?;
-        // place thumb
-        input.place_child(thumb_node_id, [thumb_x as i32, 0].into());
-        // Return the size of the scrollbar track
-        Ok(size)
+    layout(ScrollBarHLayout {
+        thumb_offset: Px::from_f32(thumb_x),
     });
 
     let args_for_handler = args.clone();

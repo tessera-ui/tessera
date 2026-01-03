@@ -22,7 +22,10 @@
 //! See [`CheckmarkArgs`] for configuration options and usage examples in the
 //! [`checkmark`] function documentation.
 use derive_setters::Setters;
-use tessera_ui::{Color, ComputedData, Dp, Px, tessera};
+use tessera_ui::{
+    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px,
+    RenderInput, tessera,
+};
 
 use crate::pipelines::checkmark::command::CheckmarkCommand;
 
@@ -69,6 +72,37 @@ impl Default for CheckmarkArgs {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct CheckmarkLayout {
+    size: Px,
+    color: Color,
+    stroke_width: f32,
+    progress: f32,
+    padding: [f32; 2],
+}
+
+impl LayoutSpec for CheckmarkLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        Ok(ComputedData {
+            width: self.size,
+            height: self.size,
+        })
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        let command = CheckmarkCommand::new()
+            .with_color(self.color)
+            .with_stroke_width(self.stroke_width)
+            .with_progress(self.progress)
+            .with_padding(self.padding[0], self.padding[1]);
+        input.metadata_mut().push_draw_command(command);
+    }
+}
+
 /// Renders a checkmark, a visual indicator that is displayed when in a
 /// `checked` state.
 ///
@@ -96,22 +130,11 @@ pub fn checkmark(args: impl Into<CheckmarkArgs>) {
     let args: CheckmarkArgs = args.into();
 
     let size_px = args.size.to_px();
-
-    // Create the checkmark command
-    let command = CheckmarkCommand::new()
-        .with_color(args.color)
-        .with_stroke_width(args.stroke_width)
-        .with_progress(args.progress)
-        .with_padding(args.padding[0], args.padding[1]);
-
-    // Measure the component and push the draw command within the measure function
-    measure(move |input| {
-        // Push the draw command to the current node's metadata
-        input.metadata_mut().push_draw_command(command);
-
-        Ok(ComputedData {
-            width: Px::new(size_px.to_f32() as i32),
-            height: Px::new(size_px.to_f32() as i32),
-        })
+    layout(CheckmarkLayout {
+        size: Px::new(size_px.to_f32() as i32),
+        color: args.color,
+        stroke_width: args.stroke_width,
+        progress: args.progress,
+        padding: args.padding,
     });
 }

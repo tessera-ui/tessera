@@ -10,8 +10,11 @@ use std::{
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, PxPosition, PxSize, State,
-    accesskit::Role, remember, tessera, use_context,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    PxPosition, PxSize, State,
+    accesskit::Role,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -118,6 +121,107 @@ struct SwitchResolvedColors {
     track_outline_color: Color,
     thumb_color: Color,
     icon_color: Color,
+}
+
+#[derive(Clone)]
+struct SwitchLayout {
+    track_width: Dp,
+    track_height: Dp,
+    track_outline_width: Dp,
+    thumb_diameter: Dp,
+    progress: f64,
+    checked: bool,
+    is_pressed: bool,
+}
+
+impl PartialEq for SwitchLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.track_width == other.track_width
+            && self.track_height == other.track_height
+            && self.track_outline_width == other.track_outline_width
+            && self.thumb_diameter == other.thumb_diameter
+            && self.progress == other.progress
+            && self.checked == other.checked
+            && self.is_pressed == other.is_pressed
+    }
+}
+
+impl LayoutSpec for SwitchLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let track_id = input.children_ids()[0];
+        let state_layer_id = input.children_ids()[1];
+        let thumb_id = input.children_ids()[2];
+        let thumb_constraint = Constraint::new(
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
+            DimensionValue::Wrap {
+                min: None,
+                max: None,
+            },
+        );
+        let track_size = input.measure_child(track_id, &thumb_constraint)?;
+        let state_layer_size = input.measure_child(state_layer_id, &thumb_constraint)?;
+        let thumb_size = input.measure_child(thumb_id, &thumb_constraint)?;
+
+        let self_width_px = track_size
+            .width
+            .max(state_layer_size.width)
+            .max(thumb_size.width);
+        let self_height_px = track_size
+            .height
+            .max(state_layer_size.height)
+            .max(thumb_size.height);
+        let track_origin_x = (self_width_px.0 - track_size.width.0) / 2;
+        let track_origin_y = (self_height_px.0 - track_size.height.0) / 2;
+
+        let checked_thumb_diameter = SwitchDefaults::THUMB_DIAMETER;
+        let thumb_padding_start = Dp((self.track_height.0 - checked_thumb_diameter.0) / 2.0);
+        let max_bound_dp =
+            Dp((self.track_width.0 - checked_thumb_diameter.0) - thumb_padding_start.0);
+
+        let min_bound_dp = Dp((self.track_height.0 - self.thumb_diameter.0) / 2.0);
+        let anim_offset_dp = Dp(min_bound_dp.0 + (max_bound_dp.0 - min_bound_dp.0) * self.progress);
+        let offset_dp = if self.is_pressed && self.checked {
+            Dp(max_bound_dp.0 - self.track_outline_width.0)
+        } else if self.is_pressed && !self.checked {
+            self.track_outline_width
+        } else {
+            anim_offset_dp
+        };
+        let thumb_x = offset_dp.to_px();
+
+        let thumb_center_x = track_origin_x + thumb_x.0 + thumb_size.width.0 / 2;
+        let thumb_center_y = track_origin_y + track_size.height.0 / 2;
+        let state_layer_x = thumb_center_x - state_layer_size.width.0 / 2;
+        let state_layer_y = thumb_center_y - state_layer_size.height.0 / 2;
+
+        output.place_child(
+            track_id,
+            PxPosition::new(Px(track_origin_x), Px(track_origin_y)),
+        );
+        output.place_child(
+            thumb_id,
+            PxPosition::new(
+                Px(track_origin_x + thumb_x.0),
+                Px(track_origin_y + (track_size.height.0 - thumb_size.height.0) / 2),
+            ),
+        );
+        output.place_child(
+            state_layer_id,
+            PxPosition::new(Px(state_layer_x), Px(state_layer_y)),
+        );
+
+        Ok(ComputedData {
+            width: self_width_px,
+            height: self_height_px,
+        })
+    }
 }
 
 /// Controller for the `switch` component.
@@ -446,87 +550,14 @@ fn switch_inner(
         let track_width = args.width;
         let track_height = args.height;
 
-        measure(move |input| {
-            let track_id = input.children_ids[0];
-            let state_layer_id = input.children_ids[1];
-            let thumb_id = input.children_ids[2];
-            let thumb_constraint = Constraint::new(
-                DimensionValue::Wrap {
-                    min: None,
-                    max: None,
-                },
-                DimensionValue::Wrap {
-                    min: None,
-                    max: None,
-                },
-            );
-            let track_size = input.measure_child(track_id, &thumb_constraint)?;
-            let state_layer_size = input.measure_child(state_layer_id, &thumb_constraint)?;
-            let thumb_size = input.measure_child(thumb_id, &thumb_constraint)?;
-
-            let self_width_px = track_size
-                .width
-                .max(state_layer_size.width)
-                .max(thumb_size.width);
-            let self_height_px = track_size
-                .height
-                .max(state_layer_size.height)
-                .max(thumb_size.height);
-            let track_origin_x = (self_width_px.0 - track_size.width.0) / 2;
-            let track_origin_y = (self_height_px.0 - track_size.height.0) / 2;
-
-            // Calculate thumb positioning:
-            // - unchecked offset is (trackHeight - thumbDiameter) / 2
-            // - checked offset is (trackWidth - checkedThumbDiameter) - thumbPadding
-            // - pressed snaps towards the inside by TrackOutlineWidth
-            let checked_thumb_diameter = SwitchDefaults::THUMB_DIAMETER;
-            let thumb_padding_start = Dp((track_height.0 - checked_thumb_diameter.0) / 2.0);
-            let max_bound_dp =
-                Dp((track_width.0 - checked_thumb_diameter.0) - thumb_padding_start.0);
-
-            let min_bound_dp = Dp((track_height.0 - thumb_diameter_dp.0) / 2.0);
-            let anim_offset_dp =
-                Dp(min_bound_dp.0 + (max_bound_dp.0 - min_bound_dp.0) * eased_progress_f64);
-            let offset_dp = if is_pressed && checked {
-                Dp(max_bound_dp.0 - track_outline_width.0)
-            } else if is_pressed && !checked {
-                track_outline_width
-            } else {
-                anim_offset_dp
-            };
-            let thumb_x = offset_dp.to_px();
-
-            // State layer follows the thumb center.
-            let thumb_center_x = track_origin_x + thumb_x.0 + thumb_size.width.0 / 2;
-            let thumb_center_y = track_origin_y + track_size.height.0 / 2;
-            let state_layer_x = thumb_center_x - state_layer_size.width.0 / 2;
-            let state_layer_y = thumb_center_y - state_layer_size.height.0 / 2;
-
-            input.place_child(
-                track_id,
-                PxPosition::new(
-                    tessera_ui::Px(track_origin_x),
-                    tessera_ui::Px(track_origin_y),
-                ),
-            );
-            input.place_child(
-                thumb_id,
-                PxPosition::new(
-                    tessera_ui::Px(track_origin_x + thumb_x.0),
-                    tessera_ui::Px(
-                        track_origin_y + (track_size.height.0 - thumb_size.height.0) / 2,
-                    ),
-                ),
-            );
-            input.place_child(
-                state_layer_id,
-                PxPosition::new(tessera_ui::Px(state_layer_x), tessera_ui::Px(state_layer_y)),
-            );
-
-            Ok(ComputedData {
-                width: self_width_px,
-                height: self_height_px,
-            })
+        layout(SwitchLayout {
+            track_width,
+            track_height,
+            track_outline_width,
+            thumb_diameter: thumb_diameter_dp,
+            progress: eased_progress_f64,
+            checked,
+            is_pressed,
         });
     });
 }

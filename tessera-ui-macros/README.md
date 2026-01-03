@@ -14,7 +14,7 @@ The `#[tessera]` macro transforms regular Rust functions into Tessera UI compone
 ## Features
 
 - **Component Integration**: Automatically registers functions as components in the Tessera component tree
-- **Runtime Injection**: Provides access to `measure` and `input_handler` functions within component functions
+- **Runtime Injection**: Provides access to `layout` and `input_handler` functions within component functions
 - **Clean Syntax**: Enables declarative component definition with minimal boilerplate
 - **Tree Management**: Handles component tree node creation and cleanup automatically
 
@@ -29,7 +29,7 @@ use tessera_macros::tessera;
 fn my_component() {
     // Your component logic here
     // The macro automatically provides access to:
-    // - measure: for custom layout logic
+    // - layout: for custom layout logic
     // - input_handler: for handling user interactions
 }
 ```
@@ -47,23 +47,32 @@ fn button_component(label: String, on_click: Arc<dyn Fn()>) {
 }
 ```
 
-### Using Measure and Input Handler
+### Using Layout and Input Handler
 
 ```rust
 use tessera_macros::tessera;
-use tessera::{ComputedData, Constraints};
+use tessera_ui::{ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px};
 
-#[tessera]
-fn custom_component() {
-    // Define custom layout behavior
-    measure(|_| {
-        // Custom measurement logic
-        use tessera::{ComputedData, Px};
+#[derive(Clone, PartialEq)]
+struct FixedLayout;
+
+impl LayoutSpec for FixedLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
         Ok(ComputedData {
             width: Px(100),
             height: Px(50),
         })
-    });
+    }
+}
+
+#[tessera]
+fn custom_component() {
+    // Define custom layout behavior
+    layout(FixedLayout);
 
     // Handle user interactions
     input_handler(|_| {
@@ -78,7 +87,7 @@ The `#[tessera]` macro performs the following transformations:
 
 1. **Component Registration**: Adds the function to the component tree with its name
 2. **Runtime Access**: Injects code to access the Tessera runtime
-3. **Function Injection**: Provides `measure` and `input_handler` functions in the component scope
+3. **Function Injection**: Provides `layout` and `input_handler` functions in the component scope
 4. **Tree Management**: Handles pushing and popping nodes from the component tree
 5. **Error Safety**: Wraps the original function body to prevent early returns from breaking the component tree
 
@@ -98,8 +107,8 @@ fn my_component() {
     // Component tree registration
     TesseraRuntime::write().component_tree.add_node(ComponentNode { ... });
     
-    // Inject measure and input_handler functions
-    let measure = |fun: impl Fn(&MeasureInput<'_>) -> Result<ComputedData, MeasurementError> + Send + Sync + 'static| { /* ... */ };
+    // Inject layout and input_handler functions
+    let layout = |spec: impl LayoutSpec| { /* ... */ };
     let input_handler = |fun: impl Fn(InputHandlerInput) + Send + Sync + 'static| { /* ... */ };
     
     // Execute original function body safely
@@ -144,19 +153,27 @@ fn counter_component() {
 
 ```rust
 use tessera_macros::tessera;
-use tessera::{ComputedData, Constraints, Px};
+use tessera_ui::{ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px};
 
-#[tessera]
-fn custom_layout() {
-    measure(|_| {
-        // Custom measurement logic
-        use tessera::{ComputedData, Px};
-        
+#[derive(Clone, PartialEq)]
+struct FixedLayout;
+
+impl LayoutSpec for FixedLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
         Ok(ComputedData {
             width: Px(120),
             height: Px(80),
         })
-    });
+    }
+}
+
+#[tessera]
+fn custom_layout() {
+    layout(FixedLayout);
     
     // Child components
     text("Hello, World!");

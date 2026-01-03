@@ -24,6 +24,7 @@
 //!       "fn_name": "entry_wrapper",
 //!       "abs_pos": { "x": 0, "y": 0 },
 //!       "size": { "w": 51, "h": 48 },
+//!       "layout_cache_hit": true,
 //!       "phases": { "build_ns": 55548600, "measure_ns": 55549000 },
 //!       "children": [
 //!         {
@@ -31,6 +32,7 @@
 //!           "fn_name": "app",
 //!           "abs_pos": { "x": 0, "y": 0 },
 //!           "size": { "w": 51, "h": 48 },
+//!           "layout_cache_hit": false,
 //!           "phases": { "build_ns": 54978700, "measure_ns": 54979600 },
 //!           "children": [
 //!             {
@@ -38,6 +40,7 @@
 //!               "fn_name": "text",
 //!               "abs_pos": { "x": 0, "y": 0 },
 //!               "size": { "w": 51, "h": 48 },
+//!               "layout_cache_hit": true,
 //!               "phases": { "build_ns": 54976500, "measure_ns": 54977000 },
 //!               "children": [
 //!                 {
@@ -85,6 +88,10 @@
 //!
 //! Each subsequent line is a frame record containing timing data for a single
 //! frame.
+//!
+//! `layout_cache_hit` is an optional boolean on each component record. When
+//! present, it indicates whether the layout cache was hit for that node in the
+//! current frame.
 //!
 //! See [`FrameRecord`] and [`ComponentRecord`] for equivalent Rust structures.
 use std::{
@@ -143,6 +150,8 @@ pub struct NodeMeta {
     pub abs_pos: Option<(i32, i32)>,
     /// Computed size of the node.
     pub size: Option<(i32, i32)>,
+    /// Whether the layout cache was hit for this node in the frame.
+    pub layout_cache_hit: Option<bool>,
 }
 
 /// Frame-level metadata dispatched after the component tree has been built and
@@ -162,7 +171,7 @@ pub struct FrameMeta {
 /// A minimal frame record written to the profiler output:
 ///
 /// ```json
-/// {"frame":1,"render_time_ns":1000000,"frame_total_ns":2000000,"components":[{"id":"1","fn_name":"root","abs_pos":{"x":0,"y":0},"size":{"w":100,"h":50},"phases":{"build_ns":5000},"children":[]}]}
+/// {"frame":1,"render_time_ns":1000000,"frame_total_ns":2000000,"components":[{"id":"1","fn_name":"root","abs_pos":{"x":0,"y":0},"size":{"w":100,"h":50},"layout_cache_hit":true,"phases":{"build_ns":5000},"children":[]}]}
 /// ```
 
 enum Message {
@@ -323,6 +332,9 @@ pub struct ComponentRecord {
     abs_pos: Option<Pos>,
     /// Size of the component.
     size: Option<Size>,
+    /// Whether the layout cache was hit for this component.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    layout_cache_hit: Option<bool>,
     /// How long each phase took.
     phases: PhaseDurations,
     /// Child components' records.
@@ -357,6 +369,7 @@ struct ComponentRecordBuilder {
     fn_name: Option<String>,
     abs_pos: Option<Pos>,
     size: Option<Size>,
+    layout_cache_hit: Option<bool>,
     phases: PhaseDurations,
     children: Vec<String>,
 }
@@ -375,6 +388,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
                 fn_name: node.fn_name.clone(),
                 abs_pos: node.abs_pos.map(|(x, y)| Pos { x, y }),
                 size: node.size.map(|(w, h)| Size { w, h }),
+                layout_cache_hit: node.layout_cache_hit,
                 phases: PhaseDurations::default(),
                 children: Vec::new(),
             });
@@ -388,6 +402,9 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
         if entry.size.is_none() {
             entry.size = node.size.map(|(w, h)| Size { w, h });
         }
+        if entry.layout_cache_hit.is_none() {
+            entry.layout_cache_hit = node.layout_cache_hit;
+        }
 
         if let Some(parent_id) = parent {
             let parent_entry =
@@ -399,6 +416,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
                         fn_name: None,
                         abs_pos: None,
                         size: None,
+                        layout_cache_hit: None,
                         phases: PhaseDurations::default(),
                         children: Vec::new(),
                     });
@@ -424,6 +442,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
                 fn_name: sample.fn_name.clone(),
                 abs_pos: sample.abs_pos.map(|(x, y)| Pos { x, y }),
                 size: sample.computed_size.map(|(w, h)| Size { w, h }),
+                layout_cache_hit: None,
                 phases: PhaseDurations::default(),
                 children: Vec::new(),
             });
@@ -455,6 +474,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
                         fn_name: None,
                         abs_pos: None,
                         size: None,
+                        layout_cache_hit: None,
                         phases: PhaseDurations::default(),
                         children: Vec::new(),
                     });
@@ -492,6 +512,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             fn_name: None,
             abs_pos: None,
             size: None,
+            layout_cache_hit: None,
             phases: PhaseDurations::default(),
             children: Vec::new(),
         });
@@ -506,6 +527,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             fn_name: builder.fn_name,
             abs_pos: builder.abs_pos,
             size: builder.size,
+            layout_cache_hit: builder.layout_cache_hit,
             phases: builder.phases,
             children,
         }

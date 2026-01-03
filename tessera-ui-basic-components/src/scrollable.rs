@@ -8,8 +8,10 @@ use std::time::Instant;
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, Modifier, Px,
-    PxPosition, State, remember, tessera,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
+    Modifier, Px, PxPosition, State,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    remember, tessera,
 };
 
 use crate::{
@@ -219,6 +221,146 @@ impl ScrollableController {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct ScrollableAlongsideLayout {
+    vertical: bool,
+    horizontal: bool,
+}
+
+impl LayoutSpec for ScrollableAlongsideLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let mut final_size = ComputedData::ZERO;
+        let mut content_constraint = Constraint::new(
+            input.parent_constraint().width(),
+            input.parent_constraint().height(),
+        );
+
+        if self.vertical {
+            let scrollbar_node_id = input.children_ids()[1];
+            let size = input.measure_child_in_parent_constraint(scrollbar_node_id)?;
+            content_constraint.width -= size.width;
+            final_size.width += size.width;
+        }
+
+        if self.horizontal {
+            let scrollbar_node_id = if self.vertical {
+                input.children_ids()[2]
+            } else {
+                input.children_ids()[1]
+            };
+            let size = input.measure_child_in_parent_constraint(scrollbar_node_id)?;
+            content_constraint.height -= size.height;
+            final_size.height += size.height;
+        }
+
+        let content_node_id = input.children_ids()[0];
+        let content_measurement = input.measure_child(content_node_id, &content_constraint)?;
+        final_size.width += content_measurement.width;
+        final_size.height += content_measurement.height;
+
+        output.place_child(content_node_id, PxPosition::ZERO);
+        if self.vertical {
+            output.place_child(
+                input.children_ids()[1],
+                PxPosition::new(content_measurement.width, Px::ZERO),
+            );
+        }
+        if self.horizontal {
+            let scrollbar_node_id = if self.vertical {
+                input.children_ids()[2]
+            } else {
+                input.children_ids()[1]
+            };
+            output.place_child(
+                scrollbar_node_id,
+                PxPosition::new(Px::ZERO, content_measurement.height),
+            );
+        }
+
+        Ok(final_size)
+    }
+}
+
+#[derive(Clone)]
+struct ScrollableInnerLayout {
+    controller: State<ScrollableController>,
+    vertical: bool,
+    horizontal: bool,
+    child_position: PxPosition,
+    has_override: bool,
+}
+
+impl PartialEq for ScrollableInnerLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.vertical == other.vertical
+            && self.horizontal == other.horizontal
+            && self.child_position == other.child_position
+            && self.has_override == other.has_override
+    }
+}
+
+impl LayoutSpec for ScrollableInnerLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let merged_constraint = Constraint::new(
+            input.parent_constraint().width(),
+            input.parent_constraint().height(),
+        );
+        let mut child_constraint = merged_constraint;
+
+        if self.vertical {
+            child_constraint.height = DimensionValue::Wrap {
+                min: None,
+                max: None,
+            };
+        }
+        if self.horizontal {
+            child_constraint.width = DimensionValue::Wrap {
+                min: None,
+                max: None,
+            };
+        }
+
+        let child_node_id = input.children_ids()[0];
+        let child_measurement = input.measure_child(child_node_id, &child_constraint)?;
+        let current_child_position = self.child_position;
+        self.controller.with_mut(|c| {
+            if let Some(override_size) = c.override_child_size.take() {
+                c.child_size = override_size;
+            } else {
+                c.child_size = child_measurement;
+            }
+        });
+
+        output.place_child(child_node_id, current_child_position);
+
+        let mut width = resolve_dimension(merged_constraint.width, child_measurement.width);
+        let mut height = resolve_dimension(merged_constraint.height, child_measurement.height);
+
+        if let Some(parent_max_width) = input.parent_constraint().width().get_max() {
+            width = width.min(parent_max_width);
+        }
+        if let Some(parent_max_height) = input.parent_constraint().height().get_max() {
+            height = height.min(parent_max_height);
+        }
+
+        let computed_data = ComputedData { width, height };
+        self.controller.with_mut(|c| c.visible_size = computed_data);
+        Ok(computed_data)
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        input.metadata_mut().clips_children = true;
+    }
+}
+
 /// # scrollable
 ///
 /// Creates a container that makes its content scrollable when it overflows.
@@ -408,62 +550,9 @@ fn scrollable_with_alongside_scrollbar(
         scrollbar_h(scrollbar_args_h, scrollbar_h_state);
     }
 
-    measure(move |input| {
-        // Record the final size
-        let mut final_size = ComputedData::ZERO;
-        let mut content_contraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-        // measure the scrollbar
-        if args.vertical {
-            let scrollbar_node_id = input.children_ids[1];
-            let size = input.measure_child_in_parent_constraint(scrollbar_node_id)?;
-            // substract the scrollbar size from the content constraint
-            content_contraint.width -= size.width;
-            // update the size
-            final_size.width += size.width;
-        }
-        if args.horizontal {
-            let scrollbar_node_id = if args.vertical {
-                input.children_ids[2]
-            } else {
-                input.children_ids[1]
-            };
-            let size = input.measure_child_in_parent_constraint(scrollbar_node_id)?;
-            content_contraint.height -= size.height;
-            // update the size
-            final_size.height += size.height;
-        }
-        // Measure the content
-        let content_node_id = input.children_ids[0];
-        let content_measurement = input.measure_child(content_node_id, &content_contraint)?;
-        // update the size
-        final_size.width += content_measurement.width;
-        final_size.height += content_measurement.height;
-        // Place childrens
-        // place the content at [0, 0]
-        input.place_child(content_node_id, PxPosition::ZERO);
-        // place the scrollbar at the end
-        if args.vertical {
-            input.place_child(
-                input.children_ids[1],
-                PxPosition::new(content_measurement.width, Px::ZERO),
-            );
-        }
-        if args.horizontal {
-            let scrollbar_node_id = if args.vertical {
-                input.children_ids[2]
-            } else {
-                input.children_ids[1]
-            };
-            input.place_child(
-                scrollbar_node_id,
-                PxPosition::new(Px::ZERO, content_measurement.height),
-            );
-        }
-        // Return the computed data
-        Ok(final_size)
+    layout(ScrollableAlongsideLayout {
+        vertical: args.vertical,
+        horizontal: args.horizontal,
     });
 }
 
@@ -549,68 +638,16 @@ fn scrollable_inner(
     scrollbar_state_h: ScrollBarState,
     child: impl FnOnce(),
 ) {
-    {
-        measure(move |input| {
-            input.enable_clipping();
-            let merged_constraint = Constraint::new(
-                input.parent_constraint.width(),
-                input.parent_constraint.height(),
-            );
-            // Now calculate the constraints to child
-            let mut child_constraint = merged_constraint;
-            // If vertical scrollable, set height to wrap
-            if args.vertical {
-                child_constraint.height = tessera_ui::DimensionValue::Wrap {
-                    min: None,
-                    max: None,
-                };
-            }
-            // If horizontal scrollable, set width to wrap
-            if args.horizontal {
-                child_constraint.width = tessera_ui::DimensionValue::Wrap {
-                    min: None,
-                    max: None,
-                };
-            }
-            // Measure the child with child constraint
-            let child_node_id = input.children_ids[0]; // Scrollable should have exactly one child
-            let child_measurement = input.measure_child(child_node_id, &child_constraint)?;
-            // Update the child position and size in the state. Allow components to override
-            // the scroll extent (used by virtualized lists) while maintaining the actual
-            // measured viewport size for layout.
-            let current_child_position = controller.with_mut(|c| {
-                if let Some(override_size) = c.override_child_size.take() {
-                    c.child_size = override_size;
-                } else {
-                    c.child_size = child_measurement;
-                }
-                c.update_scroll_position(args.scroll_smoothing);
-                c.child_position
-            });
-
-            // Place child at current interpolated position
-            input.place_child(child_node_id, current_child_position);
-
-            // Calculate the size of the scrollable area using helpers to reduce inline
-            // branching
-            let mut width = resolve_dimension(merged_constraint.width, child_measurement.width);
-            let mut height = resolve_dimension(merged_constraint.height, child_measurement.height);
-
-            if let Some(parent_max_width) = input.parent_constraint.width().get_max() {
-                width = width.min(parent_max_width);
-            }
-            if let Some(parent_max_height) = input.parent_constraint.height().get_max() {
-                height = height.min(parent_max_height);
-            }
-
-            // Pack the size into ComputedData
-            let computed_data = ComputedData { width, height };
-            // Update the visible size in the state
-            controller.with_mut(|c| c.visible_size = computed_data);
-            // Return the size of the scrollable area
-            Ok(computed_data)
-        });
-    }
+    controller.with_mut(|c| c.update_scroll_position(args.scroll_smoothing));
+    let child_position = controller.with(|c| c.child_position());
+    let has_override = controller.with(|c| c.override_child_size.is_some());
+    layout(ScrollableInnerLayout {
+        controller,
+        vertical: args.vertical,
+        horizontal: args.horizontal,
+        child_position,
+        has_override,
+    });
 
     // Handle scroll input and position updates
     input_handler(move |input| {
@@ -689,10 +726,6 @@ fn scrollable_inner(
             // Block cursor events to prevent propagation
             input.cursor_events.clear();
         }
-
-        // Update scroll position based on time (only once per frame, after handling
-        // events)
-        controller.with_mut(|c| c.update_scroll_position(args.scroll_smoothing));
     });
 
     // Add child component

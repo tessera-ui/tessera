@@ -11,7 +11,10 @@ use std::{
 use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, PxSize, State, accesskit::Role, provide_context, remember, tessera, use_context,
+    PxPosition, PxSize, State,
+    accesskit::Role,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -195,33 +198,54 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
         });
     }
 
-    measure(move |input| -> Result<ComputedData, MeasurementError> {
-        let parent_width = match input.parent_constraint.width() {
+    layout(NavigationRailItemLayout {
+        icon_position,
+        has_label,
+        has_icon,
+        item_min_height,
+    });
+}
+
+#[derive(Clone, PartialEq)]
+struct NavigationRailItemLayout {
+    icon_position: NavigationRailIconPosition,
+    has_label: bool,
+    has_icon: bool,
+    item_min_height: Dp,
+}
+
+impl LayoutSpec for NavigationRailItemLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let parent_width = match input.parent_constraint().width() {
             DimensionValue::Fixed(v) => v,
             DimensionValue::Wrap { max, .. } => max.unwrap_or(Px::ZERO),
             DimensionValue::Fill { max, .. } => max.unwrap_or(Px::ZERO),
         };
-        let min_height = item_min_height.to_px();
-        let parent_height = match input.parent_constraint.height() {
+        let min_height = self.item_min_height.to_px();
+        let parent_height = match input.parent_constraint().height() {
             DimensionValue::Fixed(v) => v.max(min_height),
             DimensionValue::Wrap { min, .. } => min.unwrap_or(min_height).max(min_height),
             DimensionValue::Fill { min, .. } => min.unwrap_or(min_height).max(min_height),
         };
 
-        let indicator_background_id = input.children_ids[0];
-        let indicator_ripple_id = input.children_ids[1];
+        let indicator_background_id = input.children_ids()[0];
+        let indicator_ripple_id = input.children_ids()[1];
         let mut child_index = 2;
 
-        let icon_id = if has_icon {
-            let id = input.children_ids[child_index];
+        let icon_id = if self.has_icon {
+            let id = input.children_ids()[child_index];
             child_index += 1;
             Some(id)
         } else {
             None
         };
 
-        let label_id = if has_label {
-            let id = input.children_ids[child_index];
+        let label_id = if self.has_label {
+            let id = input.children_ids()[child_index];
             Some(id)
         } else {
             None
@@ -229,7 +253,7 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
 
         let child_constraint = Constraint::new(DimensionValue::WRAP, DimensionValue::WRAP);
         let children_to_measure: Vec<_> = input
-            .children_ids
+            .children_ids()
             .iter()
             .map(|&child_id| (child_id, child_constraint))
             .collect();
@@ -251,17 +275,17 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
         let width = parent_width;
         let height = parent_height;
 
-        match icon_position {
+        match self.icon_position {
             NavigationRailIconPosition::Start => {
                 let horizontal_padding = ITEM_HORIZONTAL_PADDING.to_px();
                 let ripple_x = horizontal_padding;
                 let ripple_y = (height - indicator_ripple_size.height) / 2;
-                input.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
+                output.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
 
                 let indicator_x =
                     ripple_x + (indicator_ripple_size.width - indicator_size.width) / 2;
                 let indicator_y = (height - indicator_size.height) / 2;
-                input.place_child(
+                output.place_child(
                     indicator_background_id,
                     PxPosition::new(indicator_x, indicator_y),
                 );
@@ -271,17 +295,17 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
 
                 if let Some(icon_id) = icon_id {
                     let icon_y = (height - icon_size.height) / 2;
-                    input.place_child(icon_id, PxPosition::new(content_x, icon_y));
+                    output.place_child(icon_id, PxPosition::new(content_x, icon_y));
                 }
 
                 if let Some(label_id) = label_id {
                     let label_y = (height - label_size.height) / 2;
-                    let label_x = if has_icon {
+                    let label_x = if self.has_icon {
                         content_x + icon_size.width + START_ICON_TO_LABEL_PADDING.to_px()
                     } else {
                         content_x
                     };
-                    input.place_child(label_id, PxPosition::new(label_x, label_y));
+                    output.place_child(label_id, PxPosition::new(label_x, label_y));
                 }
 
                 return Ok(ComputedData { width, height });
@@ -289,21 +313,21 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
             NavigationRailIconPosition::Top => {}
         }
 
-        if !has_label {
+        if !self.has_label {
             let ripple_x = (width - indicator_ripple_size.width) / 2;
             let ripple_y = (height - indicator_ripple_size.height) / 2;
             let indicator_x = (width - indicator_size.width) / 2;
             let indicator_y = (height - indicator_size.height) / 2;
-            input.place_child(
+            output.place_child(
                 indicator_background_id,
                 PxPosition::new(indicator_x, indicator_y),
             );
-            input.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
+            output.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
 
             if let Some(icon_id) = icon_id {
                 let icon_x = (width - icon_size.width) / 2;
                 let icon_y = (height - icon_size.height) / 2;
-                input.place_child(icon_id, PxPosition::new(icon_x, icon_y));
+                output.place_child(icon_id, PxPosition::new(icon_x, icon_y));
             }
 
             return Ok(ComputedData { width, height });
@@ -330,22 +354,22 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
             + indicator_vertical_padding_px
             + INDICATOR_TOP_TO_LABEL_PADDING.to_px();
 
-        input.place_child(
+        output.place_child(
             indicator_background_id,
             PxPosition::new(indicator_x, indicator_y),
         );
-        input.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
+        output.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
 
         if let Some(icon_id) = icon_id {
-            input.place_child(icon_id, PxPosition::new(icon_x, icon_y));
+            output.place_child(icon_id, PxPosition::new(icon_x, icon_y));
         }
 
         if let Some(label_id) = label_id {
-            input.place_child(label_id, PxPosition::new(label_x, label_y));
+            output.place_child(label_id, PxPosition::new(label_x, label_y));
         }
 
         Ok(ComputedData { width, height })
-    });
+    }
 }
 
 struct NavigationRailItemArgs {

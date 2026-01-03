@@ -7,8 +7,11 @@ use std::sync::Arc;
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, Modifier, Px, PxPosition, PxSize, State,
-    accesskit::Role, provide_context, remember, tessera, use_context,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    PxPosition, PxSize, State,
+    accesskit::Role,
+    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -621,6 +624,131 @@ fn compute_surface_size(
     (width, height)
 }
 
+#[derive(Clone)]
+struct SurfaceLayout {
+    args: SurfaceArgs,
+    interaction_state: Option<State<InteractionState>>,
+    ripple_state: Option<State<RippleState>>,
+    scheme: MaterialColorScheme,
+    absolute_tonal_elevation: Dp,
+}
+
+impl PartialEq for SurfaceLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.args.content_alignment == other.args.content_alignment
+    }
+}
+
+impl LayoutSpec for SurfaceLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let effective_surface_constraint = Constraint::new(
+            input.parent_constraint().width(),
+            input.parent_constraint().height(),
+        );
+
+        let child_measurement = if !input.children_ids().is_empty() {
+            let child_measurements = input.measure_children(
+                input
+                    .children_ids()
+                    .iter()
+                    .copied()
+                    .map(|node_id| (node_id, effective_surface_constraint))
+                    .collect(),
+            )?;
+            let mut max_width = Px::ZERO;
+            let mut max_height = Px::ZERO;
+            for measurement in child_measurements.values() {
+                max_width = max_width.max(measurement.width);
+                max_height = max_height.max(measurement.height);
+            }
+            ComputedData {
+                width: max_width,
+                height: max_height,
+            }
+        } else {
+            ComputedData {
+                width: Px(0),
+                height: Px(0),
+            }
+        };
+
+        let (width, height) = compute_surface_size(effective_surface_constraint, child_measurement);
+
+        if !input.children_ids().is_empty() {
+            let (extra_x, extra_y) = compute_content_offset(
+                self.args.content_alignment,
+                width,
+                height,
+                child_measurement.width,
+                child_measurement.height,
+            );
+            let origin = PxPosition {
+                x: extra_x,
+                y: extra_y,
+            };
+            for &child_id in input.children_ids().iter() {
+                output.place_child(child_id, origin);
+            }
+        }
+
+        Ok(ComputedData { width, height })
+    }
+
+    fn record(&self, input: &RenderInput<'_>) {
+        let state_layer_alpha = if self.args.show_state_layer {
+            self.interaction_state
+                .as_ref()
+                .map(|state| state.with(|s| s.state_layer_alpha()))
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
+
+        let mut effective_style = apply_tonal_elevation_to_style(
+            &self.args.style,
+            &self.scheme,
+            self.absolute_tonal_elevation,
+        );
+        if self.args.show_state_layer {
+            effective_style = apply_state_layer_to_style(
+                &effective_style,
+                self.args.ripple_color.with_alpha(1.0),
+                state_layer_alpha,
+            );
+        }
+
+        let ripple_state_for_draw = if self.args.show_ripple {
+            self.ripple_state
+        } else {
+            None
+        };
+
+        let mut metadata = input.metadata_mut();
+        let size = metadata
+            .computed_data
+            .expect("Surface node must have computed size before record");
+
+        if let Some(simple) =
+            try_build_simple_rect_command(&self.args, &effective_style, ripple_state_for_draw)
+        {
+            metadata.push_draw_command(simple);
+        } else {
+            let drawable = make_surface_drawable(
+                &self.args,
+                &effective_style,
+                ripple_state_for_draw,
+                PxSize::new(size.width, size.height),
+            );
+
+            metadata.push_draw_command(drawable);
+        }
+    }
+}
+
 /// # surface
 ///
 /// Renders a styled container for content with optional interaction.
@@ -797,109 +925,14 @@ fn surface_inner(
             );
         },
     );
-    let args_measure = args.clone();
-    let absolute_tonal_elevation_for_draw = absolute_tonal_elevation;
 
-    measure(move |input| {
-        let args_for_draw = args_measure.clone();
-
-        let effective_surface_constraint = Constraint::new(
-            input.parent_constraint.width(),
-            input.parent_constraint.height(),
-        );
-
-        let child_measurement = if !input.children_ids.is_empty() {
-            let child_measurements = input.measure_children(
-                input
-                    .children_ids
-                    .iter()
-                    .copied()
-                    .map(|node_id| (node_id, effective_surface_constraint))
-                    .collect(),
-            )?;
-            let mut max_width = Px::ZERO;
-            let mut max_height = Px::ZERO;
-            for measurement in child_measurements.values() {
-                max_width = max_width.max(measurement.width);
-                max_height = max_height.max(measurement.height);
-            }
-            ComputedData {
-                width: max_width,
-                height: max_height,
-            }
-        } else {
-            ComputedData {
-                width: Px(0),
-                height: Px(0),
-            }
-        };
-
-        let state_layer_alpha = if args_measure.show_state_layer {
-            interaction_state
-                .as_ref()
-                .map(|state| state.with(|s| s.state_layer_alpha()))
-                .unwrap_or(0.0)
-        } else {
-            0.0
-        };
-
-        let effective_style = &args_measure.style;
-        let effective_style = apply_tonal_elevation_to_style(
-            effective_style,
-            &scheme,
-            absolute_tonal_elevation_for_draw,
-        );
-        let effective_style = if args_measure.show_state_layer {
-            apply_state_layer_to_style(
-                &effective_style,
-                args_for_draw.ripple_color.with_alpha(1.0),
-                state_layer_alpha,
-            )
-        } else {
-            effective_style
-        };
-
-        let (width, height) = compute_surface_size(effective_surface_constraint, child_measurement);
-
-        if !input.children_ids.is_empty() {
-            let (extra_x, extra_y) = compute_content_offset(
-                args_measure.content_alignment,
-                width,
-                height,
-                child_measurement.width,
-                child_measurement.height,
-            );
-            let origin = PxPosition {
-                x: extra_x,
-                y: extra_y,
-            };
-            for &child_id in input.children_ids.iter() {
-                input.place_child(child_id, origin);
-            }
-        }
-
-        let ripple_state_for_draw = if args_measure.show_ripple {
-            ripple_state
-        } else {
-            None
-        };
-
-        if let Some(simple) =
-            try_build_simple_rect_command(&args_for_draw, &effective_style, ripple_state_for_draw)
-        {
-            input.metadata_mut().push_draw_command(simple);
-        } else {
-            let drawable = make_surface_drawable(
-                &args_for_draw,
-                &effective_style,
-                ripple_state_for_draw,
-                PxSize::new(width, height),
-            );
-
-            input.metadata_mut().push_draw_command(drawable);
-        }
-
-        Ok(ComputedData { width, height })
+    let layout_args = args.clone();
+    layout(SurfaceLayout {
+        args: layout_args,
+        interaction_state,
+        ripple_state,
+        scheme,
+        absolute_tonal_elevation,
     });
 
     if !interactive && args.block_input {
