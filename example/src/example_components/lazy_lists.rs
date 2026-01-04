@@ -41,6 +41,7 @@ pub fn lazy_lists_showcase() {
                                             .text("Virtualized column/row that only mounts what is visible in the viewport.")
                                             .color(
                                                 use_context::<MaterialTheme>()
+                                                    .expect("MaterialTheme must be provided")
                                                     .get()
                                                     .color_scheme
                                                     .on_surface_variant,
@@ -79,6 +80,7 @@ fn vertical_list() {
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(
                 use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
                     .get()
                     .color_scheme
                     .surface_variant
@@ -114,6 +116,7 @@ fn horizontal_gallery() {
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(
                 use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
                     .get()
                     .color_scheme
                     .surface_variant
@@ -170,6 +173,7 @@ fn contact_card(index: usize) {
                                     .text(format!("{unread_count} unread messages"))
                                     .color(
                                         use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
                                             .get()
                                             .color_scheme
                                             .on_surface_variant,

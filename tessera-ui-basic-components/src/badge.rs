@@ -296,7 +296,11 @@ impl BadgeDefaults {
 
     /// Default container color for a badge.
     pub fn container_color() -> Color {
-        use_context::<MaterialTheme>().get().color_scheme.error
+        use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme
+            .error
     }
 }
 
@@ -421,14 +425,19 @@ where
     F: FnOnce(&mut RowScope),
 {
     let args: BadgeArgs = args.into();
-    let theme = use_context::<MaterialTheme>().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
     let container_color = args.container_color;
     let content_color = args.content_color.unwrap_or_else(|| {
-        content_color_for(container_color, &scheme)
-            .unwrap_or(use_context::<ContentColor>().get().current)
+        content_color_for(container_color, &scheme).unwrap_or(
+            use_context::<ContentColor>()
+                .map(|c| c.get().current)
+                .unwrap_or(ContentColor::default().current),
+        )
     });
 
     let padding_px = BadgeDefaults::WITH_CONTENT_HORIZONTAL_PADDING.to_px();
@@ -438,7 +447,7 @@ where
     });
 
     provide_context(
-        ContentColor {
+        || ContentColor {
             current: content_color,
         },
         || {

@@ -48,6 +48,7 @@ pub fn lazy_grids_showcase() {
                                             )
                                             .color(
                                                 use_context::<MaterialTheme>()
+                                                    .expect("MaterialTheme must be provided")
                                                     .get()
                                                     .color_scheme
                                                     .on_surface_variant,
@@ -86,6 +87,7 @@ fn vertical_grid() {
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(
                 use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
                     .get()
                     .color_scheme
                     .surface_variant
@@ -123,6 +125,7 @@ fn horizontal_grid() {
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(
                 use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
                     .get()
                     .color_scheme
                     .surface_variant

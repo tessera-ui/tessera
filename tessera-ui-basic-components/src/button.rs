@@ -131,7 +131,10 @@ impl ButtonArgs {
 
 impl Default for ButtonArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             enabled: true,
             modifier: Modifier::new(),
@@ -179,17 +182,23 @@ impl Default for ButtonArgs {
 ///     button::{ButtonArgs, button},
 ///     text::{TextArgs, text},
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(|| MaterialTheme::default(), || {
 /// button(ButtonArgs::filled(|| {}), || {
 ///     text(TextArgs::default().text("Click Me"));
 /// });
+/// # });
 /// # }
 /// # component();
 /// ```
 #[tessera]
 pub fn button(args: impl Into<ButtonArgs>, child: impl FnOnce() + Send + Sync + 'static) {
     let button_args: ButtonArgs = args.into();
-    let typography = use_context::<MaterialTheme>().get().typography;
+    let typography = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .typography;
 
     // Create interactive surface for button
     surface(create_surface_args(&button_args), move || {
@@ -203,8 +212,13 @@ pub fn button(args: impl Into<ButtonArgs>, child: impl FnOnce() + Send + Sync + 
 
 /// Create surface arguments based on button configuration
 fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
-    let inherited_content_color = use_context::<ContentColor>().get().current;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let inherited_content_color = use_context::<ContentColor>()
+        .map(|c| c.get().current)
+        .unwrap_or(ContentColor::default().current);
 
     let container_color = if args.enabled {
         args.color
@@ -281,7 +295,10 @@ impl ButtonArgs {
     /// Create a standard "Filled" button (High emphasis).
     /// Uses Primary color for container and OnPrimary for content.
     pub fn filled(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         ButtonArgs::default()
             .color(scheme.primary)
             .content_color(scheme.on_primary)
@@ -302,7 +319,10 @@ impl ButtonArgs {
     /// Create an "Elevated" button (Medium emphasis).
     /// Uses Surface color (or SurfaceContainerLow if available) with a shadow.
     pub fn elevated(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         ButtonArgs::default()
             .color(scheme.surface_container_low)
             .content_color(scheme.primary)
@@ -325,7 +345,10 @@ impl ButtonArgs {
     /// Uses SecondaryContainer color for container and OnSecondaryContainer for
     /// content.
     pub fn tonal(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         ButtonArgs::default()
             .color(scheme.secondary_container)
             .content_color(scheme.on_secondary_container)
@@ -346,7 +369,10 @@ impl ButtonArgs {
     /// Create an "Outlined" button (Medium emphasis).
     /// Transparent container with an Outline border.
     pub fn outlined(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         ButtonArgs::default()
             .color(Color::TRANSPARENT)
             .content_color(scheme.on_surface_variant)
@@ -370,7 +396,10 @@ impl ButtonArgs {
     /// Create a "Text" button (Low emphasis).
     /// Transparent container and no border.
     pub fn text(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         ButtonArgs::default()
             .color(Color::TRANSPARENT)
             .content_color(scheme.primary)

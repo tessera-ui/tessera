@@ -329,13 +329,24 @@ fn place_side_bar_if_present(
 /// # Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use tessera_ui_basic_components::side_bar::{SideBarProviderArgs, side_bar_provider};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// side_bar_provider(
 ///     SideBarProviderArgs::new(|| {}).is_open(true),
 ///     || { /* main content */ },
 ///     || { /* side bar content */ },
 /// );
+/// #     },
+/// # );
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn side_bar_provider(

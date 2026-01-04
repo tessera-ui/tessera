@@ -73,7 +73,10 @@ fn test_content() {
             });
 
             scope.child(move || {
-                let scheme = use_context::<MaterialTheme>().get().color_scheme;
+                let scheme = use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
+                    .get()
+                    .color_scheme;
                 tabs(
                     TabsArgs::default()
                         .modifier(Modifier::new().fill_max_width())

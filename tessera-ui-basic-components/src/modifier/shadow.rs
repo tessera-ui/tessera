@@ -81,7 +81,10 @@ impl From<Dp> for ShadowArgs {
 }
 
 pub(super) fn apply_shadow_modifier(base: Modifier, args: ShadowArgs) -> Modifier {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let mut layers = SurfaceDefaults::synthesize_shadow_layers(args.elevation, &scheme);
 
     if let Some(ambient) = args.ambient_color

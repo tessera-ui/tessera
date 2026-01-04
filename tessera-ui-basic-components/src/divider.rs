@@ -49,6 +49,7 @@ impl DividerDefaults {
     /// Default divider color.
     pub fn color() -> Color {
         use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
             .get()
             .color_scheme
             .outline_variant

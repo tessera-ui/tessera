@@ -18,7 +18,7 @@ use crate::{
         image::command::{ImageCommand, ImageData},
         image_vector::command::{ImageVectorCommand, ImageVectorData},
     },
-    theme::ContentColor,
+    theme::{ContentColor, MaterialTheme},
 };
 
 /// Icon content can be provided either as vector geometry or raster pixels.
@@ -84,12 +84,16 @@ pub struct IconArgs {
 
 impl From<IconContent> for IconArgs {
     fn from(content: IconContent) -> Self {
+        let theme = use_context::<MaterialTheme>();
         Self {
             content,
             size: Dp(24.0),
             width: None,
             height: None,
-            tint: use_context::<ContentColor>().get().current,
+            tint: use_context::<ContentColor>()
+                .map(|c| c.get().current)
+                .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
+                .unwrap_or_else(|| ContentColor::default().current),
             tint_mode: TintMode::default(),
             rotation: 0.0,
         }

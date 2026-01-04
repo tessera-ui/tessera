@@ -229,7 +229,9 @@ impl ButtonGroupsState {
 ///     button_groups::{ButtonGroupsArgs, button_groups},
 ///     text::{TextArgs, text},
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(|| MaterialTheme::default(), || {
 /// button_groups(ButtonGroupsArgs::default(), |scope| {
 ///     scope.child(
 ///         |color| {
@@ -265,11 +267,12 @@ impl ButtonGroupsState {
 ///                 ..Default::default()
 ///             })
 ///         },
-///         |actived| {
+///         |_| {
 ///             println!("Button 3 clicked");
 ///         },
 ///     );
 /// });
+/// # });
 /// ```
 #[tessera]
 pub fn button_groups<F>(args: impl Into<ButtonGroupsArgs>, scope_config: F)
@@ -313,7 +316,10 @@ where
                             });
                         });
                         button_args.shape = layout.active_button_shape;
-                        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+                        let scheme = use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
+                            .get()
+                            .color_scheme;
                         let label_color = scheme.on_primary;
                         button(button_args, move || {
                             elastic_container(state, index, move || child_closure(label_color))
@@ -336,7 +342,10 @@ where
                                 item.elastic_state.toggle();
                             });
                         });
-                        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+                        let scheme = use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
+                            .get()
+                            .color_scheme;
                         button_args.color = scheme.secondary_container;
                         if index == 0 {
                             button_args.shape = layout.inactive_button_shape_start;
@@ -346,7 +355,10 @@ where
                             button_args.shape = layout.inactive_button_shape;
                         }
 
-                        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+                        let scheme = use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
+                            .get()
+                            .color_scheme;
                         let label_color = scheme.on_secondary_container;
                         button(button_args, move || {
                             elastic_container(state, index, move || child_closure(label_color))

@@ -109,7 +109,10 @@ pub enum SurfaceStyle {
 
 impl Default for SurfaceStyle {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         SurfaceStyle::Filled {
             color: scheme.surface,
         }
@@ -226,6 +229,7 @@ impl SurfaceArgs {
 
 impl Default for SurfaceArgs {
     fn default() -> Self {
+        let theme = use_context::<MaterialTheme>();
         Self {
             modifier: Modifier::new(),
             style: SurfaceStyle::default(),
@@ -236,7 +240,10 @@ impl Default for SurfaceArgs {
             content_alignment: Alignment::default(),
             enabled: true,
             on_click: None,
-            ripple_color: use_context::<ContentColor>().get().current,
+            ripple_color: use_context::<ContentColor>()
+                .map(|c| c.get().current)
+                .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
+                .unwrap_or_else(|| ContentColor::default().current),
             ripple_bounded: true,
             ripple_radius: None,
             interaction_state: None,
@@ -776,7 +783,9 @@ impl LayoutSpec for SurfaceLayout {
 ///     surface::{SurfaceArgs, surface},
 ///     text::{TextArgs, text},
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(|| MaterialTheme::default(), || {
 /// surface(
 ///     SurfaceArgs::default()
 ///         .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
@@ -785,6 +794,7 @@ impl LayoutSpec for SurfaceLayout {
 ///         text(TextArgs::default().text("Click me"));
 ///     },
 /// );
+/// # });
 /// # }
 /// # component();
 /// ```
@@ -894,10 +904,17 @@ fn surface_inner(
     ripple_state: Option<State<RippleState>>,
     child: impl FnOnce() + Send + Sync + 'static,
 ) {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
-    let parent_absolute_elevation = use_context::<AbsoluteTonalElevation>().get().current;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let parent_absolute_elevation = use_context::<AbsoluteTonalElevation>()
+        .map(|e| e.get().current)
+        .unwrap_or_else(|| AbsoluteTonalElevation::default().current);
     let absolute_tonal_elevation = Dp(parent_absolute_elevation.0 + args.tonal_elevation.0);
-    let inherited_content_color = use_context::<ContentColor>().get().current;
+    let inherited_content_color = use_context::<ContentColor>()
+        .map(|c| c.get().current)
+        .unwrap_or_else(|| ContentColor::default().current);
     let content_color = args.content_color.unwrap_or_else(|| match &args.style {
         SurfaceStyle::Filled { color } => {
             content_color_for(*color, &scheme).unwrap_or(inherited_content_color)
@@ -911,12 +928,12 @@ fn surface_inner(
     let interactive = args.enabled && clickable;
 
     provide_context(
-        AbsoluteTonalElevation {
+        || AbsoluteTonalElevation {
             current: absolute_tonal_elevation,
         },
         || {
             provide_context(
-                ContentColor {
+                || ContentColor {
                     current: content_color,
                 },
                 || {

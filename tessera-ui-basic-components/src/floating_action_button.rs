@@ -142,7 +142,9 @@ impl FloatingActionButtonDefaults {
 
     /// Returns the default shape for the provided FAB size.
     pub fn shape(size: FloatingActionButtonSize) -> Shape {
-        let theme = use_context::<MaterialTheme>().get();
+        let theme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get();
         shape_from_size(size, &theme)
     }
 
@@ -255,7 +257,9 @@ impl FloatingActionButtonArgs {
 
 impl Default for FloatingActionButtonArgs {
     fn default() -> Self {
-        let theme = use_context::<MaterialTheme>().get();
+        let theme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get();
         let scheme = theme.color_scheme;
         Self {
             size: FloatingActionButtonSize::default(),
@@ -301,9 +305,13 @@ impl Default for FloatingActionButtonArgs {
 /// use tessera_ui_basic_components::floating_action_button::{
 ///     FloatingActionButtonArgs, floating_action_button,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn component() {
+/// #     material_theme(
+/// #         || MaterialTheme::default(),
+/// #         || {
 ///     let clicked = remember(|| false);
 ///     let on_click: Arc<dyn Fn() + Send + Sync> = {
 ///         let clicked = clicked;
@@ -315,6 +323,8 @@ impl Default for FloatingActionButtonArgs {
 ///     assert!(clicked.with(|value| *value));
 ///
 ///     floating_action_button(args, || {});
+/// #         },
+/// #     );
 /// }
 ///
 /// component();
@@ -325,13 +335,17 @@ pub fn floating_action_button(
     content: impl FnOnce() + Send + Sync + 'static,
 ) {
     let args: FloatingActionButtonArgs = args.into();
-    let theme = use_context::<MaterialTheme>().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let shape = args
         .shape
         .unwrap_or_else(|| shape_from_size(args.size, &theme));
     let typography = theme.typography;
     let scheme = theme.color_scheme;
-    let inherited_content_color = use_context::<ContentColor>().get().current;
+    let inherited_content_color = use_context::<ContentColor>()
+        .map(|c| c.get().current)
+        .unwrap_or_else(|| ContentColor::default().current);
     let size = FloatingActionButtonDefaults::container_size(args.size);
 
     let container_color = if args.enabled {

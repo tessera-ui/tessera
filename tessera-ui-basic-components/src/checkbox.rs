@@ -179,7 +179,10 @@ impl CheckboxArgs {
 
 impl Default for CheckboxArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             modifier: Modifier::new(),
             on_toggle: Arc::new(|_| {}),
@@ -356,7 +359,10 @@ pub fn checkbox_with_controller(
     };
 
     // Determine colors based on state
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let (checkbox_style, icon_color) = if args.disabled {
         if is_checked {
             (

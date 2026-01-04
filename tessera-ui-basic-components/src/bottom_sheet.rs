@@ -279,7 +279,11 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
 fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
     // Material scrim: compute alpha and render a simple dark surface.
     let scrim_alpha = scrim_alpha_for(progress, is_open);
-    let scrim_color = use_context::<MaterialTheme>().get().color_scheme.scrim;
+    let scrim_color = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme
+        .scrim;
     surface(
         SurfaceArgs::default()
             .style(scrim_color.with_alpha(scrim_alpha).into())
@@ -479,6 +483,7 @@ fn render_content(
                                 SurfaceArgs::default()
                                     .style(
                                         use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
                                             .get()
                                             .color_scheme
                                             .on_surface_variant
@@ -523,6 +528,7 @@ fn render_content(
                 SurfaceArgs::default()
                     .style(
                         use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
                             .get()
                             .color_scheme
                             .surface_container_low
@@ -562,15 +568,23 @@ fn render_content(
 /// # Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use tessera_ui_basic_components::bottom_sheet::{
 ///     BottomSheetProviderArgs, bottom_sheet_provider,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(|| MaterialTheme::default(), || {
 /// bottom_sheet_provider(
 ///     BottomSheetProviderArgs::new(|| {}).is_open(true),
 ///     || { /* main content */ },
 ///     || { /* bottom sheet content */ },
 /// );
+/// # });
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn bottom_sheet_provider(

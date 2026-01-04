@@ -129,21 +129,23 @@
 //!
 //! #[tessera]
 //! fn parent() {
-//!     provide_context(Theme { color: Color::RED }, || {
-//!         child();
-//!     });
+//!     provide_context(
+//!         || Theme { color: Color::RED },
+//!         || {
+//!             child();
+//!         },
+//!     );
 //! }
 //!
 //! #[tessera]
 //! fn child() {
-//!     let theme = use_context::<Theme>();
+//!     let theme = use_context::<Theme>().expect("Theme must be provided");
 //!     theme.with(|t| assert_eq!(t.color, Color::RED));
 //! }
 //! ```
 //!
 //! A context corresponds to a type. In the component tree, a component will
-//! receive the nearest parent-provided context of the same type; if none is
-//! provided, the type's default value will be used.
+//! receive the nearest parent-provided context of the same type.
 //!
 //! ```
 //! use tessera_ui::{Color, provide_context, tessera, use_context};
@@ -155,17 +157,20 @@
 //!
 //! #[tessera]
 //! fn parent() {
-//!     provide_context(Theme { color: Color::RED }, || {
-//!         child();
-//!     });
+//!     provide_context(
+//!         || Theme { color: Color::RED },
+//!         || {
+//!             child();
+//!         },
+//!     );
 //! }
 //!
 //! #[tessera]
 //! fn child() {
-//!     let theme = use_context::<Theme>();
+//!     let theme = use_context::<Theme>().expect("Theme must be provided");
 //!     theme.with(|t| assert_eq!(t.color, Color::RED));
 //!     provide_context(
-//!         Theme {
+//!         || Theme {
 //!             color: Color::GREEN,
 //!         },
 //!         || {
@@ -176,7 +181,7 @@
 //!
 //! #[tessera]
 //! fn grandchild() {
-//!     let theme = use_context::<Theme>();
+//!     let theme = use_context::<Theme>().expect("Theme must be provided");
 //!     theme.with(|t| assert_eq!(t.color, Color::GREEN));
 //! }
 //! ```

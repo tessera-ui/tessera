@@ -16,7 +16,7 @@ use crate::{
         command::{TextCommand, TextConstraint},
         pipeline::TextData,
     },
-    theme::{ContentColor, TextStyle},
+    theme::{ContentColor, MaterialTheme, TextStyle},
 };
 
 pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
@@ -53,11 +53,18 @@ pub struct TextArgs {
 
 impl Default for TextArgs {
     fn default() -> Self {
+        let theme = use_context::<MaterialTheme>();
         Self {
             modifier: Modifier::new(),
             text: String::new(),
-            color: use_context::<ContentColor>().get().current,
-            size: use_context::<TextStyle>().get().font_size,
+            color: use_context::<ContentColor>()
+                .map(|c| c.get().current)
+                .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
+                .unwrap_or_else(|| ContentColor::default().current),
+            size: use_context::<TextStyle>()
+                .map(|s| s.get().font_size)
+                .or_else(|| theme.map(|t| t.get().typography.body_large.font_size))
+                .unwrap_or_else(|| TextStyle::default().font_size),
             line_height: None,
             accessibility_label: None,
             accessibility_description: None,
@@ -131,7 +138,9 @@ pub fn text(args: impl Into<TextArgs>) {
 
 #[tessera]
 fn text_inner(text_args: TextArgs) {
-    let inherited_style = use_context::<TextStyle>().get();
+    let inherited_style = use_context::<TextStyle>()
+        .map(|s| s.get())
+        .unwrap_or_default();
 
     let line_height = text_args
         .line_height

@@ -78,7 +78,7 @@ impl Default for TextStyle {
 
 /// Provides a text style to descendants for the duration of `child`.
 pub fn provide_text_style(style: TextStyle, child: impl FnOnce()) {
-    provide_context(style, child);
+    provide_context(|| style, child);
 }
 
 /// Material typography scale used by components to resolve default text styles.
@@ -240,7 +240,7 @@ impl MaterialTheme {
 
 /// # material_theme
 ///
-/// Provides Material theme contexts (color scheme, typography, shapes) to
+/// Provides a Material theme context (color scheme, typography, shapes) to
 /// descendants.
 ///
 /// ## Usage
@@ -249,7 +249,8 @@ impl MaterialTheme {
 ///
 /// ## Parameters
 ///
-/// - `theme` — theme configuration; see [`MaterialTheme`].
+/// - `theme` — initializer closure for theme configuration; see
+///   [`MaterialTheme`].
 /// - `child` — subtree that consumes the theme.
 ///
 /// ## Examples
@@ -266,7 +267,7 @@ impl MaterialTheme {
 ///     let typography = MaterialTypography::default();
 ///
 ///     material_theme(
-///         MaterialTheme {
+///         || MaterialTheme {
 ///             color_scheme: scheme,
 ///             typography,
 ///             ..MaterialTheme::default()
@@ -278,33 +279,8 @@ impl MaterialTheme {
 /// }
 /// ```
 #[tessera]
-pub fn material_theme(theme: impl Into<MaterialTheme>, child: impl FnOnce()) {
-    let theme = theme.into();
-    let body_large = theme.typography.body_large;
-    let content_color = ContentColor {
-        current: theme.color_scheme.on_surface,
-    };
-
-    provide_context(theme, || {
-        provide_context(content_color, || {
-            provide_text_style(body_large, child);
-        })
-    });
-}
-
-/// Provides a Material theme to descendants.
-///
-/// This is a compatibility wrapper around [`material_theme`] for code that only
-/// supplies a color scheme.
-#[tessera]
-pub fn material_theme_provider(scheme: MaterialColorScheme, child: impl FnOnce()) {
-    material_theme(MaterialTheme::from_color_scheme(scheme), child);
-}
-
-/// Generates a Material theme from a seed color and provides it to descendants.
-#[tessera]
-pub fn material_theme_from_seed(seed: Color, is_dark: bool, child: impl FnOnce()) {
-    material_theme(MaterialTheme::from_seed(seed, is_dark), child);
+pub fn material_theme(theme: impl FnOnce() -> MaterialTheme, child: impl FnOnce()) {
+    provide_context(theme, child);
 }
 
 /// A Material Design color scheme, which can be light or dark,

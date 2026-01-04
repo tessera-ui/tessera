@@ -167,7 +167,10 @@ impl RadioButtonArgs {
 
 impl Default for RadioButtonArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             modifier: Modifier::new(),
             on_select: Arc::new(|_| {}),

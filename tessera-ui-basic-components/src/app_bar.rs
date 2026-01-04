@@ -78,7 +78,10 @@ pub struct AppBarArgs {
 
 impl Default for AppBarArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             modifier: Modifier::new()
                 .fill_max_width()
@@ -116,7 +119,11 @@ impl Default for AppBarArgs {
 ///     app_bar::{AppBarArgs, AppBarDefaults, app_bar},
 ///     text::{TextArgs, text},
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// let args = AppBarArgs::default();
 /// assert_eq!(
 ///     args.content_padding.left,
@@ -126,6 +133,8 @@ impl Default for AppBarArgs {
 /// app_bar(args, |scope| {
 ///     scope.child(|| text(TextArgs::default().text("Inbox")));
 /// });
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
@@ -189,7 +198,10 @@ pub struct TopAppBarArgs {
 
 impl Default for TopAppBarArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             app_bar: AppBarArgs::default(),
             title: String::new(),
@@ -272,20 +284,29 @@ impl TopAppBarArgs {
 ///     app_bar::{TopAppBarArgs, top_app_bar},
 ///     text::{TextArgs, text},
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// let args = TopAppBarArgs::new("Inbox").action(|| {
 ///     text(TextArgs::default().text("Edit"));
 /// });
 /// assert_eq!(args.title, "Inbox");
 ///
 /// top_app_bar(args);
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
 #[tessera]
 pub fn top_app_bar(args: impl Into<TopAppBarArgs>) {
     let args: TopAppBarArgs = args.into();
-    let typography = use_context::<MaterialTheme>().get().typography;
+    let typography = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .typography;
 
     let TopAppBarArgs {
         app_bar: app_bar_args,
@@ -307,9 +328,12 @@ pub fn top_app_bar(args: impl Into<TopAppBarArgs>) {
         if let Some(navigation_icon) = navigation_icon {
             let nav_color = navigation_icon_color;
             scope.child(move || {
-                provide_context(ContentColor { current: nav_color }, || {
-                    navigation_icon();
-                });
+                provide_context(
+                    || ContentColor { current: nav_color },
+                    || {
+                        navigation_icon();
+                    },
+                );
             });
         } else if extra_inset.0 > 0.0 {
             let spacer_width = extra_inset;
@@ -342,7 +366,7 @@ pub fn top_app_bar(args: impl Into<TopAppBarArgs>) {
             let action_color = action_icon_color;
             scope.child(move || {
                 provide_context(
-                    ContentColor {
+                    || ContentColor {
                         current: action_color,
                     },
                     || {

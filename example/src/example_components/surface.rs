@@ -114,10 +114,12 @@ fn test_content(state: State<ExampleSurfaceState>) {
                             let style = if border_width.to_pixels_f32() > 0.1 {
                                 SurfaceStyle::FilledOutlined {
                                     fill_color: use_context::<MaterialTheme>()
+                                        .expect("MaterialTheme must be provided")
                                         .get()
                                         .color_scheme
                                         .primary_container,
                                     border_color: use_context::<MaterialTheme>()
+                                        .expect("MaterialTheme must be provided")
                                         .get()
                                         .color_scheme
                                         .outline,
@@ -126,6 +128,7 @@ fn test_content(state: State<ExampleSurfaceState>) {
                             } else {
                                 SurfaceStyle::Filled {
                                     color: use_context::<MaterialTheme>()
+                                        .expect("MaterialTheme must be provided")
                                         .get()
                                         .color_scheme
                                         .primary_container,

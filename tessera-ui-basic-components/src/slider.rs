@@ -395,7 +395,10 @@ impl SliderArgs {
 
 impl Default for SliderArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             modifier: Modifier::new(),
             value: 0.0,
@@ -478,7 +481,10 @@ impl RangeSliderArgs {
 
 impl Default for RangeSliderArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             modifier: Modifier::new(),
             value: (0.0, 1.0),
@@ -649,7 +655,10 @@ struct SliderColors {
 
 fn slider_colors(args: &SliderArgs) -> SliderColors {
     if args.disabled {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         let disabled_thumb = scheme
             .surface
             .blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT);
@@ -673,7 +682,10 @@ fn slider_colors(args: &SliderArgs) -> SliderColors {
 
 fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
     if args.disabled {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         let disabled_thumb = scheme
             .surface
             .blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT);
@@ -721,7 +733,11 @@ fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
 /// use tessera_ui::{Dp, Modifier};
 /// use tessera_ui_basic_components::modifier::ModifierExt as _;
 /// use tessera_ui_basic_components::slider::{SliderArgs, slider};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// slider(
 ///     SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
@@ -731,6 +747,8 @@ fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
 ///             println!("Slider value changed to: {}", new_value);
 ///         }),
 /// );
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
@@ -766,7 +784,11 @@ pub fn slider(args: impl Into<SliderArgs>) {
 /// use tessera_ui_basic_components::slider::{
 ///     SliderArgs, SliderController, slider_with_controller,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// let controller = remember(|| SliderController::new());
 /// slider_with_controller(
 ///     SliderArgs::default()
@@ -777,6 +799,8 @@ pub fn slider(args: impl Into<SliderArgs>) {
 ///         }),
 ///     controller,
 /// );
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
@@ -808,7 +832,10 @@ fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderContro
     if let Some(icon_size) = slider_layout.icon_size
         && let Some(inset_icon) = args.inset_icon.as_ref()
     {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         let tint = if args.disabled {
             scheme
                 .on_surface
@@ -1053,6 +1080,7 @@ fn measure_centered_slider(
 /// use tessera_ui::{Dp, Modifier};
 /// use tessera_ui_basic_components::modifier::ModifierExt as _;
 /// use tessera_ui_basic_components::slider::{SliderArgs, centered_slider};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 /// let current_value = Arc::new(Mutex::new(0.5));
 ///
 /// // Simulate a value change
@@ -1062,6 +1090,9 @@ fn measure_centered_slider(
 ///     assert_eq!(*value_guard, 0.75);
 /// }
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// centered_slider(
 ///     SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
@@ -1072,6 +1103,8 @@ fn measure_centered_slider(
 ///             println!("Centered slider value changed to: {}", new_value);
 ///         }),
 /// );
+/// #     },
+/// # );
 ///
 /// // Simulate another value change and check the state
 /// {
@@ -1116,7 +1149,11 @@ pub fn centered_slider(args: impl Into<SliderArgs>) {
 /// use tessera_ui_basic_components::slider::{
 ///     SliderArgs, SliderController, centered_slider_with_controller,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// let controller = remember(SliderController::new);
 /// centered_slider_with_controller(
 ///     SliderArgs::default()
@@ -1127,6 +1164,8 @@ pub fn centered_slider(args: impl Into<SliderArgs>) {
 ///         }),
 ///     controller,
 /// );
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
@@ -1401,8 +1440,12 @@ fn measure_range_slider(
 /// use tessera_ui::{Dp, Modifier};
 /// use tessera_ui_basic_components::modifier::ModifierExt as _;
 /// use tessera_ui_basic_components::slider::{RangeSliderArgs, range_slider};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 /// let range_value = Arc::new(Mutex::new((0.2, 0.8)));
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// range_slider(
 ///     RangeSliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
@@ -1411,6 +1454,8 @@ fn measure_range_slider(
 ///             println!("Range changed: {} - {}", start, end);
 ///         }),
 /// );
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```

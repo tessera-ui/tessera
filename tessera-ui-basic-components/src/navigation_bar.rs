@@ -58,7 +58,9 @@ fn navigation_bar_item_content(
     interaction_state: State<InteractionState>,
     ripple_state: State<RippleState>,
 ) {
-    let theme = use_context::<MaterialTheme>().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
@@ -144,7 +146,7 @@ fn navigation_bar_item_content(
 
     if let Some(draw_icon) = item.icon {
         provide_context(
-            ContentColor {
+            || ContentColor {
                 current: icon_color,
             },
             || {
@@ -540,7 +542,10 @@ pub fn navigation_bar_with_controller<F>(
         let mut scope = NavigationBarScope { items: &mut items };
         scope_config(&mut scope);
     }
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
 
     let animation_progress = controller
         .with_mut(|c| c.animation_progress())

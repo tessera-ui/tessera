@@ -204,12 +204,19 @@ impl ChipDefaults {
 
     /// Default shape for chip containers.
     pub fn shape() -> Shape {
-        use_context::<MaterialTheme>().get().shapes.small
+        use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .shapes
+            .small
     }
 
     /// Default colors for chips by variant and style.
     pub fn colors(variant: ChipVariant, style: ChipStyle) -> ChipColors {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         let disabled_content = scheme
             .on_surface
             .with_alpha(MaterialAlpha::DISABLED_CONTENT);
@@ -336,7 +343,10 @@ impl ChipDefaults {
             return None;
         }
 
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         let outline = scheme.outline_variant;
         let disabled_outline = scheme
             .on_surface
@@ -501,19 +511,27 @@ impl Default for ChipArgs {
 /// # fn component() {
 /// use tessera_ui::remember;
 /// use tessera_ui_basic_components::chip::{ChipArgs, chip};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// let selected = remember(|| false);
 /// selected.with_mut(|value| *value = true);
 /// let args = ChipArgs::filter("Favorites").selected(selected.with(|value| *value));
 /// assert!(args.selected);
 /// chip(args);
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
 #[tessera]
 pub fn chip(args: impl Into<ChipArgs>) {
     let args: ChipArgs = args.into();
-    let theme = use_context::<MaterialTheme>().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let typography = theme.typography;
     let variant = args.variant;
     let style = args.style;

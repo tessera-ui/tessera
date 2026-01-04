@@ -30,6 +30,35 @@ thread_local! {
     /// Call counter stack: tracks sequential remember calls within each group.
     /// Each entry corresponds to a group depth level.
     static CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+
+    /// Call counter stack: tracks sequential context provider calls within each group.
+    /// This must not share state with `CALL_COUNTER_STACK`, otherwise `provide_context`
+    /// would perturb `remember` slot keys.
+    static CONTEXT_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+}
+
+pub(crate) fn compute_context_slot_key() -> (u64, u64) {
+    let logic_id =
+        current_logic_id().expect("provide_context must be called inside a tessera component");
+    let group_path_hash = current_group_path_hash();
+
+    let call_counter = CONTEXT_CALL_COUNTER_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        debug_assert!(
+            !stack.is_empty(),
+            "CONTEXT_CALL_COUNTER_STACK is empty; provide_context must be called inside a component"
+        );
+        let counter = *stack
+            .last()
+            .expect("CONTEXT_CALL_COUNTER_STACK should not be empty");
+        *stack
+            .last_mut()
+            .expect("CONTEXT_CALL_COUNTER_STACK should not be empty") += 1;
+        counter
+    });
+
+    let slot_hash = hash_components(&[&group_path_hash, &call_counter]);
+    (logic_id, slot_hash)
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
@@ -480,6 +509,9 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
     // Push a new call counter layer for this component's internal remember calls
     CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
 
+    // Push a new call counter layer for this component's internal context providers
+    CONTEXT_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+
     #[cfg(feature = "profiling")]
     let profiling_guard = crate::profiler::make_build_scope_guard(node_id, parent_node_id, fn_name);
 
@@ -506,6 +538,15 @@ fn pop_current_node() {
         debug_assert!(
             popped.is_some(),
             "CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
+        );
+    });
+
+    // Pop this component's context call counter layer
+    CONTEXT_CALL_COUNTER_STACK.with(|stack| {
+        let popped = stack.borrow_mut().pop();
+        debug_assert!(
+            popped.is_some(),
+            "CONTEXT_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
         );
     });
 }

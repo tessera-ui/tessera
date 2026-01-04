@@ -103,7 +103,10 @@ impl TextEditorArgs {
 
 impl Default for TextEditorArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             modifier: Modifier::new(),
             on_change: Arc::new(|_| String::new()),
@@ -153,12 +156,15 @@ impl Default for TextEditorArgs {
 /// # fn component() {
 /// use tessera_ui::Dp;
 /// use tessera_ui_basic_components::text_editor::{TextEditorArgs, text_editor};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(|| MaterialTheme::default(), || {
 /// text_editor(
 ///     TextEditorArgs::default()
 ///         .padding(Dp(8.0))
 ///         .initial_text("Hello World"),
 /// );
+/// # });
 /// # }
 /// # component();
 /// ```
@@ -205,11 +211,14 @@ pub fn text_editor(args: impl Into<TextEditorArgs>) {
 ///     text::write_font_system,
 ///     text_editor::{TextEditorArgs, TextEditorController, text_editor_with_controller},
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(|| MaterialTheme::default(), || {
 /// let controller = remember(|| TextEditorController::new(Dp(14.0), None));
 /// controller.with_mut(|c| c.set_text("Initial text"));
 ///
 /// text_editor_with_controller(TextEditorArgs::default().padding(Dp(8.0)), controller);
+/// # });
 /// # }
 /// # component();
 /// ```
@@ -596,10 +605,17 @@ fn determine_background_color(args: &TextEditorArgs, state: &State<TextEditorCon
     if state.with(|c| c.focus_handler().is_focused()) {
         args.focus_background_color
             .or(args.background_color)
-            .unwrap_or(use_context::<MaterialTheme>().get().color_scheme.surface)
+            .unwrap_or(
+                use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
+                    .get()
+                    .color_scheme
+                    .surface,
+            )
     } else {
         args.background_color.unwrap_or(
             use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
                 .get()
                 .color_scheme
                 .surface_variant,
@@ -614,11 +630,16 @@ fn determine_border_color(
 ) -> Option<Color> {
     if state.with(|c| c.focus_handler().is_focused()) {
         args.focus_border_color.or(args.border_color).or(Some(
-            use_context::<MaterialTheme>().get().color_scheme.primary,
+            use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme
+                .primary,
         ))
     } else {
         args.border_color.or(Some(
             use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
                 .get()
                 .color_scheme
                 .outline_variant,
@@ -641,7 +662,10 @@ impl TextEditorArgs {
     /// # #[tessera]
     /// # fn component() {
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple();
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -650,6 +674,7 @@ impl TextEditorArgs {
             .min_width(Dp(120.0))
             .background_color(
                 use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
                     .get()
                     .color_scheme
                     .surface_variant,
@@ -657,6 +682,7 @@ impl TextEditorArgs {
             .border_width(Dp(1.0))
             .border_color(
                 use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
                     .get()
                     .color_scheme
                     .outline_variant,
@@ -679,7 +705,10 @@ impl TextEditorArgs {
     /// # #[tessera]
     /// # fn component() {
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::outlined();
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -699,7 +728,10 @@ impl TextEditorArgs {
     /// # #[tessera]
     /// # fn component() {
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::minimal();
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -728,7 +760,10 @@ impl TextEditorArgs {
     /// # fn component() {
     /// use tessera_ui::Dp;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple().with_min_width(Dp(80.0));
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -747,7 +782,10 @@ impl TextEditorArgs {
     /// # fn component() {
     /// use tessera_ui::Dp;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple().with_min_height(Dp(40.0));
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -765,7 +803,10 @@ impl TextEditorArgs {
     /// # fn component() {
     /// use tessera_ui::Color;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple().with_background_color(Color::WHITE);
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -785,7 +826,10 @@ impl TextEditorArgs {
     /// use tessera_ui::Dp;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
     ///
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple().with_border_width(Dp(1.0));
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -804,7 +848,10 @@ impl TextEditorArgs {
     /// # fn component() {
     /// use tessera_ui::Color;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple().with_border_color(Color::BLACK);
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -824,12 +871,15 @@ impl TextEditorArgs {
     /// use tessera_ui::Dp;
     /// use tessera_ui_basic_components::shape_def::{RoundedCorner, Shape};
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple().with_shape(Shape::RoundedRectangle {
     ///     top_left: RoundedCorner::manual(Dp(8.0), 3.0),
     ///     top_right: RoundedCorner::manual(Dp(8.0), 3.0),
     ///     bottom_right: RoundedCorner::manual(Dp(8.0), 3.0),
     ///     bottom_left: RoundedCorner::manual(Dp(8.0), 3.0),
     /// });
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -848,7 +898,10 @@ impl TextEditorArgs {
     /// # fn component() {
     /// use tessera_ui::Dp;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple().with_padding(Dp(12.0));
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -867,7 +920,10 @@ impl TextEditorArgs {
     /// # fn component() {
     /// use tessera_ui::Color;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple().with_focus_border_color(Color::new(0.0, 0.5, 1.0, 1.0));
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -886,7 +942,10 @@ impl TextEditorArgs {
     /// # fn component() {
     /// use tessera_ui::Color;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple().with_focus_background_color(Color::WHITE);
+    /// # });
     /// # }
     /// # component();
     /// ```
@@ -905,7 +964,10 @@ impl TextEditorArgs {
     /// # fn component() {
     /// use tessera_ui::Color;
     /// use tessera_ui_basic_components::text_editor::TextEditorArgs;
+    /// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+    /// # material_theme(|| MaterialTheme::default(), || {
     /// let args = TextEditorArgs::simple().with_selection_color(Color::new(0.5, 0.7, 1.0, 0.4));
+    /// # });
     /// # }
     /// # component();
     /// ```

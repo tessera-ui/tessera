@@ -26,6 +26,7 @@ use winit::{
 use crate::{
     Clipboard, ImeState, PxPosition,
     component_tree::WindowRequests,
+    context::begin_frame_context_slots,
     cursor::{CursorEvent, CursorEventContent, CursorState, GestureState},
     dp::SCALE_FACTOR,
     keyboard_state::KeyboardState,
@@ -584,6 +585,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         let tree_timer = Instant::now();
         debug!("Building component tree...");
         begin_frame_slots();
+        begin_frame_context_slots();
         TesseraRuntime::with_mut(|rt| rt.begin_frame_trace());
         entry_wrapper(entry_point);
         let build_tree_cost = tree_timer.elapsed();
@@ -871,7 +873,7 @@ Fps: {:.2}
 
         // Recycle unused remembered state slots
         crate::runtime::recycle_frame_slots();
-        crate::context::clear_context();
+        crate::context::recycle_frame_context_slots();
         crate::modifier::clear_modifiers();
 
         // Store the commands for the next frame's comparison

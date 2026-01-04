@@ -207,7 +207,11 @@ fn render_scrim(args: &DialogProviderArgs, is_open: bool, progress: f32) {
         }
         DialogStyle::Material => {
             let alpha = scrim_alpha_for(progress, is_open);
-            let scrim_color = use_context::<MaterialTheme>().get().color_scheme.scrim;
+            let scrim_color = use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme
+                .scrim;
             surface(
                 SurfaceArgs::default()
                     .style(scrim_color.with_alpha(alpha).into())
@@ -281,6 +285,7 @@ fn dialog_content_wrapper(
                                 SurfaceArgs::default()
                                     .style(
                                         use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
                                             .get()
                                             .color_scheme
                                             .surface_container_high
@@ -352,10 +357,17 @@ impl LayoutSpec for DialogContentLayout {
 /// # Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use tessera_ui_basic_components::dialog::{
 ///     BasicDialogArgs, DialogProviderArgs, basic_dialog, dialog_provider,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// dialog_provider(
 ///     DialogProviderArgs::new(|| {}).is_open(true),
 ///     || { /* main content */ },
@@ -365,6 +377,10 @@ impl LayoutSpec for DialogContentLayout {
 ///         );
 ///     },
 /// );
+/// #     },
+/// # );
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn dialog_provider(
@@ -412,9 +428,13 @@ pub fn dialog_provider(
 ///     BasicDialogArgs, DialogController, DialogProviderArgs, basic_dialog,
 ///     dialog_provider_with_controller,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn foo() {
+/// #     material_theme(
+/// #         || MaterialTheme::default(),
+/// #         || {
 ///     let dialog_controller = remember(|| DialogController::new(false));
 ///
 ///     dialog_provider_with_controller(
@@ -429,6 +449,8 @@ pub fn dialog_provider(
 ///             );
 ///         },
 ///     );
+/// #         },
+/// #     );
 /// }
 /// ```
 #[tessera]
@@ -561,10 +583,19 @@ impl BasicDialogArgs {
 /// # Examples
 ///
 /// ```
-/// use tessera_ui_basic_components::button::{ButtonArgs, button};
-/// use tessera_ui_basic_components::dialog::{BasicDialogArgs, basic_dialog};
-/// use tessera_ui_basic_components::text::text;
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+/// use tessera_ui_basic_components::{
+///     button::{ButtonArgs, button},
+///     dialog::{BasicDialogArgs, basic_dialog},
+///     text::text,
+/// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// basic_dialog(
 ///     BasicDialogArgs::new("This is the dialog body text.")
 ///         .headline("Dialog Title")
@@ -572,11 +603,18 @@ impl BasicDialogArgs {
 ///             button(ButtonArgs::filled(|| {}), || text("Confirm"));
 ///         }),
 /// );
+/// #     },
+/// # );
+/// # }
+/// # component();
 /// ```
 #[tessera]
 pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
     let args = args.into();
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let alignment = if args.icon.is_some() {
         CrossAxisAlignment::Center
     } else {
@@ -599,7 +637,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                 let icon_color = scheme.secondary;
                 scope.child(move || {
                     provide_context(
-                        ContentColor {
+                        || ContentColor {
                             current: icon_color,
                         },
                         || {
@@ -648,7 +686,7 @@ pub fn basic_dialog(args: impl Into<BasicDialogArgs>) {
                 let action_color = scheme.primary;
                 scope.child(move || {
                     provide_context(
-                        ContentColor {
+                        || ContentColor {
                             current: action_color,
                         },
                         || {

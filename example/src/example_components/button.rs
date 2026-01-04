@@ -82,6 +82,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                             .variant(IconButtonVariant::Filled)
                                             .color(
                                                 use_context::<MaterialTheme>()
+                                                    .expect("MaterialTheme must be provided")
                                                     .get()
                                                     .color_scheme
                                                     .surface_variant,
@@ -119,6 +120,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                 .text("Filled")
                                                                 .color(
                                                                     use_context::<MaterialTheme>()
+                                                                        .expect("MaterialTheme must be provided")
                                                                         .get()
                                                                         .color_scheme
                                                                         .on_primary,
@@ -140,6 +142,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                 .text("Elevated")
                                                                 .color(
                                                                     use_context::<MaterialTheme>()
+                                                                        .expect("MaterialTheme must be provided")
                                                                         .get()
                                                                         .color_scheme
                                                                         .primary,
@@ -159,6 +162,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                 .text("Tonal")
                                                                 .color(
                                                                     use_context::<MaterialTheme>()
+                                                                        .expect("MaterialTheme must be provided")
                                                                         .get()
                                                                         .color_scheme
                                                                         .on_secondary_container,
@@ -185,6 +189,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                                 .text("Outlined")
                                                                 .color(
                                                                     use_context::<MaterialTheme>()
+                                                                        .expect("MaterialTheme must be provided")
                                                                         .get()
                                                                         .color_scheme
                                                                         .primary,
@@ -202,6 +207,7 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                                                         text(
                                                             TextArgs::default().text("Text").color(
                                                                 use_context::<MaterialTheme>()
+                                                                    .expect("MaterialTheme must be provided")
                                                                     .get()
                                                                     .color_scheme
                                                                     .primary,

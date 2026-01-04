@@ -371,7 +371,10 @@ pub struct TabsArgs {
 
 impl Default for TabsArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             modifier: Modifier::new(),
             variant: TabsVariant::default(),
@@ -523,23 +526,29 @@ impl Default for TabLabelArgs {
 ///
 /// ```
 /// use tessera_ui::{Dp, tessera};
-/// use tessera_ui_basic_components::{
-///     tabs::{TabLabelArgs, tab_label},
-///     theme::{MaterialTheme, material_theme},
-/// };
+/// use tessera_ui_basic_components::tabs::{TabLabelArgs, tab_label};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {
-///     material_theme(MaterialTheme::default(), || {
-///         tab_label(TabLabelArgs::default().text("Home"));
-///     });
+/// #     material_theme(
+/// #         || MaterialTheme::default(),
+/// #         || {
+///     tab_label(TabLabelArgs::default().text("Home"));
+/// #         },
+/// #     );
 /// }
 /// ```
 #[tessera]
 pub fn tab_label(args: TabLabelArgs) {
-    let typography = use_context::<MaterialTheme>().get().typography;
+    let typography = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .typography;
     let style = typography.title_small;
-    let content_color = use_context::<ContentColor>().get().current;
+    let content_color = use_context::<ContentColor>()
+        .map(|c| c.get().current)
+        .unwrap_or(ContentColor::default().current);
 
     let icon_content = args.icon.clone();
     let has_icon = icon_content.is_some();

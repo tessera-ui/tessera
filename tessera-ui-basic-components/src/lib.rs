@@ -36,6 +36,8 @@
 //!     text::text,
 //!     text_editor::{TextEditorArgs, text_editor},
 //! };
+//! # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
+//! # material_theme(|| MaterialTheme::default(), || {
 //!
 //! // Button example
 //! button(ButtonArgs::filled(|| { /* Handle click */ }), || {
@@ -44,6 +46,7 @@
 //!
 //! // Text editor example
 //! text_editor(TextEditorArgs::default());
+//! # });
 //! # }
 //! # component();
 //! ```

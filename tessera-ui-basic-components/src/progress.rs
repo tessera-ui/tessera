@@ -548,7 +548,10 @@ pub struct LinearProgressIndicatorArgs {
 
 impl Default for LinearProgressIndicatorArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             progress: None,
             modifier: Modifier::new().size(
@@ -588,8 +591,14 @@ impl Default for LinearProgressIndicatorArgs {
 /// use tessera_ui_basic_components::progress::{
 ///     LinearProgressIndicatorArgs, linear_progress_indicator,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// linear_progress_indicator(LinearProgressIndicatorArgs::default().progress(0.75));
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
@@ -737,7 +746,10 @@ pub struct CircularProgressIndicatorArgs {
 
 impl Default for CircularProgressIndicatorArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             progress: None,
             diameter: ProgressIndicatorDefaults::CIRCULAR_INDICATOR_DIAMETER,
@@ -835,8 +847,14 @@ fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 /// use tessera_ui_basic_components::progress::{
 ///     CircularProgressIndicatorArgs, circular_progress_indicator,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// circular_progress_indicator(CircularProgressIndicatorArgs::default().progress(0.6));
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
@@ -897,7 +915,10 @@ pub struct ProgressArgs {
 
 impl Default for ProgressArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             value: 0.0,
             modifier: Modifier::new().size(
@@ -931,9 +952,15 @@ impl Default for ProgressArgs {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_ui_basic_components::progress::{ProgressArgs, progress};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
 /// // Creates a progress bar that is 75% complete.
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// progress(ProgressArgs::default().value(0.75));
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```

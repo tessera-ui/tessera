@@ -52,6 +52,7 @@ fn test_content() {
                     .size(Dp(20.0))
                     .color(
                         use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
                             .get()
                             .color_scheme
                             .on_surface_variant,

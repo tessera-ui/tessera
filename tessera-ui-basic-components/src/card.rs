@@ -227,17 +227,29 @@ impl CardDefaults {
 
     /// Default filled card shape.
     pub fn shape() -> Shape {
-        use_context::<MaterialTheme>().get().shapes.medium
+        use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .shapes
+            .medium
     }
 
     /// Default elevated card shape.
     pub fn elevated_shape() -> Shape {
-        use_context::<MaterialTheme>().get().shapes.medium
+        use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .shapes
+            .medium
     }
 
     /// Default outlined card shape.
     pub fn outlined_shape() -> Shape {
-        use_context::<MaterialTheme>().get().shapes.medium
+        use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .shapes
+            .medium
     }
 
     /// Default elevation values for filled cards.
@@ -278,9 +290,13 @@ impl CardDefaults {
 
     /// Default colors for filled cards.
     pub fn card_colors() -> CardColors {
-        let theme = use_context::<MaterialTheme>().get();
+        let theme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get();
         let scheme = theme.color_scheme;
-        let inherited_content = use_context::<ContentColor>().get().current;
+        let inherited_content = use_context::<ContentColor>()
+            .map(|c| c.get().current)
+            .unwrap_or(ContentColor::default().current);
         let container = scheme.surface_container_highest;
         let content = content_color_for(container, &scheme).unwrap_or(inherited_content);
         let disabled_overlay = scheme
@@ -297,9 +313,13 @@ impl CardDefaults {
 
     /// Default colors for elevated cards.
     pub fn elevated_card_colors() -> CardColors {
-        let theme = use_context::<MaterialTheme>().get();
+        let theme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get();
         let scheme = theme.color_scheme;
-        let inherited_content = use_context::<ContentColor>().get().current;
+        let inherited_content = use_context::<ContentColor>()
+            .map(|c| c.get().current)
+            .unwrap_or(ContentColor::default().current);
         let container = scheme.surface_container_low;
         let content = content_color_for(container, &scheme).unwrap_or(inherited_content);
         CardColors {
@@ -312,9 +332,13 @@ impl CardDefaults {
 
     /// Default colors for outlined cards.
     pub fn outlined_card_colors() -> CardColors {
-        let theme = use_context::<MaterialTheme>().get();
+        let theme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get();
         let scheme = theme.color_scheme;
-        let inherited_content = use_context::<ContentColor>().get().current;
+        let inherited_content = use_context::<ContentColor>()
+            .map(|c| c.get().current)
+            .unwrap_or(ContentColor::default().current);
         let container = scheme.surface;
         let content = content_color_for(container, &scheme).unwrap_or(inherited_content);
         CardColors {
@@ -327,7 +351,10 @@ impl CardDefaults {
 
     /// Default border stroke for outlined cards.
     pub fn outlined_card_border(enabled: bool) -> CardBorder {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         let color = if enabled {
             scheme.outline_variant
         } else {
@@ -444,10 +471,16 @@ impl Default for CardArgs {
 /// ```
 /// use tessera_ui::tessera;
 /// use tessera_ui_basic_components::card::{CardArgs, card};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn component() {
+/// #     material_theme(
+/// #         || MaterialTheme::default(),
+/// #         || {
 ///     card(CardArgs::filled(), |_scope| {});
+/// #         },
+/// #     );
 /// }
 ///
 /// component();

@@ -58,7 +58,11 @@ fn default_menu_shape() -> Shape {
 }
 
 fn default_menu_color() -> Color {
-    use_context::<MaterialTheme>().get().color_scheme.surface
+    use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme
+        .surface
 }
 
 fn default_scrim_color() -> Color {
@@ -469,7 +473,9 @@ fn apply_close_action(
 ///     },
 ///     text::text,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(|| MaterialTheme::default(), || {
 /// let args = MenuProviderArgs::default()
 ///     .placement(MenuPlacement::BelowStart)
 ///     .is_open(true);
@@ -483,6 +489,7 @@ fn apply_close_action(
 ///         menu_scope.menu_item(MenuItemArgs::default().label("Edit").on_click(|| {}));
 ///     },
 /// );
+/// # });
 /// # }
 /// # component();
 /// ```
@@ -733,7 +740,10 @@ pub struct MenuItemArgs {
 impl MenuItemArgs {
     /// Creates menu item arguments with the required label.
     pub fn new(label: impl Into<String>) -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             label: label.into(),
             supporting_text: None,
@@ -894,6 +904,7 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
         .block_input(true)
         .ripple_color(
             use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
                 .get()
                 .color_scheme
                 .on_surface

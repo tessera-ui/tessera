@@ -143,6 +143,7 @@ fn date_time_picker_content(
                                                 .size(Dp(14.0))
                                                 .color(
                                                     use_context::<MaterialTheme>()
+                                                        .expect("MaterialTheme must be provided")
                                                         .get()
                                                         .color_scheme
                                                         .on_surface_variant,
@@ -177,6 +178,7 @@ fn date_time_picker_content(
                                                 .size(Dp(14.0))
                                                 .color(
                                                     use_context::<MaterialTheme>()
+                                                        .expect("MaterialTheme must be provided")
                                                         .get()
                                                         .color_scheme
                                                         .on_surface_variant,

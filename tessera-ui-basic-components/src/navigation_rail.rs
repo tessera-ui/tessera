@@ -94,7 +94,9 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
         interaction_state,
         ripple_state,
     } = args;
-    let theme = use_context::<MaterialTheme>().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
@@ -178,7 +180,7 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
 
     if let Some(draw_icon) = item.icon {
         provide_context(
-            ContentColor {
+            || ContentColor {
                 current: icon_color,
             },
             || {
@@ -639,7 +641,10 @@ pub fn navigation_rail_with_controller<F>(
         scope_config(&mut scope);
     }
 
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let selection_progress = controller
         .with_mut(|c| c.selection_animation_progress())
         .unwrap_or(1.0);

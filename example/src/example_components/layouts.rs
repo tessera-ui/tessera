@@ -68,6 +68,7 @@ fn row_showcase() {
                     .modifier(Modifier::new().padding_all(Dp(10.0)))
                     .style(
                         use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
                             .get()
                             .color_scheme
                             .surface_variant
@@ -105,6 +106,7 @@ fn column_showcase() {
                     .modifier(Modifier::new().padding_all(Dp(10.0)))
                     .style(
                         use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
                             .get()
                             .color_scheme
                             .surface_variant
@@ -142,6 +144,7 @@ fn boxed_showcase() {
                     .modifier(Modifier::new().padding_all(Dp(10.0)))
                     .style(
                         use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
                             .get()
                             .color_scheme
                             .surface_variant
@@ -174,6 +177,7 @@ fn flow_row_showcase() {
                     .modifier(Modifier::new().padding_all(Dp(10.0)))
                     .style(
                         use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
                             .get()
                             .color_scheme
                             .surface_variant
@@ -220,6 +224,7 @@ fn flow_column_showcase() {
                     .modifier(Modifier::new().padding_all(Dp(10.0)))
                     .style(
                         use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
                             .get()
                             .color_scheme
                             .surface_variant

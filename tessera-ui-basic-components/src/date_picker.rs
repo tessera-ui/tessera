@@ -517,11 +517,17 @@ impl DatePickerDialogArgs {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_ui_basic_components::date_picker::{DatePickerArgs, DatePickerState, date_picker};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// date_picker(DatePickerArgs::default());
 ///
 /// let mut state = DatePickerState::default();
 /// assert!(state.selected_date().is_none());
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
@@ -569,7 +575,11 @@ pub fn date_picker(args: impl Into<DatePickerArgs>) {
 /// use tessera_ui_basic_components::date_picker::{
 ///     CalendarDate, DatePickerArgs, DatePickerState, date_picker_with_state,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// let state = remember(DatePickerState::default);
 /// date_picker_with_state(DatePickerArgs::default(), state);
 ///
@@ -578,6 +588,8 @@ pub fn date_picker(args: impl Into<DatePickerArgs>) {
 ///         assert!(s.set_selected_date(date));
 ///     });
 /// }
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
@@ -585,7 +597,9 @@ pub fn date_picker(args: impl Into<DatePickerArgs>) {
 pub fn date_picker_with_state(args: impl Into<DatePickerArgs>, state: State<DatePickerState>) {
     let args: DatePickerArgs = args.into();
     let snapshot = state.with(|s| s.snapshot());
-    let theme = use_context::<MaterialTheme>().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
@@ -692,16 +706,25 @@ pub fn date_picker_with_state(args: impl Into<DatePickerArgs>, state: State<Date
 /// use tessera_ui_basic_components::date_picker::{
 ///     DatePickerDialogArgs, DatePickerState, date_picker_dialog,
 /// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// let state = remember(DatePickerState::default);
 /// date_picker_dialog(DatePickerDialogArgs::new(state));
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
 #[tessera]
 pub fn date_picker_dialog(args: impl Into<DatePickerDialogArgs>) {
     let args: DatePickerDialogArgs = args.into();
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let title = args.title;
     let picker_args = args.picker_args;
     let state = args.state;
@@ -726,6 +749,7 @@ pub fn date_picker_dialog(args: impl Into<DatePickerDialogArgs>) {
                             .text(title)
                             .size(
                                 use_context::<MaterialTheme>()
+                                    .expect("MaterialTheme must be provided")
                                     .get()
                                     .typography
                                     .title_medium
@@ -746,7 +770,7 @@ pub fn date_picker_dialog(args: impl Into<DatePickerDialogArgs>) {
                 let action_color = scheme.primary;
                 scope.child(move || {
                     provide_context(
-                        ContentColor {
+                        || ContentColor {
                             current: action_color,
                         },
                         || {
@@ -803,7 +827,10 @@ fn calendar_view(
 }
 
 fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let can_prev = can_navigate_prev(snapshot.displayed_month, &snapshot.year_range);
     let can_next = can_navigate_next(snapshot.displayed_month, &snapshot.year_range);
     let month_label = format_month_year(snapshot.displayed_month);
@@ -826,6 +853,7 @@ fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>)
                         .text(month_label)
                         .size(
                             use_context::<MaterialTheme>()
+                                .expect("MaterialTheme must be provided")
                                 .get()
                                 .typography
                                 .title_medium
@@ -845,7 +873,10 @@ fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>)
 }
 
 fn weekday_labels_row(first_day_of_week: Weekday) {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let labels = weekday_sequence(first_day_of_week);
 
     flow_row(
@@ -867,6 +898,7 @@ fn weekday_labels_row(first_day_of_week: Weekday) {
                                     .text(label)
                                     .size(
                                         use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
                                             .get()
                                             .typography
                                             .label_small
@@ -887,7 +919,10 @@ fn date_grid(
     first_day_of_week: Weekday,
     state: State<DatePickerState>,
 ) {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let today = CalendarDate::today();
     let grid = build_month_grid(snapshot.displayed_month, first_day_of_week);
 
@@ -958,6 +993,7 @@ fn date_grid(
                                     .text(format!("{}", date.day()))
                                     .size(
                                         use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
                                             .get()
                                             .typography
                                             .body_medium
@@ -976,7 +1012,10 @@ fn date_grid(
 }
 
 fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let current_date = snapshot
         .selected_date
         .or_else(|| snapshot.displayed_month.to_date(1))
@@ -1045,6 +1084,7 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                         .text(description)
                         .size(
                             use_context::<MaterialTheme>()
+                                .expect("MaterialTheme must be provided")
                                 .get()
                                 .typography
                                 .body_small
@@ -1063,7 +1103,10 @@ fn input_row(
     on_decrement: impl Fn() + Send + Sync + 'static,
     on_increment: impl Fn() + Send + Sync + 'static,
 ) {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     row(
         RowArgs::default()
             .modifier(Modifier::new().fill_max_width())
@@ -1076,6 +1119,7 @@ fn input_row(
                         .text(label)
                         .size(
                             use_context::<MaterialTheme>()
+                                .expect("MaterialTheme must be provided")
                                 .get()
                                 .typography
                                 .body_medium
@@ -1100,6 +1144,7 @@ fn input_row(
                                     .text(value)
                                     .size(
                                         use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
                                             .get()
                                             .typography
                                             .body_large
@@ -1120,7 +1165,10 @@ fn input_row(
 }
 
 fn display_mode_toggle(state: State<DatePickerState>) {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let label = state.with(|s| match s.display_mode() {
         DatePickerDisplayMode::Picker => "Input",
         DatePickerDisplayMode::Input => "Calendar",
@@ -1142,6 +1190,7 @@ fn display_mode_toggle(state: State<DatePickerState>) {
                     .text(label)
                     .size(
                         use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
                             .get()
                             .typography
                             .label_small
@@ -1154,7 +1203,10 @@ fn display_mode_toggle(state: State<DatePickerState>) {
 }
 
 fn nav_button(label: &'static str, enabled: bool, on_click: impl Fn() + Send + Sync + 'static) {
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let text_color = if enabled {
         scheme.on_surface
     } else {
@@ -1182,6 +1234,7 @@ fn nav_button(label: &'static str, enabled: bool, on_click: impl Fn() + Send + S
                     .text(label)
                     .size(
                         use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
                             .get()
                             .typography
                             .body_medium

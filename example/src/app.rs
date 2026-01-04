@@ -37,7 +37,7 @@ use tessera_ui_basic_components::{
     spacer::spacer,
     surface::{SurfaceArgs, SurfaceStyle, surface},
     text::{TextArgs, text},
-    theme::MaterialTheme,
+    theme::{MaterialTheme, material_theme},
 };
 
 use crate::example_components::{
@@ -89,6 +89,13 @@ fn measure_parent_width(width_state: State<Dp>, child: impl FnOnce() + Send + Sy
 
 #[tessera]
 pub fn app() {
+    material_theme(MaterialTheme::default, || {
+        app_inner();
+    });
+}
+
+#[tessera]
+fn app_inner() {
     let side_bar_controller = remember(SideBarController::default);
     let bottom_sheet_controller = remember(BottomSheetController::default);
     let dialog_controller = remember(DialogController::default);
@@ -685,6 +692,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
             .on_click_shared(on_click)
             .style(SurfaceStyle::Filled {
                 color: use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
                     .get()
                     .color_scheme
                     .primary_container,
@@ -705,6 +713,7 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
                         text(
                             TextArgs::default().text(description).size(Dp(14.0)).color(
                                 use_context::<MaterialTheme>()
+                                    .expect("MaterialTheme must be provided")
                                     .get()
                                     .color_scheme
                                     .on_surface_variant,
@@ -762,7 +771,13 @@ Copyright 2025 Tessera UI Framework Developers,
                         .to_string(),
                     )
                     .size(Dp(20.0))
-                    .color(use_context::<MaterialTheme>().get().color_scheme.on_surface),
+                    .color(
+                        use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
+                            .get()
+                            .color_scheme
+                            .on_surface,
+                    ),
             );
         },
     );

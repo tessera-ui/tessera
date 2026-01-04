@@ -356,7 +356,10 @@ impl SwitchArgs {
 
 impl Default for SwitchArgs {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>().get().color_scheme;
+        let scheme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme;
         Self {
             modifier: Modifier::new(),
             on_toggle: None,
@@ -448,7 +451,10 @@ fn switch_inner(
     let progress = controller.with(|c| c.animation_progress());
     let eased_progress = animation::easing(progress);
     let eased_progress_f64 = eased_progress as f64;
-    let scheme = use_context::<MaterialTheme>().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let enabled = args.enabled;
     let is_pressed = interaction_state
         .map(|state| state.with(|s| s.is_pressed()))
@@ -469,7 +475,9 @@ fn switch_inner(
         };
         let thumb_size_px = thumb_diameter_dp.to_px();
 
-        let inherited_content_color = use_context::<ContentColor>().get().current;
+        let inherited_content_color = use_context::<ContentColor>()
+            .map(|c| c.get().current)
+            .unwrap_or(ContentColor::default().current);
 
         let track_style = if checked {
             SurfaceStyle::Filled {
@@ -581,10 +589,16 @@ fn switch_inner(
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_ui_basic_components::switch::{SwitchArgs, switch};
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// switch(SwitchArgs::default().on_toggle(|checked| {
 ///     assert!(checked || !checked);
 /// }));
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
@@ -617,9 +631,15 @@ pub fn switch(args: impl Into<SwitchArgs>) {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_ui_basic_components::switch::{SwitchArgs, switch_with_child};
-/// use tessera_ui_basic_components::text::{TextArgs, text};
+/// use tessera_ui_basic_components::{
+///     switch::{SwitchArgs, switch_with_child},
+///     text::{TextArgs, text},
+/// };
+/// # use tessera_ui_basic_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme(
+/// #     || MaterialTheme::default(),
+/// #     || {
 /// switch_with_child(
 ///     SwitchArgs::default().on_toggle(|checked| {
 ///         assert!(checked || !checked);
@@ -628,6 +648,8 @@ pub fn switch(args: impl Into<SwitchArgs>) {
 ///         text(TextArgs::default().text("✓"));
 ///     },
 /// );
+/// #     },
+/// # );
 /// # }
 /// # component();
 /// ```
