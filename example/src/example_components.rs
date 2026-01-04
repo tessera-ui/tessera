@@ -17,6 +17,7 @@ pub mod layouts;
 pub mod lazy_grids;
 pub mod lazy_lists;
 pub mod menus;
+pub mod pager;
 pub mod progress;
 pub mod progress_indicator;
 pub mod radio_button;

@@ -15,7 +15,7 @@
   - [ ] Pull-to-refresh
   - [x] Lazy vertical/horizontal grids
   - [x] Staggered grids
-  - [ ] Pager
+  - [x] Pager
   - [ ] TextField/Outlined/Secure variants with defaults, context menu/input transforms, Material text selection colors.
   - [x] Appbar/TopAppBar
   - [x] FloatingActionButton

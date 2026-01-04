@@ -60,6 +60,7 @@ use crate::example_components::{
     lazy_grids::LazyGridsShowcaseDestination,
     lazy_lists::LazyListsShowcaseDestination,
     menus::MenusShowcaseDestination,
+    pager::PagerShowcaseDestination,
     progress::ProgressShowcaseDestination,
     progress_indicator::ProgressIndicatorShowcaseDestination,
     radio_button::RadioButtonShowcaseDestination,
@@ -390,6 +391,11 @@ fn home(
                 });
             },
         ),
+        ComponentExampleDesc::new("Pager", "Swipeable pages with snapping behavior.", || {
+            Router::with_mut(|router| {
+                router.push(PagerShowcaseDestination {});
+            });
+        }),
         ComponentExampleDesc::new(
             "Divider",
             "Material 3 horizontal and vertical dividers.",

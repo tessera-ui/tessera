@@ -144,7 +144,8 @@ impl<'a> ParentConstraint<'a> {
         self.0.height
     }
 
-    pub(crate) const fn as_ref(self) -> &'a Constraint {
+    /// Returns a reference to the underlying `Constraint`.
+    pub const fn as_ref(self) -> &'a Constraint {
         self.0
     }
 }
