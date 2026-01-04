@@ -8,7 +8,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Macros of tessera-ui, for creating functional components."
+description = "Macros of tessera-ui."
 readme = "README.md"
 
 [features]

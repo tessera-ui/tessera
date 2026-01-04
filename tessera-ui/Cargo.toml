@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Tessera is a cross-platform UI library for rust, focused on performance and extensibility."
+description = "A cross-platform declarative & functional UI library for rust, focused on performance and extensibility."
 readme = "../README.md"
 
 [features]
@@ -27,8 +27,8 @@ uuid = { version = "1.19.0", features = ["v4"] }
 tessera-ui-macros = { path = "../tessera-ui-macros" }
 tessera-ui-shard = { path = "../tessera-ui-shard", optional = true }
 petgraph = "0.8.3"
-accesskit = "0.21.1"
-accesskit_winit = "0.29.2"
+accesskit = "0.22.0"
+accesskit_winit = "0.30.0"
 smallvec = "1.15.1"
 dirs = "6.0.0"
 im = "15.1.0"
