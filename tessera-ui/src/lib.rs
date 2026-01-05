@@ -269,9 +269,6 @@ mod thread_utils;
 #[cfg(feature = "shard")]
 pub mod router;
 
-#[cfg(test)]
-mod test;
-
 pub use accesskit;
 pub use indextree::{Arena, NodeId};
 pub use tessera_ui_macros::tessera;

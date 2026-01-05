@@ -263,7 +263,6 @@ pub(crate) struct LayoutCacheEntry {
     pub child_keys: Vec<u64>,
     pub child_constraints: Vec<Constraint>,
     pub child_sizes: Vec<ComputedData>,
-    pub last_seen_frame: u64,
 }
 
 #[derive(Default)]

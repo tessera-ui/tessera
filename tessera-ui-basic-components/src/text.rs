@@ -6,8 +6,7 @@
 use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, Px, PxPosition, RenderInput, State, accesskit::Role, remember,
-    tessera, use_context,
+    MeasurementError, Modifier, Px, PxPosition, RenderInput, accesskit::Role, tessera, use_context,
 };
 
 use crate::{
@@ -146,20 +145,13 @@ fn text_inner(text_args: TextArgs) {
         .line_height
         .or(inherited_style.line_height)
         .unwrap_or(Dp(text_args.size.0 * 1.2));
-    let cache = remember(TextLayoutCache::default);
 
     layout(TextLayout {
         text: text_args.text,
         color: text_args.color,
         size: text_args.size,
         line_height,
-        cache,
     });
-}
-
-#[derive(Clone, Default)]
-struct TextLayoutCache {
-    data: Option<TextData>,
 }
 
 #[derive(Clone)]
@@ -168,7 +160,6 @@ struct TextLayout {
     color: Color,
     size: Dp,
     line_height: Dp,
-    cache: State<TextLayoutCache>,
 }
 
 impl PartialEq for TextLayout {
@@ -198,7 +189,7 @@ impl LayoutSpec for TextLayout {
             DimensionValue::Fill { max, .. } => max,
         };
 
-        let text_data = TextData::new(
+        let info = TextData::measure(
             self.text.clone(),
             self.color,
             self.size.to_pixels_f32(),
@@ -209,24 +200,32 @@ impl LayoutSpec for TextLayout {
             },
         );
 
-        let size = text_data.size;
-        self.cache.with_mut(|cache| cache.data = Some(text_data));
         Ok(ComputedData {
-            width: size[0].into(),
-            height: size[1].into(),
+            width: info.size[0].into(),
+            height: info.size[1].into(),
         })
     }
 
     fn record(&self, input: &RenderInput<'_>) {
-        let mut metadata = input.metadata_mut();
-        let text_data = self
-            .cache
-            .with(|cache| cache.data.clone())
-            .expect("Text cache must be populated before record");
+        let metadata = input.metadata_mut();
+        let computed = metadata
+            .computed_data
+            .expect("ComputedData must exist during record");
+        drop(metadata);
+
+        // Use TextData::get() with the computed bounds to retrieve cached data
+        let text_data = TextData::get(
+            self.text.clone(),
+            self.color,
+            self.size.to_pixels_f32(),
+            self.line_height.to_pixels_f32(),
+            [computed.width.raw() as u32, computed.height.raw() as u32],
+        );
+
         let drawable = TextCommand {
             data: text_data,
             offset: PxPosition::ZERO,
         };
-        metadata.push_draw_command(drawable);
+        input.metadata_mut().push_draw_command(drawable);
     }
 }

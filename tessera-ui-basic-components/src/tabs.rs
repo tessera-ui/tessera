@@ -14,15 +14,15 @@ use tessera_ui::{
 };
 
 use crate::{
-    alignment::Alignment,
+    alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
+    boxed::{BoxedArgs, boxed},
+    column::{ColumnArgs, column},
     icon::{IconArgs, IconContent, icon},
     modifier::ModifierExt,
-    pipelines::text::{
-        command::{TextCommand, TextConstraint},
-        pipeline::TextData,
-    },
     shape_def::Shape,
+    spacer::spacer,
     surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
     theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
@@ -550,261 +550,97 @@ pub fn tab_label(args: TabLabelArgs) {
         .map(|c| c.get().current)
         .unwrap_or(ContentColor::default().current);
 
+    let has_icon = args.icon.is_some();
+    let has_text = !args.text.is_empty();
     let icon_content = args.icon.clone();
-    let has_icon = icon_content.is_some();
-    if let Some(icon_content) = icon_content {
-        icon(IconArgs::from(icon_content).size(args.icon_size));
-    }
-
+    let text_content = args.text.clone();
+    let icon_size = args.icon_size;
+    let horizontal_padding = args.horizontal_text_padding;
+    let font_size = style.font_size;
     let line_height = style.line_height.unwrap_or(Dp(style.font_size.0 * 1.2));
 
-    layout(TabLabelLayout {
-        text: args.text,
-        icon_size: args.icon_size,
-        has_icon,
-        horizontal_text_padding: args.horizontal_text_padding,
-        indicator_height: args.indicator_height,
-        font_size: style.font_size,
-        line_height,
-        color: content_color,
-    });
-}
-
-#[derive(Clone, PartialEq)]
-struct TabLabelLayout {
-    text: String,
-    icon_size: Dp,
-    has_icon: bool,
-    horizontal_text_padding: Dp,
-    indicator_height: Dp,
-    font_size: Dp,
-    line_height: Dp,
-    color: Color,
-}
-
-struct TabLabelPositions {
-    text_x: Px,
-    text_y: Px,
-    icon_x: Px,
-    icon_y: Px,
-}
-
-#[derive(Clone, Copy)]
-struct TabLabelPositionInput {
-    width: Px,
-    height: Px,
-    padding_px: Px,
-    indicator_height_px: Px,
-    icon_size: ComputedData,
-    text_width: Px,
-    text_height: Px,
-    first_baseline: f32,
-    last_baseline: f32,
-    line_count: u32,
-    has_icon: bool,
-    has_text: bool,
-}
-
-fn tab_label_positions(input: TabLabelPositionInput) -> TabLabelPositions {
-    let text_area_width = (input.width - input.padding_px * 2).max(Px(0));
-    let text_x = Px::saturating_from_f32(
-        input.padding_px.to_f32()
-            + ((text_area_width.to_f32() - input.text_width.to_f32()).max(0.0) / 2.0),
-    );
-
-    let icon_distance_from_baseline: Px = Dp(20.0).into();
-    let (text_y, icon_x, icon_y) = if input.has_icon && input.has_text {
-        let is_single_line =
-            input.line_count <= 1 || (input.first_baseline - input.last_baseline).abs() < 0.5;
-        let baseline_offset: Px = if is_single_line {
-            Dp(14.0).into()
-        } else {
-            Dp(6.0).into()
-        };
-        let text_offset = baseline_offset + input.indicator_height_px;
-        let text_y = input.height - Px::saturating_from_f32(input.last_baseline) - text_offset;
-
-        let icon_offset = input.icon_size.height + icon_distance_from_baseline
-            - Px::saturating_from_f32(input.first_baseline);
-        let icon_y = text_y - icon_offset;
-        let icon_x =
-            Px::saturating_from_f32((input.width.to_f32() - input.icon_size.width.to_f32()) / 2.0);
-        (text_y, icon_x, icon_y)
+    // Determine container height based on content type
+    let small_height = TabsDefaults::MIN_TAB_HEIGHT;
+    let large_height = TabsDefaults::LARGE_TAB_HEIGHT;
+    let container_height = if has_icon && has_text {
+        large_height
     } else {
-        let text_y =
-            Px::saturating_from_f32((input.height.to_f32() - input.text_height.to_f32()) / 2.0);
-        let icon_x =
-            Px::saturating_from_f32((input.width.to_f32() - input.icon_size.width.to_f32()) / 2.0);
-        let icon_y = Px::saturating_from_f32(
-            (input.height.to_f32() - input.icon_size.height.to_f32()) / 2.0,
-        );
-        (text_y, icon_x, icon_y)
+        small_height
     };
 
-    TabLabelPositions {
-        text_x,
-        text_y,
-        icon_x,
-        icon_y,
-    }
-}
+    // Use boxed to center the content within the tab
+    let modifier = Modifier::new()
+        .constrain(
+            Some(DimensionValue::Wrap {
+                min: None,
+                max: None,
+            }),
+            Some(DimensionValue::Fixed(container_height.into())),
+        )
+        .padding_symmetric(horizontal_padding, Dp(0.0));
 
-impl LayoutSpec for TabLabelLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let padding_px: Px = self.horizontal_text_padding.into();
-        let indicator_height_px: Px = self.indicator_height.into();
-
-        let icon_id = input.children_ids().first().copied();
-        let has_icon = self.has_icon && icon_id.is_some();
-        let has_text = !self.text.is_empty();
-        let icon_size = if let Some(icon_id) = icon_id {
-            let icon_constraint = Constraint::new(
-                DimensionValue::Fixed(self.icon_size.into()),
-                DimensionValue::Fixed(self.icon_size.into()),
-            );
-            input.measure_child(icon_id, &icon_constraint)?
-        } else {
-            ComputedData::ZERO
-        };
-
-        let max_width_px = match input.parent_constraint().width() {
-            DimensionValue::Fixed(w) => Some(w),
-            DimensionValue::Wrap { max, .. } => max,
-            DimensionValue::Fill { max, .. } => max,
-        };
-        let text_max_width = max_width_px
-            .map(|w| (w - padding_px * 2).max(Px(0)))
-            .map(|w| w.to_f32());
-
-        let line_height = self.line_height.to_pixels_f32();
-        let (text_width, text_height, first_baseline, last_baseline, line_count) = if has_text {
-            let text_data = TextData::new(
-                self.text.clone(),
-                self.color,
-                self.font_size.to_pixels_f32(),
-                line_height,
-                TextConstraint {
-                    max_width: text_max_width,
-                    max_height: None,
-                },
-            );
-            let text_width: Px = text_data.size[0].into();
-            let text_height: Px = text_data.size[1].into();
-            (
-                text_width,
-                text_height,
-                text_data.first_baseline,
-                text_data.last_baseline,
-                text_data.line_count,
-            )
-        } else {
-            (Px(0), Px(0), 0.0, 0.0, 0)
-        };
-
-        let text_container_width = if has_text {
-            text_width + padding_px * 2
-        } else {
-            Px(0)
-        };
-        let content_width_measure = text_container_width.max(icon_size.width);
-        let width = resolve_dimension(input.parent_constraint().width(), content_width_measure);
-
-        let small_height: Px = Dp(48.0).into();
-        let large_height: Px = Dp(72.0).into();
-        let base_height = if has_icon && has_text {
-            large_height
-        } else {
-            small_height
-        };
-        let combined_height = if has_icon && has_text {
-            icon_size.height + text_height + Dp(20.0).into()
-        } else {
-            icon_size.height.max(text_height)
-        };
-        let height = resolve_dimension(
-            input.parent_constraint().height(),
-            base_height.max(combined_height),
-        );
-
-        let positions = tab_label_positions(TabLabelPositionInput {
-            width,
-            height,
-            padding_px,
-            indicator_height_px,
-            icon_size,
-            text_width,
-            text_height,
-            first_baseline,
-            last_baseline,
-            line_count,
-            has_icon,
-            has_text,
-        });
-
-        if let Some(icon_id) = icon_id {
-            output.place_child(icon_id, PxPosition::new(positions.icon_x, positions.icon_y));
-        }
-
-        Ok(ComputedData { width, height })
-    }
-
-    fn record(&self, input: &RenderInput<'_>) {
-        if self.text.is_empty() {
-            return;
-        }
-
-        let padding_px: Px = self.horizontal_text_padding.into();
-        let indicator_height_px: Px = self.indicator_height.into();
-        let icon_size_px: Px = self.icon_size.into();
-        let icon_size = ComputedData {
-            width: icon_size_px,
-            height: icon_size_px,
-        };
-
-        let mut metadata = input.metadata_mut();
-        let size = metadata
-            .computed_data
-            .expect("Tab label must have computed size before record");
-
-        let text_data = TextData::new(
-            self.text.clone(),
-            self.color,
-            self.font_size.to_pixels_f32(),
-            self.line_height.to_pixels_f32(),
-            TextConstraint {
-                max_width: Some((size.width - padding_px * 2).max(Px(0)).to_f32()),
-                max_height: Some(size.height.to_f32()),
-            },
-        );
-
-        let text_width: Px = text_data.size[0].into();
-        let text_height: Px = text_data.size[1].into();
-
-        let positions = tab_label_positions(TabLabelPositionInput {
-            width: size.width,
-            height: size.height,
-            padding_px,
-            indicator_height_px,
-            icon_size,
-            text_width,
-            text_height,
-            first_baseline: text_data.first_baseline,
-            last_baseline: text_data.last_baseline,
-            line_count: text_data.line_count,
-            has_icon: self.has_icon,
-            has_text: true,
-        });
-
-        let drawable = TextCommand {
-            data: text_data,
-            offset: PxPosition::new(positions.text_x, positions.text_y),
-        };
-        metadata.push_draw_command(drawable);
-    }
+    boxed(
+        BoxedArgs::default()
+            .alignment(Alignment::Center)
+            .modifier(modifier),
+        move |scope| {
+            scope.child(move || {
+                if has_icon && has_text {
+                    // Vertical layout with icon above text
+                    column(
+                        ColumnArgs::default()
+                            .main_axis_alignment(MainAxisAlignment::Center)
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .modifier(
+                                Modifier::new().constrain(
+                                    Some(DimensionValue::WRAP),
+                                    Some(DimensionValue::WRAP),
+                                ),
+                            ),
+                        move |col| {
+                            let icon_content = icon_content.clone();
+                            col.child(move || {
+                                if let Some(ic) = icon_content {
+                                    icon(IconArgs::from(ic).size(icon_size));
+                                }
+                            });
+                            // Spacing between icon and text
+                            col.child(|| {
+                                spacer(Modifier::new().constrain(
+                                    Some(DimensionValue::Fixed(Px(0))),
+                                    Some(DimensionValue::Fixed(Dp(2.0).into())),
+                                ));
+                            });
+                            let text_content = text_content.clone();
+                            col.child(move || {
+                                text(
+                                    TextArgs::default()
+                                        .text(text_content)
+                                        .color(content_color)
+                                        .size(font_size)
+                                        .line_height(line_height),
+                                );
+                            });
+                        },
+                    );
+                } else if has_icon {
+                    // Icon only
+                    if let Some(ic) = icon_content {
+                        icon(IconArgs::from(ic).size(icon_size));
+                    }
+                } else if has_text {
+                    // Text only
+                    text(
+                        TextArgs::default()
+                            .text(text_content)
+                            .color(content_color)
+                            .size(font_size)
+                            .line_height(line_height),
+                    );
+                }
+            });
+        },
+    );
 }
 
 #[derive(Clone)]

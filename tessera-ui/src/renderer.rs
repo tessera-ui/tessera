@@ -651,7 +651,6 @@ Fps: {:.2}
                 clipboard: args.clipboard,
                 layout_cache,
                 frame_trace,
-                frame_index: frame_idx,
             })
         });
 

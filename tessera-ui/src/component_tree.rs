@@ -41,7 +41,6 @@ struct DrawTraversalContext<'a> {
 
 pub(crate) struct LayoutContext<'a> {
     pub cache: &'a dashmap::DashMap<u64, crate::runtime::LayoutCacheEntry>,
-    pub frame_index: u64,
 }
 
 /// Parameters for the compute function
@@ -57,7 +56,6 @@ pub(crate) struct ComputeParams<'a> {
     pub clipboard: &'a mut Clipboard,
     pub layout_cache: &'a mut LayoutCache,
     pub frame_trace: Vec<TraceEntry>,
-    pub frame_index: u64,
 }
 
 /// Respents a component tree
@@ -223,7 +221,6 @@ impl ComponentTree {
             clipboard,
             layout_cache,
             frame_trace: _frame_trace,
-            frame_index,
         } = params;
         let Some(root_node) = self
             .tree
@@ -238,7 +235,6 @@ impl ComponentTree {
 
         let layout_ctx = LayoutContext {
             cache: &layout_cache.entries,
-            frame_index,
         };
 
         let measure_timer = Instant::now();

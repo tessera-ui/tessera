@@ -47,11 +47,3 @@ impl std::hash::Hash for TextConstraint {
         }
     }
 }
-
-impl TextConstraint {
-    /// Creates a new `TextConstraint` with no limits.
-    pub const NONE: Self = Self {
-        max_width: None,
-        max_height: None,
-    };
-}
