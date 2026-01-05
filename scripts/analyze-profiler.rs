@@ -11,6 +11,8 @@
 //! clap = { version = "4.0", features = ["derive"] }
 //! serde = { version = "1.0", features = ["derive"] }
 //! serde_json = "1.0"
+//! comfy-table = "7.1"
+//! owo-colors = "4.1"
 //! ```
 
 use std::{
@@ -22,6 +24,8 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
+use comfy_table::{Cell, Color, ContentArrangement, Row, Table, presets::UTF8_FULL};
+use owo_colors::OwoColorize;
 use serde::Deserialize;
 
 #[derive(Parser, Debug)]
@@ -54,6 +58,8 @@ struct FrameRecord {
     #[allow(dead_code)]
     frame: u64,
     render_time_ns: Option<u128>,
+    build_tree_time_ns: Option<u128>,
+    draw_time_ns: Option<u128>,
     frame_total_ns: Option<u128>,
     components: Vec<ComponentRecord>,
 }
@@ -84,6 +90,14 @@ struct Summary {
     frame_total_count: u64,
     render_total: u128,
     render_count: u64,
+    build_tree_total: u128,
+    build_tree_min: Option<u128>,
+    build_tree_max: Option<u128>,
+    build_tree_count: u64,
+    draw_total: u128,
+    draw_min: Option<u128>,
+    draw_max: Option<u128>,
+    draw_count: u64,
     build_total_sum: u128,
     build_total_min: Option<u128>,
     build_total_max: Option<u128>,
@@ -96,6 +110,10 @@ struct Summary {
     input_total_min: Option<u128>,
     input_total_max: Option<u128>,
     input_total_count: u64,
+    unaccounted_total_sum: u128,
+    unaccounted_total_min: Option<u128>,
+    unaccounted_total_max: Option<u128>,
+    unaccounted_total_count: u64,
     node_count: u64,
     cache_hit: u64,
     cache_miss: u64,
@@ -244,11 +262,47 @@ fn process_frame(
         summary.frame_total_count += 1;
         summary.frame_total_min = Some(summary.frame_total_min.map_or(total, |v| v.min(total)));
         summary.frame_total_max = Some(summary.frame_total_max.map_or(total, |v| v.max(total)));
-    }
 
-    if let Some(render) = frame.render_time_ns {
-        summary.render_total += render;
-        summary.render_count += 1;
+        if let Some(build_tree) = frame.build_tree_time_ns {
+            summary.build_tree_total += build_tree;
+            summary.build_tree_count += 1;
+            summary.build_tree_min = Some(
+                summary
+                    .build_tree_min
+                    .map_or(build_tree, |v| v.min(build_tree)),
+            );
+            summary.build_tree_max = Some(
+                summary
+                    .build_tree_max
+                    .map_or(build_tree, |v| v.max(build_tree)),
+            );
+        }
+        if let Some(draw) = frame.draw_time_ns {
+            summary.draw_total += draw;
+            summary.draw_count += 1;
+            summary.draw_min = Some(summary.draw_min.map_or(draw, |v| v.min(draw)));
+            summary.draw_max = Some(summary.draw_max.map_or(draw, |v| v.max(draw)));
+        }
+
+        if let Some(render) = frame.render_time_ns {
+            summary.render_total += render;
+            summary.render_count += 1;
+
+            let accounted = frame_totals.build + frame_totals.measure + frame_totals.input + render;
+            let unaccounted = total.saturating_sub(accounted);
+            summary.unaccounted_total_sum += unaccounted;
+            summary.unaccounted_total_count += 1;
+            summary.unaccounted_total_min = Some(
+                summary
+                    .unaccounted_total_min
+                    .map_or(unaccounted, |v| v.min(unaccounted)),
+            );
+            summary.unaccounted_total_max = Some(
+                summary
+                    .unaccounted_total_max
+                    .map_or(unaccounted, |v| v.max(unaccounted)),
+            );
+        }
     }
 }
 
@@ -315,74 +369,180 @@ fn accumulate_component_exclusive(
 }
 
 fn print_summary(summary: &Summary) {
-    println!("Profiler summary");
-    println!("- Frames: {}", summary.frames);
+    println!("{}", "Profiler summary".bold());
+
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(Row::from(vec![
+            Cell::new("Metric").fg(Color::Cyan),
+            Cell::new("Avg").fg(Color::Cyan),
+            Cell::new("Min").fg(Color::Cyan),
+            Cell::new("Max").fg(Color::Cyan),
+        ]));
+
+    table.add_row(Row::from(vec![
+        Cell::new("Frames"),
+        Cell::new(summary.frames.to_string()),
+        Cell::new(""),
+        Cell::new(""),
+    ]));
+
     if summary.frame_total_count > 0 {
-        let avg_frame = summary.frame_total_sum as f64 / summary.frame_total_count as f64;
-        let min_frame = summary.frame_total_min.unwrap_or(0);
-        let max_frame = summary.frame_total_max.unwrap_or(0);
-        println!(
-            "- Frame total (avg/min/max): {} / {} / {} ms",
-            format_ms(avg_frame),
-            format_ms(min_frame as f64),
-            format_ms(max_frame as f64)
-        );
+        let avg = summary.frame_total_sum as f64 / summary.frame_total_count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Frame total (wall)"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.frame_total_min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.frame_total_max.unwrap_or(0) as f64)
+            )),
+        ]));
+    }
+
+    // Renderer wall-time breakdown (additive on the main thread).
+    if summary.build_tree_count > 0 {
+        let avg = summary.build_tree_total as f64 / summary.build_tree_count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Build tree (wall)"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.build_tree_min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.build_tree_max.unwrap_or(0) as f64)
+            )),
+        ]));
+    }
+    if summary.draw_count > 0 {
+        let avg = summary.draw_total as f64 / summary.draw_count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Draw/compute (wall)"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.draw_min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.draw_max.unwrap_or(0) as f64)
+            )),
+        ]));
     }
     if summary.render_count > 0 {
-        let avg_render = summary.render_total as f64 / summary.render_count as f64;
-        println!("- Render time avg: {} ms", format_ms(avg_render));
+        let avg = summary.render_total as f64 / summary.render_count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Render (wall)"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(""),
+            Cell::new(""),
+        ]));
     }
+
+    // Node-scope totals (CPU-time sum; may exceed wall time when parallel).
     if summary.build_total_count > 0 {
-        let avg_build = summary.build_total_sum as f64 / summary.build_total_count as f64;
-        let min_build = summary.build_total_min.unwrap_or(0);
-        let max_build = summary.build_total_max.unwrap_or(0);
-        println!(
-            "- Build total (exclusive avg/min/max): {} / {} / {} ms",
-            format_ms(avg_build),
-            format_ms(min_build as f64),
-            format_ms(max_build as f64)
-        );
+        let avg = summary.build_total_sum as f64 / summary.build_total_count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Build total (exclusive CPU)"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.build_total_min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.build_total_max.unwrap_or(0) as f64)
+            )),
+        ]));
     }
     if summary.measure_total_count > 0 {
-        let avg_measure = summary.measure_total_sum as f64 / summary.measure_total_count as f64;
-        let min_measure = summary.measure_total_min.unwrap_or(0);
-        let max_measure = summary.measure_total_max.unwrap_or(0);
-        println!(
-            "- Measure total (exclusive avg/min/max): {} / {} / {} ms",
-            format_ms(avg_measure),
-            format_ms(min_measure as f64),
-            format_ms(max_measure as f64)
-        );
+        let avg = summary.measure_total_sum as f64 / summary.measure_total_count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Measure total (exclusive CPU)"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.measure_total_min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.measure_total_max.unwrap_or(0) as f64)
+            )),
+        ]));
     }
     if summary.input_total_count > 0 {
-        let avg_input = summary.input_total_sum as f64 / summary.input_total_count as f64;
-        let min_input = summary.input_total_min.unwrap_or(0);
-        let max_input = summary.input_total_max.unwrap_or(0);
-        println!(
-            "- Input total (exclusive avg/min/max): {} / {} / {} ms",
-            format_ms(avg_input),
-            format_ms(min_input as f64),
-            format_ms(max_input as f64)
-        );
+        let avg = summary.input_total_sum as f64 / summary.input_total_count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Input total (exclusive CPU)"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.input_total_min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.input_total_max.unwrap_or(0) as f64)
+            )),
+        ]));
     }
+
+    if summary.unaccounted_total_count > 0 {
+        let avg = summary.unaccounted_total_sum as f64 / summary.unaccounted_total_count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Unaccounted (wall)").fg(Color::DarkGrey),
+            Cell::new(format!("{} ms", format_ms(avg))).fg(Color::DarkGrey),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.unaccounted_total_min.unwrap_or(0) as f64)
+            ))
+            .fg(Color::DarkGrey),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.unaccounted_total_max.unwrap_or(0) as f64)
+            ))
+            .fg(Color::DarkGrey),
+        ]));
+    }
+
     let cache_total = summary.cache_hit + summary.cache_miss;
     if cache_total > 0 {
         let rate = summary.cache_hit as f64 / cache_total as f64;
-        println!(
-            "- Layout cache hit rate: {}% (hit {}, miss {}, unknown {})",
-            format_pct(rate),
-            summary.cache_hit,
-            summary.cache_miss,
-            summary.cache_unknown
-        );
+        table.add_row(Row::from(vec![
+            Cell::new("Layout cache hit rate"),
+            Cell::new(format!(
+                "{}% (hit {}, miss {}, unknown {})",
+                format_pct(rate),
+                summary.cache_hit,
+                summary.cache_miss,
+                summary.cache_unknown
+            )),
+            Cell::new(""),
+            Cell::new(""),
+        ]));
     } else {
-        println!(
-            "- Layout cache hit rate: n/a (unknown {})",
-            summary.cache_unknown
-        );
+        table.add_row(Row::from(vec![
+            Cell::new("Layout cache hit rate"),
+            Cell::new(format!("n/a (unknown {})", summary.cache_unknown)),
+            Cell::new(""),
+            Cell::new(""),
+        ]));
     }
-    println!("- Components counted: {}", summary.node_count);
-    println!();
+
+    table.add_row(Row::from(vec![
+        Cell::new("Components counted"),
+        Cell::new(summary.node_count.to_string()),
+        Cell::new(""),
+        Cell::new(""),
+    ]));
+
+    println!("{table}");
 }
 
 fn print_top_sections(stats: &HashMap<String, Stats>, top: usize, min_count: u64) {
@@ -410,7 +570,21 @@ fn print_section<F>(title: &str, rows: &[(&String, &Stats)], top: usize, value: 
 where
     F: Fn(&Stats) -> u128,
 {
-    println!("{title}");
+    println!("{}", title.bold());
+
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(Row::from(vec![
+            Cell::new("#").fg(Color::Cyan),
+            Cell::new("Component").fg(Color::Cyan),
+            Cell::new("Total (ms)").fg(Color::Cyan),
+            Cell::new("Avg (us)").fg(Color::Cyan),
+            Cell::new("Count").fg(Color::Cyan),
+            Cell::new("Hit rate").fg(Color::Cyan),
+        ]));
+
     for (idx, (name, stat)) in rows.iter().take(top).enumerate() {
         let total_ns = value(stat);
         let avg_ns = if stat.count == 0 {
@@ -418,24 +592,24 @@ where
         } else {
             total_ns as f64 / stat.count as f64
         };
-        let hit_rate = stat.hit_rate();
-        let hit_rate_display = hit_rate
+        let hit_rate_display = stat
+            .hit_rate()
             .map(format_pct)
             .unwrap_or_else(|| "n/a".to_string());
-        println!(
-            "{:>2}. {:<40} total {} ms, avg {} us, count {}, hit {} ({} / {} / {})",
-            idx + 1,
-            truncate(name, 40),
-            format_ms(total_ns as f64),
-            format_us(avg_ns),
-            stat.count,
-            hit_rate_display,
-            stat.cache_hit,
-            stat.cache_miss,
-            stat.cache_unknown
-        );
+        table.add_row(Row::from(vec![
+            Cell::new((idx + 1).to_string()),
+            Cell::new(truncate(name, 40)),
+            Cell::new(format_ms(total_ns as f64)),
+            Cell::new(format_us(avg_ns)),
+            Cell::new(stat.count.to_string()),
+            Cell::new(format!(
+                "{} ({} / {} / {})",
+                hit_rate_display, stat.cache_hit, stat.cache_miss, stat.cache_unknown
+            )),
+        ]));
     }
-    println!();
+
+    println!("{table}\n");
 }
 
 fn format_ms(value_ns: f64) -> String {
