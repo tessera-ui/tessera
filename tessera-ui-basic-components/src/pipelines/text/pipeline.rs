@@ -310,10 +310,10 @@ impl TextData {
 
     /// Retrieves cached text data using the computed bounds.
     ///
-    /// This method should be called after [`TextData::measure()`] has been
-    /// invoked with the same parameters. It uses the final bounds (from
-    /// `computed_data`) as the cache key, allowing the render phase to
-    /// retrieve data without knowing the original constraint.
+    /// This method attempts to retrieve cached data from a prior
+    /// [`TextData::measure()`] call. If the cache entry was evicted (due to LRU
+    /// limits), it will automatically recompute the text layout using the
+    /// bounds as the constraint.
     ///
     /// # Parameters
     /// - `text`: The text string.
@@ -321,10 +321,6 @@ impl TextData {
     /// - `font_size`: Font size.
     /// - `line_height`: Line height.
     /// - `bounds`: The computed bounds from measurement (width, height).
-    ///
-    /// # Panics
-    /// Panics if the cache entry is not found. This indicates a bug where
-    /// `get()` was called without a prior `measure()` call.
     pub fn get(
         text: String,
         color: Color,
@@ -333,16 +329,42 @@ impl TextData {
         bounds: [u32; 2],
     ) -> Self {
         let key = LruKey {
-            text,
+            text: text.clone(),
             color,
             font_size,
             line_height,
             bounds,
         };
-        write_lru_cache()
-            .get(&key)
-            .cloned()
-            .expect("TextData::get() called without prior measure()")
+
+        // Try to get from cache first
+        if let Some(cached) = write_lru_cache().get(&key).cloned() {
+            return cached;
+        }
+
+        // Cache miss (possibly evicted by LRU), recompute using bounds as constraint
+        let constraint = TextConstraint {
+            max_width: Some(bounds[0] as f32),
+            max_height: Some(bounds[1] as f32),
+        };
+        let (text_buffer, computed_bounds, first_baseline, last_baseline, line_count) =
+            Self::build_buffer(&text, color, font_size, line_height, &constraint);
+
+        let data = Self {
+            text_buffer,
+            size: computed_bounds,
+            first_baseline,
+            last_baseline,
+            line_count,
+            base_color: color,
+            current_color: color,
+            text: text.clone(),
+            font_size,
+            line_height,
+        };
+
+        // Store back in cache
+        write_lru_cache().put(key, data.clone());
+        data
     }
 
     /// Prepares text data for rendering (legacy API, combines measure + get).
