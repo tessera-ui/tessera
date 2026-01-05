@@ -587,6 +587,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         begin_frame_slots();
         begin_frame_context_slots();
         TesseraRuntime::with_mut(|rt| rt.begin_frame_trace());
+        let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
         entry_wrapper(entry_point);
         let build_tree_cost = tree_timer.elapsed();
         debug!("Component tree built in {build_tree_cost:?}");
@@ -789,18 +790,27 @@ Fps: {:.2}
             }
         } else {
             thread::sleep(std::time::Duration::from_millis(4)); // Sleep briefly to avoid busy-waiting
+            #[cfg(feature = "profiling")]
+            {
+                // Non-dirty frames are intentionally excluded from profiler output.
+                crate::profiler::discard_frame(frame_idx);
+            }
         }
 
         #[cfg(feature = "profiling")]
         {
-            let frame_total_ns = frame_timer.elapsed().as_nanos();
-            let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
-            submit_frame_meta(FrameMeta {
-                frame_idx,
-                render_time_ns: render_duration_ns,
-                frame_total_ns: Some(frame_total_ns),
-                nodes,
-            });
+            if dirty {
+                let frame_total_ns = frame_timer.elapsed().as_nanos();
+                let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
+                submit_frame_meta(FrameMeta {
+                    frame_idx,
+                    render_time_ns: render_duration_ns,
+                    build_tree_time_ns: Some(build_tree_cost.as_nanos()),
+                    draw_time_ns: Some(draw_cost.as_nanos()),
+                    frame_total_ns: Some(frame_total_ns),
+                    nodes,
+                });
+            }
         }
 
         // Prepare accessibility tree update before clearing the component tree if

@@ -95,7 +95,7 @@
 //!
 //! See [`FrameRecord`] and [`ComponentRecord`] for equivalent Rust structures.
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{File, OpenOptions},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
@@ -161,6 +161,10 @@ pub struct FrameMeta {
     pub frame_idx: u64,
     /// Render duration for the frame.
     pub render_time_ns: Option<u128>,
+    /// Component tree build duration for the frame (wall time).
+    pub build_tree_time_ns: Option<u128>,
+    /// Draw/compute duration for the frame (wall time).
+    pub draw_time_ns: Option<u128>,
     /// Total duration for the frame.
     pub frame_total_ns: Option<u128>,
     /// All nodes observed in the frame.
@@ -177,6 +181,7 @@ pub struct FrameMeta {
 enum Message {
     Sample(Sample),
     FrameMeta(FrameMeta),
+    DiscardFrame(u64),
 }
 
 struct ProfilerRuntime {
@@ -185,6 +190,7 @@ struct ProfilerRuntime {
 
 struct WorkerState {
     frames: HashMap<u64, Vec<Sample>>,
+    discarded_frames: HashSet<u64>,
     writer: BufWriter<File>,
     header_written: bool,
 }
@@ -217,13 +223,15 @@ fn profiler_runtime() -> &'static ProfilerRuntime {
 }
 
 fn worker_loop(receiver: mpsc::Receiver<Message>) {
-    let file = OpenOptions::new()
-        .create(true)
-        .append(true)
+    let mut options = OpenOptions::new();
+    options.create(true).write(true).truncate(true);
+
+    let file = options
         .open(output_path())
         .expect("failed to open profiler output file");
     let mut state = WorkerState {
         frames: HashMap::new(),
+        discarded_frames: HashSet::new(),
         writer: BufWriter::new(file),
         header_written: false,
     };
@@ -231,6 +239,9 @@ fn worker_loop(receiver: mpsc::Receiver<Message>) {
     for msg in receiver {
         match msg {
             Message::Sample(sample) => {
+                if state.discarded_frames.contains(&sample.frame_idx) {
+                    continue;
+                }
                 state
                     .frames
                     .entry(sample.frame_idx)
@@ -238,11 +249,19 @@ fn worker_loop(receiver: mpsc::Receiver<Message>) {
                     .push(sample);
             }
             Message::FrameMeta(frame_meta) => {
+                if state.discarded_frames.remove(&frame_meta.frame_idx) {
+                    let _ = state.frames.remove(&frame_meta.frame_idx);
+                    continue;
+                }
                 let samples = state
                     .frames
                     .remove(&frame_meta.frame_idx)
                     .unwrap_or_default();
                 flush_frame(&mut state, frame_meta, samples);
+            }
+            Message::DiscardFrame(frame_idx) => {
+                state.discarded_frames.insert(frame_idx);
+                let _ = state.frames.remove(&frame_idx);
             }
         };
     }
@@ -315,6 +334,10 @@ pub struct FrameRecord {
     frame: u64,
     /// Render duration for the frame.
     render_time_ns: Option<u128>,
+    /// Component tree build duration for the frame (wall time).
+    build_tree_time_ns: Option<u128>,
+    /// Draw/compute duration for the frame (wall time).
+    draw_time_ns: Option<u128>,
     /// Total duration for the frame.
     frame_total_ns: Option<u128>,
     /// Component tree records.
@@ -432,13 +455,12 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             continue;
         };
         let node_key = node_id.to_string();
-        let parent_key = sample.parent_node_id.map(|p| p.to_string());
 
         let entry = nodes
             .entry(node_key.clone())
             .or_insert_with(|| ComponentRecordBuilder {
                 id: node_key.clone(),
-                parent: parent_key.clone(),
+                parent: sample.parent_node_id.map(|p| p.to_string()),
                 fn_name: sample.fn_name.clone(),
                 abs_pos: sample.abs_pos.map(|(x, y)| Pos { x, y }),
                 size: sample.computed_size.map(|(w, h)| Size { w, h }),
@@ -458,29 +480,16 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
         }
 
         match sample.phase {
-            Phase::Build => entry.phases.build_ns = Some(duration_ns),
-            Phase::Measure => entry.phases.measure_ns = Some(duration_ns),
-            Phase::Input => entry.phases.input_ns = Some(duration_ns),
-            Phase::RenderFrame => {}
-        }
-
-        if let Some(parent) = parent_key {
-            let parent_entry =
-                nodes
-                    .entry(parent.clone())
-                    .or_insert_with(|| ComponentRecordBuilder {
-                        id: parent.clone(),
-                        parent: None,
-                        fn_name: None,
-                        abs_pos: None,
-                        size: None,
-                        layout_cache_hit: None,
-                        phases: PhaseDurations::default(),
-                        children: Vec::new(),
-                    });
-            if !parent_entry.children.contains(&node_key) {
-                parent_entry.children.push(node_key.clone());
+            Phase::Build => {
+                entry.phases.build_ns = Some(entry.phases.build_ns.unwrap_or(0) + duration_ns);
             }
+            Phase::Measure => {
+                entry.phases.measure_ns = Some(entry.phases.measure_ns.unwrap_or(0) + duration_ns);
+            }
+            Phase::Input => {
+                entry.phases.input_ns = Some(entry.phases.input_ns.unwrap_or(0) + duration_ns);
+            }
+            Phase::RenderFrame => {}
         }
     }
 
@@ -488,6 +497,8 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
         return Some(FrameRecord {
             frame: frame_meta.frame_idx,
             render_time_ns: frame_meta.render_time_ns,
+            build_tree_time_ns: frame_meta.build_tree_time_ns,
+            draw_time_ns: frame_meta.draw_time_ns,
             frame_total_ns: frame_meta.frame_total_ns,
             components: Vec::new(),
         });
@@ -542,6 +553,8 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
     Some(FrameRecord {
         frame: frame_meta.frame_idx,
         render_time_ns: frame_meta.render_time_ns,
+        build_tree_time_ns: frame_meta.build_tree_time_ns,
+        draw_time_ns: frame_meta.draw_time_ns,
         frame_total_ns: frame_meta.frame_total_ns,
         components,
     })
@@ -559,6 +572,19 @@ pub fn submit_frame_meta(frame_meta: FrameMeta) {
         .send(Message::FrameMeta(frame_meta))
     {
         eprintln!("tessera profiler frame meta send failed: {err}");
+    }
+}
+
+/// Discard all samples for the given frame and prevent it from being written.
+///
+/// This is used to skip profiling output for frames that did not present new
+/// content (e.g., non-dirty frames).
+pub fn discard_frame(frame_idx: u64) {
+    if let Err(err) = profiler_runtime()
+        .sender
+        .send(Message::DiscardFrame(frame_idx))
+    {
+        eprintln!("tessera profiler discard frame send failed: {err}");
     }
 }
 

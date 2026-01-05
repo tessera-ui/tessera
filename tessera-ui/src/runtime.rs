@@ -513,7 +513,12 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
     CONTEXT_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
 
     #[cfg(feature = "profiling")]
-    let profiling_guard = crate::profiler::make_build_scope_guard(node_id, parent_node_id, fn_name);
+    let profiling_guard = match current_phase() {
+        Some(RuntimePhase::Build) => {
+            crate::profiler::make_build_scope_guard(node_id, parent_node_id, fn_name)
+        }
+        _ => None,
+    };
 
     NodeContextGuard {
         popped: false,
