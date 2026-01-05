@@ -116,7 +116,7 @@ Please read the [Contributing Guide](https://github.com/tessera-ui/tessera/blob/
 
 ## License
 
-Tessera is dual-licensed under the [MIT License](https://github.com/tessera-ui/tessera/blob/main/LICENSE) or the [Apache 2.0 License](https://github.com/tessera-ui/tessera/blob/main/LICENSE).
+Tessera is dual-licensed under the [MIT License](https://github.com/tessera-ui/tessera/blob/main/LICENSE-MIT) or the [Apache 2.0 License](https://github.com/tessera-ui/tessera/blob/main/LICENSE-APACHE).
 
 ## Star History
 

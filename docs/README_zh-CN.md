@@ -116,7 +116,7 @@ fn app() {
 
 ## 许可证
 
-Tessera 采用 [MIT 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE) 或 [Apache 2.0 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE)双重许可。
+Tessera 采用 [MIT 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE-MIT) 或 [Apache 2.0 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE-APACHE)双重许可。
 
 ## Star History
 
