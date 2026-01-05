@@ -164,7 +164,7 @@ Please note that Android support is still experimental and you might encounter i
 
 ## License
 
-We assume that your contributions follow the project's dual-license terms. This project is dual-licensed under the [MIT License](./LICENSE) or the [Apache License 2.0](./LICENSE). You can choose either license.
+We assume that your contributions follow the project's dual-license terms. This project is dual-licensed under the [MIT License](./LICENSE-MIT) or the [Apache License 2.0](./LICENSE-APACHE). You can choose either license.
 
 By submitting contributions to this project, you agree that your contributions will be released under the same license terms as the project, i.e., MIT OR Apache-2.0 dual license. This means:
 
