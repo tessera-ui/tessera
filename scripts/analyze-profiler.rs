@@ -13,6 +13,7 @@
 //! serde_json = "1.0"
 //! comfy-table = "7.1"
 //! owo-colors = "4.1"
+//! csv = "1.3"
 //! ```
 
 use std::{
@@ -26,7 +27,7 @@ use anyhow::{Context, Result, bail};
 use clap::Parser;
 use comfy_table::{Cell, Color, ContentArrangement, Row, Table, presets::UTF8_FULL};
 use owo_colors::OwoColorize;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -51,6 +52,10 @@ struct Cli {
     /// Skip lines that fail JSON parsing.
     #[arg(long)]
     skip_invalid: bool,
+
+    /// Export full per-component aggregated stats to a CSV file.
+    #[arg(long)]
+    csv: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -199,9 +204,110 @@ fn main() -> Result<()> {
         bail!("no frame records found");
     }
 
+    if let Some(path) = &cli.csv {
+        export_csv(path, &stats_by_name)?;
+        println!("{} {}", "Wrote CSV:".green(), path.display());
+    }
+
     print_summary(&summary);
     print_top_sections(&stats_by_name, cli.top, cli.min_count);
 
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct CsvRow {
+    component: String,
+    count: u64,
+
+    build_total_ns: u128,
+    build_total_ms: f64,
+    build_avg_us: f64,
+
+    measure_total_ns: u128,
+    measure_total_ms: f64,
+    measure_avg_us: f64,
+
+    input_total_ns: u128,
+    input_total_ms: f64,
+    input_avg_us: f64,
+
+    total_total_ns: u128,
+    total_total_ms: f64,
+    total_avg_us: f64,
+
+    cache_hit: u64,
+    cache_miss: u64,
+    cache_unknown: u64,
+    cache_hit_rate: Option<f64>,
+}
+
+fn export_csv(path: &PathBuf, stats: &HashMap<String, Stats>) -> Result<()> {
+    let mut rows: Vec<(&String, &Stats)> = stats.iter().collect();
+    rows.sort_by_key(|(_, stat)| std::cmp::Reverse(stat.total_ns()));
+
+    let file = File::create(path)
+        .with_context(|| format!("failed to create CSV output file at {}", path.display()))?;
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(true)
+        .from_writer(file);
+
+    for (name, stat) in rows {
+        let count = stat.count;
+        let build_avg_ns = if count == 0 {
+            0.0
+        } else {
+            stat.build_ns as f64 / count as f64
+        };
+        let measure_avg_ns = if count == 0 {
+            0.0
+        } else {
+            stat.measure_ns as f64 / count as f64
+        };
+        let input_avg_ns = if count == 0 {
+            0.0
+        } else {
+            stat.input_ns as f64 / count as f64
+        };
+        let total_ns = stat.total_ns();
+        let total_avg_ns = if count == 0 {
+            0.0
+        } else {
+            total_ns as f64 / count as f64
+        };
+
+        writer
+            .serialize(CsvRow {
+                component: name.to_string(),
+                count,
+
+                build_total_ns: stat.build_ns,
+                build_total_ms: stat.build_ns as f64 / 1_000_000.0,
+                build_avg_us: build_avg_ns / 1_000.0,
+
+                measure_total_ns: stat.measure_ns,
+                measure_total_ms: stat.measure_ns as f64 / 1_000_000.0,
+                measure_avg_us: measure_avg_ns / 1_000.0,
+
+                input_total_ns: stat.input_ns,
+                input_total_ms: stat.input_ns as f64 / 1_000_000.0,
+                input_avg_us: input_avg_ns / 1_000.0,
+
+                total_total_ns: total_ns,
+                total_total_ms: total_ns as f64 / 1_000_000.0,
+                total_avg_us: total_avg_ns / 1_000.0,
+
+                cache_hit: stat.cache_hit,
+                cache_miss: stat.cache_miss,
+                cache_unknown: stat.cache_unknown,
+                cache_hit_rate: stat.hit_rate(),
+            })
+            .with_context(|| format!("failed to write CSV row for component '{name}'"))?;
+    }
+
+    writer
+        .flush()
+        .with_context(|| format!("failed to flush CSV output file at {}", path.display()))?;
     Ok(())
 }
 
