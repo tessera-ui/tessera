@@ -771,10 +771,10 @@ fn about() {
                 TextArgs::default()
                     .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
                     .text(
-                        r#"This is an example app of Tessera UI Framework.,
-Made with ❤️ by tessera-ui devs.,
+                        r#"This is an example app of Tessera UI Framework.
+Made with ❤️ by tessera-ui devs.
 
-Copyright 2025 Tessera UI Framework Developers,
+Copyright 2025 Tessera UI Framework Developers
 "#
                         .to_string(),
                     )
