@@ -1,9 +1,8 @@
-use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera, use_context};
 use tessera_ui_basic_components::{
-    column::{ColumnArgs, column},
     glass_progress::{GlassProgressArgs, glass_progress},
+    lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgs, scrollable},
     slider::{SliderArgs, slider},
     spacer::spacer,
     surface::{SurfaceArgs, surface},
@@ -16,20 +15,7 @@ use tessera_ui_basic_components::{
 pub fn glass_progress_showcase() {
     surface(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
-        move || {
-            scrollable(
-                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
-                move || {
-                    surface(
-                        SurfaceArgs::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
-                        move || {
-                            test_content();
-                        },
-                    );
-                },
-            )
-        },
+        test_content,
     );
 }
 
@@ -37,16 +23,20 @@ pub fn glass_progress_showcase() {
 fn test_content() {
     let progress = remember(|| 0.5);
 
-    column(
-        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
+    let controller = retain(LazyListController::new);
+    lazy_column_with_controller(
+        LazyColumnArgs::default()
+            .modifier(Modifier::new().fill_max_width())
+            .content_padding(Dp(16.0)),
+        controller,
         move |scope| {
-            scope.child(|| text("Glass Progress Showcase"));
+            scope.item(|| text("Glass Progress Showcase"));
 
-            scope.child(|| {
+            scope.item(|| {
                 spacer(Modifier::new().height(Dp(20.0)));
             });
 
-            scope.child(|| {
+            scope.item(|| {
                 text(TextArgs::default()
                     .text("This is the glass progress, adjust the slider below to change its value.")
                     .size(Dp(20.0))
@@ -60,7 +50,7 @@ fn test_content() {
                     );
             });
 
-            scope.child(move || {
+            scope.item(move || {
                 glass_progress(
                     GlassProgressArgs::default()
                         .value(progress.get())
@@ -68,11 +58,11 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| {
+            scope.item(|| {
                 spacer(Modifier::new().height(Dp(20.0)));
             });
 
-            scope.child(move || {
+            scope.item(move || {
                 slider(
                     SliderArgs::default()
                         .value(progress.get())
@@ -83,5 +73,5 @@ fn test_content() {
                 );
             });
         },
-    )
+    );
 }

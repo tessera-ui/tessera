@@ -1,12 +1,11 @@
-use tessera_ui::{Dp, Modifier, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
 use tessera_ui_basic_components::{
-    column::{ColumnArgs, column},
+    lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     modifier::ModifierExt as _,
     progress::{
         CircularProgressIndicatorArgs, LinearProgressIndicatorArgs, ProgressArgs,
         circular_progress_indicator, linear_progress_indicator, progress,
     },
-    scrollable::{ScrollableArgs, scrollable},
     slider::{SliderArgs, slider},
     spacer::spacer,
     surface::{SurfaceArgs, surface},
@@ -18,35 +17,24 @@ use tessera_ui_basic_components::{
 pub fn progress_showcase() {
     surface(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
-        move || {
-            scrollable(
-                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
-                move || {
-                    surface(
-                        SurfaceArgs::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
-                        move || {
-                            test_content();
-                        },
-                    );
-                },
-            )
-        },
+        test_content,
     );
 }
 
 #[tessera]
 fn test_content() {
     let progress_value = remember(|| 0.5);
-
-    column(
-        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
+    let controller = retain(LazyListController::new);
+    lazy_column_with_controller(
+        LazyColumnArgs::default()
+            .content_padding(Dp(16.0))
+            .modifier(Modifier::new().fill_max_width()),
+        controller,
         move |scope| {
-            scope.child(|| {
+            scope.item(|| {
                 text("This is the progress, adjust the slider below to change its value.")
             });
-
-            scope.child(move || {
+            scope.item(move || {
                 let progress_val = progress_value.get();
                 progress(
                     ProgressArgs::default()
@@ -54,10 +42,8 @@ fn test_content() {
                         .modifier(Modifier::new().width(Dp(240.0))),
                 );
             });
-
-            scope.child(|| spacer(Modifier::new().height(Dp(10.0))));
-
-            scope.child(move || {
+            scope.item(|| spacer(Modifier::new().height(Dp(10.0))));
+            scope.item(move || {
                 slider(
                     SliderArgs::default()
                         .value(progress_value.get())
@@ -65,38 +51,33 @@ fn test_content() {
                         .modifier(Modifier::new().width(Dp(250.0))),
                 );
             });
+            scope.item(|| spacer(Modifier::new().height(Dp(20.0))));
 
-            scope.child(|| spacer(Modifier::new().height(Dp(20.0))));
-
-            scope.child(|| {
+            scope.item(|| {
                 text("Linear progress indicator (indeterminate).".to_string());
             });
-            scope.child(|| {
+            scope.item(|| {
                 linear_progress_indicator(LinearProgressIndicatorArgs::default());
             });
-
-            scope.child(|| spacer(Modifier::new().height(Dp(20.0))));
-
-            scope.child(|| {
+            scope.item(|| spacer(Modifier::new().height(Dp(20.0))));
+            scope.item(|| {
                 text("Circular progress indicator (determinate).".to_string());
             });
-            scope.child(move || {
+            scope.item(move || {
                 circular_progress_indicator(
                     CircularProgressIndicatorArgs::default().progress(progress_value.get()),
                 );
             });
-
-            scope.child(|| spacer(Modifier::new().height(Dp(20.0))));
-
-            scope.child(|| {
+            scope.item(|| spacer(Modifier::new().height(Dp(20.0))));
+            scope.item(|| {
                 text("Circular progress indicator (indeterminate).".to_string());
             });
-            scope.child(|| {
+            scope.item(|| {
                 circular_progress_indicator(
                     CircularProgressIndicatorArgs::default()
                         .track_color(tessera_ui::Color::TRANSPARENT),
                 );
             });
         },
-    )
+    );
 }

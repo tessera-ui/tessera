@@ -12,8 +12,8 @@ use std::{
 
 use derive_setters::Setters;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, ParentConstraint, Px,
-    PxPosition, State, key,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, NodeId,
+    ParentConstraint, Px, PxPosition, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     remember, tessera,
 };
@@ -87,8 +87,8 @@ impl LazyListController {
 /// Arguments shared between lazy lists.
 #[derive(Clone, Setters)]
 pub struct LazyColumnArgs {
-    /// Scroll container arguments. Vertical scrolling is enforced.
-    pub scrollable: ScrollableArgs,
+    /// Modifier for the scroll container.
+    pub modifier: Modifier,
     /// How children are aligned along the cross axis (horizontal for columns).
     pub cross_axis_alignment: CrossAxisAlignment,
     /// Gap between successive items.
@@ -108,7 +108,7 @@ pub struct LazyColumnArgs {
 impl Default for LazyColumnArgs {
     fn default() -> Self {
         Self {
-            scrollable: ScrollableArgs::default(),
+            modifier: Modifier::new(),
             cross_axis_alignment: CrossAxisAlignment::Start,
             item_spacing: Dp(0.0),
             overscan: 2,
@@ -123,8 +123,8 @@ impl Default for LazyColumnArgs {
 /// scrolling is enforced.
 #[derive(Clone, Setters)]
 pub struct LazyRowArgs {
-    /// Scroll container arguments. Horizontal scrolling is enforced.
-    pub scrollable: ScrollableArgs,
+    /// Modifier for the scroll container.
+    pub modifier: Modifier,
     /// How children are aligned along the cross axis (vertical for rows).
     pub cross_axis_alignment: CrossAxisAlignment,
     /// Gap between successive items.
@@ -143,7 +143,7 @@ pub struct LazyRowArgs {
 impl Default for LazyRowArgs {
     fn default() -> Self {
         Self {
-            scrollable: ScrollableArgs::default(),
+            modifier: Modifier::new(),
             cross_axis_alignment: CrossAxisAlignment::Start,
             item_spacing: Dp(0.0),
             overscan: 2,
@@ -397,9 +397,10 @@ pub fn lazy_column_with_controller<F>(
         configure(&mut scope);
     }
 
-    let mut scrollable_args = args.scrollable.clone();
-    scrollable_args.vertical = true;
-    scrollable_args.horizontal = false;
+    let scrollable_args = ScrollableArgs::default()
+        .modifier(args.modifier)
+        .vertical(true)
+        .horizontal(false);
 
     let view_args = LazyListViewArgs {
         axis: LazyListAxis::Vertical,
@@ -534,9 +535,10 @@ pub fn lazy_row_with_controller<F>(
         configure(&mut scope);
     }
 
-    let mut scrollable_args = args.scrollable.clone();
-    scrollable_args.vertical = false;
-    scrollable_args.horizontal = true;
+    let scrollable_args = ScrollableArgs::default()
+        .modifier(args.modifier)
+        .vertical(false)
+        .horizontal(true);
 
     let view_args = LazyListViewArgs {
         axis: LazyListAxis::Horizontal,

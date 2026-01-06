@@ -4,7 +4,6 @@ use tessera_ui_basic_components::{
     column::{ColumnArgs, column},
     lazy_list::{LazyColumnArgs, LazyRowArgs, lazy_column, lazy_row},
     modifier::ModifierExt as _,
-    scrollable::ScrollableArgs,
     shape_def::Shape,
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
@@ -90,10 +89,7 @@ fn vertical_list() {
         move || {
             lazy_column(
                 LazyColumnArgs::default()
-                    .scrollable(
-                        ScrollableArgs::default()
-                            .modifier(Modifier::new().fill_max_width().height(Dp(360.0))),
-                    )
+                    .modifier(Modifier::new().fill_max_width().height(Dp(360.0)))
                     .item_spacing(Dp(12.0))
                     .estimated_item_size(Dp(68.0))
                     .cross_axis_alignment(CrossAxisAlignment::Stretch)
@@ -126,10 +122,7 @@ fn horizontal_gallery() {
         move || {
             lazy_row(
                 LazyRowArgs::default()
-                    .scrollable(
-                        ScrollableArgs::default()
-                            .modifier(Modifier::new().fill_max_width().height(Dp(180.0))),
-                    )
+                    .modifier(Modifier::new().fill_max_width().height(Dp(180.0)))
                     .item_spacing(Dp(16.0))
                     .estimated_item_size(Dp(160.0))
                     .cross_axis_alignment(CrossAxisAlignment::Center)

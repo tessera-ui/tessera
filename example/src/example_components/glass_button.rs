@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{Dp, Modifier, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::{BoxedArgs, boxed},
@@ -10,8 +10,8 @@ use tessera_ui_basic_components::{
     icon_button::{GlassIconButtonArgs, glass_icon_button},
     image::{ImageArgs, ImageSource, image, load_image_from_source},
     image_vector::{ImageVectorSource, load_image_vector_from_source},
+    lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgs, scrollable},
     shape_def::Shape,
     spacer::spacer,
     surface::{SurfaceArgs, surface},
@@ -32,20 +32,7 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
 pub fn glass_button_showcase() {
     surface(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
-        move || {
-            scrollable(
-                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
-                move || {
-                    surface(
-                        SurfaceArgs::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0))),
-                        move || {
-                            test_content();
-                        },
-                    );
-                },
-            )
-        },
+        test_content,
     );
 }
 
@@ -64,18 +51,20 @@ fn test_content() {
                 .expect("Failed to load icon SVG"),
         )
     });
-
-    column(
-        ColumnArgs::default()
+    let controller = retain(LazyListController::new);
+    lazy_column_with_controller(
+        LazyColumnArgs::default()
             .modifier(Modifier::new().fill_max_width())
-            .cross_axis_alignment(CrossAxisAlignment::Center),
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .content_padding(Dp(16.0)),
+        controller,
         move |scope| {
-            scope.child(|| text("Glass Button Showcase"));
+            scope.item(|| text("Glass Button Showcase"));
 
-            scope.child(|| {
+            scope.item(|| {
                 spacer(Modifier::new().height(Dp(20.0)));
             });
-            scope.child(move || {
+            scope.item(move || {
                 boxed(
                     BoxedArgs::default().alignment(Alignment::Center),
                     move |scope| {
@@ -133,13 +122,13 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| {
+            scope.item(|| {
                 spacer(Modifier::new().height(Dp(20.0)));
             });
 
-            scope.child(move || {
+            scope.item(move || {
                 text(format!("Click count: {}", counter.get()));
             });
         },
-    )
+    );
 }

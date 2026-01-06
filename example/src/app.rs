@@ -29,7 +29,6 @@ use tessera_ui_basic_components::{
         NavigationRailController, NavigationRailItem, navigation_rail_with_controller,
     },
     row::{RowArgs, row},
-    scrollable::ScrollableArgs,
     shape_def::Shape,
     side_bar::{
         SideBarController, SideBarProviderArgs, SideBarStyle, side_bar_provider_with_controller,
@@ -670,7 +669,7 @@ fn home(
             let controller = retain(LazyListController::new);
             lazy_column_with_controller(
                 LazyColumnArgs::default()
-                    .scrollable(ScrollableArgs::default().modifier(Modifier::new().fill_max_size()))
+                    .modifier(Modifier::new().fill_max_size())
                     .item_spacing(Dp(16.0))
                     .content_padding(Dp(8.0))
                     .cross_axis_alignment(CrossAxisAlignment::Stretch)

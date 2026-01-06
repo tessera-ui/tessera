@@ -1,7 +1,7 @@
-use tessera_ui::{Dp, Modifier, shard, tessera};
+use tessera_ui::{Dp, Modifier, retain, shard, tessera};
 use tessera_ui_basic_components::{
+    lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgs, scrollable},
     surface::{SurfaceArgs, surface},
     text::text,
 };
@@ -12,16 +12,16 @@ pub fn text_showcase() {
     surface(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
-            scrollable(
-                ScrollableArgs::default().modifier(Modifier::new().fill_max_size()),
-                || {
-                    surface(
-                        SurfaceArgs::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
-                        || {
-                            test_content();
-                        },
-                    );
+            let controller = retain(LazyListController::new);
+            lazy_column_with_controller(
+                LazyColumnArgs::default()
+                    .modifier(Modifier::new().fill_max_width())
+                    .content_padding(Dp(16.0)),
+                controller,
+                move |scope| {
+                    scope.item(|| {
+                        test_content();
+                    });
                 },
             )
         },

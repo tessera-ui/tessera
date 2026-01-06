@@ -1,6 +1,6 @@
 use std::{fmt::Display, sync::Arc};
 
-use tessera_ui::{Dp, Modifier, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
 use tessera_ui_basic_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{BoxedArgs, boxed},
@@ -8,9 +8,9 @@ use tessera_ui_basic_components::{
     fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
     glass_slider::{GlassSliderArgs, glass_slider},
     image::{ImageArgs, ImageData, ImageSource, image, load_image_from_source},
+    lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     modifier::ModifierExt as _,
     row::{RowArgs, row},
-    scrollable::{ScrollableArgs, scrollable},
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::{SurfaceArgs, surface},
@@ -94,33 +94,21 @@ impl Default for ExampleGlassState {
 pub fn fluid_glass_showcase() {
     surface(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
-        move || {
-            scrollable(
-                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
-                move || {
-                    surface(
-                        SurfaceArgs::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0))),
-                        move || {
-                            test_content();
-                        },
-                    );
-                },
-            )
-        },
+        test_content,
     );
 }
 
 #[tessera]
 fn test_content() {
     let state = remember(ExampleGlassState::default);
-    let image_data = state.with(|s| s.background_image_data.clone());
-    column(
-        ColumnArgs::default()
-            .modifier(Modifier::new().fill_max_width())
+    let controller = retain(LazyListController::new);
+    lazy_column_with_controller(
+        LazyColumnArgs::default()
+            .content_padding(Dp(16.0))
             .cross_axis_alignment(CrossAxisAlignment::Center),
+        controller,
         move |scope| {
-            scope.child(move || {
+            scope.item(move || {
                 let (
                     corner_radius,
                     width,
@@ -151,10 +139,9 @@ fn test_content() {
                     move |scope| {
                         scope.child(move || {
                             boxed(BoxedArgs::default().alignment(Alignment::Center), |scope| {
-                                let image_for_child = image_data.clone();
                                 scope.child(move || {
                                     image(ImageArgs {
-                                        data: image_for_child.clone(),
+                                        data: state.with(|s| s.background_image_data.clone()),
                                         modifier: Modifier::new().size(Dp(250.0), Dp(250.0)),
                                     });
                                 });
@@ -202,9 +189,9 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.item(|| spacer(Modifier::new().height(Dp(16.0))));
 
-            scope.child(move || {
+            scope.item(move || {
                 glass_config_slider(
                     "Width",
                     state.with(|s| s.width.value.0 as f32 / 500.0),
@@ -214,9 +201,9 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.item(|| spacer(Modifier::new().height(Dp(16.0))));
 
-            scope.child(move || {
+            scope.item(move || {
                 glass_config_slider(
                     "Height",
                     state.with(|s| s.height.value.0 as f32 / 500.0),
@@ -226,9 +213,9 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.item(|| spacer(Modifier::new().height(Dp(16.0))));
 
-            scope.child(move || {
+            scope.item(move || {
                 glass_config_slider(
                     "Corner Radius",
                     state.with(|s| s.corner_radius.value.0 / 100.0),
@@ -238,9 +225,9 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.item(|| spacer(Modifier::new().height(Dp(16.0))));
 
-            scope.child(move || {
+            scope.item(move || {
                 glass_config_slider(
                     "Border Width",
                     state.with(|s| s.border_width.value.0 as f32 / 20.0),
@@ -250,9 +237,9 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.item(|| spacer(Modifier::new().height(Dp(16.0))));
 
-            scope.child(move || {
+            scope.item(move || {
                 glass_config_slider(
                     "Refraction Strength",
                     state.with(|s| s.refraction_amount.value / 100.0),
@@ -262,9 +249,9 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.item(|| spacer(Modifier::new().height(Dp(16.0))));
 
-            scope.child(move || {
+            scope.item(move || {
                 glass_config_slider(
                     "Refraction Height",
                     state.with(|s| s.refraction_height.value.0 as f32 / 50.0),
@@ -274,9 +261,9 @@ fn test_content() {
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(32.0))));
+            scope.item(|| spacer(Modifier::new().height(Dp(32.0))));
 
-            scope.child(move || {
+            scope.item(move || {
                 glass_config_slider(
                     "Blur Radius",
                     state.with(|s| s.blur_radius.value.0 as f32 / 100.0),

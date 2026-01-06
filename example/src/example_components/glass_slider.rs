@@ -1,9 +1,8 @@
-use tessera_ui::{Dp, Modifier, remember, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
 use tessera_ui_basic_components::{
-    column::{ColumnArgs, column},
     glass_slider::{GlassSliderArgs, GlassSliderController, glass_slider_with_controller},
+    lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     modifier::ModifierExt as _,
-    scrollable::{ScrollableArgs, scrollable},
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
@@ -13,20 +12,7 @@ use tessera_ui_basic_components::{
 pub fn glass_slider_showcase() {
     surface(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
-        move || {
-            scrollable(
-                ScrollableArgs::default().modifier(Modifier::new().fill_max_width()),
-                move || {
-                    surface(
-                        SurfaceArgs::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
-                        move || {
-                            test_content();
-                        },
-                    );
-                },
-            )
-        },
+        test_content,
     );
 }
 
@@ -34,12 +20,15 @@ pub fn glass_slider_showcase() {
 fn test_content() {
     let value = remember(|| 0.5);
     let slider_controller = remember(GlassSliderController::new);
-
-    column(
-        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
+    let controller = retain(LazyListController::new);
+    lazy_column_with_controller(
+        LazyColumnArgs::default()
+            .modifier(Modifier::new().fill_max_width())
+            .content_padding(Dp(16.0)),
+        controller,
         move |scope| {
-            scope.child(|| text("Glass Slider Showcase"));
-            scope.child(move || {
+            scope.item(|| text("Glass Slider Showcase"));
+            scope.item(move || {
                 glass_slider_with_controller(
                     GlassSliderArgs::default()
                         .value(value.get())
@@ -51,7 +40,7 @@ fn test_content() {
                 );
             });
 
-            scope.child(move || {
+            scope.item(move || {
                 text(
                     TextArgs::default()
                         .text(format!("Value: {:.2}", value.get()))
@@ -59,5 +48,5 @@ fn test_content() {
                 );
             });
         },
-    )
+    );
 }
