@@ -1,5 +1,5 @@
-//! tessera is a cross-platform UI library focused on performance and
-//! extensibility.
+//! Tessera is a cross-platform declarative & functional UI library for rust,
+//! focused on performance and extensibility.
 //!
 //! # Guide
 //!
@@ -148,7 +148,7 @@
 //! when you need to retain state in a loop or similar scenarios.
 //!
 //! ```
-//! use tessera_ui::{tessera, remember_with_key};
+//! use tessera_ui::{tessera, retain_with_key};
 //!
 //! struct User {
 //!     id: i32,
