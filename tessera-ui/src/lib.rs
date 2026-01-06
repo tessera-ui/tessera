@@ -114,6 +114,25 @@
 //! However, `remember_with_key` is a litte cheaper than `key` + `remember`, so
 //! prefer it in simple cases.
 //!
+//! ## Retained State
+//!
+//! By default, `remember` and `remember_with_key` will recycle state when the
+//! component stops rendering. For state that should persist even when unused
+//! (e.g., scroll position when navigating away from a page), use `retain` or
+//! `retain_with_key`:
+//!
+//! ```
+//! use tessera_ui::{retain_with_key, tessera};
+//!
+//! #[tessera]
+//! fn scrollable_page(page_id: &str) {
+//!     // Scroll position persists even when navigating away and returning
+//!     let scroll_offset = retain_with_key(page_id, || 0.0f32);
+//!
+//!     /* component implementation */
+//! }
+//! ```
+//!
 //! # Context
 //!
 //! The context mechanism is used to pass data down the component tree, avoiding
@@ -299,7 +318,7 @@ pub use crate::{
         },
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
     },
-    runtime::{State, key, remember, remember_with_key},
+    runtime::{State, key, remember, remember_with_key, retain, retain_with_key},
 };
 
 use ime_state::ImeState;

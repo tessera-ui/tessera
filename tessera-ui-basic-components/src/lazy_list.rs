@@ -25,8 +25,35 @@ use crate::{
 
 const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 
-/// Persistent state shared by lazy list components.
+/// Persistent state for lazy list components.
+///
+/// This controller holds both the scroll position ([`ScrollableController`])
+/// and the item measurement cache. When retained across navigation (via
+/// [`retain`] or [`retain_with_key`]), both the scroll position and cached
+/// measurements will be preserved, ensuring correct layout when remounting.
+///
+/// [`retain`]: tessera_ui::retain
+/// [`retain_with_key`]: tessera_ui::retain_with_key
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::{retain_with_key, tessera};
+/// use tessera_ui_basic_components::lazy_list::{
+///     LazyColumnArgs, LazyListController, lazy_column_with_controller,
+/// };
+///
+/// #[tessera]
+/// fn scrollable_page(page_id: &str) {
+///     // Both scroll position and measurement cache persist across navigation
+///     let controller = retain_with_key(page_id, LazyListController::new);
+///     lazy_column_with_controller(LazyColumnArgs::default(), controller, |scope| {
+///         scope.items(100, |i| { /* ... */ });
+///     });
+/// }
+/// ```
 pub struct LazyListController {
+    scroll: ScrollableController,
     cache: LazyListCache,
 }
 
@@ -37,11 +64,23 @@ impl Default for LazyListController {
 }
 
 impl LazyListController {
-    /// Creates a new lazy list state with default scroll offsets and caches.
+    /// Creates a new lazy list controller with default scroll position and
+    /// empty cache.
     pub fn new() -> Self {
         Self {
+            scroll: ScrollableController::new(),
             cache: LazyListCache::default(),
         }
+    }
+
+    /// Returns a reference to the underlying scroll controller.
+    pub fn scroll_controller(&self) -> &ScrollableController {
+        &self.scroll
+    }
+
+    /// Returns a mutable reference to the underlying scroll controller.
+    pub fn scroll_controller_mut(&mut self) -> &mut ScrollableController {
+        &mut self.scroll
     }
 }
 
@@ -307,15 +346,20 @@ where
 ///
 /// ## Usage
 ///
-/// Use when you need to share scroll/cache state across component boundaries
-/// (e.g., restoring position when remounting).
+/// Use when you need to preserve scroll position across navigation or share
+/// state between components. Pass a [`LazyListController`] created with
+/// [`retain`] or [`retain_with_key`] to persist both scroll position and
+/// measurement cache.
+///
+/// [`retain`]: tessera_ui::retain
+/// [`retain_with_key`]: tessera_ui::retain_with_key
 ///
 /// ## Parameters
 ///
 /// - `args` — configures the list's layout and scrolling behavior; see
 ///   [`LazyColumnArgs`].
-/// - `controller` — a [`LazyListController`] that holds scroll offsets and item
-///   measurement cache.
+/// - `controller` — a [`LazyListController`] that holds scroll position and
+///   item measurement cache.
 /// - `configure` — a closure that receives a [`LazyColumnScope`] for adding
 ///   items to the list.
 ///
@@ -368,9 +412,22 @@ pub fn lazy_column_with_controller<F>(
         padding_cross: sanitize_spacing(Px::from(args.content_padding)),
     };
 
-    // Create a ScrollableController for this lazy list instance
+    // Create a proxy scroll controller that syncs with the LazyListController
     let scroll_controller = remember(ScrollableController::default);
+
+    // Restore saved position from controller on first mount
+    let saved_position = controller.with(|c| c.scroll.child_position());
+    scroll_controller.with_mut(|sc| {
+        if sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO {
+            sc.set_scroll_position(saved_position);
+        }
+    });
+
     scrollable_with_controller(scrollable_args, scroll_controller, move || {
+        // Sync scroll position back to controller
+        let current_pos = scroll_controller.with(|sc| sc.child_position());
+        controller.with_mut(|c| c.scroll.set_scroll_position(current_pos));
+
         lazy_list_view(view_args, controller, slots.clone(), scroll_controller);
     });
 }
@@ -426,15 +483,20 @@ where
 ///
 /// ## Usage
 ///
-/// Use when you need to synchronize scroll state with other components or
-/// restore position after remounts.
+/// Use when you need to preserve scroll position across navigation or share
+/// state between components. Pass a [`LazyListController`] created with
+/// [`retain`] or [`retain_with_key`] to persist both scroll position and
+/// measurement cache.
+///
+/// [`retain`]: tessera_ui::retain
+/// [`retain_with_key`]: tessera_ui::retain_with_key
 ///
 /// ## Parameters
 ///
 /// - `args` — configures the list's layout and scrolling behavior; see
 ///   [`LazyRowArgs`].
-/// - `controller` — a [`LazyListController`] that holds scroll offsets and item
-///   measurement cache.
+/// - `controller` — a [`LazyListController`] that holds scroll position and
+///   item measurement cache.
 /// - `configure` — a closure that receives a [`LazyRowScope`] for adding items
 ///   to the list.
 ///
@@ -487,9 +549,22 @@ pub fn lazy_row_with_controller<F>(
         padding_cross: sanitize_spacing(Px::from(args.content_padding)),
     };
 
-    // Create a ScrollableController for this lazy list instance
+    // Create a proxy scroll controller that syncs with the LazyListController
     let scroll_controller = remember(ScrollableController::default);
+
+    // Restore saved position from controller on first mount
+    let saved_position = controller.with(|c| c.scroll.child_position());
+    scroll_controller.with_mut(|sc| {
+        if sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO {
+            sc.set_scroll_position(saved_position);
+        }
+    });
+
     scrollable_with_controller(scrollable_args, scroll_controller, move || {
+        // Sync scroll position back to controller
+        let current_pos = scroll_controller.with(|sc| sc.child_position());
+        controller.with_mut(|c| c.scroll.set_scroll_position(current_pos));
+
         lazy_list_view(view_args, controller, slots.clone(), scroll_controller);
     });
 }

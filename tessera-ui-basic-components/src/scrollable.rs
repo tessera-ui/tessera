@@ -166,6 +166,15 @@ impl ScrollableController {
         self.target_position = target;
     }
 
+    /// Instantly sets the scroll position without animation.
+    ///
+    /// This is useful for restoring a saved scroll position when remounting
+    /// a component.
+    pub fn set_scroll_position(&mut self, position: PxPosition) {
+        self.child_position = position;
+        self.target_position = position;
+    }
+
     /// Updates the scroll position based on time-based interpolation
     /// Returns true if the position changed (needs redraw)
     fn update_scroll_position(&mut self, smoothing: f32) -> bool {

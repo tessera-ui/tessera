@@ -84,6 +84,7 @@ struct SlotEntry {
     generation: u64,
     value: Option<Arc<dyn Any + Send + Sync>>,
     last_alive_epoch: u64,
+    retained: bool,
 }
 
 #[derive(Default)]
@@ -719,13 +720,17 @@ pub fn reset_slots() {
 }
 
 /// Recycle state slots that were not touched in the current frame.
+///
+/// Slots marked as `retained` (created via [`retain`] or [`retain_with_key`])
+/// will not be recycled even if unused.
 pub fn recycle_frame_slots() {
     let mut table = slot_table().write();
     let epoch = table.epoch;
     let mut freed: Vec<(u32, SlotKey)> = Vec::new();
 
     for (slot, entry) in table.entries.iter_mut().enumerate() {
-        if entry.last_alive_epoch == epoch || entry.value.is_none() {
+        // Skip if touched this frame, already empty, or marked as retained
+        if entry.last_alive_epoch == epoch || entry.value.is_none() || entry.retained {
             continue;
         }
 
@@ -824,6 +829,7 @@ where
                 generation: 0,
                 value: None,
                 last_alive_epoch: 0,
+                retained: false,
             });
             (table.entries.len() - 1) as u32
         };
@@ -880,6 +886,167 @@ where
     T: Send + Sync + 'static,
 {
     remember_with_key((), init)
+}
+
+/// Retain a value across frames with an explicit key, even if unused.
+///
+/// Unlike [`remember_with_key`], state created with this function will **not**
+/// be recycled when the component stops calling it. This is useful for state
+/// that should persist across navigation, such as scroll positions or form
+/// inputs.
+///
+/// The `init` closure is executed only once — when the key is first
+/// encountered. On subsequent updates with the same key, the stored value is
+/// returned and `init` is not called.
+///
+/// # Use Cases
+///
+/// - Preserving scroll position when navigating away and returning to a page
+/// - Retaining form input values across route changes
+/// - Caching expensive computation results that should survive component
+///   unmounts
+///
+/// # Interior mutability
+///
+/// This function returns a `State<T>` handle that internally uses an
+/// `Arc<RwLock<T>>`. Use `with`, `with_mut`, `get`, or `set` to read or update
+/// the value without handling synchronization primitives directly.
+///
+/// # Comparison with [`remember_with_key`]
+///
+/// Use [`remember_with_key`] for ephemeral component state that should be
+/// cleaned up when the component is no longer rendered. Use `retain_with_key`
+/// for persistent state that must survive across frame gaps.
+///
+/// # Panics
+///
+/// This function must be called during a component's build/render phase.
+/// Calling it during the measure or input handling phases will panic.
+pub fn retain_with_key<K, F, T>(key: K, init: F) -> State<T>
+where
+    K: Hash,
+    F: FnOnce() -> T,
+    T: Send + Sync + 'static,
+{
+    ensure_build_phase();
+    let (logic_id, slot_hash) = compute_slot_key(&key);
+    let type_id = TypeId::of::<T>();
+    let slot_key = SlotKey {
+        logic_id,
+        slot_hash,
+        type_id,
+    };
+
+    let mut table = slot_table().write();
+    let mut init_opt = Some(init);
+
+    if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
+        let epoch = table.epoch;
+        let generation = {
+            let entry = table
+                .entries
+                .get_mut(slot as usize)
+                .expect("slot entry should exist");
+
+            if entry.key.type_id != slot_key.type_id {
+                panic!(
+                    "retain_with_key type mismatch: expected {}, found {:?}",
+                    std::any::type_name::<T>(),
+                    entry.key.type_id
+                );
+            }
+
+            entry.last_alive_epoch = epoch;
+            entry.retained = true;
+            if entry.value.is_none() {
+                let init_fn = init_opt
+                    .take()
+                    .expect("retain_with_key init called more than once");
+                entry.value = Some(Arc::new(RwLock::new(init_fn())));
+                entry.generation = entry.generation.wrapping_add(1);
+            }
+
+            entry.generation
+        };
+
+        State::new(slot, generation)
+    } else {
+        let slot = if let Some(slot) = table.free_list.pop() {
+            slot
+        } else {
+            table.entries.push(SlotEntry {
+                key: slot_key,
+                generation: 0,
+                value: None,
+                last_alive_epoch: 0,
+                retained: false,
+            });
+            (table.entries.len() - 1) as u32
+        };
+
+        let epoch = table.epoch;
+        let generation = {
+            let entry = table
+                .entries
+                .get_mut(slot as usize)
+                .expect("slot entry should exist");
+            entry.key = slot_key;
+            entry.generation = entry.generation.wrapping_add(1);
+            entry.retained = true;
+            let init_fn = init_opt
+                .take()
+                .expect("retain_with_key init called more than once");
+            entry.value = Some(Arc::new(RwLock::new(init_fn())));
+            entry.last_alive_epoch = epoch;
+            entry.generation
+        };
+
+        table.key_to_slot.insert(slot_key, slot);
+        State::new(slot, generation)
+    }
+}
+
+/// Retain a value across frames, even if unused.
+///
+/// Unlike [`remember`], state created with this function will **not** be
+/// recycled when the component stops calling it. This is useful for state that
+/// should persist across navigation, such as scroll positions or form inputs.
+///
+/// The `init` closure is executed only once — when the component first runs.
+/// On subsequent updates, the stored value is returned and `init` is not
+/// called.
+///
+/// # Use Cases
+///
+/// - Preserving scroll position when navigating away and returning to a page
+/// - Retaining form input values across route changes
+/// - Caching expensive computation results that should survive component
+///   unmounts
+///
+/// # Interior mutability
+///
+/// This function returns a `State<T>` handle that internally uses an
+/// `Arc<RwLock<T>>`. Use `with`, `with_mut`, `get`, or `set` to read or update
+/// the value without handling synchronization primitives directly.
+///
+/// # Comparison with [`retain_with_key`]
+///
+/// `retain` identifies stored state based on the component's call order and
+/// control-flow path. It associates state by position within a component, but
+/// this does not work reliably for dynamically generated state inside loops.
+/// For state that is allocated dynamically in loops, consider using
+/// [`retain_with_key`] to explicitly provide a unique key.
+///
+/// # Panics
+///
+/// This function must be called during a component's build/render phase.
+/// Calling it during the measure or input handling phases will panic.
+pub fn retain<F, T>(init: F) -> State<T>
+where
+    F: FnOnce() -> T,
+    T: Send + Sync + 'static,
+{
+    retain_with_key((), init)
 }
 
 /// Groups the execution of a block of code with a stable key.
