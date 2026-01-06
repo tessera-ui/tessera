@@ -44,7 +44,16 @@
 //! }
 //! ```
 //!
-//! # Memoized State
+//! # Memoized state
+//!
+//! Components in tessera are functions. To persist state across frames within a
+//! component, use the memoization API.
+//!
+//! There are two primary primitives for memoized state depending on lifetime:
+//! `remember` and `retain`. The following sections describe their behavior and
+//! usage.
+//!
+//! ## remember
 //!
 //! The `remember` and `remember_with_key` functions can be used to create
 //! persistent state across frames within a component.
@@ -114,22 +123,67 @@
 //! However, `remember_with_key` is a litte cheaper than `key` + `remember`, so
 //! prefer it in simple cases.
 //!
-//! ## Retained State
+//! ## retain
 //!
-//! By default, `remember` and `remember_with_key` will recycle state when the
-//! component stops rendering. For state that should persist even when unused
-//! (e.g., scroll position when navigating away from a page), use `retain` or
-//! `retain_with_key`:
+//! `retain` just work as `remember` but is not dropped when a component becomes
+//! invisible; use it for state that should persist for the lifetime of the
+//! process (for example, scroll position).
+//!
+//! It has the same API and typical usage as `remember`, except that its value
+//! is retained across the entire lifetime of the process.
 //!
 //! ```
-//! use tessera_ui::{retain_with_key, tessera};
+//! use tessera_ui::{retain, tessera};
 //!
 //! #[tessera]
 //! fn scrollable_page(page_id: &str) {
 //!     // Scroll position persists even when navigating away and returning
-//!     let scroll_offset = retain_with_key(page_id, || 0.0f32);
+//!     let scroll_offset = retain(|| 0.0f32);
 //!
 //!     /* component implementation */
+//! }
+//! ```
+//!
+//! There is also a `key` variant for `retain`, called `retain_with_key`. Use it
+//! when you need to retain state in a loop or similar scenarios.
+//!
+//! ```
+//! use tessera_ui::{tessera, remember_with_key};
+//!
+//! struct User {
+//!     id: i32,
+//!     name: String,
+//! }
+//!
+//! #[tessera]
+//! fn user_list() {
+//!     let users = vec![
+//!         User { id: 101, name: "Alice".to_string() },
+//!         User { id: 205, name: "Bob".to_string() },
+//!         User { id: 33,  name: "Charlie".to_string() },
+//!     ];
+//!
+//!     for user in users.iter() {
+//!         // Regardless of the user's position in the list, this `likes` state will follow the user.id
+//!         let likes = retain_with_key(user.id, || 0);
+//!
+//!         /* component implementation */
+//!     }
+//! }
+//! ```
+//!
+//! Or use the `key` function to influence the `retain` calls inside it.
+//!
+//! ```
+//! use tessera_ui::{key, retain, tessera};
+//!
+//! #[tessera]
+//! fn my_list(items: Vec<String>) {
+//!     for item in items {
+//!         key(item.clone(), || {
+//!             let state = retain(|| 0);
+//!         });
+//!     }
 //! }
 //! ```
 //!
@@ -165,7 +219,6 @@
 //!
 //! A context corresponds to a type. In the component tree, a component will
 //! receive the nearest parent-provided context of the same type.
-//!
 //! ```
 //! use tessera_ui::{Color, provide_context, tessera, use_context};
 //!
@@ -208,7 +261,6 @@
 //! # Layout
 //!
 //! Implement a layout spec to define a component's layout behavior.
-//!
 //! ```
 //! use tessera_ui::{
 //!     Constraint, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px, PxPosition,
