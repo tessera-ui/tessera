@@ -4076,6 +4076,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tessera-shard"
+version = "0.4.2"
+dependencies = [
+ "dashmap",
+ "parking_lot",
+ "tokio",
+]
+
+[[package]]
 name = "tessera-ui"
 version = "2.5.0"
 dependencies = [
@@ -4099,21 +4108,12 @@ dependencies = [
  "serde_json",
  "smallvec",
  "tessera-macros",
- "tessera-ui-shard",
+ "tessera-shard",
  "tracing",
  "uuid",
  "wgpu",
  "windows 0.62.2",
  "winit",
-]
-
-[[package]]
-name = "tessera-ui-shard"
-version = "0.4.2"
-dependencies = [
- "dashmap",
- "parking_lot",
- "tokio",
 ]
 
 [[package]]

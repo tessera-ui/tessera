@@ -10,7 +10,7 @@
 //!   empty.
 //! * On every frame, the top destination's `exec_component()` is invoked.
 //!
-//! The actual stack and destination logic live in `tessera_ui_shard::router`.
+//! The actual stack and destination logic live in `tessera_shard::router`.
 //!
 //! # Typical Minimal Usage
 //!
@@ -55,11 +55,11 @@
 //!
 //! # See Also
 //!
-//! * [`tessera_ui_shard::router::RouterDestination`]
+//! * [`tessera_shard::router::RouterDestination`]
 //! * `#[shard]` macro which generates `*Destination` structs.
 use tessera_macros::tessera;
 
-pub use tessera_ui_shard::router::{Router, RouterDestination};
+pub use tessera_shard::router::{Router, RouterDestination};
 
 /// Root component that drives the shard router stack each frame.
 ///

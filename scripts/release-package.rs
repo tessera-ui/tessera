@@ -60,7 +60,7 @@ const PUBLISHABLE_PACKAGES: &[&str] = &[
     "tessera-ui",
     "tessera-components",
     "tessera-macros",
-    "tessera-ui-shard",
+    "tessera-shard",
     "cargo-tessera",
 ];
 

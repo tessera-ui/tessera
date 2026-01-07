@@ -340,7 +340,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Features
 ///
 /// * Generates a `StructNameDestination` (UpperCamelCase + `Destination`)
-///   implementing `tessera_ui_shard::router::RouterDestination`
+///   implementing `tessera_shard::router::RouterDestination`
 /// * (Optional) Injects a single `#[state]` parameter whose type:
 ///   - Must implement `Default + Send + Sync + 'static`
 ///   - Is constructed (or reused) and passed to your function body
@@ -383,7 +383,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # See Also
 ///
 /// * Routing helpers: `tessera_ui::router::{push, pop, router_root}`
-/// * Shard state registry: `tessera_ui_shard::ShardRegistry`
+/// * Shard state registry: `tessera_shard::ShardRegistry`
 ///
 /// # Safety
 ///
@@ -427,11 +427,11 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                         let s = arg_ident.to_string().to_lowercase();
                         if s == "app" || s == "application" {
                             lifecycle_override = Some(
-                                quote! { #crate_path::tessera_ui_shard::ShardStateLifeCycle::Application },
+                                quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Application },
                             );
                         } else if s == "shard" {
                             lifecycle_override = Some(
-                                quote! { #crate_path::tessera_ui_shard::ShardStateLifeCycle::Shard },
+                                quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard },
                             );
                         } else {
                             panic!(
@@ -511,7 +511,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     let lifecycle_method_tokens = if let Some(lc) = state_lifecycle.clone() {
         quote! {
-            fn life_cycle(&self) -> #crate_path::tessera_ui_shard::ShardStateLifeCycle {
+            fn life_cycle(&self) -> #crate_path::tessera_shard::ShardStateLifeCycle {
                 #lc
             }
         }
@@ -533,7 +533,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     #(#dest_fields),*
                 }
 
-                impl #crate_path::tessera_ui_shard::router::RouterDestination for #struct_name {
+                impl #crate_path::tessera_shard::router::RouterDestination for #struct_name {
                     fn exec_component(&self) {
                         #func_name(
                             #(
@@ -556,7 +556,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                     // Call the global registry and pass the original function body as a closure
                     unsafe {
-                        #crate_path::tessera_ui_shard::ShardRegistry::get().init_or_get::<#state_type, _, _>(
+                        #crate_path::tessera_shard::ShardRegistry::get().init_or_get::<#state_type, _, _>(
                             SHARD_ID,
                             |#state_name| {
                                 #func_body
@@ -571,7 +571,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     #(#dest_fields),*
                 }
 
-                impl #crate_path::tessera_ui_shard::router::RouterDestination for #struct_name {
+                impl #crate_path::tessera_shard::router::RouterDestination for #struct_name {
                     fn exec_component(&self) {
                         #func_name(
                             #(

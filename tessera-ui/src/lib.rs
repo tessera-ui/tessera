@@ -378,4 +378,4 @@ use ime_state::ImeState;
 #[cfg(feature = "shard")]
 pub use tessera_macros::shard;
 #[cfg(feature = "shard")]
-pub use tessera_ui_shard;
+pub use tessera_shard;

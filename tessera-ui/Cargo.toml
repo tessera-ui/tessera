@@ -11,7 +11,7 @@ readme = "../README.md"
 
 [features]
 default = ["shard"]
-shard = ["tessera-ui-shard"]
+shard = ["tessera-shard"]
 profiling = ["serde", "serde_json"]
 
 [dependencies]
@@ -25,7 +25,7 @@ rayon = "1.11.0"
 dashmap = "6.1.0"
 uuid = { version = "1.19.0", features = ["v4"] }
 tessera-macros = { path = "../tessera-macros" }
-tessera-ui-shard = { path = "../tessera-ui-shard", optional = true }
+tessera-shard = { path = "../tessera-shard", optional = true }
 petgraph = "0.8.3"
 accesskit = "0.22.0"
 accesskit_winit = "0.30.0"
