@@ -57,7 +57,7 @@
 //!
 //! * [`tessera_ui_shard::router::RouterDestination`]
 //! * `#[shard]` macro which generates `*Destination` structs.
-use tessera_ui_macros::tessera;
+use tessera_macros::tessera;
 
 pub use tessera_ui_shard::router::{Router, RouterDestination};
 

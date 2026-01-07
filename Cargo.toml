@@ -4,7 +4,7 @@ members = [
     "example",
     "tessera-ui",
     "tessera-components",
-    "tessera-ui-macros",
+    "tessera-macros",
     "tessera-ui-shard",
     "cargo-tessera",
 ]

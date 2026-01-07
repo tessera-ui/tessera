@@ -13,7 +13,7 @@ use std::{any::TypeId, sync::Arc, thread, time::Instant};
 use accesskit::{self, TreeUpdate};
 use accesskit_winit::{Adapter as AccessKitAdapter, Event as AccessKitEvent};
 use parking_lot::RwLock;
-use tessera_ui_macros::tessera;
+use tessera_macros::tessera;
 use tracing::{debug, error, instrument, warn};
 use winit::{
     application::ApplicationHandler,

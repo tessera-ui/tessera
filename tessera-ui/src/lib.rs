@@ -342,7 +342,7 @@ pub mod router;
 
 pub use accesskit;
 pub use indextree::{Arena, NodeId};
-pub use tessera_ui_macros::tessera;
+pub use tessera_macros::tessera;
 pub use wgpu;
 pub use winit;
 
@@ -376,6 +376,6 @@ pub use crate::{
 use ime_state::ImeState;
 
 #[cfg(feature = "shard")]
-pub use tessera_ui_macros::shard;
+pub use tessera_macros::shard;
 #[cfg(feature = "shard")]
 pub use tessera_ui_shard;

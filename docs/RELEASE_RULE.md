@@ -15,11 +15,11 @@ The version number consists of three parts: `major.minor.patch`, e.g., `1.0.0`.
 
 ## Release Process
 
-You must use the `scripts/release-package.rs` script to publish. It will automatically handle version number updates, packaging, generating changelogs, and pushing based on Conventional Commits. The release process is limited to the following three packages: `tessera-ui`, `tessera-components`, and `tessera-ui-macros`.
+You must use the `scripts/release-package.rs` script to publish. It will automatically handle version number updates, packaging, generating changelogs, and pushing based on Conventional Commits. The release process is limited to the following three packages: `tessera-ui`, `tessera-components`, and `tessera-macros`.
 
 ### How it Works
 
-1. **Automatic Version Analysis**: The script analyzes Git history since the last tag for all publishable packages (`tessera-ui`, `tessera-components`, `tessera-ui-macros`).
+1. **Automatic Version Analysis**: The script analyzes Git history since the last tag for all publishable packages (`tessera-ui`, `tessera-components`, `tessera-macros`).
    - A commit with `BREAKING CHANGE` in its body will result in a **major** version bump.
    - A `feat:` commit will result in a **minor** version bump.
    - Any other commit type (`fix:`, `refactor:`, etc.) will result in a **patch** version bump.

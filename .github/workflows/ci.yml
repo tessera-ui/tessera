@@ -60,5 +60,5 @@ jobs:
         run: |
           cargo +stable ndk -t arm64-v8a check -p tessera-ui --verbose
           cargo +stable ndk -t arm64-v8a check -p tessera-components --verbose
-          cargo +stable ndk -t arm64-v8a check -p tessera-ui-macros --verbose
+          cargo +stable ndk -t arm64-v8a check -p tessera-macros --verbose
           cargo +stable ndk -t arm64-v8a check -p tessera-ui-shard --verbose

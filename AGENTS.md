@@ -17,7 +17,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 - **Core Crates**:
   - **tessera-ui**: Framework core (component tree, rendering, runtime, basic types Dp/Px, event handling, etc.)
   - **tessera-components**: Basic UI components (row, column, text, button, surface, etc.) and their rendering pipelines
-  - **tessera-ui-macros**: The `#[tessera]` procedural macro for simplified component definition
+  - **tessera-macros**: The `#[tessera]` procedural macro for simplified component definition
   - **example**: Example project demonstrating framework usage
 
 **Module Path Convention**: All modules must use the `src/module_name.rs` pattern. Do not use `src/module_name/mod.rs`.

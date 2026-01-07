@@ -4066,6 +4066,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tessera-macros"
+version = "0.4.4"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "tessera-ui"
 version = "2.5.0"
 dependencies = [
@@ -4088,23 +4098,13 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
- "tessera-ui-macros",
+ "tessera-macros",
  "tessera-ui-shard",
  "tracing",
  "uuid",
  "wgpu",
  "windows 0.62.2",
  "winit",
-]
-
-[[package]]
-name = "tessera-ui-macros"
-version = "0.4.4"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
