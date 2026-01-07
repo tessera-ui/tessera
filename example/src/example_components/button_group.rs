@@ -1,5 +1,4 @@
-use tessera_ui::{Dp, Modifier, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     button_groups::{ButtonGroupsArgs, ButtonGroupsStyle, button_groups},
     lazy_list::{LazyColumnArgs, lazy_column},
     modifier::ModifierExt as _,
@@ -7,6 +6,7 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
+use tessera_ui::{Dp, Modifier, shard, tessera};
 
 #[tessera]
 #[shard]

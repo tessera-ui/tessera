@@ -66,7 +66,7 @@
 //!   transparency
 //!
 //! These pipelines are registered in
-//! `tessera_ui_basic_components::pipelines::register_pipelines()`.
+//! `tessera_components::pipelines::register_pipelines()`.
 //!
 //! # Performance Considerations
 //!

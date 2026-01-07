@@ -3,7 +3,7 @@ resolver = "3"
 members = [
     "example",
     "tessera-ui",
-    "tessera-ui-basic-components",
+    "tessera-components",
     "tessera-ui-macros",
     "tessera-ui-shard",
     "cargo-tessera",

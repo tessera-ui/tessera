@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::{BoxedArgs, boxed},
     column::{ColumnArgs, column},
@@ -17,6 +16,7 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::text,
 };
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
 
 const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),

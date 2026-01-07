@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera, use_context};
-use tessera_ui_basic_components::{
+use tessera_components::{
     button::{ButtonArgs, button},
     icon::IconArgs,
     icon_button::{IconButtonArgs, IconButtonVariant, icon_button},
@@ -14,6 +13,7 @@ use tessera_ui_basic_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera, use_context};
 
 const ICON_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),

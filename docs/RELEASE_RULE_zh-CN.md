@@ -15,11 +15,11 @@
 
 ## 发布流程
 
-必须使用 `scripts/release-package.rs` 脚本发布。它会根据 Conventional Commits 自动处理版本号的更新、打包、生成更新日志并推送。发布流程仅限于以下三个包：`tessera-ui`、`tessera-ui-basic-components` 和 `tessera-ui-macros`。
+必须使用 `scripts/release-package.rs` 脚本发布。它会根据 Conventional Commits 自动处理版本号的更新、打包、生成更新日志并推送。发布流程仅限于以下三个包：`tessera-ui`、`tessera-components` 和 `tessera-ui-macros`。
 
 ### 工作原理
 
-1. **自动版本分析**：脚本会分析所有可发布包（`tessera-ui`, `tessera-ui-basic-components`, `tessera-ui-macros`）自上次 tag 以来的 Git 历史。
+1. **自动版本分析**：脚本会分析所有可发布包（`tessera-ui`, `tessera-components`, `tessera-ui-macros`）自上次 tag 以来的 Git 历史。
    - 在消息体中包含 `BREAKING CHANGE` 的提交将导致**主版本号**更新。
    - `feat:` 提交将导致**次版本号**更新。
    - 任何其他类型的提交（`fix:`、`refactor:` 等）将导致**修订号**更新。

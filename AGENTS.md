@@ -16,7 +16,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 - **Project Type**: Rust UI Framework
 - **Core Crates**:
   - **tessera-ui**: Framework core (component tree, rendering, runtime, basic types Dp/Px, event handling, etc.)
-  - **tessera-ui-basic-components**: Basic UI components (row, column, text, button, surface, etc.) and their rendering pipelines
+  - **tessera-components**: Basic UI components (row, column, text, button, surface, etc.) and their rendering pipelines
   - **tessera-ui-macros**: The `#[tessera]` procedural macro for simplified component definition
   - **example**: Example project demonstrating framework usage
 
@@ -182,7 +182,7 @@ Example:
 /// - `state` — a clonable [`DialogProviderState`] used to open/close
 ///
 /// ## Examples
-/// use tessera_ui_basic_components::dialog::DialogProviderState;
+/// use tessera_components::dialog::DialogProviderState;
 /// let s = DialogProviderState::new();
 /// assert!(!s.is_open());
 /// s.open();

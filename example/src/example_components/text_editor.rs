@@ -1,5 +1,4 @@
-use tessera_ui::{Dp, Modifier, remember, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     column::{ColumnArgs, column},
     modifier::ModifierExt as _,
     scrollable::{ScrollableArgs, scrollable},
@@ -8,6 +7,7 @@ use tessera_ui_basic_components::{
     text::{TextArgs, text},
     text_editor::{TextEditorArgs, TextEditorController, text_editor_with_controller},
 };
+use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 
 #[tessera]
 #[shard]

@@ -1,5 +1,4 @@
-use tessera_ui::{Dp, Modifier, remember, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     alignment::CrossAxisAlignment,
     chip::{ChipArgs, ChipStyle, chip},
     column::{ColumnArgs, column},
@@ -11,6 +10,7 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
+use tessera_ui::{Dp, Modifier, remember, shard, tessera};
 
 #[tessera]
 #[shard]

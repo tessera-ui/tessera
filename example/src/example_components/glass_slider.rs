@@ -1,11 +1,11 @@
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     glass_slider::{GlassSliderArgs, GlassSliderController, glass_slider_with_controller},
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     modifier::ModifierExt as _,
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
 
 #[tessera]
 #[shard]

@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 tessera-ui = { path = "../tessera-ui" }
-tessera-ui-basic-components = { path = "../tessera-ui-basic-components" }
+tessera-components = { path = "../tessera-components" }
 tokio = { version = "1.49.0", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }

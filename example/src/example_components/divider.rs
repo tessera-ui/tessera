@@ -1,5 +1,4 @@
-use tessera_ui::{Dp, Modifier, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     column::{ColumnArgs, column},
     divider::{DividerArgs, horizontal_divider, vertical_divider},
     modifier::ModifierExt as _,
@@ -8,6 +7,7 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
+use tessera_ui::{Dp, Modifier, shard, tessera};
 
 #[tessera]
 #[shard]

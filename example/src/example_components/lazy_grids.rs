@@ -3,8 +3,7 @@
 //! ## Usage
 //!
 //! Browse lazy grid layouts in the example catalog.
-use tessera_ui::{Color, Dp, Modifier, shard, tessera, use_context};
-use tessera_ui_basic_components::{
+use tessera_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::{ColumnArgs, column},
     lazy_grid::{
@@ -19,6 +18,7 @@ use tessera_ui_basic_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
+use tessera_ui::{Color, Dp, Modifier, shard, tessera, use_context};
 
 #[tessera]
 #[shard]

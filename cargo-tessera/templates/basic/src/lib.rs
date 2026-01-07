@@ -1,11 +1,11 @@
 use std::{thread, time::Duration};
 
 use parking_lot::deadlock;
-use tessera_ui::{Renderer, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::text,
 };
+use tessera_ui::{Renderer, tessera};
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 
@@ -30,7 +30,7 @@ fn android_main(android_app: AndroidApp) {
     Renderer::run(
         app,
         |app| {
-            tessera_ui_basic_components::pipelines::register_pipelines(app);
+            tessera_components::pipelines::register_pipelines(app);
         },
         android_app.clone(),
     )
@@ -42,7 +42,7 @@ pub fn desktop_main() {
     init_tracing_desktop();
     spawn_deadlock_detector();
     Renderer::run(app, |app| {
-        tessera_ui_basic_components::pipelines::register_pipelines(app);
+        tessera_components::pipelines::register_pipelines(app);
     })
     .unwrap_or_else(|err| error!("App failed to run: {err}"));
 }

@@ -1,5 +1,4 @@
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera, use_context};
-use tessera_ui_basic_components::{
+use tessera_components::{
     glass_progress::{GlassProgressArgs, glass_progress},
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     modifier::ModifierExt as _,
@@ -9,6 +8,7 @@ use tessera_ui_basic_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera, use_context};
 
 #[tessera]
 #[shard]

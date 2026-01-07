@@ -1,5 +1,4 @@
-use tessera_ui::{Dp, Modifier, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     badge::{BadgeArgs, badge, badge_with_content, badged_box},
     column::{ColumnArgs, column},
     icon::{IconArgs, icon},
@@ -10,6 +9,7 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
+use tessera_ui::{Dp, Modifier, shard, tessera};
 
 #[tessera]
 #[shard]

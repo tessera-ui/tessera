@@ -21,7 +21,7 @@ fn android_main(android_app: AndroidApp) {
     Renderer::run(
         app,
         |app| {
-            tessera_ui_basic_components::pipelines::register_pipelines(app);
+            tessera_components::pipelines::register_pipelines(app);
         },
         android_app.clone(),
     )
@@ -33,7 +33,7 @@ pub fn desktop_main() {
     init_tracing_desktop();
     spawn_deadlock_detector();
     Renderer::run(app, |app| {
-        tessera_ui_basic_components::pipelines::register_pipelines(app);
+        tessera_components::pipelines::register_pipelines(app);
     })
     .unwrap_or_else(|err| error!("App failed to run: {err}"));
 }

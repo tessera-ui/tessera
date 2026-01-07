@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use tessera_ui::{Dp, Modifier, State, remember, retain, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     alignment::CrossAxisAlignment,
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     modifier::ModifierExt as _,
@@ -10,6 +9,7 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
+use tessera_ui::{Dp, Modifier, State, remember, retain, shard, tessera};
 
 #[tessera]
 #[shard]

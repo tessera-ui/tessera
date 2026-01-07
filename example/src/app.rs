@@ -1,12 +1,7 @@
 use std::sync::Arc;
 
 use closure::closure;
-use tessera_ui::{
-    Color, Dp, Modifier, State, remember, retain,
-    router::{Router, router_root},
-    shard, tessera, use_context,
-};
-use tessera_ui_basic_components::{
+use tessera_components::{
     alignment::CrossAxisAlignment,
     app_bar::{AppBarArgs, TopAppBarArgs, top_app_bar as material_top_app_bar},
     bottom_sheet::{
@@ -37,6 +32,11 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, SurfaceStyle, surface},
     text::{TextArgs, text},
     theme::{MaterialTheme, material_theme},
+};
+use tessera_ui::{
+    Color, Dp, Modifier, State, remember, retain,
+    router::{Router, router_root},
+    shard, tessera, use_context,
 };
 
 use crate::example_components::{

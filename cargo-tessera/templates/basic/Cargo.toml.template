@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 tessera-ui = "2"
-tessera-ui-basic-components = "2"
+tessera-components = "2"
 parking_lot = { version = "*", features = ["deadlock_detection"] }
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["fmt", "env-filter"] }

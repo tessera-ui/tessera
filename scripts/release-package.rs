@@ -58,7 +58,7 @@ const GITHUB_OWNER: &str = "tessera-ui";
 const GITHUB_REPO: &str = "tessera";
 const PUBLISHABLE_PACKAGES: &[&str] = &[
     "tessera-ui",
-    "tessera-ui-basic-components",
+    "tessera-components",
     "tessera-ui-macros",
     "tessera-ui-shard",
     "cargo-tessera",

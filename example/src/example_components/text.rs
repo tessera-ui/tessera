@@ -1,10 +1,10 @@
-use tessera_ui::{Dp, Modifier, retain, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     modifier::ModifierExt as _,
     surface::{SurfaceArgs, surface},
     text::text,
 };
+use tessera_ui::{Dp, Modifier, retain, shard, tessera};
 
 #[tessera]
 #[shard]

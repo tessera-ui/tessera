@@ -1,5 +1,4 @@
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     material_icons::filled,
     modifier::ModifierExt as _,
@@ -7,6 +6,7 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::text,
 };
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
 
 #[tessera]
 #[shard]
@@ -135,7 +135,7 @@ fn test_content() {
                             icon_slider_value.set(new_value);
                         })
                         .modifier(Modifier::new().width(Dp(250.0)))
-                        .size(tessera_ui_basic_components::slider::SliderSize::Medium)
+                        .size(tessera_components::slider::SliderSize::Medium)
                         .inset_icon(filled::volume_up_icon()),
                 );
             });

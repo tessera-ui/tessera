@@ -1,5 +1,4 @@
-use tessera_ui::{Color, Dp, Modifier, State, remember, shard, tessera, use_context};
-use tessera_ui_basic_components::{
+use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     column::{ColumnArgs, column},
     modifier::ModifierExt as _,
@@ -13,6 +12,7 @@ use tessera_ui_basic_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
+use tessera_ui::{Color, Dp, Modifier, State, remember, shard, tessera, use_context};
 
 #[tessera]
 #[shard]

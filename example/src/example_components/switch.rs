@@ -1,5 +1,4 @@
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     icon::{IconArgs, icon},
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
     material_icons::round::check_icon,
@@ -11,6 +10,7 @@ use tessera_ui_basic_components::{
     },
     text::{TextArgs, text},
 };
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
 
 #[tessera]
 #[shard]

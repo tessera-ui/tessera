@@ -1,5 +1,4 @@
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
-use tessera_ui_basic_components::{
+use tessera_components::{
     icon::{IconArgs, icon},
     image::{ImageArgs, ImageSource, image, load_image_from_source},
     image_vector::{ImageVectorSource, load_image_vector_from_source},
@@ -9,6 +8,7 @@ use tessera_ui_basic_components::{
     surface::{SurfaceArgs, surface},
     text::text,
 };
+use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
 
 const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),

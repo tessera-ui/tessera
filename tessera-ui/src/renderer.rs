@@ -197,7 +197,7 @@ impl Default for TesseraConfig {
 ///     my_app, // Entry point function
 ///     |app| {
 ///         // Register rendering pipelines
-///         // For example, tessera_ui_basic_components::pipelines::register_pipelines(app);
+///         // For example, tessera_components::pipelines::register_pipelines(app);
 ///     },
 /// )
 /// .unwrap();
@@ -282,8 +282,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     ///   root UI components.
     /// - `register_pipelines_fn`: A function that registers rendering pipelines
     ///   with the WGPU app. Typically, you'll call
-    ///   `tessera_ui_basic_components::pipelines::register_pipelines(app)`
-    ///   here.
+    ///   `tessera_components::pipelines::register_pipelines(app)` here.
     ///
     /// # Returns
     ///
@@ -303,7 +302,7 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
     /// fn main() -> Result<(), Box<dyn std::error::Error>> {
     ///     Renderer::run(my_ui, |_app| {
     ///         // Register your rendering pipelines here
-    ///         // tessera_ui_basic_components::pipelines::register_pipelines(app);
+    ///         // tessera_components::pipelines::register_pipelines(app);
     ///     })?;
     ///     Ok(())
     /// }

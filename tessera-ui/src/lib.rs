@@ -7,7 +7,7 @@
 //!
 //! # Component Library
 //!
-//! The tessera-ui crate itself does not contain built-in components, but the official project provides a [basic component library](https://crates.io/crates/tessera-ui-basic-components).
+//! The tessera-ui crate itself does not contain built-in components, but the official project provides a [basic component library](https://crates.io/crates/tessera-components).
 //!
 //! It contains commonly used UI components such as buttons, text boxes, labels,
 //! etc., which help developers quickly build user interfaces.

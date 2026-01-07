@@ -133,7 +133,7 @@ fn my_component() {
 ```rust
 use tessera_macros::tessera;
 use tessera_ui::remember;
-use tessera_ui_basic_components::{
+use tessera_components::{
     button::{ButtonArgs, button},
     text::text,
 };

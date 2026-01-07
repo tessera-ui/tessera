@@ -1463,8 +1463,8 @@ dependencies = [
  "dashmap",
  "image",
  "parking_lot",
+ "tessera-components",
  "tessera-ui",
- "tessera-ui-basic-components",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -4040,6 +4040,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "tessera-components"
+version = "2.7.0"
+dependencies = [
+ "bytemuck",
+ "closure",
+ "derive_setters",
+ "earcutr",
+ "encase",
+ "glam",
+ "glyphon",
+ "image",
+ "lru",
+ "lyon_geom",
+ "lyon_path",
+ "lyon_tessellation",
+ "material-color-utilities",
+ "parking_lot",
+ "smallvec",
+ "tessera-ui",
+ "thiserror 2.0.17",
+ "tracing",
+ "unicode-segmentation",
+ "usvg",
+]
+
+[[package]]
 name = "tessera-ui"
 version = "2.5.0"
 dependencies = [
@@ -4069,32 +4095,6 @@ dependencies = [
  "wgpu",
  "windows 0.62.2",
  "winit",
-]
-
-[[package]]
-name = "tessera-ui-basic-components"
-version = "2.7.0"
-dependencies = [
- "bytemuck",
- "closure",
- "derive_setters",
- "earcutr",
- "encase",
- "glam",
- "glyphon",
- "image",
- "lru",
- "lyon_geom",
- "lyon_path",
- "lyon_tessellation",
- "material-color-utilities",
- "parking_lot",
- "smallvec",
- "tessera-ui",
- "thiserror 2.0.17",
- "tracing",
- "unicode-segmentation",
- "usvg",
 ]
 
 [[package]]
