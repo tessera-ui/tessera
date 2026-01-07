@@ -1,17 +1,16 @@
+mod app;
+
 use std::{thread, time::Duration};
 
 use parking_lot::deadlock;
-use tessera_ui::{Renderer, tessera};
+use tessera_ui::Renderer;
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 
 #[cfg(target_os = "android")]
 use tessera_ui::winit::platform::android::activity::AndroidApp;
 
-#[tessera]
-fn app() {
-    // Empty application
-}
+use app::app;
 
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
