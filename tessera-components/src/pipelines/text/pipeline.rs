@@ -26,6 +26,8 @@ use tessera_ui::{
 
 use super::command::{TextCommand, TextConstraint};
 
+const LRU_CAPACITY: usize = 1024;
+
 /// It costs a lot to create a glyphon font system, so we use a static one
 /// to share it every where and avoid creating it multiple times.
 static FONT_SYSTEM: OnceLock<RwLock<glyphon::FontSystem>> = OnceLock::new();
@@ -63,7 +65,7 @@ fn write_lru_cache() -> RwLockWriteGuard<'static, lru::LruCache<LruKey, TextData
     TEXT_DATA_CACHE
         .get_or_init(|| {
             RwLock::new(lru::LruCache::new(
-                NonZero::new(100).expect("text cache size must be non-zero"),
+                NonZero::new(LRU_CAPACITY).expect("text cache size must be non-zero"),
             ))
         })
         .write()
@@ -286,7 +288,7 @@ impl TextData {
         };
 
         // Store in cache
-        let data = Self {
+        let data: TextData = Self {
             text_buffer,
             size: bounds,
             first_baseline,
@@ -481,7 +483,7 @@ impl TextData {
         let total_height = line_count as f32 * metrics.line_height + descent_amount;
         (
             text_buffer,
-            [run_width as u32, total_height.ceil() as u32],
+            [run_width.ceil() as u32, total_height.ceil() as u32],
             first_baseline,
             last_baseline,
             line_count,
