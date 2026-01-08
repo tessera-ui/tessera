@@ -7,10 +7,10 @@ use tessera_ui::Renderer;
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 
+use app::app;
+
 #[cfg(target_os = "android")]
 use tessera_ui::winit::platform::android::activity::AndroidApp;
-
-use app::app;
 
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
