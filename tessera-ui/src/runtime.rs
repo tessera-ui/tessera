@@ -35,6 +35,12 @@ thread_local! {
     /// This must not share state with `CALL_COUNTER_STACK`, otherwise `provide_context`
     /// would perturb `remember` slot keys.
     static CONTEXT_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+
+    /// Instance key stack: overrides instance identity inside `key` blocks.
+    static INSTANCE_KEY_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+
+    /// Call counter stack used for instance identity, reset by `key` blocks.
+    static INSTANCE_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
 }
 
 pub(crate) fn compute_context_slot_key() -> (u64, u64) {
@@ -483,7 +489,7 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
     // Get the parent's call index and increment it
     // This distinguishes multiple calls to the same component (e.g., foo(1);
     // foo(2);)
-    let (parent_call_index, parent_logic_id) = CALL_COUNTER_STACK.with(|stack| {
+    let (parent_call_index, parent_logic_id) = INSTANCE_CALL_COUNTER_STACK.with(|stack| {
         let mut stack = stack.borrow_mut();
         let index = stack.last().copied().unwrap_or(0);
         if let Some(last) = stack.last_mut() {
@@ -498,10 +504,19 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
     // 1. foo(1) and foo(2) get different logic_ids (via parent_call_index)
     // 2. Components in different container instances get different logic_ids (via
     //    parent_logic_id)
-    let instance_logic_id = if parent_call_index == 0 && parent_logic_id == 0 {
+    let instance_salt = if let Some(key_hash) = current_instance_key_override() {
+        hash_components(&[&key_hash, &parent_call_index])
+    } else {
+        parent_call_index
+    };
+
+    let instance_logic_id = if parent_call_index == 0
+        && parent_logic_id == 0
+        && current_instance_key_override().is_none()
+    {
         base_logic_id
     } else {
-        hash_components(&[&base_logic_id, &parent_logic_id, &parent_call_index])
+        hash_components(&[&base_logic_id, &parent_logic_id, &instance_salt])
     };
 
     LOGIC_ID_STACK.with(|stack| stack.borrow_mut().push(instance_logic_id));
@@ -511,6 +526,9 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
 
     // Push a new call counter layer for this component's internal context providers
     CONTEXT_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+
+    // Push a new call counter layer for this component's child instance identity
+    INSTANCE_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
 
     #[cfg(feature = "profiling")]
     let profiling_guard = match current_phase() {
@@ -552,6 +570,14 @@ fn pop_current_node() {
         debug_assert!(
             popped.is_some(),
             "CONTEXT_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
+        );
+    });
+
+    INSTANCE_CALL_COUNTER_STACK.with(|stack| {
+        let popped = stack.borrow_mut().pop();
+        debug_assert!(
+            popped.is_some(),
+            "INSTANCE_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
         );
     });
 }
@@ -633,6 +659,10 @@ fn current_group_path_hash() -> u64 {
     hash_components(&[&group_path])
 }
 
+fn current_instance_key_override() -> Option<u64> {
+    INSTANCE_KEY_STACK.with(|stack| stack.borrow().last().copied())
+}
+
 /// RAII guard that tracks control-flow grouping for the current component node.
 ///
 /// A guard pushes the provided group id when constructed and pops it when
@@ -652,6 +682,41 @@ impl GroupGuard {
 impl Drop for GroupGuard {
     fn drop(&mut self) {
         pop_group_id(self.group_id);
+    }
+}
+
+/// RAII guard that sets a stable instance key for the duration of a block.
+pub struct InstanceKeyGuard {
+    key_hash: u64,
+}
+
+impl InstanceKeyGuard {
+    /// Push a key hash for instance identity and reset the instance call counter.
+    pub fn new(key_hash: u64) -> Self {
+        INSTANCE_KEY_STACK.with(|stack| stack.borrow_mut().push(key_hash));
+        INSTANCE_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+        Self { key_hash }
+    }
+}
+
+impl Drop for InstanceKeyGuard {
+    fn drop(&mut self) {
+        INSTANCE_CALL_COUNTER_STACK.with(|stack| {
+            let popped = stack.borrow_mut().pop();
+            debug_assert!(
+                popped.is_some(),
+                "INSTANCE_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
+            );
+        });
+        INSTANCE_KEY_STACK.with(|stack| {
+            let mut stack = stack.borrow_mut();
+            let popped = stack.pop();
+            debug_assert_eq!(
+                popped,
+                Some(self.key_hash),
+                "Unbalanced InstanceKeyGuard stack"
+            );
+        });
     }
 }
 
@@ -1074,6 +1139,7 @@ where
     F: FnOnce() -> R,
 {
     let key_hash = hash_components(&[&key]);
-    let _guard = GroupGuard::new(key_hash);
+    let _group_guard = GroupGuard::new(key_hash);
+    let _instance_guard = InstanceKeyGuard::new(key_hash);
     block()
 }
