@@ -3,13 +3,13 @@
 //! ## Usage
 //!
 //! Use to display content that might overflow the available space.
-mod scrollbar;
+pub(crate) mod scrollbar;
 use std::time::Instant;
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
-    Modifier, Px, PxPosition, State,
+    Color, ComputedData, Constraint, CursorEvent, CursorEventContent, DimensionValue, Dp,
+    MeasurementError, Modifier, Px, PxPosition, State,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     remember, tessera,
 };
@@ -149,7 +149,7 @@ impl ScrollableController {
         self.visible_size
     }
 
-    fn child_size(&self) -> ComputedData {
+    pub(crate) fn child_size(&self) -> ComputedData {
         self.child_size
     }
 
@@ -158,11 +158,11 @@ impl ScrollableController {
         self.override_child_size = Some(size);
     }
 
-    fn target_position(&self) -> PxPosition {
+    pub(crate) fn target_position(&self) -> PxPosition {
         self.target_position
     }
 
-    fn set_target_position(&mut self, target: PxPosition) {
+    pub(crate) fn set_target_position(&mut self, target: PxPosition) {
         self.target_position = target;
     }
 
@@ -177,7 +177,7 @@ impl ScrollableController {
 
     /// Updates the scroll position based on time-based interpolation
     /// Returns true if the position changed (needs redraw)
-    fn update_scroll_position(&mut self, smoothing: f32) -> bool {
+    pub(crate) fn update_scroll_position(&mut self, smoothing: f32) -> bool {
         let current_time = Instant::now();
 
         // Calculate delta time
@@ -667,55 +667,63 @@ fn scrollable_inner(
             .unwrap_or(false);
 
         if is_cursor_in_component {
-            // Handle scroll events
-            for event in input
-                .cursor_events
-                .iter()
-                .filter_map(|event| match &event.content {
-                    CursorEventContent::Scroll(event) => Some(event),
-                    _ => None,
-                })
-            {
-                controller.with_mut(|c| {
-                    // Use scroll delta directly (speed already handled in cursor.rs)
-                    let scroll_delta_x = event.delta_x;
-                    let scroll_delta_y = event.delta_y;
+            let mut remaining_events: Vec<CursorEvent> = Vec::new();
+            for cursor_event in input.cursor_events.iter() {
+                match &cursor_event.content {
+                    CursorEventContent::Scroll(scroll_event) => {
+                        let scroll_delta_x = scroll_event.delta_x;
+                        let scroll_delta_y = scroll_event.delta_y;
+                        let (consumed_x, consumed_y) = controller.with_mut(|c| {
+                            let current_target = c.target_position;
+                            let new_target = current_target.saturating_offset(
+                                Px::saturating_from_f32(scroll_delta_x),
+                                Px::saturating_from_f32(scroll_delta_y),
+                            );
+                            let child_size = c.child_size;
+                            let constrained_target = constrain_position(
+                                new_target,
+                                &child_size,
+                                &input.computed_data,
+                                args.vertical,
+                                args.horizontal,
+                            );
+                            c.set_target_position(constrained_target);
+                            (
+                                constrained_target.x.to_f32() - current_target.x.to_f32(),
+                                constrained_target.y.to_f32() - current_target.y.to_f32(),
+                            )
+                        });
 
-                    // Calculate new target position using saturating arithmetic
-                    let current_target = c.target_position;
-                    let new_target = current_target.saturating_offset(
-                        Px::saturating_from_f32(scroll_delta_x),
-                        Px::saturating_from_f32(scroll_delta_y),
-                    );
+                        let remaining_x = scroll_delta_x - consumed_x;
+                        let remaining_y = scroll_delta_y - consumed_y;
 
-                    // Apply bounds constraints immediately before setting target
-                    let child_size = c.child_size;
-                    let constrained_target = constrain_position(
-                        new_target,
-                        &child_size,
-                        &input.computed_data,
-                        args.vertical,
-                        args.horizontal,
-                    );
+                        if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide)
+                            && (consumed_x.abs() > f32::EPSILON || consumed_y.abs() > f32::EPSILON)
+                        {
+                            if args.vertical {
+                                let mut scrollbar_state = scrollbar_state_v.write();
+                                scrollbar_state.last_scroll_activity =
+                                    Some(std::time::Instant::now());
+                                scrollbar_state.should_be_visible = true;
+                            }
+                            if args.horizontal {
+                                let mut scrollbar_state = scrollbar_state_h.write();
+                                scrollbar_state.last_scroll_activity =
+                                    Some(std::time::Instant::now());
+                                scrollbar_state.should_be_visible = true;
+                            }
+                        }
 
-                    // Set constrained target position
-                    c.set_target_position(constrained_target);
-                });
-
-                // Update scroll activity for AutoHide behavior
-                if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
-                    // Update vertical scrollbar state if vertical scrolling is enabled
-                    if args.vertical {
-                        let mut scrollbar_state = scrollbar_state_v.write();
-                        scrollbar_state.last_scroll_activity = Some(std::time::Instant::now());
-                        scrollbar_state.should_be_visible = true;
+                        if remaining_x.abs() > f32::EPSILON || remaining_y.abs() > f32::EPSILON {
+                            let mut event = cursor_event.clone();
+                            if let CursorEventContent::Scroll(scroll_event) = &mut event.content {
+                                scroll_event.delta_x = remaining_x;
+                                scroll_event.delta_y = remaining_y;
+                            }
+                            remaining_events.push(event);
+                        }
                     }
-                    // Update horizontal scrollbar state if horizontal scrolling is enabled
-                    if args.horizontal {
-                        let mut scrollbar_state = scrollbar_state_h.write();
-                        scrollbar_state.last_scroll_activity = Some(std::time::Instant::now());
-                        scrollbar_state.should_be_visible = true;
-                    }
+                    _ => remaining_events.push(cursor_event.clone()),
                 }
             }
 
@@ -732,8 +740,8 @@ fn scrollable_inner(
             );
             controller.with_mut(|c| c.set_target_position(constrained_position));
 
-            // Block cursor events to prevent propagation
             input.cursor_events.clear();
+            input.cursor_events.extend(remaining_events);
         }
     });
 

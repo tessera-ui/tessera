@@ -9,7 +9,7 @@
 - [ ] [material design components](https://m3.material.io/components)
   - [ ] WindowInsets padding/size helpers
   - [x] FlowRow/FlowColumn
-  - [ ] Pull-to-refresh
+  - [x] Pull-to-refresh
   - [x] Lazy vertical/horizontal grids
   - [x] Staggered grids
   - [x] Pager

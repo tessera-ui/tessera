@@ -99,6 +99,7 @@ pub mod pager;
 pub mod pipelines;
 pub mod pos_misc;
 pub mod progress;
+pub mod pull_refresh;
 pub mod radio_button;
 pub mod ripple_state;
 pub mod row;

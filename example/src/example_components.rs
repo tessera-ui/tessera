@@ -20,6 +20,7 @@ pub mod menus;
 pub mod pager;
 pub mod progress;
 pub mod progress_indicator;
+pub mod pull_refresh;
 pub mod radio_button;
 pub mod slider;
 pub mod spacer;

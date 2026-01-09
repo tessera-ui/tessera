@@ -62,6 +62,7 @@ use crate::example_components::{
     pager::PagerShowcaseDestination,
     progress::ProgressShowcaseDestination,
     progress_indicator::ProgressIndicatorShowcaseDestination,
+    pull_refresh::PullRefreshShowcaseDestination,
     radio_button::RadioButtonShowcaseDestination,
     slider::SliderShowcaseDestination,
     spacer::SpacerShowcaseDestination,
@@ -465,6 +466,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(ProgressIndicatorShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Pull-to-refresh",
+            "Pull down to trigger a refresh and show a progress indicator.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(PullRefreshShowcaseDestination {});
                 });
             },
         ),
