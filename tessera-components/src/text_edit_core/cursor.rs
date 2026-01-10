@@ -19,6 +19,7 @@ pub(crate) const CURSOR_WIDRH: Dp = Dp(2.5);
 struct CursorLayout {
     height: Px,
     visible: bool,
+    color: Color,
 }
 
 impl LayoutSpec for CursorLayout {
@@ -39,7 +40,7 @@ impl LayoutSpec for CursorLayout {
         }
 
         let drawable = ShapeCommand::Rect {
-            color: Color::BLACK,
+            color: self.color,
             corner_radii: glam::Vec4::ZERO.into(),
             corner_g2: [3.0; 4],
             shadow: None,
@@ -62,11 +63,12 @@ impl LayoutSpec for CursorLayout {
 ///   line height
 /// * `bink_timer` - Timer used to control the blinking animation cycle
 #[tessera]
-pub(super) fn cursor(height_px: Px, bink_timer: Instant) {
+pub(super) fn cursor(height_px: Px, bink_timer: Instant, color: Color) {
     let visible = bink_timer.elapsed().as_millis() % 1000 >= 500;
 
     layout(CursorLayout {
         height: height_px,
         visible,
+        color,
     });
 }

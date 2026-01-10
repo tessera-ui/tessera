@@ -33,7 +33,7 @@
 //! use tessera_components::{
 //!     button::{ButtonArgs, button},
 //!     text::text,
-//!     text_editor::{TextEditorArgs, text_editor},
+//!     text_input::{TextInputArgs, text_input},
 //! };
 //! use tessera_ui::Dp;
 //! # use tessera_components::theme::{MaterialTheme, material_theme};
@@ -45,7 +45,7 @@
 //! });
 //!
 //! // Text editor example
-//! text_editor(TextEditorArgs::default());
+//! text_input(TextInputArgs::default());
 //! # });
 //! # }
 //! # component();
@@ -113,5 +113,6 @@ pub mod switch;
 pub mod tabs;
 pub mod text;
 mod text_edit_core;
-pub mod text_editor;
+pub mod text_field;
+pub mod text_input;
 pub mod time_picker;

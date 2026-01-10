@@ -21,7 +21,7 @@
 
 mod cursor;
 
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use glyphon::{
     Cursor, Edit,
@@ -43,6 +43,10 @@ use crate::{
     selection_highlight_rect::selection_highlight_rect,
     text_edit_core::cursor::CURSOR_WIDRH,
 };
+
+/// Display-only text transform applied to the text content before rendering
+/// (e.g., masking or formatting without changing the underlying buffer).
+pub type DisplayTransform = Arc<dyn Fn(&str) -> String + Send + Sync>;
 
 /// Definition of a rectangular selection highlight
 #[derive(Clone, Debug)]
@@ -88,8 +92,12 @@ pub struct TextEditorController {
     blink_timer: Instant,
     focus_handler: Focus,
     pub(crate) selection_color: Color,
+    pub(crate) text_color: Color,
+    pub(crate) cursor_color: Color,
     pub(crate) current_selection_rects: Vec<RectDef>,
     current_text_data: Option<TextData>,
+    current_layout_buffer: Option<glyphon::Buffer>,
+    display_transform: Option<DisplayTransform>,
     layout_version: u64,
     // Click tracking for double/triple click detection
     last_click_time: Option<Instant>,
@@ -130,14 +138,20 @@ impl TextEditorController {
         );
         buffer.set_wrap(&mut write_font_system(), glyphon::Wrap::Glyph);
         let editor = glyphon::Editor::new(buffer);
+        let text_color = Color::BLACK;
+        let cursor_color = Color::BLACK;
         Self {
             line_height: line_height_px,
             editor,
             blink_timer: Instant::now(),
             focus_handler: Focus::new(),
             selection_color,
+            text_color,
+            cursor_color,
             current_selection_rects: Vec::new(),
             current_text_data: None,
+            current_layout_buffer: None,
+            display_transform: None,
             layout_version: 0,
             last_click_time: None,
             last_click_position: None,
@@ -164,13 +178,27 @@ impl TextEditorController {
             buffer.shape_until_scroll(&mut write_font_system(), false);
         });
 
-        let text_buffer = match self.editor.buffer_ref() {
-            glyphon::cosmic_text::BufferRef::Owned(buffer) => buffer.clone(),
-            glyphon::cosmic_text::BufferRef::Borrowed(buffer) => (**buffer).to_owned(),
-            glyphon::cosmic_text::BufferRef::Arc(buffer) => (**buffer).clone(),
+        let text_buffer = if let Some(transform) = self.display_transform.as_ref() {
+            let metrics = self.editor.with_buffer(|buffer| buffer.metrics());
+            let content = editor_content(&self.editor);
+            let display_text = transform(&content);
+            build_display_buffer(
+                &display_text,
+                self.text_color,
+                metrics.font_size,
+                metrics.line_height,
+                &constraint,
+            )
+        } else {
+            match self.editor.buffer_ref() {
+                glyphon::cosmic_text::BufferRef::Owned(buffer) => buffer.clone(),
+                glyphon::cosmic_text::BufferRef::Borrowed(buffer) => (**buffer).to_owned(),
+                glyphon::cosmic_text::BufferRef::Arc(buffer) => (**buffer).clone(),
+            }
         };
 
-        let text_data = TextData::from_buffer(text_buffer);
+        let text_data = TextData::from_buffer(text_buffer.clone());
+        self.current_layout_buffer = Some(text_buffer);
         self.current_text_data = Some(text_data.clone());
         text_data
     }
@@ -217,6 +245,49 @@ impl TextEditorController {
     /// * `color` - The new selection color.
     pub fn set_selection_color(&mut self, color: Color) {
         self.selection_color = color;
+    }
+
+    /// Returns the current text color.
+    pub fn text_color(&self) -> Color {
+        self.text_color
+    }
+
+    /// Sets the text color used by the editor.
+    pub fn set_text_color(&mut self, color: Color) {
+        if self.text_color == color {
+            return;
+        }
+        self.text_color = color;
+        let current_text = editor_content(&self.editor);
+        self.set_text(&current_text);
+    }
+
+    /// Returns the cursor color.
+    pub fn cursor_color(&self) -> Color {
+        self.cursor_color
+    }
+
+    /// Sets the cursor color used by the editor.
+    pub fn set_cursor_color(&mut self, color: Color) {
+        self.cursor_color = color;
+    }
+
+    /// Sets a display transform applied when rendering text.
+    pub fn set_display_transform(&mut self, transform: Option<DisplayTransform>) {
+        let should_update = match (&self.display_transform, &transform) {
+            (None, None) => false,
+            (Some(current), Some(next)) => !Arc::ptr_eq(current, next),
+            _ => true,
+        };
+        if should_update {
+            self.display_transform = transform;
+            self.bump_layout_version();
+        }
+    }
+
+    /// Returns whether a display transform is active.
+    pub fn display_transform_active(&self) -> bool {
+        self.display_transform.is_some()
     }
 
     // Handles a mouse click event and determines the click type (single,
@@ -427,10 +498,18 @@ impl TextEditorController {
         let old_cursor = self.editor.cursor();
 
         self.editor.with_buffer_mut(|buffer| {
+            let color = glyphon::Color::rgba(
+                (self.text_color.r * 255.0) as u8,
+                (self.text_color.g * 255.0) as u8,
+                (self.text_color.b * 255.0) as u8,
+                (self.text_color.a * 255.0) as u8,
+            );
             buffer.set_text(
                 &mut write_font_system(),
                 text,
-                &glyphon::Attrs::new().family(glyphon::fontdb::Family::SansSerif),
+                &glyphon::Attrs::new()
+                    .family(glyphon::fontdb::Family::SansSerif)
+                    .color(color),
                 glyphon::Shaping::Advanced,
                 None,
             );
@@ -496,6 +575,71 @@ fn compute_selection_rects(editor: &glyphon::Editor) -> Vec<RectDef> {
     });
 
     selection_rects
+}
+
+fn editor_content(editor: &glyphon::Editor) -> String {
+    editor.with_buffer(|buffer| {
+        buffer
+            .lines
+            .iter()
+            .map(|line| line.text().to_string() + line.ending().as_str())
+            .collect::<String>()
+    })
+}
+
+fn glyphon_color(color: Color) -> glyphon::Color {
+    glyphon::Color::rgba(
+        (color.r * 255.0) as u8,
+        (color.g * 255.0) as u8,
+        (color.b * 255.0) as u8,
+        (color.a * 255.0) as u8,
+    )
+}
+
+fn build_display_buffer(
+    text: &str,
+    color: Color,
+    font_size: f32,
+    line_height: f32,
+    constraint: &TextConstraint,
+) -> glyphon::Buffer {
+    let mut buffer = glyphon::Buffer::new(
+        &mut write_font_system(),
+        glyphon::Metrics::new(font_size, line_height),
+    );
+    buffer.set_wrap(&mut write_font_system(), glyphon::Wrap::Glyph);
+    buffer.set_size(
+        &mut write_font_system(),
+        constraint.max_width,
+        constraint.max_height,
+    );
+    buffer.set_text(
+        &mut write_font_system(),
+        text,
+        &glyphon::Attrs::new()
+            .family(glyphon::fontdb::Family::SansSerif)
+            .color(glyphon_color(color)),
+        glyphon::Shaping::Advanced,
+        None,
+    );
+    buffer.shape_until_scroll(&mut write_font_system(), false);
+    buffer
+}
+
+fn build_display_editor(
+    buffer: glyphon::Buffer,
+    cursor: Cursor,
+    selection: Option<(Cursor, Cursor)>,
+) -> glyphon::Editor<'static> {
+    let mut editor = glyphon::Editor::new(buffer);
+    if let Some((start, end)) = selection {
+        editor.set_selection(Selection::Normal(start));
+        editor.set_cursor(end);
+    } else {
+        editor.set_cursor(cursor);
+        editor.set_selection(Selection::None);
+    }
+    editor
 }
 
 /// Clip rects to visible area and drop those fully outside.
@@ -566,9 +710,24 @@ impl LayoutSpec for TextEditLayout {
             })
         });
 
-        let mut selection_rects = self
-            .controller
-            .with(|c| compute_selection_rects(c.editor()));
+        let (mut selection_rects, cursor_pos_raw) = self.controller.with(|c| {
+            if c.display_transform_active()
+                && let Some(buffer) = c.current_layout_buffer.clone()
+            {
+                let cursor = c.editor().cursor();
+                let selection = c.editor().selection_bounds();
+                let display_editor = build_display_editor(buffer, cursor, selection);
+                (
+                    compute_selection_rects(&display_editor),
+                    display_editor.cursor_position(),
+                )
+            } else {
+                (
+                    compute_selection_rects(c.editor()),
+                    c.editor().cursor_position(),
+                )
+            }
+        });
 
         let selection_rects_len = selection_rects.len();
 
@@ -585,7 +744,7 @@ impl LayoutSpec for TextEditLayout {
         self.controller
             .with_mut(|c| c.current_selection_rects = selection_rects.clone());
 
-        if let Some(cursor_pos_raw) = self.controller.with(|c| c.editor().cursor_position()) {
+        if let Some(cursor_pos_raw) = cursor_pos_raw {
             let cursor_pos = PxPosition::new(Px(cursor_pos_raw.0), Px(cursor_pos_raw.1));
             let cursor_node_index = selection_rects_len;
             if let Some(cursor_node_id) = input.children_ids().get(cursor_node_index).copied() {
@@ -650,7 +809,8 @@ pub fn text_edit_core(controller: State<TextEditorController>) {
 
     // Cursor rendering (only when focused)
     if controller.with(|c| c.focus_handler().is_focused()) {
-        let (line_height, blink_timer) = controller.with(|c| (c.line_height(), c.blink_timer()));
-        cursor::cursor(line_height, blink_timer);
+        let (line_height, blink_timer, cursor_color) =
+            controller.with(|c| (c.line_height(), c.blink_timer(), c.cursor_color()));
+        cursor::cursor(line_height, blink_timer, cursor_color);
     }
 }

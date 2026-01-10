@@ -71,7 +71,7 @@ use crate::example_components::{
     switch::SwitchShowcaseDestination,
     tabs::TabsShowcaseDestination,
     text::TextShowcaseDestination,
-    text_editor::TextEditorShowcaseDestination,
+    text_input::TextInputShowcaseDestination,
 };
 
 const NAVIGATION_RAIL_BREAKPOINT: Dp = Dp(600.0);
@@ -374,11 +374,11 @@ fn home(
 ) {
     let examples = Arc::new(vec![
         ComponentExampleDesc::new(
-            "Text Editor",
+            "Text Input",
             "A basic component for multiline text input.",
             || {
                 Router::with_mut(|router| {
-                    router.push(TextEditorShowcaseDestination {});
+                    router.push(TextInputShowcaseDestination {});
                 });
             },
         ),

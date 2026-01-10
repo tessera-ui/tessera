@@ -691,7 +691,8 @@ pub struct InstanceKeyGuard {
 }
 
 impl InstanceKeyGuard {
-    /// Push a key hash for instance identity and reset the instance call counter.
+    /// Push a key hash for instance identity and reset the instance call
+    /// counter.
     pub fn new(key_hash: u64) -> Self {
         INSTANCE_KEY_STACK.with(|stack| stack.borrow_mut().push(key_hash));
         INSTANCE_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));

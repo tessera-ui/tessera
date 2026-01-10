@@ -13,7 +13,7 @@
   - [x] Lazy vertical/horizontal grids
   - [x] Staggered grids
   - [x] Pager
-  - [ ] TextField/Outlined/Secure variants with defaults, context menu/input transforms, Material text selection colors.
+  - [x] TextField/Outlined/Secure variants with defaults, context menu/input transforms, Material text selection colors.
   - [x] Appbar/TopAppBar
   - [x] FloatingActionButton
   - [x] Chip

@@ -49,6 +49,25 @@ impl MaterialAlpha {
     pub const DISABLED_CONTENT: f32 = 0.38;
 }
 
+/// Colors used for text selection highlights and handles.
+#[derive(Clone, Copy, Debug)]
+pub struct TextSelectionColors {
+    /// Color of the selection handle (when rendered).
+    pub handle: Color,
+    /// Background color of the selection highlight.
+    pub background: Color,
+}
+
+impl TextSelectionColors {
+    /// Creates selection colors based on the current Material scheme.
+    pub fn from_scheme(scheme: &MaterialColorScheme) -> Self {
+        Self {
+            handle: scheme.primary,
+            background: scheme.primary.with_alpha(0.35),
+        }
+    }
+}
+
 /// Returns the matching content color for a background color in the scheme.
 ///
 /// When the background color does not match a known scheme color, this returns

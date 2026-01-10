@@ -29,4 +29,4 @@ pub mod surface;
 pub mod switch;
 pub mod tabs;
 pub mod text;
-pub mod text_editor;
+pub mod text_input;
