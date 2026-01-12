@@ -84,24 +84,28 @@ fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStre
 /// Helper: tokens to inject `on_minimize`
 fn on_minimize_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
-        let on_minimize = {
+        #[allow(clippy::needless_pass_by_value)]
+        fn on_minimize<F>(fun: F)
+        where
+            F: Fn(bool) + Send + Sync + 'static,
+        {
             use #crate_path::runtime::TesseraRuntime;
-            |fun: Box<dyn Fn(bool) + Send + Sync + 'static>| {
-                TesseraRuntime::with_mut(|runtime| runtime.on_minimize(fun));
-            }
-        };
+            TesseraRuntime::with_mut(|runtime| runtime.on_minimize(Box::new(fun)));
+        }
     }
 }
 
 /// Helper: tokens to inject `on_close`
 fn on_close_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
-        let on_close = {
+        #[allow(clippy::needless_pass_by_value)]
+        fn on_close<F>(fun: F)
+        where
+            F: Fn() + Send + Sync + 'static,
+        {
             use #crate_path::runtime::TesseraRuntime;
-            |fun: Box<dyn Fn() + Send + Sync + 'static>| {
-                TesseraRuntime::with_mut(|runtime| runtime.on_close(fun));
-            }
-        };
+            TesseraRuntime::with_mut(|runtime| runtime.on_close(Box::new(fun)));
+        }
     }
 }
 
