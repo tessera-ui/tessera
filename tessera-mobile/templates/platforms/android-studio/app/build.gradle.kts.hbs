@@ -1,0 +1,53 @@
+plugins {
+    id("com.android.application")
+    id("rust"){{#if android-app-plugins}}{{~#each android-app-plugins}}
+    id("{{this}}"){{/each}}{{/if}}
+}
+
+android {
+    namespace="{{app.identifier}}"{{#if has-asset-packs}}
+    assetPacks += mutableSetOf({{quote-and-join-colon-prefix asset-packs}}){{/if}}
+    compileSdk = 34
+    defaultConfig {
+        applicationId = "{{app.identifier}}"
+        minSdk = {{android.min-sdk-version}}
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
+    }{{#if android-vulkan-validation}}
+    sourceSets.getByName("main") {
+        // Vulkan validation layers
+        val ndkHome = System.getenv("NDK_HOME")
+        jniLibs.srcDir("${ndkHome}/sources/third_party/vulkan/src/build-android/jniLibs")
+    }{{/if}}
+    buildTypes {
+        getByName("debug") {
+            isDebuggable = true
+            isJniDebuggable = true
+            isMinifyEnabled = false
+            packaging { {{~#each abi-list}}
+                jniLibs.keepDebugSymbols.add("*/{{this}}/*.so"){{/each}}
+            }
+        }
+        getByName("release") {
+            isMinifyEnabled = true
+             proguardFiles(
+                *fileTree(".") { include("**/*.pro") }
+                    .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
+                    .toList().toTypedArray()
+            )
+        }
+    }
+}
+
+rust {
+    rootDirRel = "{{root-dir-rel}}"
+}
+
+dependencies {
+    implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22"))
+    implementation("androidx.games:games-activity:2.0.2")
+    implementation("androidx.appcompat:appcompat:1.6.1"){{~#each android-app-dependencies-platform}}
+    implementation(platform("{{this}}")){{/each}}{{~#each android-app-dependencies}}
+    implementation("{{this}}"){{/each}}
+}

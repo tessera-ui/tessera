@@ -4,6 +4,7 @@ use clap::{Args, Parser, Subcommand};
 use commands::android::{self, AndroidFormat};
 
 mod commands;
+mod template;
 
 #[derive(Parser)]
 #[command(name = "cargo-tessera")]
@@ -70,10 +71,18 @@ enum TesseraCommands {
 
 #[derive(Subcommand)]
 enum AndroidCommands {
-    /// Build Android artifacts using xbuild
+    /// Initialize Android project (Gradle) for Tessera app
+    Init {
+        /// Skip installing Rust targets automatically
+        #[arg(long)]
+        skip_targets_install: bool,
+    },
+    /// Build Android artifacts using Gradle
     Build(AndroidBuildArgs),
-    /// Run/install the app on an Android device via xbuild
+    /// Run/install the app on an Android device via Gradle
     Dev(AndroidDevArgs),
+    /// Build Rust library for a single Android target (used by Gradle)
+    RustBuild(AndroidRustBuildArgs),
 }
 
 #[derive(Args)]
@@ -108,6 +117,18 @@ struct AndroidDevArgs {
     device: Option<String>,
 }
 
+#[derive(Args)]
+struct AndroidRustBuildArgs {
+    /// Build in release mode
+    #[arg(long, short)]
+    release: bool,
+    /// Target triple (e.g. aarch64-linux-android)
+    target: String,
+    /// Override package/binary name (-p)
+    #[arg(long, short)]
+    package: Option<String>,
+}
+
 fn main() -> Result<()> {
     let Cli { command } = Cli::parse();
 
@@ -139,6 +160,11 @@ fn main() -> Result<()> {
                 commands::build::execute(release, target.as_deref(), package.as_deref())?;
             }
             TesseraCommands::Android { command } => match command {
+                AndroidCommands::Init {
+                    skip_targets_install,
+                } => {
+                    commands::android::init(skip_targets_install)?;
+                }
                 AndroidCommands::Build(build_args) => {
                     android::build(android::BuildOptions {
                         release: build_args.release,
@@ -153,6 +179,13 @@ fn main() -> Result<()> {
                         arch: dev_args.arch.clone(),
                         package: dev_args.package.clone(),
                         device: dev_args.device.clone(),
+                    })?;
+                }
+                AndroidCommands::RustBuild(build_args) => {
+                    android::rust_build(android::RustBuildOptions {
+                        release: build_args.release,
+                        target: build_args.target.clone(),
+                        package: build_args.package.clone(),
                     })?;
                 }
             },

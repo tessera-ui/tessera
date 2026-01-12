@@ -1,10 +1,11 @@
-use std::{collections::HashMap, fs, path::Path};
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
 use comfy_table::{
     Attribute, Cell, ContentArrangement, Table, modifiers::UTF8_ROUND_CORNERS as RoundCorners,
     presets::UTF8_FULL,
 };
+use handlebars::Handlebars;
 use include_dir::{Dir, include_dir};
 use inquire::{
     Select as ChoicePrompt, Text,
@@ -13,6 +14,9 @@ use inquire::{
     validator::Validation,
 };
 use owo_colors::colored::*;
+use serde_json::json;
+
+use crate::template::write_template_dir_at;
 
 static TEMPLATES: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates");
 
@@ -127,69 +131,21 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
         .to_string();
     let project_name_snake = project_name.replace('-', "_");
 
-    // Template variables for substitution
-    let mut vars: HashMap<&str, String> = HashMap::new();
-    vars.insert("project_name", project_name);
-    vars.insert("project_name_snake", project_name_snake);
+    let mut handlebars = Handlebars::new();
+    handlebars.register_escape_fn(handlebars::no_escape);
 
-    copy_dir(template_dir, project_dir, &vars)
-}
+    let data = json!({
+        "project_name": project_name,
+        "project_name_snake": project_name_snake,
+    });
 
-fn copy_dir(dir: &Dir, dest: &Path, vars: &HashMap<&str, String>) -> Result<()> {
-    fs::create_dir_all(dest).context(format!("Failed to create {}", dest.display()))?;
-
-    for file in dir.files() {
-        let filename = file
-            .path()
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or_else(|| {
-                anyhow::anyhow!("Invalid file path in template: {}", file.path().display())
-            })?;
-
-        let content = file.contents_utf8().ok_or_else(|| {
-            anyhow::anyhow!(
-                "Template file '{}' is not valid UTF-8",
-                file.path().display()
-            )
-        })?;
-
-        let processed_content = apply_template_vars(content, vars);
-        let output_name = filename
-            .strip_suffix(".template")
-            .unwrap_or(filename)
-            .to_string();
-        let output_path = dest.join(output_name);
-
-        if let Some(parent) = output_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        fs::write(&output_path, processed_content)
-            .context(format!("Failed to write {}", output_path.display()))?;
-    }
-
-    for subdir in dir.dirs() {
-        let dirname = subdir.path().file_name().ok_or_else(|| {
-            anyhow::anyhow!(
-                "Invalid directory path in template: {}",
-                subdir.path().display()
-            )
-        })?;
-
-        copy_dir(subdir, &dest.join(dirname), vars)?;
-    }
-
-    Ok(())
-}
-
-/// Simple template variable substitution
-fn apply_template_vars(content: &str, vars: &HashMap<&str, String>) -> String {
-    let mut result = content.to_string();
-    for (key, value) in vars {
-        result = result.replace(&format!("{{{{{}}}}}", key), value);
-    }
-    result
+    write_template_dir_at(
+        template_dir,
+        project_dir,
+        template_dir.path(),
+        &handlebars,
+        &data,
+    )
 }
 
 fn prompt_theme() -> RenderConfig<'static> {

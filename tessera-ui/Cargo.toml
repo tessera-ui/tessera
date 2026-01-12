@@ -46,7 +46,7 @@ winit = "0.30.12"
 arboard = "3.6.1"
 
 [target.'cfg(target_os = "android")'.dependencies]
-winit = { version = "0.30.12", features = ["android-native-activity"] }
+winit = { version = "0.30.12", features = ["android-game-activity"] }
 ndk-sys = "0.6.0"
 jni = "0.21.1"
 ndk-context = "0.1.1"

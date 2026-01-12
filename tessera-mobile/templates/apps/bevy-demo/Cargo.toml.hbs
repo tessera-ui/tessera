@@ -1,0 +1,56 @@
+[package]
+name = "{{app.name}}"
+version = "0.1.0"
+authors = ["{{author}}"]
+edition = "2024"
+
+[package.metadata.cargo-apple.ios]
+frameworks = ["AudioToolbox"]
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "{{app.name}}-desktop"
+path = "gen/bin/desktop.rs"
+
+[dependencies]
+bevy = { version = "0.16", default-features = false, features = [
+    "android-native-activity",
+    "android_shared_stdcxx",
+    "animation",
+    "bevy_animation",
+    "bevy_asset",
+    "bevy_audio",
+    "bevy_color",
+    "bevy_core_pipeline",
+    "bevy_gilrs",
+    "bevy_gizmos",
+    "bevy_gltf",
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_scene",
+    "bevy_sprite",
+    "bevy_state",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_winit",
+    "default_font",
+    "hdr",
+    "ktx2",
+    "multi_threaded",
+    "png",
+    "sysinfo_plugin",
+    "tonemapping_luts",
+    "vorbis",
+    "webgl2",
+    "x11",
+    "zstd",
+] }
+log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.13"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+env_logger = "0.11.5"
