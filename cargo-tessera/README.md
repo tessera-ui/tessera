@@ -38,23 +38,22 @@ cargo tessera build --release --target x86_64-pc-windows-msvc
 
 ### Build for Android (experimental)
 
-Install [`xbuild`](https://github.com/rust-mobile/xbuild):
-
-```bash
-cargo install xbuild
-```
+Make sure Android SDK/NDK are installed and `adb` is available in your PATH.
 
 Android helpers live under the dedicated subcommand:
 
 ```bash
-# Build APK/AAB via xbuild
+# Initialize the Android Gradle project (required once)
+cargo tessera android init
+
+# Build APK/AAB via Gradle
 cargo tessera android build --release --format apk
 
-# Run the app on a device/emulator (set --device if multiple devices are connected)
-cargo tessera android dev --device adb:1234
+# Run the app on a device/emulator (device id is required)
+cargo tessera android dev --device 8cd1353b
 ```
 
-`cargo tessera android dev` requires `--device <adb_serial>` (list devices with `x devices`). If a build or run fails, reinstall `xbuild` or run `x doctor` for diagnostics.
+`cargo tessera android dev` requires `--device <device_id>` (list devices with `adb devices`).
 
 ## Commands
 

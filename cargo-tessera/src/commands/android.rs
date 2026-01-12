@@ -696,8 +696,6 @@ fn display_path(path: &Path) -> String {
     }
 }
 
-// xbuild helpers removed in favor of tessera-mobile integration.
-
 #[derive(Debug, Deserialize)]
 struct Manifest {
     package: Option<PackageSection>,

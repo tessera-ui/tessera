@@ -11,7 +11,6 @@
 
 如果您需要为 `tessera` 做代码贡献，除最新 nightly rust 以外，强烈建议安装以下工具:
 
-- [`xbuild`](https://github.com/rust-mobile/xbuild) 我们用它来构建和测试 Android 版本。未来也可能用它适配 iOS 版本。
 - [`rust-script`](https://rust-script.org/#installation) 我们用它来运行[一些 rust 脚本](scripts)。对开发有帮助。
 
 ## 代码贡献规范
@@ -124,16 +123,14 @@ Vulkan SDK 是**可选的**。仅当您需要进行着色器验证或调试时�
 
 ## 安卓构建特别说明
 
-由于 `NativeActivity` 的限制，为安卓构建需要一些特殊的考量。我们使用 [`xbuild`](https://github.com/rust-mobile/xbuild) 来处理交叉编译和打包的复杂性。
+由于 `NativeActivity` 的限制，为安卓构建需要一些特殊的考量。当前通过 `cargo tessera android` 进行初始化、构建与运行。
 
-- **先决条件**: 确保您已正确设置 Android NDK 和 SDK。
-- **问题排查**: 如果您在安卓构建过程中遇到问题，`xbuild` 提供了一个诊断工具。运行以下命令来检查您的环境并识别潜在问题：
-
-```bash
-x doctor
-```
-
-- **Nix 用户**: 安卓开发 shell (`nix develop .#android`) 中已预先配置好了 `xbuild`。
+- **先决条件**: 确保您已正确设置 Android SDK/NDK，并且 `adb` 可用。
+- **初始化**: 先执行 `cargo tessera android init` 生成 Gradle 项目。
+- **运行与构建**:
+  - 运行：`cargo tessera android dev --device <device_id>`
+  - 构建：`cargo tessera android build --format apk`
+- **Nix 用户**: 安卓开发 shell (`nix develop .#android`) 已预配置 Android SDK/NDK 和常用工具。
 
 请注意，安卓支持仍处于实验阶段，您可能会遇到一些问题。
 

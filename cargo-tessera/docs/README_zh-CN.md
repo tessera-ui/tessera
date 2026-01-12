@@ -39,19 +39,20 @@ cargo tessera build --release --target x86_64-pc-windows-msvc
 
 ### Android 构建（实验性）
 
-先安装 [`xbuild`](https://github.com/rust-mobile/xbuild)（`cargo install xbuild`）。
+请确保已安装 Android SDK/NDK，并且 `adb` 已加入 PATH。
 
 Android 相关命令位于独立子命令下：
 
 ```bash
-# 使用 xbuild 产出 APK/AAB
+# 初始化 Android Gradle 项目（仅需一次）
+cargo tessera android init
+
+# 使用 Gradle 产出 APK/AAB
 cargo tessera android build --release --format apk
 
-# 在设备或模拟器上运行，必须指定 --device（可通过 `x devices` 查看）
-cargo tessera android dev --device adb:1234
+# 在设备或模拟器上运行，必须指定 --device（可通过 `adb devices` 查看）
+cargo tessera android dev --device 8cd1353b
 ```
-
-如果 `x build` / `x run` 失败，尝试执行 `x doctor` 进行排查。
 
 ## 命令速览
 

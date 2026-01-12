@@ -112,7 +112,7 @@ struct AndroidDevArgs {
     /// Override package/binary name (-p)
     #[arg(long, short)]
     package: Option<String>,
-    /// Device id used by `x run --device`
+    /// Device id from `adb devices`
     #[arg(long, short)]
     device: Option<String>,
 }

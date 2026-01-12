@@ -127,9 +127,7 @@
               rustup --quiet toolchain install stable || true
               rustup --quiet target add aarch64-linux-android || true
 
-              echo "Installing xbuild..."
-              command -v x >/dev/null || cargo install xbuild --features vendored  # vendor OpenSSL
-              echo "Android shell ready (adb / NDK / xbuild / cross‑std)."
+              echo "Android shell ready (adb / NDK / cargo tessera android)."
             '';
           };
         };
