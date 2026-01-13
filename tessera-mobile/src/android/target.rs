@@ -237,11 +237,14 @@ impl<'a> Target<'a> {
         mode: CargoMode,
     ) -> Result<(), CompileLibError> {
         let min_sdk_version = config.min_sdk_version();
+        let cargo_target = self
+            .generate_cargo_config(config, env)
+            .map_err(CompileLibError::MissingTool)?;
 
         // Force color, since gradle would otherwise give us uncolored output
         // (which Android Studio makes red, which is extra gross!)
         let color = if force_color { "always" } else { "auto" };
-        CargoCommand::new(mode.as_str())
+        let mut cmd = CargoCommand::new(mode.as_str())
             .with_verbose(noise_level.pedantic())
             .with_package(Some(config.app().name()))
             .with_manifest_path(Some(config.app().manifest_path()))
@@ -269,13 +272,36 @@ impl<'a> Target<'a> {
                 env.ndk
                     .compiler_path(ndk::Compiler::Clangxx, self.clang_triple(), min_sdk_version)
                     .map_err(CompileLibError::MissingTool)?,
-            )
-            .before_spawn(move |cmd| {
-                cmd.args(["--color", color]);
-                Ok(())
-            })
-            .run()
-            .map_err(|cause| CompileLibError::CargoFailed { mode, cause })?;
+            );
+
+        let target_env = self.triple.to_ascii_uppercase().replace('-', "_");
+        if let Some(linker) = cargo_target.linker {
+            let linker_key = format!("CARGO_TARGET_{target_env}_LINKER");
+            if std::env::var_os(&linker_key).is_none() {
+                cmd = cmd.env(linker_key, linker);
+            }
+        }
+        if !cargo_target.rustflags.is_empty() {
+            let rustflags_key = format!("CARGO_TARGET_{target_env}_RUSTFLAGS");
+            let rustflags = cargo_target.rustflags.join(" ");
+            if let Some(existing) = std::env::var_os(&rustflags_key) {
+                let mut combined = existing;
+                if !combined.is_empty() {
+                    combined.push(" ");
+                }
+                combined.push(&rustflags);
+                cmd = cmd.env(rustflags_key, combined);
+            } else {
+                cmd = cmd.env(rustflags_key, rustflags);
+            }
+        }
+
+        cmd.before_spawn(move |cmd| {
+            cmd.args(["--color", color]);
+            Ok(())
+        })
+        .run()
+        .map_err(|cause| CompileLibError::CargoFailed { mode, cause })?;
         Ok(())
     }
 

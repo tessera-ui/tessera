@@ -21,7 +21,6 @@ use cargo_mobile2::{
         target::Target,
     },
     config::app::{App, Raw as RawAppConfig},
-    dot_cargo,
     opts::{FilterLevel, NoiseLevel, Profile},
     os::replace_path_separator,
     target::TargetTrait,
@@ -315,9 +314,6 @@ pub fn init(skip_targets_install: bool) -> Result<()> {
         Target::install_all().map_err(|err| anyhow!("Failed to install Android targets: {err}"))?;
     }
 
-    let env =
-        AndroidEnv::new().map_err(|err| anyhow!("Failed to load Android SDK/NDK env: {err}"))?;
-
     let mut handlebars = Handlebars::new();
     handlebars.register_escape_fn(handlebars::no_escape);
     register_helpers(&mut handlebars);
@@ -359,8 +355,6 @@ pub fn init(skip_targets_install: bool) -> Result<()> {
     }
 
     sync_android_plugins(&ctx.config.project_dir(), &android_plugins)?;
-
-    write_android_cargo_config(&ctx, &env)?;
 
     if !project_exists {
         println!(
@@ -428,7 +422,6 @@ pub fn build(opts: BuildOptions) -> Result<()> {
     }
     sync_android_project(&ctx)?;
     let env = AndroidEnv::new()?;
-    ensure_android_cargo_config(&ctx, &env)?;
     let targets = ctx.targets()?;
     let profile = ctx.profile();
 
@@ -509,7 +502,6 @@ pub fn dev(opts: DevOptions) -> Result<()> {
     );
 
     let env = AndroidEnv::new()?;
-    ensure_android_cargo_config(&ctx, &env)?;
     let profile = ctx.profile();
 
     println!("{}", "Watching for file changes...".dimmed());
@@ -629,7 +621,6 @@ pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
         ));
     }
     let env = AndroidEnv::new()?;
-    ensure_android_cargo_config(&ctx, &env)?;
     let target = ctx.target_by_name_or_triple(&target_name)?;
     let profile = ctx.profile();
 
@@ -699,36 +690,6 @@ fn display_path(path: &Path) -> String {
 
 fn collect_android_plugin_modules(plugins: &[AndroidPlugin]) -> Vec<String> {
     plugins.iter().map(|plugin| plugin.module.clone()).collect()
-}
-
-fn ensure_android_cargo_config(ctx: &AndroidContext, env: &AndroidEnv) -> Result<()> {
-    let config_path = ctx.config.app().prefix_path(".cargo/config.toml");
-    let legacy_path = ctx.config.app().prefix_path(".cargo/config");
-    if config_path.is_file() || legacy_path.is_file() {
-        return Ok(());
-    }
-
-    write_android_cargo_config(ctx, env)
-}
-
-fn write_android_cargo_config(ctx: &AndroidContext, env: &AndroidEnv) -> Result<()> {
-    let mut cargo_config = dot_cargo::DotCargo::load(ctx.config.app())
-        .with_context(|| "Failed to load .cargo/config.toml")?;
-    for target in Target::all().values() {
-        let dot_target = target
-            .generate_cargo_config(&ctx.config, env)
-            .map_err(|err| {
-                anyhow!(
-                    "Failed to generate cargo config for {}: {err}",
-                    target.triple
-                )
-            })?;
-        cargo_config.insert_target(target.triple.to_owned(), dot_target);
-    }
-    cargo_config
-        .write(ctx.config.app())
-        .with_context(|| "Failed to write .cargo/config.toml")?;
-    Ok(())
 }
 
 fn build_android_template_data(
