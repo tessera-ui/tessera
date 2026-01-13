@@ -6,20 +6,14 @@ This example demonstrates the capabilities of the Tessera UI framework with a co
 
 ```bash
 cd example
-cargo run
+cargo tessera dev
 ```
 
 ## Run example on android
 
 1. make sure Android SDK/NDK are installed and `adb` is available in PATH
 
-2. initialize the Android Gradle project
-
-   ```bash
-   cargo tessera android init
-   ```
-
-3. run the example
+2. run the example
 
    ```bash
    # get device id
@@ -27,7 +21,7 @@ cargo run
    cargo tessera android dev --device 8cd1353b
    ```
 
-4. optional: build the apk
+3. optional: build the apk
 
    ```bash
    cargo tessera android build --format apk
