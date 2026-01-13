@@ -1,0 +1,11 @@
+[package]
+name = "{{project_name}}"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tessera-ui = "2"
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+winit = "0.30"

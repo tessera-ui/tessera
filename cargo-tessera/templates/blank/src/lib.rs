@@ -40,11 +40,11 @@ pub fn desktop_main() {
 #[cfg(target_os = "android")]
 fn init_tracing_android() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_max_level(tracing::Level::INFO)
         .without_time()
-        .init();
+        .try_init();
 }
 
 #[cfg(not(target_os = "android"))]
@@ -52,11 +52,11 @@ fn init_tracing_desktop() {
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("error,tessera_ui=info"))
         .unwrap();
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         .pretty()
         .with_env_filter(filter)
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
-        .init();
+        .try_init();
 }
 
 #[allow(dead_code)]

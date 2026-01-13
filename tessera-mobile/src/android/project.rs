@@ -128,15 +128,15 @@ pub fn generate(
             );
             map.insert("root-dir", config.app().root_dir());
             map.insert(
-                "abi-list",
+                "abi_list",
                 Target::all()
                     .values()
                     .map(|target| target.abi)
                     .collect::<Vec<_>>(),
             );
-            map.insert("target-list", Target::all().keys().collect::<Vec<_>>());
+            map.insert("target_list", Target::all().keys().collect::<Vec<_>>());
             map.insert(
-                "arch-list",
+                "arch_list",
                 Target::all()
                     .values()
                     .map(|target| target.arch)

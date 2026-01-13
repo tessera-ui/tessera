@@ -18,16 +18,15 @@ use serde_json::json;
 
 use crate::template::write_template_dir_at;
 
-static TEMPLATES: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates");
+static TEMPLATES: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates/plugin");
 
-/// Prompt for project name interactively with validation
-pub fn prompt_project_name() -> Result<String> {
+pub fn prompt_plugin_name() -> Result<String> {
     let validator = |input: &str| -> Result<Validation, CustomUserError> {
         let trimmed = input.trim();
 
         if trimmed.is_empty() {
             return Ok(Validation::Invalid(
-                "Project name cannot be empty".to_string().into(),
+                "Plugin name cannot be empty".to_string().into(),
             ));
         }
 
@@ -46,7 +45,7 @@ pub fn prompt_project_name() -> Result<String> {
             .is_some_and(|c| c.is_ascii_lowercase())
         {
             return Ok(Validation::Invalid(
-                "Project name must start with a lowercase letter".into(),
+                "Plugin name must start with a lowercase letter".into(),
             ));
         }
 
@@ -59,59 +58,31 @@ pub fn prompt_project_name() -> Result<String> {
         Ok(Validation::Valid)
     };
 
-    let name = Text::new("Project name")
+    let name = Text::new("Plugin name")
         .with_render_config(prompt_theme())
         .with_help_message("lowercase, numbers, '-' or '_', must start with a letter")
-        .with_placeholder("my-tessera-app")
+        .with_placeholder("tessera-plugin")
         .with_validator(validator)
         .prompt()?;
 
     Ok(name.trim().to_string())
 }
 
-pub fn execute(name: &str, template: &str) -> Result<()> {
-    println!("{}", "Creating new Tessera project...".bright_cyan());
-
-    let project_dir = Path::new(name);
-
-    // Check if directory already exists
-    if project_dir.exists() {
-        anyhow::bail!("Directory '{}' already exists", name);
-    }
-
-    // Create project directory
-    fs::create_dir_all(project_dir).context("Failed to create project directory")?;
-
-    // Generate project from template
-    generate_from_template(project_dir, template)?;
-
-    println!(
-        "\n{} Project '{}' created successfully!",
-        "Success".green(),
-        name.bright_green()
-    );
-    print_project_summary(name, template);
-
-    Ok(())
-}
-
-/// Select template interactively if not specified
 pub fn select_template_interactive() -> Result<String> {
     let templates: Vec<String> = TEMPLATES
         .dirs()
         .filter_map(|d| d.path().file_name()?.to_str().map(|s| s.to_string()))
-        .filter(|name| name != "plugin")
         .collect();
 
     if templates.is_empty() {
-        anyhow::bail!("No templates found");
+        anyhow::bail!("No plugin templates found");
     }
 
     if templates.len() == 1 {
         return Ok(templates[0].clone());
     }
 
-    let selection = ChoicePrompt::new("Select a template", templates.clone())
+    let selection = ChoicePrompt::new("Select a plugin template", templates.clone())
         .with_render_config(prompt_theme())
         .with_help_message("Use ↑ ↓ to navigate, Enter to confirm")
         .prompt()?;
@@ -119,11 +90,28 @@ pub fn select_template_interactive() -> Result<String> {
     Ok(selection)
 }
 
-fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
-    if template == "plugin" {
-        anyhow::bail!("Template '{}' is reserved for plugins", template);
+pub fn execute(name: &str, template: &str) -> Result<()> {
+    println!("{}", "Creating new Tessera plugin...".bright_cyan());
+
+    let project_dir = Path::new(name);
+    if project_dir.exists() {
+        anyhow::bail!("Directory '{}' already exists", name);
     }
-    // Find template directory
+
+    fs::create_dir_all(project_dir).context("Failed to create plugin directory")?;
+    generate_from_template(project_dir, template)?;
+
+    println!(
+        "\n{} Plugin '{}' created successfully!",
+        "Success".green(),
+        name.bright_green()
+    );
+    print_plugin_summary(name, template);
+
+    Ok(())
+}
+
+fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
     let template_dir = TEMPLATES
         .get_dir(template)
         .ok_or_else(|| anyhow::anyhow!("Template '{}' not found", template))?;
@@ -131,9 +119,11 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
     let project_name = project_dir
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("tessera-app")
+        .unwrap_or("tessera-plugin")
         .to_string();
     let project_name_snake = project_name.replace('-', "_");
+    let android_package = format!("com.tessera.plugin.{project_name_snake}");
+    let android_package_path = android_package.replace('.', "/");
 
     let mut handlebars = Handlebars::new();
     handlebars.register_escape_fn(handlebars::no_escape);
@@ -141,6 +131,10 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
     let data = json!({
         "project_name": project_name,
         "project_name_snake": project_name_snake,
+        "android": {
+            "package": android_package,
+            "package_path": android_package_path,
+        },
     });
 
     write_template_dir_at(
@@ -178,7 +172,7 @@ fn prompt_theme() -> RenderConfig<'static> {
     config
 }
 
-fn print_project_summary(name: &str, template: &str) {
+fn print_plugin_summary(name: &str, template: &str) {
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -200,7 +194,7 @@ fn print_project_summary(name: &str, template: &str) {
         Cell::new(format!("{}", template.cyan())),
     ]);
 
-    let next_steps = format!("cd {}\ncargo tessera dev", name);
+    let next_steps = format!("cd {}\ncargo build", name);
     table.add_row(vec![Cell::new("Next"), Cell::new(next_steps)]);
 
     println!("\n{table}");

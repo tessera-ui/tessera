@@ -1,4 +1,5 @@
 use std::{
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::mpsc::channel,
@@ -6,11 +7,15 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
+use cargo_metadata::MetadataCommand;
 use cargo_mobile2::{
     ChildHandle,
     android::{
         self,
-        config::{Config as AndroidConfig, Metadata as AndroidMetadata, Raw as RawAndroidConfig},
+        config::{
+            Config as AndroidConfig, DEFAULT_VULKAN_VALIDATION, Metadata as AndroidMetadata,
+            Raw as RawAndroidConfig,
+        },
         device::Device,
         env::Env as AndroidEnv,
         target::Target,
@@ -28,9 +33,9 @@ use include_dir::{Dir, include_dir};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use owo_colors::colored::*;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
-use crate::template::write_template_dir;
+use crate::template::{write_template_dir, write_template_file};
 
 use super::find_package_dir;
 
@@ -89,6 +94,12 @@ struct AndroidContext {
     activity: String,
     config: AndroidConfig,
     metadata: AndroidMetadata,
+}
+
+#[derive(Debug)]
+struct AndroidPlugin {
+    module: String,
+    source_dir: PathBuf,
 }
 
 impl AndroidContext {
@@ -181,6 +192,14 @@ package.metadata.tessera.android.package in Cargo.toml"
         let config = AndroidConfig::from_raw(app, Some(raw_android))
             .context("Failed to build Android config")?;
 
+        let app_toml = load_app_toml(config.app().root_dir())?;
+        let app_permissions =
+            map_tessera_permissions(app_toml.permissions.as_deref().unwrap_or_default())?;
+        let mut merged_permissions = manifest_cfg.permissions.clone().unwrap_or_default();
+        merged_permissions.extend(app_permissions);
+        merged_permissions.sort();
+        merged_permissions.dedup();
+
         let metadata = AndroidMetadata {
             supported: true,
             no_default_features: false,
@@ -193,7 +212,7 @@ package.metadata.tessera.android.package in Cargo.toml"
             app_dependencies_platform: manifest_cfg.app_dependencies_platform.clone(),
             asset_packs: None,
             app_activity_name: Some(DEFAULT_ANDROID_ACTIVITY.to_string()),
-            app_permissions: manifest_cfg.permissions.clone(),
+            app_permissions: Some(merged_permissions),
             app_theme_parent: Some(DEFAULT_ANDROID_THEME_PARENT.to_string()),
             env_vars: None,
             vulkan_validation: None,
@@ -277,6 +296,8 @@ fn sanitize_identifier(identifier: &str) -> String {
 
 pub fn init(skip_targets_install: bool) -> Result<()> {
     let ctx = AndroidContext::from_init()?;
+    let android_plugins = collect_android_plugins(&ctx)?;
+    let android_plugin_modules = collect_android_plugin_modules(&android_plugins);
 
     let project_exists = ctx.config.project_dir_exists();
     if project_exists {
@@ -300,41 +321,7 @@ pub fn init(skip_targets_install: bool) -> Result<()> {
     let mut handlebars = Handlebars::new();
     handlebars.register_escape_fn(handlebars::no_escape);
     register_helpers(&mut handlebars);
-
-    let root_dir_rel = util::relativize_path(
-        ctx.config.app().root_dir(),
-        ctx.config.project_dir().join("app"),
-    );
-    let root_dir_rel = replace_path_separator(root_dir_rel.into_os_string());
-
-    let data = json!({
-        "app": {
-            "identifier": ctx.config.app().identifier(),
-            "name": ctx.config.app().name(),
-            "stylized-name": ctx.config.app().stylized_name(),
-        },
-        "android": {
-            "min-sdk-version": ctx.config.min_sdk_version(),
-        },
-        "android-vulkan-validation": false,
-        "android-app-activity-name": DEFAULT_ANDROID_ACTIVITY,
-        "android-app-theme-parent": DEFAULT_ANDROID_THEME_PARENT,
-        "android-app-permissions": ctx.metadata.app_permissions().unwrap_or_default(),
-        "android-app-plugins": ctx.metadata.app_plugins().unwrap_or_default(),
-        "android-project-dependencies": ctx.metadata.project_dependencies().unwrap_or_default(),
-        "android-app-dependencies": ctx.metadata.app_dependencies().unwrap_or_default(),
-        "android-app-dependencies-platform": ctx.metadata
-            .app_dependencies_platform()
-            .unwrap_or_default(),
-        "has-code": true,
-        "has-asset-packs": false,
-        "asset-packs": Vec::<String>::new(),
-        "abi-list": Target::all().values().map(|t| t.abi).collect::<Vec<_>>(),
-        "arch-list": Target::all().values().map(|t| t.arch).collect::<Vec<_>>(),
-        "target-list": Target::all().keys().collect::<Vec<_>>(),
-        "root-dir-rel": Path::new(&root_dir_rel).display().to_string(),
-        "windows": cfg!(windows),
-    });
+    let data = build_android_template_data(&ctx, &android_plugin_modules)?;
 
     if !project_exists {
         write_template_dir(
@@ -347,24 +334,33 @@ pub fn init(skip_targets_install: bool) -> Result<()> {
         let asset_dir = ctx.config.project_dir().join("app/src/main/assets");
         fs::create_dir_all(&asset_dir)
             .with_context(|| format!("Failed to create assets dir {}", asset_dir.display()))?;
+    } else {
+        write_template_file(
+            &ANDROID_TEMPLATE_DIR,
+            Path::new("build.gradle.kts.hbs"),
+            ctx.config.project_dir().as_path(),
+            &handlebars,
+            &data,
+        )?;
+        write_template_file(
+            &ANDROID_TEMPLATE_DIR,
+            Path::new("settings.gradle.hbs"),
+            ctx.config.project_dir().as_path(),
+            &handlebars,
+            &data,
+        )?;
+        write_template_file(
+            &ANDROID_TEMPLATE_DIR,
+            Path::new("app/build.gradle.kts.hbs"),
+            ctx.config.project_dir().as_path(),
+            &handlebars,
+            &data,
+        )?;
     }
 
-    let mut cargo_config = dot_cargo::DotCargo::load(ctx.config.app())
-        .with_context(|| "Failed to load .cargo/config.toml")?;
-    for target in Target::all().values() {
-        let dot_target = target
-            .generate_cargo_config(&ctx.config, &env)
-            .map_err(|err| {
-                anyhow!(
-                    "Failed to generate cargo config for {}: {err}",
-                    target.triple
-                )
-            })?;
-        cargo_config.insert_target(target.triple.to_owned(), dot_target);
-    }
-    cargo_config
-        .write(ctx.config.app())
-        .with_context(|| "Failed to write .cargo/config.toml")?;
+    sync_android_plugins(&ctx.config.project_dir(), &android_plugins)?;
+
+    write_android_cargo_config(&ctx, &env)?;
 
     if !project_exists {
         println!(
@@ -430,7 +426,9 @@ pub fn build(opts: BuildOptions) -> Result<()> {
             "Android project not initialized. Run `cargo tessera android init` first."
         ));
     }
+    sync_android_project(&ctx)?;
     let env = AndroidEnv::new()?;
+    ensure_android_cargo_config(&ctx, &env)?;
     let targets = ctx.targets()?;
     let profile = ctx.profile();
 
@@ -498,6 +496,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
         .device
         .as_deref()
         .ok_or_else(|| anyhow!("--device <adb_serial> is required for android dev"))?;
+    sync_android_project(&ctx)?;
 
     println!(
         "{}",
@@ -510,6 +509,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
     );
 
     let env = AndroidEnv::new()?;
+    ensure_android_cargo_config(&ctx, &env)?;
     let profile = ctx.profile();
 
     println!("{}", "Watching for file changes...".dimmed());
@@ -629,6 +629,7 @@ pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
         ));
     }
     let env = AndroidEnv::new()?;
+    ensure_android_cargo_config(&ctx, &env)?;
     let target = ctx.target_by_name_or_triple(&target_name)?;
     let profile = ctx.profile();
 
@@ -696,6 +697,303 @@ fn display_path(path: &Path) -> String {
     }
 }
 
+fn collect_android_plugin_modules(plugins: &[AndroidPlugin]) -> Vec<String> {
+    plugins.iter().map(|plugin| plugin.module.clone()).collect()
+}
+
+fn ensure_android_cargo_config(ctx: &AndroidContext, env: &AndroidEnv) -> Result<()> {
+    let config_path = ctx.config.app().prefix_path(".cargo/config.toml");
+    let legacy_path = ctx.config.app().prefix_path(".cargo/config");
+    if config_path.is_file() || legacy_path.is_file() {
+        return Ok(());
+    }
+
+    write_android_cargo_config(ctx, env)
+}
+
+fn write_android_cargo_config(ctx: &AndroidContext, env: &AndroidEnv) -> Result<()> {
+    let mut cargo_config = dot_cargo::DotCargo::load(ctx.config.app())
+        .with_context(|| "Failed to load .cargo/config.toml")?;
+    for target in Target::all().values() {
+        let dot_target = target
+            .generate_cargo_config(&ctx.config, env)
+            .map_err(|err| {
+                anyhow!(
+                    "Failed to generate cargo config for {}: {err}",
+                    target.triple
+                )
+            })?;
+        cargo_config.insert_target(target.triple.to_owned(), dot_target);
+    }
+    cargo_config
+        .write(ctx.config.app())
+        .with_context(|| "Failed to write .cargo/config.toml")?;
+    Ok(())
+}
+
+fn build_android_template_data(
+    ctx: &AndroidContext,
+    android_plugin_modules: &[String],
+) -> Result<Value> {
+    let app_dir = ctx.config.project_dir().join("app");
+    let root_dir_rel = util::relativize_path(ctx.config.app().root_dir(), app_dir);
+    let root_dir_rel = replace_path_separator(root_dir_rel.into_os_string())
+        .to_string_lossy()
+        .into_owned();
+
+    let app = serde_json::to_value(ctx.config.app())
+        .context("Failed to serialize app metadata for templates")?;
+
+    let asset_packs: Vec<String> = ctx
+        .metadata
+        .asset_packs
+        .as_ref()
+        .map(|packs| packs.iter().map(|pack| pack.name.clone()).collect())
+        .unwrap_or_default();
+    let has_asset_packs = !asset_packs.is_empty();
+    let app_permissions = ctx.metadata.app_permissions.clone().unwrap_or_default();
+    let app_activity_name = ctx
+        .metadata
+        .app_activity_name
+        .clone()
+        .unwrap_or_else(|| DEFAULT_ANDROID_ACTIVITY.to_string());
+    let app_theme_parent = ctx
+        .metadata
+        .app_theme_parent
+        .clone()
+        .unwrap_or_else(|| DEFAULT_ANDROID_THEME_PARENT.to_string());
+
+    let mut project_dependencies = ctx
+        .metadata
+        .project_dependencies
+        .clone()
+        .unwrap_or_default();
+    if !android_plugin_modules.is_empty() {
+        let kotlin_plugin = "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22".to_string();
+        if !project_dependencies.iter().any(|dep| dep == &kotlin_plugin) {
+            project_dependencies.push(kotlin_plugin);
+        }
+    }
+    project_dependencies.sort();
+    project_dependencies.dedup();
+
+    let mut abi_list = Vec::new();
+    let mut arch_list = Vec::new();
+    let mut target_list = Vec::new();
+    for target in Target::all().values() {
+        abi_list.push(target.abi.to_string());
+        arch_list.push(target.arch.to_string());
+        target_list.push(target.triple.to_string());
+    }
+
+    Ok(json!({
+        "app": app,
+        "android": {
+            "min-sdk-version": ctx.config.min_sdk_version(),
+        },
+        "root-dir-rel": root_dir_rel,
+        "android-app-plugins": ctx.metadata.app_plugins.clone().unwrap_or_default(),
+        "android-project-dependencies": project_dependencies,
+        "android-app-dependencies": ctx.metadata.app_dependencies.clone().unwrap_or_default(),
+        "android-app-dependencies-platform": ctx
+            .metadata
+            .app_dependencies_platform
+            .clone()
+            .unwrap_or_default(),
+        "android-plugin-modules": android_plugin_modules,
+        "android-app-permissions": app_permissions,
+        "android-app-activity-name": app_activity_name,
+        "android-app-theme-parent": app_theme_parent,
+        "has-code": true,
+        "asset-packs": asset_packs,
+        "has-asset-packs": has_asset_packs,
+        "android-vulkan-validation": ctx
+            .metadata
+            .vulkan_validation
+            .unwrap_or(DEFAULT_VULKAN_VALIDATION),
+        "abi_list": abi_list,
+        "arch_list": arch_list,
+        "target_list": target_list,
+    }))
+}
+
+fn sync_android_project(ctx: &AndroidContext) -> Result<()> {
+    let android_plugins = collect_android_plugins(ctx)?;
+    let android_plugin_modules = collect_android_plugin_modules(&android_plugins);
+
+    let mut handlebars = Handlebars::new();
+    handlebars.register_escape_fn(handlebars::no_escape);
+    register_helpers(&mut handlebars);
+    let data = build_android_template_data(ctx, &android_plugin_modules)?;
+
+    let project_dir = ctx.config.project_dir();
+    write_template_file(
+        &ANDROID_TEMPLATE_DIR,
+        Path::new("build.gradle.kts.hbs"),
+        project_dir.as_path(),
+        &handlebars,
+        &data,
+    )?;
+    write_template_file(
+        &ANDROID_TEMPLATE_DIR,
+        Path::new("settings.gradle.hbs"),
+        project_dir.as_path(),
+        &handlebars,
+        &data,
+    )?;
+    write_template_file(
+        &ANDROID_TEMPLATE_DIR,
+        Path::new("app/build.gradle.kts.hbs"),
+        project_dir.as_path(),
+        &handlebars,
+        &data,
+    )?;
+
+    sync_android_plugins(&project_dir, &android_plugins)?;
+    Ok(())
+}
+
+fn collect_android_plugins(ctx: &AndroidContext) -> Result<Vec<AndroidPlugin>> {
+    let manifest_path = ctx.config.app().root_dir().join("Cargo.toml");
+    let metadata = MetadataCommand::new()
+        .manifest_path(&manifest_path)
+        .exec()
+        .context("Failed to run cargo metadata")?;
+
+    let root_manifest = ctx
+        .package_dir
+        .as_ref()
+        .map(|dir| dir.join("Cargo.toml"))
+        .unwrap_or_else(|| manifest_path.clone())
+        .canonicalize()
+        .with_context(|| "Failed to resolve root Cargo.toml")?;
+
+    let root_pkg = metadata
+        .packages
+        .iter()
+        .find(|pkg| {
+            pkg.manifest_path
+                .clone()
+                .into_std_path_buf()
+                .canonicalize()
+                .map(|path| path == root_manifest)
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| anyhow!("Failed to resolve the root package from cargo metadata"))?;
+
+    let resolve = metadata
+        .resolve
+        .as_ref()
+        .ok_or_else(|| anyhow!("cargo metadata missing dependency graph"))?;
+
+    let mut nodes = HashMap::new();
+    for node in &resolve.nodes {
+        nodes.insert(node.id.clone(), node);
+    }
+
+    let mut visited = HashSet::new();
+    let mut stack = vec![root_pkg.id.clone()];
+    while let Some(id) = stack.pop() {
+        if visited.insert(id.clone())
+            && let Some(node) = nodes.get(&id)
+        {
+            for dep in &node.deps {
+                stack.push(dep.pkg.clone());
+            }
+        }
+    }
+
+    let mut plugins = Vec::new();
+    let mut modules = HashSet::new();
+    for pkg in metadata
+        .packages
+        .iter()
+        .filter(|pkg| visited.contains(&pkg.id) && pkg.id != root_pkg.id)
+    {
+        let pkg_dir = pkg
+            .manifest_path
+            .clone()
+            .into_std_path_buf()
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| anyhow!("Failed to locate plugin root for {}", pkg.manifest_path))?;
+        let plugin_manifest_path = pkg_dir.join("tessera-plugin.toml");
+        if !plugin_manifest_path.exists() {
+            continue;
+        }
+        let contents = fs::read_to_string(&plugin_manifest_path)
+            .with_context(|| format!("Failed to read {}", plugin_manifest_path.display()))?;
+        let manifest: PluginManifest = toml::from_str(&contents)
+            .with_context(|| format!("Failed to parse {}", plugin_manifest_path.display()))?;
+        let Some(android) = manifest.android else {
+            continue;
+        };
+        let module = android.module;
+        if !modules.insert(module.clone()) {
+            return Err(anyhow!(
+                "Duplicate Android plugin module '{}' found in {}",
+                module,
+                plugin_manifest_path.display()
+            ));
+        }
+        let source_dir = pkg_dir.join("android");
+        if !source_dir.is_dir() {
+            return Err(anyhow!(
+                "Android module directory not found for plugin '{}': {}",
+                module,
+                source_dir.display()
+            ));
+        }
+        plugins.push(AndroidPlugin { module, source_dir });
+    }
+
+    plugins.sort_by(|a, b| a.module.cmp(&b.module));
+    Ok(plugins)
+}
+
+fn sync_android_plugins(project_dir: &Path, plugins: &[AndroidPlugin]) -> Result<()> {
+    if plugins.is_empty() {
+        return Ok(());
+    }
+    let plugins_dir = project_dir.join("plugins");
+    fs::create_dir_all(&plugins_dir)
+        .with_context(|| format!("Failed to create {}", plugins_dir.display()))?;
+
+    for plugin in plugins {
+        let target_dir = plugins_dir.join(&plugin.module);
+        if target_dir.exists() {
+            fs::remove_dir_all(&target_dir)
+                .with_context(|| format!("Failed to remove {}", target_dir.display()))?;
+        }
+        copy_dir_all(&plugin.source_dir, &target_dir).with_context(|| {
+            format!(
+                "Failed to copy plugin module {} to {}",
+                plugin.module,
+                target_dir.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn copy_dir_all(source: &Path, target: &Path) -> Result<()> {
+    fs::create_dir_all(target).with_context(|| format!("Failed to create {}", target.display()))?;
+    for entry in
+        fs::read_dir(source).with_context(|| format!("Failed to read {}", source.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        let dest = target.join(entry.file_name());
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            copy_dir_all(&path, &dest)?;
+        } else {
+            fs::copy(&path, &dest).with_context(|| format!("Failed to copy {}", path.display()))?;
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Deserialize)]
 struct Manifest {
     package: Option<PackageSection>,
@@ -754,4 +1052,64 @@ struct AndroidManifestConfig {
     project_dependencies: Option<Vec<String>>,
     app_dependencies: Option<Vec<String>>,
     app_dependencies_platform: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct AppToml {
+    permissions: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PluginManifest {
+    #[allow(dead_code)]
+    name: Option<String>,
+    #[allow(dead_code)]
+    version: Option<u32>,
+    #[allow(dead_code)]
+    permissions: Option<Vec<String>>,
+    android: Option<PluginAndroid>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PluginAndroid {
+    module: String,
+    #[allow(dead_code)]
+    package: Option<String>,
+}
+
+fn load_app_toml(root: &Path) -> Result<AppToml> {
+    let path = root.join("tessera-app.toml");
+    if !path.exists() {
+        return Ok(AppToml::default());
+    }
+    let contents =
+        fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
+    toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))
+}
+
+fn map_tessera_permissions(perms: &[String]) -> Result<Vec<String>> {
+    let mut mapped = Vec::new();
+    for perm in perms {
+        match perm.as_str() {
+            "notifications" => mapped.push("android.permission.POST_NOTIFICATIONS".to_string()),
+            "camera" => mapped.push("android.permission.CAMERA".to_string()),
+            "microphone" => mapped.push("android.permission.RECORD_AUDIO".to_string()),
+            "location" => {
+                mapped.push("android.permission.ACCESS_COARSE_LOCATION".to_string());
+                mapped.push("android.permission.ACCESS_FINE_LOCATION".to_string());
+            }
+            "bluetooth" => {
+                mapped.push("android.permission.BLUETOOTH_CONNECT".to_string());
+                mapped.push("android.permission.BLUETOOTH_SCAN".to_string());
+            }
+            other => {
+                return Err(anyhow!(
+                    "Unknown tessera permission '{other}' in tessera-app.toml"
+                ));
+            }
+        }
+    }
+    mapped.sort();
+    mapped.dedup();
+    Ok(mapped)
 }

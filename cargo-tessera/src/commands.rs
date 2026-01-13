@@ -2,6 +2,7 @@ pub mod android;
 pub mod build;
 pub mod dev;
 pub mod new;
+pub mod plugin;
 
 use std::{fs, path::PathBuf};
 

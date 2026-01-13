@@ -33,3 +33,4 @@ inquire = { version = "0.9.1", default-features = false, features = ["crossterm"
 cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", default-features = false, features = ["native-tls"] }
 handlebars = "6"
 serde_json = "1"
+cargo_metadata = "0.19"

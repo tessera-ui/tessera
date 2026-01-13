@@ -1,0 +1,10 @@
+package {{android.package}}
+
+import android.app.Activity
+
+object HelloPlugin {
+    @JvmStatic
+    fun hello(activity: Activity): String {
+        return "Hello from Kotlin (${activity.packageName})"
+    }
+}

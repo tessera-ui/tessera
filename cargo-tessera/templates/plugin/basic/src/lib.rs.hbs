@@ -1,0 +1,23 @@
+use tessera_ui::Plugin;
+
+pub struct HelloPlugin {
+    message: String,
+}
+
+impl HelloPlugin {
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl Plugin for HelloPlugin {}
+
+pub fn init() -> impl Plugin {
+    HelloPlugin {
+        message: format!("Hello from {{project_name}}"),
+    }
+}
+
+pub fn with_plugin<R>(f: impl FnOnce(&HelloPlugin) -> R) -> R {
+    tessera_ui::with_plugin::<HelloPlugin, R>(f)
+}

@@ -16,10 +16,10 @@ use tessera_ui::winit::platform::android::activity::AndroidApp;
 #[unsafe(no_mangle)]
 fn android_main(android_app: AndroidApp) {
     // Initialize tracing subscriber for Android (EnvFilter still honored)
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .with_max_level(tracing::Level::INFO)
-        .init();
+        .try_init();
 
     spawn_deadlock_detector();
 
@@ -42,11 +42,11 @@ pub fn desktop_main() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .or_else(|_| tracing_subscriber::EnvFilter::try_new("error,tessera_ui=info"))
         .unwrap();
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         .pretty()
         .with_env_filter(filter)
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
-        .init();
+        .try_init();
 
     spawn_deadlock_detector();
 

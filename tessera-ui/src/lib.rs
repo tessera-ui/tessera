@@ -315,6 +315,8 @@
 #![deny(missing_docs, clippy::unwrap_used)]
 
 pub mod accessibility;
+#[cfg(target_os = "android")]
+pub mod android;
 pub mod clipboard;
 pub mod color;
 mod component_tree;
@@ -329,6 +331,7 @@ mod keyboard_state;
 pub mod layout;
 pub mod modifier;
 pub(crate) mod pipeline_cache;
+pub mod plugin;
 #[cfg(feature = "profiling")]
 pub mod profiler;
 pub mod px;
@@ -361,6 +364,9 @@ pub use crate::{
     focus_state::Focus,
     layout::{DefaultLayoutSpec, LayoutInput, LayoutOutput, LayoutResult, LayoutSpec, RenderInput},
     modifier::{Modifier, ModifierChild, ModifierWrapper},
+    plugin::{
+        Plugin, PluginContext, PluginResult, register_plugin, register_plugin_boxed, with_plugin,
+    },
     px::{Px, PxPosition, PxRect, PxSize},
     renderer::{
         Command, DrawRegion, PaddingRect, Renderer, SampleRegion,

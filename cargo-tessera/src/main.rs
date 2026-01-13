@@ -1,7 +1,12 @@
+use std::process::ExitCode;
+
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 
-use commands::android::{self, AndroidFormat};
+use commands::{
+    android::{self, AndroidFormat},
+    plugin,
+};
 
 mod commands;
 mod template;
@@ -67,6 +72,11 @@ enum TesseraCommands {
         #[command(subcommand)]
         command: AndroidCommands,
     },
+    /// Create a new Tessera plugin
+    Plugin {
+        #[command(subcommand)]
+        command: PluginCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -83,6 +93,18 @@ enum AndroidCommands {
     Dev(AndroidDevArgs),
     /// Build Rust library for a single Android target (used by Gradle)
     RustBuild(AndroidRustBuildArgs),
+}
+
+#[derive(Subcommand)]
+enum PluginCommands {
+    /// Create a new Tessera plugin
+    New {
+        /// Name of the plugin (optional, will prompt if not provided)
+        name: Option<String>,
+        /// Use a specific template
+        #[arg(short, long)]
+        template: Option<String>,
+    },
 }
 
 #[derive(Args)]
@@ -129,7 +151,15 @@ struct AndroidRustBuildArgs {
     package: Option<String>,
 }
 
-fn main() -> Result<()> {
+fn main() -> ExitCode {
+    if let Err(err) = run() {
+        print_error(&err);
+        return ExitCode::from(1);
+    }
+    ExitCode::SUCCESS
+}
+
+fn run() -> Result<()> {
     let Cli { command } = Cli::parse();
 
     match command {
@@ -145,6 +175,19 @@ fn main() -> Result<()> {
                 };
                 commands::new::execute(&name, &template)?;
             }
+            TesseraCommands::Plugin { command } => match command {
+                PluginCommands::New { name, template } => {
+                    let name = match name {
+                        Some(n) => n,
+                        None => plugin::prompt_plugin_name()?,
+                    };
+                    let template = match template {
+                        Some(t) => t,
+                        None => plugin::select_template_interactive()?,
+                    };
+                    plugin::execute(&name, &template)?;
+                }
+            },
             TesseraCommands::Dev {
                 verbose,
                 package,
@@ -193,4 +236,11 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_error(err: &anyhow::Error) {
+    eprintln!("Error: {err}");
+    for cause in err.chain().skip(1) {
+        eprintln!("Caused by: {cause}");
+    }
 }

@@ -1,3 +1,6 @@
 include ':app'
+{{#if android-plugin-modules}}{{~#each android-plugin-modules}}
+include ':plugins:{{this}}'
+project(':plugins:{{this}}').projectDir = file('plugins/{{this}}'){{/each}}{{/if}}
 {{#if asset-packs}}{{~#each asset-packs}}
 include ':{{this}}'{{/each}}{{/if}}
