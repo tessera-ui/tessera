@@ -165,6 +165,12 @@ package.metadata.tessera.android.package in Cargo.toml"
             .unwrap_or_else(|| PathBuf::from("."))
             .canonicalize()
             .with_context(|| "Failed to resolve project root")?;
+        let target_dir = MetadataCommand::new()
+            .manifest_path(root_dir.join("Cargo.toml"))
+            .exec()
+            .context("Failed to resolve Cargo target directory")?
+            .target_directory
+            .into_std_path_buf();
 
         let identifier = manifest_cfg
             .package
@@ -178,8 +184,11 @@ package.metadata.tessera.android.package in Cargo.toml"
             asset_dir: None,
             template_pack: None,
         };
-        let app =
-            App::from_raw(root_dir, raw_app).context("Failed to build Android app metadata")?;
+        let app = App::from_raw(root_dir, raw_app)
+            .context("Failed to build Android app metadata")?
+            .with_target_dir_resolver(move |triple, profile| {
+                target_dir.join(triple).join(profile.as_str())
+            });
 
         let raw_android = RawAndroidConfig {
             min_sdk_version: Some(manifest_cfg.min_sdk.unwrap_or(DEFAULT_MIN_SDK_VERSION)),
