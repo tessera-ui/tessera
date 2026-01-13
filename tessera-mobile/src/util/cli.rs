@@ -2,6 +2,7 @@ use std::fmt::{Debug, Display};
 
 use colored::Colorize as _;
 
+#[allow(unused_imports)]
 pub use interface::*;
 
 pub static VERSION_SHORT: &str = concat!("v", env!("CARGO_PKG_VERSION"));
