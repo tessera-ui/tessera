@@ -11,19 +11,13 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "example"
-path = "src/main.rs"
+path = "src/lib.rs"
 
 [dependencies]
 tessera-ui = { path = "../tessera-ui" }
 tessera-components = { path = "../tessera-components" }
 tokio = { version = "1.49.0", features = ["full"] }
-tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
-parking_lot = { version = "0.12.5", features = ["deadlock_detection"] }
 bytemuck = { version = "1.24.0", features = ["derive"] }
 image = "0.25.9"
 dashmap = "6.1.0"
 closure = "0.3.0"
-
-[target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.15.1"

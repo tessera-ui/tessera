@@ -331,6 +331,7 @@ mod keyboard_state;
 pub mod layout;
 pub mod modifier;
 pub(crate) mod pipeline_cache;
+pub mod pipeline_context;
 pub mod plugin;
 #[cfg(feature = "profiling")]
 pub mod profiler;
@@ -364,6 +365,7 @@ pub use crate::{
     focus_state::Focus,
     layout::{DefaultLayoutSpec, LayoutInput, LayoutOutput, LayoutResult, LayoutSpec, RenderInput},
     modifier::{Modifier, ModifierChild, ModifierWrapper},
+    pipeline_context::PipelineContext,
     plugin::{
         Plugin, PluginContext, PluginResult, register_plugin, register_plugin_boxed, with_plugin,
     },
@@ -385,3 +387,263 @@ use ime_state::ImeState;
 pub use tessera_macros::shard;
 #[cfg(feature = "shard")]
 pub use tessera_shard;
+
+/// Internal helper to enable deadlock detection in debug builds.
+#[doc(hidden)]
+pub fn __tessera_init_deadlock_detection() {
+    #[cfg(debug_assertions)]
+    {
+        use std::{sync::Once, thread, time::Duration};
+
+        static INIT: Once = Once::new();
+        INIT.call_once(|| {
+            thread::spawn(|| {
+                loop {
+                    thread::sleep(Duration::from_secs(10));
+                    let deadlocks = parking_lot::deadlock::check_deadlock();
+                    if deadlocks.is_empty() {
+                        continue;
+                    }
+
+                    eprintln!("{} deadlocks detected", deadlocks.len());
+                    for (idx, threads) in deadlocks.iter().enumerate() {
+                        eprintln!("Deadlock #{}", idx);
+                        for thread in threads {
+                            eprintln!("Thread Id {:#?}", thread.thread_id());
+                            eprintln!("{:?}", thread.backtrace());
+                        }
+                    }
+                }
+            });
+        });
+    }
+}
+
+/// Defines the Tessera application entry points for desktop and Android.
+///
+/// This macro registers plugin crates by calling their `init()` function,
+/// then starts the renderer with a provided pipeline registration function.
+///
+/// Example:
+/// `tessera_ui::entry!(app, pipelines = [tessera_components], plugins =
+/// [hello_plugin]);`
+#[macro_export]
+macro_rules! entry {
+    ($entry:path $(,)?) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            {
+                plugins: [],
+                pipelines: [],
+                config: $crate::entry!(@config)
+            },
+        );
+    };
+    ($entry:path, $($rest:tt)+) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            {
+                plugins: [],
+                pipelines: [],
+                config: $crate::entry!(@config)
+            },
+            $($rest)+
+        );
+    };
+    (@config) => {
+        $crate::renderer::TesseraConfig::default()
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        ) => {
+        $crate::entry!(@run $entry, $config, [$($pipelines),*], [$($plugins),*]);
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        plugins = [$($plugin:ident),* $(,)?],
+        $($rest:tt)+
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugin),*], pipelines: [$($pipelines),*], config: $config },
+            $($rest)+
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        plugins = [$($plugin:ident),* $(,)?],
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugin),*], pipelines: [$($pipelines),*], config: $config },
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        plugins = [$($plugin:ident),* $(,)?]
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugin),*], pipelines: [$($pipelines),*], config: $config },
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        pipelines = [$($new_pipelines:ident),* $(,)?],
+        $($rest:tt)+
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugins),*], pipelines: [$($new_pipelines),*], config: $config },
+            $($rest)+
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        pipelines = [$($new_pipelines:ident),* $(,)?],
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugins),*], pipelines: [$($new_pipelines),*], config: $config },
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        pipelines = [$($new_pipelines:ident),* $(,)?]
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugins),*], pipelines: [$($new_pipelines),*], config: $config },
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        config = $new_config:expr,
+        $($rest:tt)+
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugins),*], pipelines: [$($pipelines),*], config: $new_config },
+            $($rest)+
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        config = $new_config:expr,
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugins),*], pipelines: [$($pipelines),*], config: $new_config },
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        config = $new_config:expr
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugins),*], pipelines: [$($pipelines),*], config: $new_config },
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        , $($rest:tt)*
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugins),*], pipelines: [$($pipelines),*], config: $config },
+            $($rest)*
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        $($unexpected:tt)+
+    ) => {
+        compile_error!("Unsupported argument for tessera_ui::entry!");
+    };
+    (@run $entry:path, $config:expr, [$($pipeline:ident),*], [$($plugin:ident),*]) => {
+        #[cfg(target_os = "android")]
+        #[unsafe(no_mangle)]
+        fn android_main(android_app: $crate::winit::platform::android::activity::AndroidApp) {
+            __tessera_entry(android_app);
+        }
+
+        #[cfg(target_os = "android")]
+        #[allow(dead_code)]
+        fn main() {}
+
+        #[cfg(target_os = "android")]
+        #[doc(hidden)]
+        pub fn __tessera_entry(
+            android_app: $crate::winit::platform::android::activity::AndroidApp,
+        ) {
+            $crate::__tessera_init_deadlock_detection();
+            $(
+                $crate::register_plugin($plugin::init());
+            )*
+            if let Err(err) = $crate::Renderer::run_with_config(
+                $entry,
+                |app| {
+                    let mut context = $crate::PipelineContext::new(app);
+                    $(
+                        $pipeline::init(&mut context);
+                    )*
+                },
+                android_app,
+                $config,
+            ) {
+                eprintln!("App failed to run: {err}");
+            }
+        }
+
+        #[cfg(not(target_os = "android"))]
+        fn main() {
+            __tessera_entry();
+        }
+
+        #[cfg(not(target_os = "android"))]
+        #[doc(hidden)]
+        pub fn __tessera_entry() {
+            $crate::__tessera_init_deadlock_detection();
+            $(
+                $crate::register_plugin($plugin::init());
+            )*
+            if let Err(err) = $crate::Renderer::run_with_config(
+                $entry,
+                |app| {
+                    let mut context = $crate::PipelineContext::new(app);
+                    $(
+                        $pipeline::init(&mut context);
+                    )*
+                },
+                $config,
+            ) {
+                eprintln!("App failed to run: {err}");
+            }
+        }
+    };
+}

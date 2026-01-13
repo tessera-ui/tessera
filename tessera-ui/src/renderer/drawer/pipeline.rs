@@ -65,8 +65,7 @@
 //! - **FluidGlassPipeline**: Creates advanced glass effects with distortion and
 //!   transparency
 //!
-//! These pipelines are registered in
-//! `tessera_components::pipelines::register_pipelines()`.
+//! These pipelines are registered in `tessera_components::init(...)`.
 //!
 //! # Performance Considerations
 //!

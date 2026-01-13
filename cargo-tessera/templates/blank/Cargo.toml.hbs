@@ -10,11 +10,8 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "{{project_name_snake}}"
-path = "src/main.rs"
+path = "src/lib.rs"
 
 [dependencies]
 tessera-ui = "2"
 tessera-components = "2"
-parking_lot = { version = "*", features = ["deadlock_detection"] }
-tracing = "*"
-tracing-subscriber = { version = "*", features = ["fmt", "env-filter"] }

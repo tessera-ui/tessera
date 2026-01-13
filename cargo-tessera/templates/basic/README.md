@@ -6,8 +6,8 @@ A minimal Tessera UI starter that renders a full-screen surface with a
 ## Features
 
 - Preconfigured Tessera renderer with basic component pipelines
-- `src/main.rs` scaffolded with the Tessera macro
-- Ready-to-edit `Cargo.toml` with tracing defaults
+- `src/lib.rs` entrypoint generated via `tessera_ui::entry!` with pipeline registration
+- Ready-to-edit `Cargo.toml` for Tessera apps
 
 ## Running
 

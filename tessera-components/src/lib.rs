@@ -5,21 +5,15 @@
 //! First, you need to register the pipelines provided by this crate.
 //!
 //! ```no_run
-//! # use tessera_ui::tessera;
-//! # #[tessera]
-//! # fn component() {
-//! use tessera_components::pipelines::register_pipelines;
-//! use tessera_ui::renderer::Renderer;
+//! use tessera_ui::{PipelineContext, renderer::Renderer};
 //!
-//! Renderer::run(
-//!     // ...
-//!     # || {}, // Placeholder for root component
-//!     |app| {
-//!         tessera_components::pipelines::register_pipelines(app);
-//!     },
-//! );
-//! # }
-//! # component();
+//! fn component() {}
+//!
+//! Renderer::run(component, |app| {
+//!     let mut context = PipelineContext::new(app);
+//!     tessera_components::init(&mut context);
+//! })
+//! .unwrap();
 //! ```
 //!
 //! Then you can use the components in your UI.
@@ -89,8 +83,11 @@ pub mod lazy_staggered_grid;
 pub mod material_icons;
 pub mod modifier;
 pub mod theme;
+use tessera_ui::PipelineContext;
+
 pub use pipelines::shape::command::RippleProps;
 pub use ripple_state::RippleState;
+
 pub mod flow_row;
 pub mod menus;
 pub mod navigation_bar;
@@ -116,3 +113,8 @@ mod text_edit_core;
 pub mod text_field;
 pub mod text_input;
 pub mod time_picker;
+
+/// Registers pipelines provided by this crate with the renderer.
+pub fn init(context: &mut PipelineContext<'_>) {
+    pipelines::register_pipelines(context.app());
+}
