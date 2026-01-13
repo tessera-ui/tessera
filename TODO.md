@@ -3,7 +3,15 @@
 - [ ] Better IME support on Android
 - [x] Performance improvement
 - [x] Switch to Semver for versioning
-- [ ] Platform-specific plugin system
+- [ ] Platform-specific plugin system & Package Support
+  - [x] Desktop Plugins
+  - [x] Android Plugins
+  - [ ] iOS Plugins
+  - [x] Android Package Support
+  - [ ] Windows Package Support
+  - [ ] macOS Package Support
+  - [ ] Linux Package Support
+
 - [x] lazy_column
 - [x] lazy_row
 - [ ] [material design components](https://m3.material.io/components)
