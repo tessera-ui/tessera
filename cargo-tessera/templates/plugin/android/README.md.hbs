@@ -1,0 +1,45 @@
+# {{project_name}}
+
+Tessera plugin crate with an Android JVM module.
+
+## Usage
+
+Add the plugin to your Tessera app:
+
+```toml
+[dependencies]
+{{project_name}} = { path = "{{project_name}}" }
+```
+
+Register it in your entrypoint:
+
+```rust
+tessera_ui::entry! {
+    // ...
+    plugins = [
+        // ...
+        {{project_name_snake}},
+    ],
+    // ...
+}
+```
+
+Use it from components or app code:
+
+```rust
+{{project_name_snake}}::with_plugin(|plugin| {
+    println!("{}", plugin.message());
+});
+```
+
+## Android module
+
+The Android JVM code lives under `android/` and exposes
+`{{android.package}}.HelloPlugin`. When you run `cargo tessera android init`,
+`build`, or `dev`, the module is synced into `gen/android/plugins/{{project_name_snake}}`.
+
+## Build
+
+```bash
+cargo build
+```
