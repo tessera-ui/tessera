@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tessera-ui/tessera/main/docs/schemas/tessera-app.schema.json",
+  "title": "Tessera App Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "permissions": {
+      "type": "array",
+      "description": "Tessera permissions mapped to platform-specific permissions.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "notifications",
+          "camera",
+          "microphone",
+          "location",
+          "bluetooth"
+        ]
+      },
+      "uniqueItems": true,
+      "default": []
+    }
+  }
+}

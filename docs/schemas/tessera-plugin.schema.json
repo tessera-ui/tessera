@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tessera-ui/tessera/main/docs/schemas/tessera-plugin.schema.json",
+  "title": "Tessera Plugin Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "permissions": {
+      "type": "array",
+      "description": "Tessera permissions required by the plugin.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "notifications",
+          "camera",
+          "microphone",
+          "location",
+          "bluetooth"
+        ]
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "android": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "module": {
+          "type": "string",
+          "description": "Gradle module name for the Android plugin.",
+          "pattern": "^[A-Za-z0-9_]+$"
+        },
+        "package": {
+          "type": "string",
+          "description": "Android package name used by the plugin."
+        }
+      },
+      "required": [
+        "module"
+      ]
+    }
+  }
+}
