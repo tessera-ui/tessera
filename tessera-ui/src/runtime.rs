@@ -242,10 +242,6 @@ pub struct TesseraRuntime {
     pub(crate) window_size: [u32; 2],
     /// Cursor icon change request from UI components.
     pub cursor_icon_request: Option<winit::window::CursorIcon>,
-    /// Called when the window minimize state changes.
-    on_minimize_callbacks: Vec<Box<dyn Fn(bool) + Send + Sync>>,
-    /// Called when the window close event is triggered.
-    on_close_callbacks: Vec<Box<dyn Fn() + Send + Sync>>,
     /// Whether the window is currently minimized.
     pub(crate) window_minimized: bool,
     /// Per-frame control-flow trace.
@@ -303,25 +299,6 @@ impl TesseraRuntime {
         self.window_size
     }
 
-    /// Registers a per-frame callback for minimize state changes.
-    /// Components should call this every frame they wish to be notified.
-    pub fn on_minimize(&mut self, callback: impl Fn(bool) + Send + Sync + 'static) {
-        self.on_minimize_callbacks.push(Box::new(callback));
-    }
-
-    /// Registers a per-frame callback for window close event.
-    /// Components should call this every frame they wish to be notified.
-    pub fn on_close(&mut self, callback: impl Fn() + Send + Sync + 'static) {
-        self.on_close_callbacks.push(Box::new(callback));
-    }
-
-    /// Clears all per-frame registered callbacks.
-    /// Must be called by the event loop at the beginning of each frame.
-    pub fn clear_frame_callbacks(&mut self) {
-        self.on_minimize_callbacks.clear();
-        self.on_close_callbacks.clear();
-    }
-
     /// Sets the instance key for the current component node.
     #[doc(hidden)]
     pub fn set_current_instance_key(&mut self, instance_key: u64) {
@@ -367,23 +344,6 @@ impl TesseraRuntime {
 
     pub(crate) fn trace_end(&mut self) {
         self.frame_trace.push(TraceEntry::End);
-    }
-
-    /// Triggers all registered callbacks (global and per-frame).
-    /// Called by the event loop when a minimize event is detected.
-    pub fn trigger_minimize_callbacks(&self, minimized: bool) {
-        for callback in &self.on_minimize_callbacks {
-            callback(minimized);
-        }
-    }
-
-    /// Triggers all registered callbacks (global and per-frame) for window
-    /// close event. Called by the event loop when a close event is
-    /// detected.
-    pub fn trigger_close_callbacks(&self) {
-        for callback in &self.on_close_callbacks {
-            callback();
-        }
     }
 }
 

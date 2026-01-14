@@ -81,34 +81,6 @@ fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStre
     }
 }
 
-/// Helper: tokens to inject `on_minimize`
-fn on_minimize_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
-    quote! {
-        #[allow(clippy::needless_pass_by_value)]
-        fn on_minimize<F>(fun: F)
-        where
-            F: Fn(bool) + Send + Sync + 'static,
-        {
-            use #crate_path::runtime::TesseraRuntime;
-            TesseraRuntime::with_mut(|runtime| runtime.on_minimize(Box::new(fun)));
-        }
-    }
-}
-
-/// Helper: tokens to inject `on_close`
-fn on_close_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
-    quote! {
-        #[allow(clippy::needless_pass_by_value)]
-        fn on_close<F>(fun: F)
-        where
-            F: Fn() + Send + Sync + 'static,
-        {
-            use #crate_path::runtime::TesseraRuntime;
-            TesseraRuntime::with_mut(|runtime| runtime.on_close(Box::new(fun)));
-        }
-    }
-}
-
 /// Helper: tokens to compute a stable logic id based on module path + function
 /// name.
 fn logic_id_tokens(fn_name: &syn::Ident) -> proc_macro2::TokenStream {
@@ -271,8 +243,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let register_tokens = register_node_tokens(&crate_path, fn_name);
     let layout_tokens = layout_inject_tokens(&crate_path);
     let state_tokens = input_handler_inject_tokens(&crate_path);
-    let on_minimize_tokens = on_minimize_inject_tokens(&crate_path);
-    let on_close_tokens = on_close_inject_tokens(&crate_path);
     let logic_id_tokens = logic_id_tokens(fn_name);
 
     // Generate the transformed function with Tessera runtime integration
@@ -326,9 +296,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             // Inject helper tokens
             #layout_tokens
             #state_tokens
-            #on_minimize_tokens
-            #on_close_tokens
-
             // Execute user's function body
             #fn_block
         }

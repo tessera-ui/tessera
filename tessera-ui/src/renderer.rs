@@ -726,9 +726,6 @@ Fps: {:.2}
         args.app.window.pre_present_notify();
         // and tell runtime the new size
         TesseraRuntime::with_mut(|rt: &mut TesseraRuntime| rt.window_size = args.app.size().into());
-        // Clear any registered callbacks
-        TesseraRuntime::with_mut(|rt| rt.clear_frame_callbacks());
-
         // Build the component tree and measure time
         let build_tree_cost = Self::build_component_tree(entry_point);
 
@@ -926,7 +923,6 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         if let Some(context) = self.plugin_context(event_loop) {
             self.plugins.shutdown(&context);
         }
-        TesseraRuntime::with(|rt| rt.trigger_close_callbacks());
         if let Some(ref app) = self.app
             && let Err(e) = app.save_pipeline_cache()
         {
@@ -944,19 +940,15 @@ impl<F: Fn(), R: Fn(&mut WgpuApp) + Clone + 'static> Renderer<F, R> {
         };
 
         if size.width == 0 || size.height == 0 {
-            // Window minimize handling & callback API
             TesseraRuntime::with_mut(|rt| {
                 if !rt.window_minimized {
                     rt.window_minimized = true;
-                    rt.trigger_minimize_callbacks(true);
                 }
             });
         } else {
-            // Window (un)minimize handling & callback API
             TesseraRuntime::with_mut(|rt| {
                 if rt.window_minimized {
                     rt.window_minimized = false;
-                    rt.trigger_minimize_callbacks(false);
                 }
             });
             app.resize(size);
