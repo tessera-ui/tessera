@@ -72,15 +72,74 @@ fn write_lru_cache() -> RwLockWriteGuard<'static, lru::LruCache<LruKey, TextData
 }
 
 #[cfg(target_os = "android")]
+fn is_android_emoji_face(face: &fontdb::FaceInfo) -> bool {
+    let post_script = face.post_script_name.as_str();
+    if post_script.contains("NotoColorEmoji") {
+        return true;
+    }
+
+    face.families
+        .iter()
+        .any(|(name, _)| name.contains("Noto Color Emoji"))
+}
+
+#[cfg(target_os = "android")]
+fn remove_system_emoji_faces(db: &mut fontdb::Database) -> usize {
+    let ids: Vec<_> = db
+        .faces()
+        .filter(|face| {
+            matches!(
+                &face.source,
+                fontdb::Source::File(_) | fontdb::Source::SharedFile(_, _)
+            ) && is_android_emoji_face(face)
+        })
+        .map(|face| face.id)
+        .collect();
+
+    // Android ships COLRv1 emoji fonts, which swash cannot rasterize yet.
+    for id in &ids {
+        db.remove_face(*id);
+    }
+
+    ids.len()
+}
+
+#[cfg(target_os = "android")]
+fn load_embedded_android_emoji_font(db: &mut fontdb::Database) -> usize {
+    let before = db.len();
+    let data = include_bytes_zstd::include_bytes_zstd!("assets/NotoColorEmoji_COLRv0.ttf", 19);
+    if data.is_empty() {
+        println!("android fontdb: embedded emoji font data is empty");
+        return 0;
+    }
+    db.load_font_data(data);
+    db.len().saturating_sub(before)
+}
+
+#[cfg(target_os = "android")]
+fn ensure_android_emoji_font(db: &mut fontdb::Database) {
+    // Use the bundled COLRv0 emoji font to avoid COLRv1 rendering gaps.
+    let removed = remove_system_emoji_faces(db);
+    let added = load_embedded_android_emoji_font(db);
+    println!(
+        "android fontdb: embedded emoji font loaded faces={added}, removed_system_faces={removed}"
+    );
+}
+
+#[cfg(target_os = "android")]
 fn init_font_system() -> RwLock<glyphon::FontSystem> {
     let mut font_system = glyphon::FontSystem::new();
 
-    font_system.db_mut().load_fonts_dir("/system/fonts");
-    font_system.db_mut().set_sans_serif_family("Roboto");
-    font_system.db_mut().set_serif_family("Noto Serif");
-    font_system.db_mut().set_monospace_family("Droid Sans Mono");
-    font_system.db_mut().set_cursive_family("Dancing Script");
-    font_system.db_mut().set_fantasy_family("Dancing Script");
+    {
+        let db = font_system.db_mut();
+        db.load_fonts_dir("/system/fonts");
+        ensure_android_emoji_font(db);
+        db.set_sans_serif_family("Roboto");
+        db.set_serif_family("Noto Serif");
+        db.set_monospace_family("Droid Sans Mono");
+        db.set_cursive_family("Dancing Script");
+        db.set_fantasy_family("Dancing Script");
+    }
 
     RwLock::new(font_system)
 }

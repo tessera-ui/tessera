@@ -32,3 +32,6 @@ thiserror = "2.0.17"
 lyon_geom = "1.0.18"
 material-color-utilities = "1.0.0-dev.18"
 closure = "0.3.0"
+
+[target.'cfg(target_os = "android")'.dependencies]
+include-bytes-zstd = "0.1.0"
