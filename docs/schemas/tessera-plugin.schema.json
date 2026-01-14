@@ -29,10 +29,6 @@
           "type": "string",
           "description": "Gradle module name for the Android plugin.",
           "pattern": "^[A-Za-z0-9_]+$"
-        },
-        "package": {
-          "type": "string",
-          "description": "Android package name used by the plugin."
         }
       },
       "required": [
