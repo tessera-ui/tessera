@@ -1120,11 +1120,6 @@ struct AppToml {
 
 #[derive(Debug, Deserialize)]
 struct PluginManifest {
-    #[allow(dead_code)]
-    name: Option<String>,
-    #[allow(dead_code)]
-    version: Option<u32>,
-    #[allow(dead_code)]
     permissions: Option<Vec<String>>,
     android: Option<PluginAndroid>,
 }
