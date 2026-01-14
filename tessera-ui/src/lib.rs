@@ -368,6 +368,7 @@ pub use crate::{
     pipeline_context::PipelineContext,
     plugin::{
         Plugin, PluginContext, PluginResult, register_plugin, register_plugin_boxed, with_plugin,
+        with_plugin_mut,
     },
     px::{Px, PxPosition, PxRect, PxSize},
     renderer::{

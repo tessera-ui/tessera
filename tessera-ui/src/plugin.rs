@@ -29,18 +29,53 @@ pub trait Plugin: Send + Sync + 'static {
     }
 
     /// Called when the renderer creates or resumes its platform resources.
-    fn on_resumed(&self, _context: &PluginContext) -> PluginResult {
+    fn on_resumed(&mut self, _context: &PluginContext) -> PluginResult {
         Ok(())
     }
 
     /// Called when the renderer suspends and releases platform resources.
-    fn on_suspended(&self, _context: &PluginContext) -> PluginResult {
+    fn on_suspended(&mut self, _context: &PluginContext) -> PluginResult {
         Ok(())
     }
 
     /// Called when the renderer is shutting down.
-    fn on_shutdown(&self, _context: &PluginContext) -> PluginResult {
+    fn on_shutdown(&mut self, _context: &PluginContext) -> PluginResult {
         Ok(())
+    }
+}
+
+trait PluginEntry: Send + Sync {
+    fn name(&self) -> &'static str;
+    fn resumed(&self, context: &PluginContext) -> PluginResult;
+    fn suspended(&self, context: &PluginContext) -> PluginResult;
+    fn shutdown(&self, context: &PluginContext) -> PluginResult;
+}
+
+struct PluginSlot<P: Plugin> {
+    inner: Arc<RwLock<P>>,
+}
+
+impl<P: Plugin> PluginSlot<P> {
+    fn new(inner: Arc<RwLock<P>>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<P: Plugin> PluginEntry for PluginSlot<P> {
+    fn name(&self) -> &'static str {
+        self.inner.read().name()
+    }
+
+    fn resumed(&self, context: &PluginContext) -> PluginResult {
+        self.inner.write().on_resumed(context)
+    }
+
+    fn suspended(&self, context: &PluginContext) -> PluginResult {
+        self.inner.write().on_suspended(context)
+    }
+
+    fn shutdown(&self, context: &PluginContext) -> PluginResult {
+        self.inner.write().on_shutdown(context)
     }
 }
 
@@ -85,11 +120,11 @@ impl PluginContext {
 
 /// Registers a plugin instance for the current process.
 pub fn register_plugin<P: Plugin>(plugin: P) {
-    register_plugin_arc(Arc::new(plugin));
+    register_plugin_arc(Arc::new(RwLock::new(plugin)));
 }
 
-/// Registers a plugin instance wrapped in an `Arc`.
-pub fn register_plugin_boxed<P: Plugin>(plugin: Arc<P>) {
+/// Registers a plugin instance wrapped in an `Arc<RwLock<_>>`.
+pub fn register_plugin_boxed<P: Plugin>(plugin: Arc<RwLock<P>>) {
     register_plugin_arc(plugin);
 }
 
@@ -102,22 +137,27 @@ pub fn with_plugin<T, R>(f: impl FnOnce(&T) -> R) -> R
 where
     T: Plugin + 'static,
 {
-    let registry = plugin_instance_registry().read();
-    let type_id = TypeId::of::<T>();
-    let Some(plugin) = registry.get(&type_id) else {
-        panic!("Plugin '{}' is not registered", std::any::type_name::<T>());
-    };
-    let Some(plugin) = plugin.as_ref().downcast_ref::<T>() else {
-        panic!(
-            "Plugin '{}' has a mismatched type",
-            std::any::type_name::<T>()
-        );
-    };
-    f(plugin)
+    let plugin = plugin_instance::<T>();
+    let guard = plugin.read();
+    f(&*guard)
+}
+
+/// Provides mutable access to the registered plugin instance.
+///
+/// # Panics
+///
+/// Panics if the plugin type was not registered.
+pub fn with_plugin_mut<T, R>(f: impl FnOnce(&mut T) -> R) -> R
+where
+    T: Plugin + 'static,
+{
+    let plugin = plugin_instance::<T>();
+    let mut guard = plugin.write();
+    f(&mut *guard)
 }
 
 pub(crate) struct PluginHost {
-    plugins: Vec<Arc<dyn Plugin>>,
+    plugins: Vec<Arc<dyn PluginEntry>>,
     shutdown_called: bool,
 }
 
@@ -130,11 +170,11 @@ impl PluginHost {
     }
 
     pub(crate) fn resumed(&self, context: &PluginContext) {
-        self.dispatch("resumed", context, Plugin::on_resumed);
+        self.dispatch("resumed", context, |plugin, ctx| plugin.resumed(ctx));
     }
 
     pub(crate) fn suspended(&self, context: &PluginContext) {
-        self.dispatch("suspended", context, Plugin::on_suspended);
+        self.dispatch("suspended", context, |plugin, ctx| plugin.suspended(ctx));
     }
 
     pub(crate) fn shutdown(&mut self, context: &PluginContext) {
@@ -142,15 +182,13 @@ impl PluginHost {
             return;
         }
         self.shutdown_called = true;
-        self.dispatch("shutdown", context, Plugin::on_shutdown);
+        self.dispatch("shutdown", context, |plugin, ctx| plugin.shutdown(ctx));
     }
 
-    fn dispatch(
-        &self,
-        stage: &'static str,
-        context: &PluginContext,
-        handler: fn(&dyn Plugin, &PluginContext) -> PluginResult,
-    ) {
+    fn dispatch<F>(&self, stage: &'static str, context: &PluginContext, mut handler: F)
+    where
+        F: FnMut(&dyn PluginEntry, &PluginContext) -> PluginResult,
+    {
         for plugin in &self.plugins {
             if let Err(err) = handler(plugin.as_ref(), context) {
                 error!("Plugin '{}' {} hook failed: {}", plugin.name(), stage, err);
@@ -159,18 +197,18 @@ impl PluginHost {
     }
 }
 
-fn plugin_registry() -> &'static RwLock<Vec<Arc<dyn Plugin>>> {
-    static REGISTRY: OnceLock<RwLock<Vec<Arc<dyn Plugin>>>> = OnceLock::new();
+fn plugin_registry() -> &'static RwLock<Vec<Arc<dyn PluginEntry>>> {
+    static REGISTRY: OnceLock<RwLock<Vec<Arc<dyn PluginEntry>>>> = OnceLock::new();
     REGISTRY.get_or_init(|| RwLock::new(Vec::new()))
 }
 
-fn registered_plugins() -> Vec<Arc<dyn Plugin>> {
+fn registered_plugins() -> Vec<Arc<dyn PluginEntry>> {
     plugin_registry().read().clone()
 }
 
-fn register_plugin_arc<P: Plugin>(plugin: Arc<P>) {
+fn register_plugin_arc<P: Plugin>(plugin: Arc<RwLock<P>>) {
     let mut registry = plugin_registry().write();
-    registry.push(plugin.clone() as Arc<dyn Plugin>);
+    registry.push(Arc::new(PluginSlot::new(plugin.clone())) as Arc<dyn PluginEntry>);
 
     let mut instances = plugin_instance_registry().write();
     let type_id = TypeId::of::<P>();
@@ -187,4 +225,21 @@ fn plugin_instance_registry() -> &'static RwLock<HashMap<TypeId, Arc<dyn Any + S
     static REGISTRY: OnceLock<RwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>> =
         OnceLock::new();
     REGISTRY.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn plugin_instance<T: Plugin>() -> Arc<RwLock<T>> {
+    let registry = plugin_instance_registry().read();
+    let type_id = TypeId::of::<T>();
+    let Some(plugin) = registry.get(&type_id) else {
+        panic!("Plugin '{}' is not registered", std::any::type_name::<T>());
+    };
+    let plugin = plugin.clone();
+    drop(registry);
+    match Arc::downcast::<RwLock<T>>(plugin) {
+        Ok(plugin) => plugin,
+        Err(_) => panic!(
+            "Plugin '{}' has a mismatched type",
+            std::any::type_name::<T>()
+        ),
+    }
 }

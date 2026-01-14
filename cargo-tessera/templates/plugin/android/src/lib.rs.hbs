@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 use tessera_ui::{Plugin, PluginContext, PluginResult};
 
 #[cfg(target_os = "android")]
@@ -17,7 +15,7 @@ tessera_ui::android::jni_bind! {
 pub struct HelloPlugin {
     message: String,
     #[cfg(target_os = "android")]
-    android_app: Mutex<Option<AndroidApp>>,
+    android_app: Option<AndroidApp>,
 }
 
 impl HelloPlugin {
@@ -27,10 +25,7 @@ impl HelloPlugin {
 
     #[cfg(target_os = "android")]
     pub fn android_app(&self) -> Option<AndroidApp> {
-        self.android_app
-            .lock()
-            .unwrap_or_else(|err| err.into_inner())
-            .clone()
+        self.android_app.clone()
     }
 
     #[cfg(target_os = "android")]
@@ -48,24 +43,18 @@ impl HelloPlugin {
 }
 
 impl Plugin for HelloPlugin {
-    fn on_resumed(&self, ctx: &PluginContext) -> PluginResult {
+    fn on_resumed(&mut self, ctx: &PluginContext) -> PluginResult {
         #[cfg(target_os = "android")]
         {
-            *self
-                .android_app
-                .lock()
-                .unwrap_or_else(|err| err.into_inner()) = Some(ctx.android_app().clone());
+            self.android_app = Some(ctx.android_app().clone());
         }
         Ok(())
     }
 
-    fn on_suspended(&self, _ctx: &PluginContext) -> PluginResult {
+    fn on_suspended(&mut self, _ctx: &PluginContext) -> PluginResult {
         #[cfg(target_os = "android")]
         {
-            *self
-                .android_app
-                .lock()
-                .unwrap_or_else(|err| err.into_inner()) = None;
+            self.android_app = None;
         }
         Ok(())
     }
@@ -76,7 +65,7 @@ pub fn init() -> impl Plugin {
     HelloPlugin {
         message: format!("Hello from {{project_name}}"),
         #[cfg(target_os = "android")]
-        android_app: Mutex::new(None),
+        android_app: None,
     }
 }
 
