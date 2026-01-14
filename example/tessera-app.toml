@@ -1,1 +1,2 @@
+#:schema https://raw.githubusercontent.com/tessera-ui/tessera/main/docs/schemas/tessera-app.schema.json
 permissions = []
