@@ -13,14 +13,14 @@ use crate::{
     pipelines::image_vector::command::ImageVectorData,
 };
 
-pub use generated::{ICON_BLOB, filled, outlined, round, sharp, two_tone};
+pub use generated::{filled, outlined, round, sharp, two_tone};
 
 #[allow(missing_docs, clippy::all)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/material_icons.rs"));
 }
 
-type IconCache = HashMap<(&'static str, u32, u32), Arc<ImageVectorData>>;
+type IconCache = HashMap<(usize, usize), Arc<ImageVectorData>>;
 
 static ICON_CACHE: std::sync::OnceLock<RwLock<IconCache>> = std::sync::OnceLock::new();
 
@@ -29,15 +29,13 @@ fn cache() -> &'static RwLock<IconCache> {
 }
 
 /// Load vector data from the bundled blob with caching.
-pub fn load_icon_bytes(style: &'static str, offset: u32, len: u32) -> Arc<ImageVectorData> {
-    let key = (style, offset, len);
+pub fn load_icon_bytes(bytes: &'static [u8]) -> Arc<ImageVectorData> {
+    let key = (bytes.as_ptr() as usize, bytes.len());
     if let Some(cached) = cache().read().get(&key) {
         return cached.clone();
     }
 
-    let start = offset as usize;
-    let end = start + len as usize;
-    let bytes = Arc::<[u8]>::from(&ICON_BLOB[start..end]);
+    let bytes = Arc::<[u8]>::from(bytes);
     let vector =
         crate::image_vector::load_image_vector_from_source(&ImageVectorSource::Bytes(bytes))
             .map(Arc::new)

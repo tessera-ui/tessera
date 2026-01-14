@@ -19,8 +19,7 @@ struct IconEntry {
     style: &'static str,
     func: String,
     doc_name: String,
-    offset: u32,
-    len: u32,
+    path: String,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -30,7 +29,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let assets_dir = manifest_dir.join("assets").join("material_icons");
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
 
-    let mut blob: Vec<u8> = Vec::new();
     let mut entries: Vec<IconEntry> = Vec::new();
 
     for (style, _module) in STYLES {
@@ -47,20 +45,20 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .to_string_lossy()
                 .into_owned();
             let func = make_func_name(&name, &mut used_funcs);
-            let bytes = fs::read(&path)?;
-            let offset = blob.len() as u32;
-            blob.extend_from_slice(&bytes);
+            let file_name = path
+                .file_name()
+                .expect("SVG entry missing a file name")
+                .to_string_lossy()
+                .into_owned();
+            let rel_path = format!("assets/material_icons/{style}/{file_name}");
             entries.push(IconEntry {
                 style,
                 func,
                 doc_name: name,
-                offset,
-                len: bytes.len() as u32,
+                path: rel_path,
             });
         }
     }
-
-    fs::write(out_dir.join("material_icons.bin"), &blob)?;
 
     let mut generated = String::new();
     writeln!(
@@ -73,15 +71,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     writeln!(
         generated,
         "use crate::pipelines::image_vector::command::ImageVectorData;"
-    )?;
-
-    writeln!(
-        generated,
-        "/// Concatenated SVG payloads for all bundled Material icons."
-    )?;
-    writeln!(
-        generated,
-        "#[allow(missing_docs)] pub static ICON_BLOB: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/material_icons.bin\"));"
     )?;
 
     for (style, module) in STYLES {
@@ -111,10 +100,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             writeln!(generated, "    pub fn {func}() -> IconContent {{")?;
             writeln!(
                 generated,
-                "        let data: Arc<ImageVectorData> = load_icon_bytes(\"{style}\", {offset}, {len});",
-                style = style,
-                offset = entry.offset,
-                len = entry.len
+                "        let data: Arc<ImageVectorData> = load_icon_bytes(include_bytes!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/{path}\")));",
+                path = entry.path
             )?;
             writeln!(generated, "        IconContent::from(data)")?;
             writeln!(generated, "    }}")?;
