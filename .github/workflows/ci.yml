@@ -26,9 +26,9 @@ jobs:
         run: rustup toolchain install stable --profile minimal
       - uses: Swatinem/rust-cache@v2
       - name: Check all targets
-        run: cargo +stable check --all-targets --verbose
+        run: cargo +stable check --workspace --all-targets --verbose
       - name: Run tests
-        run: cargo +stable test --verbose
+        run: cargo +stable test --workspace --verbose
       - name: Install rust-script
         run: cargo install rust-script
       - name: Check formatting
@@ -58,7 +58,4 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          cargo +stable ndk -t arm64-v8a check -p tessera-ui --verbose
-          cargo +stable ndk -t arm64-v8a check -p tessera-components --verbose
-          cargo +stable ndk -t arm64-v8a check -p tessera-macros --verbose
-          cargo +stable ndk -t arm64-v8a check -p tessera-shard --verbose
+          cargo +stable ndk -t arm64-v8a check --workspace --all-targets --verbose
