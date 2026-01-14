@@ -172,6 +172,7 @@ package.metadata.tessera.android.package in Cargo.toml"
             .target_directory
             .into_std_path_buf();
 
+        let plugin_permissions = collect_plugin_permissions(&root_dir, package_dir.as_ref())?;
         let identifier = manifest_cfg
             .package
             .clone()
@@ -201,8 +202,9 @@ package.metadata.tessera.android.package in Cargo.toml"
             .context("Failed to build Android config")?;
 
         let app_toml = load_app_toml(config.app().root_dir())?;
-        let app_permissions =
-            map_tessera_permissions(app_toml.permissions.as_deref().unwrap_or_default())?;
+        let mut tessera_permissions = app_toml.permissions.unwrap_or_default();
+        tessera_permissions.extend(plugin_permissions);
+        let app_permissions = map_tessera_permissions(&tessera_permissions)?;
         let mut merged_permissions = manifest_cfg.permissions.clone().unwrap_or_default();
         merged_permissions.extend(app_permissions);
         merged_permissions.sort();
@@ -813,6 +815,13 @@ fn sync_android_project(ctx: &AndroidContext) -> Result<()> {
     )?;
     write_template_file(
         &ANDROID_TEMPLATE_DIR,
+        Path::new("app/src/main/AndroidManifest.xml.hbs"),
+        project_dir.as_path(),
+        &handlebars,
+        &data,
+    )?;
+    write_template_file(
+        &ANDROID_TEMPLATE_DIR,
         Path::new("app/build.gradle.kts.hbs"),
         project_dir.as_path(),
         &handlebars,
@@ -919,6 +928,86 @@ fn collect_android_plugins(ctx: &AndroidContext) -> Result<Vec<AndroidPlugin>> {
 
     plugins.sort_by(|a, b| a.module.cmp(&b.module));
     Ok(plugins)
+}
+
+fn collect_plugin_permissions(
+    root_dir: &Path,
+    package_dir: Option<&PathBuf>,
+) -> Result<Vec<String>> {
+    let manifest_path = root_dir.join("Cargo.toml");
+    let metadata = MetadataCommand::new()
+        .manifest_path(&manifest_path)
+        .exec()
+        .context("Failed to run cargo metadata")?;
+
+    let root_manifest = package_dir
+        .map(|dir| dir.join("Cargo.toml"))
+        .unwrap_or_else(|| manifest_path.clone())
+        .canonicalize()
+        .with_context(|| "Failed to resolve root Cargo.toml")?;
+
+    let root_pkg = metadata
+        .packages
+        .iter()
+        .find(|pkg| {
+            pkg.manifest_path
+                .clone()
+                .into_std_path_buf()
+                .canonicalize()
+                .map(|path| path == root_manifest)
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| anyhow!("Failed to resolve the root package from cargo metadata"))?;
+
+    let resolve = metadata
+        .resolve
+        .as_ref()
+        .ok_or_else(|| anyhow!("cargo metadata missing dependency graph"))?;
+
+    let mut nodes = HashMap::new();
+    for node in &resolve.nodes {
+        nodes.insert(node.id.clone(), node);
+    }
+
+    let mut visited = HashSet::new();
+    let mut stack = vec![root_pkg.id.clone()];
+    while let Some(id) = stack.pop() {
+        if visited.insert(id.clone())
+            && let Some(node) = nodes.get(&id)
+        {
+            for dep in &node.deps {
+                stack.push(dep.pkg.clone());
+            }
+        }
+    }
+
+    let mut permissions = Vec::new();
+    for pkg in metadata
+        .packages
+        .iter()
+        .filter(|pkg| visited.contains(&pkg.id) && pkg.id != root_pkg.id)
+    {
+        let pkg_dir = pkg
+            .manifest_path
+            .clone()
+            .into_std_path_buf()
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| anyhow!("Failed to locate plugin root for {}", pkg.manifest_path))?;
+        let plugin_manifest_path = pkg_dir.join("tessera-plugin.toml");
+        if !plugin_manifest_path.exists() {
+            continue;
+        }
+        let contents = fs::read_to_string(&plugin_manifest_path)
+            .with_context(|| format!("Failed to read {}", plugin_manifest_path.display()))?;
+        let manifest: PluginManifest = toml::from_str(&contents)
+            .with_context(|| format!("Failed to parse {}", plugin_manifest_path.display()))?;
+        if let Some(mut plugin_permissions) = manifest.permissions {
+            permissions.append(&mut plugin_permissions);
+        }
+    }
+
+    Ok(permissions)
 }
 
 fn sync_android_plugins(project_dir: &Path, plugins: &[AndroidPlugin]) -> Result<()> {
@@ -1074,7 +1163,7 @@ fn map_tessera_permissions(perms: &[String]) -> Result<Vec<String>> {
             }
             other => {
                 return Err(anyhow!(
-                    "Unknown tessera permission '{other}' in tessera-app.toml"
+                    "Unknown tessera permission '{other}' in tessera-app.toml or tessera-plugin.toml"
                 ));
             }
         }
