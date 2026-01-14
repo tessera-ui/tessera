@@ -71,6 +71,7 @@ impl Plugin for HelloPlugin {
     }
 }
 
+// The registration of the plugin. DO NOT REMOVE
 pub fn init() -> impl Plugin {
     HelloPlugin {
         message: format!("Hello from {{project_name}}"),
