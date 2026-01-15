@@ -425,9 +425,19 @@ pub fn __tessera_init_deadlock_detection() {
 /// This macro registers plugin crates by calling their `init()` function,
 /// then starts the renderer with a provided pipeline registration function.
 ///
-/// Example:
-/// `tessera_ui::entry!(app, pipelines = [tessera_components], plugins =
-/// [hello_plugin]);`
+/// # Example:
+///
+/// ```rust,ignore
+/// use tessera_components::theme::{MaterialTheme, material_theme};
+///
+/// fn app() {
+///     material_theme(MaterialTheme::default, || {
+///         // Your app code here
+///     });
+/// }
+///
+/// tessera_ui::entry!(app, pipelines = [tessera_components]);
+/// ```
 #[macro_export]
 macro_rules! entry {
     ($entry:path $(,)?) => {
@@ -587,6 +597,13 @@ macro_rules! entry {
         compile_error!("Unsupported argument for tessera_ui::entry!");
     };
     (@run $entry:path, $config:expr, [$($pipeline:ident),*], [$($plugin:ident),*]) => {
+        #[doc(hidden)]
+        fn __tessera_register_pipelines<'a>(context: &mut $crate::PipelineContext<'a>) {
+            $(
+                $pipeline::init(context);
+            )*
+        }
+
         #[cfg(target_os = "android")]
         #[unsafe(no_mangle)]
         fn android_main(android_app: $crate::winit::platform::android::activity::AndroidApp) {
@@ -608,12 +625,7 @@ macro_rules! entry {
             )*
             if let Err(err) = $crate::Renderer::run_with_config(
                 $entry,
-                |app| {
-                    let mut context = $crate::PipelineContext::new(app);
-                    $(
-                        $pipeline::init(&mut context);
-                    )*
-                },
+                __tessera_register_pipelines,
                 android_app,
                 $config,
             ) {
@@ -635,12 +647,7 @@ macro_rules! entry {
             )*
             if let Err(err) = $crate::Renderer::run_with_config(
                 $entry,
-                |app| {
-                    let mut context = $crate::PipelineContext::new(app);
-                    $(
-                        $pipeline::init(&mut context);
-                    )*
-                },
+                __tessera_register_pipelines,
                 $config,
             ) {
                 eprintln!("App failed to run: {err}");

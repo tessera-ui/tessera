@@ -1,4 +1,4 @@
-use tessera_ui::renderer::WgpuApp;
+use tessera_ui::PipelineContext;
 
 use crate::pipelines::{
     checkmark::pipeline::CheckmarkPipeline, fluid_glass::pipeline::FluidGlassPipeline,
@@ -7,88 +7,101 @@ use crate::pipelines::{
     simple_rect::pipeline::SimpleRectPipeline, text::pipeline::GlyphonTextRender,
 };
 
-pub(super) fn register(app: &mut WgpuApp) {
-    register_simple_rect(app);
-    register_shape(app);
-    register_progress_arc(app);
-    register_checkmark(app);
-    register_text(app);
-    register_fluid_glass(app);
-    register_image(app);
-    register_image_vector(app);
+pub(super) fn register(context: &mut PipelineContext<'_>) {
+    register_simple_rect(context);
+    register_shape(context);
+    register_progress_arc(context);
+    register_checkmark(context);
+    register_text(context);
+    register_fluid_glass(context);
+    register_image(context);
+    register_image_vector(context);
 }
 
-fn register_simple_rect(app: &mut WgpuApp) {
+fn register_simple_rect(context: &mut PipelineContext<'_>) {
+    let resources = context.resources();
     let pipeline = SimpleRectPipeline::new(
-        &app.gpu,
-        &app.config,
-        app.pipeline_cache.as_ref(),
-        app.sample_count,
+        resources.device,
+        resources.surface_config,
+        resources.pipeline_cache,
+        resources.sample_count,
     );
-    app.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline(pipeline);
 }
 
-fn register_shape(app: &mut WgpuApp) {
+fn register_shape(context: &mut PipelineContext<'_>) {
+    let resources = context.resources();
     let pipeline = ShapePipeline::new(
-        &app.gpu,
-        &app.config,
-        app.pipeline_cache.as_ref(),
-        app.sample_count,
+        resources.device,
+        resources.surface_config,
+        resources.pipeline_cache,
+        resources.sample_count,
     );
-    app.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline(pipeline);
 }
 
-fn register_progress_arc(app: &mut WgpuApp) {
+fn register_progress_arc(context: &mut PipelineContext<'_>) {
+    let resources = context.resources();
     let pipeline = ProgressArcPipeline::new(
-        &app.gpu,
-        &app.config,
-        app.pipeline_cache.as_ref(),
-        app.sample_count,
+        resources.device,
+        resources.surface_config,
+        resources.pipeline_cache,
+        resources.sample_count,
     );
-    app.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline(pipeline);
 }
 
-fn register_checkmark(app: &mut WgpuApp) {
+fn register_checkmark(context: &mut PipelineContext<'_>) {
+    let resources = context.resources();
     let pipeline = CheckmarkPipeline::new(
-        &app.gpu,
-        app.pipeline_cache.as_ref(),
-        &app.config,
-        app.sample_count,
+        resources.device,
+        resources.pipeline_cache,
+        resources.surface_config,
+        resources.sample_count,
     );
-    app.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline(pipeline);
 }
 
-fn register_text(app: &mut WgpuApp) {
-    let pipeline = GlyphonTextRender::new(&app.gpu, &app.queue, &app.config, app.sample_count);
-    app.register_draw_pipeline(pipeline);
+fn register_text(context: &mut PipelineContext<'_>) {
+    let resources = context.resources();
+    let pipeline = GlyphonTextRender::new(
+        resources.device,
+        resources.queue,
+        resources.surface_config,
+        resources.sample_count,
+    );
+    context.register_draw_pipeline(pipeline);
 }
 
-fn register_fluid_glass(app: &mut WgpuApp) {
+fn register_fluid_glass(context: &mut PipelineContext<'_>) {
+    let resources = context.resources();
     let pipeline = FluidGlassPipeline::new(
-        &app.gpu,
-        app.pipeline_cache.as_ref(),
-        &app.config,
-        app.sample_count,
+        resources.device,
+        resources.pipeline_cache,
+        resources.surface_config,
+        resources.sample_count,
     );
-    app.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline(pipeline);
 }
 
-fn register_image(app: &mut WgpuApp) {
+fn register_image(context: &mut PipelineContext<'_>) {
+    let resources = context.resources();
     let pipeline = ImagePipeline::new(
-        &app.gpu,
-        &app.config,
-        app.pipeline_cache.as_ref(),
-        app.sample_count,
+        resources.device,
+        resources.surface_config,
+        resources.pipeline_cache,
+        resources.sample_count,
     );
-    app.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline(pipeline);
 }
 
-fn register_image_vector(app: &mut WgpuApp) {
+fn register_image_vector(context: &mut PipelineContext<'_>) {
+    let resources = context.resources();
     let pipeline = ImageVectorPipeline::new(
-        &app.gpu,
-        &app.config,
-        app.pipeline_cache.as_ref(),
-        app.sample_count,
+        resources.device,
+        resources.surface_config,
+        resources.pipeline_cache,
+        resources.sample_count,
     );
-    app.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline(pipeline);
 }

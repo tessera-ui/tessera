@@ -20,7 +20,7 @@ mod compute;
 mod draw;
 
 /// Register all draw and compute pipelines required by this crate.
-pub fn register_pipelines(app: &mut tessera_ui::renderer::WgpuApp) {
-    draw::register(app);
-    compute::register(app);
+pub fn register_pipelines(context: &mut tessera_ui::PipelineContext<'_>) {
+    draw::register(context);
+    compute::register(context);
 }

@@ -5,15 +5,15 @@
 //! First, you need to register the pipelines provided by this crate.
 //!
 //! ```no_run
-//! use tessera_ui::{PipelineContext, renderer::Renderer};
+//! use tessera_components::theme::{MaterialTheme, material_theme};
 //!
-//! fn component() {}
+//! fn app() {
+//!     material_theme(MaterialTheme::default, || {
+//!         // Your app code here
+//!     });
+//! }
 //!
-//! Renderer::run(component, |app| {
-//!     let mut context = PipelineContext::new(app);
-//!     tessera_components::init(&mut context);
-//! })
-//! .unwrap();
+//! tessera_ui::entry!(app, pipelines = [tessera_components]);
 //! ```
 //!
 //! Then you can use the components in your UI.
@@ -116,5 +116,5 @@ pub mod time_picker;
 
 /// Registers pipelines provided by this crate with the renderer.
 pub fn init(context: &mut PipelineContext<'_>) {
-    pipelines::register_pipelines(context.app());
+    pipelines::register_pipelines(context);
 }

@@ -4,22 +4,25 @@
 //!
 //! Register draw and compute pipelines from component libraries at startup.
 
-use crate::{ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, renderer::WgpuApp};
+use crate::{
+    ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline,
+    renderer::{RenderCore, RenderResources},
+};
 
 /// Context passed to pipeline initialization functions.
 pub struct PipelineContext<'a> {
-    app: &'a mut WgpuApp,
+    core: &'a mut RenderCore,
 }
 
 impl<'a> PipelineContext<'a> {
     /// Creates a new pipeline context for the given renderer app.
-    pub fn new(app: &'a mut WgpuApp) -> Self {
-        Self { app }
+    pub(crate) fn new(core: &'a mut RenderCore) -> Self {
+        Self { core }
     }
 
-    /// Returns the underlying renderer app for direct access.
-    pub fn app(&mut self) -> &mut WgpuApp {
-        self.app
+    /// Returns shared GPU resources used for pipeline creation.
+    pub fn resources(&self) -> RenderResources<'_> {
+        self.core.resources()
     }
 
     /// Registers a draw pipeline for a specific command type.
@@ -28,7 +31,7 @@ impl<'a> PipelineContext<'a> {
         T: DrawCommand + 'static,
         P: DrawablePipeline<T> + 'static,
     {
-        self.app.register_draw_pipeline(pipeline);
+        self.core.register_draw_pipeline(pipeline);
     }
 
     /// Registers a compute pipeline for a specific command type.
@@ -37,6 +40,6 @@ impl<'a> PipelineContext<'a> {
         T: ComputeCommand + 'static,
         P: ComputablePipeline<T> + 'static,
     {
-        self.app.register_compute_pipeline(pipeline);
+        self.core.register_compute_pipeline(pipeline);
     }
 }
