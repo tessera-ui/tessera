@@ -27,7 +27,7 @@ uuid = { version = "1.19.0", features = ["v4"] }
 tessera-macros = { path = "../tessera-macros" }
 tessera-shard = { path = "../tessera-shard", optional = true }
 petgraph = "0.8.3"
-accesskit = "0.22.0"
+accesskit = "0.23.0"
 accesskit_winit = "0.30.0"
 smallvec = "1.15.1"
 dirs = "6.0.0"
