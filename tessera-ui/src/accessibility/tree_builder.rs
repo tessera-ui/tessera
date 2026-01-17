@@ -3,7 +3,7 @@
 //! This module contains the logic to build AccessKit TreeUpdates from Tessera's
 //! component tree.
 
-use accesskit::{Node, NodeId as AccessKitNodeId, Rect, Tree, TreeUpdate};
+use accesskit::{Node, NodeId as AccessKitNodeId, Rect, Tree, TreeId, TreeUpdate};
 use indextree::NodeId as ComponentNodeId;
 
 use crate::{
@@ -65,6 +65,7 @@ pub fn build_tree_update(
     Some(TreeUpdate {
         nodes,
         tree: Some(tree_struct),
+        tree_id: TreeId::ROOT,
         focus: focus.unwrap_or_else(|| root_accesskit_id.to_accesskit_id()),
     })
 }
@@ -342,7 +343,11 @@ pub fn dispatch_action(
     action_request: accesskit::ActionRequest,
 ) -> bool {
     // Convert AccessKit NodeId back to AccessibilityId
-    let accessibility_id = AccessibilityId::from_accesskit_id(action_request.target);
+    if action_request.target_tree != TreeId::ROOT {
+        return false;
+    }
+
+    let accessibility_id = AccessibilityId::from_accesskit_id(action_request.target_node);
 
     // Convert to component NodeId using get_node_id_at
     // The AccessibilityId stores the 1-based index from indextree
