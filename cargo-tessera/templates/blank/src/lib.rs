@@ -5,4 +5,8 @@ mod app;
 
 use app::app;
 
-tessera_ui::entry!(app, modules = [tessera_components::TesseraComponents], plugins = []);
+tessera_ui::entry!(
+    app,
+    modules = [tessera_components::TesseraComponents::default()],
+    plugins = []
+);

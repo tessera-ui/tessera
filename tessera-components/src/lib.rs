@@ -13,7 +13,10 @@
 //!     });
 //! }
 //!
-//! tessera_ui::entry!(app, modules = [tessera_components::TesseraComponents]);
+//! tessera_ui::entry!(
+//!     app,
+//!     modules = [tessera_components::TesseraComponents::default()],
+//! );
 //! ```
 //!
 //! Then you can use the components in your UI.

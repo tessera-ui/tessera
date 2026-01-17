@@ -10,14 +10,15 @@ impl HelloPlugin {
     }
 }
 
-impl Plugin for HelloPlugin {}
-
-// The registration of the plugin. DO NOT REMOVE
-pub fn init() -> impl Plugin {
-    HelloPlugin {
-        message: format!("Hello from {{project_name}}"),
+impl Default for HelloPlugin {
+    fn default() -> Self {
+        Self {
+            message: format!("Hello from {{project_name}}"),
+        }
     }
 }
+
+impl Plugin for HelloPlugin {}
 
 pub fn with_plugin<R>(f: impl FnOnce(&HelloPlugin) -> R) -> R {
     tessera_ui::with_plugin::<HelloPlugin, R>(f)

@@ -461,8 +461,8 @@ pub fn __tessera_init_tracing() {
 
 /// Defines the Tessera application entry points for desktop and Android.
 ///
-/// This macro registers plugin crates by calling their `init()` function,
-/// then starts the renderer with the provided render modules.
+/// This macro registers plugin instances supplied in `plugins`, then starts
+/// the renderer with the provided render modules.
 ///
 /// # Example:
 ///
@@ -475,7 +475,10 @@ pub fn __tessera_init_tracing() {
 ///     });
 /// }
 ///
-/// tessera_ui::entry!(app, modules = [tessera_components::TesseraComponents]);
+/// tessera_ui::entry!(
+///     app,
+///     modules = [tessera_components::TesseraComponents::default()],
+/// );
 /// ```
 #[macro_export]
 macro_rules! entry {
@@ -507,14 +510,14 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
         ) => {
         $crate::entry!(@run $entry, $config, [$($modules),*], [$($plugins),*]);
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
-        plugins = [$($plugin:ident),* $(,)?],
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        plugins = [$($plugin:expr),* $(,)?],
         $($rest:tt)+
     ) => {
         $crate::entry!(
@@ -526,8 +529,8 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
-        plugins = [$($plugin:ident),* $(,)?],
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        plugins = [$($plugin:expr),* $(,)?],
     ) => {
         $crate::entry!(
             @parse
@@ -537,8 +540,8 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
-        plugins = [$($plugin:ident),* $(,)?]
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        plugins = [$($plugin:expr),* $(,)?]
     ) => {
         $crate::entry!(
             @parse
@@ -548,7 +551,7 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
         modules = [$($new_modules:expr),* $(,)?],
         $($rest:tt)+
     ) => {
@@ -561,7 +564,7 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
         modules = [$($new_modules:expr),* $(,)?],
     ) => {
         $crate::entry!(
@@ -572,7 +575,7 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
         modules = [$($new_modules:expr),* $(,)?]
     ) => {
         $crate::entry!(
@@ -583,7 +586,7 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
         config = $new_config:expr,
         $($rest:tt)+
     ) => {
@@ -596,7 +599,7 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
         config = $new_config:expr,
     ) => {
         $crate::entry!(
@@ -607,7 +610,7 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
         config = $new_config:expr
     ) => {
         $crate::entry!(
@@ -618,7 +621,7 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
         , $($rest:tt)*
     ) => {
         $crate::entry!(
@@ -630,12 +633,12 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
         $($unexpected:tt)+
     ) => {
         compile_error!("Unsupported argument for tessera_ui::entry!");
     };
-    (@run $entry:path, $config:expr, [$($module:expr),*], [$($plugin:ident),*]) => {
+    (@run $entry:path, $config:expr, [$($module:expr),*], [$($plugin:expr),*]) => {
         #[doc(hidden)]
         fn __tessera_modules() -> Vec<Box<dyn $crate::RenderModule>> {
             vec![$(Box::new($module)),*]
@@ -659,7 +662,7 @@ macro_rules! entry {
             $crate::__tessera_init_tracing();
             $crate::__tessera_init_deadlock_detection();
             $(
-                $crate::register_plugin($plugin::init());
+                $crate::register_plugin($plugin);
             )*
             if let Err(err) = $crate::Renderer::run_with_config(
                 $entry,
@@ -682,7 +685,7 @@ macro_rules! entry {
             $crate::__tessera_init_tracing();
             $crate::__tessera_init_deadlock_detection();
             $(
-                $crate::register_plugin($plugin::init());
+                $crate::register_plugin($plugin);
             )*
             if let Err(err) = $crate::Renderer::run_with_config(
                 $entry,

@@ -42,6 +42,16 @@ impl HelloPlugin {
     }
 }
 
+impl Default for HelloPlugin {
+    fn default() -> Self {
+        Self {
+            message: format!("Hello from {{project_name}}"),
+            #[cfg(target_os = "android")]
+            android_app: None,
+        }
+    }
+}
+
 impl Plugin for HelloPlugin {
     fn on_resumed(&mut self, ctx: &PluginContext) -> PluginResult {
         #[cfg(target_os = "android")]
@@ -57,15 +67,6 @@ impl Plugin for HelloPlugin {
             self.android_app = None;
         }
         Ok(())
-    }
-}
-
-// The registration of the plugin. DO NOT REMOVE
-pub fn init() -> impl Plugin {
-    HelloPlugin {
-        message: format!("Hello from {{project_name}}"),
-        #[cfg(target_os = "android")]
-        android_app: None,
     }
 }
 
