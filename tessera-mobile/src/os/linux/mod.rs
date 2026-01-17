@@ -80,14 +80,14 @@ impl Application {
                                     // We absolutely want the Exec value
                                     exec_command: parsed_entry
                                         .section("Desktop Entry")
-                                        .attr("Exec")
-                                        .ok_or(DetectEditorError::ExecFieldMissing)?
-                                        .into(),
+                                        .and_then(|section| section.attr("Exec").first())
+                                        .map(Into::into)
+                                        .ok_or(DetectEditorError::ExecFieldMissing)?,
                                     // The icon is optional, we try getting it because the Exec
                                     // value may need it
                                     icon: parsed_entry
                                         .section("Desktop Entry")
-                                        .attr("Icon")
+                                        .and_then(|section| section.attr("Icon").first())
                                         .map(Into::into),
                                     xdg_entry_path: entry_filepath,
                                 })
@@ -141,21 +141,12 @@ pub fn open_file_with(
             let dir = dir.join("applications");
             let (entry, entry_path) = xdg::find_entry_by_app_name(&dir, app_str)?;
 
-            let command_parts = entry
-                .section("Desktop Entry")
-                .attr("Exec")
-                .map(|str_entry| {
-                    let osstring_entry: OsString = str_entry.into();
-                    xdg::parse_command(
-                        &osstring_entry,
-                        path_str,
-                        entry
-                            .section("Desktop Entry")
-                            .attr("Icon")
-                            .map(|s| s.as_ref()),
-                        Some(&entry_path),
-                    )
-                })?;
+            let section = entry.section("Desktop Entry")?;
+            let exec_entry = section.attr("Exec").first()?;
+            let osstring_entry: OsString = exec_entry.into();
+            let icon = section.attr("Icon").first().map(|value| OsStr::new(value));
+            let command_parts =
+                xdg::parse_command(&osstring_entry, path_str, icon, Some(&entry_path));
             // This could go outside, but we'd better have a proper error for it then
             if !command_parts.is_empty() {
                 Some(command_parts) // This guarantees that command_parts has at least one element

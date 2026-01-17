@@ -65,12 +65,16 @@ pub fn find_entry_by_app_name(
         // If it is a file we open it
         if entry_path.is_file() {
             if let Ok(parsed) = parse_entry(&entry_path) {
-                if parsed
+                let has_name_match = parsed
                     .section("Desktop Entry")
-                    .attr("Name")
-                    .map(str::as_ref)
-                    == Some(app_name)
-                {
+                    .map(|section| {
+                        section
+                            .attr("Name")
+                            .iter()
+                            .any(|name| OsStr::new(name) == app_name)
+                    })
+                    .unwrap_or(false);
+                if has_name_match {
                     return Some((parsed, entry_path));
                 }
             }
