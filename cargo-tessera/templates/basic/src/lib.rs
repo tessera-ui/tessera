@@ -5,4 +5,4 @@ mod app;
 
 use app::app;
 
-tessera_ui::entry!(app, pipelines = [tessera_components], plugins = []);
+tessera_ui::entry!(app, modules = [tessera_components::TesseraComponents], plugins = []);
