@@ -1,10 +1,9 @@
 mod constraint;
 mod node;
 
-use std::{any::TypeId, num::NonZero, sync::Arc, time::Instant};
+use std::{num::NonZero, sync::Arc, time::Instant};
 
 use parking_lot::RwLock;
-use rayon::prelude::*;
 use tracing::{debug, warn};
 
 use crate::{
@@ -12,7 +11,7 @@ use crate::{
     cursor::CursorEvent,
     layout::RenderInput,
     px::{PxPosition, PxSize},
-    renderer::{Command, RenderCommand},
+    render_graph::{RenderGraph, RenderGraphBuilder},
     runtime::{LayoutCache, RuntimePhase, TraceEntry, push_current_node, push_phase},
 };
 
@@ -27,18 +26,7 @@ pub(crate) use node::{measure_node, measure_nodes};
 #[cfg(feature = "profiling")]
 use crate::profiler::{NodeMeta, Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
 
-#[derive(Debug, Clone, Copy)]
-struct ScreenSize {
-    width: i32,
-    height: i32,
-}
-
-struct DrawTraversalContext<'a> {
-    tree: &'a ComponentNodeTree,
-    metadatas: &'a ComponentNodeMetaDatas,
-    screen_size: ScreenSize,
-}
-
+#[derive(Clone, Copy)]
 pub(crate) struct LayoutContext<'a> {
     pub cache: &'a dashmap::DashMap<u64, crate::runtime::LayoutCacheEntry>,
 }
@@ -195,20 +183,18 @@ impl ComponentTree {
         nodes
     }
 
-    /// Compute the ComponentTree into a list of rendering commands
+    /// Compute the ComponentTree into a render graph
     ///
     /// This method processes the component tree through three main phases:
     /// 1. **Measure Phase**: Calculate sizes and positions for all components
-    /// 2. **Command Generation**: Extract draw commands from component metadata
+    /// 2. **Graph Generation**: Extract render fragments from component
+    ///    metadata
     /// 3. **State Handling**: Process user interactions and events
     ///
-    /// Returns a tuple of (commands, window_requests) where commands contain
-    /// the rendering instructions with their associated sizes and positions.
+    /// Returns a tuple of (graph, window_requests) where the graph contains
+    /// the render ops for the current frame.
     #[tracing::instrument(level = "debug", skip(self, params))]
-    pub(crate) fn compute(
-        &mut self,
-        params: ComputeParams<'_>,
-    ) -> (Vec<RenderCommand>, WindowRequests) {
+    pub(crate) fn compute(&mut self, params: ComputeParams<'_>) -> (RenderGraph, WindowRequests) {
         let ComputeParams {
             screen_size,
             mut cursor_position,
@@ -226,7 +212,7 @@ impl ComponentTree {
             .tree
             .get_node_id_at(NonZero::new(1).expect("root node index must be non-zero"))
         else {
-            return (vec![], WindowRequests::default());
+            return (RenderGraph::default(), WindowRequests::default());
         };
         let screen_constraint = Constraint::new(
             DimensionValue::Fixed(screen_size.width),
@@ -270,21 +256,12 @@ impl ComponentTree {
         );
 
         let compute_draw_timer = Instant::now();
-        debug!("Start computing draw commands...");
-        // compute_draw_commands_parallel expects &ComponentNodeTree and
-        // &ComponentNodeMetaDatas It also uses get_mut on metadatas internally,
-        // which is fine for DashMap with &self.
-        let commands = compute_draw_commands_parallel(
-            root_node,
-            &self.tree,
-            &self.metadatas,
-            screen_size.width.0,
-            screen_size.height.0,
-        );
+        debug!("Start computing render graph...");
+        let graph = build_render_graph(root_node, &self.tree, &self.metadatas, screen_size);
         debug!(
-            "Draw commands computed in {:?}, total commands: {}",
+            "Render graph built in {:?}, total ops: {}",
             compute_draw_timer.elapsed(),
-            commands.len()
+            graph.ops().len()
         );
 
         let input_handler_timer = Instant::now();
@@ -402,7 +379,7 @@ impl ComponentTree {
             "Input Handlers executed in {:?}",
             input_handler_timer.elapsed()
         );
-        (commands, window_requests)
+        (graph, window_requests)
     }
 }
 
@@ -424,54 +401,57 @@ fn record_layout_commands(
     }
 }
 
-/// Parallel computation of draw commands from the component tree
-///
-/// This function traverses the component tree and extracts rendering commands
-/// from each node's metadata. It uses parallel processing for better
-/// performance when dealing with large component trees.
-///
-/// The function maintains thread-safety by using DashMap's concurrent access
-/// capabilities, allowing multiple threads to safely read and modify metadata.
+/// Sequential computation of render graph ops from the component tree.
 #[tracing::instrument(level = "trace", skip(tree, metadatas))]
-fn compute_draw_commands_parallel(
+fn build_render_graph(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
-    screen_width: i32,
-    screen_height: i32,
-) -> Vec<RenderCommand> {
-    let ctx = DrawTraversalContext {
-        tree,
-        metadatas,
-        screen_size: ScreenSize {
-            width: screen_width,
-            height: screen_height,
-        },
+    screen_size: PxSize,
+) -> RenderGraph {
+    let screen_rect = PxRect {
+        x: Px(0),
+        y: Px(0),
+        width: screen_size.width,
+        height: screen_size.height,
     };
 
-    compute_draw_commands_inner_parallel(PxPosition::ZERO, true, node_id, &ctx, None, 1.0)
+    let mut builder = RenderGraphBuilder::new();
+    let mut context = RenderGraphBuildContext {
+        tree,
+        metadatas,
+        builder: &mut builder,
+        screen_rect,
+    };
+    build_render_graph_inner(&mut context, PxPosition::ZERO, true, node_id, None, 1.0);
+    builder.finish()
 }
 
-#[tracing::instrument(level = "trace", skip(ctx))]
-fn compute_draw_commands_inner_parallel(
+struct RenderGraphBuildContext<'a> {
+    tree: &'a ComponentNodeTree,
+    metadatas: &'a ComponentNodeMetaDatas,
+    builder: &'a mut RenderGraphBuilder,
+    screen_rect: PxRect,
+}
+
+#[tracing::instrument(level = "trace", skip(context))]
+fn build_render_graph_inner(
+    context: &mut RenderGraphBuildContext<'_>,
     start_pos: PxPosition,
     is_root: bool,
     node_id: indextree::NodeId,
-    ctx: &DrawTraversalContext<'_>,
     clip_rect: Option<PxRect>,
     current_opacity: f32,
-) -> Vec<RenderCommand> {
-    let mut local_commands = Vec::new();
-
+) {
     // Get metadata and calculate absolute position. This MUST happen for all nodes.
-    let Some(mut metadata) = ctx.metadatas.get_mut(&node_id) else {
-        warn!("Missing metadata for node {node_id:?}; skipping draw computation");
-        return local_commands;
+    let Some(mut metadata) = context.metadatas.get_mut(&node_id) else {
+        warn!("Missing metadata for node {node_id:?}; skipping render graph build");
+        return;
     };
     let rel_pos = match metadata.rel_position {
         Some(pos) => pos,
         None if is_root => PxPosition::ZERO,
-        _ => return local_commands, // Skip nodes that were not placed at all.
+        _ => return, // Skip nodes that were not placed at all.
     };
     let self_pos = start_pos + rel_pos;
     let node_opacity = metadata.opacity;
@@ -499,7 +479,6 @@ fn compute_draw_commands_inner_parallel(
     }
 
     let clips_children = metadata.clips_children;
-    // Add Clip command if the node clips its children
     if clips_children {
         let new_clip_rect = if let Some(existing_clip) = clip_rect {
             existing_clip
@@ -510,86 +489,44 @@ fn compute_draw_commands_inner_parallel(
         };
 
         clip_rect = Some(new_clip_rect);
-
-        local_commands.push(RenderCommand {
-            command: Command::ClipPush(new_clip_rect),
-            type_id: TypeId::of::<Command>(),
-            size,
-            position: self_pos,
-            opacity: cumulative_opacity,
-        });
+        context.builder.push_clip_push(new_clip_rect);
     }
 
-    // Viewport culling check
-    let screen_rect = PxRect {
-        x: Px(0),
-        y: Px(0),
-        width: Px(ctx.screen_size.width),
-        height: Px(ctx.screen_size.height),
-    };
-
-    // Only drain commands if the node is visible.
-    if size.width.0 > 0 && size.height.0 > 0 && !node_rect.is_orthogonal(&screen_rect) {
-        for (cmd, type_id) in metadata.commands.drain(..) {
-            local_commands.push(RenderCommand {
-                command: cmd,
-                type_id,
-                size,
-                position: self_pos,
-                opacity: cumulative_opacity,
-            });
-        }
-    }
-
+    let fragment = metadata.take_fragment();
     drop(metadata); // Release lock before recursing
 
-    // ALWAYS recurse to children to ensure their abs_position is calculated.
-    let children: Vec<_> = node_id.children(ctx.tree).collect();
-    let child_results: Vec<Vec<_>> = children
-        .into_par_iter()
-        .filter_map(|child| {
-            // Grab the parent's absolute position without holding the DashMap guard across recursion.
-            let parent_abs_pos = {
-                let Some(parent_meta) = ctx.metadatas.get(&node_id) else {
-                    warn!(
-                        "Missing parent metadata for node {node_id:?}; skipping child {child:?}"
-                    );
-                    return None;
-                };
-                let Some(pos) = parent_meta.abs_position else {
-                    warn!(
-                        "Missing parent absolute position for node {node_id:?}; skipping child {child:?}"
-                    );
-                    return None;
-                };
-                pos
-            };
-
-            Some(compute_draw_commands_inner_parallel(
-                parent_abs_pos, // Pass the calculated absolute position
-                false,
-                child,
-                ctx,
-                clip_rect,
-                cumulative_opacity,
-            ))
-        })
-        .collect();
-
-    for child_cmds in child_results {
-        local_commands.extend(child_cmds);
+    if size.width.0 > 0 && size.height.0 > 0 && !node_rect.is_orthogonal(&context.screen_rect) {
+        context
+            .builder
+            .append_fragment(fragment, size, self_pos, cumulative_opacity);
     }
 
-    // If the node clips its children, we need to pop the clip command
+    for child in node_id.children(context.tree) {
+        let parent_abs_pos = match context
+            .metadatas
+            .get(&node_id)
+            .and_then(|meta| meta.abs_position)
+        {
+            Some(pos) => pos,
+            None => {
+                warn!(
+                    "Missing parent absolute position for node {node_id:?}; skipping child {child:?}"
+                );
+                continue;
+            }
+        };
+
+        build_render_graph_inner(
+            context,
+            parent_abs_pos,
+            false,
+            child,
+            clip_rect,
+            cumulative_opacity,
+        );
+    }
+
     if clips_children {
-        local_commands.push(RenderCommand {
-            command: Command::ClipPop,
-            type_id: TypeId::of::<Command>(),
-            size,
-            position: self_pos,
-            opacity: cumulative_opacity,
-        });
+        context.builder.push_clip_pop();
     }
-
-    local_commands
 }

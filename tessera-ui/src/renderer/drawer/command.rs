@@ -5,7 +5,8 @@
 
 use crate::{
     dyn_eq::DynPartialEqDraw,
-    renderer::command::{DrawRegion, PaddingRect, SampleRegion},
+    px::{PxPosition, PxRect, PxSize},
+    render_scene::{DrawRegion, PaddingRect, SampleRegion},
 };
 
 /// Trait for graphics rendering commands that can be processed by draw
@@ -59,4 +60,12 @@ pub trait DrawCommand: DynPartialEqDraw + Send + Sync {
     /// In most cases you must implement this on your command to support
     /// opacity changes in the UI.
     fn apply_opacity(&mut self, opacity: f32);
+
+    /// Returns an absolute rectangle used for ordering decisions.
+    ///
+    /// The default implementation returns `None`, which falls back to the draw
+    /// region derived from the command size and position.
+    fn ordering_rect(&self, _position: PxPosition, _size: PxSize) -> Option<PxRect> {
+        None
+    }
 }

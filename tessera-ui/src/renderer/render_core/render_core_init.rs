@@ -12,7 +12,7 @@ use crate::{
     renderer::{compute::ComputePipelineRegistry, drawer::Drawer},
 };
 
-use super::{BlitState, ComputeState, FrameTargets, RenderCore, RenderPipelines};
+use super::{BlitState, ComputeState, FrameTargets, LocalTexturePool, RenderCore, RenderPipelines};
 
 impl RenderCore {
     async fn request_adapter_for_surface(
@@ -221,29 +221,27 @@ impl RenderCore {
             multiview_mask: None,
             cache: pipeline_cache.as_ref(),
         });
-
-        let compute_blit_pipeline =
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("Compute Copy Pipeline"),
-                layout: Some(&blit_pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &blit_shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[],
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &blit_shader,
-                    entry_point: Some("fs_main"),
-                    targets: &[Some(TextureFormat::Rgba8Unorm.into())],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: pipeline_cache.as_ref(),
-            });
+        let blit_pipeline_rgba = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Blit Pipeline Rgba8"),
+            layout: Some(&blit_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &blit_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &blit_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::TextureFormat::Rgba8Unorm.into())],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: pipeline_cache.as_ref(),
+        });
 
         let pipelines = RenderPipelines {
             drawer,
@@ -260,15 +258,14 @@ impl RenderCore {
         let compute = ComputeState {
             target_a: compute_target_a,
             target_b: compute_target_b,
-            pending: Vec::new(),
             resource_manager: Arc::new(RwLock::new(ComputeResourceManager::new())),
         };
 
         let blit = BlitState {
             pipeline: blit_pipeline,
+            pipeline_rgba: blit_pipeline_rgba,
             bind_group_layout: blit_bind_group_layout,
             sampler: blit_sampler,
-            compute_pipeline: compute_blit_pipeline,
         };
 
         Self {
@@ -285,6 +282,7 @@ impl RenderCore {
             targets,
             compute,
             blit,
+            local_textures: LocalTexturePool::new(),
         }
     }
 

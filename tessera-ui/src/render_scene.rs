@@ -1,8 +1,8 @@
-//! Unified command system for rendering and computation.
+//! Render command definitions for frame graphs.
 //!
-//! This module defines the `Command` enum that unifies draw and compute
-//! operations into a single type, enabling seamless integration of graphics and
-//! compute pipelines in the rendering workflow.
+//! ## Usage
+//!
+//! Define command metadata for render graph nodes.
 
 use std::any::Any;
 
@@ -107,13 +107,13 @@ impl<T: Any> AsAny for T {
 /// commands in a unified pipeline, with proper barrier handling for multi-pass
 /// rendering scenarios.
 pub enum Command {
-    /// A graphics rendering command processed by draw pipelines
+    /// A graphics rendering command processed by draw pipelines.
     Draw(Box<dyn DrawCommand>),
-    /// A GPU computation command processed by compute pipelines
+    /// A GPU computation command processed by compute pipelines.
     Compute(Box<dyn ComputeCommand>),
-    /// A command to push a clipping rectangle onto the stack
+    /// A command to push a clipping rectangle onto the stack.
     ClipPush(PxRect),
-    /// A command to pop the most recent clipping rectangle from the stack
+    /// A command to pop the most recent clipping rectangle from the stack.
     ClipPop,
 }
 
@@ -144,14 +144,14 @@ impl Clone for Command {
     }
 }
 
-/// Automatic conversion from boxed draw commands to unified commands
+/// Automatic conversion from boxed draw commands to unified commands.
 impl From<Box<dyn DrawCommand>> for Command {
     fn from(val: Box<dyn DrawCommand>) -> Self {
         Self::Draw(val)
     }
 }
 
-/// Automatic conversion from boxed compute commands to unified commands
+/// Automatic conversion from boxed compute commands to unified commands.
 impl From<Box<dyn ComputeCommand>> for Command {
     fn from(val: Box<dyn ComputeCommand>) -> Self {
         Self::Compute(val)

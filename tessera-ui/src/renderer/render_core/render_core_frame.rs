@@ -1,13 +1,15 @@
 use std::{any::TypeId, mem};
 
 use smallvec::SmallVec;
-use tracing::warn;
 
 use crate::{
-    DrawCommand, Px, PxPosition,
+    DrawCommand, Px, PxPosition, PxRect, PxSize,
+    render_graph::{RenderGraphExecution, RenderResource, RenderResourceId},
+    render_pass::{
+        ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassKind, RenderPassPlan,
+    },
+    render_scene::AsAny,
     renderer::{
-        RenderCommand,
-        command::{AsAny, Command, DrawRegion, SampleRegion},
         compute::{ErasedComputeBatchItem, pipeline::ErasedDispatchContext},
         drawer::ErasedDrawContext,
     },
@@ -15,42 +17,171 @@ use crate::{
 
 use super::*;
 
-struct FrameContext<'a> {
+struct RenderPassParams<'a, 'b> {
+    msaa_view: Option<wgpu::TextureView>,
+    clear_target: bool,
     encoder: &'a mut wgpu::CommandEncoder,
-    device: &'a wgpu::Device,
-    queue: &'a wgpu::Queue,
-    config: &'a wgpu::SurfaceConfiguration,
-}
-
-struct BlitPipelines<'a> {
-    bind_group_layout: &'a wgpu::BindGroupLayout,
-    sampler: &'a wgpu::Sampler,
-    blit_pipeline: &'a wgpu::RenderPipeline,
-    compute_blit_pipeline: &'a wgpu::RenderPipeline,
-}
-
-struct RenderPassParams<'a> {
-    msaa_view: &'a Option<wgpu::TextureView>,
-    is_first_pass: &'a mut bool,
-    encoder: &'a mut wgpu::CommandEncoder,
-    write_target: &'a wgpu::TextureView,
+    write_target: wgpu::TextureView,
     commands_in_pass: &'a mut SmallVec<[DrawOrClip; 32]>,
-    scene_texture_view: &'a wgpu::TextureView,
+    scene_texture_view: wgpu::TextureView,
     drawer: &'a mut Drawer,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
+    target_size: PxSize,
+    clip_stack: &'a mut SmallVec<[PxRect; 16]>,
+    apply_clip: bool,
+    resources: &'a FrameResources<'b>,
+}
+
+struct RenderPassExecParams<'a, 'b> {
+    encoder: &'a mut wgpu::CommandEncoder,
+    swapchain_view: &'a mut wgpu::TextureView,
+    scene_texture_view: &'a mut wgpu::TextureView,
+    scene_source: &'a mut SceneSource,
+    resources: &'a mut FrameResources<'b>,
+    clear_state: &'a mut RenderPassClearState,
+    pass: &'a mut RenderPassPlan,
     clip_stack: &'a mut SmallVec<[PxRect; 16]>,
 }
 
-struct FlushRenderPassParams<'a> {
+struct BlitParams<'a> {
     encoder: &'a mut wgpu::CommandEncoder,
-    output_view: &'a mut wgpu::TextureView,
-    scene_texture_view: &'a mut wgpu::TextureView,
-    commands_in_pass: &'a mut SmallVec<[DrawOrClip; 32]>,
-    sampling_rects_in_pass: &'a mut SmallVec<[PxRect; 16]>,
-    clip_stack: &'a mut SmallVec<[PxRect; 16]>,
-    is_first_pass: &'a mut bool,
+    device: &'a wgpu::Device,
+    source: &'a wgpu::TextureView,
+    target: &'a wgpu::TextureView,
+    bind_group_layout: &'a wgpu::BindGroupLayout,
+    sampler: &'a wgpu::Sampler,
+    pipeline: &'a wgpu::RenderPipeline,
+    target_size: PxSize,
+    scissor_rect: Option<PxRect>,
+}
+
+struct FrameResources<'a> {
+    locals: Vec<usize>,
+    pool: &'a mut LocalTexturePool,
+}
+
+impl<'a> FrameResources<'a> {
+    fn new(
+        pool: &'a mut LocalTexturePool,
+        device: &wgpu::Device,
+        resources: &[RenderResource],
+        sample_count: u32,
+    ) -> Self {
+        pool.reset();
+        let locals = resources
+            .iter()
+            .map(|resource| match resource {
+                RenderResource::Texture(desc) => pool.allocate(device, desc, sample_count),
+            })
+            .collect();
+        Self { locals, pool }
+    }
+
+    fn local_slot(&self, id: RenderResourceId) -> Option<&LocalTextureSlot> {
+        let RenderResourceId::Local(index) = id else {
+            return None;
+        };
+        let slot_index = *self.locals.get(index as usize)?;
+        self.pool.slot(slot_index)
+    }
+
+    fn local_slot_mut(&mut self, id: RenderResourceId) -> Option<&mut LocalTextureSlot> {
+        let RenderResourceId::Local(index) = id else {
+            return None;
+        };
+        let slot_index = *self.locals.get(index as usize)?;
+        self.pool.slot_mut(slot_index)
+    }
+}
+
+struct RenderCoreFrameState<'a> {
+    device: &'a wgpu::Device,
+    queue: &'a wgpu::Queue,
+    config: &'a wgpu::SurfaceConfiguration,
+    targets: &'a mut FrameTargets,
+    pipelines: &'a mut RenderPipelines,
+    compute: &'a mut ComputeState,
+    blit: &'a BlitState,
+}
+
+struct RenderPassClearState {
+    scene_written: bool,
+    locals_written: Vec<bool>,
+}
+
+impl RenderPassClearState {
+    fn new(local_count: usize) -> Self {
+        Self {
+            scene_written: false,
+            locals_written: vec![false; local_count],
+        }
+    }
+
+    fn should_clear(&mut self, resource: RenderResourceId) -> bool {
+        match resource {
+            RenderResourceId::SceneColor => {
+                let clear = !self.scene_written;
+                self.scene_written = true;
+                clear
+            }
+            RenderResourceId::Local(index) => {
+                let slot = self
+                    .locals_written
+                    .get_mut(index as usize)
+                    .unwrap_or_else(|| panic!("missing clear state for local resource {index}"));
+                let clear = !*slot;
+                *slot = true;
+                clear
+            }
+            RenderResourceId::SceneDepth => false,
+        }
+    }
+}
+
+trait ComputeTargets {
+    fn views(&self) -> (wgpu::TextureView, wgpu::TextureView);
+    fn swap(&mut self);
+}
+
+struct SceneComputeTargets<'a> {
+    front: &'a mut wgpu::TextureView,
+    back: &'a mut wgpu::TextureView,
+}
+
+impl ComputeTargets for SceneComputeTargets<'_> {
+    fn views(&self) -> (wgpu::TextureView, wgpu::TextureView) {
+        (self.front.clone(), self.back.clone())
+    }
+
+    fn swap(&mut self) {
+        std::mem::swap(self.front, self.back);
+    }
+}
+
+struct LocalComputeTargets<'a> {
+    slot: &'a mut LocalTextureSlot,
+}
+
+impl ComputeTargets for LocalComputeTargets<'_> {
+    fn views(&self) -> (wgpu::TextureView, wgpu::TextureView) {
+        (
+            self.slot.front_view().clone(),
+            self.slot.back_view().clone(),
+        )
+    }
+
+    fn swap(&mut self) {
+        self.slot.swap_front_back();
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SceneSource {
+    Swapchain,
+    Offscreen,
+    Compute,
 }
 
 struct SubmitContext<'a> {
@@ -59,111 +190,26 @@ struct SubmitContext<'a> {
     config: &'a wgpu::SurfaceConfiguration,
 }
 
+struct SubmitBatchParams<'a, 'b> {
+    drawer: &'a mut Drawer,
+    resources: SubmitContext<'a>,
+    scene_texture_view: &'a wgpu::TextureView,
+    target_size: PxSize,
+    clip_stack: &'b [PxRect],
+    current_batch_draw_rect: &'a mut Option<PxRect>,
+}
+
 struct ComputePassParams<'a> {
     encoder: &'a mut wgpu::CommandEncoder,
-    commands: Vec<PendingComputeCommand>,
+    commands: Vec<ComputePlanItem>,
     compute_pipeline_registry: &'a mut ComputePipelineRegistry,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
     resource_manager: &'a mut ComputeResourceManager,
-    scene_view: &'a wgpu::TextureView,
-    target_a: &'a wgpu::TextureView,
-    target_b: &'a wgpu::TextureView,
-    blit_bind_group_layout: &'a wgpu::BindGroupLayout,
-    blit_sampler: &'a wgpu::Sampler,
-    compute_blit_pipeline: &'a wgpu::RenderPipeline,
-}
-
-struct ComputePassResources<'a> {
-    compute_pipeline_registry: &'a mut ComputePipelineRegistry,
-    resource_manager: &'a mut ComputeResourceManager,
-    compute_target_a: &'a wgpu::TextureView,
-    compute_target_b: &'a wgpu::TextureView,
 }
 
 impl RenderCore {
-    fn handle_offscreen_and_compute(
-        context: FrameContext<'_>,
-        offscreen_texture: &mut wgpu::TextureView,
-        output_texture: &mut wgpu::TextureView,
-        compute_commands: Vec<PendingComputeCommand>,
-        compute_resources: ComputePassResources<'_>,
-        copy_rect: PxRect,
-        blit_resources: BlitPipelines<'_>,
-    ) -> wgpu::TextureView {
-        let blit_bind_group = context
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: blit_resources.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(output_texture),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(blit_resources.sampler),
-                    },
-                ],
-                label: Some("Blit Bind Group"),
-            });
-
-        let mut rpass = context
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Blit Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: offscreen_texture,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                ..Default::default()
-            });
-
-        rpass.set_pipeline(blit_resources.blit_pipeline);
-        rpass.set_bind_group(0, &blit_bind_group, &[]);
-        // Set a scissor rect to ensure we only write to the required region.
-        rpass.set_scissor_rect(
-            copy_rect.x.0.max(0) as u32,
-            copy_rect.y.0.max(0) as u32,
-            copy_rect.width.0.max(0) as u32,
-            copy_rect.height.0.max(0) as u32,
-        );
-        // Draw a single triangle that covers the whole screen. The scissor rect clips
-        // it.
-        rpass.draw(0..3, 0..1);
-
-        drop(rpass); // End the blit pass
-
-        // Apply compute commands if any, reusing existing do_compute implementation
-        if !compute_commands.is_empty() {
-            Self::do_compute(ComputePassParams {
-                encoder: context.encoder,
-                commands: compute_commands,
-                compute_pipeline_registry: compute_resources.compute_pipeline_registry,
-                device: context.device,
-                queue: context.queue,
-                config: context.config,
-                resource_manager: compute_resources.resource_manager,
-                scene_view: offscreen_texture,
-                target_a: compute_resources.compute_target_a,
-                target_b: compute_resources.compute_target_b,
-                blit_bind_group_layout: blit_resources.bind_group_layout,
-                blit_sampler: blit_resources.sampler,
-                compute_blit_pipeline: blit_resources.compute_blit_pipeline,
-            })
-        } else {
-            // Return an owned clone so caller does not keep a borrow on read_target
-            offscreen_texture.clone()
-        }
-    }
-
     /// Render the surface using the unified command system.
     ///
     /// This method processes a stream of commands (both draw and compute) and
@@ -173,8 +219,7 @@ impl RenderCore {
     ///
     /// # Arguments
     ///
-    /// * `commands` - An iterable of (Command, PxSize, PxPosition) tuples
-    ///   representing the rendering operations to perform.
+    /// * `ops` - Ordered render ops for the current frame.
     ///
     /// # Returns
     ///
@@ -182,13 +227,8 @@ impl RenderCore {
     /// * `Err(wgpu::SurfaceError)` if there are issues with the surface
     pub(crate) fn render(
         &mut self,
-        commands: impl IntoIterator<Item = RenderCommand>,
+        execution: RenderGraphExecution,
     ) -> Result<(), wgpu::SurfaceError> {
-        // Collect commands into a Vec to allow reordering
-        let commands: Vec<_> = commands.into_iter().collect();
-        // Reorder instructions based on dependencies for better batching optimization
-        let commands = crate::renderer::reorder::reorder_instructions(commands);
-
         let output_frame = self.surface.get_current_texture()?;
         let mut encoder = self
             .device
@@ -202,354 +242,351 @@ impl RenderCore {
             depth_or_array_layers: 1,
         };
 
-        // Clear any existing compute commands
-        if !self.compute.pending.is_empty() {
-            // This is a warning to developers that not all compute commands were used in
-            // the last frame.
-            warn!("Not every compute command is used in last frame. This is likely a bug.");
-            self.compute.pending.clear();
-        }
+        let RenderGraphExecution { ops, resources } = execution;
+        let graph = RenderPassGraph::build(ops, &resources, texture_size);
+        let mut passes = graph.into_passes();
 
-        // Flag for first pass
-        let mut is_first_pass = true;
+        let device = &self.device;
+        let queue = &self.queue;
+        let config = &self.config;
+        let blit = &self.blit;
+        let pipelines = &mut self.pipelines;
+        let targets = &mut self.targets;
+        let compute = &mut self.compute;
+        let local_textures = &mut self.local_textures;
 
         // Frame-level begin for all pipelines
-        self.pipelines.drawer.pipeline_registry.begin_all_frames(
-            &self.device,
-            &self.queue,
-            &self.config,
-        );
+        pipelines
+            .drawer
+            .pipeline_registry
+            .begin_all_frames(device, queue, config);
 
-        let mut scene_texture_view = self.targets.offscreen.clone();
-        let mut commands_in_pass: SmallVec<[DrawOrClip; 32]> = SmallVec::new();
-        let mut sampling_rects_in_pass: SmallVec<[PxRect; 16]> = SmallVec::new();
+        let mut scene_texture_view = targets.offscreen.clone();
+        let mut scene_source = SceneSource::Swapchain;
         let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
+        let mut frame_resources =
+            FrameResources::new(local_textures, device, &resources, targets.sample_count);
 
         let mut output_view = output_frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        for render_command in commands {
-            let RenderCommand {
-                command,
-                type_id: command_type_id,
-                size,
-                position: start_pos,
-                opacity,
-            } = render_command;
-            let need_new_pass = should_start_new_pass(
-                last_draw_in_pass(&commands_in_pass),
-                &command,
-                size,
-                start_pos,
-                texture_size,
-                &sampling_rects_in_pass,
-            );
+        let mut clear_state = RenderPassClearState::new(resources.len());
 
-            if need_new_pass {
-                self.flush_render_pass(FlushRenderPassParams {
+        let mut frame_state = RenderCoreFrameState {
+            device,
+            queue,
+            config,
+            targets,
+            pipelines,
+            compute,
+            blit,
+        };
+
+        for pass in passes.iter_mut() {
+            Self::execute_render_pass(
+                &mut frame_state,
+                RenderPassExecParams {
                     encoder: &mut encoder,
-                    output_view: &mut output_view,
+                    swapchain_view: &mut output_view,
                     scene_texture_view: &mut scene_texture_view,
-                    commands_in_pass: &mut commands_in_pass,
-                    sampling_rects_in_pass: &mut sampling_rects_in_pass,
+                    scene_source: &mut scene_source,
+                    resources: &mut frame_resources,
+                    clear_state: &mut clear_state,
+                    pass,
                     clip_stack: &mut clip_stack,
-                    is_first_pass: &mut is_first_pass,
-                });
-            }
-
-            match command {
-                Command::Draw(mut cmd) => {
-                    cmd.apply_opacity(opacity);
-                    // Compute sampling area for copy and target rect for drawing
-                    if let Some(barrier) = cmd.sample_region() {
-                        let sampling_rect =
-                            extract_sampling_rect(Some(barrier), size, start_pos, texture_size);
-                        sampling_rects_in_pass.push(sampling_rect);
-                    }
-                    // Compute draw rect using command's declared draw region (may be larger
-                    // than the layout box).
-                    let draw_rect =
-                        extract_draw_rect(cmd.draw_region(), size, start_pos, texture_size);
-                    // Add the command to the current pass
-                    commands_in_pass.push(DrawOrClip::Draw(DrawCommandWithMetadata {
-                        command: cmd,
-                        type_id: command_type_id,
-                        size,
-                        start_pos,
-                        draw_rect,
-                    }));
-                }
-                Command::Compute(cmd) => {
-                    let barrier = cmd.barrier();
-                    let sampling_rect =
-                        extract_sampling_rect(Some(barrier), size, start_pos, texture_size);
-                    let target_rect = extract_target_rect(size, start_pos, texture_size);
-                    // Add the compute command to the pending list
-                    self.compute.pending.push(PendingComputeCommand {
-                        command: cmd,
-                        size,
-                        start_pos,
-                        target_rect,
-                        sampling_rect,
-                    });
-                }
-                Command::ClipPush(rect) => {
-                    // Push it into command stack
-                    commands_in_pass.push(DrawOrClip::Clip(ClipOps::Push(rect)));
-                }
-                Command::ClipPop => {
-                    // Push it into command stack
-                    commands_in_pass.push(DrawOrClip::Clip(ClipOps::Pop));
-                }
-            }
+                },
+            );
         }
 
-        self.flush_render_pass(FlushRenderPassParams {
-            encoder: &mut encoder,
-            output_view: &mut output_view,
-            scene_texture_view: &mut scene_texture_view,
-            commands_in_pass: &mut commands_in_pass,
-            sampling_rects_in_pass: &mut sampling_rects_in_pass,
-            clip_stack: &mut clip_stack,
-            is_first_pass: &mut is_first_pass,
-        });
-
-        if !self.compute.pending.is_empty() {
-            warn!(
-                "{} compute command(s) were not matched with draw commands in this frame",
-                self.compute.pending.len()
-            );
-            self.compute.pending.clear();
+        if !matches!(scene_source, SceneSource::Swapchain) {
+            RenderCore::blit_to_view(BlitParams {
+                encoder: &mut encoder,
+                device,
+                source: &scene_texture_view,
+                target: &output_view,
+                bind_group_layout: &blit.bind_group_layout,
+                sampler: &blit.sampler,
+                pipeline: &blit.pipeline,
+                target_size: PxSize::new(
+                    Px(self.config.width as i32),
+                    Px(self.config.height as i32),
+                ),
+                scissor_rect: None,
+            });
         }
 
         // Frame-level end for all pipelines
-        self.pipelines.drawer.pipeline_registry.end_all_frames(
-            &self.device,
-            &self.queue,
-            &self.config,
-        );
+        frame_state
+            .pipelines
+            .drawer
+            .pipeline_registry
+            .end_all_frames(device, queue, config);
 
-        self.queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish()));
         output_frame.present();
 
         Ok(())
     }
 
-    fn flush_render_pass(&mut self, params: FlushRenderPassParams<'_>) {
-        let FlushRenderPassParams {
+    fn execute_render_pass(
+        state: &mut RenderCoreFrameState<'_>,
+        params: RenderPassExecParams<'_, '_>,
+    ) {
+        let RenderPassExecParams {
             encoder,
-            output_view,
+            swapchain_view,
             scene_texture_view,
-            commands_in_pass,
-            sampling_rects_in_pass,
+            scene_source,
+            resources,
+            clear_state,
+            pass,
             clip_stack,
-            is_first_pass,
         } = params;
 
-        if commands_in_pass.is_empty() {
+        if pass.draws.is_empty() && pass.compute.is_empty() {
             return;
         }
 
-        let draw_target_rects = collect_sampled_draw_rects(commands_in_pass);
-        if !draw_target_rects.is_empty() {
-            let compute_to_run = self.take_compute_commands_for_rects(&draw_target_rects);
+        match pass.kind {
+            RenderPassKind::Compute => {
+                if pass.compute.is_empty() {
+                    return;
+                }
 
-            let mut copy_rects = sampling_rects_in_pass.clone();
-            for pending in &compute_to_run {
-                copy_rects.push(pending.sampling_rect);
+                let read_resource = pass.read_resource.unwrap_or(RenderResourceId::SceneColor);
+                let write_resource = pass.write_resource;
+
+                if read_resource == RenderResourceId::SceneColor {
+                    let full_rect = PxRect {
+                        x: Px(0),
+                        y: Px(0),
+                        width: Px(state.config.width as i32),
+                        height: Px(state.config.height as i32),
+                    };
+                    let copy_rect = pass.copy_rect.unwrap_or(full_rect);
+                    if matches!(*scene_source, SceneSource::Swapchain) {
+                        Self::blit_to_view(BlitParams {
+                            encoder,
+                            device: state.device,
+                            source: swapchain_view,
+                            target: &state.targets.offscreen,
+                            bind_group_layout: &state.blit.bind_group_layout,
+                            sampler: &state.blit.sampler,
+                            pipeline: &state.blit.pipeline,
+                            target_size: PxSize::new(
+                                Px(state.config.width as i32),
+                                Px(state.config.height as i32),
+                            ),
+                            scissor_rect: Some(copy_rect),
+                        });
+                        *scene_texture_view = state.targets.offscreen.clone();
+                        *scene_source = SceneSource::Offscreen;
+                    }
+                }
+
+                let input_view = match read_resource {
+                    RenderResourceId::SceneColor => Some(scene_texture_view.clone()),
+                    RenderResourceId::Local(_) => resources
+                        .local_slot(read_resource)
+                        .map(|slot| slot.front_view().clone()),
+                    RenderResourceId::SceneDepth => Some(scene_texture_view.clone()),
+                };
+
+                let input_follows_front = read_resource == write_resource;
+                let compute_to_run = std::mem::take(&mut pass.compute);
+
+                let final_view = match write_resource {
+                    RenderResourceId::SceneColor => {
+                        let mut targets = SceneComputeTargets {
+                            front: &mut state.compute.target_a,
+                            back: &mut state.compute.target_b,
+                        };
+                        let needs_scene_prefill = read_resource == RenderResourceId::SceneColor
+                            && !matches!(*scene_source, SceneSource::Compute);
+                        if needs_scene_prefill {
+                            let (front_view, _) = targets.views();
+                            Self::blit_to_view(BlitParams {
+                                encoder,
+                                device: state.device,
+                                source: scene_texture_view,
+                                target: &front_view,
+                                bind_group_layout: &state.blit.bind_group_layout,
+                                sampler: &state.blit.sampler,
+                                pipeline: &state.blit.pipeline_rgba,
+                                target_size: PxSize::new(
+                                    Px(state.config.width as i32),
+                                    Px(state.config.height as i32),
+                                ),
+                                scissor_rect: None,
+                            });
+                        }
+                        let params = ComputePassParams {
+                            encoder,
+                            commands: compute_to_run,
+                            compute_pipeline_registry: &mut state.pipelines.compute_registry,
+                            device: state.device,
+                            queue: state.queue,
+                            config: state.config,
+                            resource_manager: &mut state.compute.resource_manager.write(),
+                        };
+                        let texture_size = wgpu::Extent3d {
+                            width: state.config.width,
+                            height: state.config.height,
+                            depth_or_array_layers: 1,
+                        };
+                        do_compute_with_targets(
+                            params,
+                            if read_resource == RenderResourceId::SceneColor {
+                                None
+                            } else {
+                                input_view
+                            },
+                            &mut targets,
+                            texture_size,
+                            input_follows_front,
+                        )
+                    }
+                    RenderResourceId::Local(_) => {
+                        let params = ComputePassParams {
+                            encoder,
+                            commands: compute_to_run,
+                            compute_pipeline_registry: &mut state.pipelines.compute_registry,
+                            device: state.device,
+                            queue: state.queue,
+                            config: state.config,
+                            resource_manager: &mut state.compute.resource_manager.write(),
+                        };
+                        let Some(slot) = resources.local_slot_mut(write_resource) else {
+                            return;
+                        };
+                        let texture_size = wgpu::Extent3d {
+                            width: slot.desc.size.width.positive().max(1),
+                            height: slot.desc.size.height.positive().max(1),
+                            depth_or_array_layers: 1,
+                        };
+                        let mut targets = LocalComputeTargets { slot };
+                        do_compute_with_targets(
+                            params,
+                            input_view,
+                            &mut targets,
+                            texture_size,
+                            input_follows_front,
+                        )
+                    }
+                    RenderResourceId::SceneDepth => {
+                        drop(compute_to_run);
+                        return;
+                    }
+                };
+
+                if write_resource == RenderResourceId::SceneColor {
+                    *scene_texture_view = final_view;
+                    *scene_source = SceneSource::Compute;
+                }
             }
+            RenderPassKind::Draw => {
+                if pass.draws.is_empty() {
+                    return;
+                }
 
-            if let Some(combined_rect) = union_rects(&copy_rects) {
-                let final_view_after_compute = Self::handle_offscreen_and_compute(
-                    FrameContext {
-                        encoder,
-                        device: &self.device,
-                        queue: &self.queue,
-                        config: &self.config,
-                    },
-                    &mut self.targets.offscreen,
-                    output_view,
-                    compute_to_run,
-                    ComputePassResources {
-                        compute_pipeline_registry: &mut self.pipelines.compute_registry,
-                        resource_manager: &mut self.compute.resource_manager.write(),
-                        compute_target_a: &self.compute.target_a,
-                        compute_target_b: &self.compute.target_b,
-                    },
-                    combined_rect,
-                    BlitPipelines {
-                        bind_group_layout: &self.blit.bind_group_layout,
-                        sampler: &self.blit.sampler,
-                        blit_pipeline: &self.blit.pipeline,
-                        compute_blit_pipeline: &self.blit.compute_pipeline,
-                    },
-                );
-                *scene_texture_view = final_view_after_compute;
+                let write_resource = pass.write_resource;
+                let reads_scene = pass.read_resource == Some(RenderResourceId::SceneColor);
+                if reads_scene {
+                    let full_rect = PxRect {
+                        x: Px(0),
+                        y: Px(0),
+                        width: Px(state.config.width as i32),
+                        height: Px(state.config.height as i32),
+                    };
+                    let copy_rect = pass.copy_rect.unwrap_or(full_rect);
+                    if matches!(*scene_source, SceneSource::Swapchain) {
+                        Self::blit_to_view(BlitParams {
+                            encoder,
+                            device: state.device,
+                            source: swapchain_view,
+                            target: &state.targets.offscreen,
+                            bind_group_layout: &state.blit.bind_group_layout,
+                            sampler: &state.blit.sampler,
+                            pipeline: &state.blit.pipeline,
+                            target_size: PxSize::new(
+                                Px(state.config.width as i32),
+                                Px(state.config.height as i32),
+                            ),
+                            scissor_rect: Some(copy_rect),
+                        });
+                        *scene_texture_view = state.targets.offscreen.clone();
+                        *scene_source = SceneSource::Offscreen;
+                    }
+                }
+
+                let (write_target, msaa_view, target_size) = match write_resource {
+                    RenderResourceId::SceneColor => (
+                        swapchain_view.clone(),
+                        state.targets.msaa_view.clone(),
+                        PxSize::new(
+                            Px(state.config.width as i32),
+                            Px(state.config.height as i32),
+                        ),
+                    ),
+                    RenderResourceId::Local(_) => {
+                        let Some(slot) = resources.local_slot(write_resource) else {
+                            return;
+                        };
+                        (
+                            slot.front_view().clone(),
+                            slot.msaa_view.clone(),
+                            slot.desc.size,
+                        )
+                    }
+                    RenderResourceId::SceneDepth => {
+                        return;
+                    }
+                };
+
+                let scene_view = if reads_scene {
+                    scene_texture_view.clone()
+                } else {
+                    write_target.clone()
+                };
+                let clear_target = clear_state.should_clear(write_resource);
+
+                render_current_pass(RenderPassParams {
+                    msaa_view,
+                    clear_target,
+                    encoder,
+                    write_target,
+                    commands_in_pass: &mut pass.draws,
+                    scene_texture_view: scene_view,
+                    drawer: &mut state.pipelines.drawer,
+                    device: state.device,
+                    queue: state.queue,
+                    config: state.config,
+                    target_size,
+                    clip_stack,
+                    apply_clip: write_resource == RenderResourceId::SceneColor,
+                    resources,
+                });
+
+                if write_resource == RenderResourceId::SceneColor {
+                    *scene_source = SceneSource::Swapchain;
+                }
             }
         }
+    }
 
-        render_current_pass(RenderPassParams {
-            msaa_view: &self.targets.msaa_view,
-            is_first_pass,
+    fn blit_to_view(params: BlitParams<'_>) {
+        let BlitParams {
             encoder,
-            write_target: output_view,
-            commands_in_pass,
-            scene_texture_view,
-            drawer: &mut self.pipelines.drawer,
-            device: &self.device,
-            queue: &self.queue,
-            config: &self.config,
-            clip_stack,
-        });
-        commands_in_pass.clear();
-        sampling_rects_in_pass.clear();
-    }
-
-    fn take_compute_commands_for_rects(
-        &mut self,
-        target_rects: &[PxRect],
-    ) -> Vec<PendingComputeCommand> {
-        if target_rects.is_empty() {
-            return Vec::new();
-        }
-
-        let mut taken = Vec::new();
-        let mut remaining = Vec::with_capacity(self.compute.pending.len());
-
-        for pending in self.compute.pending.drain(..) {
-            if target_rects
-                .iter()
-                .any(|rect| !rect.is_orthogonal(&pending.target_rect))
-            {
-                taken.push(pending);
-            } else {
-                remaining.push(pending);
-            }
-        }
-
-        self.compute.pending = remaining;
-        taken
-    }
-
-    fn do_compute(params: ComputePassParams<'_>) -> wgpu::TextureView {
-        if params.commands.is_empty() {
-            return params.scene_view.clone();
-        }
-
-        let texture_size = wgpu::Extent3d {
-            width: params.config.width,
-            height: params.config.height,
-            depth_or_array_layers: 1,
-        };
-
-        Self::blit_to_view(
-            params.encoder,
-            params.device,
-            params.scene_view,
-            params.target_a,
-            params.blit_bind_group_layout,
-            params.blit_sampler,
-            params.compute_blit_pipeline,
-        );
-
-        let mut read_view = params.target_a.clone();
-        let mut write_target = params.target_b;
-        let mut read_target = params.target_a;
-
-        let commands = &params.commands;
-        let mut index = 0;
-        while index < commands.len() {
-            let command = &commands[index];
-            let type_id = AsAny::as_any(&*command.command).type_id();
-
-            let mut batch_items: SmallVec<[ErasedComputeBatchItem<'_>; 8]> = SmallVec::new();
-            let mut batch_sampling_rects: SmallVec<[PxRect; 8]> = SmallVec::new();
-            let mut cursor = index;
-
-            while cursor < commands.len() {
-                let candidate = &commands[cursor];
-                if AsAny::as_any(&*candidate.command).type_id() != type_id {
-                    break;
-                }
-
-                let sampling_area = candidate.sampling_rect;
-
-                if batch_sampling_rects
-                    .iter()
-                    .any(|existing| rects_overlap(*existing, sampling_area))
-                {
-                    break;
-                }
-
-                batch_sampling_rects.push(sampling_area);
-                batch_items.push(ErasedComputeBatchItem {
-                    command: &*candidate.command,
-                    size: candidate.size,
-                    position: candidate.start_pos,
-                    target_area: candidate.target_rect,
-                });
-                cursor += 1;
-            }
-
-            if batch_items.is_empty() {
-                batch_sampling_rects.push(command.sampling_rect);
-                batch_items.push(ErasedComputeBatchItem {
-                    command: &*command.command,
-                    size: command.size,
-                    position: command.start_pos,
-                    target_area: command.target_rect,
-                });
-                cursor = index + 1;
-            }
-
-            params.encoder.copy_texture_to_texture(
-                read_view.texture().as_image_copy(),
-                write_target.texture().as_image_copy(),
-                texture_size,
-            );
-
-            {
-                let mut cpass = params
-                    .encoder
-                    .begin_compute_pass(&wgpu::ComputePassDescriptor {
-                        label: Some("Compute Pass"),
-                        timestamp_writes: None,
-                    });
-
-                params.compute_pipeline_registry.dispatch_erased(
-                    ErasedDispatchContext {
-                        device: params.device,
-                        queue: params.queue,
-                        config: params.config,
-                        compute_pass: &mut cpass,
-                        resource_manager: params.resource_manager,
-                        input_view: &read_view,
-                        output_view: write_target,
-                    },
-                    &batch_items,
-                );
-            }
-
-            read_view = write_target.clone();
-            std::mem::swap(&mut write_target, &mut read_target);
-            index = cursor;
-        }
-
-        // After the loop, the final result is in the `read_view`,
-        // because we swapped one last time at the end of the loop.
-        read_view
-    }
-
-    fn blit_to_view(
-        encoder: &mut wgpu::CommandEncoder,
-        device: &wgpu::Device,
-        source: &wgpu::TextureView,
-        target: &wgpu::TextureView,
-        bind_group_layout: &wgpu::BindGroupLayout,
-        sampler: &wgpu::Sampler,
-        pipeline: &wgpu::RenderPipeline,
-    ) {
+            device,
+            source,
+            target,
+            bind_group_layout,
+            sampler,
+            pipeline,
+            target_size,
+            scissor_rect,
+        } = params;
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: bind_group_layout,
             entries: &[
@@ -582,8 +619,140 @@ impl RenderCore {
 
         rpass.set_pipeline(pipeline);
         rpass.set_bind_group(0, &bind_group, &[]);
+        if let Some(rect) = scissor_rect {
+            let Some(clamped) = clamp_rect_to_target(rect, target_size) else {
+                return;
+            };
+            rpass.set_scissor_rect(
+                clamped.x.0.max(0) as u32,
+                clamped.y.0.max(0) as u32,
+                clamped.width.0.max(0) as u32,
+                clamped.height.0.max(0) as u32,
+            );
+        }
         rpass.draw(0..3, 0..1);
     }
+}
+
+fn do_compute_with_targets<T: ComputeTargets>(
+    params: ComputePassParams<'_>,
+    fixed_input_view: Option<wgpu::TextureView>,
+    targets: &mut T,
+    texture_size: wgpu::Extent3d,
+    input_follows_front: bool,
+) -> wgpu::TextureView {
+    if params.commands.is_empty() {
+        let (front_view, _) = targets.views();
+        return front_view;
+    }
+
+    let commands = &params.commands;
+    let mut index = 0;
+    while index < commands.len() {
+        let command = &commands[index];
+        let type_id = AsAny::as_any(&*command.command).type_id();
+
+        let mut batch_items: SmallVec<[ErasedComputeBatchItem<'_>; 8]> = SmallVec::new();
+        let mut batch_sampling_rects: SmallVec<[PxRect; 8]> = SmallVec::new();
+        let mut cursor = index;
+
+        while cursor < commands.len() {
+            let candidate = &commands[cursor];
+            if AsAny::as_any(&*candidate.command).type_id() != type_id {
+                break;
+            }
+
+            let sampling_area = candidate.sampling_rect;
+
+            if batch_sampling_rects
+                .iter()
+                .any(|existing| rects_overlap(*existing, sampling_area))
+            {
+                break;
+            }
+
+            batch_sampling_rects.push(sampling_area);
+            batch_items.push(ErasedComputeBatchItem {
+                command: &*candidate.command,
+                size: candidate.size,
+                position: candidate.start_pos,
+                target_area: candidate.target_rect,
+            });
+            cursor += 1;
+        }
+
+        if batch_items.is_empty() {
+            batch_sampling_rects.push(command.sampling_rect);
+            batch_items.push(ErasedComputeBatchItem {
+                command: &*command.command,
+                size: command.size,
+                position: command.start_pos,
+                target_area: command.target_rect,
+            });
+            cursor = index + 1;
+        }
+
+        let (front_view, back_view) = targets.views();
+        let use_fixed_input = input_follows_front && fixed_input_view.is_some() && index == 0;
+        let input_view = if use_fixed_input {
+            fixed_input_view
+                .as_ref()
+                .expect("compute pass missing input view")
+                .clone()
+        } else if input_follows_front {
+            front_view.clone()
+        } else {
+            fixed_input_view
+                .as_ref()
+                .expect("compute pass missing input view")
+                .clone()
+        };
+
+        let copy_source = if use_fixed_input {
+            fixed_input_view
+                .as_ref()
+                .expect("compute pass missing input view")
+        } else {
+            &front_view
+        };
+        params.encoder.copy_texture_to_texture(
+            copy_source.texture().as_image_copy(),
+            back_view.texture().as_image_copy(),
+            texture_size,
+        );
+
+        {
+            let mut cpass = params
+                .encoder
+                .begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("Compute Pass"),
+                    timestamp_writes: None,
+                });
+
+            params.compute_pipeline_registry.dispatch_erased(
+                ErasedDispatchContext {
+                    device: params.device,
+                    queue: params.queue,
+                    config: params.config,
+                    target_size: PxSize::new(
+                        Px(texture_size.width as i32),
+                        Px(texture_size.height as i32),
+                    ),
+                    compute_pass: &mut cpass,
+                    resource_manager: params.resource_manager,
+                    input_view: &input_view,
+                    output_view: &back_view,
+                },
+                &batch_items,
+            );
+        }
+
+        targets.swap();
+        index = cursor;
+    }
+
+    let (front_view, _) = targets.views();
+    front_view
 }
 
 fn rects_overlap(a: PxRect, b: PxRect) -> bool {
@@ -600,242 +769,105 @@ fn rects_overlap(a: PxRect, b: PxRect) -> bool {
     !(a_right <= b_left || b_right <= a_left || a_bottom <= b_top || b_bottom <= a_top)
 }
 
-fn compute_padded_rect(
-    size: PxSize,
-    start_pos: PxPosition,
-    top: Px,
-    right: Px,
-    bottom: Px,
-    left: Px,
-    texture_size: wgpu::Extent3d,
-) -> PxRect {
-    let padded_x = (start_pos.x - left).max(Px(0));
-    let padded_y = (start_pos.y - top).max(Px(0));
-    let padded_width = (size.width + left + right).min(Px(texture_size.width as i32 - padded_x.0));
-    let padded_height =
-        (size.height + top + bottom).min(Px(texture_size.height as i32 - padded_y.0));
-    PxRect {
-        x: padded_x,
-        y: padded_y,
-        width: padded_width,
-        height: padded_height,
-    }
-}
+fn render_current_pass(params: RenderPassParams<'_, '_>) {
+    let RenderPassParams {
+        msaa_view,
+        clear_target,
+        encoder,
+        write_target,
+        commands_in_pass,
+        scene_texture_view,
+        drawer,
+        device,
+        queue,
+        config,
+        target_size,
+        clip_stack,
+        apply_clip,
+        resources,
+    } = params;
 
-fn clamp_rect_to_texture(mut rect: PxRect, texture_size: wgpu::Extent3d) -> PxRect {
-    rect.x = rect.x.positive().min(texture_size.width).into();
-    rect.y = rect.y.positive().min(texture_size.height).into();
-    rect.width = rect
-        .width
-        .positive()
-        .min(texture_size.width - rect.x.positive())
-        .into();
-    rect.height = rect
-        .height
-        .positive()
-        .min(texture_size.height - rect.y.positive())
-        .into();
-    rect
-}
-
-fn extract_sampling_rect(
-    barrier: Option<SampleRegion>,
-    size: PxSize,
-    start_pos: PxPosition,
-    texture_size: wgpu::Extent3d,
-) -> PxRect {
-    match barrier {
-        Some(SampleRegion::Global) => PxRect {
-            x: Px(0),
-            y: Px(0),
-            width: Px(texture_size.width as i32),
-            height: Px(texture_size.height as i32),
-        },
-        Some(SampleRegion::PaddedLocal(sampling)) => {
-            // For actual rendering/compute, use the sampling padding
-            compute_padded_rect(
-                size,
-                start_pos,
-                sampling.top,
-                sampling.right,
-                sampling.bottom,
-                sampling.left,
-                texture_size,
-            )
-        }
-        Some(SampleRegion::Absolute(rect)) => clamp_rect_to_texture(rect, texture_size),
-        None => extract_target_rect(size, start_pos, texture_size),
-    }
-}
-
-/// Compute the draw rectangle for a command based on its declared DrawRegion.
-fn extract_draw_rect(
-    region: DrawRegion,
-    size: PxSize,
-    start_pos: PxPosition,
-    texture_size: wgpu::Extent3d,
-) -> PxRect {
-    match region {
-        DrawRegion::Global => PxRect {
-            x: Px(0),
-            y: Px(0),
-            width: Px(texture_size.width as i32),
-            height: Px(texture_size.height as i32),
-        },
-        DrawRegion::PaddedLocal(padding) => compute_padded_rect(
-            size,
-            start_pos,
-            padding.top,
-            padding.right,
-            padding.bottom,
-            padding.left,
-            texture_size,
-        ),
-        DrawRegion::Absolute(rect) => clamp_rect_to_texture(rect, texture_size),
-    }
-}
-
-fn extract_target_rect(
-    size: PxSize,
-    start_pos: PxPosition,
-    texture_size: wgpu::Extent3d,
-) -> PxRect {
-    let x = start_pos.x.positive().min(texture_size.width);
-    let y = start_pos.y.positive().min(texture_size.height);
-    let width = size.width.positive().min(texture_size.width - x);
-    let height = size.height.positive().min(texture_size.height - y);
-    PxRect {
-        x: Px::from(x),
-        y: Px::from(y),
-        width: Px::from(width),
-        height: Px::from(height),
-    }
-}
-
-fn last_draw_in_pass(commands_in_pass: &[DrawOrClip]) -> Option<&DrawCommandWithMetadata> {
-    commands_in_pass
-        .iter()
-        .rev()
-        .find_map(|command| match command {
-            DrawOrClip::Draw(cmd) => Some(cmd),
-            DrawOrClip::Clip(_) => None,
-        })
-}
-
-fn should_start_new_pass(
-    last_draw: Option<&DrawCommandWithMetadata>,
-    next_command: &Command,
-    size: PxSize,
-    start_pos: PxPosition,
-    texture_size: wgpu::Extent3d,
-    sampling_rects_in_pass: &[PxRect],
-) -> bool {
-    let Some(last_draw) = last_draw else {
-        return false;
-    };
-
-    match (last_draw.command.sample_region(), next_command.barrier()) {
-        (None, Some(_)) => true,
-        (Some(_), Some(barrier)) => {
-            let next_sampling_rect =
-                extract_sampling_rect(Some(barrier), size, start_pos, texture_size);
-            !sampling_rects_in_pass
-                .iter()
-                .all(|rect| rect.is_orthogonal(&next_sampling_rect))
-        }
-        _ => false,
-    }
-}
-
-fn collect_sampled_draw_rects(commands_in_pass: &[DrawOrClip]) -> SmallVec<[PxRect; 8]> {
-    let mut rects = SmallVec::new();
-    for rect in commands_in_pass.iter().filter_map(|command| match command {
-        DrawOrClip::Draw(cmd) if cmd.command.sample_region().is_some() => Some(cmd.draw_rect),
-        _ => None,
-    }) {
-        rects.push(rect);
-    }
-    rects
-}
-
-fn union_rects(rects: &[PxRect]) -> Option<PxRect> {
-    let mut iter = rects.iter().copied();
-    let mut combined = iter.next()?;
-    for rect in iter {
-        combined = combined.union(&rect);
-    }
-    Some(combined)
-}
-
-fn render_current_pass(params: RenderPassParams<'_>) {
-    let (view, resolve_target) = if let Some(msaa_view) = params.msaa_view {
-        (msaa_view, Some(params.write_target))
+    let (view, resolve_target) = if let Some(msaa_view) = msaa_view.as_ref() {
+        (msaa_view, Some(&write_target))
     } else {
-        (params.write_target, None)
+        (&write_target, None)
     };
 
-    let load_ops = if *params.is_first_pass {
-        *params.is_first_pass = false;
+    let load_ops = if clear_target {
         wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
     } else {
         wgpu::LoadOp::Load
     };
 
-    let mut rpass = params
-        .encoder
-        .begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                depth_slice: None,
-                resolve_target,
-                ops: wgpu::Operations {
-                    load: load_ops,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            ..Default::default()
-        });
+    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("Render Pass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target,
+            ops: wgpu::Operations {
+                load: load_ops,
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        ..Default::default()
+    });
 
-    params.drawer.begin_pass(
-        params.device,
-        params.queue,
-        params.config,
+    drawer.begin_pass(
+        device,
+        queue,
+        config,
+        target_size,
         &mut rpass,
-        params.scene_texture_view,
+        &scene_texture_view,
     );
 
     // Prepare buffered submission state
     let mut buffer: Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)> = Vec::new();
     let mut last_command_type_id = None;
     let mut current_batch_draw_rect: Option<PxRect> = None;
-    for cmd in mem::take(params.commands_in_pass).into_iter() {
+    let mut current_batch_read: Option<RenderResourceId> = None;
+    for cmd in mem::take(commands_in_pass).into_iter() {
         let cmd = match cmd {
             DrawOrClip::Clip(clip_ops) => {
                 // Must flush any existing buffered commands before changing clip state
                 if !buffer.is_empty() {
+                    let scene_view = resolve_scene_view(
+                        current_batch_read,
+                        &scene_texture_view,
+                        &write_target,
+                        resources,
+                    );
                     submit_buffered_commands(
                         &mut rpass,
-                        params.drawer,
-                        SubmitContext {
-                            device: params.device,
-                            queue: params.queue,
-                            config: params.config,
+                        SubmitBatchParams {
+                            drawer,
+                            resources: SubmitContext {
+                                device,
+                                queue,
+                                config,
+                            },
+                            scene_texture_view: scene_view,
+                            target_size,
+                            clip_stack: if apply_clip {
+                                clip_stack.as_slice()
+                            } else {
+                                &[]
+                            },
+                            current_batch_draw_rect: &mut current_batch_draw_rect,
                         },
                         &mut buffer,
-                        params.scene_texture_view,
-                        params.clip_stack.as_slice(),
-                        &mut current_batch_draw_rect,
                     );
                     last_command_type_id = None; // Reset batch type after flush
+                    current_batch_read = None;
                 }
                 // Update clip stack
                 match clip_ops {
                     ClipOps::Push(rect) => {
-                        params.clip_stack.push(rect);
+                        clip_stack.push(rect);
                     }
                     ClipOps::Pop => {
-                        params.clip_stack.pop();
+                        clip_stack.pop();
                     }
                 }
                 // continue to next command
@@ -845,19 +877,36 @@ fn render_current_pass(params: RenderPassParams<'_>) {
         };
 
         // If the incoming command cannot be merged into the current batch, flush first.
-        if !can_merge_into_batch(&last_command_type_id, cmd.type_id) && !buffer.is_empty() {
+        let read_resource = cmd.read_resource;
+        if (!can_merge_into_batch(&last_command_type_id, cmd.type_id)
+            || current_batch_read != read_resource)
+            && !buffer.is_empty()
+        {
+            let scene_view = resolve_scene_view(
+                current_batch_read,
+                &scene_texture_view,
+                &write_target,
+                resources,
+            );
             submit_buffered_commands(
                 &mut rpass,
-                params.drawer,
-                SubmitContext {
-                    device: params.device,
-                    queue: params.queue,
-                    config: params.config,
+                SubmitBatchParams {
+                    drawer,
+                    resources: SubmitContext {
+                        device,
+                        queue,
+                        config,
+                    },
+                    scene_texture_view: scene_view,
+                    target_size,
+                    clip_stack: if apply_clip {
+                        clip_stack.as_slice()
+                    } else {
+                        &[]
+                    },
+                    current_batch_draw_rect: &mut current_batch_draw_rect,
                 },
                 &mut buffer,
-                params.scene_texture_view,
-                params.clip_stack.as_slice(),
-                &mut current_batch_draw_rect,
             );
         }
 
@@ -865,44 +914,80 @@ fn render_current_pass(params: RenderPassParams<'_>) {
         // merge helper).
         buffer.push((cmd.command, cmd.size, cmd.start_pos));
         last_command_type_id = Some(cmd.type_id);
+        current_batch_read = read_resource;
         current_batch_draw_rect = Some(merge_batch_rect(current_batch_draw_rect, cmd.draw_rect));
     }
 
     // If there are any remaining commands in the buffer, submit them
     if !buffer.is_empty() {
+        let scene_view = resolve_scene_view(
+            current_batch_read,
+            &scene_texture_view,
+            &write_target,
+            resources,
+        );
         submit_buffered_commands(
             &mut rpass,
-            params.drawer,
-            SubmitContext {
-                device: params.device,
-                queue: params.queue,
-                config: params.config,
+            SubmitBatchParams {
+                drawer,
+                resources: SubmitContext {
+                    device,
+                    queue,
+                    config,
+                },
+                scene_texture_view: scene_view,
+                target_size,
+                clip_stack: if apply_clip {
+                    clip_stack.as_slice()
+                } else {
+                    &[]
+                },
+                current_batch_draw_rect: &mut current_batch_draw_rect,
             },
             &mut buffer,
-            params.scene_texture_view,
-            params.clip_stack.as_slice(),
-            &mut current_batch_draw_rect,
         );
     }
 
-    params.drawer.end_pass(
-        params.device,
-        params.queue,
-        params.config,
+    drawer.end_pass(
+        device,
+        queue,
+        config,
+        target_size,
         &mut rpass,
-        params.scene_texture_view,
+        &scene_texture_view,
     );
+}
+
+fn resolve_scene_view<'a>(
+    read_resource: Option<RenderResourceId>,
+    scene_texture_view: &'a wgpu::TextureView,
+    write_target: &'a wgpu::TextureView,
+    resources: &'a FrameResources<'_>,
+) -> &'a wgpu::TextureView {
+    match read_resource {
+        Some(RenderResourceId::SceneColor) => scene_texture_view,
+        Some(resource_id @ RenderResourceId::Local(_)) => resources
+            .local_slot(resource_id)
+            .map(|slot| slot.front_view())
+            .unwrap_or(scene_texture_view),
+        Some(RenderResourceId::SceneDepth) => scene_texture_view,
+        None => write_target,
+    }
 }
 
 fn submit_buffered_commands(
     rpass: &mut wgpu::RenderPass<'_>,
-    drawer: &mut Drawer,
-    resources: SubmitContext<'_>,
+    params: SubmitBatchParams<'_, '_>,
     buffer: &mut Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)>,
-    scene_texture_view: &wgpu::TextureView,
-    clip_stack: &[PxRect],
-    current_batch_draw_rect: &mut Option<PxRect>,
 ) {
+    let SubmitBatchParams {
+        drawer,
+        resources,
+        scene_texture_view,
+        target_size,
+        clip_stack,
+        current_batch_draw_rect,
+    } = params;
     // Take the buffered commands and convert to the transient representation
     // expected by drawer.submit
     let commands = mem::take(buffer);
@@ -914,7 +999,7 @@ fn submit_buffered_commands(
     // Apply clipping to the current batch rectangle; if nothing remains, abort
     // early.
     let (current_clip_rect, anything_to_submit) =
-        apply_clip_to_batch_rect(clip_stack, current_batch_draw_rect);
+        apply_clip_to_batch_rect(clip_stack, current_batch_draw_rect, target_size);
     if !anything_to_submit {
         return;
     }
@@ -929,6 +1014,7 @@ fn submit_buffered_commands(
             device: resources.device,
             queue: resources.queue,
             config: resources.config,
+            target_size,
             render_pass: rpass,
             scene_texture_view,
             clip_rect: current_clip_rect,
@@ -947,6 +1033,11 @@ fn set_scissor_rect_from_pxrect(rpass: &mut wgpu::RenderPass<'_>, rect: PxRect) 
     );
 }
 
+fn clamp_rect_to_target(rect: PxRect, target_size: PxSize) -> Option<PxRect> {
+    let target_rect = PxRect::from_position_size(PxPosition::ZERO, target_size);
+    rect.intersection(&target_rect)
+}
+
 /// Apply clip_stack to current_batch_draw_rect. Returns false if intersection
 /// yields nothing (meaning there is nothing to submit), true otherwise.
 ///
@@ -955,18 +1046,33 @@ fn set_scissor_rect_from_pxrect(rpass: &mut wgpu::RenderPass<'_>, rect: PxRect) 
 fn apply_clip_to_batch_rect(
     clip_stack: &[PxRect],
     current_batch_draw_rect: &mut Option<PxRect>,
+    target_size: PxSize,
 ) -> (Option<PxRect>, bool) {
-    if let Some(clipped_rect) = clip_stack.last() {
-        let Some(current_rect) = current_batch_draw_rect.as_ref() else {
-            return (Some(*clipped_rect), false);
-        };
-        if let Some(final_rect) = current_rect.intersection(clipped_rect) {
-            *current_batch_draw_rect = Some(final_rect);
-            return (Some(*clipped_rect), true);
+    let clipped_rect = clip_stack
+        .last()
+        .copied()
+        .and_then(|rect| clamp_rect_to_target(rect, target_size));
+
+    let Some(current_rect) = current_batch_draw_rect.as_ref() else {
+        return (clipped_rect, false);
+    };
+
+    let Some(mut final_rect) = clamp_rect_to_target(*current_rect, target_size) else {
+        *current_batch_draw_rect = None;
+        return (clipped_rect, false);
+    };
+
+    if let Some(clip_rect) = clipped_rect {
+        if let Some(intersection) = final_rect.intersection(&clip_rect) {
+            final_rect = intersection;
+        } else {
+            *current_batch_draw_rect = None;
+            return (Some(clip_rect), false);
         }
-        return (Some(*clipped_rect), false);
     }
-    (None, true)
+
+    *current_batch_draw_rect = Some(final_rect);
+    (clipped_rect, true)
 }
 
 /// Determine whether `next_type_id` (with potential clipping) can be merged
@@ -983,22 +1089,4 @@ fn can_merge_into_batch(last_command_type_id: &Option<TypeId>, next_type_id: Typ
 /// Merge the existing optional batch rect with a new command rect.
 fn merge_batch_rect(current: Option<PxRect>, next: PxRect) -> PxRect {
     current.map(|dr| dr.union(&next)).unwrap_or(next)
-}
-
-struct DrawCommandWithMetadata {
-    command: Box<dyn DrawCommand>,
-    type_id: TypeId,
-    size: PxSize,
-    start_pos: PxPosition,
-    draw_rect: PxRect,
-}
-
-enum DrawOrClip {
-    Draw(DrawCommandWithMetadata),
-    Clip(ClipOps),
-}
-
-enum ClipOps {
-    Push(PxRect),
-    Pop,
 }

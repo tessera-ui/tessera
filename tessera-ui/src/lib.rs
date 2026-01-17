@@ -336,6 +336,10 @@ pub mod plugin;
 #[cfg(feature = "profiling")]
 pub mod profiler;
 pub mod px;
+mod render_graph;
+pub mod render_module;
+mod render_pass;
+pub mod render_scene;
 pub mod renderer;
 #[doc(hidden)]
 pub mod runtime;
@@ -371,8 +375,14 @@ pub use crate::{
         with_plugin_mut,
     },
     px::{Px, PxPosition, PxRect, PxSize},
+    render_graph::{
+        RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp, RenderGraphParts,
+        RenderResource, RenderResourceId, RenderTextureDesc,
+    },
+    render_module::{RenderMiddleware, RenderMiddlewareContext, RenderModule},
+    render_scene::{Command, DrawRegion, PaddingRect, SampleRegion},
     renderer::{
-        Command, DrawRegion, PaddingRect, Renderer, SampleRegion,
+        Renderer,
         compute::{
             self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry, ComputeResource,
             ComputeResourceManager, ComputeResourceRef,
@@ -420,10 +430,39 @@ pub fn __tessera_init_deadlock_detection() {
     }
 }
 
+/// Internal helper to initialize tracing subscribers for app entry points.
+#[doc(hidden)]
+pub fn __tessera_init_tracing() {
+    #[cfg(target_os = "android")]
+    {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_max_level(tracing::Level::INFO)
+            .try_init();
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let filter = match tracing_subscriber::EnvFilter::try_from_default_env() {
+            Ok(filter) => filter,
+            Err(_) => match tracing_subscriber::EnvFilter::try_new("error,tessera_ui=info") {
+                Ok(filter) => filter,
+                Err(_) => tracing_subscriber::EnvFilter::new("error"),
+            },
+        };
+
+        let _ = tracing_subscriber::fmt()
+            .pretty()
+            .with_env_filter(filter)
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+            .try_init();
+    }
+}
+
 /// Defines the Tessera application entry points for desktop and Android.
 ///
 /// This macro registers plugin crates by calling their `init()` function,
-/// then starts the renderer with a provided pipeline registration function.
+/// then starts the renderer with the provided render modules.
 ///
 /// # Example:
 ///
@@ -436,7 +475,7 @@ pub fn __tessera_init_deadlock_detection() {
 ///     });
 /// }
 ///
-/// tessera_ui::entry!(app, pipelines = [tessera_components]);
+/// tessera_ui::entry!(app, modules = [tessera_components::TesseraComponents]);
 /// ```
 #[macro_export]
 macro_rules! entry {
@@ -446,7 +485,7 @@ macro_rules! entry {
             $entry,
             {
                 plugins: [],
-                pipelines: [],
+                modules: [],
                 config: $crate::entry!(@config)
             },
         );
@@ -457,7 +496,7 @@ macro_rules! entry {
             $entry,
             {
                 plugins: [],
-                pipelines: [],
+                modules: [],
                 config: $crate::entry!(@config)
             },
             $($rest)+
@@ -468,140 +507,138 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
         ) => {
-        $crate::entry!(@run $entry, $config, [$($pipelines),*], [$($plugins),*]);
+        $crate::entry!(@run $entry, $config, [$($modules),*], [$($plugins),*]);
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
         plugins = [$($plugin:ident),* $(,)?],
         $($rest:tt)+
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugin),*], pipelines: [$($pipelines),*], config: $config },
+            { plugins: [$($plugin),*], modules: [$($modules),*], config: $config },
             $($rest)+
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
         plugins = [$($plugin:ident),* $(,)?],
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugin),*], pipelines: [$($pipelines),*], config: $config },
+            { plugins: [$($plugin),*], modules: [$($modules),*], config: $config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
         plugins = [$($plugin:ident),* $(,)?]
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugin),*], pipelines: [$($pipelines),*], config: $config },
+            { plugins: [$($plugin),*], modules: [$($modules),*], config: $config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
-        pipelines = [$($new_pipelines:ident),* $(,)?],
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        modules = [$($new_modules:expr),* $(,)?],
         $($rest:tt)+
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], pipelines: [$($new_pipelines),*], config: $config },
+            { plugins: [$($plugins),*], modules: [$($new_modules),*], config: $config },
             $($rest)+
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
-        pipelines = [$($new_pipelines:ident),* $(,)?],
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        modules = [$($new_modules:expr),* $(,)?],
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], pipelines: [$($new_pipelines),*], config: $config },
+            { plugins: [$($plugins),*], modules: [$($new_modules),*], config: $config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
-        pipelines = [$($new_pipelines:ident),* $(,)?]
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
+        modules = [$($new_modules:expr),* $(,)?]
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], pipelines: [$($new_pipelines),*], config: $config },
+            { plugins: [$($plugins),*], modules: [$($new_modules),*], config: $config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
         config = $new_config:expr,
         $($rest:tt)+
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], pipelines: [$($pipelines),*], config: $new_config },
+            { plugins: [$($plugins),*], modules: [$($modules),*], config: $new_config },
             $($rest)+
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
         config = $new_config:expr,
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], pipelines: [$($pipelines),*], config: $new_config },
+            { plugins: [$($plugins),*], modules: [$($modules),*], config: $new_config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
         config = $new_config:expr
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], pipelines: [$($pipelines),*], config: $new_config },
+            { plugins: [$($plugins),*], modules: [$($modules),*], config: $new_config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
         , $($rest:tt)*
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], pipelines: [$($pipelines),*], config: $config },
+            { plugins: [$($plugins),*], modules: [$($modules),*], config: $config },
             $($rest)*
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:ident),*], pipelines: [$($pipelines:ident),*], config: $config:expr },
+        { plugins: [$($plugins:ident),*], modules: [$($modules:expr),*], config: $config:expr },
         $($unexpected:tt)+
     ) => {
         compile_error!("Unsupported argument for tessera_ui::entry!");
     };
-    (@run $entry:path, $config:expr, [$($pipeline:ident),*], [$($plugin:ident),*]) => {
+    (@run $entry:path, $config:expr, [$($module:expr),*], [$($plugin:ident),*]) => {
         #[doc(hidden)]
-        fn __tessera_register_pipelines<'a>(context: &mut $crate::PipelineContext<'a>) {
-            $(
-                $pipeline::init(context);
-            )*
+        fn __tessera_modules() -> Vec<Box<dyn $crate::RenderModule>> {
+            vec![$(Box::new($module)),*]
         }
 
         #[cfg(target_os = "android")]
@@ -619,13 +656,14 @@ macro_rules! entry {
         pub fn __tessera_entry(
             android_app: $crate::winit::platform::android::activity::AndroidApp,
         ) {
+            $crate::__tessera_init_tracing();
             $crate::__tessera_init_deadlock_detection();
             $(
                 $crate::register_plugin($plugin::init());
             )*
             if let Err(err) = $crate::Renderer::run_with_config(
                 $entry,
-                __tessera_register_pipelines,
+                __tessera_modules(),
                 android_app,
                 $config,
             ) {
@@ -641,13 +679,14 @@ macro_rules! entry {
         #[cfg(not(target_os = "android"))]
         #[doc(hidden)]
         pub fn __tessera_entry() {
+            $crate::__tessera_init_tracing();
             $crate::__tessera_init_deadlock_detection();
             $(
                 $crate::register_plugin($plugin::init());
             )*
             if let Err(err) = $crate::Renderer::run_with_config(
                 $entry,
-                __tessera_register_pipelines,
+                __tessera_modules(),
                 $config,
             ) {
                 eprintln!("App failed to run: {err}");

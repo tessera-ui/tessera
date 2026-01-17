@@ -44,6 +44,7 @@ impl Drawer {
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
+        target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         scene_texture_view: &wgpu::TextureView,
     ) {
@@ -51,6 +52,7 @@ impl Drawer {
             gpu,
             queue,
             config,
+            target_size,
             render_pass,
             scene_texture_view,
         );
@@ -65,11 +67,18 @@ impl Drawer {
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
+        target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         scene_texture_view: &wgpu::TextureView,
     ) {
-        self.pipeline_registry
-            .end_all_passes(gpu, queue, config, render_pass, scene_texture_view);
+        self.pipeline_registry.end_all_passes(
+            gpu,
+            queue,
+            config,
+            target_size,
+            render_pass,
+            scene_texture_view,
+        );
     }
 
     /// Submit a draw command to the appropriate pipeline for rendering.

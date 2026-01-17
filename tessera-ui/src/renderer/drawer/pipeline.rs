@@ -128,6 +128,8 @@ pub struct PassContext<'a, 'b> {
     pub queue: &'a wgpu::Queue,
     /// The current surface configuration.
     pub config: &'a wgpu::SurfaceConfiguration,
+    /// Target texture size for the current pass.
+    pub target_size: PxSize,
     /// The active render pass encoder.
     pub render_pass: &'a mut wgpu::RenderPass<'b>,
     /// A view of the current scene texture.
@@ -166,6 +168,8 @@ pub struct DrawContext<'a, 'b, 'c, T> {
     pub queue: &'a wgpu::Queue,
     /// The current surface configuration.
     pub config: &'a wgpu::SurfaceConfiguration,
+    /// Target texture size for the current pass.
+    pub target_size: PxSize,
     /// The active render pass encoder.
     pub render_pass: &'a mut wgpu::RenderPass<'b>,
     /// The draw commands to be processed.
@@ -184,6 +188,8 @@ pub struct ErasedDrawContext<'a, 'b> {
     pub queue: &'a wgpu::Queue,
     /// Current surface configuration for the render target.
     pub config: &'a wgpu::SurfaceConfiguration,
+    /// Target texture size for the current pass.
+    pub target_size: PxSize,
     /// Active render pass that receives draw calls.
     pub render_pass: &'a mut wgpu::RenderPass<'b>,
     /// Scene texture view available for sampling.
@@ -422,6 +428,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
             device,
             queue,
             config,
+            target_size,
             render_pass,
             scene_texture_view,
             clip_rect,
@@ -445,6 +452,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
                 device,
                 queue,
                 config,
+                target_size,
                 render_pass,
                 commands: &typed_commands,
                 scene_texture_view,
@@ -537,6 +545,7 @@ impl PipelineRegistry {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
+        target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         scene_texture_view: &wgpu::TextureView,
     ) {
@@ -545,6 +554,7 @@ impl PipelineRegistry {
                 device,
                 queue,
                 config,
+                target_size,
                 render_pass,
                 scene_texture_view,
             });
@@ -556,6 +566,7 @@ impl PipelineRegistry {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
+        target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         scene_texture_view: &wgpu::TextureView,
     ) {
@@ -564,6 +575,7 @@ impl PipelineRegistry {
                 device,
                 queue,
                 config,
+                target_size,
                 render_pass,
                 scene_texture_view,
             });

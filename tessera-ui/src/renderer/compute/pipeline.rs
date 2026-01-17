@@ -84,7 +84,7 @@
 use std::{any::TypeId, collections::HashMap};
 
 use crate::{
-    PxPosition, PxRect, PxSize, compute::resource::ComputeResourceManager, renderer::command::AsAny,
+    PxPosition, PxRect, PxSize, compute::resource::ComputeResourceManager, render_scene::AsAny,
 };
 
 use super::command::ComputeCommand;
@@ -145,6 +145,8 @@ pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
     pub queue: &'a wgpu::Queue,
     /// Surface configuration describing output formats and dimensions.
     pub config: &'a wgpu::SurfaceConfiguration,
+    /// Target texture size for the current compute pass.
+    pub target_size: PxSize,
     /// Active compute pass encoder.
     pub compute_pass: &'a mut wgpu::ComputePass<'b>,
     /// Batch of typed compute items to process.
@@ -162,6 +164,7 @@ pub(crate) struct ErasedDispatchContext<'a, 'b> {
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub config: &'a wgpu::SurfaceConfiguration,
+    pub target_size: PxSize,
     pub compute_pass: &'a mut wgpu::ComputePass<'b>,
     pub resource_manager: &'a mut ComputeResourceManager,
     pub input_view: &'a wgpu::TextureView,
@@ -310,6 +313,7 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
             device: context.device,
             queue: context.queue,
             config: context.config,
+            target_size: context.target_size,
             compute_pass: context.compute_pass,
             items: &typed_items,
             resource_manager: context.resource_manager,

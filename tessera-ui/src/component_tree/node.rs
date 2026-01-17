@@ -1,5 +1,4 @@
 use std::{
-    any::TypeId,
     collections::HashMap,
     ops::{Add, AddAssign},
     sync::Arc,
@@ -10,18 +9,17 @@ use dashmap::DashMap;
 use indextree::NodeId;
 use parking_lot::RwLock;
 use rayon::prelude::*;
-use smallvec::SmallVec;
 use tracing::debug;
 use winit::window::CursorIcon;
 
 use crate::{
-    Clipboard, ComputeCommand, ComputeResourceManager, DrawCommand, Px,
+    Clipboard, ComputeResourceManager, Px,
     accessibility::{AccessibilityActionHandler, AccessibilityNode, AccessibilityPadding},
     cursor::CursorEvent,
     dp::Dp,
     layout::{LayoutInput, LayoutOutput, LayoutResult, LayoutSpecDyn},
     px::{PxPosition, PxSize},
-    renderer::Command,
+    render_graph::RenderFragment,
     runtime::{LayoutCacheEntry, RuntimePhase, push_current_node, push_phase},
 };
 
@@ -291,13 +289,11 @@ pub struct ComponentNodeMetaData {
     /// The effective clipping rectangle for this node, considering all its
     /// ancestors. This is calculated once per frame before event handling.
     pub event_clip_rect: Option<crate::PxRect>,
-    /// Commands associated with this node.
+    /// Render fragment associated with this node.
     ///
-    /// This stores both draw and compute commands in a unified vector using the
-    /// new `Command` enum. Commands are collected during the measure phase and
-    /// executed during rendering. The order of commands in this vector
-    /// determines their execution order.
-    pub(crate) commands: SmallVec<[(Command, TypeId); 4]>,
+    /// Commands are collected during the record phase and merged into the frame
+    /// graph during rendering.
+    pub(crate) fragment: RenderFragment,
     /// Whether this node clips its children.
     pub clips_children: bool,
     /// Opacity multiplier applied to this node and its descendants.
@@ -317,7 +313,7 @@ impl ComponentNodeMetaData {
             rel_position: None,
             abs_position: None,
             event_clip_rect: None,
-            commands: SmallVec::new(),
+            fragment: RenderFragment::default(),
             clips_children: false,
             opacity: 1.0,
             accessibility: None,
@@ -325,29 +321,14 @@ impl ComponentNodeMetaData {
         }
     }
 
-    /// Pushes a draw command to the node's metadata.
-    ///
-    /// Draw commands are responsible for rendering visual content (shapes,
-    /// text, images). This method wraps the command in the unified
-    /// `Command::Draw` variant and adds it to the command queue. Commands
-    /// are executed in the order they are added.
-    pub fn push_draw_command<C: DrawCommand + 'static>(&mut self, command: C) {
-        let command = Box::new(command);
-        let command = command as Box<dyn DrawCommand>;
-        let command = Command::Draw(command);
-        self.commands.push((command, TypeId::of::<C>()));
+    /// Returns a mutable render fragment for this node.
+    pub fn fragment_mut(&mut self) -> &mut RenderFragment {
+        &mut self.fragment
     }
 
-    /// Pushes a compute command to the node's metadata.
-    ///
-    /// Compute commands perform GPU computation tasks (post-processing effects,
-    /// complex calculations). This method wraps the command in the unified
-    /// `Command::Compute` variant and adds it to the command queue.
-    pub fn push_compute_command<C: ComputeCommand + 'static>(&mut self, command: C) {
-        let command = Box::new(command);
-        let command = command as Box<dyn ComputeCommand>;
-        let command = Command::Compute(command);
-        self.commands.push((command, TypeId::of::<C>()));
+    /// Takes the current fragment and replaces it with an empty one.
+    pub(crate) fn take_fragment(&mut self) -> RenderFragment {
+        std::mem::take(&mut self.fragment)
     }
 }
 

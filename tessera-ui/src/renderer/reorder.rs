@@ -16,10 +16,7 @@ use petgraph::{
 
 use crate::{
     px::{Px, PxPosition, PxRect, PxSize},
-    renderer::{
-        RenderCommand,
-        command::{Command, SampleRegion},
-    },
+    render_scene::{Command, SampleRegion, SceneItem},
 };
 
 /// Instruction category for sorting.
@@ -52,8 +49,8 @@ impl InstructionInfo {
     /// Creates a new `InstructionInfo` from a command and its context.
     ///
     /// It calculates the instruction category and the bounding rectangle.
-    pub(crate) fn new(render_command: RenderCommand, original_index: usize) -> Self {
-        let RenderCommand {
+    pub(crate) fn new(render_command: SceneItem, original_index: usize) -> Self {
+        let SceneItem {
             command,
             type_id,
             size,
@@ -169,8 +166,8 @@ impl PartialOrd for PriorityNode {
 }
 
 pub(crate) fn reorder_instructions(
-    commands: impl IntoIterator<Item = RenderCommand>,
-) -> Vec<RenderCommand> {
+    commands: impl IntoIterator<Item = SceneItem>,
+) -> Vec<SceneItem> {
     let instructions: Vec<InstructionInfo> = commands
         .into_iter()
         .enumerate()
@@ -196,7 +193,7 @@ pub(crate) fn reorder_instructions(
     for node_index in sorted_node_indices {
         let original_index = node_index.index();
         if let Some(info) = original_infos[original_index].take() {
-            sorted_instructions.push(RenderCommand {
+            sorted_instructions.push(SceneItem {
                 command: info.command,
                 type_id: info.type_id,
                 size: info.size,
@@ -356,13 +353,16 @@ fn build_dependency_graph(instructions: &[InstructionInfo]) -> DiGraph<(), ()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::{any::TypeId, fmt::Debug};
+
     use crate::{
+        SampleRegion,
         px::{Px, PxPosition, PxRect, PxSize},
-        renderer::{SampleRegion, command::Command, compute::ComputeCommand, drawer::DrawCommand},
+        render_scene::Command,
+        renderer::{compute::ComputeCommand, drawer::DrawCommand},
     };
-    use std::any::TypeId;
-    use std::fmt::Debug;
+
+    use super::*;
 
     #[derive(Debug, PartialEq, Clone)]
     struct MockDrawCommand {
@@ -422,13 +422,13 @@ mod tests {
         pos: PxPosition,
         barrier_req: Option<SampleRegion>,
         is_compute: bool,
-    ) -> RenderCommand {
+    ) -> SceneItem {
         let size = PxSize::new(Px(10), Px(10));
         if is_compute {
             let cmd = MockComputeCommand {
                 barrier_req: barrier_req.unwrap_or(SampleRegion::Global),
             };
-            RenderCommand {
+            SceneItem {
                 command: Command::Compute(Box::new(cmd)),
                 type_id: TypeId::of::<MockComputeCommand>(),
                 size,
@@ -437,7 +437,7 @@ mod tests {
             }
         } else {
             let cmd = MockDrawCommand { barrier_req };
-            RenderCommand {
+            SceneItem {
                 command: Command::Draw(Box::new(cmd)),
                 type_id: TypeId::of::<MockDrawCommand>(),
                 size,
@@ -451,13 +451,13 @@ mod tests {
         pos: PxPosition,
         barrier_req: Option<SampleRegion>,
         is_compute: bool,
-    ) -> RenderCommand {
+    ) -> SceneItem {
         let size = PxSize::new(Px(10), Px(10));
         if is_compute {
             let cmd = MockComputeCommand2 {
                 barrier_req: barrier_req.unwrap_or(SampleRegion::Global),
             };
-            RenderCommand {
+            SceneItem {
                 command: Command::Compute(Box::new(cmd)),
                 type_id: TypeId::of::<MockComputeCommand2>(),
                 size,
@@ -466,7 +466,7 @@ mod tests {
             }
         } else {
             let cmd = MockDrawCommand2 { barrier_req };
-            RenderCommand {
+            SceneItem {
                 command: Command::Draw(Box::new(cmd)),
                 type_id: TypeId::of::<MockDrawCommand2>(),
                 size,
@@ -476,7 +476,7 @@ mod tests {
         }
     }
 
-    fn get_positions(commands: &[RenderCommand]) -> Vec<PxPosition> {
+    fn get_positions(commands: &[SceneItem]) -> Vec<PxPosition> {
         commands.iter().map(|cmd| cmd.position).collect()
     }
 
@@ -623,7 +623,7 @@ mod tests {
         let clip_rect = PxRect::new(Px(0), Px(0), Px(50), Px(50));
         let clip_size = PxSize::new(Px(50), Px(50));
         let commands = vec![
-            RenderCommand {
+            SceneItem {
                 command: Command::ClipPush(clip_rect),
                 type_id: TypeId::of::<Command>(),
                 size: clip_size,
@@ -635,7 +635,7 @@ mod tests {
                 Some(SampleRegion::Global),
                 false,
             ),
-            RenderCommand {
+            SceneItem {
                 command: Command::ClipPop,
                 type_id: TypeId::of::<Command>(),
                 size: clip_size,
@@ -679,7 +679,7 @@ mod tests {
         let clip_rect = PxRect::new(Px(0), Px(0), Px(400), Px(400));
         let clip_size = PxSize::new(Px(400), Px(400));
         let commands = vec![
-            RenderCommand {
+            SceneItem {
                 command: Command::ClipPush(clip_rect),
                 type_id: TypeId::of::<Command>(),
                 size: clip_size,
@@ -728,7 +728,7 @@ mod tests {
                 ))),
                 true,
             ),
-            RenderCommand {
+            SceneItem {
                 command: Command::ClipPop,
                 type_id: TypeId::of::<Command>(),
                 size: clip_size,
@@ -795,7 +795,7 @@ mod tests {
             }
         }
 
-        fn random_commands(seed: u64) -> Vec<RenderCommand> {
+        fn random_commands(seed: u64) -> Vec<SceneItem> {
             let mut rng = Lcg::new(seed);
             let mut commands = Vec::new();
             let len = 5 + rng.next_range(6) as usize; // 5..10 commands before balancing clip stack
@@ -856,7 +856,7 @@ mod tests {
                             height,
                         );
                         let size = PxSize::new(width, height);
-                        commands.push(RenderCommand {
+                        commands.push(SceneItem {
                             command: Command::ClipPush(rect),
                             type_id: TypeId::of::<Command>(),
                             size,
@@ -869,7 +869,7 @@ mod tests {
                         // Clip pop if possible, otherwise fallback to draw
                         if clip_depth > 0 {
                             clip_depth -= 1;
-                            commands.push(RenderCommand {
+                            commands.push(SceneItem {
                                 command: Command::ClipPop,
                                 type_id: TypeId::of::<Command>(),
                                 size: PxSize::new(Px(0), Px(0)),
@@ -889,7 +889,7 @@ mod tests {
 
             while clip_depth > 0 {
                 clip_depth -= 1;
-                commands.push(RenderCommand {
+                commands.push(SceneItem {
                     command: Command::ClipPop,
                     type_id: TypeId::of::<Command>(),
                     size: PxSize::new(Px(0), Px(0)),
