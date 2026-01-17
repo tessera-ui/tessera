@@ -9,6 +9,7 @@ use commands::{
 };
 
 mod commands;
+mod output;
 mod template;
 
 #[derive(Parser)]
@@ -239,8 +240,8 @@ fn run() -> Result<()> {
 }
 
 fn print_error(err: &anyhow::Error) {
-    eprintln!("Error: {err}");
+    output::error(err.to_string());
     for cause in err.chain().skip(1) {
-        eprintln!("Caused by: {cause}");
+        output::note(format!("caused by: {cause}"));
     }
 }

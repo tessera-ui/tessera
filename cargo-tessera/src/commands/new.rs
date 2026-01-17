@@ -1,22 +1,12 @@
-use std::{fs, path::Path};
+use std::{fs, path::Path, time::Instant};
 
 use anyhow::{Context, Result};
-use comfy_table::{
-    Attribute, Cell, ContentArrangement, Table, modifiers::UTF8_ROUND_CORNERS as RoundCorners,
-    presets::UTF8_FULL,
-};
 use handlebars::Handlebars;
 use include_dir::{Dir, include_dir};
-use inquire::{
-    Select as ChoicePrompt, Text,
-    error::CustomUserError,
-    ui::{Attributes, Color, ErrorMessageRenderConfig, RenderConfig, StyleSheet, Styled},
-    validator::Validation,
-};
-use owo_colors::colored::*;
+use inquire::{Select as ChoicePrompt, Text, error::CustomUserError, validator::Validation};
 use serde_json::json;
 
-use crate::template::write_template_dir_at;
+use crate::{output, template::write_template_dir_at};
 
 static TEMPLATES: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates");
 
@@ -60,7 +50,6 @@ pub fn prompt_project_name() -> Result<String> {
     };
 
     let name = Text::new("Project name")
-        .with_render_config(prompt_theme())
         .with_help_message("lowercase, numbers, '-' or '_', must start with a letter")
         .with_placeholder("my-tessera-app")
         .with_validator(validator)
@@ -70,8 +59,6 @@ pub fn prompt_project_name() -> Result<String> {
 }
 
 pub fn execute(name: &str, template: &str) -> Result<()> {
-    println!("{}", "Creating new Tessera project...".bright_cyan());
-
     let project_dir = Path::new(name);
 
     // Check if directory already exists
@@ -83,14 +70,20 @@ pub fn execute(name: &str, template: &str) -> Result<()> {
     fs::create_dir_all(project_dir).context("Failed to create project directory")?;
 
     // Generate project from template
+    let started = Instant::now();
     generate_from_template(project_dir, template)?;
 
-    println!(
-        "\n{} Project '{}' created successfully!",
-        "Success".green(),
-        name.bright_green()
+    let duration = output::format_duration(started.elapsed());
+    output::status(
+        "Created",
+        format!(
+            "tessera app `{}` (template `{}`) in {}",
+            name, template, duration
+        ),
     );
-    print_project_summary(name, template);
+    output::note("Next steps:");
+    output::step(format!("cd {}", name));
+    output::step("cargo tessera dev");
 
     Ok(())
 }
@@ -112,8 +105,7 @@ pub fn select_template_interactive() -> Result<String> {
     }
 
     let selection = ChoicePrompt::new("Select a template", templates.clone())
-        .with_render_config(prompt_theme())
-        .with_help_message("Use ↑ ↓ to navigate, Enter to confirm")
+        .with_help_message("Use arrow keys to navigate, Enter to confirm")
         .prompt()?;
 
     Ok(selection)
@@ -150,58 +142,4 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
         &handlebars,
         &data,
     )
-}
-
-fn prompt_theme() -> RenderConfig<'static> {
-    let accent = Color::LightCyan;
-    let mut config = RenderConfig::default_colored()
-        .with_prompt_prefix(Styled::new(">").with_fg(accent))
-        .with_answered_prompt_prefix(Styled::new("ok").with_fg(Color::LightGreen))
-        .with_canceled_prompt_indicator(Styled::new("cancelled").with_fg(Color::LightRed))
-        .with_highlighted_option_prefix(Styled::new("›").with_fg(accent))
-        .with_scroll_up_prefix(Styled::new("↑").with_fg(Color::DarkGrey))
-        .with_scroll_down_prefix(Styled::new("↓").with_fg(Color::DarkGrey))
-        .with_selected_checkbox(Styled::new("◉").with_fg(accent))
-        .with_unselected_checkbox(Styled::new("○").with_fg(Color::DarkGrey))
-        .with_error_message(
-            ErrorMessageRenderConfig::default_colored()
-                .with_prefix(Styled::new("⚠").with_fg(Color::LightRed)),
-        );
-
-    config.prompt = StyleSheet::new()
-        .with_fg(Color::White)
-        .with_attr(Attributes::BOLD);
-    config.answer = StyleSheet::new().with_fg(accent);
-    config.placeholder = StyleSheet::new().with_fg(Color::DarkGrey);
-    config.help_message = StyleSheet::new().with_fg(Color::DarkGrey);
-    config.text_input = StyleSheet::new().with_fg(Color::White);
-    config
-}
-
-fn print_project_summary(name: &str, template: &str) {
-    let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(RoundCorners)
-        .set_width(60)
-        .set_content_arrangement(ContentArrangement::Dynamic)
-        .set_header(vec![
-            Cell::new("Field").add_attribute(Attribute::Bold),
-            Cell::new("Details").add_attribute(Attribute::Bold),
-        ]);
-
-    table.add_row(vec![
-        Cell::new("Name"),
-        Cell::new(format!("{}", name.bright_green())),
-    ]);
-
-    table.add_row(vec![
-        Cell::new("Template"),
-        Cell::new(format!("{}", template.cyan())),
-    ]);
-
-    let next_steps = format!("cd {}\ncargo tessera dev", name);
-    table.add_row(vec![Cell::new("Next"), Cell::new(next_steps)]);
-
-    println!("\n{table}");
 }

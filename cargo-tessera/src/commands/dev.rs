@@ -7,19 +7,17 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
-use owo_colors::colored::*;
+
+use crate::output;
 
 use super::find_package_dir;
 
 pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()> {
-    println!(
-        "{}",
-        "Starting development server (auto rebuild/restart)...".bright_cyan()
-    );
+    output::status("Starting", "dev server (auto rebuild/restart)");
     if let Some(pkg) = package {
-        println!("Package: {}", pkg.bright_yellow());
+        output::status("Package", format!("`{}`", pkg));
     }
-    println!("{}", "Watching for file changes...".dimmed());
+    output::status("Watching", "for file changes");
 
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
@@ -74,10 +72,7 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
 
                 // Cancel an in-flight build so we only build once per stable tree.
                 if let Some(mut active_build) = build_child.take() {
-                    println!(
-                        "\n{}",
-                        "Change detected, canceling in-progress build...".bright_yellow()
-                    );
+                    output::status("Canceling", "in-progress build due to changes");
                     let _ = active_build.kill();
                     let _ = active_build.wait();
                 }
@@ -94,7 +89,7 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
                 let _ = c.wait();
             }
 
-            println!("\n{}", "Rebuilding project...".bright_yellow());
+            output::status("Building", "project");
 
             let mut build_cmd = Command::new("cargo");
             build_cmd.arg("build");
@@ -114,7 +109,7 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
                     pending_change = false;
                 }
                 Err(e) => {
-                    println!("{} Failed to start build: {}", "Error".red(), e);
+                    output::error(format!("failed to start build: {e}"));
                 }
             }
         }
@@ -124,16 +119,10 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
             match active_build.try_wait() {
                 Ok(Some(status)) => {
                     if !status.success() {
-                        println!("{}", "Build failed, waiting for changes...".red());
+                        output::warn("build failed; waiting for changes");
                     } else if pending_change {
-                        println!(
-                            "{}",
-                            "New changes arrived during build; skipping run and rebuilding..."
-                                .yellow()
-                        );
+                        output::status("Rebuilding", "new changes arrived during build");
                     } else {
-                        println!("{}", "Build succeeded, launching app...".green());
-
                         let mut run_cmd = Command::new("cargo");
                         run_cmd.arg("run");
                         if verbose {
@@ -146,10 +135,10 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
                         match run_cmd.spawn() {
                             Ok(c) => {
                                 child = Some(c);
-                                println!("{}", "Watching for changes... (Ctrl+C to stop)".cyan());
+                                output::status("Running", "app (watching for changes)");
                             }
                             Err(e) => {
-                                println!("{} Failed to start app: {}", "Error".red(), e);
+                                output::error(format!("failed to start app: {e}"));
                             }
                         }
                     }
@@ -158,7 +147,7 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
                     build_child = Some(active_build);
                 }
                 Err(err) => {
-                    println!("{} Failed to check build status: {}", "⚠️".yellow(), err);
+                    output::warn(format!("failed to check build status: {err}"));
                 }
             }
         }
@@ -168,22 +157,22 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
             match running_child.try_wait() {
                 Ok(Some(status)) => {
                     if !status.success() {
-                        println!(
-                            "\n{}",
-                            format!("Application crashed with exit code: {:?}", status.code())
-                                .red()
-                        );
+                        let code = status
+                            .code()
+                            .map(|c| c.to_string())
+                            .unwrap_or_else(|| "unknown".to_string());
+                        output::warn(format!("application exited with status {code}"));
                     } else {
-                        println!("\n{}", "Application exited normally.".green());
+                        output::status("Stopped", "application exited normally");
                     }
-                    println!("{}", "Stopping dev server...".dimmed());
+                    output::status("Stopping", "dev server");
                     break;
                 }
                 Ok(None) => {
                     child = Some(running_child);
                 }
                 Err(err) => {
-                    println!("{} Failed to check app status: {}", "⚠️".yellow(), err);
+                    output::warn(format!("failed to check app status: {err}"));
                 }
             }
         }

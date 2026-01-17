@@ -30,11 +30,13 @@ use clap::ValueEnum;
 use handlebars::{Handlebars, handlebars_helper};
 use include_dir::{Dir, include_dir};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
-use owo_colors::colored::*;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::template::{write_template_dir, write_template_file};
+use crate::{
+    output,
+    template::{write_template_dir, write_template_file},
+};
 
 use super::find_package_dir;
 
@@ -311,14 +313,10 @@ pub fn init(skip_targets_install: bool) -> Result<()> {
 
     let project_exists = ctx.config.project_dir_exists();
     if project_exists {
-        println!(
-            "{}",
-            format!(
-                "Android project already exists at {}",
-                display_path(&ctx.config.project_dir())
-            )
-            .bright_yellow()
-        );
+        output::warn(format!(
+            "android project already exists at {}",
+            display_path(&ctx.config.project_dir())
+        ));
     }
 
     if !skip_targets_install {
@@ -368,13 +366,12 @@ pub fn init(skip_targets_install: bool) -> Result<()> {
     sync_android_plugins(&ctx.config.project_dir(), &android_plugins)?;
 
     if !project_exists {
-        println!(
-            "{}",
+        output::status(
+            "Generated",
             format!(
-                "Android project generated at {}",
+                "android project at {}",
                 display_path(&ctx.config.project_dir())
-            )
-            .bright_green()
+            ),
         );
     }
     Ok(())
@@ -436,10 +433,10 @@ pub fn build(opts: BuildOptions) -> Result<()> {
     let targets = ctx.targets()?;
     let profile = ctx.profile();
 
-    println!(
-        "{}",
+    output::status(
+        "Building",
         format!(
-            "Building Android artifact ({}, targets: {}, release: {})",
+            "android artifact ({}, targets: {}, release: {})",
             ctx.package_name,
             targets
                 .iter()
@@ -447,8 +444,7 @@ pub fn build(opts: BuildOptions) -> Result<()> {
                 .collect::<Vec<_>>()
                 .join(", "),
             if ctx.release { "yes" } else { "no" }
-        )
-        .bright_cyan()
+        ),
     );
 
     for target in &targets {
@@ -481,10 +477,10 @@ pub fn build(opts: BuildOptions) -> Result<()> {
         )?,
     };
 
-    println!("\n{}", "Android build complete".green());
-    println!("Package: {}", ctx.package_name.bright_green());
+    output::status("Finished", "android build");
+    output::status("Package", ctx.package_name.clone());
     for out in outputs {
-        println!("Artifact: {}", display_path(&out).bright_yellow());
+        output::status("Artifact", display_path(&out));
     }
     Ok(())
 }
@@ -502,20 +498,19 @@ pub fn dev(opts: DevOptions) -> Result<()> {
         .ok_or_else(|| anyhow!("--device <adb_serial> is required for android dev"))?;
     sync_android_project(&ctx)?;
 
-    println!(
-        "{}",
+    output::status(
+        "Running",
         format!(
-            "Running Tessera app on Android ({}, release: {})",
+            "android app {} (release: {})",
             ctx.package_name,
             if ctx.release { "yes" } else { "no" }
-        )
-        .bright_cyan()
+        ),
     );
 
     let env = AndroidEnv::new()?;
     let profile = ctx.profile();
 
-    println!("{}", "Watching for file changes...".dimmed());
+    output::status("Watching", "for file changes");
 
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
@@ -562,10 +557,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
                 last_change = Instant::now();
 
                 if let Some(active_run) = run_child.take() {
-                    println!(
-                        "\n{}",
-                        "Change detected, canceling in-progress Android deploy...".bright_yellow()
-                    );
+                    output::status("Canceling", "in-progress Android deploy due to changes");
                     let _ = active_run.kill();
                     let _ = active_run.wait();
                 }
@@ -577,10 +569,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
         if pending_change && run_child.is_none() && last_change.elapsed() >= debounce_window {
             while rx.try_recv().is_ok() {}
 
-            println!(
-                "\n{}",
-                "Building and deploying to Android device...".bright_yellow()
-            );
+            output::status("Deploying", "building and installing on device");
 
             match run_once(&ctx, &env, profile, device_id, NoiseLevel::Polite) {
                 Ok(child) => {
@@ -588,7 +577,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
                     pending_change = false;
                 }
                 Err(e) => {
-                    println!("{} Failed to start deploy: {}", "Error".red(), e);
+                    output::error(format!("failed to start deploy: {e}"));
                 }
             }
         }
@@ -597,19 +586,16 @@ pub fn dev(opts: DevOptions) -> Result<()> {
             match active_run.try_wait() {
                 Ok(Some(output)) => {
                     if !output.status.success() {
-                        println!("{}", "Deploy failed, waiting for changes...".red());
+                        output::warn("deploy failed; waiting for changes");
                     } else {
-                        println!(
-                            "{}",
-                            "Deploy finished. App should be running on the device.".green()
-                        );
+                        output::status("Running", "app should be running on the device");
                     }
                 }
                 Ok(None) => {
                     run_child = Some(active_run);
                 }
                 Err(err) => {
-                    println!("{} Failed to check deploy status: {}", "⚠️".yellow(), err);
+                    output::warn(format!("failed to check deploy status: {err}"));
                 }
             }
         }

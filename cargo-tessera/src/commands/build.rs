@@ -1,27 +1,40 @@
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
-use owo_colors::colored::*;
+
+use crate::output;
 
 pub fn execute(release: bool, target: Option<&str>, package: Option<&str>) -> Result<()> {
-    println!("{}", "Building project...".bright_cyan());
+    let mut details = Vec::new();
+    if release {
+        details.push("release".to_string());
+    }
+    if let Some(target) = target {
+        details.push(format!("target {target}"));
+    }
+    if let Some(package) = package {
+        details.push(format!("package {package}"));
+    }
+    let message = if details.is_empty() {
+        "project".to_string()
+    } else {
+        format!("project ({})", details.join(", "))
+    };
+    output::status("Building", message);
 
     let mut cmd = Command::new("cargo");
     cmd.arg("build");
 
     if release {
         cmd.arg("--release");
-        println!("Building in {} mode", "release".bright_green());
     }
 
     if let Some(target) = target {
         cmd.arg("--target").arg(target);
-        println!("Target platform: {}", target.bright_yellow());
     }
 
     if let Some(package) = package {
         cmd.arg("-p").arg(package);
-        println!("Package: {}", package.bright_yellow());
     }
 
     let status = cmd.status().context("Failed to run cargo build")?;
@@ -30,18 +43,13 @@ pub fn execute(release: bool, target: Option<&str>, package: Option<&str>) -> Re
         bail!("Build failed");
     }
 
-    println!(
-        "\n{} Build completed successfully!",
-        "Build complete".green()
-    );
-
     if release {
         let binary_path = if let Some(target) = target {
             format!("target/{}/release/", target)
         } else {
             "target/release/".to_string()
         };
-        println!("Binary location: {}", binary_path.cyan());
+        output::status("Binary", binary_path);
     }
 
     Ok(())
