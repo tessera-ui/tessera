@@ -317,7 +317,6 @@
 pub mod accessibility;
 #[cfg(target_os = "android")]
 pub mod android;
-pub mod clipboard;
 pub mod color;
 mod component_tree;
 pub mod context;
@@ -325,6 +324,7 @@ mod cursor;
 pub mod dp;
 pub mod dyn_eq;
 pub mod dyn_eq_compute;
+pub mod entry_registry;
 pub mod focus_state;
 mod ime_state;
 mod keyboard_state;
@@ -356,7 +356,6 @@ pub use winit;
 
 pub use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityId, AccessibilityNode},
-    clipboard::Clipboard,
     color::Color,
     component_tree::{
         ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
@@ -366,6 +365,7 @@ pub use crate::{
     context::{Context, provide_context, use_context},
     cursor::{CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent},
     dp::Dp,
+    entry_registry::{EntryRegistry, TesseraPackage},
     focus_state::Focus,
     layout::{DefaultLayoutSpec, LayoutInput, LayoutOutput, LayoutResult, LayoutSpec, RenderInput},
     modifier::{Modifier, ModifierChild, ModifierWrapper},
@@ -461,8 +461,8 @@ pub fn __tessera_init_tracing() {
 
 /// Defines the Tessera application entry points for desktop and Android.
 ///
-/// This macro registers plugin instances supplied in `plugins`, then starts
-/// the renderer with the provided render modules.
+/// This macro registers packages and plugins, then starts the renderer with
+/// the provided render modules.
 ///
 /// # Example:
 ///
@@ -477,7 +477,7 @@ pub fn __tessera_init_tracing() {
 ///
 /// tessera_ui::entry!(
 ///     app,
-///     modules = [tessera_components::TesseraComponents::default()],
+///     packages = [tessera_components::ComponentsPackage::default()],
 /// );
 /// ```
 #[macro_export]
@@ -489,6 +489,7 @@ macro_rules! entry {
             {
                 plugins: [],
                 modules: [],
+                packages: [],
                 config: $crate::entry!(@config)
             },
         );
@@ -500,6 +501,7 @@ macro_rules! entry {
             {
                 plugins: [],
                 modules: [],
+                packages: [],
                 config: $crate::entry!(@config)
             },
             $($rest)+
@@ -510,138 +512,183 @@ macro_rules! entry {
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         ) => {
-        $crate::entry!(@run $entry, $config, [$($modules),*], [$($plugins),*]);
+        $crate::entry!(@run $entry, $config, [$($modules),*], [$($plugins),*], [$($packages),*]);
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         plugins = [$($plugin:expr),* $(,)?],
         $($rest:tt)+
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugin),*], modules: [$($modules),*], config: $config },
+            { plugins: [$($plugin),*], modules: [$($modules),*], packages: [$($packages),*], config: $config },
             $($rest)+
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         plugins = [$($plugin:expr),* $(,)?],
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugin),*], modules: [$($modules),*], config: $config },
+            { plugins: [$($plugin),*], modules: [$($modules),*], packages: [$($packages),*], config: $config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         plugins = [$($plugin:expr),* $(,)?]
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugin),*], modules: [$($modules),*], config: $config },
+            { plugins: [$($plugin),*], modules: [$($modules),*], packages: [$($packages),*], config: $config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         modules = [$($new_modules:expr),* $(,)?],
         $($rest:tt)+
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], modules: [$($new_modules),*], config: $config },
+            { plugins: [$($plugins),*], modules: [$($new_modules),*], packages: [$($packages),*], config: $config },
             $($rest)+
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         modules = [$($new_modules:expr),* $(,)?],
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], modules: [$($new_modules),*], config: $config },
+            { plugins: [$($plugins),*], modules: [$($new_modules),*], packages: [$($packages),*], config: $config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         modules = [$($new_modules:expr),* $(,)?]
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], modules: [$($new_modules),*], config: $config },
+            { plugins: [$($plugins),*], modules: [$($new_modules),*], packages: [$($packages),*], config: $config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
+        packages = [$($new_packages:expr),* $(,)?],
+        $($rest:tt)+
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugins),*], modules: [$($modules),*], packages: [$($new_packages),*], config: $config },
+            $($rest)+
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
+        packages = [$($new_packages:expr),* $(,)?],
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugins),*], modules: [$($modules),*], packages: [$($new_packages),*], config: $config },
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
+        packages = [$($new_packages:expr),* $(,)?]
+    ) => {
+        $crate::entry!(
+            @parse
+            $entry,
+            { plugins: [$($plugins),*], modules: [$($modules),*], packages: [$($new_packages),*], config: $config },
+        );
+    };
+    (@parse
+        $entry:path,
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         config = $new_config:expr,
         $($rest:tt)+
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], modules: [$($modules),*], config: $new_config },
+            { plugins: [$($plugins),*], modules: [$($modules),*], packages: [$($packages),*], config: $new_config },
             $($rest)+
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         config = $new_config:expr,
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], modules: [$($modules),*], config: $new_config },
+            { plugins: [$($plugins),*], modules: [$($modules),*], packages: [$($packages),*], config: $new_config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         config = $new_config:expr
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], modules: [$($modules),*], config: $new_config },
+            { plugins: [$($plugins),*], modules: [$($modules),*], packages: [$($packages),*], config: $new_config },
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         , $($rest:tt)*
     ) => {
         $crate::entry!(
             @parse
             $entry,
-            { plugins: [$($plugins),*], modules: [$($modules),*], config: $config },
+            { plugins: [$($plugins),*], modules: [$($modules),*], packages: [$($packages),*], config: $config },
             $($rest)*
         );
     };
     (@parse
         $entry:path,
-        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], config: $config:expr },
+        { plugins: [$($plugins:expr),*], modules: [$($modules:expr),*], packages: [$($packages:expr),*], config: $config:expr },
         $($unexpected:tt)+
     ) => {
         compile_error!("Unsupported argument for tessera_ui::entry!");
     };
-    (@run $entry:path, $config:expr, [$($module:expr),*], [$($plugin:expr),*]) => {
+    (@run $entry:path, $config:expr, [$($module:expr),*], [$($plugin:expr),*], [$($package:expr),*]) => {
         #[doc(hidden)]
         fn __tessera_modules() -> Vec<Box<dyn $crate::RenderModule>> {
-            vec![$(Box::new($module)),*]
+            let mut registry = $crate::EntryRegistry::new();
+            $(
+                registry.register_plugin($plugin);
+            )*
+            $(
+                registry.register_package($package);
+            )*
+            $(
+                registry.add_module($module);
+            )*
+            registry.finish()
         }
 
         #[cfg(target_os = "android")]
@@ -661,9 +708,6 @@ macro_rules! entry {
         ) {
             $crate::__tessera_init_tracing();
             $crate::__tessera_init_deadlock_detection();
-            $(
-                $crate::register_plugin($plugin);
-            )*
             if let Err(err) = $crate::Renderer::run_with_config(
                 $entry,
                 __tessera_modules(),
@@ -684,9 +728,6 @@ macro_rules! entry {
         pub fn __tessera_entry() {
             $crate::__tessera_init_tracing();
             $crate::__tessera_init_deadlock_detection();
-            $(
-                $crate::register_plugin($plugin);
-            )*
             if let Err(err) = $crate::Renderer::run_with_config(
                 $entry,
                 __tessera_modules(),

@@ -22,7 +22,7 @@ use winit::{
 };
 
 use crate::{
-    Clipboard, ImeState, PxPosition,
+    ImeState, PxPosition,
     component_tree::WindowRequests,
     context::begin_frame_context_slots,
     cursor::{CursorEvent, CursorEventContent, CursorState, GestureState},
@@ -243,8 +243,6 @@ pub struct Renderer<F: Fn()> {
     plugins: PluginHost,
     /// Configuration settings for the renderer
     config: TesseraConfig,
-    /// Clipboard manager
-    clipboard: Clipboard,
     /// Ordered render ops from the previous frame, for dirty rectangle
     /// optimization.
     previous_ops: Vec<RenderGraphOp>,
@@ -365,7 +363,6 @@ impl<F: Fn()> Renderer<F> {
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
-        let clipboard = Clipboard::new();
         #[cfg(feature = "profiling")]
         crate::profiler::set_output_path(&config.profiler_output_path);
         let mut renderer = Self {
@@ -378,7 +375,6 @@ impl<F: Fn()> Renderer<F> {
             plugins: PluginHost::new(),
             ime_state,
             config,
-            clipboard,
             previous_ops: Vec::new(),
             previous_resources: Vec::new(),
             accessibility_adapter: None,
@@ -496,7 +492,6 @@ impl<F: Fn()> Renderer<F> {
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
-        let clipboard = Clipboard::new(android_app);
         #[cfg(feature = "profiling")]
         crate::profiler::set_output_path(&config.profiler_output_path);
         let mut renderer = Self {
@@ -510,7 +505,6 @@ impl<F: Fn()> Renderer<F> {
             ime_state,
             android_ime_opened: false,
             config,
-            clipboard,
             previous_ops: Vec::new(),
             previous_resources: Vec::new(),
             accessibility_adapter: None,
@@ -534,7 +528,6 @@ struct RenderFrameArgs<'a> {
     pub app: &'a mut RenderCore,
     #[cfg(target_os = "android")]
     pub event_loop: &'a ActiveEventLoop,
-    pub clipboard: &'a mut Clipboard,
 }
 
 struct RenderFrameContext<'a, F: Fn()> {
@@ -675,7 +668,6 @@ Fps: {:.2}
                 modifiers: args.keyboard_state.modifiers(),
                 compute_resource_manager: args.app.compute_resource_manager(),
                 gpu: args.app.device(),
-                clipboard: args.clipboard,
                 layout_cache,
                 frame_trace,
             })
@@ -1146,7 +1138,6 @@ impl<F: Fn()> Renderer<F> {
             app,
             #[cfg(target_os = "android")]
             event_loop,
-            clipboard: &mut self.clipboard,
         };
         let accessibility_update = Self::execute_render_frame(RenderFrameContext {
             entry_point: &self.entry_point,
@@ -1245,15 +1236,6 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
             .collect();
 
         self.app = Some(render_core);
-
-        #[cfg(target_os = "android")]
-        {
-            self.clipboard = Clipboard::new(event_loop.android_app().clone());
-        }
-        #[cfg(not(target_os = "android"))]
-        {
-            self.clipboard = Clipboard::new();
-        }
 
         if let Some(context) = self.plugin_context(event_loop) {
             self.plugins.resumed(&context);

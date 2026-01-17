@@ -5179,6 +5179,7 @@ dependencies = [
  "material-color-utilities",
  "parking_lot",
  "smallvec",
+ "tessera-platform",
  "tessera-ui",
  "thiserror 2.0.17",
  "tracing",
@@ -5235,6 +5236,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tessera-platform"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "parking_lot",
+ "tessera-ui",
+ "tracing",
+]
+
+[[package]]
 name = "tessera-shard"
 version = "0.4.2"
 dependencies = [
@@ -5249,7 +5260,6 @@ version = "2.5.0"
 dependencies = [
  "accesskit",
  "accesskit_winit",
- "arboard",
  "bytemuck",
  "dashmap",
  "dirs",

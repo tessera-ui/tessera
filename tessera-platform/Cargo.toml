@@ -1,0 +1,16 @@
+[package]
+name = "tessera-platform"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Platform services and plugins for Tessera."
+
+[dependencies]
+parking_lot = "0.12.5"
+tessera-ui = { path = "../tessera-ui" }
+tracing = "0.1.44"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+arboard = "3.6.1"

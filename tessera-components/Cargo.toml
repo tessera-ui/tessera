@@ -20,6 +20,7 @@ glyphon = "0.10.0"
 tracing = "0.1.44"
 parking_lot = "0.12.5"
 tessera-ui = { path = "../tessera-ui" }
+tessera-platform = { path = "../tessera-platform" }
 unicode-segmentation = "1.12.0"
 encase = "0.12.0"
 glam = { version = "0.30.10", features = ["encase"] }

@@ -7,7 +7,7 @@ use parking_lot::RwLock;
 use tracing::{debug, warn};
 
 use crate::{
-    Clipboard, ComputeResourceManager, Px, PxRect,
+    ComputeResourceManager, Px, PxRect,
     cursor::CursorEvent,
     layout::RenderInput,
     px::{PxPosition, PxSize},
@@ -41,7 +41,6 @@ pub(crate) struct ComputeParams<'a> {
     pub modifiers: winit::keyboard::ModifiersState,
     pub compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
     pub gpu: &'a wgpu::Device,
-    pub clipboard: &'a mut Clipboard,
     pub layout_cache: &'a mut LayoutCache,
     pub frame_trace: Vec<TraceEntry>,
 }
@@ -204,7 +203,6 @@ impl ComponentTree {
             modifiers,
             compute_resource_manager,
             gpu,
-            clipboard,
             layout_cache,
             frame_trace: _frame_trace,
         } = params;
@@ -347,7 +345,6 @@ impl ComponentTree {
                     ime_events: &mut ime_events,
                     key_modifiers: modifiers,
                     requests: &mut window_requests,
-                    clipboard,
                     current_node_id: node_id,
                     metadatas: &self.metadatas,
                 };

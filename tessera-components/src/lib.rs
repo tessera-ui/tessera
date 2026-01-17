@@ -2,7 +2,8 @@
 //!
 //! # Usage
 //!
-//! First, add the render module provided by this crate at application entry.
+//! First, add the package (recommended) or render module provided by this crate
+//! at application entry.
 //!
 //! ```no_run
 //! use tessera_components::theme::{MaterialTheme, material_theme};
@@ -15,7 +16,7 @@
 //!
 //! tessera_ui::entry!(
 //!     app,
-//!     modules = [tessera_components::TesseraComponents::default()],
+//!     packages = [tessera_components::ComponentsPackage::default()],
 //! );
 //! ```
 //!
@@ -49,11 +50,8 @@
 //! ```
 #![deny(missing_docs, clippy::unwrap_used)]
 
-mod animation;
-mod padding_utils;
-mod selection_highlight_rect;
-
 pub mod alignment;
+mod animation;
 pub mod app_bar;
 pub mod badge;
 pub mod bottom_sheet;
@@ -70,6 +68,7 @@ pub mod dialog;
 pub mod divider;
 pub mod floating_action_button;
 pub mod flow_column;
+pub mod flow_row;
 pub mod fluid_glass;
 pub mod glass_button;
 pub mod glass_progress;
@@ -84,17 +83,11 @@ pub mod lazy_grid;
 pub mod lazy_list;
 pub mod lazy_staggered_grid;
 pub mod material_icons;
-pub mod modifier;
-pub mod theme;
-use tessera_ui::{PipelineContext, RenderMiddleware, RenderModule};
-
-pub use pipelines::shape::command::RippleProps;
-pub use ripple_state::RippleState;
-
-pub mod flow_row;
 pub mod menus;
+pub mod modifier;
 pub mod navigation_bar;
 pub mod navigation_rail;
+mod padding_utils;
 pub mod pager;
 pub mod pipelines;
 pub mod pos_misc;
@@ -104,6 +97,7 @@ pub mod radio_button;
 pub mod ripple_state;
 pub mod row;
 pub mod scrollable;
+mod selection_highlight_rect;
 pub mod shadow;
 pub mod shape_def;
 pub mod side_bar;
@@ -116,25 +110,46 @@ pub mod text;
 mod text_edit_core;
 pub mod text_field;
 pub mod text_input;
+pub mod theme;
 pub mod time_picker;
 
-/// Registers pipelines provided by this crate with the renderer.
-pub fn init(context: &mut PipelineContext<'_>) {
-    pipelines::register_pipelines(context);
-}
+use tessera_platform::PlatformPackage;
+use tessera_ui::{EntryRegistry, PipelineContext, RenderMiddleware, RenderModule, TesseraPackage};
+
+pub use pipelines::shape::command::RippleProps;
+pub use ripple_state::RippleState;
 
 /// Render module for registering all Tessera component pipelines.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct TesseraComponents;
+#[derive(Default, Clone, Copy)]
+struct TesseraComponents;
 
 impl RenderModule for TesseraComponents {
     fn register_pipelines(&self, context: &mut PipelineContext<'_>) {
-        init(context);
+        pipelines::register_pipelines(context);
     }
 
     fn create_middlewares(&self) -> Vec<Box<dyn RenderMiddleware>> {
         vec![Box::new(
             pipelines::shadow::atlas::ShadowAtlasMiddleware::new(),
         )]
+    }
+}
+
+/// Package that registers the components module and required platform services.
+#[derive(Clone, Default, Copy)]
+pub struct ComponentsPackage;
+
+impl ComponentsPackage {
+    /// Creates a package that registers components and required platform
+    /// plugins.
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl TesseraPackage for ComponentsPackage {
+    fn register(self, registry: &mut EntryRegistry) {
+        registry.register_package(PlatformPackage);
+        registry.add_module(TesseraComponents);
     }
 }

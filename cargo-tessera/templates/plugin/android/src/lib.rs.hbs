@@ -1,9 +1,10 @@
-use tessera_ui::{Plugin, PluginContext, PluginResult};
+use tessera_ui::{EntryRegistry, Plugin, PluginContext, PluginResult, TesseraPackage};
 
 #[cfg(target_os = "android")]
-use tessera_ui::android::{activity, ActivityRef};
-#[cfg(target_os = "android")]
-use winit::platform::android::activity::AndroidApp;
+use tessera_ui::{
+    android::{activity, ActivityRef},
+    winit::platform::android::activity::AndroidApp,
+};
 
 #[cfg(target_os = "android")]
 tessera_ui::android::jni_bind! {
@@ -19,6 +20,14 @@ pub struct HelloPlugin {
 }
 
 impl HelloPlugin {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            #[cfg(target_os = "android")]
+            android_app: None,
+        }
+    }
+
     pub fn message(&self) -> &str {
         &self.message
     }
@@ -44,11 +53,7 @@ impl HelloPlugin {
 
 impl Default for HelloPlugin {
     fn default() -> Self {
-        Self {
-            message: format!("Hello from {{project_name}}"),
-            #[cfg(target_os = "android")]
-            android_app: None,
-        }
+        Self::new(format!("Hello from {{project_name}}"))
     }
 }
 
@@ -67,6 +72,31 @@ impl Plugin for HelloPlugin {
             self.android_app = None;
         }
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct HelloPackage {
+    message: String,
+}
+
+impl HelloPackage {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl Default for HelloPackage {
+    fn default() -> Self {
+        Self::new(format!("Hello from {{project_name}}"))
+    }
+}
+
+impl TesseraPackage for HelloPackage {
+    fn register(self, registry: &mut EntryRegistry) {
+        registry.register_plugin(HelloPlugin::new(self.message));
     }
 }
 

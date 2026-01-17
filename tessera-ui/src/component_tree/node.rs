@@ -13,7 +13,7 @@ use tracing::debug;
 use winit::window::CursorIcon;
 
 use crate::{
-    Clipboard, ComputeResourceManager, Px,
+    ComputeResourceManager, Px,
     accessibility::{AccessibilityActionHandler, AccessibilityNode, AccessibilityPadding},
     cursor::CursorEvent,
     dp::Dp,
@@ -397,8 +397,6 @@ pub struct InputHandlerInput<'a> {
     pub key_modifiers: winit::keyboard::ModifiersState,
     /// A context for making requests to the window for the current frame.
     pub requests: &'a mut WindowRequests,
-    /// Clipboard
-    pub clipboard: &'a mut Clipboard,
     /// The current node ID (for accessibility setup)
     pub(crate) current_node_id: indextree::NodeId,
     /// Reference to component metadatas (for accessibility setup)

@@ -27,8 +27,9 @@ use glyphon::{
     Cursor, Edit,
     cosmic_text::{self, Selection},
 };
+use tessera_platform::clipboard;
 use tessera_ui::{
-    Clipboard, Color, ComputedData, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
+    Color, ComputedData, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     tessera, winit,
@@ -364,8 +365,6 @@ impl TextEditorController {
     ///
     /// * `key_event` - The keyboard event to map.
     /// * `key_modifiers` - The current keyboard modifier state.
-    /// * `clipboard` - Mutable reference to the clipboard for clipboard
-    ///   operations.
     ///
     /// # Returns
     ///
@@ -374,7 +373,6 @@ impl TextEditorController {
         &mut self,
         key_event: winit::event::KeyEvent,
         key_modifiers: winit::keyboard::ModifiersState,
-        clipboard: &mut Clipboard,
     ) -> Option<Vec<glyphon::Action>> {
         let editor = &mut self.editor;
 
@@ -460,12 +458,12 @@ impl TextEditorController {
                     match s.to_lowercase().as_str() {
                         "c" => {
                             if let Some(text) = editor.copy_selection() {
-                                clipboard.set_text(&text);
+                                clipboard::set_text(&text);
                             }
                             return None;
                         }
                         "v" => {
-                            if let Some(text) = clipboard.get_text() {
+                            if let Some(text) = clipboard::get_text() {
                                 return Some(text.chars().map(glyphon::Action::Insert).collect());
                             }
 
@@ -473,7 +471,7 @@ impl TextEditorController {
                         }
                         "x" => {
                             if let Some(text) = editor.copy_selection() {
-                                clipboard.set_text(&text);
+                                clipboard::set_text(&text);
                                 // Use Backspace action to delete selection
                                 return Some(vec![glyphon::Action::Backspace]);
                             }

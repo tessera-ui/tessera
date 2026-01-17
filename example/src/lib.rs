@@ -6,8 +6,4 @@ mod example_components;
 
 use crate::app::app;
 
-tessera_ui::entry!(
-    app,
-    plugins = [],
-    modules = [tessera_components::TesseraComponents],
-);
+tessera_ui::entry!(app, packages = [tessera_components::ComponentsPackage],);

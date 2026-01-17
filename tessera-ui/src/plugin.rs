@@ -12,7 +12,7 @@ use std::{
 };
 
 use parking_lot::RwLock;
-use tracing::error;
+use tracing::{error, warn};
 use winit::window::Window;
 
 #[cfg(target_os = "android")]
@@ -207,18 +207,21 @@ fn registered_plugins() -> Vec<Arc<dyn PluginEntry>> {
 }
 
 fn register_plugin_arc<P: Plugin>(plugin: Arc<RwLock<P>>) {
-    let mut registry = plugin_registry().write();
-    registry.push(Arc::new(PluginSlot::new(plugin.clone())) as Arc<dyn PluginEntry>);
-
+    let plugin_entry = Arc::new(PluginSlot::new(plugin.clone())) as Arc<dyn PluginEntry>;
     let mut instances = plugin_instance_registry().write();
     let type_id = TypeId::of::<P>();
     if instances.contains_key(&type_id) {
-        panic!(
-            "Plugin '{}' was registered more than once",
+        warn!(
+            "Plugin '{}' was registered more than once; keeping the first instance",
             std::any::type_name::<P>()
         );
+        return;
     }
     instances.insert(type_id, plugin as Arc<dyn Any + Send + Sync>);
+    drop(instances);
+
+    let mut registry = plugin_registry().write();
+    registry.push(plugin_entry);
 }
 
 fn plugin_instance_registry() -> &'static RwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>> {

@@ -10,10 +10,11 @@ use glyphon::{
     Action as GlyphonAction, Cursor, Edit,
     cosmic_text::{self, Selection},
 };
+use tessera_platform::clipboard;
 use tessera_ui::{
-    Clipboard, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Modifier, PressKeyEventType, Px,
-    PxPosition, State, provide_context, remember, tessera, use_context,
+    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, LayoutInput,
+    LayoutOutput, LayoutSpec, MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, State,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -970,7 +971,6 @@ fn render_text_field(
 fn apply_menu_action(
     action: TextFieldMenuAction,
     controller: State<TextInputController>,
-    clipboard: &mut Clipboard,
     on_change: Arc<dyn Fn(String) -> String + Send + Sync>,
     input_transform: Option<Arc<dyn Fn(String) -> String + Send + Sync>>,
     enabled: bool,
@@ -984,7 +984,7 @@ fn apply_menu_action(
             let selected =
                 controller.with_mut(|c| c.with_editor_mut(|editor| editor.copy_selection()));
             if let Some(text) = selected {
-                clipboard.set_text(&text);
+                clipboard::set_text(&text);
             }
         }
         TextFieldMenuAction::Cut => {
@@ -994,7 +994,7 @@ fn apply_menu_action(
             let selected =
                 controller.with_mut(|c| c.with_editor_mut(|editor| editor.copy_selection()));
             if let Some(text) = selected {
-                clipboard.set_text(&text);
+                clipboard::set_text(&text);
                 handle_action(
                     &controller,
                     GlyphonAction::Backspace,
@@ -1007,7 +1007,7 @@ fn apply_menu_action(
             if read_only {
                 return;
             }
-            let Some(text) = clipboard.get_text() else {
+            let Some(text) = clipboard::get_text() else {
                 return;
             };
             for ch in text.chars() {
@@ -1232,7 +1232,6 @@ pub fn text_field_with_controller(
                 apply_menu_action(
                     action,
                     controller,
-                    input.clipboard,
                     on_change.clone(),
                     input_transform.clone(),
                     enabled,

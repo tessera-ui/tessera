@@ -592,8 +592,7 @@ fn handle_text_input(
             let mut all_actions = Vec::new();
             controller.with_mut(|s| {
                 for key_event in input.keyboard_events.iter().cloned() {
-                    if let Some(actions) =
-                        s.map_key_event_to_action(key_event, input.key_modifiers, input.clipboard)
+                    if let Some(actions) = s.map_key_event_to_action(key_event, input.key_modifiers)
                     {
                         all_actions.extend(actions);
                     }

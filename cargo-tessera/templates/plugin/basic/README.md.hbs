@@ -11,13 +11,24 @@ Add the plugin to your Tessera app:
 {{project_name}} = { path = "{{project_name}}" }
 ```
 
-Register it in your entrypoint:
+Register it in your entrypoint (recommended):
+
+```rust
+tessera_ui::entry! {
+    // ...
+    packages = [
+        {{project_name_snake}}::HelloPackage::default(),
+    ],
+    // ...
+}
+```
+
+You can also register the plugin directly:
 
 ```rust
 tessera_ui::entry! {
     // ...
     plugins = [
-        // ...
         {{project_name_snake}}::HelloPlugin::default(),
     ],
     // ...
