@@ -68,6 +68,13 @@ This document defines how You should assist in the Tessera project to ensure cod
 - `Absolute(PxRect)`: Samples a specific, absolute region of the screen.
 - **Performance Optimization**: When a command requires a barrier, the renderer performs a **full-screen texture copy** to make the background available for sampling. The key optimization is **batching**: subsequent commands that also require a barrier and have non-overlapping draw regions are processed in the same render pass, avoiding additional expensive texture copies. A scissor rectangle is applied to limit the actual drawing area for each command.
 
+### WebGPU Resource Usage Guidelines
+
+- Don't: create temporary mapped buffers when updating data. Use `Queue::write_buffer` and `Queue::write_texture` instead. For large generated uploads, recycle staging buffers in a pool.
+- Do: group resource bindings by change frequency, starting from the lowest. Put per-frame resources in bind group 0, per-pass resources in bind group 1, and per-material resources in bind group 2 to reduce state changes.
+- Don't: create many buffers or textures per frame. Coalesce smaller resources into larger ones (buffer subranges, texture atlases, texture arrays).
+- Don't: submit many times per frame. Multiple command buffers per submission are fine, but limit `submit()` calls to a few per frame (for example, 1-5).
+
 ---
 
 ## 🎯 Event & State Management
