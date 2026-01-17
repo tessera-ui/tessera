@@ -25,24 +25,14 @@ struct CachedRectInstances {
 
 fn build_instances(
     commands: &[(&ShapeCommand, PxSize, PxPosition)],
-    config: &wgpu::SurfaceConfiguration,
+    target_size: PxSize,
 ) -> Vec<ShapeUniforms> {
     commands
         .iter()
         .flat_map(|(command, size, start_pos)| {
             let mut uniforms = rect_to_uniforms(command, *size, *start_pos);
-            uniforms.screen_size = [config.width as f32, config.height as f32].into();
-
-            let has_shadow =
-                (uniforms.shadow_ambient_color[3] > 0.0) || (uniforms.shadow_spot_color[3] > 0.0);
-
-            if has_shadow {
-                let mut uniforms_for_shadow = uniforms;
-                uniforms_for_shadow.render_mode = 2.0;
-                vec![uniforms_for_shadow, uniforms]
-            } else {
-                vec![uniforms]
-            }
+            uniforms.screen_size = [target_size.width.to_f32(), target_size.height.to_f32()].into();
+            vec![uniforms]
         })
         .collect()
 }
@@ -52,7 +42,7 @@ impl ShapePipeline {
         &self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
+        target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&ShapeCommand, PxSize, PxPosition)],
         indices: &[usize],
@@ -62,7 +52,7 @@ impl ShapePipeline {
         }
 
         let subset: Vec<_> = indices.iter().map(|&i| commands[i]).collect();
-        let instances = build_instances(&subset, config);
+        let instances = build_instances(&subset, target_size);
         if instances.is_empty() {
             return;
         }
@@ -101,7 +91,7 @@ impl ShapePipeline {
         &self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
+        target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         entry: Arc<ShapeCacheEntry>,
         instances: &[(PxPosition, PxSize)],
@@ -119,7 +109,7 @@ impl ShapePipeline {
                     size.width.raw() as f32 + entry.padding.x * 2.0,
                     size.height.raw() as f32 + entry.padding.y * 2.0,
                 ),
-                screen_size: Vec2::new(config.width as f32, config.height as f32),
+                screen_size: Vec2::new(target_size.width.to_f32(), target_size.height.to_f32()),
                 padding: entry.padding,
             })
             .collect();
@@ -159,12 +149,12 @@ impl ShapePipeline {
         &mut self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
+        target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         pending: &mut CachedInstanceBatch,
     ) {
         if let Some((entry, instances)) = pending.take() {
-            self.draw_cached_run(gpu, gpu_queue, config, render_pass, entry, &instances);
+            self.draw_cached_run(gpu, gpu_queue, target_size, render_pass, entry, &instances);
         }
     }
 }

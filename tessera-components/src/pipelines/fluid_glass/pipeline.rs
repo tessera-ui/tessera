@@ -50,7 +50,7 @@ struct InstanceBuildInput<'a> {
     command: &'a FluidGlassCommand,
     size: &'a PxSize,
     start_pos: &'a PxPosition,
-    config: &'a wgpu::SurfaceConfiguration,
+    target_size: PxSize,
     clip_rect: Option<PxRect>,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
@@ -478,7 +478,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
 
         let instances = self.build_instances(
             context.commands,
-            context.config,
+            context.target_size,
             context.clip_rect,
             context.device,
             context.queue,
@@ -524,14 +524,14 @@ impl FluidGlassPipeline {
             command,
             size,
             start_pos,
-            config,
+            target_size,
             clip_rect,
             device: gpu,
             queue,
         } = input;
         let args = &command.args;
-        let screen_w = config.width as f32;
-        let screen_h = config.height as f32;
+        let screen_w = target_size.width.to_f32();
+        let screen_h = target_size.height.to_f32();
 
         let clip_rect_uv = if let Some(rect) = clip_rect {
             [
@@ -612,7 +612,7 @@ impl FluidGlassPipeline {
     fn build_instances(
         &mut self,
         commands: &[(&FluidGlassCommand, PxSize, PxPosition)],
-        config: &wgpu::SurfaceConfiguration,
+        target_size: PxSize,
         clip_rect: Option<PxRect>,
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -624,7 +624,7 @@ impl FluidGlassPipeline {
                     command: cmd,
                     size,
                     start_pos: pos,
-                    config,
+                    target_size,
                     clip_rect,
                     device: gpu,
                     queue,

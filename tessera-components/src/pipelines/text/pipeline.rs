@@ -230,8 +230,8 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
         self.viewport.update(
             context.queue,
             glyphon::Resolution {
-                width: context.config.width,
-                height: context.config.height,
+                width: context.target_size.width.positive(),
+                height: context.target_size.height.positive(),
             },
         );
 

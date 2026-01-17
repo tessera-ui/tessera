@@ -1,8 +1,8 @@
 //! Text cursor component for the text edit core system.
 //!
-//! This module provides a blinking cursor component used within text editing
-//! interfaces. The cursor provides visual feedback for text insertion point and
-//! blinks at regular intervals to maintain user attention.
+//! ## Usage
+//!
+//! Show insertion point feedback inside text editing components.
 use std::time::Instant;
 
 use tessera_ui::{
@@ -43,10 +43,12 @@ impl LayoutSpec for CursorLayout {
             color: self.color,
             corner_radii: glam::Vec4::ZERO.into(),
             corner_g2: [3.0; 4],
-            shadow: None,
         };
 
-        input.metadata_mut().push_draw_command(drawable);
+        input
+            .metadata_mut()
+            .fragment_mut()
+            .push_draw_command(drawable);
     }
 }
 

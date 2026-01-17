@@ -99,7 +99,10 @@ impl LayoutSpec for CheckmarkLayout {
             .with_stroke_width(self.stroke_width)
             .with_progress(self.progress)
             .with_padding(self.padding[0], self.padding[1]);
-        input.metadata_mut().push_draw_command(command);
+        input
+            .metadata_mut()
+            .fragment_mut()
+            .push_draw_command(command);
     }
 }
 

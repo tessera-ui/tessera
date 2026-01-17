@@ -280,10 +280,16 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
 
         for (command, size, start_pos) in context.commands.iter() {
             // Convert position and size to NDC coordinates
-            let ndc_pos = pixel_to_ndc(*start_pos, [context.config.width, context.config.height]);
+            let ndc_pos = pixel_to_ndc(
+                *start_pos,
+                [
+                    context.target_size.width.positive(),
+                    context.target_size.height.positive(),
+                ],
+            );
             let ndc_size = [
-                size.width.to_f32() / context.config.width as f32 * 2.0,
-                size.height.to_f32() / context.config.height as f32 * 2.0,
+                size.width.to_f32() / context.target_size.width.to_f32() * 2.0,
+                size.height.to_f32() / context.target_size.height.to_f32() * 2.0,
             ];
 
             // Create uniforms

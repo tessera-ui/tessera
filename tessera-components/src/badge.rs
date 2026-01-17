@@ -177,12 +177,13 @@ impl LayoutSpec for BadgeLayout {
             unreachable!("badge shape must resolve to a rounded rectangle");
         };
 
-        metadata.push_draw_command(ShapeCommand::Rect {
-            color: self.container_color,
-            corner_radii,
-            corner_g2,
-            shadow: None,
-        });
+        metadata
+            .fragment_mut()
+            .push_draw_command(ShapeCommand::Rect {
+                color: self.container_color,
+                corner_radii,
+                corner_g2,
+            });
     }
 }
 
@@ -262,12 +263,13 @@ impl LayoutSpec for BadgeWithContentLayout {
             unreachable!("badge shape must resolve to a rounded rectangle");
         };
 
-        metadata.push_draw_command(ShapeCommand::Rect {
-            color: self.container_color,
-            corner_radii,
-            corner_g2,
-            shadow: None,
-        });
+        metadata
+            .fragment_mut()
+            .push_draw_command(ShapeCommand::Rect {
+                color: self.container_color,
+                corner_radii,
+                corner_g2,
+            });
     }
 }
 

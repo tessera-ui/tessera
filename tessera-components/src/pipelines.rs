@@ -12,6 +12,7 @@ pub(crate) mod image_vector;
 pub(crate) mod mean;
 pub(crate) mod pos_misc;
 pub(crate) mod progress_arc;
+pub(crate) mod shadow;
 pub(crate) mod shape;
 pub(crate) mod simple_rect;
 pub(crate) mod text;

@@ -269,22 +269,26 @@ impl LayoutSpec for CircularProgressLayout {
             let track_sweep = 360.0 - sweep - gap * 2.0;
 
             if self.track_color.a > 0.0 && track_sweep > 0.0 {
-                metadata.push_draw_command(ProgressArcCommand {
-                    color: self.track_color,
-                    stroke_width_px: stroke_px.to_f32(),
-                    start_angle_degrees: track_start,
-                    sweep_angle_degrees: track_sweep,
-                    cap,
-                });
+                metadata
+                    .fragment_mut()
+                    .push_draw_command(ProgressArcCommand {
+                        color: self.track_color,
+                        stroke_width_px: stroke_px.to_f32(),
+                        start_angle_degrees: track_start,
+                        sweep_angle_degrees: track_sweep,
+                        cap,
+                    });
             }
             if self.color.a > 0.0 && sweep > 0.0 {
-                metadata.push_draw_command(ProgressArcCommand {
-                    color: self.color,
-                    stroke_width_px: stroke_px.to_f32(),
-                    start_angle_degrees: start_base,
-                    sweep_angle_degrees: sweep,
-                    cap,
-                });
+                metadata
+                    .fragment_mut()
+                    .push_draw_command(ProgressArcCommand {
+                        color: self.color,
+                        stroke_width_px: stroke_px.to_f32(),
+                        start_angle_degrees: start_base,
+                        sweep_angle_degrees: sweep,
+                        cap,
+                    });
             }
         } else {
             let elapsed_ms = Instant::now()
@@ -304,22 +308,26 @@ impl LayoutSpec for CircularProgressLayout {
             let track_sweep = 360.0 - sweep - gap * 2.0;
 
             if self.track_color.a > 0.0 && track_sweep > 0.0 {
-                metadata.push_draw_command(ProgressArcCommand {
-                    color: self.track_color,
-                    stroke_width_px: stroke_px.to_f32(),
-                    start_angle_degrees: track_start,
-                    sweep_angle_degrees: track_sweep,
-                    cap,
-                });
+                metadata
+                    .fragment_mut()
+                    .push_draw_command(ProgressArcCommand {
+                        color: self.track_color,
+                        stroke_width_px: stroke_px.to_f32(),
+                        start_angle_degrees: track_start,
+                        sweep_angle_degrees: track_sweep,
+                        cap,
+                    });
             }
             if self.color.a > 0.0 && sweep > 0.0 {
-                metadata.push_draw_command(ProgressArcCommand {
-                    color: self.color,
-                    stroke_width_px: stroke_px.to_f32(),
-                    start_angle_degrees: rotation,
-                    sweep_angle_degrees: sweep,
-                    cap,
-                });
+                metadata
+                    .fragment_mut()
+                    .push_draw_command(ProgressArcCommand {
+                        color: self.color,
+                        stroke_width_px: stroke_px.to_f32(),
+                        start_angle_degrees: rotation,
+                        sweep_angle_degrees: sweep,
+                        cap,
+                    });
             }
         }
     }

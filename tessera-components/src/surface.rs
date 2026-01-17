@@ -55,8 +55,8 @@ impl SurfaceDefaults {
     pub fn synthesize_shadow_layers(
         elevation: Dp,
         scheme: &MaterialColorScheme,
-    ) -> crate::pipelines::shape::command::ShadowLayers {
-        use crate::pipelines::shape::command::{ShadowLayer, ShadowLayers};
+    ) -> crate::shadow::ShadowLayers {
+        use crate::shadow::{ShadowLayer, ShadowLayers};
         let elevation_px = elevation.to_pixels_f32();
         let spot_offset_y = (elevation_px * 0.5).clamp(1.0, 12.0);
         let spot_smoothness = (elevation_px * 0.75).clamp(2.0, 24.0);
@@ -382,7 +382,6 @@ fn build_rounded_rectangle_command(
                     color: *color,
                     corner_radii,
                     corner_g2,
-                    shadow: None,
                     ripple: ripple_props,
                 }
             } else {
@@ -390,7 +389,6 @@ fn build_rounded_rectangle_command(
                     color: *color,
                     corner_radii,
                     corner_g2,
-                    shadow: None,
                 }
             }
         }
@@ -400,7 +398,6 @@ fn build_rounded_rectangle_command(
                     color: *color,
                     corner_radii,
                     corner_g2,
-                    shadow: None,
                     border_width: width.to_pixels_f32(),
                     ripple: ripple_props,
                 }
@@ -409,7 +406,6 @@ fn build_rounded_rectangle_command(
                     color: *color,
                     corner_radii,
                     corner_g2,
-                    shadow: None,
                     border_width: width.to_pixels_f32(),
                 }
             }
@@ -425,7 +421,6 @@ fn build_rounded_rectangle_command(
                     border_color: *border_color,
                     corner_radii,
                     corner_g2,
-                    shadow: None,
                     border_width: border_width.to_pixels_f32(),
                     ripple: ripple_props,
                 }
@@ -435,7 +430,6 @@ fn build_rounded_rectangle_command(
                     border_color: *border_color,
                     corner_radii,
                     corner_g2,
-                    shadow: None,
                     border_width: border_width.to_pixels_f32(),
                 }
             }
@@ -457,14 +451,10 @@ fn build_ellipse_command(
                     color: *color,
                     corner_radii: corner_marker,
                     corner_g2: [0.0; 4],
-                    shadow: None,
                     ripple: ripple_props,
                 }
             } else {
-                ShapeCommand::Ellipse {
-                    color: *color,
-                    shadow: None,
-                }
+                ShapeCommand::Ellipse { color: *color }
             }
         }
         SurfaceStyle::Outlined { color, width } => {
@@ -473,14 +463,12 @@ fn build_ellipse_command(
                     color: *color,
                     corner_radii: corner_marker,
                     corner_g2: [0.0; 4],
-                    shadow: None,
                     border_width: width.to_pixels_f32(),
                     ripple: ripple_props,
                 }
             } else {
                 ShapeCommand::OutlinedEllipse {
                     color: *color,
-                    shadow: None,
                     border_width: width.to_pixels_f32(),
                 }
             }
@@ -494,7 +482,6 @@ fn build_ellipse_command(
             ShapeCommand::FilledOutlinedEllipse {
                 color: *fill_color,
                 border_color: *border_color,
-                shadow: None,
                 border_width: border_width.to_pixels_f32(),
             }
         }
@@ -742,7 +729,7 @@ impl LayoutSpec for SurfaceLayout {
         if let Some(simple) =
             try_build_simple_rect_command(&self.args, &effective_style, ripple_state_for_draw)
         {
-            metadata.push_draw_command(simple);
+            metadata.fragment_mut().push_draw_command(simple);
         } else {
             let drawable = make_surface_drawable(
                 &self.args,
@@ -751,7 +738,7 @@ impl LayoutSpec for SurfaceLayout {
                 PxSize::new(size.width, size.height),
             );
 
-            metadata.push_draw_command(drawable);
+            metadata.fragment_mut().push_draw_command(drawable);
         }
     }
 }

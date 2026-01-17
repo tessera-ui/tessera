@@ -134,18 +134,19 @@ impl ImagePipeline {
     fn compute_uniforms(
         start_pos: PxPosition,
         size: PxSize,
+        target_size: PxSize,
         config: &wgpu::SurfaceConfiguration,
         opacity: f32,
     ) -> ImageUniforms {
         // Convert pixel positions/sizes into normalized device coordinates and size
         // ratios.
         let rect = [
-            (start_pos.x.0 as f32 / config.width as f32) * 2.0 - 1.0
-                + (size.width.0 as f32 / config.width as f32),
-            (start_pos.y.0 as f32 / config.height as f32) * -2.0 + 1.0
-                - (size.height.0 as f32 / config.height as f32),
-            size.width.0 as f32 / config.width as f32,
-            size.height.0 as f32 / config.height as f32,
+            (start_pos.x.0 as f32 / target_size.width.to_f32()) * 2.0 - 1.0
+                + (size.width.0 as f32 / target_size.width.to_f32()),
+            (start_pos.y.0 as f32 / target_size.height.to_f32()) * -2.0 + 1.0
+                - (size.height.0 as f32 / target_size.height.to_f32()),
+            size.width.0 as f32 / target_size.width.to_f32(),
+            size.height.0 as f32 / target_size.height.to_f32(),
         ]
         .into();
 
@@ -262,8 +263,13 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
 
             // Use the extracted uniforms computation helper (dereference borrowed tuple
             // elements).
-            let uniforms =
-                Self::compute_uniforms(*start_pos, *size, context.config, command.opacity);
+            let uniforms = Self::compute_uniforms(
+                *start_pos,
+                *size,
+                context.target_size,
+                context.config,
+                command.opacity,
+            );
 
             let mut buffer = UniformBuffer::new(Vec::new());
             buffer.write(&uniforms).expect("buffer write failed");

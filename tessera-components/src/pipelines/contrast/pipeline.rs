@@ -166,8 +166,8 @@ impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
             context.compute_pass.set_pipeline(&self.pipeline);
             context.compute_pass.set_bind_group(0, &bind_group, &[]);
             context.compute_pass.dispatch_workgroups(
-                context.config.width.div_ceil(8),
-                context.config.height.div_ceil(8),
+                context.target_size.width.positive().div_ceil(8),
+                context.target_size.height.positive().div_ceil(8),
                 1,
             );
         }

@@ -773,7 +773,7 @@ impl LayoutSpec for TextEditLayout {
                 data: text_data,
                 offset: PxPosition::ZERO,
             };
-            metadata.push_draw_command(drawable);
+            metadata.fragment_mut().push_draw_command(drawable);
         }
     }
 }

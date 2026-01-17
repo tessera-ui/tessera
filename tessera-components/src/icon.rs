@@ -199,14 +199,14 @@ impl LayoutSpec for IconLayout {
                     tint_mode: self.tint_mode,
                     rotation: self.rotation,
                 };
-                metadata.push_draw_command(command);
+                metadata.fragment_mut().push_draw_command(command);
             }
             IconContent::Raster(data) => {
                 let command = ImageCommand {
                     data: data.clone(),
                     opacity: 1.0,
                 };
-                metadata.push_draw_command(command);
+                metadata.fragment_mut().push_draw_command(command);
             }
         }
     }

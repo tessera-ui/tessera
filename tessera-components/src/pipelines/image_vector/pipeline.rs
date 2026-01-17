@@ -481,7 +481,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 rotation: command.rotation,
                 uv_origin: entry.uv_origin,
                 uv_scale: entry.uv_scale,
-                config: context.config,
+                target_size: context.target_size,
             });
             let mut buffer = UniformBuffer::new(Vec::new());
             buffer
@@ -543,7 +543,7 @@ fn raster_uniforms() -> ImageVectorUniforms {
 }
 
 #[derive(Clone, Copy)]
-struct SampleUniformParams<'a> {
+struct SampleUniformParams {
     start_pos: PxPosition,
     size: PxSize,
     tint: Color,
@@ -551,10 +551,10 @@ struct SampleUniformParams<'a> {
     rotation: f32,
     uv_origin: [f32; 2],
     uv_scale: [f32; 2],
-    config: &'a wgpu::SurfaceConfiguration,
+    target_size: PxSize,
 }
 
-fn compute_sample_uniforms(params: SampleUniformParams<'_>) -> AtlasSampleUniforms {
+fn compute_sample_uniforms(params: SampleUniformParams) -> AtlasSampleUniforms {
     let SampleUniformParams {
         start_pos,
         size,
@@ -563,13 +563,13 @@ fn compute_sample_uniforms(params: SampleUniformParams<'_>) -> AtlasSampleUnifor
         rotation,
         uv_origin,
         uv_scale,
-        config,
+        target_size,
     } = params;
 
-    let left = (start_pos.x.0 as f32 / config.width as f32) * 2.0 - 1.0;
-    let right = ((start_pos.x.0 + size.width.0) as f32 / config.width as f32) * 2.0 - 1.0;
-    let top = 1.0 - (start_pos.y.0 as f32 / config.height as f32) * 2.0;
-    let bottom = 1.0 - ((start_pos.y.0 + size.height.0) as f32 / config.height as f32) * 2.0;
+    let left = (start_pos.x.0 as f32 / target_size.width.to_f32()) * 2.0 - 1.0;
+    let right = ((start_pos.x.0 + size.width.0) as f32 / target_size.width.to_f32()) * 2.0 - 1.0;
+    let top = 1.0 - (start_pos.y.0 as f32 / target_size.height.to_f32()) * 2.0;
+    let bottom = 1.0 - ((start_pos.y.0 + size.height.0) as f32 / target_size.height.to_f32()) * 2.0;
 
     AtlasSampleUniforms {
         origin: Vec2::new(left, top),

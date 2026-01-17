@@ -1,21 +1,8 @@
 //! Shape rendering pipeline for UI components.
 //!
-//! This module provides the GPU pipeline and associated data structures for
-//! rendering vector-based shapes in Tessera UI components. Supported shapes
-//! include rectangles, rounded rectangles (with G2 curve support), ellipses,
-//! and arbitrary polygons.
+//! ## Usage
 //!
-//! The pipeline supports advanced visual effects such as drop shadows and
-//! interactive ripples, making it suitable for rendering button backgrounds,
-//! surfaces, and other interactive or decorative UI elements.
-//!
-//! Typical usage scenarios include:
-//! - Drawing backgrounds and outlines for buttons, surfaces, and containers
-//! - Rendering custom-shaped UI elements with smooth corners
-//! - Applying shadow and ripple effects for interactive feedback
-//!
-//! This module is intended to be used internally by basic UI components and
-//! registered as part of the rendering pipeline system.
+//! Draw rectangles and ellipses (with optional ripples) for component surfaces.
 
 mod cache;
 mod draw;
@@ -23,7 +10,7 @@ mod draw;
 use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};
 
 use encase::ShaderType;
-use glam::{Vec2, Vec3, Vec4};
+use glam::{Vec2, Vec4};
 use lru::LruCache;
 use tessera_ui::{
     PxPosition, PxSize,
@@ -65,10 +52,6 @@ pub struct ShapeUniforms {
     pub corner_g2: Vec4,    // x:tl, y:tr, z:br, w:bl
     pub primary_color: Vec4,
     pub border_color: Vec4,
-    pub shadow_ambient_color: Vec4,
-    pub shadow_ambient_params: Vec3, // x:y offset, z: smoothness, w: unused
-    pub shadow_spot_color: Vec4,
-    pub shadow_spot_params: Vec3, // x:y offset, z: smoothness, w: unused
     pub render_mode: f32,
     pub ripple_params: Vec4,
     pub ripple_color: Vec4,
@@ -353,7 +336,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                     self.draw_uncached_batch(
                         context.device,
                         context.queue,
-                        context.config,
+                        context.target_size,
                         context.render_pass,
                         context.commands,
                         &pending_uncached,
@@ -368,7 +351,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                         self.flush_cached_run(
                             context.device,
                             context.queue,
-                            context.config,
+                            context.target_size,
                             context.render_pass,
                             &mut pending_cached_run,
                         );
@@ -381,7 +364,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                 self.flush_cached_run(
                     context.device,
                     context.queue,
-                    context.config,
+                    context.target_size,
                     context.render_pass,
                     &mut pending_cached_run,
                 );
@@ -392,7 +375,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         self.flush_cached_run(
             context.device,
             context.queue,
-            context.config,
+            context.target_size,
             context.render_pass,
             &mut pending_cached_run,
         );
@@ -401,7 +384,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             self.draw_uncached_batch(
                 context.device,
                 context.queue,
-                context.config,
+                context.target_size,
                 context.render_pass,
                 context.commands,
                 &pending_uncached,

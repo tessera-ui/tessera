@@ -132,7 +132,10 @@ impl LayoutSpec for ImageLayout {
             data: self.data.clone(),
             opacity: 1.0,
         };
-        input.metadata_mut().push_draw_command(image_command);
+        input
+            .metadata_mut()
+            .fragment_mut()
+            .push_draw_command(image_command);
     }
 }
 

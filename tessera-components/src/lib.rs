@@ -2,7 +2,7 @@
 //!
 //! # Usage
 //!
-//! First, you need to register the pipelines provided by this crate.
+//! First, add the render module provided by this crate at application entry.
 //!
 //! ```no_run
 //! use tessera_components::theme::{MaterialTheme, material_theme};
@@ -13,7 +13,7 @@
 //!     });
 //! }
 //!
-//! tessera_ui::entry!(app, pipelines = [tessera_components]);
+//! tessera_ui::entry!(app, modules = [tessera_components::TesseraComponents]);
 //! ```
 //!
 //! Then you can use the components in your UI.
@@ -83,7 +83,7 @@ pub mod lazy_staggered_grid;
 pub mod material_icons;
 pub mod modifier;
 pub mod theme;
-use tessera_ui::PipelineContext;
+use tessera_ui::{PipelineContext, RenderMiddleware, RenderModule};
 
 pub use pipelines::shape::command::RippleProps;
 pub use ripple_state::RippleState;
@@ -101,6 +101,7 @@ pub mod radio_button;
 pub mod ripple_state;
 pub mod row;
 pub mod scrollable;
+pub mod shadow;
 pub mod shape_def;
 pub mod side_bar;
 pub mod slider;
@@ -117,4 +118,20 @@ pub mod time_picker;
 /// Registers pipelines provided by this crate with the renderer.
 pub fn init(context: &mut PipelineContext<'_>) {
     pipelines::register_pipelines(context);
+}
+
+/// Render module for registering all Tessera component pipelines.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct TesseraComponents;
+
+impl RenderModule for TesseraComponents {
+    fn register_pipelines(&self, context: &mut PipelineContext<'_>) {
+        init(context);
+    }
+
+    fn create_middlewares(&self) -> Vec<Box<dyn RenderMiddleware>> {
+        vec![Box::new(
+            pipelines::shadow::atlas::ShadowAtlasMiddleware::new(),
+        )]
+    }
 }

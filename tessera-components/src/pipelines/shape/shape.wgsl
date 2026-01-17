@@ -3,10 +3,6 @@ struct ShapeUniforms {
     corner_g2: vec4f,          // x:tl, y:tr, z:br, w:bl
     primary_color: vec4f,
     border_color: vec4f,
-    shadow_ambient_color: vec4f,
-    shadow_ambient_params: vec3f,
-    shadow_spot_color: vec4f,
-    shadow_spot_params: vec3f,
     render_mode: f32,
     ripple_params: vec4f,
     ripple_color: vec4f,
@@ -17,13 +13,11 @@ struct ShapeUniforms {
 
 const MODE_FILL: f32 = 0.0;
 const MODE_OUTLINE: f32 = 1.0;
-const MODE_SHADOW: f32 = 2.0;
 const MODE_RIPPLE_FILL: f32 = 3.0;
 const MODE_RIPPLE_OUTLINE: f32 = 4.0;
 const MODE_RIPPLE_FILLED_OUTLINE: f32 = 5.0;
 
 const EPS_DISCARD: f32 = 0.001;
-const SHADOW_AA_MARGIN_PX: f32 = 1.0;
 
 struct ShapeInstances {
     instances: array<ShapeUniforms>,
@@ -43,23 +37,6 @@ struct VertexOutput {
     @location(1) @interpolate(flat) instance_index: u32,
 };
 
-fn shadow_layer_pad(color: vec4f, params: vec3f) -> vec2f {
-    if color.a <= 0.0 {
-        return vec2f(0.0, 0.0);
-    }
-
-    let offset = params.xy;
-    let smoothness = params.z;
-    return vec2f(abs(offset.x), abs(offset.y)) + vec2f(smoothness, smoothness);
-}
-
-fn shadow_pad(instance: ShapeUniforms) -> vec2f {
-    var pad = vec2f(0.0, 0.0);
-    pad = max(pad, shadow_layer_pad(instance.shadow_ambient_color, instance.shadow_ambient_params));
-    pad = max(pad, shadow_layer_pad(instance.shadow_spot_color, instance.shadow_spot_params));
-    return pad + vec2f(SHADOW_AA_MARGIN_PX, SHADOW_AA_MARGIN_PX);
-}
-
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     let instance = uniforms.instances[in.instance_index];
@@ -70,15 +47,8 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let instance_pos = instance.position.xy;
     let instance_size = instance.position.zw;
 
-    var pad = vec2f(0.0, 0.0);
-    if instance.render_mode == MODE_SHADOW {
-        pad = shadow_pad(instance);
-    }
-
-    let expanded_size = instance_size + pad * 2.0;
-
     // Calculate the vertex's final pixel position.
-    let pixel_pos = instance_pos - pad + in.position * expanded_size;
+    let pixel_pos = instance_pos + in.position * instance_size;
 
     // Convert final pixel position to NDC for the rasterizer.
     let clip_pos = vec2<f32>(
@@ -90,14 +60,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.clip_position = vec4<f32>(clip_pos, 0.0, 1.0);
 
     // local_pos is normalized object space (so `local_pos * size` yields pixels).
-    // For shadows, expand the normalized range so the SDF can cover pixels
-    // outside the layout box.
-    if instance.render_mode == MODE_SHADOW {
-        let safe_size = max(instance_size, vec2f(1.0, 1.0));
-        out.local_pos = (in.position * expanded_size - pad) / safe_size - 0.5;
-    } else {
-        out.local_pos = in.position - 0.5; // Center around 0 for SDF
-    }
+    out.local_pos = in.position - 0.5; // Center around 0 for SDF
     out.instance_index = in.instance_index;
     return out;
 }
@@ -183,20 +146,6 @@ fn outline_mask(dist: f32, border_width: f32) -> f32 {
     return max(0.0, outer - inner);
 }
 
-fn shadow_layer_alpha(
-    p_object: vec2f,
-    half_size: vec2f,
-    corner_radii: vec4f,
-    corner_g2: vec4f,
-    offset: vec2f,
-    smoothness: f32,
-) -> f32 {
-    let dist = sdf_shape(p_object - offset, half_size, corner_radii, corner_g2);
-    let mask = aa_mask(dist);
-    let soft = smoothstep(smoothness, 0.0, dist);
-    return mask * soft;
-}
-
 // Calculate ripple effect based on distance from ripple center
 fn calculate_ripple_mask(dist_to_center: f32, ripple_radius: f32, aa: f32) -> f32 {
     if ripple_radius <= 0.0 {
@@ -220,114 +169,77 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     var final_color: vec4f;
 
-    if mode == MODE_SHADOW {
-        var ambient_alpha: f32 = 0.0;
-        if instance.shadow_ambient_color.a > 0.0 {
-            ambient_alpha = shadow_layer_alpha(
-                p_object,
-                half_size,
-                instance.corner_radii,
-                instance.corner_g2,
-                instance.shadow_ambient_params.xy,
-                instance.shadow_ambient_params.z,
-            );
-        }
+    let dist = sdf_shape(p_object, half_size, instance.corner_radii, instance.corner_g2);
+    let shape_mask = aa_mask(dist);
 
-        var spot_alpha: f32 = 0.0;
-        if instance.shadow_spot_color.a > 0.0 {
-            spot_alpha = shadow_layer_alpha(
-                p_object,
-                half_size,
-                instance.corner_radii,
-                instance.corner_g2,
-                instance.shadow_spot_params.xy,
-                instance.shadow_spot_params.z,
-            );
-        }
-
-        let ambient_a = ambient_alpha * instance.shadow_ambient_color.a;
-        let spot_a = spot_alpha * instance.shadow_spot_color.a;
-        let out_a = ambient_a + spot_a * (1.0 - ambient_a);
-        if out_a <= EPS_DISCARD {
+    if mode == MODE_FILL {
+        if shape_mask <= EPS_DISCARD {
             discard;
         }
+        final_color = vec4f(instance.primary_color.rgb, instance.primary_color.a * shape_mask);
+    } else if mode == MODE_OUTLINE {
+        if instance.border_width <= 0.0 {
+            discard;
+        }
+        let mask = outline_mask(dist, instance.border_width);
+        if mask <= EPS_DISCARD {
+            discard;
+        }
+        final_color = vec4f(instance.primary_color.rgb, instance.primary_color.a * mask);
+    } else if mode == MODE_RIPPLE_FILL || mode == MODE_RIPPLE_OUTLINE || mode == MODE_RIPPLE_FILLED_OUTLINE {
+        var base_rgb: vec3f;
+        var base_a: f32;
 
-        let out_pm_rgb = instance.shadow_ambient_color.rgb * ambient_a
-            + instance.shadow_spot_color.rgb * spot_a * (1.0 - ambient_a);
-        final_color = vec4f(out_pm_rgb / out_a, out_a);
-    } else {
-        let dist = sdf_shape(p_object, half_size, instance.corner_radii, instance.corner_g2);
-        let shape_mask = aa_mask(dist);
-
-        if mode == MODE_FILL {
-            if shape_mask <= EPS_DISCARD {
-                discard;
-            }
-            final_color = vec4f(instance.primary_color.rgb, instance.primary_color.a * shape_mask);
-        } else if mode == MODE_OUTLINE {
+        if mode == MODE_RIPPLE_FILL {
+            base_rgb = instance.primary_color.rgb;
+            base_a = instance.primary_color.a * shape_mask;
+        } else if mode == MODE_RIPPLE_OUTLINE {
             if instance.border_width <= 0.0 {
                 discard;
             }
             let mask = outline_mask(dist, instance.border_width);
-            if mask <= EPS_DISCARD {
-                discard;
-            }
-            final_color = vec4f(instance.primary_color.rgb, instance.primary_color.a * mask);
-        } else if mode == MODE_RIPPLE_FILL || mode == MODE_RIPPLE_OUTLINE || mode == MODE_RIPPLE_FILLED_OUTLINE {
-            var base_rgb: vec3f;
-            var base_a: f32;
-
-            if mode == MODE_RIPPLE_FILL {
-                base_rgb = instance.primary_color.rgb;
-                base_a = instance.primary_color.a * shape_mask;
-            } else if mode == MODE_RIPPLE_OUTLINE {
-                if instance.border_width <= 0.0 {
+            base_rgb = instance.primary_color.rgb;
+            base_a = instance.primary_color.a * mask;
+        } else {
+            if instance.border_width <= 0.0 {
+                if shape_mask <= EPS_DISCARD {
                     discard;
                 }
-                let mask = outline_mask(dist, instance.border_width);
                 base_rgb = instance.primary_color.rgb;
-                base_a = instance.primary_color.a * mask;
+                base_a = instance.primary_color.a * shape_mask;
             } else {
-                if instance.border_width <= 0.0 {
-                    if shape_mask <= EPS_DISCARD {
-                        discard;
-                    }
-                    base_rgb = instance.primary_color.rgb;
-                    base_a = instance.primary_color.a * shape_mask;
-                } else {
-                    let dist_inner_edge = dist + instance.border_width;
-                    let aa = fwidth(dist);
-                    let t = smoothstep(-aa, aa, dist_inner_edge);
-                    base_rgb = mix(instance.primary_color.rgb, instance.border_color.rgb, t);
-                    base_a = mix(instance.primary_color.a, instance.border_color.a, t) * shape_mask;
-                }
+                let dist_inner_edge = dist + instance.border_width;
+                let aa = fwidth(dist);
+                let t = smoothstep(-aa, aa, dist_inner_edge);
+                base_rgb = mix(instance.primary_color.rgb, instance.border_color.rgb, t);
+                base_a = mix(instance.primary_color.a, instance.border_color.a, t) * shape_mask;
             }
+        }
 
-            let ripple_center = instance.ripple_params.xy;
-            let ripple_radius = instance.ripple_params.z;
-            let ripple_alpha = instance.ripple_params.w;
-            let ripple_bounded = instance.ripple_color.a > 0.5;
+        let ripple_center = instance.ripple_params.xy;
+        let ripple_radius = instance.ripple_params.z;
+        let ripple_alpha = instance.ripple_params.w;
+        let ripple_bounded = instance.ripple_color.a > 0.5;
 
-            let p_pixel = p_normalized * size;
-            let center_pixel = ripple_center * size;
-            let dist_to_center_pixel = distance(p_pixel, center_pixel);
-            let min_dimension = min(size.x, size.y);
-            let dist_norm = dist_to_center_pixel / max(min_dimension, 1.0);
-            let aa_ripple = max(fwidth(dist_norm), EPS_DISCARD);
-            let ripple_mask = calculate_ripple_mask(dist_norm, ripple_radius, aa_ripple);
-            let bounded_mask = select(1.0, shape_mask, ripple_bounded);
-            let overlay_a = clamp(ripple_mask * ripple_alpha * bounded_mask, 0.0, 1.0);
+        let p_pixel = p_normalized * size;
+        let center_pixel = ripple_center * size;
+        let dist_to_center_pixel = distance(p_pixel, center_pixel);
+        let min_dimension = min(size.x, size.y);
+        let dist_norm = dist_to_center_pixel / max(min_dimension, 1.0);
+        let aa_ripple = max(fwidth(dist_norm), EPS_DISCARD);
+        let ripple_mask = calculate_ripple_mask(dist_norm, ripple_radius, aa_ripple);
+        let bounded_mask = select(1.0, shape_mask, ripple_bounded);
+        let overlay_a = clamp(ripple_mask * ripple_alpha * bounded_mask, 0.0, 1.0);
 
-            let out_a = overlay_a + base_a * (1.0 - overlay_a);
-            if out_a <= EPS_DISCARD {
-                discard;
-            }
-
-            let out_pm_rgb = instance.ripple_color.rgb * overlay_a + base_rgb * base_a * (1.0 - overlay_a);
-            final_color = vec4f(out_pm_rgb / out_a, out_a);
-        } else {
+        let out_a = overlay_a + base_a * (1.0 - overlay_a);
+        if out_a <= EPS_DISCARD {
             discard;
         }
+
+        let out_pm_rgb = instance.ripple_color.rgb * overlay_a + base_rgb * base_a * (1.0 - overlay_a);
+        final_color = vec4f(out_pm_rgb / out_a, out_a);
+    } else {
+        discard;
     }
 
     return vec4f(final_color.rgb * final_color.a, final_color.a);

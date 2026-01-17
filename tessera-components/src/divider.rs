@@ -124,6 +124,7 @@ impl LayoutSpec for DividerLayout {
     fn record(&self, input: &RenderInput<'_>) {
         input
             .metadata_mut()
+            .fragment_mut()
             .push_draw_command(SimpleRectCommand { color: self.color });
     }
 }

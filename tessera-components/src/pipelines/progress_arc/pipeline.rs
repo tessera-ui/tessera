@@ -151,7 +151,7 @@ impl ProgressArcPipeline {
 
 fn build_instances(
     commands: &[(&ProgressArcCommand, PxSize, PxPosition)],
-    config: &wgpu::SurfaceConfiguration,
+    target_size: PxSize,
 ) -> Vec<ArcUniform> {
     commands
         .iter()
@@ -163,7 +163,7 @@ fn build_instances(
                 size.height.raw() as f32,
             ),
             color: Vec4::from_array(command.color.to_array()),
-            screen_size: Vec2::new(config.width as f32, config.height as f32),
+            screen_size: Vec2::new(target_size.width.to_f32(), target_size.height.to_f32()),
             stroke_width: command.stroke_width_px,
             start_angle_degrees: command.start_angle_degrees,
             sweep_angle_degrees: command.sweep_angle_degrees,
@@ -182,7 +182,7 @@ impl DrawablePipeline<ProgressArcCommand> for ProgressArcPipeline {
             return;
         }
 
-        let instances = build_instances(context.commands, context.config);
+        let instances = build_instances(context.commands, context.target_size);
         if instances.is_empty() {
             return;
         }

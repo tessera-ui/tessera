@@ -226,6 +226,9 @@ impl LayoutSpec for TextLayout {
             data: text_data,
             offset: PxPosition::ZERO,
         };
-        input.metadata_mut().push_draw_command(drawable);
+        input
+            .metadata_mut()
+            .fragment_mut()
+            .push_draw_command(drawable);
     }
 }

@@ -1,9 +1,8 @@
-//! Provides a rectangular highlight component for visually indicating selected
-//! regions, typically in text editors or similar UI elements. This module
-//! enables rendering of sharp-cornered, shadowless rectangles with configurable
-//! size and color, suitable for marking text selections or other highlighted
-//! areas. For multi-line or complex selections, multiple highlight rectangles
-//! can be composed to cover the desired region.
+//! Rectangular highlight component for selection visuals.
+//!
+//! ## Usage
+//!
+//! Highlight selected text ranges or focusable regions inside editors.
 use tessera_ui::{
     Color, ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px, RenderInput,
     tessera,
@@ -63,9 +62,11 @@ impl LayoutSpec for SelectionHighlightLayout {
             color: self.color,
             corner_radii: glam::Vec4::ZERO.into(),
             corner_g2: [3.0; 4],
-            shadow: None,
         };
 
-        input.metadata_mut().push_draw_command(drawable);
+        input
+            .metadata_mut()
+            .fragment_mut()
+            .push_draw_command(drawable);
     }
 }

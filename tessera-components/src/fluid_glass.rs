@@ -460,7 +460,7 @@ impl LayoutSpec for FluidGlassLayout {
             let blur_command =
                 DualBlurCommand::horizontal_then_vertical(self.args.blur_radius.to_pixels_f32());
             let mut metadata = input.metadata_mut();
-            metadata.push_compute_command(blur_command);
+            metadata.fragment_mut().push_compute_command(blur_command);
         }
 
         if let Some(contrast_value) = self.args.contrast
@@ -471,14 +471,19 @@ impl LayoutSpec for FluidGlassLayout {
             let contrast_command =
                 ContrastCommand::new(contrast_value, mean_command.result_buffer_ref());
             let mut metadata = input.metadata_mut();
-            metadata.push_compute_command(mean_command);
-            metadata.push_compute_command(contrast_command);
+            metadata.fragment_mut().push_compute_command(mean_command);
+            metadata
+                .fragment_mut()
+                .push_compute_command(contrast_command);
         }
 
         let drawable = FluidGlassCommand {
             args: self.args.clone(),
         };
 
-        input.metadata_mut().push_draw_command(drawable);
+        input
+            .metadata_mut()
+            .fragment_mut()
+            .push_draw_command(drawable);
     }
 }

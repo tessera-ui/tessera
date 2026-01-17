@@ -2,8 +2,7 @@
 //!
 //! ## Usage
 //!
-//! Add drawing effects like alpha, clipping, and shape-based backgrounds or
-//! borders.
+//! Apply basic visual effects like alpha, clipping, and shape borders.
 
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
@@ -44,12 +43,8 @@ fn shape_background_command(color: Color, shape: Shape, size: PxSize) -> ShapeCo
             color,
             corner_radii,
             corner_g2,
-            shadow: None,
         },
-        ResolvedShape::Ellipse => ShapeCommand::Ellipse {
-            color,
-            shadow: None,
-        },
+        ResolvedShape::Ellipse => ShapeCommand::Ellipse { color },
     }
 }
 
@@ -63,12 +58,10 @@ fn shape_border_command(color: Color, width: Dp, shape: Shape, size: PxSize) -> 
             color,
             corner_radii,
             corner_g2,
-            shadow: None,
             border_width,
         },
         ResolvedShape::Ellipse => ShapeCommand::OutlinedEllipse {
             color,
-            shadow: None,
             border_width,
         },
     }
@@ -183,11 +176,13 @@ impl LayoutSpec for BackgroundLayout {
         let size = metadata
             .computed_data
             .expect("modifier_background must have computed size before record");
-        metadata.push_draw_command(shape_background_command(
-            self.color,
-            self.shape,
-            size.into(),
-        ));
+        metadata
+            .fragment_mut()
+            .push_draw_command(shape_background_command(
+                self.color,
+                self.shape,
+                size.into(),
+            ));
     }
 }
 
@@ -216,12 +211,14 @@ impl LayoutSpec for BorderOverlayLayout {
         let size = metadata
             .computed_data
             .expect("modifier_border_overlay must have computed size before record");
-        metadata.push_draw_command(shape_border_command(
-            self.color,
-            self.width,
-            self.shape,
-            size.into(),
-        ));
+        metadata
+            .fragment_mut()
+            .push_draw_command(shape_border_command(
+                self.color,
+                self.width,
+                self.shape,
+                size.into(),
+            ));
     }
 }
 
