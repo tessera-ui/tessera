@@ -6,7 +6,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use smallvec::SmallVec;
 use tessera_ui::{
     Command, Px, PxPosition, PxSize, RenderGraph, RenderGraphOp, RenderGraphParts,
     RenderMiddleware, RenderMiddlewareContext, RenderResource, RenderResourceId, RenderTextureDesc,
@@ -190,8 +189,8 @@ fn apply_shadow_atlas(
             .get(&item.mask_op)
             .copied()
             .unwrap_or(item.size);
-        op.reads.clear();
-        op.writes = SmallVec::from_slice(&[mask_atlas_id]);
+        op.read = None;
+        op.write = Some(mask_atlas_id);
         op.position = pos + draw_pos;
         op.size = draw_size;
     }
@@ -205,8 +204,8 @@ fn apply_shadow_atlas(
             };
             let write_resource = blur_atlases[chain.layer_index][stage % 2];
             let op = &mut ops[*blur_index];
-            op.reads = SmallVec::from_slice(&[read_resource]);
-            op.writes = SmallVec::from_slice(&[write_resource]);
+            op.read = Some(read_resource);
+            op.write = Some(write_resource);
             if let Some(pos) = atlas_layout.positions.get(&chain.mask_op).copied() {
                 op.position = pos + op.position;
             }
@@ -216,7 +215,7 @@ fn apply_shadow_atlas(
     for chain in &chains {
         let final_resource = blur_atlases[chain.layer_index][(chain.blur_ops.len() - 1) % 2];
         let op = &mut ops[chain.composite_op];
-        op.reads = SmallVec::from_slice(&[final_resource]);
+        op.read = Some(final_resource);
 
         let Some(pos) = atlas_layout.positions.get(&chain.mask_op).copied() else {
             continue;
@@ -423,8 +422,8 @@ fn reorder_ops(ops: &mut Vec<RenderGraphOp>, order: &[usize]) -> Vec<RenderGraph
 fn compact_resources(ops: &mut [RenderGraphOp], resources: &mut Vec<RenderResource>) {
     let mut used = vec![false; resources.len()];
     for op in ops.iter() {
-        mark_resources(&op.reads, &mut used);
-        mark_resources(&op.writes, &mut used);
+        mark_resources(op.read, &mut used);
+        mark_resources(op.write, &mut used);
     }
 
     let mut remap: Vec<Option<u32>> = vec![None; resources.len()];
@@ -438,34 +437,27 @@ fn compact_resources(ops: &mut [RenderGraphOp], resources: &mut Vec<RenderResour
     }
 
     for op in ops.iter_mut() {
-        remap_list(&mut op.reads, &remap);
-        remap_list(&mut op.writes, &remap);
+        remap_resource(&mut op.read, &remap);
+        remap_resource(&mut op.write, &remap);
     }
 
     *resources = new_resources;
 }
 
-fn mark_resources(resources: &[RenderResourceId], used: &mut [bool]) {
-    for resource in resources {
-        if let RenderResourceId::Local(index) = *resource
-            && let Some(entry) = used.get_mut(index as usize)
-        {
-            *entry = true;
-        }
+fn mark_resources(resource: Option<RenderResourceId>, used: &mut [bool]) {
+    if let Some(RenderResourceId::Local(index)) = resource
+        && let Some(entry) = used.get_mut(index as usize)
+    {
+        *entry = true;
     }
 }
 
-fn remap_list<A: smallvec::Array<Item = RenderResourceId>>(
-    resources: &mut SmallVec<A>,
-    remap: &[Option<u32>],
-) {
-    for resource in resources.iter_mut() {
-        if let RenderResourceId::Local(index) = *resource {
-            let new_index = remap
-                .get(index as usize)
-                .and_then(|value| *value)
-                .unwrap_or(index);
-            *resource = RenderResourceId::Local(new_index);
-        }
+fn remap_resource(resource: &mut Option<RenderResourceId>, remap: &[Option<u32>]) {
+    if let Some(RenderResourceId::Local(index)) = resource.as_mut() {
+        let new_index = remap
+            .get(*index as usize)
+            .and_then(|value| *value)
+            .unwrap_or(*index);
+        *index = new_index;
     }
 }

@@ -52,10 +52,10 @@ pub struct RenderFragmentOp {
     pub command: Command,
     /// Type identifier used for batching.
     pub type_id: TypeId,
-    /// Resources read by this op.
-    pub reads: SmallVec<[RenderResourceId; 2]>,
-    /// Resources written by this op.
-    pub writes: SmallVec<[RenderResourceId; 1]>,
+    /// Resource read by this op.
+    pub read: Option<RenderResourceId>,
+    /// Resource written by this op.
+    pub write: Option<RenderResourceId>,
     /// Local dependencies inside the fragment.
     pub deps: SmallVec<[u32; 2]>,
     /// Optional size override for this op.
@@ -95,17 +95,17 @@ impl RenderFragment {
     /// Adds a draw command with default scene resource bindings.
     pub fn push_draw_command<C: DrawCommand + 'static>(&mut self, command: C) -> u32 {
         let type_id = TypeId::of::<C>();
-        let mut reads = SmallVec::new();
-        if command.sample_region().is_some() {
-            reads.push(RenderResourceId::SceneColor);
-        }
-        let mut writes = SmallVec::new();
-        writes.push(RenderResourceId::SceneColor);
+        let read = command
+            .sample_region()
+            .is_some()
+            .then_some(RenderResourceId::SceneColor);
+        let write = Some(RenderResourceId::SceneColor);
+
         let op = RenderFragmentOp {
             command: Command::Draw(Box::new(command)),
             type_id,
-            reads,
-            writes,
+            read,
+            write,
             deps: SmallVec::new(),
             size_override: None,
             position_override: None,
@@ -116,15 +116,14 @@ impl RenderFragment {
     /// Adds a compute command with default scene resource bindings.
     pub fn push_compute_command<C: ComputeCommand + 'static>(&mut self, command: C) -> u32 {
         let type_id = TypeId::of::<C>();
-        let mut reads = SmallVec::new();
-        reads.push(RenderResourceId::SceneColor);
-        let mut writes = SmallVec::new();
-        writes.push(RenderResourceId::SceneColor);
+        let read = Some(RenderResourceId::SceneColor);
+        let write = Some(RenderResourceId::SceneColor);
+
         let op = RenderFragmentOp {
             command: Command::Compute(Box::new(command)),
             type_id,
-            reads,
-            writes,
+            read,
+            write,
             deps: SmallVec::new(),
             size_override: None,
             position_override: None,
@@ -153,10 +152,10 @@ pub struct RenderGraphOp {
     pub command: Command,
     /// Type identifier used for batching and ordering.
     pub type_id: TypeId,
-    /// Resource reads for the op.
-    pub reads: SmallVec<[RenderResourceId; 2]>,
-    /// Resource writes for the op.
-    pub writes: SmallVec<[RenderResourceId; 1]>,
+    /// Resource read for the op.
+    pub read: Option<RenderResourceId>,
+    /// Resource write for the op.
+    pub write: Option<RenderResourceId>,
     /// Dependencies on other ops by index.
     pub deps: SmallVec<[usize; 2]>,
     /// Measured size of the op.
@@ -252,8 +251,8 @@ impl RenderGraphBuilder {
         self.ops.push(RenderGraphOp {
             command: Command::ClipPush(rect),
             type_id: TypeId::of::<Command>(),
-            reads: SmallVec::new(),
-            writes: SmallVec::new(),
+            read: None,
+            write: None,
             deps: SmallVec::new(),
             size: PxSize::ZERO,
             position: PxPosition::ZERO,
@@ -268,8 +267,8 @@ impl RenderGraphBuilder {
         self.ops.push(RenderGraphOp {
             command: Command::ClipPop,
             type_id: TypeId::of::<Command>(),
-            reads: SmallVec::new(),
-            writes: SmallVec::new(),
+            read: None,
+            write: None,
             deps: SmallVec::new(),
             size: PxSize::ZERO,
             position: PxPosition::ZERO,
@@ -301,12 +300,12 @@ impl RenderGraphBuilder {
         let base_index = self.ops.len();
 
         for mut op in fragment.ops.drain(..) {
-            let writes_scene = op.writes.contains(&RenderResourceId::SceneColor);
+            let writes_scene = op.write == Some(RenderResourceId::SceneColor);
             let position_override = op.position_override.unwrap_or(PxPosition::ZERO);
             let size_override = op.size_override.unwrap_or(size);
 
-            let reads = map_reads(&op.reads, &resource_map);
-            let writes = map_writes(&op.writes, &resource_map);
+            let read = op.read.map(|r| map_resource(r, &resource_map));
+            let write = op.write.map(|w| map_resource(w, &resource_map));
             let deps = op
                 .deps
                 .iter()
@@ -326,8 +325,8 @@ impl RenderGraphBuilder {
             self.ops.push(RenderGraphOp {
                 command: op.command,
                 type_id: op.type_id,
-                reads,
-                writes,
+                read,
+                write,
                 deps,
                 size: size_override,
                 position: resolved_position,
@@ -345,28 +344,6 @@ impl RenderGraphBuilder {
             resources: self.resources,
         }
     }
-}
-
-fn map_reads(
-    resources: &[RenderResourceId],
-    local_map: &[RenderResourceId],
-) -> SmallVec<[RenderResourceId; 2]> {
-    let mut mapped = SmallVec::new();
-    for resource in resources {
-        mapped.push(map_resource(*resource, local_map));
-    }
-    mapped
-}
-
-fn map_writes(
-    resources: &[RenderResourceId],
-    local_map: &[RenderResourceId],
-) -> SmallVec<[RenderResourceId; 1]> {
-    let mut mapped = SmallVec::new();
-    for resource in resources {
-        mapped.push(map_resource(*resource, local_map));
-    }
-    mapped
 }
 
 fn map_resource(resource: RenderResourceId, local_map: &[RenderResourceId]) -> RenderResourceId {
@@ -590,29 +567,25 @@ fn needs_ordering(
 }
 
 fn non_scene_conflict(left: &RenderGraphOp, right: &RenderGraphOp) -> bool {
-    for resource in &left.writes {
-        if *resource == RenderResourceId::SceneColor {
-            continue;
+    if let Some(resource) = left.write {
+        if resource == RenderResourceId::SceneColor {
+            return false;
         }
-        if resource_in(&right.reads, *resource) || resource_in(&right.writes, *resource) {
+        if Some(resource) == right.read || Some(resource) == right.write {
             return true;
         }
     }
 
-    for resource in &left.reads {
-        if *resource == RenderResourceId::SceneColor {
-            continue;
+    if let Some(resource) = left.read {
+        if resource == RenderResourceId::SceneColor {
+            return false;
         }
-        if resource_in(&right.writes, *resource) {
+        if Some(resource) == right.write {
             return true;
         }
     }
 
     false
-}
-
-fn resource_in(resources: &[RenderResourceId], target: RenderResourceId) -> bool {
-    resources.contains(&target)
 }
 
 fn scene_conflict(left: &OpInfo, right: &OpInfo) -> bool {
@@ -635,7 +608,7 @@ fn scene_conflict(left: &OpInfo, right: &OpInfo) -> bool {
 }
 
 fn scene_read_rect(op: &RenderGraphOp) -> Option<PxRect> {
-    if !resource_in(&op.reads, RenderResourceId::SceneColor) {
+    if op.read != Some(RenderResourceId::SceneColor) {
         return None;
     }
     match &op.command {
@@ -650,7 +623,7 @@ fn scene_read_rect(op: &RenderGraphOp) -> Option<PxRect> {
 }
 
 fn scene_write_rect(op: &RenderGraphOp) -> Option<PxRect> {
-    if !resource_in(&op.writes, RenderResourceId::SceneColor) {
+    if op.write != Some(RenderResourceId::SceneColor) {
         return None;
     }
     match &op.command {

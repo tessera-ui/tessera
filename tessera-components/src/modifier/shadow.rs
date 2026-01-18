@@ -258,14 +258,11 @@ fn record_md3_shadow(
         format: wgpu::TextureFormat::Rgba8Unorm,
     });
 
-    let mut mask_writes = SmallVec::new();
-    mask_writes.push(mask_id);
-
     let mask_op = fragment.push_op(RenderFragmentOp {
         command: Command::Draw(Box::new(ShadowMaskCommand::new(shape))),
         type_id: TypeId::of::<ShadowMaskCommand>(),
-        reads: SmallVec::new(),
-        writes: mask_writes,
+        read: None,
+        write: Some(mask_id),
         deps: SmallVec::new(),
         size_override: Some(size),
         position_override: Some(pad_pos),
@@ -282,26 +279,24 @@ fn record_md3_shadow(
             .enumerate()
         {
             let blur_command = DualBlurCommand::horizontal_then_vertical(radius);
-            let mut blur_reads = SmallVec::new();
-            let mut blur_writes = SmallVec::new();
+            let blur_write = Some(blur_id);
             let mut blur_deps = SmallVec::new();
 
-            if index == 0 {
-                blur_reads.push(mask_id);
+            let blur_read = if index == 0 {
                 blur_deps.push(mask_op);
+                Some(mask_id)
             } else {
-                blur_reads.push(blur_id);
                 if let Some(prev) = last_blur_op {
                     blur_deps.push(prev);
                 }
-            }
-            blur_writes.push(blur_id);
+                Some(blur_id)
+            };
 
             let blur_op = fragment.push_op(RenderFragmentOp {
                 command: Command::Compute(Box::new(blur_command)),
                 type_id: TypeId::of::<DualBlurCommand>(),
-                reads: blur_reads,
-                writes: blur_writes,
+                read: blur_read,
+                write: blur_write,
                 deps: blur_deps,
                 size_override: Some(mask_size),
                 position_override: Some(PxPosition::ZERO),
@@ -317,10 +312,6 @@ fn record_md3_shadow(
         let composite_offset = offset - pad_pos;
         let ordering_offset = pad_pos - offset;
 
-        let mut composite_reads = SmallVec::new();
-        composite_reads.push(blur_id);
-        let mut composite_writes = SmallVec::new();
-        composite_writes.push(RenderResourceId::SceneColor);
         let mut composite_deps = SmallVec::new();
         composite_deps.push(blur_op);
 
@@ -329,8 +320,8 @@ fn record_md3_shadow(
                 ShadowCompositeCommand::new(layer.color).with_ordering(ordering_offset, size),
             )),
             type_id: TypeId::of::<ShadowCompositeCommand>(),
-            reads: composite_reads,
-            writes: composite_writes,
+            read: Some(blur_id),
+            write: Some(RenderResourceId::SceneColor),
             deps: composite_deps,
             size_override: Some(mask_size),
             position_override: Some(composite_offset),

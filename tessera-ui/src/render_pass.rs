@@ -33,15 +33,12 @@ impl RenderPassGraph {
                 size,
                 position,
                 type_id,
-                reads,
-                writes,
+                read,
+                write,
                 ..
             } = op;
-            let write_resource = writes
-                .first()
-                .copied()
-                .unwrap_or(RenderResourceId::SceneColor);
-            let read_resource = reads.first().copied();
+            let write_resource = write.unwrap_or(RenderResourceId::SceneColor);
+            let read_resource = read;
 
             match command {
                 Command::Draw(cmd) => {
