@@ -63,6 +63,7 @@ const PUBLISHABLE_PACKAGES: &[&str] = &[
     "tessera-shard",
     "cargo-tessera",
     "tessera-mobile",
+    "tessera-platform",
 ];
 
 fn release_package(
