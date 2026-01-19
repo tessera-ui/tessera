@@ -1,3 +1,5 @@
 include ':app'
 
+include ':plugins:tessera_platform'
+project(':plugins:tessera_platform').projectDir = file('plugins/tessera_platform')
 

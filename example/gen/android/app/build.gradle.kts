@@ -49,4 +49,5 @@ dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22"))
     implementation("androidx.games:games-activity:2.0.2")
     implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation(project(":plugins:tessera_platform"))
 }

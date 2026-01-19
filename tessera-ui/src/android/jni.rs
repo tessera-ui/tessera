@@ -534,13 +534,18 @@ macro_rules! java_class {
 macro_rules! jni_bind {
     (
         class $class:literal as $name:ident {
-            $(fn $method:ident ( $($arg_name:ident : $arg_ty:ty),* $(,)? ) -> $ret:ty;)+
+            $(
+                $(#[$meta:meta])*
+                fn $method:ident ( $($arg_name:ident : $arg_ty:ty),* $(,)? ) -> $ret:ty;
+            )+
         }
     ) => {
+        #[doc = concat!("JNI bindings for `", $class, "`.")]
         pub struct $name;
 
         impl $name {
             $(
+                $(#[$meta])*
                 #[allow(clippy::needless_pass_by_value)]
                 #[allow(non_snake_case)]
                 pub fn $method(
