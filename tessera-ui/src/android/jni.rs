@@ -542,6 +542,7 @@ macro_rules! jni_bind {
         impl $name {
             $(
                 #[allow(clippy::needless_pass_by_value)]
+                #[allow(non_snake_case)]
                 pub fn $method(
                     android_app: &$crate::winit::platform::android::activity::AndroidApp,
                     $($arg_name: $arg_ty),*

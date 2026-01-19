@@ -17,9 +17,13 @@ use tessera_ui::winit::platform::android::activity::AndroidApp;
 #[cfg(target_os = "android")]
 tessera_ui::android::jni_bind! {
     class "com.tessera.platform.ClipboardPlugin" as ClipboardPluginJni {
+        /// Whether the clipboard contains text.
         fn hasText(activity: ActivityRef) -> bool;
+        /// Returns clipboard text.
         fn getText(activity: ActivityRef) -> String;
+        /// Sets clipboard text.
         fn setText(activity: ActivityRef, text: &str) -> ();
+        /// Clears clipboard contents.
         fn clear(activity: ActivityRef) -> ();
     }
 }
