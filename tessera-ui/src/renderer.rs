@@ -3,8 +3,8 @@
 //! handling, and rendering pipeline for cross-platform UI applications.
 
 pub mod compute;
+pub mod core;
 pub mod drawer;
-pub mod render_core;
 
 use std::{sync::Arc, thread, time::Instant};
 
@@ -42,8 +42,8 @@ pub use crate::render_scene::{Command, DrawRegion, PaddingRect, SampleRegion};
 pub use compute::{
     ComputablePipeline, ComputeBatchItem, ComputePipelineRegistry, ErasedComputeBatchItem,
 };
+pub use core::{RenderCore, RenderResources};
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
-pub use render_core::{RenderCore, RenderResources};
 
 #[cfg(feature = "profiling")]
 use crate::profiler::{

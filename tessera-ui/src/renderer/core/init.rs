@@ -283,6 +283,7 @@ impl RenderCore {
             compute,
             blit,
             local_textures: LocalTexturePool::new(),
+            frame_index: 0,
         }
     }
 
@@ -368,6 +369,7 @@ impl RenderCore {
     }
 
     pub(crate) fn rebuild_pass_targets(&mut self) {
+        self.local_textures.clear();
         self.targets.offscreen.texture().destroy();
         self.compute.target_a.texture().destroy();
         self.compute.target_b.texture().destroy();

@@ -17,8 +17,8 @@ use crate::{
 
 use super::{compute::ComputePipelineRegistry, drawer::Drawer};
 
-mod render_core_frame;
-mod render_core_init;
+mod frame;
+mod init;
 
 struct RenderPipelines {
     drawer: Drawer,
@@ -72,6 +72,7 @@ struct LocalTextureSlot {
     back: TextureHandle,
     msaa_view: Option<wgpu::TextureView>,
     in_use: bool,
+    last_used_frame: u64,
 }
 
 impl LocalTextureSlot {
@@ -93,11 +94,17 @@ struct LocalTexturePool {
 }
 
 impl LocalTexturePool {
+    const MAX_SLOTS: usize = 16;
+
     fn new() -> Self {
         Self { slots: Vec::new() }
     }
 
-    fn reset(&mut self) {
+    fn clear(&mut self) {
+        self.slots.clear();
+    }
+
+    fn begin_frame(&mut self, _current_frame: u64) {
         for slot in &mut self.slots {
             slot.in_use = false;
         }
@@ -108,6 +115,7 @@ impl LocalTexturePool {
         device: &wgpu::Device,
         desc: &RenderTextureDesc,
         sample_count: u32,
+        current_frame: u64,
     ) -> usize {
         let key = RenderTextureDescKey::from_desc(desc, sample_count);
         if let Some((index, slot)) = self
@@ -117,7 +125,14 @@ impl LocalTexturePool {
             .find(|(_, slot)| slot.desc == key && !slot.in_use)
         {
             slot.in_use = true;
+            slot.last_used_frame = current_frame;
             return index;
+        }
+
+        if self.slots.len() >= Self::MAX_SLOTS
+            && let Some(index) = self.lru_unused_index()
+        {
+            self.slots.swap_remove(index);
         }
 
         let front = create_local_texture(device, desc, "Local Front");
@@ -134,9 +149,19 @@ impl LocalTexturePool {
             back,
             msaa_view,
             in_use: true,
+            last_used_frame: current_frame,
         };
         self.slots.push(slot);
         self.slots.len() - 1
+    }
+
+    fn lru_unused_index(&self) -> Option<usize> {
+        self.slots
+            .iter()
+            .enumerate()
+            .filter(|(_, slot)| !slot.in_use)
+            .min_by_key(|(_, slot)| slot.last_used_frame)
+            .map(|(index, _)| index)
     }
 
     fn slot(&self, index: usize) -> Option<&LocalTextureSlot> {
@@ -234,6 +259,8 @@ pub struct RenderCore {
     blit: BlitState,
     /// Pool of local textures declared by render graph resources.
     local_textures: LocalTexturePool,
+    /// Monotonic frame counter for resource eviction.
+    frame_index: u64,
 }
 
 /// Shared GPU resources used when creating pipelines.

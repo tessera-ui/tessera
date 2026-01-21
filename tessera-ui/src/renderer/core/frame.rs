@@ -4,7 +4,7 @@ use smallvec::SmallVec;
 
 use crate::{
     DrawCommand, Px, PxPosition, PxRect, PxSize,
-    render_graph::{RenderGraphExecution, RenderResource, RenderResourceId},
+    render_graph::{RenderGraphExecution, RenderResource, RenderResourceId, RenderTextureDesc},
     render_pass::{
         ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassKind, RenderPassPlan,
     },
@@ -16,6 +16,26 @@ use crate::{
 };
 
 use super::*;
+
+fn compute_last_use_passes(passes: &[RenderPassPlan], local_count: usize) -> Vec<usize> {
+    let mut last_use = vec![0usize; local_count];
+    for (pass_index, pass) in passes.iter().enumerate() {
+        if let Some(RenderResourceId::Local(index)) = pass.read_resource {
+            last_use[index as usize] = pass_index;
+        }
+        if let RenderResourceId::Local(index) = pass.write_resource {
+            last_use[index as usize] = pass_index;
+        }
+        for draw in pass.draws.iter() {
+            if let DrawOrClip::Draw(cmd) = draw
+                && let Some(RenderResourceId::Local(index)) = cmd.read_resource
+            {
+                last_use[index as usize] = pass_index;
+            }
+        }
+    }
+    last_use
+}
 
 struct RenderPassParams<'a, 'b> {
     msaa_view: Option<wgpu::TextureView>,
@@ -31,7 +51,7 @@ struct RenderPassParams<'a, 'b> {
     target_size: PxSize,
     clip_stack: &'a mut SmallVec<[PxRect; 16]>,
     apply_clip: bool,
-    resources: &'a FrameResources<'b>,
+    resources: &'a mut FrameResources<'b>,
 }
 
 struct RenderPassExecParams<'a, 'b> {
@@ -58,32 +78,66 @@ struct BlitParams<'a> {
 }
 
 struct FrameResources<'a> {
-    locals: Vec<usize>,
+    locals: Vec<LocalResourceState>,
     pool: &'a mut LocalTexturePool,
+    device: &'a wgpu::Device,
+    sample_count: u32,
+    current_frame: u64,
+}
+
+struct LocalResourceState {
+    desc: RenderTextureDesc,
+    slot: Option<usize>,
+    last_use_pass: usize,
 }
 
 impl<'a> FrameResources<'a> {
     fn new(
         pool: &'a mut LocalTexturePool,
-        device: &wgpu::Device,
+        device: &'a wgpu::Device,
         resources: &[RenderResource],
         sample_count: u32,
+        current_frame: u64,
+        last_use_passes: &[usize],
     ) -> Self {
-        pool.reset();
         let locals = resources
             .iter()
-            .map(|resource| match resource {
-                RenderResource::Texture(desc) => pool.allocate(device, desc, sample_count),
+            .enumerate()
+            .map(|(index, resource)| match resource {
+                RenderResource::Texture(desc) => LocalResourceState {
+                    desc: desc.clone(),
+                    slot: None,
+                    last_use_pass: *last_use_passes.get(index).unwrap_or(&0),
+                },
             })
             .collect();
-        Self { locals, pool }
+        Self {
+            locals,
+            pool,
+            device,
+            sample_count,
+            current_frame,
+        }
     }
 
-    fn local_slot(&self, id: RenderResourceId) -> Option<&LocalTextureSlot> {
+    fn local_slot(&mut self, id: RenderResourceId) -> Option<&LocalTextureSlot> {
         let RenderResourceId::Local(index) = id else {
             return None;
         };
-        let slot_index = *self.locals.get(index as usize)?;
+        let local = self.locals.get_mut(index as usize)?;
+        let slot_index = match local.slot {
+            Some(slot) => slot,
+            None => {
+                let slot = self.pool.allocate(
+                    self.device,
+                    &local.desc,
+                    self.sample_count,
+                    self.current_frame,
+                );
+                local.slot = Some(slot);
+                slot
+            }
+        };
         self.pool.slot(slot_index)
     }
 
@@ -91,8 +145,32 @@ impl<'a> FrameResources<'a> {
         let RenderResourceId::Local(index) = id else {
             return None;
         };
-        let slot_index = *self.locals.get(index as usize)?;
+        let local = self.locals.get_mut(index as usize)?;
+        let slot_index = match local.slot {
+            Some(slot) => slot,
+            None => {
+                let slot = self.pool.allocate(
+                    self.device,
+                    &local.desc,
+                    self.sample_count,
+                    self.current_frame,
+                );
+                local.slot = Some(slot);
+                slot
+            }
+        };
         self.pool.slot_mut(slot_index)
+    }
+
+    fn release_for_pass(&mut self, pass_index: usize) {
+        for local in &mut self.locals {
+            if local.last_use_pass == pass_index
+                && let Some(slot) = local.slot.take()
+                && let Some(slot_ref) = self.pool.slot_mut(slot)
+            {
+                slot_ref.in_use = false;
+            }
+        }
     }
 }
 
@@ -229,6 +307,7 @@ impl RenderCore {
         &mut self,
         execution: RenderGraphExecution,
     ) -> Result<(), wgpu::SurfaceError> {
+        let current_frame = self.frame_index;
         let output_frame = self.surface.get_current_texture()?;
         let mut encoder = self
             .device
@@ -245,6 +324,7 @@ impl RenderCore {
         let RenderGraphExecution { ops, resources } = execution;
         let graph = RenderPassGraph::build(ops, &resources, texture_size);
         let mut passes = graph.into_passes();
+        let last_use_passes = compute_last_use_passes(&passes, resources.len());
 
         let device = &self.device;
         let queue = &self.queue;
@@ -255,6 +335,8 @@ impl RenderCore {
         let compute = &mut self.compute;
         let local_textures = &mut self.local_textures;
 
+        local_textures.begin_frame(current_frame);
+
         // Frame-level begin for all pipelines
         pipelines
             .drawer
@@ -264,8 +346,14 @@ impl RenderCore {
         let mut scene_texture_view = targets.offscreen.clone();
         let mut scene_source = SceneSource::Swapchain;
         let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
-        let mut frame_resources =
-            FrameResources::new(local_textures, device, &resources, targets.sample_count);
+        let mut frame_resources = FrameResources::new(
+            local_textures,
+            device,
+            &resources,
+            targets.sample_count,
+            current_frame,
+            &last_use_passes,
+        );
 
         let mut output_view = output_frame
             .texture
@@ -283,7 +371,7 @@ impl RenderCore {
             blit,
         };
 
-        for pass in passes.iter_mut() {
+        for (pass_index, pass) in passes.iter_mut().enumerate() {
             Self::execute_render_pass(
                 &mut frame_state,
                 RenderPassExecParams {
@@ -297,6 +385,7 @@ impl RenderCore {
                     clip_stack: &mut clip_stack,
                 },
             );
+            frame_resources.release_for_pass(pass_index);
         }
 
         if !matches!(scene_source, SceneSource::Swapchain) {
@@ -325,6 +414,7 @@ impl RenderCore {
 
         queue.submit(Some(encoder.finish()));
         output_frame.present();
+        self.frame_index = self.frame_index.wrapping_add(1);
 
         Ok(())
     }
@@ -962,7 +1052,7 @@ fn resolve_scene_view<'a>(
     read_resource: Option<RenderResourceId>,
     scene_texture_view: &'a wgpu::TextureView,
     write_target: &'a wgpu::TextureView,
-    resources: &'a FrameResources<'_>,
+    resources: &'a mut FrameResources<'_>,
 ) -> &'a wgpu::TextureView {
     match read_resource {
         Some(RenderResourceId::SceneColor) => scene_texture_view,
