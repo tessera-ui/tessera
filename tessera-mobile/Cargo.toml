@@ -61,7 +61,7 @@ default = ["cli", "native-tls"]
 [dependencies]
 handlebars = "6"
 serde_json = "1"
-colored = "3.0"
+colored = "3.1"
 deunicode = "1.4"
 dunce = "1.0"
 english-numbers = "0.3"
