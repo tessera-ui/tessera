@@ -2,6 +2,9 @@
 
 Latest optimized SVGs for material design icons.
 
+Note: In this repository, SVG files are packaged into `material_icons.zip` and
+extracted at build time. The manifest file lists the available icons.
+
 > This package is automatically updated, so it will always have the latest icons from Google.
 
 > For Material Symbols, see [`material-symbols`](https://www.npmjs.com/package/material-symbols)

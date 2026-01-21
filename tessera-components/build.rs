@@ -1,11 +1,13 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     env,
     error::Error,
     fmt::Write as _,
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
+
+use zip::ZipArchive;
 
 const STYLES: &[(&str, &str)] = &[
     ("filled", "filled"),
@@ -15,6 +17,10 @@ const STYLES: &[(&str, &str)] = &[
     ("two-tone", "two_tone"),
 ];
 
+const ICON_ARCHIVE: &str = "assets/material_icons/material_icons.zip";
+const ICON_MANIFEST: &str = "assets/material_icons/material_icons.manifest";
+const ICON_OUT_DIR: &str = "material_icons";
+
 struct IconEntry {
     style: &'static str,
     func: String,
@@ -23,41 +29,34 @@ struct IconEntry {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    println!("cargo:rerun-if-changed=assets/material_icons");
-
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
-    let assets_dir = manifest_dir.join("assets").join("material_icons");
+    let archive_path = manifest_dir.join(ICON_ARCHIVE);
+    let manifest_path = manifest_dir.join(ICON_MANIFEST);
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
+    let extract_dir = out_dir.join(ICON_OUT_DIR);
+
+    println!("cargo:rerun-if-changed={ICON_ARCHIVE}");
+    println!("cargo:rerun-if-changed={ICON_MANIFEST}");
+
+    extract_archive(&archive_path, &extract_dir)?;
+    let manifest_entries = read_manifest_entries(&manifest_path)?;
 
     let mut entries: Vec<IconEntry> = Vec::new();
+    let mut used_func_sets: HashMap<&'static str, HashSet<String>> = HashMap::new();
 
-    for (style, _module) in STYLES {
-        let style_dir = assets_dir.join(style);
-        let mut files = read_svg_entries(&style_dir)?;
-        files.sort_by_key(|a| a.file_name());
-        let mut used_funcs = HashSet::new();
-
-        for file in files {
-            let path = file.path();
-            let name = path
-                .file_stem()
-                .expect("SVG entry missing a file stem")
-                .to_string_lossy()
-                .into_owned();
-            let func = make_func_name(&name, &mut used_funcs);
-            let file_name = path
-                .file_name()
-                .expect("SVG entry missing a file name")
-                .to_string_lossy()
-                .into_owned();
-            let rel_path = format!("assets/material_icons/{style}/{file_name}");
-            entries.push(IconEntry {
-                style,
-                func,
-                doc_name: name,
-                path: rel_path,
-            });
-        }
+    for rel_path in manifest_entries {
+        let (style, doc_name) = split_manifest_entry(&rel_path)?;
+        let func = {
+            let used_funcs = used_func_sets.entry(style).or_default();
+            make_func_name(&doc_name, used_funcs)
+        };
+        let include_path = format!("{ICON_OUT_DIR}/{rel_path}");
+        entries.push(IconEntry {
+            style,
+            func,
+            doc_name,
+            path: include_path,
+        });
     }
 
     let mut generated = String::new();
@@ -100,7 +99,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             writeln!(generated, "    pub fn {func}() -> IconContent {{")?;
             writeln!(
                 generated,
-                "        let data: Arc<ImageVectorData> = load_icon_bytes(include_bytes!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/{path}\")));",
+                "        let data: Arc<ImageVectorData> = load_icon_bytes(include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{path}\")));",
                 path = entry.path
             )?;
             writeln!(generated, "        IconContent::from(data)")?;
@@ -114,20 +113,62 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn read_svg_entries(dir: &Path) -> Result<Vec<fs::DirEntry>, Box<dyn Error>> {
-    let mut entries = Vec::new();
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        if entry
-            .path()
-            .extension()
-            .map(|ext| ext.eq_ignore_ascii_case("svg"))
-            .unwrap_or(false)
-        {
-            entries.push(entry);
-        }
+fn extract_archive(archive_path: &Path, extract_dir: &Path) -> Result<(), Box<dyn Error>> {
+    if extract_dir.exists() {
+        fs::remove_dir_all(extract_dir)?;
     }
+    fs::create_dir_all(extract_dir)?;
+
+    let file = fs::File::open(archive_path)?;
+    let mut archive = ZipArchive::new(file)?;
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)?;
+        let name = entry.name();
+        if entry.is_dir() {
+            continue;
+        }
+        if !name.ends_with(".svg") {
+            continue;
+        }
+        let out_path = extract_dir.join(name);
+        if let Some(parent) = out_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut outfile = fs::File::create(out_path)?;
+        io::copy(&mut entry, &mut outfile)?;
+    }
+    Ok(())
+}
+
+fn read_manifest_entries(manifest_path: &Path) -> Result<Vec<String>, Box<dyn Error>> {
+    let content = fs::read_to_string(manifest_path)?;
+    let mut entries: Vec<String> = content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect();
+    entries.sort();
     Ok(entries)
+}
+
+fn split_manifest_entry(entry: &str) -> Result<(&'static str, String), Box<dyn Error>> {
+    let mut parts = entry.splitn(2, '/');
+    let style = parts.next().unwrap_or_default();
+    let file_name = parts
+        .next()
+        .ok_or_else(|| format!("invalid icon manifest entry: {entry}"))?;
+    let doc_name = Path::new(file_name)
+        .file_stem()
+        .ok_or_else(|| format!("invalid icon manifest entry: {entry}"))?
+        .to_string_lossy()
+        .into_owned();
+    let style = STYLES
+        .iter()
+        .find(|(key, _)| *key == style)
+        .map(|(key, _)| *key)
+        .ok_or_else(|| format!("unknown icon style in manifest entry: {entry}"))?;
+    Ok((style, doc_name))
 }
 
 fn make_func_name(name: &str, used: &mut HashSet<String>) -> String {
