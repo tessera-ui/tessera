@@ -29,7 +29,7 @@ tessera-macros = { path = "../tessera-macros" }
 tessera-shard = { path = "../tessera-shard", optional = true }
 petgraph = "0.8.3"
 accesskit = "0.23.0"
-accesskit_winit = "0.31.0"
+accesskit_winit = "0.31.1"
 smallvec = "1.15.1"
 dirs = "6.0.0"
 im = "15.1.0"
