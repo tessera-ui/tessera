@@ -28,7 +28,7 @@ toml = "0.9.10"
 serde = { version = "1.0", features = ["derive"] }
 include_dir = "0.7"
 notify = "8.2.0"
-inquire = { version = "0.9.1", default-features = false, features = ["crossterm", "editor"] }
+inquire = { version = "0.9.2", default-features = false, features = ["crossterm", "editor"] }
 cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", default-features = false, features = ["native-tls"] }
 handlebars = "6"
 serde_json = "1"
