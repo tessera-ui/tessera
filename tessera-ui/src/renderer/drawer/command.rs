@@ -3,8 +3,11 @@
 //! This module defines the core traits and types for graphics rendering
 //! commands in the unified command system.
 
+use downcast_rs::impl_downcast;
+use dyn_clone::DynClone;
+
 use crate::{
-    dyn_eq::DynPartialEqDraw,
+    dyn_traits::DynPartialEqDraw,
     px::{PxPosition, PxRect, PxSize},
     render_scene::{DrawRegion, PaddingRect, SampleRegion},
 };
@@ -32,7 +35,7 @@ use crate::{
 ///     }
 /// }
 /// ```
-pub trait DrawCommand: DynPartialEqDraw + Send + Sync {
+pub trait DrawCommand: DynClone + DynPartialEqDraw + Send + Sync {
     /// Specifies sample requirements for this draw operation.
     ///
     /// As a default implementation, this returns `None`, indicating that
@@ -69,3 +72,7 @@ pub trait DrawCommand: DynPartialEqDraw + Send + Sync {
         None
     }
 }
+
+impl_downcast!(DrawCommand);
+
+dyn_clone::clone_trait_object!(DrawCommand);

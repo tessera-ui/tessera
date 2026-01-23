@@ -4,7 +4,8 @@
 //!
 //! Define command metadata for render graph nodes.
 
-use std::any::Any;
+use downcast_rs::{Downcast, impl_downcast};
+use dyn_clone::DynClone;
 
 use crate::{
     ComputeCommand, DrawCommand,
@@ -84,22 +85,12 @@ impl SampleRegion {
     }
 }
 
-/// Trait providing type erasure capabilities for command objects.
-///
-/// This trait allows commands to be stored and passed around as trait objects
-/// while still providing access to their concrete types when needed for
-/// pipeline dispatch.
-pub trait AsAny {
-    /// Returns a reference to the concrete type as `&dyn Any`.
-    fn as_any(&self) -> &dyn Any;
-}
+/// Trait for composite rendering commands that expand into draw/compute ops.
+pub trait CompositeCommand: DynClone + Downcast + Send + Sync {}
 
-/// Blanket implementation of `AsAny` for all types that implement `Any`.
-impl<T: Any> AsAny for T {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+impl_downcast!(CompositeCommand);
+
+dyn_clone::clone_trait_object!(CompositeCommand);
 
 /// Unified command enum that can represent either a draw or compute operation.
 ///
@@ -111,6 +102,8 @@ pub enum Command {
     Draw(Box<dyn DrawCommand>),
     /// A GPU computation command processed by compute pipelines.
     Compute(Box<dyn ComputeCommand>),
+    /// A composite command that expands into draw/compute operations.
+    Composite(Box<dyn CompositeCommand>),
     /// A command to push a clipping rectangle onto the stack.
     ClipPush(PxRect),
     /// A command to pop the most recent clipping rectangle from the stack.
@@ -128,6 +121,7 @@ impl Command {
             Self::Draw(command) => command.sample_region(),
             // Currently, compute can only be used for after effects,
             Self::Compute(command) => Some(command.barrier()),
+            Self::Composite(_) => None,
             Self::ClipPush(_) | Self::ClipPop => None, // Clipping commands do not require barriers
         }
     }
@@ -136,8 +130,9 @@ impl Command {
 impl Clone for Command {
     fn clone(&self) -> Self {
         match self {
-            Self::Draw(cmd) => Self::Draw(cmd.clone_box()),
-            Self::Compute(cmd) => Self::Compute(cmd.clone_box()),
+            Self::Draw(cmd) => Self::Draw(cmd.clone()),
+            Self::Compute(cmd) => Self::Compute(cmd.clone()),
+            Self::Composite(cmd) => Self::Composite(cmd.clone()),
             Self::ClipPush(rect) => Self::ClipPush(*rect),
             Self::ClipPop => Self::ClipPop,
         }
@@ -155,5 +150,12 @@ impl From<Box<dyn DrawCommand>> for Command {
 impl From<Box<dyn ComputeCommand>> for Command {
     fn from(val: Box<dyn ComputeCommand>) -> Self {
         Self::Compute(val)
+    }
+}
+
+/// Automatic conversion from boxed composite commands to unified commands.
+impl From<Box<dyn CompositeCommand>> for Command {
+    fn from(val: Box<dyn CompositeCommand>) -> Self {
+        Self::Composite(val)
     }
 }

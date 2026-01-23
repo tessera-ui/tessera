@@ -6,6 +6,7 @@ use wgpu::TextureFormat;
 use winit::window::Window;
 
 use crate::{
+    CompositePipelineRegistry,
     compute::resource::ComputeResourceManager,
     dp::SCALE_FACTOR,
     pipeline_cache::initialize_cache,
@@ -246,6 +247,7 @@ impl RenderCore {
         let pipelines = RenderPipelines {
             drawer,
             compute_registry: ComputePipelineRegistry::new(),
+            composite_registry: CompositePipelineRegistry::new(),
         };
 
         let targets = FrameTargets {

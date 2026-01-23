@@ -10,9 +10,11 @@ use parking_lot::RwLock;
 use winit::window::Window;
 
 use crate::{
-    ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, PxSize,
-    compute::resource::ComputeResourceManager, pipeline_cache::save_cache,
+    CompositeCommand, ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, PxSize,
+    compute::resource::ComputeResourceManager,
+    pipeline_cache::save_cache,
     render_graph::RenderTextureDesc,
+    renderer::composite::{CompositeContext, CompositePipelineRegistry},
 };
 
 use super::{compute::ComputePipelineRegistry, drawer::Drawer};
@@ -23,6 +25,7 @@ mod init;
 struct RenderPipelines {
     drawer: Drawer,
     compute_registry: ComputePipelineRegistry,
+    composite_registry: CompositePipelineRegistry,
 }
 
 struct FrameTargets {
@@ -353,6 +356,46 @@ impl RenderCore {
         P: ComputablePipeline<T> + 'static,
     {
         self.pipelines.compute_registry.register(pipeline);
+    }
+
+    /// Registers a new composite pipeline for a specific command type.
+    pub fn register_composite_pipeline<T, P>(&mut self, pipeline: P)
+    where
+        T: CompositeCommand + 'static,
+        P: super::composite::CompositePipeline<T> + 'static,
+    {
+        self.pipelines.composite_registry.register(pipeline);
+    }
+
+    pub(crate) fn composite_context_parts(
+        &mut self,
+        frame_size: PxSize,
+        frame_index: u64,
+    ) -> (CompositeContext<'_>, &mut CompositePipelineRegistry) {
+        let RenderCore {
+            device,
+            queue,
+            config,
+            pipeline_cache,
+            targets,
+            pipelines,
+            ..
+        } = self;
+        let resources = RenderResources {
+            device,
+            queue,
+            surface_config: config,
+            pipeline_cache: pipeline_cache.as_ref(),
+            sample_count: targets.sample_count,
+        };
+        let context = CompositeContext {
+            resources,
+            frame_size,
+            surface_format: config.format,
+            sample_count: targets.sample_count,
+            frame_index,
+        };
+        (context, &mut pipelines.composite_registry)
     }
 
     pub(crate) fn save_pipeline_cache(&self) -> io::Result<()> {

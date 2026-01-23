@@ -14,7 +14,7 @@ use std::{
 use smallvec::SmallVec;
 
 use crate::{
-    Command, ComputeCommand, DrawCommand, DrawRegion, SampleRegion,
+    Command, CompositeCommand, ComputeCommand, DrawCommand, DrawRegion, SampleRegion,
     px::{Px, PxPosition, PxRect, PxSize},
 };
 
@@ -124,6 +124,21 @@ impl RenderFragment {
             type_id,
             read,
             write,
+            deps: SmallVec::new(),
+            size_override: None,
+            position_override: None,
+        };
+        self.push_op(op)
+    }
+
+    /// Adds a composite command with default scene resource bindings.
+    pub fn push_composite_command<C: CompositeCommand + 'static>(&mut self, command: C) -> u32 {
+        let type_id = TypeId::of::<C>();
+        let op = RenderFragmentOp {
+            command: Command::Composite(Box::new(command)),
+            type_id,
+            read: None,
+            write: Some(RenderResourceId::SceneColor),
             deps: SmallVec::new(),
             size_override: None,
             position_override: None,
@@ -478,6 +493,7 @@ impl OpInfo {
                 }
             }
             Command::Compute(_) => OpCategory::Compute,
+            Command::Composite(_) => OpCategory::StateChange,
             Command::ClipPush(_) | Command::ClipPop => OpCategory::StateChange,
         };
 
@@ -618,6 +634,7 @@ fn scene_read_rect(op: &RenderGraphOp) -> Option<PxRect> {
         Command::Compute(command) => {
             Some(sample_region_rect(command.barrier(), op.position, op.size))
         }
+        Command::Composite(_) => None,
         Command::ClipPush(_) | Command::ClipPop => None,
     }
 }
@@ -633,6 +650,7 @@ fn scene_write_rect(op: &RenderGraphOp) -> Option<PxRect> {
                 .unwrap_or_else(|| draw_region_rect(command.draw_region(), op.position, op.size)),
         ),
         Command::Compute(_) => Some(PxRect::from_position_size(op.position, op.size)),
+        Command::Composite(_) => None,
         Command::ClipPush(_) | Command::ClipPop => None,
     }
 }

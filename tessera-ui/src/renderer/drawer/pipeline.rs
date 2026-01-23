@@ -367,7 +367,7 @@ pub trait DrawablePipeline<T: DrawCommand> {
 /// used internally by the [`PipelineRegistry`] and should not be implemented
 /// directly by users.
 ///
-/// The type erasure is achieved through the [`AsAny`] trait, which allows
+/// The type erasure is achieved through the [`Downcast`] trait, which allows
 /// downcasting from `&dyn DrawCommand` to concrete command types.
 ///
 /// # Implementation Note
@@ -434,12 +434,12 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
             clip_rect,
         } = context;
 
-        if commands[0].0.as_any().is::<T>() {
+        if commands[0].0.is::<T>() {
             let typed_commands: Vec<(&T, PxSize, PxPosition)> = commands
                 .iter()
                 .map(|(cmd, size, pos)| {
                     (
-                        cmd.as_any().downcast_ref::<T>().expect(
+                        cmd.downcast_ref::<T>().expect(
                             "FATAL: A command in a batch has a different type than the first one.",
                         ),
                         *size,

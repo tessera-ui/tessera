@@ -114,6 +114,9 @@ impl RenderPassGraph {
                         sampling_rect,
                     });
                 }
+                Command::Composite(_) => {
+                    panic!("Composite commands must be expanded before render pass planning");
+                }
                 Command::ClipPush(rect) => {
                     flush_compute_pass(&mut passes, &mut compute_builder);
                     draw_builder.push_clip(ClipOps::Push(rect));

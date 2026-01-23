@@ -83,9 +83,7 @@
 
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{
-    PxPosition, PxRect, PxSize, compute::resource::ComputeResourceManager, render_scene::AsAny,
-};
+use crate::{PxPosition, PxRect, PxSize, compute::resource::ComputeResourceManager};
 
 use super::command::ComputeCommand;
 
@@ -261,7 +259,7 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
 /// time. It's used internally by the [`ComputePipelineRegistry`] and should not
 /// be implemented directly by users.
 ///
-/// The type erasure is achieved through the [`AsAny`] trait, which allows
+/// The type erasure is achieved through the [`Downcast`] trait, which allows
 /// downcasting from `&dyn ComputeCommand` to concrete command types.
 ///
 /// # Implementation Note
@@ -298,7 +296,8 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
 
         let mut typed_items: Vec<ComputeBatchItem<'_, C>> = Vec::with_capacity(items.len());
         for item in items {
-            let command = AsAny::as_any(item.command)
+            let command = item
+                .command
                 .downcast_ref::<C>()
                 .expect("Compute batch contained command of unexpected type");
             typed_items.push(ComputeBatchItem {
@@ -411,7 +410,7 @@ impl ComputePipelineRegistry {
             return;
         }
 
-        let command_type_id = AsAny::as_any(items[0].command).type_id();
+        let command_type_id = items[0].command.as_any().type_id();
         if let Some(pipeline) = self.pipelines.get_mut(&command_type_id) {
             pipeline.dispatch_erased(context, items);
         } else {

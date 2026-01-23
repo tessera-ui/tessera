@@ -8,12 +8,12 @@ use crate::{
     render_pass::{
         ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassKind, RenderPassPlan,
     },
-    render_scene::AsAny,
     renderer::{
         compute::{ErasedComputeBatchItem, pipeline::ErasedDispatchContext},
         drawer::ErasedDrawContext,
     },
 };
+use downcast_rs::Downcast;
 
 use super::*;
 
@@ -740,7 +740,7 @@ fn do_compute_with_targets<T: ComputeTargets>(
     let mut index = 0;
     while index < commands.len() {
         let command = &commands[index];
-        let type_id = AsAny::as_any(&*command.command).type_id();
+        let type_id = command.command.as_any().type_id();
 
         let mut batch_items: SmallVec<[ErasedComputeBatchItem<'_>; 8]> = SmallVec::new();
         let mut batch_sampling_rects: SmallVec<[PxRect; 8]> = SmallVec::new();
@@ -748,7 +748,7 @@ fn do_compute_with_targets<T: ComputeTargets>(
 
         while cursor < commands.len() {
             let candidate = &commands[cursor];
-            if AsAny::as_any(&*candidate.command).type_id() != type_id {
+            if candidate.command.as_any().type_id() != type_id {
                 break;
             }
 

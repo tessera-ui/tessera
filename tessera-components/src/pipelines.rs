@@ -17,6 +17,7 @@ pub(crate) mod shape;
 pub(crate) mod simple_rect;
 pub(crate) mod text;
 
+mod composite;
 mod compute;
 mod draw;
 
@@ -24,4 +25,5 @@ mod draw;
 pub fn register_pipelines(context: &mut tessera_ui::PipelineContext<'_>) {
     draw::register(context);
     compute::register(context);
+    composite::register(context);
 }

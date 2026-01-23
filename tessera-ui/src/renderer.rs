@@ -2,6 +2,7 @@
 //! the main [`Renderer`] struct that manages the application lifecycle, event
 //! handling, and rendering pipeline for cross-platform UI applications.
 
+pub mod composite;
 pub mod compute;
 pub mod core;
 pub mod drawer;
@@ -763,6 +764,10 @@ Fps: {:.2}
         let screen_size: PxSize = args.app.size().into();
         let (new_graph, window_requests, draw_cost) =
             Self::compute_draw_commands(args, screen_size, frame_idx);
+        let (composite_context, composite_registry) =
+            args.app.composite_context_parts(screen_size, frame_idx);
+        let new_graph =
+            composite::expand_composites(new_graph, composite_context, composite_registry);
         let new_graph = Self::apply_middlewares(
             new_graph,
             RenderMiddlewareContext {

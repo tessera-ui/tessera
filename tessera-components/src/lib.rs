@@ -114,7 +114,7 @@ pub mod theme;
 pub mod time_picker;
 
 use tessera_platform::PlatformPackage;
-use tessera_ui::{EntryRegistry, PipelineContext, RenderMiddleware, RenderModule, TesseraPackage};
+use tessera_ui::{EntryRegistry, PipelineContext, RenderModule, TesseraPackage};
 
 pub use pipelines::shape::command::RippleProps;
 pub use ripple_state::RippleState;
@@ -126,12 +126,6 @@ struct TesseraComponents;
 impl RenderModule for TesseraComponents {
     fn register_pipelines(&self, context: &mut PipelineContext<'_>) {
         pipelines::register_pipelines(context);
-    }
-
-    fn create_middlewares(&self) -> Vec<Box<dyn RenderMiddleware>> {
-        vec![Box::new(
-            pipelines::shadow::atlas::ShadowAtlasMiddleware::new(),
-        )]
     }
 }
 

@@ -322,8 +322,7 @@ mod component_tree;
 pub mod context;
 mod cursor;
 pub mod dp;
-pub mod dyn_eq;
-pub mod dyn_eq_compute;
+mod dyn_traits;
 pub mod entry_registry;
 pub mod focus_state;
 mod ime_state;
@@ -365,6 +364,7 @@ pub use crate::{
     context::{Context, provide_context, use_context},
     cursor::{CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent},
     dp::Dp,
+    dyn_traits::{DynPartialEqCompute, DynPartialEqDraw},
     entry_registry::{EntryRegistry, TesseraPackage},
     focus_state::Focus,
     layout::{DefaultLayoutSpec, LayoutInput, LayoutOutput, LayoutResult, LayoutSpec, RenderInput},
@@ -380,9 +380,13 @@ pub use crate::{
         RenderResource, RenderResourceId, RenderTextureDesc,
     },
     render_module::{RenderMiddleware, RenderMiddlewareContext, RenderModule},
-    render_scene::{Command, DrawRegion, PaddingRect, SampleRegion},
+    render_scene::{Command, CompositeCommand, DrawRegion, PaddingRect, SampleRegion},
     renderer::{
         Renderer,
+        composite::{
+            self, CompositeBatchItem, CompositeContext, CompositeOutput, CompositePipeline,
+            CompositePipelineRegistry, CompositeReplacement,
+        },
         compute::{
             self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry, ComputeResource,
             ComputeResourceManager, ComputeResourceRef,

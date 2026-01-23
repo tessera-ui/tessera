@@ -5,8 +5,8 @@
 //! Register draw and compute pipelines from component libraries at startup.
 
 use crate::{
-    ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline,
-    renderer::{RenderCore, RenderResources},
+    CompositeCommand, ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline,
+    renderer::{RenderCore, RenderResources, composite::CompositePipeline},
 };
 
 /// Context passed to pipeline initialization functions.
@@ -41,5 +41,14 @@ impl<'a> PipelineContext<'a> {
         P: ComputablePipeline<T> + 'static,
     {
         self.core.register_compute_pipeline(pipeline);
+    }
+
+    /// Registers a composite pipeline for a specific command type.
+    pub fn register_composite_pipeline<T, P>(&mut self, pipeline: P)
+    where
+        T: CompositeCommand + 'static,
+        P: CompositePipeline<T> + 'static,
+    {
+        self.core.register_composite_pipeline(pipeline);
     }
 }
