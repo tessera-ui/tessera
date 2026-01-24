@@ -96,6 +96,7 @@ pub mod pull_refresh;
 pub mod radio_button;
 pub mod ripple_state;
 pub mod row;
+pub mod scaffold;
 pub mod scrollable;
 mod selection_highlight_rect;
 pub mod shadow;

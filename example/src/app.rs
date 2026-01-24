@@ -3,7 +3,7 @@ use std::sync::Arc;
 use closure::closure;
 use tessera_components::{
     alignment::CrossAxisAlignment,
-    app_bar::{AppBarArgs, TopAppBarArgs, top_app_bar as material_top_app_bar},
+    app_bar::{AppBarArgs, AppBarDefaults, TopAppBarArgs, top_app_bar as material_top_app_bar},
     bottom_sheet::{
         BottomSheetController, BottomSheetProviderArgs, BottomSheetStyle,
         bottom_sheet_provider_with_controller,
@@ -24,6 +24,7 @@ use tessera_components::{
         NavigationRailController, NavigationRailItem, navigation_rail_with_controller,
     },
     row::{RowArgs, row},
+    scaffold::{ScaffoldArgs, scaffold},
     shape_def::Shape,
     side_bar::{
         SideBarController, SideBarProviderArgs, SideBarStyle, side_bar_provider_with_controller,
@@ -212,22 +213,18 @@ fn app_inner() {
 
                                             row_scope.child_weighted(
                                                 move || {
-                                                    column(
-                                                        ColumnArgs::default().modifier(
-                                                            Modifier::new().fill_max_size(),
-                                                        ),
-                                                        |scope| {
-                                                            scope.child(top_app_bar);
-                                                            scope.child_weighted(
-                                                                move || {
-                                                                    router_root(HomeDestination {
-                                                                        bottom_sheet_controller,
-                                                                        side_bar_controller,
-                                                                        dialog_controller,
-                                                                    });
-                                                                },
-                                                                1.0,
-                                                            );
+                                                    scaffold(
+                                                        ScaffoldArgs::default()
+                                                            .top_bar_height(
+                                                                AppBarDefaults::TOP_APP_BAR_HEIGHT,
+                                                            )
+                                                            .top_bar(top_app_bar),
+                                                        move || {
+                                                            router_root(HomeDestination {
+                                                                bottom_sheet_controller,
+                                                                side_bar_controller,
+                                                                dialog_controller,
+                                                            });
                                                         },
                                                     );
                                                 },
@@ -237,14 +234,22 @@ fn app_inner() {
                                     );
                                 } else {
                                     column(ColumnArgs::default(), |scope| {
-                                        scope.child(top_app_bar);
                                         scope.child_weighted(
                                             move || {
-                                                router_root(HomeDestination {
-                                                    bottom_sheet_controller,
-                                                    side_bar_controller,
-                                                    dialog_controller,
-                                                });
+                                                scaffold(
+                                                    ScaffoldArgs::default()
+                                                        .top_bar_height(
+                                                            AppBarDefaults::TOP_APP_BAR_HEIGHT,
+                                                        )
+                                                        .top_bar(top_app_bar),
+                                                    move || {
+                                                        router_root(HomeDestination {
+                                                            bottom_sheet_controller,
+                                                            side_bar_controller,
+                                                            dialog_controller,
+                                                        });
+                                                    },
+                                                );
                                             },
                                             1.0,
                                         );
