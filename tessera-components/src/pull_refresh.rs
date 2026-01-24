@@ -647,21 +647,17 @@ fn pull_refresh_indicator_with_offset(
     offset: Dp,
 ) {
     let indicator_size = args.indicator_size;
-    pull_refresh_indicator(
-        PullRefreshIndicatorArgs::default()
-            .modifier(
-                Modifier::new()
-                    .size(indicator_size, indicator_size)
-                    .offset(Dp(0.0), offset),
-            )
-            .size(indicator_size)
-            .background_color(args.indicator_background_color)
-            .content_color(args.indicator_content_color)
-            .track_color(args.indicator_track_color)
-            .stroke_width(args.indicator_stroke_width)
-            .elevation(args.indicator_elevation),
-        refresh_controller,
-    );
+    let indicator_args = PullRefreshIndicatorArgs::default()
+        .size(indicator_size)
+        .background_color(args.indicator_background_color)
+        .content_color(args.indicator_content_color)
+        .track_color(args.indicator_track_color)
+        .stroke_width(args.indicator_stroke_width)
+        .elevation(args.indicator_elevation);
+
+    Modifier::new().offset(Dp(0.0), offset).run(move || {
+        pull_refresh_indicator(indicator_args, refresh_controller);
+    });
 }
 
 fn indicator_offset_dp(controller: State<PullRefreshController>, indicator_size: Dp) -> Dp {
