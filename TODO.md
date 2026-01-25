@@ -27,7 +27,7 @@
   - [x] Chip
   - [x] ListItem
   - [x] NavigationRail
-  - [ ] Snackbar/SnackbarHost
+  - [x] Snackbar/SnackbarHost
   - [ ] ExposedDropdownMenu
   - [x] Date/Time pickers/dialogs
 - [ ] Documentation of pluggable graphics rendering pipelines

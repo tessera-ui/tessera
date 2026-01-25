@@ -36,6 +36,23 @@ static FONT_SYSTEM: OnceLock<RwLock<glyphon::FontSystem>> = OnceLock::new();
 /// recently used TextData.
 static TEXT_DATA_CACHE: OnceLock<RwLock<lru::LruCache<LruKey, TextData>>> = OnceLock::new();
 
+fn linear_to_srgb_channel(value: f32) -> f32 {
+    let value = value.clamp(0.0, 1.0);
+    if value <= 0.003_130_8 {
+        value * 12.92
+    } else {
+        1.055 * value.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+fn color_to_glyphon(color: Color) -> glyphon::Color {
+    let r = (linear_to_srgb_channel(color.r) * 255.0 + 0.5) as u8;
+    let g = (linear_to_srgb_channel(color.g) * 255.0 + 0.5) as u8;
+    let b = (linear_to_srgb_channel(color.b) * 255.0 + 0.5) as u8;
+    let a = (color.a.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+    glyphon::Color::rgba(r, g, b, a)
+}
+
 #[derive(PartialEq)]
 struct LruKey {
     text: String,
@@ -480,12 +497,7 @@ impl TextData {
             top: start_pos.y.to_f32(),
             scale: 1.0,
             bounds,
-            default_color: glyphon::Color::rgba(
-                (self.current_color.r * 255.0) as u8,
-                (self.current_color.g * 255.0) as u8,
-                (self.current_color.b * 255.0) as u8,
-                (self.current_color.a * 255.0) as u8,
-            ),
+            default_color: color_to_glyphon(self.current_color),
             custom_glyphs: &[],
         }
     }
@@ -502,12 +514,7 @@ impl TextData {
             &mut write_font_system(),
             glyphon::Metrics::new(size, line_height),
         );
-        let color = glyphon::Color::rgba(
-            (color.r * 255.0) as u8,
-            (color.g * 255.0) as u8,
-            (color.b * 255.0) as u8,
-            (color.a * 255.0) as u8,
-        );
+        let color = color_to_glyphon(color);
         text_buffer.set_wrap(&mut write_font_system(), glyphon::Wrap::Glyph);
         text_buffer.set_size(
             &mut write_font_system(),

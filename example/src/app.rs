@@ -67,6 +67,7 @@ use crate::example_components::{
     pull_refresh::PullRefreshShowcaseDestination,
     radio_button::RadioButtonShowcaseDestination,
     slider::SliderShowcaseDestination,
+    snackbar::SnackbarShowcaseDestination,
     spacer::SpacerShowcaseDestination,
     staggered_grids::StaggeredGridsShowcaseDestination,
     surface::SurfaceShowcaseDestination,
@@ -440,6 +441,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(ListItemShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Snackbar",
+            "Transient messages with optional actions and dismiss controls.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(SnackbarShowcaseDestination {});
                 });
             },
         ),
