@@ -38,6 +38,16 @@ pub struct Padding {
 }
 
 impl Padding {
+    /// Creates padding with explicit edges.
+    pub const fn new(left: Dp, top: Dp, right: Dp, bottom: Dp) -> Self {
+        Self {
+            left,
+            top,
+            right,
+            bottom,
+        }
+    }
+
     /// Creates symmetric padding on all edges.
     pub const fn all(value: Dp) -> Self {
         Self {
@@ -58,13 +68,53 @@ impl Padding {
         }
     }
 
-    /// Creates padding with explicit edges.
-    pub const fn only(left: Dp, top: Dp, right: Dp, bottom: Dp) -> Self {
+    /// Creates padding with only horizontal edges.
+    pub const fn horizontal(value: Dp) -> Self {
+        Self::symmetric(value, Dp(0.0))
+    }
+
+    /// Creates padding with only vertical edges.
+    pub const fn vertical(value: Dp) -> Self {
+        Self::symmetric(Dp(0.0), value)
+    }
+
+    /// Creates padding with only the left edge.
+    pub const fn left(value: Dp) -> Self {
         Self {
-            left,
-            top,
-            right,
-            bottom,
+            left: value,
+            top: Dp(0.0),
+            right: Dp(0.0),
+            bottom: Dp(0.0),
+        }
+    }
+
+    /// Creates padding with only the top edge.
+    pub const fn top(value: Dp) -> Self {
+        Self {
+            left: Dp(0.0),
+            top: value,
+            right: Dp(0.0),
+            bottom: Dp(0.0),
+        }
+    }
+
+    /// Creates padding with only the right edge.
+    pub const fn right(value: Dp) -> Self {
+        Self {
+            left: Dp(0.0),
+            top: Dp(0.0),
+            right: value,
+            bottom: Dp(0.0),
+        }
+    }
+
+    /// Creates padding with only the bottom edge.
+    pub const fn bottom(value: Dp) -> Self {
+        Self {
+            left: Dp(0.0),
+            top: Dp(0.0),
+            right: Dp(0.0),
+            bottom: value,
         }
     }
 }
