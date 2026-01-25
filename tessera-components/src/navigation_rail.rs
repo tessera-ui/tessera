@@ -678,7 +678,7 @@ pub fn navigation_rail_with_controller<F>(
         move || {
             column(
                 ColumnArgs::default()
-                    .modifier(Modifier::new().fill_max_size().padding(Padding::only(
+                    .modifier(Modifier::new().fill_max_size().padding(Padding::new(
                         Dp::ZERO,
                         TOP_PADDING,
                         Dp::ZERO,
@@ -690,14 +690,12 @@ pub fn navigation_rail_with_controller<F>(
                     if let Some(header) = header {
                         column_scope.child(move || {
                             row(
-                                RowArgs::default().modifier(Modifier::new().padding(
-                                    Padding::only(
-                                        ITEM_HORIZONTAL_PADDING,
-                                        Dp::ZERO,
-                                        Dp::ZERO,
-                                        Dp::ZERO,
-                                    ),
-                                )),
+                                RowArgs::default().modifier(Modifier::new().padding(Padding::new(
+                                    ITEM_HORIZONTAL_PADDING,
+                                    Dp::ZERO,
+                                    Dp::ZERO,
+                                    Dp::ZERO,
+                                ))),
                                 move |row_scope| {
                                     row_scope.child(header);
                                 },

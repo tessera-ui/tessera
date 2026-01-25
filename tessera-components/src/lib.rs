@@ -82,6 +82,7 @@ pub mod interaction_state;
 pub mod lazy_grid;
 pub mod lazy_list;
 pub mod lazy_staggered_grid;
+pub mod list_item;
 pub mod material_icons;
 pub mod menus;
 pub mod modifier;

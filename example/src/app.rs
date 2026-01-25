@@ -59,6 +59,7 @@ use crate::example_components::{
     layouts::LayoutsShowcaseDestination,
     lazy_grids::LazyGridsShowcaseDestination,
     lazy_lists::LazyListsShowcaseDestination,
+    list_item::ListItemShowcaseDestination,
     menus::MenusShowcaseDestination,
     pager::PagerShowcaseDestination,
     progress::ProgressShowcaseDestination,
@@ -430,6 +431,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(ChipShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "List Item",
+            "Material 3 list rows with leading, supporting, and trailing content.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(ListItemShowcaseDestination {});
                 });
             },
         ),

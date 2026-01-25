@@ -25,7 +25,7 @@
   - [x] Appbar/TopAppBar
   - [x] FloatingActionButton
   - [x] Chip
-  - [ ] ListItem
+  - [x] ListItem
   - [x] NavigationRail
   - [ ] Snackbar/SnackbarHost
   - [ ] ExposedDropdownMenu

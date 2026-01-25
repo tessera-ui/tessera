@@ -198,7 +198,6 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
                     Px::from_f32(layer_info.layer.offset[1]),
                 );
                 let composite_offset = offset - item.pad_pos;
-                let ordering_offset = item.pad_pos - offset;
 
                 let uv_origin = [
                     atlas_pos.x.to_f32() / atlas_layout.size.width.to_f32(),
@@ -210,7 +209,7 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
                 ];
 
                 let mut composite = ShadowCompositeCommand::new(layer_info.layer.color)
-                    .with_ordering(ordering_offset, item.size);
+                    .with_ordering(PxPosition::ZERO, item.mask_size);
                 composite.uv_origin = uv_origin;
                 composite.uv_size = uv_size;
                 composite.apply_opacity(item.opacity);
@@ -475,10 +474,9 @@ fn build_fallback_output(items: &[ShadowItem]) -> CompositeOutput {
                 Px::from_f32(layer_info.layer.offset[1]),
             );
             let composite_offset = offset - item.pad_pos;
-            let ordering_offset = item.pad_pos - offset;
 
             let mut composite = ShadowCompositeCommand::new(layer_info.layer.color)
-                .with_ordering(ordering_offset, item.size);
+                .with_ordering(PxPosition::ZERO, item.mask_size);
             composite.apply_opacity(item.opacity);
 
             replacement_ops.push(build_op(

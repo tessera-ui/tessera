@@ -132,7 +132,7 @@ impl ScaffoldArgs {
 }
 
 fn scaffold_content_padding(base: Padding, top_bar_height: Dp, bottom_bar_height: Dp) -> Padding {
-    Padding::only(
+    Padding::new(
         base.left,
         Dp(base.top.0 + top_bar_height.0),
         base.right,

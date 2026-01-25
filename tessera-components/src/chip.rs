@@ -661,7 +661,7 @@ fn chip_padding(variant: ChipVariant, has_leading_icon: bool, has_trailing_icon:
             } else {
                 ChipDefaults::INPUT_EDGE_PADDING
             };
-            Padding::only(start, Dp(0.0), end, Dp(0.0))
+            Padding::new(start, Dp(0.0), end, Dp(0.0))
         }
         _ => Padding::symmetric(ChipDefaults::HORIZONTAL_PADDING, Dp(0.0)),
     }

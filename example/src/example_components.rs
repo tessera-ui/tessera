@@ -16,6 +16,7 @@ pub mod image;
 pub mod layouts;
 pub mod lazy_grids;
 pub mod lazy_lists;
+pub mod list_item;
 pub mod menus;
 pub mod pager;
 pub mod progress;
