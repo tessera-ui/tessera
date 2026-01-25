@@ -293,12 +293,11 @@ where
     let layout = ButtonGroupsLayout::new(args.size, args.style);
     let child_len = child_closures.len();
     let selection_mode = args.selection_mode;
+    let row_modifier = RowArgs::default().modifier.height(layout.container_height);
     row(
-        RowArgs {
-            modifier: Modifier::new().height(layout.container_height),
-            main_axis_alignment: MainAxisAlignment::SpaceBetween,
-            ..Default::default()
-        },
+        RowArgs::default()
+            .modifier(row_modifier)
+            .main_axis_alignment(MainAxisAlignment::Start),
         move |scope| {
             for (index, child_closure) in child_closures.into_iter().enumerate() {
                 let on_click_closure = on_click_closures[index].clone();
