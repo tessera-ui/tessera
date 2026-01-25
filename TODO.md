@@ -31,6 +31,9 @@
   - [ ] ExposedDropdownMenu
   - [x] Date/Time pickers/dialogs
   - [x] Segmented buttons
+  - [ ] Split buttons
+  - [ ] FAB menu
+  - [ ] Extanded FABs
 - [ ] Documentation of pluggable graphics rendering pipelines
 - [x] CLI tool (`cargo-tessera`):
   - [x] Project scaffolding (`cargo tessera new`)
