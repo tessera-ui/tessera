@@ -70,6 +70,7 @@ use crate::example_components::{
     slider::SliderShowcaseDestination,
     snackbar::SnackbarShowcaseDestination,
     spacer::SpacerShowcaseDestination,
+    split_buttons::SplitButtonsShowcaseDestination,
     staggered_grids::StaggeredGridsShowcaseDestination,
     surface::SurfaceShowcaseDestination,
     switch::SwitchShowcaseDestination,
@@ -617,6 +618,15 @@ fn home(
             || {
                 Router::with_mut(|router| {
                     router.push(SegmentedButtonsShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Split Buttons",
+            "Primary and secondary actions combined into a split button.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(SplitButtonsShowcaseDestination {});
                 });
             },
         ),

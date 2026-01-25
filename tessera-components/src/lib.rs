@@ -107,6 +107,7 @@ pub mod side_bar;
 pub mod slider;
 pub mod snackbar;
 pub mod spacer;
+pub mod split_buttons;
 pub mod surface;
 pub mod switch;
 pub mod tabs;

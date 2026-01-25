@@ -31,7 +31,7 @@
   - [ ] ExposedDropdownMenu
   - [x] Date/Time pickers/dialogs
   - [x] Segmented buttons
-  - [ ] Split buttons
+  - [x] Split buttons
   - [ ] FAB menu
   - [ ] Extanded FABs
   - [ ] Loading indicators (A replacement for indeterminate circular progress indicators when no progress value is needed)

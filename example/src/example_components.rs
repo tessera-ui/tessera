@@ -27,6 +27,7 @@ pub mod segmented_buttons;
 pub mod slider;
 pub mod snackbar;
 pub mod spacer;
+pub mod split_buttons;
 pub mod staggered_grids;
 pub mod surface;
 pub mod switch;

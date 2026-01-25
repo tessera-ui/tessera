@@ -304,7 +304,7 @@ impl Default for SegmentedButtonRowArgs {
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let selected = remember(|| 0usize);
-///             single_choice_segmented_button_row(SegmentedButtonRowArgs::default(), || {
+///             single_choice_segmented_button_row(SegmentedButtonRowArgs::default(), move || {
 ///                 segmented_button(
 ///                     SegmentedButtonArgs::new("List")
 ///                         .selected(selected.get() == 0)
@@ -455,7 +455,7 @@ pub fn segmented_button(args: impl Into<SegmentedButtonArgs>) {
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let selected = remember(|| 0usize);
-///             single_choice_segmented_button_row(SegmentedButtonRowArgs::default(), || {
+///             single_choice_segmented_button_row(SegmentedButtonRowArgs::default(), move || {
 ///                 segmented_button(
 ///                     SegmentedButtonArgs::new("Day")
 ///                         .selected(selected.get() == 0)
@@ -522,7 +522,7 @@ pub fn single_choice_segmented_button_row(
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let selected = remember(|| [true, false]);
-///             multi_choice_segmented_button_row(SegmentedButtonRowArgs::default(), || {
+///             multi_choice_segmented_button_row(SegmentedButtonRowArgs::default(), move || {
 ///                 segmented_button(
 ///                     SegmentedButtonArgs::new("Email")
 ///                         .selected(selected.get()[0])
