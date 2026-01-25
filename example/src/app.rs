@@ -66,6 +66,7 @@ use crate::example_components::{
     progress_indicator::ProgressIndicatorShowcaseDestination,
     pull_refresh::PullRefreshShowcaseDestination,
     radio_button::RadioButtonShowcaseDestination,
+    segmented_buttons::SegmentedButtonsShowcaseDestination,
     slider::SliderShowcaseDestination,
     snackbar::SnackbarShowcaseDestination,
     spacer::SpacerShowcaseDestination,
@@ -602,11 +603,20 @@ fn home(
             },
         ),
         ComponentExampleDesc::new(
-            "Button Group",
-            "Material 3 segmented buttons supporting single or multiple selection.",
+            "Button Groups",
+            "Grouped buttons for related actions with shared spacing and styling.",
             || {
                 Router::with_mut(|router| {
                     router.push(ButtonGroupShowcaseDestination {});
+                });
+            },
+        ),
+        ComponentExampleDesc::new(
+            "Segmented Buttons",
+            "Connected buttons for single or multi-select options.",
+            || {
+                Router::with_mut(|router| {
+                    router.push(SegmentedButtonsShowcaseDestination {});
                 });
             },
         ),

@@ -1,4 +1,4 @@
-//! Material 3-style segmented buttons with single or multiple selection.
+//! Material 3 button groups for related actions.
 //!
 //! ## Usage
 //!

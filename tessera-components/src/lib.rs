@@ -99,6 +99,7 @@ pub mod ripple_state;
 pub mod row;
 pub mod scaffold;
 pub mod scrollable;
+pub mod segmented_buttons;
 mod selection_highlight_rect;
 pub mod shadow;
 pub mod shape_def;

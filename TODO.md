@@ -30,7 +30,7 @@
   - [x] Snackbar/SnackbarHost
   - [ ] ExposedDropdownMenu
   - [x] Date/Time pickers/dialogs
-  - [ ] Segmented buttons
+  - [x] Segmented buttons
 - [ ] Documentation of pluggable graphics rendering pipelines
 - [x] CLI tool (`cargo-tessera`):
   - [x] Project scaffolding (`cargo tessera new`)
