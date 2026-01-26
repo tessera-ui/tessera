@@ -35,7 +35,7 @@
   - [ ] FAB menu
   - [ ] Extanded FABs
   - [ ] Loading indicators (A replacement for indeterminate circular progress indicators when no progress value is needed)
-  - [ ] Side sheets
+  - [x] Side sheets
   - [ ] Search
   - [ ] Tooltips
 - [ ] Documentation of pluggable graphics rendering pipelines

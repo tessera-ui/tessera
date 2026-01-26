@@ -26,8 +26,8 @@ use tessera_components::{
     row::{RowArgs, row},
     scaffold::{ScaffoldArgs, scaffold},
     shape_def::Shape,
-    side_bar::{
-        SideBarController, SideBarProviderArgs, SideBarStyle, side_bar_provider_with_controller,
+    side_sheet::{
+        SideSheetController, SideSheetProviderArgs, modal_side_sheet_provider_with_controller,
     },
     spacer::spacer,
     surface::{SurfaceArgs, SurfaceStyle, surface},
@@ -102,18 +102,17 @@ pub fn app() {
 
 #[tessera]
 fn app_inner() {
-    let side_bar_controller = remember(SideBarController::default);
+    let side_sheet_controller = remember(SideSheetController::default);
     let bottom_sheet_controller = remember(BottomSheetController::default);
     let dialog_controller = remember(DialogController::default);
     let navigation_width = remember(|| Dp::ZERO);
     let navigation_rail_controller = remember(|| NavigationRailController::new(0));
 
-    side_bar_provider_with_controller(
-        SideBarProviderArgs::new(move || {
-            side_bar_controller.with_mut(|c| c.close());
-        })
-        .style(SideBarStyle::Glass),
-        side_bar_controller,
+    modal_side_sheet_provider_with_controller(
+        SideSheetProviderArgs::new(move || {
+            side_sheet_controller.with_mut(|c| c.close());
+        }),
+        side_sheet_controller,
         move || {
             bottom_sheet_provider_with_controller(
                 BottomSheetProviderArgs::new(move || {
@@ -149,7 +148,7 @@ fn app_inner() {
                                                     Router::with_mut(|router| {
                                                         router.reset_with(HomeDestination {
                                                             bottom_sheet_controller,
-                                                            side_bar_controller,
+                                                            side_sheet_controller,
                                                             dialog_controller,
                                                         });
                                                     });
@@ -226,7 +225,7 @@ fn app_inner() {
                                                         move || {
                                                             router_root(HomeDestination {
                                                                 bottom_sheet_controller,
-                                                                side_bar_controller,
+                                                                side_sheet_controller,
                                                                 dialog_controller,
                                                             });
                                                         },
@@ -249,7 +248,7 @@ fn app_inner() {
                                                     move || {
                                                         router_root(HomeDestination {
                                                             bottom_sheet_controller,
-                                                            side_bar_controller,
+                                                            side_sheet_controller,
                                                             dialog_controller,
                                                         });
                                                     },
@@ -267,7 +266,7 @@ fn app_inner() {
                                                 Router::with_mut(|router| {
                                                     router.reset_with(HomeDestination {
                                                         bottom_sheet_controller,
-                                                        side_bar_controller,
+                                                        side_sheet_controller,
                                                         dialog_controller,
                                                     });
                                                 });
@@ -349,9 +348,9 @@ fn app_inner() {
         },
         || {
             text(
-                r#"Hi, I'm side bar!
+                r#"Hi, I'm a side sheet!
 
-Side bars are bars at side, side at bars, bars side at, at side bars..."#,
+Side sheets provide secondary content or tools that slide in from the screen edge."#,
             );
         },
     );
@@ -378,7 +377,7 @@ impl ComponentExampleDesc {
 #[shard]
 fn home(
     bottom_sheet_controller: State<BottomSheetController>,
-    side_bar_controller: State<SideBarController>,
+    side_sheet_controller: State<SideSheetController>,
     dialog_controller: State<DialogController>,
 ) {
     let examples = Arc::new(vec![
@@ -710,10 +709,10 @@ fn home(
             },
         ),
         ComponentExampleDesc::new(
-            "Side Bar",
-            "side bar displays content sliding in from the left side of the screen.",
+            "Side Sheet",
+            "Side sheets display supporting content sliding in from the screen edge.",
             move || {
-                side_bar_controller.with_mut(|c| c.open());
+                side_sheet_controller.with_mut(|c| c.open());
             },
         ),
     ]);

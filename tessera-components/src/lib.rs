@@ -103,7 +103,7 @@ pub mod segmented_buttons;
 mod selection_highlight_rect;
 pub mod shadow;
 pub mod shape_def;
-pub mod side_bar;
+pub mod side_sheet;
 pub mod slider;
 pub mod snackbar;
 pub mod spacer;
