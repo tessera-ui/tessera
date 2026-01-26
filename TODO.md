@@ -36,7 +36,7 @@
   - [ ] Extanded FABs
   - [ ] Loading indicators (A replacement for indeterminate circular progress indicators when no progress value is needed)
   - [x] Side sheets
-  - [ ] Search
+  - [x] Search
   - [ ] Tooltips
 - [ ] Documentation of pluggable graphics rendering pipelines
 - [x] CLI tool (`cargo-tessera`):

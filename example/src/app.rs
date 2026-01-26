@@ -25,6 +25,7 @@ use tessera_components::{
     },
     row::{RowArgs, row},
     scaffold::{ScaffoldArgs, scaffold},
+    search::{SearchBarArgs, SearchBarController, docked_search_bar_with_controller},
     shape_def::Shape,
     side_sheet::{
         SideSheetController, SideSheetProviderArgs, modal_side_sheet_provider_with_controller,
@@ -380,6 +381,8 @@ fn home(
     side_sheet_controller: State<SideSheetController>,
     dialog_controller: State<DialogController>,
 ) {
+    let search_query = remember(String::new);
+    let search_controller = remember(SearchBarController::default);
     let examples = Arc::new(vec![
         ComponentExampleDesc::new(
             "Text Input",
@@ -720,7 +723,23 @@ fn home(
     surface(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
-            let controller = retain(LazyListController::new);
+            let list_controller = retain(LazyListController::new);
+            let query = search_query.get();
+            let query = query.trim().to_lowercase();
+            let filtered: Vec<ComponentExampleDesc> = if query.is_empty() {
+                examples.iter().cloned().collect()
+            } else {
+                examples
+                    .iter()
+                    .filter(|&example| {
+                        let title = example.title.to_lowercase();
+                        let description = example.desription.to_lowercase();
+                        title.contains(&query) || description.contains(&query)
+                    })
+                    .cloned()
+                    .collect()
+            };
+
             lazy_column_with_controller(
                 LazyColumnArgs::default()
                     .modifier(Modifier::new().fill_max_size())
@@ -729,9 +748,31 @@ fn home(
                     .cross_axis_alignment(CrossAxisAlignment::Stretch)
                     .estimated_item_size(Dp(140.0))
                     .content_padding(Dp(16.0)),
-                controller,
+                list_controller,
                 move |scope| {
-                    scope.items_from_iter(examples.iter().cloned(), move |_, example| {
+                    scope.sticky_header(move || {
+                        let search_query = search_query;
+                        let controller = search_controller;
+                        let args = SearchBarArgs::default()
+                            .modifier(Modifier::new().fill_max_width())
+                            .placeholder("Search components")
+                            .leading_icon(|| {
+                                icon(IconArgs::from(filled::search_icon()));
+                            })
+                            .on_query_change(move |text| {
+                                search_query.set(text.clone());
+                                text
+                            })
+                            .on_active_change(move |is_active| {
+                                if is_active {
+                                    controller.with_mut(|c| c.close());
+                                }
+                            });
+
+                        docked_search_bar_with_controller(args, controller, || {});
+                    });
+
+                    scope.items_from_iter(filtered, move |_, example| {
                         let on_click = example.on_click.clone();
                         let title = example.title.clone();
                         let description = example.desription.clone();

@@ -218,6 +218,8 @@ pub struct TextFieldArgs {
     /// Optional suffix content shown after the input text.
     #[setters(skip)]
     pub suffix: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// Whether to show the filled-style indicator line.
+    pub show_indicator: bool,
     /// Input line limit policy.
     #[setters(skip)]
     pub line_limit: TextFieldLineLimit,
@@ -433,6 +435,7 @@ impl Default for TextFieldArgs {
             trailing_icon: None,
             prefix: None,
             suffix: None,
+            show_indicator: true,
             line_limit: TextFieldLineLimit::SingleLine,
             context_menu: TextFieldContextMenu::default(),
             input_transform: None,
@@ -715,7 +718,7 @@ fn render_text_field(
     let focused = controller.with(|c| c.focus_handler().is_focused());
     let is_empty = editor_content_len(&controller) == 0;
     let border_width = resolve_border_width(&args, focused);
-    let show_indicator = border_width == Dp(0.0);
+    let show_indicator = args.show_indicator && border_width == Dp(0.0);
 
     let label_text = args.label.clone();
     let placeholder_text = args.placeholder.clone();

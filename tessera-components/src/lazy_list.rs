@@ -195,6 +195,26 @@ impl<'a> LazyListScope<'a> {
         });
     }
 
+    /// Adds a sticky header item that remains pinned while scrolling.
+    pub fn sticky_header<F>(&mut self, builder: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.slots.push(LazySlot::sticky(builder, None));
+    }
+
+    /// Adds a sticky header item with a stable key.
+    pub fn sticky_header_with_key<K, F>(&mut self, key: K, builder: F)
+    where
+        K: Hash,
+        F: Fn() + Send + Sync + 'static,
+    {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        let key_hash = hasher.finish();
+        self.slots.push(LazySlot::sticky(builder, Some(key_hash)));
+    }
+
     /// Adds lazily generated items from an iterator, providing both index and
     /// element reference.
     ///
@@ -658,6 +678,8 @@ fn lazy_list_view(
         padding_cross: view_args.padding_cross,
         viewport_limit,
         visible_item_indices,
+        sticky_indices: plan.sticky_indices().to_vec(),
+        scroll_offset,
         controller,
         scroll_controller,
     });
@@ -693,6 +715,8 @@ struct LazyListLayout {
     padding_cross: Px,
     viewport_limit: Px,
     visible_item_indices: Vec<usize>,
+    sticky_indices: Vec<usize>,
+    scroll_offset: Px,
     controller: State<LazyListController>,
     scroll_controller: State<ScrollableController>,
 }
@@ -708,6 +732,8 @@ impl PartialEq for LazyListLayout {
             && self.padding_cross == other.padding_cross
             && self.viewport_limit == other.viewport_limit
             && self.visible_item_indices == other.visible_item_indices
+            && self.sticky_indices == other.sticky_indices
+            && self.scroll_offset == other.scroll_offset
     }
 }
 
@@ -747,6 +773,7 @@ impl LayoutSpec for LazyListLayout {
 
                 max_cross = max_cross.max(self.axis.cross(&child_size));
                 placements.push(Placement {
+                    item_index: *item_index,
                     child_id: *child_id,
                     offset_main: item_offset,
                     size: child_size,
@@ -781,14 +808,40 @@ impl LayoutSpec for LazyListLayout {
                 self.axis.cross(&placement.size),
                 self.cross_axis_alignment,
             );
-            let position = self.axis.position(
-                placement.offset_main + self.padding_main,
-                self.padding_cross + cross_offset,
-            );
+            let mut main_offset = placement.offset_main + self.padding_main;
+            if self.is_sticky(placement.item_index) {
+                let sticky_start = self.scroll_offset + self.padding_main;
+                main_offset = main_offset.max(sticky_start);
+                if let Some(next_index) = self.next_sticky_after(placement.item_index) {
+                    let next_offset = self.controller.with(|c| {
+                        c.cache
+                            .offset_for(next_index, self.estimated_item_main, self.item_spacing)
+                    });
+                    let max_offset =
+                        next_offset + self.padding_main - self.axis.main(&placement.size);
+                    main_offset = main_offset.min(max_offset);
+                }
+            }
+            let position = self
+                .axis
+                .position(main_offset, self.padding_cross + cross_offset);
             output.place_child(placement.child_id, position);
         }
 
         Ok(self.axis.pack_size(reported_main, cross_with_padding))
+    }
+}
+
+impl LazyListLayout {
+    fn is_sticky(&self, index: usize) -> bool {
+        self.sticky_indices.binary_search(&index).is_ok()
+    }
+
+    fn next_sticky_after(&self, index: usize) -> Option<usize> {
+        match self.sticky_indices.binary_search(&index) {
+            Ok(pos) => self.sticky_indices.get(pos + 1).copied(),
+            Err(pos) => self.sticky_indices.get(pos).copied(),
+        }
     }
 }
 
@@ -827,7 +880,19 @@ fn compute_visible_children(
         start_index = start_index.saturating_sub(1);
     }
 
-    plan.visible_children(start_index..end_index)
+    let mut result = plan.visible_children(start_index..end_index);
+    if let Some(sticky_index) = plan.last_sticky_before(start_index) {
+        let existing = result
+            .iter()
+            .position(|child| child.item_index == sticky_index);
+        let sticky_child = existing
+            .map(|pos| result.remove(pos))
+            .or_else(|| plan.visible_child(sticky_index));
+        if let Some(child) = sticky_child {
+            result.push(child);
+        }
+    }
+    result
 }
 
 fn clamp_reported_main(
@@ -937,6 +1002,7 @@ impl LazyListAxis {
 
 #[derive(Clone)]
 struct Placement {
+    item_index: usize,
     child_id: NodeId,
     offset_main: Px,
     size: ComputedData,
@@ -945,6 +1011,7 @@ struct Placement {
 #[derive(Clone)]
 enum LazySlot {
     Items(LazyItemsSlot),
+    Sticky(LazyStickySlot),
 }
 
 impl LazySlot {
@@ -963,9 +1030,20 @@ impl LazySlot {
         })
     }
 
+    fn sticky<F>(builder: F, key_hash: Option<u64>) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        Self::Sticky(LazyStickySlot {
+            builder: Arc::new(builder),
+            key_hash,
+        })
+    }
+
     fn len(&self) -> usize {
         match self {
             Self::Items(slot) => slot.count,
+            Self::Sticky(_) => 1,
         }
     }
 }
@@ -978,17 +1056,28 @@ struct LazyItemsSlot {
 }
 
 #[derive(Clone)]
+struct LazyStickySlot {
+    builder: Arc<dyn Fn() + Send + Sync>,
+    key_hash: Option<u64>,
+}
+
+#[derive(Clone)]
 struct LazySlotPlan {
     entries: Vec<LazySlotEntry>,
     total_count: usize,
+    sticky_indices: Vec<usize>,
 }
 
 impl LazySlotPlan {
     fn new(slots: Vec<LazySlot>) -> Self {
         let mut entries = Vec::with_capacity(slots.len());
         let mut cursor = 0;
+        let mut sticky_indices = Vec::new();
         for slot in slots {
             let len = slot.len();
+            if matches!(slot, LazySlot::Sticky(_)) {
+                sticky_indices.push(cursor);
+            }
             entries.push(LazySlotEntry {
                 start: cursor,
                 len,
@@ -999,6 +1088,7 @@ impl LazySlotPlan {
         Self {
             entries,
             total_count: cursor,
+            sticky_indices,
         }
     }
 
@@ -1006,41 +1096,90 @@ impl LazySlotPlan {
         self.total_count
     }
 
-    fn visible_children(&self, range: Range<usize>) -> Vec<VisibleChild> {
-        let mut result = Vec::new();
-        for index in range {
-            if let Some((slot, local_index)) = self.resolve(index) {
-                let key_hash = if let Some(provider) = &slot.key_provider {
+    fn sticky_indices(&self) -> &[usize] {
+        &self.sticky_indices
+    }
+
+    fn last_sticky_before(&self, index: usize) -> Option<usize> {
+        if self.sticky_indices.is_empty() {
+            return None;
+        }
+        match self.sticky_indices.binary_search(&index) {
+            Ok(pos) => self.sticky_indices.get(pos).copied(),
+            Err(0) => None,
+            Err(pos) => self.sticky_indices.get(pos.saturating_sub(1)).copied(),
+        }
+    }
+
+    fn visible_child(&self, index: usize) -> Option<VisibleChild> {
+        let resolved = self.resolve(index)?;
+        let key_hash = match resolved {
+            ResolvedSlot::Items(slot, local_index) => {
+                if let Some(provider) = &slot.key_provider {
                     provider(local_index)
                 } else {
                     let mut hasher = DefaultHasher::new();
                     index.hash(&mut hasher);
                     hasher.finish()
-                };
+                }
+            }
+            ResolvedSlot::Sticky(slot) => slot.key_hash.unwrap_or_else(|| {
+                let mut hasher = DefaultHasher::new();
+                index.hash(&mut hasher);
+                hasher.finish()
+            }),
+        };
+        let (builder, local_index) = match resolved {
+            ResolvedSlot::Items(slot, local_index) => (slot.builder.clone(), local_index),
+            ResolvedSlot::Sticky(slot) => {
+                let builder = slot.builder.clone();
+                (
+                    {
+                        let wrapper: Arc<dyn Fn(usize) + Send + Sync> = Arc::new(move |_| {
+                            builder();
+                        });
+                        wrapper
+                    },
+                    0,
+                )
+            }
+        };
+        Some(VisibleChild {
+            item_index: index,
+            local_index,
+            builder,
+            key_hash,
+        })
+    }
 
-                result.push(VisibleChild {
-                    item_index: index,
-                    local_index,
-                    builder: slot.builder.clone(),
-                    key_hash,
-                });
+    fn visible_children(&self, range: Range<usize>) -> Vec<VisibleChild> {
+        let mut result = Vec::new();
+        for index in range {
+            if let Some(child) = self.visible_child(index) {
+                result.push(child);
             }
         }
         result
     }
 
-    fn resolve(&self, index: usize) -> Option<(&LazyItemsSlot, usize)> {
+    fn resolve(&self, index: usize) -> Option<ResolvedSlot<'_>> {
         self.entries.iter().find_map(|entry| {
             if index >= entry.start && index < entry.start + entry.len {
                 let local_index = index - entry.start;
                 match &entry.slot {
-                    LazySlot::Items(slot) => Some((slot, local_index)),
+                    LazySlot::Items(slot) => Some(ResolvedSlot::Items(slot, local_index)),
+                    LazySlot::Sticky(slot) => Some(ResolvedSlot::Sticky(slot)),
                 }
             } else {
                 None
             }
         })
     }
+}
+
+enum ResolvedSlot<'a> {
+    Items(&'a LazyItemsSlot, usize),
+    Sticky(&'a LazyStickySlot),
 }
 
 #[derive(Clone)]
