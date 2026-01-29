@@ -99,10 +99,6 @@ fn app() {
 
 This is a complete counter application! For more details, please refer to the [Quick Start Guide](https://tessera-ui.github.io/guide/getting-started.html).
 
-## Getting Started
-
-Please refer to the [Quick Start Guide](https://tessera-ui.github.io/guide/getting-started.html) to create your first application with `Tessera`.
-
 ## Contributing
 
 Please read the [Contributing Guide](https://github.com/tessera-ui/tessera/blob/main/CONTRIBUTING.md) to learn how to contribute to the project.

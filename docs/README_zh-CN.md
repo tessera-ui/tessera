@@ -99,10 +99,6 @@ fn app() {
 
 这就是一个完整的计数器应用程序！进一步的细节请参考[快速开始指南](https://tessera-ui.github.io/zhHans/guide/getting-started.html)。
 
-## 开始使用
-
-请参考 [快速开始指南](https://tessera-ui.github.io/zhHans/guide/getting-started.html) 以使用 `Tessera` 创建您的第一个应用程序。
-
 ## 贡献
 
 请阅读 [贡献指南](https://github.com/tessera-ui/tessera/blob/main/docs/CONTRIBUTING_zh-CN.md) 了解如何为项目做出贡献。
