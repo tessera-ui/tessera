@@ -27,7 +27,6 @@ dashmap = "6.1.0"
 uuid = { version = "1.20.0", features = ["v4"] }
 tessera-macros = { path = "../tessera-macros" }
 tessera-shard = { path = "../tessera-shard", optional = true }
-petgraph = "0.8.3"
 accesskit = "0.23.0"
 accesskit_winit = "0.31.1"
 smallvec = "1.15.1"
