@@ -635,6 +635,7 @@ fn render_results_surface(
             .shape(shape)
             .modifier(modifier)
             .tonal_elevation(tonal_elevation)
+            .block_input(true)
             .elevation(shadow_elevation),
         move || {
             column(ColumnArgs::default(), |scope| {

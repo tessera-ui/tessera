@@ -764,6 +764,7 @@ pub(crate) fn create_surface_args(
     SurfaceArgs::default()
         .style(style)
         .shape(args.shape)
+        .block_input(true)
         .modifier(modifier)
 }
 
