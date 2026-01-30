@@ -1,4 +1,4 @@
-//! # Input Method Editor (IME) State Management
+//! # IME State Management
 //!
 //! This module provides IME state management.
 

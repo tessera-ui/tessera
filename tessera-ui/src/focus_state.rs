@@ -24,9 +24,7 @@
 //!
 //! ## Thread Safety
 //!
-//! The focus state is managed through a global static variable protected by
-//! read-write locks, making it safe to use across multiple threads. This is
-//! essential for Tessera's parallelized design.
+//! The focus state is safely accessible from multiple threads.
 
 use std::sync::OnceLock;
 

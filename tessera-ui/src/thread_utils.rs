@@ -1,7 +1,4 @@
 //! # Thread Utilities
-//!
-//! This module provides cross-platform utilities for thread management and
-//! debugging in the Tessera UI framework.
 
 /// Sets the name of the current thread for debugging and profiling purposes.
 ///

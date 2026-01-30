@@ -1,8 +1,4 @@
-//! Render pass planning for Tessera frames.
-//!
-//! ## Usage
-//!
-//! Build render pass plans from ordered render graph ops.
+//! Render pass planning
 
 use smallvec::SmallVec;
 

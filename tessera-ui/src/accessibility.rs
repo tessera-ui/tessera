@@ -4,15 +4,6 @@
 //! AccessKit. It enables screen readers and other assistive technologies to
 //! interact with Tessera applications.
 //!
-//! ## Architecture
-//!
-//! - **Stable IDs**: Each component can have a stable accessibility ID that
-//!   persists across frames
-//! - **Semantic Metadata**: Components provide semantic information (role,
-//!   label, state, actions)
-//! - **Decentralized**: Component libraries decide their own semantics; the
-//!   core only provides infrastructure
-//!
 //! ## Usage
 //!
 //! Components use the accessibility API through the input handler context:

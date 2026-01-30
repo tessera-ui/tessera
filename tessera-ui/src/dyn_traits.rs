@@ -1,8 +1,4 @@
 //! Dynamic trait helpers for command objects.
-//!
-//! ## Usage
-//!
-//! Enable dynamic equality checks for cloneable command trait objects.
 
 use downcast_rs::{Downcast, impl_downcast};
 use dyn_clone::DynClone;

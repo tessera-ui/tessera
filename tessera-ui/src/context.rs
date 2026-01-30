@@ -1,4 +1,4 @@
-//! Context provider — share ambient values during component build.
+//! # Context provider
 //!
 //! ## Usage
 //!

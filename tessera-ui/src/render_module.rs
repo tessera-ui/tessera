@@ -1,8 +1,4 @@
-//! Render module integration for Tessera.
-//!
-//! ## Usage
-//!
-//! Compose component render modules for UI rendering.
+//! # Render Module Interface
 
 use crate::{PipelineContext, PxSize, render_graph::RenderGraph};
 

@@ -1,18 +1,11 @@
-//! Root routing entry utilities.
+//! # Router
 //!
 //! This module re-exports [`Router`] which provides `push()` and `pop()`
 //! methods for manipulating the navigation stack, and provides the
 //! [`router_root`] component which drives per‑frame execution of the current
 //! (top) destination.
 //!
-//! Core flow:
-//! * On the first frame, the supplied `root_dest` is pushed if the stack is
-//!   empty.
-//! * On every frame, the top destination's `exec_component()` is invoked.
-//!
-//! The actual stack and destination logic live in `tessera_shard::router`.
-//!
-//! # Typical Minimal Usage
+//! # Example
 //!
 //! ```
 //! use tessera_ui::{tessera, shard, router::{router_root, Router}};

@@ -1,8 +1,4 @@
 //! Plugin lifecycle hooks for Tessera platform integrations.
-//!
-//! ## Usage
-//!
-//! Register plugins and services for platform-specific capabilities.
 
 use std::{
     any::{Any, TypeId},

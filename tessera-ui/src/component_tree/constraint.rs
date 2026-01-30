@@ -96,26 +96,6 @@
 //!   intrinsic sizing behavior
 //! - **Fill adapts to available space**: Fill constraints expand within parent
 //!   bounds
-//!
-//! ### Merge Examples
-//!
-//! ```
-//! # use tessera_ui::Px;
-//! # use tessera_ui::{Constraint, DimensionValue, LayoutInput};
-//! fn merge_example(input: &LayoutInput<'_>) {
-//!     let child = Constraint::new(
-//!         DimensionValue::Fill {
-//!             min: Some(Px(50)),
-//!             max: None,
-//!         },
-//!         DimensionValue::Fill {
-//!             min: Some(Px(50)),
-//!             max: None,
-//!         },
-//!     );
-//!     let _merged = child.merge(input.parent_constraint());
-//! }
-//! ```
 
 use std::ops::Sub;
 

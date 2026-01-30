@@ -1,8 +1,4 @@
 //! Entry package registry for renderer startup.
-//!
-//! ## Usage
-//!
-//! Bundle render modules and platform plugins for app startup.
 use std::sync::Arc;
 
 use parking_lot::RwLock;

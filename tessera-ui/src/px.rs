@@ -1,17 +1,13 @@
-//! Physical pixel coordinate system for Tessera UI framework.
+//! # Physical Pixel Types
 //!
-//! This module provides types and operations for working with physical pixel
-//! coordinates, positions, and sizes. Physical pixels represent actual screen
-//! pixels and are used internally by the rendering system.
-//!
-//! # Key Types
+//! ## Key Types
 //!
 //! - [`Px`] - A single physical pixel coordinate value that supports negative
 //!   values for scrolling
 //! - [`PxPosition`] - A 2D position in physical pixel space (x, y coordinates)
 //! - [`PxSize`] - A 2D size in physical pixel space (width, height dimensions)
 //!
-//! # Coordinate System
+//! ## Coordinate System
 //!
 //! The coordinate system uses:
 //! - Origin (0, 0) at the top-left corner
@@ -20,14 +16,17 @@
 //! - Negative coordinates are supported for scrolling and off-screen
 //!   positioning
 //!
-//! # Conversion
+//! ## Conversion
 //!
 //! Physical pixels can be converted to and from density-independent pixels
 //! ([`Dp`]):
-//! - Use [`Px::from_dp`] to convert from Dp to Px
-//! - Use [`Px::to_dp`] to convert from Px to Dp
+//! - Use [`Px::from_dp`] to convert from [`Dp`] to [`Px`]
+//! - Use [`Px::to_dp`] to convert from [`Px`] to [`Dp`]
 //!
-//! # Example
+//! [`From`] & [`Into`] traits are also implemented for seamless conversion
+//! between `Px` and `Dp`.
+//!
+//! ## Example
 //!
 //! ```
 //! use tessera_ui::dp::Dp;

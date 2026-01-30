@@ -1,8 +1,4 @@
 //! Android platform helpers for Tessera apps.
-//!
-//! ## Usage
-//!
-//! Call Android APIs from Tessera plugins using JNI helpers.
 
 #[cfg(target_os = "android")]
 pub mod jni;

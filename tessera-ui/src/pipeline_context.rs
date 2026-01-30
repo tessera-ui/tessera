@@ -1,8 +1,4 @@
-//! Pipeline registration context for renderer initialization.
-//!
-//! ## Usage
-//!
-//! Register draw and compute pipelines from component libraries at startup.
+//! Pipeline registration context for renderer initialization
 
 use crate::{
     CompositeCommand, ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline,

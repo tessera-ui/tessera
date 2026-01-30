@@ -1,9 +1,4 @@
-//! Pure layout specs and record hooks for components.
-//!
-//! ## Usage
-//!
-//! Define layout specs for containers and record draw commands in a render
-//! pass.
+//! Layout specification and measurement.
 
 use std::{any::Any, cell::RefCell, collections::HashMap, sync::Arc};
 

@@ -1,4 +1,4 @@
-//! Cursor state management and event handling system.
+//! # Cursor management
 //!
 //! This module provides comprehensive cursor and touch event handling for the
 //! Tessera UI framework. It manages cursor position tracking, event queuing,

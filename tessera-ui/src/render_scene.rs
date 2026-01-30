@@ -1,8 +1,4 @@
-//! Render command definitions for frame graphs.
-//!
-//! ## Usage
-//!
-//! Define command metadata for render graph nodes.
+//! Render command definitions for frame graphs
 
 use downcast_rs::{Downcast, impl_downcast};
 use dyn_clone::DynClone;
