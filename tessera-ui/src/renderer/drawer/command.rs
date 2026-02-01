@@ -3,11 +3,10 @@
 //! This module defines the core traits and types for graphics rendering
 //! commands in the unified command system.
 
-use downcast_rs::impl_downcast;
+use downcast_rs::{Downcast, impl_downcast};
 use dyn_clone::DynClone;
 
 use crate::{
-    dyn_traits::DynPartialEqDraw,
     px::{PxPosition, PxRect, PxSize},
     render_scene::{DrawRegion, PaddingRect, SampleRegion},
 };
@@ -23,7 +22,7 @@ use crate::{
 /// ```
 /// use tessera_ui::DrawCommand;
 ///
-/// #[derive(PartialEq, Clone)]
+/// #[derive(Clone)]
 /// struct RectangleCommand {
 ///     color: [f32; 4],
 ///     corner_radius: f32,
@@ -35,7 +34,7 @@ use crate::{
 ///     }
 /// }
 /// ```
-pub trait DrawCommand: DynClone + DynPartialEqDraw + Send + Sync {
+pub trait DrawCommand: DynClone + Downcast + Send + Sync {
     /// Specifies sample requirements for this draw operation.
     ///
     /// As a default implementation, this returns `None`, indicating that

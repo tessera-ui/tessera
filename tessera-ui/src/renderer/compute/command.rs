@@ -6,11 +6,11 @@
 use downcast_rs::{Downcast, impl_downcast};
 use dyn_clone::DynClone;
 
-use crate::{SampleRegion, dyn_traits::DynPartialEqCompute};
+use crate::SampleRegion;
 
 /// Trait for GPU compute operations that can be dispatched through the unified
 /// command system.
-pub trait ComputeCommand: DynClone + DynPartialEqCompute + Downcast + Send + Sync {
+pub trait ComputeCommand: DynClone + Downcast + Send + Sync {
     /// Declares the dependency on previously rendered content for barrier
     /// planning.
     fn barrier(&self) -> SampleRegion;

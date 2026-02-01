@@ -402,12 +402,10 @@ impl RenderCore {
     }
 
     /// Resize the surface if needed.
-    pub(crate) fn resize_if_needed(&mut self) -> bool {
-        let result = self.size_changed;
+    pub(crate) fn resize_if_needed(&mut self) {
         if self.size_changed {
             self.resize_surface();
             self.size_changed = false;
         }
-        result
     }
 }

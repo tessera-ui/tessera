@@ -7,7 +7,7 @@ pub mod compute;
 pub mod core;
 pub mod drawer;
 
-use std::{sync::Arc, thread, time::Instant};
+use std::{sync::Arc, time::Instant};
 
 use accesskit::{self, TreeUpdate};
 use accesskit_winit::{Adapter as AccessKitAdapter, Event as AccessKitEvent};
@@ -18,7 +18,7 @@ use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
 
@@ -32,7 +32,7 @@ use crate::{
     pipeline_context::PipelineContext,
     plugin::{PluginContext, PluginHost},
     px::PxSize,
-    render_graph::{RenderGraph, RenderGraphExecution, RenderGraphOp, RenderResource},
+    render_graph::{RenderGraph, RenderGraphExecution},
     render_module::RenderModule,
     runtime::{TesseraRuntime, begin_frame_slots},
     thread_utils,
@@ -242,11 +242,6 @@ pub struct Renderer<F: Fn()> {
     plugins: PluginHost,
     /// Configuration settings for the renderer
     config: TesseraConfig,
-    /// Ordered render ops from the previous frame, for dirty rectangle
-    /// optimization.
-    previous_ops: Vec<RenderGraphOp>,
-    /// Resource declarations from the previous frame, for dirty detection.
-    previous_resources: Vec<RenderResource>,
     /// AccessKit adapter for accessibility support
     accessibility_adapter: Option<AccessKitAdapter>,
     /// Event loop proxy for sending accessibility events
@@ -371,8 +366,6 @@ impl<F: Fn()> Renderer<F> {
             plugins: PluginHost::new(),
             ime_state,
             config,
-            previous_ops: Vec::new(),
-            previous_resources: Vec::new(),
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
             frame_index: 0,
@@ -498,8 +491,6 @@ impl<F: Fn()> Renderer<F> {
             ime_state,
             android_ime_opened: false,
             config,
-            previous_ops: Vec::new(),
-            previous_resources: Vec::new(),
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
             frame_index: 0,
@@ -512,7 +503,6 @@ impl<F: Fn()> Renderer<F> {
 // Helper struct to group render-frame arguments and reduce parameter count.
 // Kept private to this module.
 struct RenderFrameArgs<'a> {
-    pub resized: bool,
     pub cursor_state: &'a mut CursorState,
     pub keyboard_state: &'a mut KeyboardState,
     pub ime_state: &'a mut ImeState,
@@ -526,8 +516,6 @@ struct RenderFrameArgs<'a> {
 struct RenderFrameContext<'a, F: Fn()> {
     entry_point: &'a F,
     args: &'a mut RenderFrameArgs<'a>,
-    previous_ops: &'a mut Vec<RenderGraphOp>,
-    previous_resources: &'a mut Vec<RenderResource>,
     accessibility_enabled: bool,
     window_label: &'a str,
     frame_idx: u64,
@@ -715,8 +703,6 @@ Fps: {:.2}
         let RenderFrameContext {
             entry_point,
             args,
-            previous_ops,
-            previous_resources,
             accessibility_enabled,
             window_label,
             frame_idx,
@@ -743,108 +729,29 @@ Fps: {:.2}
         let new_graph =
             composite::expand_composites(new_graph, composite_context, composite_registry);
         let RenderGraphExecution { ops, resources } = new_graph.into_execution();
-        let new_ops = ops;
-        let new_resources = resources;
-
         #[cfg(feature = "profiling")]
         let mut render_duration_ns: Option<u128> = None;
-        // Dirty Rectangle Detection
-        let mut dirty = false;
-        if args.resized
-            || new_ops.len() != previous_ops.len()
-            || new_resources.len() != previous_resources.len()
+        // Perform GPU render every frame.
+        let render_cost = Self::perform_render(args, RenderGraphExecution { ops, resources });
+        // Log frame statistics
+        Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
+        #[cfg(feature = "profiling")]
         {
-            dirty = true;
-        } else {
-            for (new_cmd_tuple, old_cmd_tuple) in new_ops.iter().zip(previous_ops.iter()) {
-                let RenderGraphOp {
-                    command: new_cmd,
-                    size: new_size,
-                    position: new_pos,
-                    opacity: new_opacity,
-                    ..
-                } = new_cmd_tuple;
-                let RenderGraphOp {
-                    command: old_cmd,
-                    size: old_size,
-                    position: old_pos,
-                    opacity: old_opacity,
-                    ..
-                } = old_cmd_tuple;
-
-                let content_are_equal = match (new_cmd, old_cmd) {
-                    (Command::Draw(new_draw_cmd), Command::Draw(old_draw_cmd)) => {
-                        new_draw_cmd.dyn_eq(old_draw_cmd.as_ref())
-                    }
-                    (Command::Compute(new_compute_cmd), Command::Compute(old_compute_cmd)) => {
-                        new_compute_cmd.dyn_eq(old_compute_cmd.as_ref())
-                    }
-                    (Command::ClipPop, Command::ClipPop) => true,
-                    (Command::ClipPush(new_rect), Command::ClipPush(old_rect)) => {
-                        new_rect == old_rect
-                    }
-                    _ => false, // Mismatched command types
-                };
-
-                if !content_are_equal
-                    || new_size != old_size
-                    || new_pos != old_pos
-                    || (new_opacity - old_opacity).abs() > f32::EPSILON
-                {
-                    dirty = true;
-                    break;
-                }
-            }
-            if !dirty {
-                for (new_resource, old_resource) in
-                    new_resources.iter().zip(previous_resources.iter())
-                {
-                    if new_resource != old_resource {
-                        dirty = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if dirty {
-            // Perform GPU render
-            let render_cost = Self::perform_render(
-                args,
-                RenderGraphExecution {
-                    ops: new_ops.clone(),
-                    resources: new_resources.clone(),
-                },
-            );
-            // Log frame statistics
-            Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
-            #[cfg(feature = "profiling")]
-            {
-                render_duration_ns = Some(render_cost.as_nanos());
-            }
-        } else {
-            thread::sleep(std::time::Duration::from_millis(4)); // Sleep briefly to avoid busy-waiting
-            #[cfg(feature = "profiling")]
-            {
-                // Non-dirty frames are intentionally excluded from profiler output.
-                crate::profiler::discard_frame(frame_idx);
-            }
+            render_duration_ns = Some(render_cost.as_nanos());
         }
 
         #[cfg(feature = "profiling")]
         {
-            if dirty {
-                let frame_total_ns = frame_timer.elapsed().as_nanos();
-                let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
-                submit_frame_meta(FrameMeta {
-                    frame_idx,
-                    render_time_ns: render_duration_ns,
-                    build_tree_time_ns: Some(build_tree_cost.as_nanos()),
-                    draw_time_ns: Some(draw_cost.as_nanos()),
-                    frame_total_ns: Some(frame_total_ns),
-                    nodes,
-                });
-            }
+            let frame_total_ns = frame_timer.elapsed().as_nanos();
+            let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
+            submit_frame_meta(FrameMeta {
+                frame_idx,
+                render_time_ns: render_duration_ns,
+                build_tree_time_ns: Some(build_tree_cost.as_nanos()),
+                draw_time_ns: Some(draw_cost.as_nanos()),
+                frame_total_ns: Some(frame_total_ns),
+                nodes,
+            });
         }
 
         // Prepare accessibility tree update before clearing the component tree if
@@ -920,13 +827,7 @@ Fps: {:.2}
         crate::context::recycle_frame_context_slots();
         crate::modifier::clear_modifiers();
 
-        // Store the commands for the next frame's comparison
-        *previous_ops = new_ops;
-        *previous_resources = new_resources;
-
-        // Currently we render every frame, but with dirty checking, this could be
-        // conditional. For now, we still request a redraw to keep the event
-        // loop spinning for animations.
+        // Request a redraw to keep the event loop spinning for animations.
         args.app.window().request_redraw();
 
         accessibility_update
@@ -1097,9 +998,8 @@ impl<F: Fn()> Renderer<F> {
             None => return,
         };
 
-        let resized = app.resize_if_needed();
+        app.resize_if_needed();
         let mut args = RenderFrameArgs {
-            resized,
             cursor_state: &mut self.cursor_state,
             keyboard_state: &mut self.keyboard_state,
             ime_state: &mut self.ime_state,
@@ -1112,8 +1012,6 @@ impl<F: Fn()> Renderer<F> {
         let accessibility_update = Self::execute_render_frame(RenderFrameContext {
             entry_point: &self.entry_point,
             args: &mut args,
-            previous_ops: &mut self.previous_ops,
-            previous_resources: &mut self.previous_resources,
             accessibility_enabled: self.accessibility_adapter.is_some(),
             window_label: &self.config.window_title,
             frame_idx: self.frame_index,
@@ -1161,6 +1059,7 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
     /// and any custom shaders your application requires.
     #[tracing::instrument(level = "debug", skip(self, event_loop))]
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        event_loop.set_control_flow(ControlFlow::Poll);
         // Just return if the app is already created
         if self.app.is_some() {
             return;
@@ -1230,8 +1129,6 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
         // Clean up AccessKit adapter
         self.accessibility_adapter = None;
 
-        self.previous_ops = Vec::new();
-        self.previous_resources = Vec::new();
         self.cursor_state = CursorState::default();
         self.keyboard_state = KeyboardState::default();
         self.ime_state = ImeState::default();
@@ -1249,45 +1146,6 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
         crate::runtime::reset_slots();
     }
 
-    /// Handles window-specific events from the windowing system.
-    ///
-    /// This method processes all window events including user input, window
-    /// state changes, and rendering requests. It's the main event
-    /// processing hub that translates winit events into Tessera's internal
-    /// event system.
-    ///
-    /// ## Event Categories
-    ///
-    /// ### Window Management
-    /// - `CloseRequested`: User requested to close the window
-    /// - `Resized`: Window size changed
-    /// - `ScaleFactorChanged`: Display scaling changed (high-DPI support)
-    ///
-    /// ### Input Events
-    /// - `CursorMoved`: Mouse cursor position changed
-    /// - `CursorLeft`: Mouse cursor left the window
-    /// - `MouseInput`: Mouse button press/release
-    /// - `MouseWheel`: Mouse wheel scrolling
-    /// - `Touch`: Touch screen interactions (mobile)
-    /// - `KeyboardInput`: Keyboard key press/release
-    /// - `Ime`: Input Method Editor events (international text input)
-    ///
-    /// ### Rendering
-    /// - `RedrawRequested`: System requests a frame to be rendered
-    ///
-    /// ## Event Processing Flow
-    ///
-    /// 1. **Input Events**: Captured and stored in respective state managers
-    /// 2. **State Updates**: Internal state (cursor, keyboard, IME) is updated
-    /// 3. **Rendering**: On redraw requests, the full rendering pipeline is
-    ///    executed
-    ///
-    /// ## Platform-Specific Handling
-    ///
-    /// Some events have platform-specific behavior, particularly:
-    /// - Touch events (mobile platforms)
-    /// - IME events (different implementations per platform)
-    /// - Scale factor changes (high-DPI displays)
     #[tracing::instrument(level = "debug", skip(self, event_loop))]
     fn window_event(
         &mut self,
@@ -1295,10 +1153,6 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        // Defer borrowing `app` into specific event handlers to avoid overlapping
-        // mutable borrows. Handlers will obtain a mutable reference to
-        // `self.app` as needed.
-
         // Forward event to AccessKit adapter
         if let (Some(adapter), Some(app)) = (&mut self.accessibility_adapter, &self.app) {
             adapter.process_event(app.window(), &event);
@@ -1366,15 +1220,6 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
         }
     }
 
-    /// Handles user events sent through the event loop proxy.
-    ///
-    /// This method is called when accessibility events are sent from AccessKit.
-    /// It processes:
-    /// - `InitialTreeRequested`: Builds and returns the initial accessibility
-    ///   tree
-    /// - `ActionRequested`: Dispatches accessibility actions to appropriate
-    ///   components
-    /// - `AccessibilityDeactivated`: Cleans up when accessibility is turned off
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AccessKitEvent) {
         use accesskit_winit::WindowEvent as AccessKitWindowEvent;
 
@@ -1387,11 +1232,6 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
                 self.send_accessibility_update();
             }
             AccessKitWindowEvent::ActionRequested(action_request) => {
-                println!(
-                    "[tessera-ui][accessibility] Action requested: {:?}",
-                    action_request
-                );
-
                 // Dispatch action to the appropriate component handler
                 let handled = TesseraRuntime::with(|runtime| {
                     let tree = runtime.component_tree.tree();

@@ -95,7 +95,7 @@
 //!
 //! See [`FrameRecord`] and [`ComponentRecord`] for equivalent Rust structures.
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs::{File, OpenOptions},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
@@ -181,7 +181,6 @@ pub struct FrameMeta {
 enum Message {
     Sample(Sample),
     FrameMeta(FrameMeta),
-    DiscardFrame(u64),
 }
 
 struct ProfilerRuntime {
@@ -190,7 +189,6 @@ struct ProfilerRuntime {
 
 struct WorkerState {
     frames: HashMap<u64, Vec<Sample>>,
-    discarded_frames: HashSet<u64>,
     writer: BufWriter<File>,
     header_written: bool,
 }
@@ -231,7 +229,6 @@ fn worker_loop(receiver: mpsc::Receiver<Message>) {
         .expect("failed to open profiler output file");
     let mut state = WorkerState {
         frames: HashMap::new(),
-        discarded_frames: HashSet::new(),
         writer: BufWriter::new(file),
         header_written: false,
     };
@@ -239,9 +236,6 @@ fn worker_loop(receiver: mpsc::Receiver<Message>) {
     for msg in receiver {
         match msg {
             Message::Sample(sample) => {
-                if state.discarded_frames.contains(&sample.frame_idx) {
-                    continue;
-                }
                 state
                     .frames
                     .entry(sample.frame_idx)
@@ -249,19 +243,11 @@ fn worker_loop(receiver: mpsc::Receiver<Message>) {
                     .push(sample);
             }
             Message::FrameMeta(frame_meta) => {
-                if state.discarded_frames.remove(&frame_meta.frame_idx) {
-                    let _ = state.frames.remove(&frame_meta.frame_idx);
-                    continue;
-                }
                 let samples = state
                     .frames
                     .remove(&frame_meta.frame_idx)
                     .unwrap_or_default();
                 flush_frame(&mut state, frame_meta, samples);
-            }
-            Message::DiscardFrame(frame_idx) => {
-                state.discarded_frames.insert(frame_idx);
-                let _ = state.frames.remove(&frame_idx);
             }
         };
     }
@@ -572,19 +558,6 @@ pub fn submit_frame_meta(frame_meta: FrameMeta) {
         .send(Message::FrameMeta(frame_meta))
     {
         eprintln!("tessera profiler frame meta send failed: {err}");
-    }
-}
-
-/// Discard all samples for the given frame and prevent it from being written.
-///
-/// This is used to skip profiling output for frames that did not present new
-/// content (e.g., non-dirty frames).
-pub fn discard_frame(frame_idx: u64) {
-    if let Err(err) = profiler_runtime()
-        .sender
-        .send(Message::DiscardFrame(frame_idx))
-    {
-        eprintln!("tessera profiler discard frame send failed: {err}");
     }
 }
 
