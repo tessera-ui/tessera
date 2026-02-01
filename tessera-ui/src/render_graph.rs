@@ -190,7 +190,7 @@ pub struct RenderGraph {
     resources: Vec<RenderResource>,
 }
 
-/// Owned render graph payload for middleware transforms.
+/// Owned render graph payload for graph transforms.
 pub struct RenderGraphParts {
     /// Render ops for the frame.
     pub ops: Vec<RenderGraphOp>,
@@ -211,7 +211,7 @@ impl RenderGraph {
         &self.resources
     }
 
-    /// Decomposes the graph into owned parts for middleware processing.
+    /// Decomposes the graph into owned parts for graph processing.
     #[must_use]
     pub fn into_parts(self) -> RenderGraphParts {
         RenderGraphParts {

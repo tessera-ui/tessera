@@ -33,7 +33,7 @@ use crate::{
     plugin::{PluginContext, PluginHost},
     px::PxSize,
     render_graph::{RenderGraph, RenderGraphExecution, RenderGraphOp, RenderResource},
-    render_module::{RenderMiddleware, RenderMiddlewareContext, RenderModule},
+    render_module::RenderModule,
     runtime::{TesseraRuntime, begin_frame_slots},
     thread_utils,
 };
@@ -236,10 +236,8 @@ pub struct Renderer<F: Fn()> {
     keyboard_state: KeyboardState,
     /// Tracks Input Method Editor (IME) state for international text input
     ime_state: ImeState,
-    /// Render modules providing pipelines and middleware.
+    /// Render modules providing pipelines.
     modules: Vec<Box<dyn RenderModule>>,
-    /// Per-frame render middlewares derived from modules.
-    middlewares: Vec<Box<dyn RenderMiddleware>>,
     /// Lifecycle hooks for registered plugins.
     plugins: PluginHost,
     /// Configuration settings for the renderer
@@ -274,8 +272,7 @@ impl<F: Fn()> Renderer<F> {
     /// - `entry_point`: A function that defines your UI. This function will be
     ///   called every frame to build the component tree. It should contain your
     ///   root UI components.
-    /// - `modules`: Render modules that register pipelines and provide
-    ///   middleware.
+    /// - `modules`: Render modules that register pipelines.
     ///
     /// # Returns
     ///
@@ -320,8 +317,7 @@ impl<F: Fn()> Renderer<F> {
     /// # Parameters
     ///
     /// - `entry_point`: A function that defines your UI
-    /// - `modules`: Render modules that register pipelines and provide
-    ///   middleware
+    /// - `modules`: Render modules that register pipelines
     /// - `config`: Custom configuration for the renderer
     ///
     /// # Returns
@@ -372,7 +368,6 @@ impl<F: Fn()> Renderer<F> {
             cursor_state,
             keyboard_state,
             modules,
-            middlewares: Vec::new(),
             plugins: PluginHost::new(),
             ime_state,
             config,
@@ -395,8 +390,7 @@ impl<F: Fn()> Renderer<F> {
     /// # Parameters
     ///
     /// - `entry_point`: A function that defines your UI
-    /// - `modules`: Render modules that register pipelines and provide
-    ///   middleware
+    /// - `modules`: Render modules that register pipelines
     /// - `android_app`: The Android application context
     ///
     /// # Returns
@@ -442,8 +436,7 @@ impl<F: Fn()> Renderer<F> {
     /// # Parameters
     ///
     /// - `entry_point`: A function that defines your UI
-    /// - `modules`: Render modules that register pipelines and provide
-    ///   middleware
+    /// - `modules`: Render modules that register pipelines
     /// - `android_app`: The Android application context
     /// - `config`: Custom configuration for the renderer
     ///
@@ -501,7 +494,6 @@ impl<F: Fn()> Renderer<F> {
             cursor_state,
             keyboard_state,
             modules,
-            middlewares: Vec::new(),
             plugins: PluginHost::new(),
             ime_state,
             android_ime_opened: false,
@@ -536,7 +528,6 @@ struct RenderFrameContext<'a, F: Fn()> {
     args: &'a mut RenderFrameArgs<'a>,
     previous_ops: &'a mut Vec<RenderGraphOp>,
     previous_resources: &'a mut Vec<RenderResource>,
-    middlewares: &'a mut Vec<Box<dyn RenderMiddleware>>,
     accessibility_enabled: bool,
     window_label: &'a str,
     frame_idx: u64,
@@ -679,22 +670,6 @@ Fps: {:.2}
         (graph, window_requests, draw_cost)
     }
 
-    fn apply_middlewares(
-        scene: RenderGraph,
-        context: RenderMiddlewareContext,
-        middlewares: &mut [Box<dyn RenderMiddleware>],
-    ) -> RenderGraph {
-        if middlewares.is_empty() {
-            return scene;
-        }
-
-        let mut scene = scene;
-        for middleware in middlewares.iter_mut() {
-            scene = middleware.process(scene, &context);
-        }
-        scene
-    }
-
     /// Perform the actual GPU rendering for the provided commands and return
     /// the render duration.
     #[instrument(level = "debug", skip(args, execution))]
@@ -742,7 +717,6 @@ Fps: {:.2}
             args,
             previous_ops,
             previous_resources,
-            middlewares,
             accessibility_enabled,
             window_label,
             frame_idx,
@@ -768,15 +742,6 @@ Fps: {:.2}
             args.app.composite_context_parts(screen_size, frame_idx);
         let new_graph =
             composite::expand_composites(new_graph, composite_context, composite_registry);
-        let new_graph = Self::apply_middlewares(
-            new_graph,
-            RenderMiddlewareContext {
-                frame_size: screen_size,
-                surface_format: args.app.surface_config().format,
-                sample_count: args.app.sample_count(),
-            },
-            middlewares,
-        );
         let RenderGraphExecution { ops, resources } = new_graph.into_execution();
         let new_ops = ops;
         let new_resources = resources;
@@ -1149,7 +1114,6 @@ impl<F: Fn()> Renderer<F> {
             args: &mut args,
             previous_ops: &mut self.previous_ops,
             previous_resources: &mut self.previous_resources,
-            middlewares: &mut self.middlewares,
             accessibility_enabled: self.accessibility_adapter.is_some(),
             window_label: &self.config.window_title,
             frame_idx: self.frame_index,
@@ -1234,12 +1198,6 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
             module.register_pipelines(&mut context);
         }
 
-        self.middlewares = self
-            .modules
-            .iter()
-            .flat_map(|module| module.create_middlewares())
-            .collect();
-
         self.app = Some(render_core);
 
         if let Some(context) = self.plugin_context(event_loop) {
@@ -1277,8 +1235,6 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
         self.cursor_state = CursorState::default();
         self.keyboard_state = KeyboardState::default();
         self.ime_state = ImeState::default();
-        self.middlewares.clear();
-
         #[cfg(target_os = "android")]
         {
             self.android_ime_opened = false;

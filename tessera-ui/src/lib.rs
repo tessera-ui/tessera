@@ -379,7 +379,7 @@ pub use crate::{
         RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp, RenderGraphParts,
         RenderResource, RenderResourceId, RenderTextureDesc,
     },
-    render_module::{RenderMiddleware, RenderMiddlewareContext, RenderModule},
+    render_module::RenderModule,
     render_scene::{Command, CompositeCommand, DrawRegion, PaddingRect, SampleRegion},
     renderer::{
         Renderer,
