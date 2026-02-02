@@ -28,12 +28,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "accesskit"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5351dcebb14b579ccab05f288596b2ae097005be7ee50a7c3d4ca9d0d5a66f6a"
+dependencies = [
+ "uuid",
+]
+
+[[package]]
 name = "accesskit_atspi_common"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6778622dca77b55464f993289ffa9c2f192976e5891c2c30e2439af61b6ddf2"
 dependencies = [
- "accesskit",
+ "accesskit 0.23.0",
  "accesskit_consumer",
  "atspi-common",
  "serde",
@@ -46,7 +55,7 @@ version = "0.33.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fce4cd9f6ea13c76d53403ff1583163f7a9e58381ecfbf4c8449affd7c09c24"
 dependencies = [
- "accesskit",
+ "accesskit 0.23.0",
  "hashbrown 0.16.1",
 ]
 
@@ -56,7 +65,7 @@ version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c001a603b958865ce466c92ac2487041ff402f994c705a3f12a5765e4e54a35e"
 dependencies = [
- "accesskit",
+ "accesskit 0.23.0",
  "accesskit_consumer",
  "hashbrown 0.16.1",
  "objc2 0.5.2",
@@ -70,7 +79,7 @@ version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f861c80792fd2f3d0fccd89be70ecd76295b9ea641e6116e331036cec0cec707"
 dependencies = [
- "accesskit",
+ "accesskit 0.23.0",
  "accesskit_atspi_common",
  "async-channel",
  "async-executor",
@@ -88,7 +97,7 @@ version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce3cdfe5e46c3f39d2d51bb6d6e5771347021889c5f6a7cade8ff7c401ccfbd7"
 dependencies = [
- "accesskit",
+ "accesskit 0.23.0",
  "accesskit_consumer",
  "hashbrown 0.16.1",
  "static_assertions",
@@ -102,7 +111,7 @@ version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16f1da113a14288fc93435277734c73926de5d95f0d930ef3b9e894de29bae34"
 dependencies = [
- "accesskit",
+ "accesskit 0.23.0",
  "accesskit_macos",
  "accesskit_unix",
  "accesskit_windows",
@@ -5345,7 +5354,7 @@ dependencies = [
 name = "tessera-ui"
 version = "2.5.0"
 dependencies = [
- "accesskit",
+ "accesskit 0.24.0",
  "accesskit_winit",
  "bytemuck",
  "dashmap",
