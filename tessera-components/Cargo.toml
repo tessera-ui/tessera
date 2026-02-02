@@ -9,7 +9,7 @@ description = "Basic components for tessera-ui, using md3e design principles."
 build = "build.rs"
 
 [dependencies]
-bytemuck = "1.24.0"
+bytemuck = "1.25.0"
 derive_setters = "0.1.8"
 image = { version = "0.25.9", default-features = false, features = [
     "png",

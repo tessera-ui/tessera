@@ -16,7 +16,7 @@ path = "src/lib.rs"
 tessera-ui = { path = "../tessera-ui" }
 tessera-components = { path = "../tessera-components" }
 tokio = { version = "1.49.0", features = ["full"] }
-bytemuck = { version = "1.24.0", features = ["derive"] }
+bytemuck = { version = "1.25.0", features = ["derive"] }
 image = "0.25.9"
 dashmap = "6.1.0"
 closure = "0.3.0"

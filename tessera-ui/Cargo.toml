@@ -15,7 +15,7 @@ shard = ["tessera-shard"]
 profiling = ["serde", "serde_json"]
 
 [dependencies]
-bytemuck = { version = "1.24.0", features = ["derive"] }
+bytemuck = { version = "1.25.0", features = ["derive"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 parking_lot = { version = "0.12.5", features = ["deadlock_detection"] }
