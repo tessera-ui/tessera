@@ -460,21 +460,26 @@ impl<'a> Device<'a> {
             sleep(Duration::from_secs(2));
         };
         let pid = stdout.trim().to_string();
-        let mut logcat = duct::cmd(
-            env.platform_tools_path().join("adb"),
-            ["logcat", "-v", "color", "-s", &filter],
-        )
-        .vars(env.explicit_env())
-        .dup_stdio();
+        let mut logcat_args = vec!["logcat".to_string(), "-v".to_string(), "color".to_string()];
+        if pid.is_empty() {
+            logcat_args.push("-s".to_string());
+            logcat_args.push(filter);
+        } else {
+            logcat_args.push("--pid".to_string());
+            logcat_args.push(pid);
+        }
+
+        let mut logcat = duct::cmd(env.platform_tools_path().join("adb"), logcat_args)
+            .vars(env.explicit_env())
+            .dup_stdio();
 
         let logcat_filter_specs = config.logcat_filter_specs().to_vec();
-        logcat = logcat.before_spawn(move |cmd| {
-            if !pid.is_empty() {
-                cmd.args(["--pid", &pid]);
-            }
-            cmd.args(&logcat_filter_specs);
-            Ok(())
-        });
+        if !logcat_filter_specs.is_empty() {
+            logcat = logcat.before_spawn(move |cmd| {
+                cmd.args(&logcat_filter_specs);
+                Ok(())
+            });
+        }
         logcat.start().map_err(|err| RunError::CommandFailed {
             command: format!("{logcat:?}"),
             error: err,
