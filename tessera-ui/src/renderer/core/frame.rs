@@ -1,19 +1,23 @@
-use std::{any::TypeId, mem};
+use std::{any::TypeId, mem, time::Instant};
 
+use downcast_rs::Downcast;
 use smallvec::SmallVec;
 
 use crate::{
     DrawCommand, Px, PxPosition, PxRect, PxSize,
-    render_graph::{RenderGraphExecution, RenderResource, RenderResourceId, RenderTextureDesc},
+    render_graph::{
+        ExternalTextureDesc, RenderGraphExecution, RenderResource, RenderResourceId,
+        RenderTextureDesc,
+    },
     render_pass::{
         ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassKind, RenderPassPlan,
     },
     renderer::{
         compute::{ErasedComputeBatchItem, pipeline::ErasedDispatchContext},
         drawer::ErasedDrawContext,
+        external::{ExternalTextureRegistry, ExternalTextureSlotGuard},
     },
 };
-use downcast_rs::Downcast;
 
 use super::*;
 
@@ -83,6 +87,19 @@ struct FrameResources<'a> {
     device: &'a wgpu::Device,
     sample_count: u32,
     current_frame: u64,
+    external: ExternalTextureRegistry,
+    external_descs: &'a [ExternalTextureDesc],
+}
+
+struct FrameResourcesParams<'a> {
+    pool: &'a mut LocalTexturePool,
+    device: &'a wgpu::Device,
+    resources: &'a [RenderResource],
+    external_descs: &'a [ExternalTextureDesc],
+    sample_count: u32,
+    current_frame: u64,
+    last_use_passes: &'a [usize],
+    external: ExternalTextureRegistry,
 }
 
 struct LocalResourceState {
@@ -92,14 +109,17 @@ struct LocalResourceState {
 }
 
 impl<'a> FrameResources<'a> {
-    fn new(
-        pool: &'a mut LocalTexturePool,
-        device: &'a wgpu::Device,
-        resources: &[RenderResource],
-        sample_count: u32,
-        current_frame: u64,
-        last_use_passes: &[usize],
-    ) -> Self {
+    fn new(params: FrameResourcesParams<'a>) -> Self {
+        let FrameResourcesParams {
+            pool,
+            device,
+            resources,
+            external_descs,
+            sample_count,
+            current_frame,
+            last_use_passes,
+            external,
+        } = params;
         let locals = resources
             .iter()
             .enumerate()
@@ -117,6 +137,8 @@ impl<'a> FrameResources<'a> {
             device,
             sample_count,
             current_frame,
+            external,
+            external_descs,
         }
     }
 
@@ -162,6 +184,18 @@ impl<'a> FrameResources<'a> {
         self.pool.slot_mut(slot_index)
     }
 
+    fn external_slot(&self, id: RenderResourceId) -> Option<ExternalTextureSlotGuard<'_>> {
+        let RenderResourceId::External(index) = id else {
+            return None;
+        };
+        let handle_id = self.external_descs.get(index as usize)?.handle_id;
+        self.external.slot(handle_id)
+    }
+
+    fn external_slot_mut(&self, id: RenderResourceId) -> Option<ExternalTextureSlotGuard<'_>> {
+        self.external_slot(id)
+    }
+
     fn release_for_pass(&mut self, pass_index: usize) {
         for local in &mut self.locals {
             if local.last_use_pass == pass_index
@@ -187,13 +221,20 @@ struct RenderCoreFrameState<'a> {
 struct RenderPassClearState {
     scene_written: bool,
     locals_written: Vec<bool>,
+    externals_written: Vec<bool>,
+    externals_should_clear: Vec<bool>,
 }
 
 impl RenderPassClearState {
-    fn new(local_count: usize) -> Self {
+    fn new(local_count: usize, external_resources: &[ExternalTextureDesc]) -> Self {
         Self {
             scene_written: false,
             locals_written: vec![false; local_count],
+            externals_written: vec![false; external_resources.len()],
+            externals_should_clear: external_resources
+                .iter()
+                .map(|desc| desc.clear_on_first_use)
+                .collect(),
         }
     }
 
@@ -209,6 +250,23 @@ impl RenderPassClearState {
                     .locals_written
                     .get_mut(index as usize)
                     .unwrap_or_else(|| panic!("missing clear state for local resource {index}"));
+                let clear = !*slot;
+                *slot = true;
+                clear
+            }
+            RenderResourceId::External(index) => {
+                let should_clear = self
+                    .externals_should_clear
+                    .get(index as usize)
+                    .copied()
+                    .unwrap_or(true);
+                if !should_clear {
+                    return false;
+                }
+                let slot = self
+                    .externals_written
+                    .get_mut(index as usize)
+                    .unwrap_or_else(|| panic!("missing clear state for external resource {index}"));
                 let clear = !*slot;
                 *slot = true;
                 clear
@@ -248,6 +306,20 @@ impl ComputeTargets for LocalComputeTargets<'_> {
             self.slot.front_view().clone(),
             self.slot.back_view().clone(),
         )
+    }
+
+    fn swap(&mut self) {
+        self.slot.swap_front_back();
+    }
+}
+
+struct ExternalComputeTargets<'a> {
+    slot: ExternalTextureSlotGuard<'a>,
+}
+
+impl ComputeTargets for ExternalComputeTargets<'_> {
+    fn views(&self) -> (wgpu::TextureView, wgpu::TextureView) {
+        (self.slot.front_view(), self.slot.back_view())
     }
 
     fn swap(&mut self) {
@@ -307,13 +379,12 @@ impl RenderCore {
         &mut self,
         execution: RenderGraphExecution,
     ) -> Result<(), wgpu::SurfaceError> {
+        let render_start = Instant::now();
         let current_frame = self.frame_index;
+        self.last_render_breakdown = None;
+        let acquire_start = Instant::now();
         let output_frame = self.surface.get_current_texture()?;
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
+        let acquire = acquire_start.elapsed();
 
         let texture_size = wgpu::Extent3d {
             width: self.config.width,
@@ -321,10 +392,26 @@ impl RenderCore {
             depth_or_array_layers: 1,
         };
 
-        let RenderGraphExecution { ops, resources } = execution;
-        let graph = RenderPassGraph::build(ops, &resources, texture_size);
+        let RenderGraphExecution {
+            ops,
+            resources,
+            external_resources,
+        } = execution;
+        for resource in &external_resources {
+            self.external_textures
+                .mark_used(resource.handle_id, current_frame);
+        }
+        let build_start = Instant::now();
+        let graph = RenderPassGraph::build(ops, &resources, &external_resources, texture_size);
         let mut passes = graph.into_passes();
         let last_use_passes = compute_last_use_passes(&passes, resources.len());
+        let build_passes = build_start.elapsed();
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
 
         let device = &self.device;
         let queue = &self.queue;
@@ -335,6 +422,7 @@ impl RenderCore {
         let compute = &mut self.compute;
         let local_textures = &mut self.local_textures;
 
+        let encode_start = Instant::now();
         local_textures.begin_frame(current_frame);
 
         // Frame-level begin for all pipelines
@@ -346,20 +434,22 @@ impl RenderCore {
         let mut scene_texture_view = targets.offscreen.clone();
         let mut scene_source = SceneSource::Swapchain;
         let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
-        let mut frame_resources = FrameResources::new(
-            local_textures,
+        let mut frame_resources = FrameResources::new(FrameResourcesParams {
+            pool: local_textures,
             device,
-            &resources,
-            targets.sample_count,
+            resources: &resources,
+            external_descs: &external_resources,
+            sample_count: targets.sample_count,
             current_frame,
-            &last_use_passes,
-        );
+            last_use_passes: &last_use_passes,
+            external: self.external_textures.clone(),
+        });
 
         let mut output_view = output_frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut clear_state = RenderPassClearState::new(resources.len());
+        let mut clear_state = RenderPassClearState::new(resources.len(), &external_resources);
 
         let mut frame_state = RenderCoreFrameState {
             device,
@@ -411,10 +501,25 @@ impl RenderCore {
             .drawer
             .pipeline_registry
             .end_all_frames(device, queue, config);
+        let encode = encode_start.elapsed();
 
+        let submit_start = Instant::now();
         queue.submit(Some(encoder.finish()));
+        let submit = submit_start.elapsed();
+
+        let present_start = Instant::now();
         output_frame.present();
+        let present = present_start.elapsed();
+        self.external_textures.collect_garbage(current_frame, 2);
         self.frame_index = self.frame_index.wrapping_add(1);
+        self.last_render_breakdown = Some(RenderTimingBreakdown {
+            acquire,
+            build_passes,
+            encode,
+            submit,
+            present,
+            total: render_start.elapsed(),
+        });
 
         Ok(())
     }
@@ -480,6 +585,9 @@ impl RenderCore {
                     RenderResourceId::Local(_) => resources
                         .local_slot(read_resource)
                         .map(|slot| slot.front_view().clone()),
+                    RenderResourceId::External(_) => resources
+                        .external_slot(read_resource)
+                        .map(|slot| slot.front_view()),
                     RenderResourceId::SceneDepth => Some(scene_texture_view.clone()),
                 };
 
@@ -564,6 +672,34 @@ impl RenderCore {
                             input_follows_front,
                         )
                     }
+                    RenderResourceId::External(_) => {
+                        let params = ComputePassParams {
+                            encoder,
+                            commands: compute_to_run,
+                            compute_pipeline_registry: &mut state.pipelines.compute_registry,
+                            device: state.device,
+                            queue: state.queue,
+                            config: state.config,
+                            resource_manager: &mut state.compute.resource_manager.write(),
+                        };
+                        let Some(slot) = resources.external_slot_mut(write_resource) else {
+                            return;
+                        };
+                        let size = slot.size();
+                        let texture_size = wgpu::Extent3d {
+                            width: size.width.positive().max(1),
+                            height: size.height.positive().max(1),
+                            depth_or_array_layers: 1,
+                        };
+                        let mut targets = ExternalComputeTargets { slot };
+                        do_compute_with_targets(
+                            params,
+                            input_view,
+                            &mut targets,
+                            texture_size,
+                            input_follows_front,
+                        )
+                    }
                     RenderResourceId::SceneDepth => {
                         drop(compute_to_run);
                         return;
@@ -628,6 +764,12 @@ impl RenderCore {
                             slot.msaa_view.clone(),
                             slot.desc.size,
                         )
+                    }
+                    RenderResourceId::External(_) => {
+                        let Some(slot) = resources.external_slot(write_resource) else {
+                            return;
+                        };
+                        (slot.front_view(), slot.msaa_view(), slot.size())
                     }
                     RenderResourceId::SceneDepth => {
                         return;
@@ -937,7 +1079,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
                                 queue,
                                 config,
                             },
-                            scene_texture_view: scene_view,
+                            scene_texture_view: &scene_view,
                             target_size,
                             clip_stack: if apply_clip {
                                 clip_stack.as_slice()
@@ -987,7 +1129,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
                         queue,
                         config,
                     },
-                    scene_texture_view: scene_view,
+                    scene_texture_view: &scene_view,
                     target_size,
                     clip_stack: if apply_clip {
                         clip_stack.as_slice()
@@ -1025,7 +1167,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
                     queue,
                     config,
                 },
-                scene_texture_view: scene_view,
+                scene_texture_view: &scene_view,
                 target_size,
                 clip_stack: if apply_clip {
                     clip_stack.as_slice()
@@ -1048,20 +1190,24 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     );
 }
 
-fn resolve_scene_view<'a>(
+fn resolve_scene_view(
     read_resource: Option<RenderResourceId>,
-    scene_texture_view: &'a wgpu::TextureView,
-    write_target: &'a wgpu::TextureView,
-    resources: &'a mut FrameResources<'_>,
-) -> &'a wgpu::TextureView {
+    scene_texture_view: &wgpu::TextureView,
+    write_target: &wgpu::TextureView,
+    resources: &mut FrameResources<'_>,
+) -> wgpu::TextureView {
     match read_resource {
-        Some(RenderResourceId::SceneColor) => scene_texture_view,
+        Some(RenderResourceId::SceneColor) => scene_texture_view.clone(),
         Some(resource_id @ RenderResourceId::Local(_)) => resources
             .local_slot(resource_id)
+            .map(|slot| slot.front_view().clone())
+            .unwrap_or_else(|| scene_texture_view.clone()),
+        Some(resource_id @ RenderResourceId::External(_)) => resources
+            .external_slot(resource_id)
             .map(|slot| slot.front_view())
-            .unwrap_or(scene_texture_view),
-        Some(RenderResourceId::SceneDepth) => scene_texture_view,
-        None => write_target,
+            .unwrap_or_else(|| scene_texture_view.clone()),
+        Some(RenderResourceId::SceneDepth) => scene_texture_view.clone(),
+        None => write_target.clone(),
     }
 }
 

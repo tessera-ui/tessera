@@ -4,7 +4,7 @@
 //!
 //! Drive frame submission and GPU resource setup for Tessera applications.
 
-use std::{io, sync::Arc};
+use std::{io, sync::Arc, time::Duration};
 
 use parking_lot::RwLock;
 use winit::window::Window;
@@ -14,7 +14,10 @@ use crate::{
     compute::resource::ComputeResourceManager,
     pipeline_cache::save_cache,
     render_graph::RenderTextureDesc,
-    renderer::composite::{CompositeContext, CompositePipelineRegistry},
+    renderer::{
+        composite::{CompositeContext, CompositePipelineRegistry},
+        external::ExternalTextureRegistry,
+    },
 };
 
 use super::{compute::ComputePipelineRegistry, drawer::Drawer};
@@ -33,6 +36,23 @@ struct FrameTargets {
     msaa_texture: Option<wgpu::Texture>,
     msaa_view: Option<wgpu::TextureView>,
     sample_count: u32,
+}
+
+/// Timing breakdown for the most recent render call.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct RenderTimingBreakdown {
+    /// Time spent acquiring the swapchain texture.
+    pub acquire: Duration,
+    /// Time spent building the render pass graph and pass plan.
+    pub build_passes: Duration,
+    /// Time spent encoding GPU commands.
+    pub encode: Duration,
+    /// Time spent submitting command buffers to the queue.
+    pub submit: Duration,
+    /// Time spent presenting the swapchain image.
+    pub present: Duration,
+    /// Total render duration for the frame.
+    pub total: Duration,
 }
 
 struct ComputeState {
@@ -262,8 +282,12 @@ pub struct RenderCore {
     blit: BlitState,
     /// Pool of local textures declared by render graph resources.
     local_textures: LocalTexturePool,
+    /// Registry of external textures owned by pipelines.
+    external_textures: ExternalTextureRegistry,
     /// Monotonic frame counter for resource eviction.
     frame_index: u64,
+    /// Timing breakdown for the last render call.
+    last_render_breakdown: Option<RenderTimingBreakdown>,
 }
 
 /// Shared GPU resources used when creating pipelines.
@@ -332,6 +356,11 @@ impl RenderCore {
         self.compute.resource_manager.clone()
     }
 
+    /// Returns the timing breakdown for the most recent render call.
+    pub(crate) fn last_render_breakdown(&self) -> Option<RenderTimingBreakdown> {
+        self.last_render_breakdown
+    }
+
     /// Registers a new drawable pipeline for a specific command type.
     ///
     /// This method takes ownership of the pipeline and wraps it in a
@@ -390,6 +419,7 @@ impl RenderCore {
         };
         let context = CompositeContext {
             resources,
+            external_textures: self.external_textures.clone(),
             frame_size,
             surface_format: config.format,
             sample_count: targets.sample_count,

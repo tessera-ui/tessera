@@ -6,6 +6,7 @@ pub mod composite;
 pub mod compute;
 pub mod core;
 pub mod drawer;
+pub mod external;
 
 use std::{sync::Arc, time::Instant};
 
@@ -38,6 +39,8 @@ use crate::{
     thread_utils,
 };
 
+use self::core::RenderTimingBreakdown;
+
 pub use crate::render_scene::{Command, DrawRegion, PaddingRect, SampleRegion};
 
 pub use compute::{
@@ -45,6 +48,7 @@ pub use compute::{
 };
 pub use core::{RenderCore, RenderResources};
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
+pub use external::{ExternalTextureHandle, ExternalTextureRegistry};
 
 #[cfg(feature = "profiling")]
 use crate::profiler::{
@@ -598,24 +602,55 @@ impl<F: Fn()> Renderer<F> {
         build_tree_cost: std::time::Duration,
         draw_cost: std::time::Duration,
         render_cost: std::time::Duration,
+        render_breakdown: Option<RenderTimingBreakdown>,
     ) {
         let total = build_tree_cost + draw_cost + render_cost;
         let fps = 1.0 / total.as_secs_f32();
         if fps < 60.0 {
-            warn!(
-                "Jank detected! Frame statistics:
+            if let Some(breakdown) = render_breakdown {
+                warn!(
+                    "Jank detected! Frame statistics:
+Build tree cost: {:?}
+Draw commands cost: {:?}
+Render cost: {:?}
+Total frame cost: {:?}
+Fps: {:.2}
+Render breakdown:
+Acquire: {:?}
+Build passes: {:?}
+Encode: {:?}
+Submit: {:?}
+Present: {:?}
+Render total (core): {:?}
+",
+                    build_tree_cost,
+                    draw_cost,
+                    render_cost,
+                    total,
+                    1.0 / total.as_secs_f32(),
+                    breakdown.acquire,
+                    breakdown.build_passes,
+                    breakdown.encode,
+                    breakdown.submit,
+                    breakdown.present,
+                    breakdown.total,
+                );
+            } else {
+                warn!(
+                    "Jank detected! Frame statistics:
 Build tree cost: {:?}
 Draw commands cost: {:?}
 Render cost: {:?}
 Total frame cost: {:?}
 Fps: {:.2}
 ",
-                build_tree_cost,
-                draw_cost,
-                render_cost,
-                total,
-                1.0 / total.as_secs_f32()
-            );
+                    build_tree_cost,
+                    draw_cost,
+                    render_cost,
+                    total,
+                    1.0 / total.as_secs_f32()
+                );
+            }
         }
     }
 
@@ -728,13 +763,25 @@ Fps: {:.2}
             args.app.composite_context_parts(screen_size, frame_idx);
         let new_graph =
             composite::expand_composites(new_graph, composite_context, composite_registry);
-        let RenderGraphExecution { ops, resources } = new_graph.into_execution();
+        let RenderGraphExecution {
+            ops,
+            resources,
+            external_resources,
+        } = new_graph.into_execution();
         #[cfg(feature = "profiling")]
         let mut render_duration_ns: Option<u128> = None;
         // Perform GPU render every frame.
-        let render_cost = Self::perform_render(args, RenderGraphExecution { ops, resources });
+        let render_cost = Self::perform_render(
+            args,
+            RenderGraphExecution {
+                ops,
+                resources,
+                external_resources,
+            },
+        );
         // Log frame statistics
-        Self::log_frame_stats(build_tree_cost, draw_cost, render_cost);
+        let render_breakdown = args.app.last_render_breakdown();
+        Self::log_frame_stats(build_tree_cost, draw_cost, render_cost, render_breakdown);
         #[cfg(feature = "profiling")]
         {
             render_duration_ns = Some(render_cost.as_nanos());

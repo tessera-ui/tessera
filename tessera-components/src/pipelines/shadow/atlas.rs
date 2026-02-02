@@ -4,13 +4,14 @@
 //!
 //! Expand shadow composite commands into atlas-backed mask, blur, and draw ops.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 use smallvec::SmallVec;
 use tessera_ui::{
-    Command, CompositeBatchItem, CompositeCommand, CompositeContext, CompositeOutput,
+    Color, Command, CompositeBatchItem, CompositeCommand, CompositeContext, CompositeOutput,
     CompositePipeline, DrawCommand, Px, PxPosition, PxSize, RenderGraphOp, RenderResource,
-    RenderResourceId, RenderTextureDesc, composite::CompositeReplacement, wgpu,
+    RenderResourceId, RenderTextureDesc, composite::CompositeReplacement,
+    renderer::ExternalTextureHandle, wgpu,
 };
 
 use crate::{
@@ -41,12 +42,16 @@ impl ShadowAtlasCommand {
 impl CompositeCommand for ShadowAtlasCommand {}
 
 /// Composite pipeline that expands shadow atlas commands.
-pub struct ShadowAtlasPipeline;
+pub struct ShadowAtlasPipeline {
+    stamp_cache: HashMap<ShadowStampKey, ShadowStampEntry>,
+}
 
 impl ShadowAtlasPipeline {
     /// Creates a new shadow atlas pipeline instance.
     pub fn new() -> Self {
-        Self
+        Self {
+            stamp_cache: HashMap::new(),
+        }
     }
 }
 
@@ -85,9 +90,7 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
                 })
                 .collect();
 
-            let id = shadows.len();
             shadows.push(ShadowItem {
-                id,
                 op_index: item.op_index,
                 position: item.position,
                 size: item.size,
@@ -111,107 +114,104 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
         if layer_count == 0 || layer_count > 2 {
             return build_fallback_output(&shadows);
         }
-
-        let mask_items = build_mask_items(&shadows);
-        let atlas_layout = match layout_mask_atlas(&mask_items, context.frame_size.width) {
-            Some(layout) => layout,
-            None => return build_fallback_output(&shadows),
-        };
-
         let mut output = CompositeOutput::empty();
-        let mask_atlas_id = add_atlas_resource(&mut output.resources, atlas_layout.size);
-        let mut blur_atlases: Vec<[RenderResourceId; 2]> = Vec::with_capacity(layer_count);
-        for _ in 0..layer_count {
-            let a = add_atlas_resource(&mut output.resources, atlas_layout.size);
-            let b = add_atlas_resource(&mut output.resources, atlas_layout.size);
-            blur_atlases.push([a, b]);
-        }
-
-        let mut blur_ops_by_layer: Vec<Vec<Vec<RenderGraphOp>>> = vec![Vec::new(); layer_count];
-
-        for mask_item in &mask_items {
-            let item = &shadows[mask_item.index];
-            let atlas_pos = atlas_layout
-                .positions
-                .get(&item.id)
-                .copied()
-                .unwrap_or(PxPosition::ZERO);
-
-            let mut mask_command = ShadowMaskCommand::new(item.shape);
-            mask_command.apply_opacity(item.opacity);
-            output.prelude_ops.push(build_op(
-                Command::Draw(Box::new(mask_command)),
-                std::any::TypeId::of::<ShadowMaskCommand>(),
-                None,
-                Some(mask_atlas_id),
-                item.size,
-                atlas_pos + item.pad_pos,
-                item.opacity,
-            ));
-
-            for (layer_index, layer_info) in item.layers.iter().enumerate() {
-                for (stage, radius) in layer_info.radii.iter().copied().enumerate() {
-                    if blur_ops_by_layer[layer_index].len() <= stage {
-                        blur_ops_by_layer[layer_index].push(Vec::new());
-                    }
-                    let blur_command = DualBlurCommand::horizontal_then_vertical(radius);
-                    let read_resource = if stage == 0 {
-                        mask_atlas_id
-                    } else {
-                        blur_atlases[layer_index][(stage - 1) % 2]
-                    };
-                    let write_resource = blur_atlases[layer_index][stage % 2];
-                    blur_ops_by_layer[layer_index][stage].push(build_op(
-                        Command::Compute(Box::new(blur_command)),
-                        std::any::TypeId::of::<DualBlurCommand>(),
-                        Some(read_resource),
-                        Some(write_resource),
-                        item.mask_size,
-                        atlas_pos,
-                        item.opacity,
-                    ));
-                }
-            }
-        }
-
-        for layer_ops in blur_ops_by_layer {
-            for stage_ops in layer_ops {
-                output.prelude_ops.extend(stage_ops);
-            }
-        }
+        let device = context.resources.device;
+        let registry = &context.external_textures;
+        let sample_count = context.sample_count;
+        let frame_index = context.frame_index;
 
         for item in &shadows {
+            let key = build_stamp_key(item, sample_count);
+            let desc = RenderTextureDesc {
+                size: item.mask_size,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+            };
+            let (entry, mut needs_rebuild) = match self.stamp_cache.entry(key) {
+                Entry::Vacant(slot) => {
+                    let stamp = ShadowStampEntry::new(
+                        registry,
+                        device,
+                        desc.clone(),
+                        sample_count,
+                        item.layers.len(),
+                        frame_index,
+                    );
+                    (slot.insert(stamp), true)
+                }
+                Entry::Occupied(entry) => (entry.into_mut(), false),
+            };
+
+            entry.last_used_frame = frame_index;
+            if entry.ensure(registry, device, &desc, sample_count) {
+                needs_rebuild = true;
+            }
+            if entry.last_built_frame == frame_index {
+                needs_rebuild = false;
+            }
+
+            let clear_on_first_use = needs_rebuild;
+            let mut blur_resources: Vec<[RenderResourceId; 2]> =
+                Vec::with_capacity(entry.blur.len());
+            for handles in &mut entry.blur {
+                let a = output.add_external_texture(handles[0].desc(clear_on_first_use));
+                let b = output.add_external_texture(handles[1].desc(clear_on_first_use));
+                blur_resources.push([a, b]);
+            }
+
+            if needs_rebuild {
+                entry.last_built_frame = frame_index;
+                let mask_id = output.add_external_texture(entry.mask.desc(true));
+                let mut mask_command = ShadowMaskCommand::new(item.shape);
+                mask_command.apply_opacity(item.opacity);
+                output.prelude_ops.push(build_op(
+                    Command::Draw(Box::new(mask_command)),
+                    std::any::TypeId::of::<ShadowMaskCommand>(),
+                    None,
+                    Some(mask_id),
+                    item.size,
+                    item.pad_pos,
+                    item.opacity,
+                ));
+
+                for (layer_index, layer_info) in item.layers.iter().enumerate() {
+                    for (stage, radius) in layer_info.radii.iter().copied().enumerate() {
+                        let blur_command = DualBlurCommand::horizontal_then_vertical(radius);
+                        let read_resource = if stage == 0 {
+                            mask_id
+                        } else {
+                            blur_resources[layer_index][(stage - 1) % 2]
+                        };
+                        let write_resource = blur_resources[layer_index][stage % 2];
+                        output.prelude_ops.push(build_op(
+                            Command::Compute(Box::new(blur_command)),
+                            std::any::TypeId::of::<DualBlurCommand>(),
+                            Some(read_resource),
+                            Some(write_resource),
+                            item.mask_size,
+                            PxPosition::ZERO,
+                            item.opacity,
+                        ));
+                    }
+                }
+            }
+
             let mut ops: Vec<RenderGraphOp> = Vec::new();
-            let atlas_pos = atlas_layout
-                .positions
-                .get(&item.id)
-                .copied()
-                .unwrap_or(PxPosition::ZERO);
             for (layer_index, layer_info) in item.layers.iter().enumerate() {
                 if layer_info.radii.is_empty() {
                     continue;
                 }
                 let final_resource =
-                    blur_atlases[layer_index][(layer_info.radii.len().saturating_sub(1)) % 2];
+                    blur_resources[layer_index][(layer_info.radii.len().saturating_sub(1)) % 2];
                 let offset = PxPosition::new(
                     Px::from_f32(layer_info.layer.offset[0]),
                     Px::from_f32(layer_info.layer.offset[1]),
                 );
                 let composite_offset = offset - item.pad_pos;
 
-                let uv_origin = [
-                    atlas_pos.x.to_f32() / atlas_layout.size.width.to_f32(),
-                    atlas_pos.y.to_f32() / atlas_layout.size.height.to_f32(),
-                ];
-                let uv_size = [
-                    item.mask_size.width.to_f32() / atlas_layout.size.width.to_f32(),
-                    item.mask_size.height.to_f32() / atlas_layout.size.height.to_f32(),
-                ];
-
                 let mut composite = ShadowCompositeCommand::new(layer_info.layer.color)
                     .with_ordering(PxPosition::ZERO, item.mask_size);
-                composite.uv_origin = uv_origin;
-                composite.uv_size = uv_size;
+                composite.uv_origin = [0.0, 0.0];
+                composite.uv_size = [1.0, 1.0];
                 composite.apply_opacity(item.opacity);
 
                 ops.push(build_op(
@@ -232,6 +232,13 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
             }
         }
 
+        self.stamp_cache.retain(|_, entry| {
+            frame_index
+                <= entry
+                    .last_used_frame
+                    .saturating_add(SHADOW_STAMP_EVICT_FRAMES)
+        });
+
         output
     }
 }
@@ -243,7 +250,6 @@ struct ShadowLayerInfo {
 }
 
 struct ShadowItem {
-    id: usize,
     op_index: usize,
     position: PxPosition,
     size: PxSize,
@@ -254,42 +260,148 @@ struct ShadowItem {
     layers: Vec<ShadowLayerInfo>,
 }
 
-impl ShadowItem {
-    fn index_key(&self) -> usize {
-        self.id
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct ColorKey {
+    r: u32,
+    g: u32,
+    b: u32,
+    a: u32,
+}
+
+impl ColorKey {
+    fn from_color(color: Color) -> Self {
+        Self {
+            r: color.r.to_bits(),
+            g: color.g.to_bits(),
+            b: color.b.to_bits(),
+            a: color.a.to_bits(),
+        }
     }
 }
 
-#[derive(Clone, Copy)]
-struct MaskAtlasItem {
-    index: usize,
-    size: PxSize,
-    guard: Px,
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum ResolvedShapeKey {
+    Rounded {
+        corner_radii: [u32; 4],
+        corner_g2: [u32; 4],
+    },
+    Ellipse,
 }
 
-struct MaskAtlasLayout {
-    size: PxSize,
-    positions: HashMap<usize, PxPosition>,
+impl ResolvedShapeKey {
+    fn from_shape(shape: ResolvedShape) -> Self {
+        match shape {
+            ResolvedShape::Rounded {
+                corner_radii,
+                corner_g2,
+            } => ResolvedShapeKey::Rounded {
+                corner_radii: corner_radii.map(f32::to_bits),
+                corner_g2: corner_g2.map(f32::to_bits),
+            },
+            ResolvedShape::Ellipse => ResolvedShapeKey::Ellipse,
+        }
+    }
 }
 
-fn build_mask_items(items: &[ShadowItem]) -> Vec<MaskAtlasItem> {
-    let mut mask_items: Vec<MaskAtlasItem> = items
-        .iter()
-        .map(|item| {
-            let draw_size = item.size;
-            let region_size = item.mask_size;
-            let guard_x = ((region_size.width - draw_size.width).max(Px::ZERO)).0 / 2;
-            let guard_y = ((region_size.height - draw_size.height).max(Px::ZERO)).0 / 2;
-            let guard = Px::new(guard_x.max(guard_y));
-            MaskAtlasItem {
-                index: item.index_key(),
-                size: region_size,
-                guard,
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct ShadowLayerKey {
+    color: ColorKey,
+    offset: [u32; 2],
+    smoothness: u32,
+}
+
+impl ShadowLayerKey {
+    fn new(layer: ShadowLayer) -> Self {
+        Self {
+            color: ColorKey::from_color(layer.color),
+            offset: [layer.offset[0].to_bits(), layer.offset[1].to_bits()],
+            smoothness: layer.smoothness.to_bits(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct ShadowStampKey {
+    shape: ResolvedShapeKey,
+    size: PxSize,
+    mask_size: PxSize,
+    pad_pos: PxPosition,
+    opacity: u32,
+    layers: Vec<ShadowLayerKey>,
+    sample_count: u32,
+}
+
+fn build_stamp_key(item: &ShadowItem, sample_count: u32) -> ShadowStampKey {
+    ShadowStampKey {
+        shape: ResolvedShapeKey::from_shape(item.shape),
+        size: item.size,
+        mask_size: item.mask_size,
+        pad_pos: item.pad_pos,
+        opacity: item.opacity.to_bits(),
+        layers: item
+            .layers
+            .iter()
+            .map(|layer| ShadowLayerKey::new(layer.layer))
+            .collect(),
+        sample_count,
+    }
+}
+
+struct ShadowStampEntry {
+    mask: ExternalTextureHandle,
+    blur: Vec<[ExternalTextureHandle; 2]>,
+    last_used_frame: u64,
+    last_built_frame: u64,
+}
+
+impl ShadowStampEntry {
+    fn new(
+        registry: &tessera_ui::renderer::ExternalTextureRegistry,
+        device: &wgpu::Device,
+        desc: RenderTextureDesc,
+        sample_count: u32,
+        layer_count: usize,
+        frame_index: u64,
+    ) -> Self {
+        let mask = registry.allocate(device, desc.clone(), sample_count);
+        let mut blur = Vec::with_capacity(layer_count);
+        for _ in 0..layer_count {
+            let a = registry.allocate(device, desc.clone(), sample_count);
+            let b = registry.allocate(device, desc.clone(), sample_count);
+            blur.push([a, b]);
+        }
+        Self {
+            mask,
+            blur,
+            last_used_frame: frame_index,
+            last_built_frame: frame_index.wrapping_sub(1),
+        }
+    }
+
+    fn ensure(
+        &mut self,
+        registry: &tessera_ui::renderer::ExternalTextureRegistry,
+        device: &wgpu::Device,
+        desc: &RenderTextureDesc,
+        sample_count: u32,
+    ) -> bool {
+        let mut changed = false;
+        if external_desc_changed(&self.mask, desc, sample_count) {
+            changed = true;
+        }
+        self.mask
+            .ensure(registry, device, desc.clone(), sample_count);
+        for handles in &mut self.blur {
+            if external_desc_changed(&handles[0], desc, sample_count)
+                || external_desc_changed(&handles[1], desc, sample_count)
+            {
+                changed = true;
             }
-        })
-        .collect();
-    mask_items.sort_by_key(|item| (-(item.size.height.0), -(item.size.width.0)));
-    mask_items
+            handles[0].ensure(registry, device, desc.clone(), sample_count);
+            handles[1].ensure(registry, device, desc.clone(), sample_count);
+        }
+        changed
+    }
 }
 
 fn filter_active_layers(shadow: ShadowLayers) -> Vec<ShadowLayer> {
@@ -311,6 +423,7 @@ fn filter_active_layers(shadow: ShadowLayers) -> Vec<ShadowLayer> {
 
 const SHADOW_AA_MARGIN_PX: f32 = 1.0;
 const SHADOW_MAX_SINGLE_BLUR_RADIUS: f32 = 30.0;
+const SHADOW_STAMP_EVICT_FRAMES: u64 = 120;
 
 fn blur_pass_radii(radius: f32) -> SmallVec<[f32; 4]> {
     if radius <= 0.0 {
@@ -353,46 +466,6 @@ fn shadow_padding_xy(layers: &[ShadowLayer]) -> (Px, Px) {
         Px::new(pad_x.ceil() as i32).max(Px::ZERO),
         Px::new(pad_y.ceil() as i32).max(Px::ZERO),
     )
-}
-
-fn layout_mask_atlas(items: &[MaskAtlasItem], max_width: Px) -> Option<MaskAtlasLayout> {
-    if max_width.0 <= 0 {
-        return None;
-    }
-    let mut positions: HashMap<usize, PxPosition> = HashMap::new();
-    let mut x = Px::ZERO;
-    let mut y = Px::ZERO;
-    let mut row_height = Px::ZERO;
-    let mut atlas_width = Px::ZERO;
-    let mut atlas_height = Px::ZERO;
-
-    for item in items {
-        let guard = item.guard.max(Px::ZERO);
-        let slot_width = item.size.width + guard + guard;
-        let slot_height = item.size.height + guard + guard;
-        if x > Px::ZERO && x + slot_width > max_width {
-            y += row_height;
-            x = Px::ZERO;
-            row_height = Px::ZERO;
-        }
-
-        let inner_pos = PxPosition::new(x + guard, y + guard);
-        positions.insert(item.index, inner_pos);
-
-        x += slot_width;
-        row_height = row_height.max(slot_height);
-        atlas_width = atlas_width.max(x);
-        atlas_height = atlas_height.max(y + row_height);
-    }
-
-    if atlas_width.0 <= 0 || atlas_height.0 <= 0 {
-        return None;
-    }
-
-    Some(MaskAtlasLayout {
-        size: PxSize::new(atlas_width, atlas_height),
-        positions,
-    })
 }
 
 fn add_atlas_resource(resources: &mut Vec<RenderResource>, size: PxSize) -> RenderResourceId {
@@ -499,4 +572,15 @@ fn build_fallback_output(items: &[ShadowItem]) -> CompositeOutput {
     }
 
     output
+}
+
+fn external_desc_changed(
+    handle: &ExternalTextureHandle,
+    desc: &RenderTextureDesc,
+    sample_count: u32,
+) -> bool {
+    let current = handle.desc(false);
+    current.size != desc.size
+        || current.format != desc.format
+        || current.sample_count != sample_count
 }

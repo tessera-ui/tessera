@@ -9,16 +9,20 @@ use std::{any::TypeId, collections::HashMap};
 use crate::{
     Command, CompositeCommand, PxPosition, PxSize,
     render_graph::{
-        RenderGraph, RenderGraphOp, RenderGraphParts, RenderResource, RenderResourceId,
+        ExternalTextureDesc, RenderGraph, RenderGraphOp, RenderGraphParts, RenderResource,
+        RenderResourceId,
     },
 };
 
 use super::core::RenderResources;
+use super::external::ExternalTextureRegistry;
 
 /// Context provided to composite pipelines during expansion.
 pub struct CompositeContext<'a> {
     /// Shared GPU resources for pipeline usage.
     pub resources: RenderResources<'a>,
+    /// Registry for external persistent textures.
+    pub external_textures: ExternalTextureRegistry,
     /// Pixel size of the current frame.
     pub frame_size: PxSize,
     /// Surface format for the current frame.
@@ -73,6 +77,8 @@ pub struct CompositeReplacement {
 pub struct CompositeOutput {
     /// Local resources referenced by prelude and replacement ops.
     pub resources: Vec<RenderResource>,
+    /// External resources referenced by prelude and replacement ops.
+    pub external_resources: Vec<ExternalTextureDesc>,
     /// Prelude ops emitted before scene ops.
     pub prelude_ops: Vec<RenderGraphOp>,
     /// Replacement ops for composite commands.
@@ -84,9 +90,17 @@ impl CompositeOutput {
     pub fn empty() -> Self {
         Self {
             resources: Vec::new(),
+            external_resources: Vec::new(),
             prelude_ops: Vec::new(),
             replacements: Vec::new(),
         }
+    }
+
+    /// Adds an external texture reference and returns its resource id.
+    pub fn add_external_texture(&mut self, desc: ExternalTextureDesc) -> RenderResourceId {
+        let index = self.external_resources.len() as u32;
+        self.external_resources.push(desc);
+        RenderResourceId::External(index)
     }
 }
 
@@ -196,7 +210,11 @@ pub(crate) fn expand_composites(
     context: CompositeContext<'_>,
     registry: &mut CompositePipelineRegistry,
 ) -> RenderGraph {
-    let RenderGraphParts { ops, resources } = scene.into_parts();
+    let RenderGraphParts {
+        ops,
+        resources,
+        external_resources,
+    } = scene.into_parts();
 
     let mut type_order: Vec<TypeId> = Vec::new();
     let mut batches: HashMap<TypeId, Vec<ErasedCompositeBatchItem<'_>>> = HashMap::new();
@@ -220,10 +238,15 @@ pub(crate) fn expand_composites(
     }
 
     if type_order.is_empty() {
-        return RenderGraph::from_parts(RenderGraphParts { ops, resources });
+        return RenderGraph::from_parts(RenderGraphParts {
+            ops,
+            resources,
+            external_resources,
+        });
     }
 
     let mut new_resources = resources;
+    let mut new_external_resources = external_resources;
     let mut prelude_ops: Vec<RenderGraphOp> = Vec::new();
     let mut replacements: HashMap<usize, Vec<Vec<RenderGraphOp>>> = HashMap::new();
 
@@ -234,11 +257,13 @@ pub(crate) fn expand_composites(
         let output = registry.compile_erased(&context, items);
 
         let resource_map = map_resources(&mut new_resources, &output.resources);
+        let external_map =
+            map_external_resources(&mut new_external_resources, &output.external_resources);
 
         let prelude_base = prelude_ops.len();
         let mut mapped_prelude = output.prelude_ops;
         for op in &mut mapped_prelude {
-            remap_resources(op, &resource_map);
+            remap_resources(op, &resource_map, &external_map);
             remap_deps(op, prelude_base);
         }
         prelude_ops.extend(mapped_prelude);
@@ -246,7 +271,7 @@ pub(crate) fn expand_composites(
         for replacement in output.replacements {
             let mut mapped_ops = replacement.ops;
             for op in &mut mapped_ops {
-                remap_resources(op, &resource_map);
+                remap_resources(op, &resource_map, &external_map);
             }
             replacements
                 .entry(replacement.target_op)
@@ -294,6 +319,7 @@ pub(crate) fn expand_composites(
     RenderGraph::from_parts(RenderGraphParts {
         ops: new_ops,
         resources: new_resources,
+        external_resources: new_external_resources,
     })
 }
 
@@ -310,17 +336,53 @@ fn map_resources(
     map
 }
 
-fn remap_resources(op: &mut RenderGraphOp, map: &[RenderResourceId]) {
-    op.read = op.read.map(|resource| map_resource(resource, map));
-    op.write = op.write.map(|resource| map_resource(resource, map));
+fn map_external_resources(
+    resources: &mut Vec<ExternalTextureDesc>,
+    externals: &[ExternalTextureDesc],
+) -> Vec<RenderResourceId> {
+    let mut map = Vec::with_capacity(externals.len());
+    for resource in externals {
+        if let Some(index) = resources
+            .iter()
+            .position(|existing| existing.handle_id == resource.handle_id)
+        {
+            map.push(RenderResourceId::External(index as u32));
+            continue;
+        }
+        let index = resources.len() as u32;
+        resources.push(resource.clone());
+        map.push(RenderResourceId::External(index));
+    }
+    map
 }
 
-fn map_resource(resource: RenderResourceId, map: &[RenderResourceId]) -> RenderResourceId {
+fn remap_resources(
+    op: &mut RenderGraphOp,
+    local_map: &[RenderResourceId],
+    external_map: &[RenderResourceId],
+) {
+    op.read = op
+        .read
+        .map(|resource| map_resource(resource, local_map, external_map));
+    op.write = op
+        .write
+        .map(|resource| map_resource(resource, local_map, external_map));
+}
+
+fn map_resource(
+    resource: RenderResourceId,
+    local_map: &[RenderResourceId],
+    external_map: &[RenderResourceId],
+) -> RenderResourceId {
     match resource {
-        RenderResourceId::Local(index) => map
+        RenderResourceId::Local(index) => local_map
             .get(index as usize)
             .copied()
             .unwrap_or(RenderResourceId::Local(index)),
+        RenderResourceId::External(index) => external_map
+            .get(index as usize)
+            .copied()
+            .unwrap_or(RenderResourceId::External(index)),
         other => other,
     }
 }

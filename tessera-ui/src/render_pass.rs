@@ -4,7 +4,7 @@ use smallvec::SmallVec;
 
 use crate::{
     Command, ComputeCommand, DrawCommand, DrawRegion, Px, PxPosition, PxRect, PxSize, SampleRegion,
-    render_graph::{RenderGraphOp, RenderResource, RenderResourceId},
+    render_graph::{ExternalTextureDesc, RenderGraphOp, RenderResource, RenderResourceId},
 };
 
 /// A pass planning result for the current frame.
@@ -17,6 +17,7 @@ impl RenderPassGraph {
     pub(crate) fn build(
         ops: Vec<RenderGraphOp>,
         resources: &[RenderResource],
+        external_resources: &[ExternalTextureDesc],
         texture_size: wgpu::Extent3d,
     ) -> Self {
         let mut passes = Vec::new();
@@ -45,9 +46,16 @@ impl RenderPassGraph {
                             .is_some()
                             .then_some(RenderResourceId::SceneColor)
                     });
-                    let target_extent = resource_extent(write_resource, resources, texture_size);
+                    let target_extent = resource_extent(
+                        write_resource,
+                        resources,
+                        external_resources,
+                        texture_size,
+                    );
                     let read_extent = read_resource
-                        .map(|resource| resource_extent(resource, resources, texture_size))
+                        .map(|resource| {
+                            resource_extent(resource, resources, external_resources, texture_size)
+                        })
                         .unwrap_or(target_extent);
                     let needs_flush = draw_builder.ensure_resources(read_resource, write_resource);
                     if needs_flush {
@@ -90,8 +98,14 @@ impl RenderPassGraph {
                     flush_draw_pass(&mut passes, &mut draw_builder);
 
                     let read_resource = read_resource.unwrap_or(RenderResourceId::SceneColor);
-                    let read_extent = resource_extent(read_resource, resources, texture_size);
-                    let write_extent = resource_extent(write_resource, resources, texture_size);
+                    let read_extent =
+                        resource_extent(read_resource, resources, external_resources, texture_size);
+                    let write_extent = resource_extent(
+                        write_resource,
+                        resources,
+                        external_resources,
+                        texture_size,
+                    );
                     let needs_flush =
                         compute_builder.ensure_resources(read_resource, write_resource);
                     if needs_flush {
@@ -509,12 +523,17 @@ fn flush_compute_pass(passes: &mut Vec<RenderPassPlan>, builder: &mut ComputePas
 fn resource_extent(
     id: RenderResourceId,
     resources: &[RenderResource],
+    external_resources: &[ExternalTextureDesc],
     surface_size: wgpu::Extent3d,
 ) -> wgpu::Extent3d {
     match id {
         RenderResourceId::SceneColor | RenderResourceId::SceneDepth => surface_size,
         RenderResourceId::Local(index) => match resources.get(index as usize) {
             Some(RenderResource::Texture(desc)) => extent_from_px(desc.size),
+            None => surface_size,
+        },
+        RenderResourceId::External(index) => match external_resources.get(index as usize) {
+            Some(desc) => extent_from_px(desc.size),
             None => surface_size,
         },
     }

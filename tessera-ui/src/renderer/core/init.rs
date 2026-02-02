@@ -10,7 +10,9 @@ use crate::{
     compute::resource::ComputeResourceManager,
     dp::SCALE_FACTOR,
     pipeline_cache::initialize_cache,
-    renderer::{compute::ComputePipelineRegistry, drawer::Drawer},
+    renderer::{
+        compute::ComputePipelineRegistry, drawer::Drawer, external::ExternalTextureRegistry,
+    },
 };
 
 use super::{BlitState, ComputeState, FrameTargets, LocalTexturePool, RenderCore, RenderPipelines};
@@ -285,7 +287,9 @@ impl RenderCore {
             compute,
             blit,
             local_textures: LocalTexturePool::new(),
+            external_textures: ExternalTextureRegistry::new(),
             frame_index: 0,
+            last_render_breakdown: None,
         }
     }
 

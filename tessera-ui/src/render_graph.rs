@@ -27,6 +27,8 @@ pub enum RenderResourceId {
     SceneDepth,
     /// A local texture allocated by a fragment.
     Local(u32),
+    /// A persistent texture owned by a pipeline.
+    External(u32),
 }
 
 /// Descriptor for a local render texture.
@@ -43,6 +45,21 @@ pub struct RenderTextureDesc {
 pub enum RenderResource {
     /// A texture resource allocated for a fragment.
     Texture(RenderTextureDesc),
+}
+
+/// Descriptor for a persistent external texture.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalTextureDesc {
+    /// Registry handle identifier for the texture.
+    pub handle_id: u32,
+    /// Pixel size of the texture.
+    pub size: PxSize,
+    /// Texture format.
+    pub format: wgpu::TextureFormat,
+    /// MSAA sample count for render targets.
+    pub sample_count: u32,
+    /// Whether to clear the texture on the first render pass write.
+    pub clear_on_first_use: bool,
 }
 
 /// A single render op inside a fragment graph.
@@ -188,6 +205,7 @@ pub struct RenderGraphOp {
 pub struct RenderGraph {
     ops: Vec<RenderGraphOp>,
     resources: Vec<RenderResource>,
+    external_resources: Vec<ExternalTextureDesc>,
 }
 
 /// Owned render graph payload for graph transforms.
@@ -196,6 +214,8 @@ pub struct RenderGraphParts {
     pub ops: Vec<RenderGraphOp>,
     /// Resource declarations referenced by the ops.
     pub resources: Vec<RenderResource>,
+    /// External resources referenced by the ops.
+    pub external_resources: Vec<ExternalTextureDesc>,
 }
 
 impl RenderGraph {
@@ -211,12 +231,19 @@ impl RenderGraph {
         &self.resources
     }
 
+    /// Returns external resources in the graph.
+    #[must_use]
+    pub fn external_resources(&self) -> &[ExternalTextureDesc] {
+        &self.external_resources
+    }
+
     /// Decomposes the graph into owned parts for graph processing.
     #[must_use]
     pub fn into_parts(self) -> RenderGraphParts {
         RenderGraphParts {
             ops: self.ops,
             resources: self.resources,
+            external_resources: self.external_resources,
         }
     }
 
@@ -226,6 +253,7 @@ impl RenderGraph {
         Self {
             ops: parts.ops,
             resources: parts.resources,
+            external_resources: parts.external_resources,
         }
     }
 
@@ -234,6 +262,7 @@ impl RenderGraph {
         RenderGraphExecution {
             ops: order_ops(self.ops),
             resources: self.resources,
+            external_resources: self.external_resources,
         }
     }
 }
@@ -242,12 +271,14 @@ impl RenderGraph {
 pub(crate) struct RenderGraphExecution {
     pub(crate) ops: Vec<RenderGraphOp>,
     pub(crate) resources: Vec<RenderResource>,
+    pub(crate) external_resources: Vec<ExternalTextureDesc>,
 }
 
 /// Builder for a frame-level render graph.
 pub(crate) struct RenderGraphBuilder {
     ops: Vec<RenderGraphOp>,
     resources: Vec<RenderResource>,
+    external_resources: Vec<ExternalTextureDesc>,
     sequence_index: usize,
 }
 
@@ -257,6 +288,7 @@ impl RenderGraphBuilder {
         Self {
             ops: Vec::new(),
             resources: Vec::new(),
+            external_resources: Vec::new(),
             sequence_index: 0,
         }
     }
@@ -357,6 +389,7 @@ impl RenderGraphBuilder {
         RenderGraph {
             ops: self.ops,
             resources: self.resources,
+            external_resources: self.external_resources,
         }
     }
 }
@@ -367,6 +400,7 @@ fn map_resource(resource: RenderResourceId, local_map: &[RenderResourceId]) -> R
             .get(index as usize)
             .copied()
             .unwrap_or(RenderResourceId::Local(index)),
+        RenderResourceId::External(index) => RenderResourceId::External(index),
         other => other,
     }
 }

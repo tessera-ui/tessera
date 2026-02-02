@@ -374,8 +374,8 @@ pub use crate::{
     },
     px::{Px, PxPosition, PxRect, PxSize},
     render_graph::{
-        RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp, RenderGraphParts,
-        RenderResource, RenderResourceId, RenderTextureDesc,
+        ExternalTextureDesc, RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp,
+        RenderGraphParts, RenderResource, RenderResourceId, RenderTextureDesc,
     },
     render_module::RenderModule,
     render_scene::{Command, CompositeCommand, DrawRegion, PaddingRect, SampleRegion},
@@ -390,6 +390,7 @@ pub use crate::{
             ComputeResourceManager, ComputeResourceRef,
         },
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
+        external::{ExternalTextureHandle, ExternalTextureRegistry},
     },
     runtime::{State, key, remember, remember_with_key, retain, retain_with_key},
 };
