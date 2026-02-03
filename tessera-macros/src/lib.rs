@@ -304,6 +304,43 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+/// Generates platform-specific entry points from a shared `run` function.
+///
+/// # Usage
+///
+/// Annotate a public zero-argument function that returns [`EntryPoint`].
+#[proc_macro_attribute]
+pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let crate_path: syn::Path = parse_crate_path(attr);
+    let mut input_fn = parse_macro_input!(item as ItemFn);
+
+    if !input_fn.sig.inputs.is_empty() {
+        return syn::Error::new_spanned(
+            &input_fn.sig.inputs,
+            "entry functions must not accept arguments",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    input_fn.attrs.retain(|attr| !attr.path().is_ident("entry"));
+    let fn_name = &input_fn.sig.ident;
+
+    let expanded = quote! {
+        #input_fn
+
+        #[cfg(target_os = "android")]
+        #[unsafe(no_mangle)]
+        fn android_main(android_app: #crate_path::winit::platform::android::activity::AndroidApp) {
+            if let Err(err) = #fn_name().run_android(android_app) {
+                eprintln!("App failed to run: {err}");
+            }
+        }
+    };
+
+    expanded.into()
+}
+
 /// Transforms a function into a *shard component* that can be navigated to via
 /// the routing system and (optionally) provided with a lazily‑initialized
 /// per‑shard state.

@@ -121,7 +121,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 ## ⚙️ Special Notes
 
-- **example crate**: `example/Cargo.toml` is intentionally configured with both `[lib]` and `[[bin]]` pointing to `src/lib.rs` for compatibility with both testing and running. The resulting compiler warning is expected—do not remove the `[[bin]]` section.
+- **example crate**: `example/Cargo.toml` uses `[lib]` pointing to `src/lib.rs` for shared entry logic (including Android) with the name `{package}_lib`, and `[[bin]]` pointing to `src/main.rs` for desktop. `src/lib.rs` must expose `#[tessera_ui::entry] pub fn run() -> EntryPoint`, and `src/main.rs` should only call `{package}_lib::run().run_desktop()` to keep a single startup path and avoid PDB output name collisions.
 
 ---
 

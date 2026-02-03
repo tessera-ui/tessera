@@ -14,24 +14,22 @@ Add the plugin to your Tessera app:
 Register it in your entrypoint (recommended):
 
 ```rust
-tessera_ui::entry! {
-    // ...
-    packages = [
-        {{project_name_snake}}::HelloPackage::default(),
-    ],
-    // ...
+use tessera_ui::EntryPoint;
+
+#[tessera_ui::entry]
+pub fn run() -> EntryPoint {
+    EntryPoint::new(app).package({{project_name_snake}}::HelloPackage::default())
 }
 ```
 
 You can also register the plugin directly:
 
 ```rust
-tessera_ui::entry! {
-    // ...
-    plugins = [
-        {{project_name_snake}}::HelloPlugin::default(),
-    ],
-    // ...
+use tessera_ui::EntryPoint;
+
+#[tessera_ui::entry]
+pub fn run() -> EntryPoint {
+    EntryPoint::new(app).plugin({{project_name_snake}}::HelloPlugin::default())
 }
 ```
 

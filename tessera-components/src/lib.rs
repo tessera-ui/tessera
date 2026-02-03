@@ -14,10 +14,16 @@
 //!     });
 //! }
 //!
-//! tessera_ui::entry!(
-//!     app,
-//!     packages = [tessera_components::ComponentsPackage::default()],
-//! );
+//! use tessera_ui::EntryPoint;
+//!
+//! #[tessera_ui::entry]
+//! pub fn run() -> EntryPoint {
+//!     EntryPoint::new(app).package(tessera_components::ComponentsPackage)
+//! }
+//!
+//! fn main() {
+//!     let _ = run().run_desktop();
+//! }
 //! ```
 //!
 //! Then you can use the components in your UI.

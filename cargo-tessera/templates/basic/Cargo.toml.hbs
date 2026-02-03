@@ -5,12 +5,12 @@ edition = "2024"
 
 [lib]
 crate-type = ["rlib", "cdylib"]
-name = "{{project_name_snake}}"
+name = "{{project_name_snake}}_lib"
 path = "src/lib.rs"
 
 [[bin]]
 name = "{{project_name_snake}}"
-path = "src/lib.rs"
+path = "src/main.rs"
 
 [dependencies]
 tessera-ui = "3"

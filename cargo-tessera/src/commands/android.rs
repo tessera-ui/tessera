@@ -179,9 +179,12 @@ package.metadata.tessera.android.package in Cargo.toml"
             .package
             .clone()
             .unwrap_or_else(|| default_identifier(&package_name));
+        let lib_name = manifest
+            .lib_name()
+            .unwrap_or_else(|| package_name.replace('-', "_"));
         let raw_app = RawAppConfig {
             name: package_name.clone(),
-            lib_name: Some(package_name.replace('-', "_")),
+            lib_name: Some(lib_name),
             stylized_name: None,
             identifier: sanitize_identifier(&identifier),
             asset_dir: None,
@@ -1042,6 +1045,7 @@ fn copy_dir_all(source: &Path, target: &Path) -> Result<()> {
 #[derive(Debug, Deserialize)]
 struct Manifest {
     package: Option<PackageSection>,
+    lib: Option<LibSection>,
 }
 
 impl Manifest {
@@ -1061,6 +1065,10 @@ impl Manifest {
         self.package.as_ref().and_then(|p| p.name.clone())
     }
 
+    fn lib_name(&self) -> Option<String> {
+        self.lib.as_ref().and_then(|l| l.name.clone())
+    }
+
     fn android(&self) -> Option<AndroidManifestConfig> {
         self.package
             .as_ref()
@@ -1074,6 +1082,11 @@ impl Manifest {
 struct PackageSection {
     name: Option<String>,
     metadata: Option<MetadataSection>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LibSection {
+    name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
