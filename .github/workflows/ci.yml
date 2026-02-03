@@ -62,4 +62,4 @@ jobs:
           cargo +stable ndk -t arm64-v8a check -p tessera-components --verbose
           cargo +stable ndk -t arm64-v8a check -p tessera-macros --verbose
           cargo +stable ndk -t arm64-v8a check -p tessera-shard --verbose
-          cargo +stable ndk -t arm64-v8a check -p example --verbose
+          cargo tessera android build --format apk -p example

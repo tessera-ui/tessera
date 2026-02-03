@@ -244,13 +244,31 @@ impl<'a> Target<'a> {
         // Force color, since gradle would otherwise give us uncolored output
         // (which Android Studio makes red, which is extra gross!)
         let color = if force_color { "always" } else { "auto" };
+        let mut cargo_args = metadata
+            .cargo_args()
+            .map(|args| args.to_vec())
+            .unwrap_or_default();
+        let has_explicit_target = cargo_args.iter().any(|arg| {
+            matches!(
+                arg.as_str(),
+                "--lib" | "--bin" | "--bins" | "--example" | "--examples"
+            )
+        });
+        if !has_explicit_target {
+            cargo_args.push("--lib".to_string());
+        }
+        let cargo_args = if cargo_args.is_empty() {
+            None
+        } else {
+            Some(cargo_args)
+        };
         let mut cmd = CargoCommand::new(mode.as_str())
             .with_verbose(noise_level.pedantic())
             .with_package(Some(config.app().name()))
             .with_manifest_path(Some(config.app().manifest_path()))
             .with_target(Some(self.triple))
             .with_no_default_features(metadata.no_default_features())
-            .with_args(metadata.cargo_args())
+            .with_args(cargo_args.as_deref())
             .with_features(metadata.features())
             .with_release(profile.release())
             .build(env)

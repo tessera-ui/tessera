@@ -67,6 +67,7 @@ impl EntryPoint {
     }
 
     /// Runs the entry point on desktop platforms.
+    #[cfg(not(target_os = "android"))]
     pub fn run_desktop(self) -> Result<(), winit::error::EventLoopError> {
         init_tracing();
         init_deadlock_detection();
