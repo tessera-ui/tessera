@@ -311,6 +311,7 @@ impl CursorState {
     /// * `position` - Initial position of the touch in pixel coordinates
     pub fn handle_touch_start(&mut self, touch_id: u64, position: PxPosition) {
         self.active_inertia = None; // Stop any existing inertia on new touch
+        self.clear_position_on_next_frame = false;
         let now = Instant::now();
 
         self.touch_points.insert(
@@ -459,7 +460,7 @@ impl CursorState {
         };
         self.push_event(release_event);
 
-        if self.touch_points.is_empty() && self.active_inertia.is_none() {
+        if self.touch_points.is_empty() {
             self.clear_position_on_next_frame = true;
         }
     }
