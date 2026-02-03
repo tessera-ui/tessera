@@ -60,7 +60,6 @@ struct RenderPassParams<'a, 'b> {
 
 struct RenderPassExecParams<'a, 'b> {
     encoder: &'a mut wgpu::CommandEncoder,
-    swapchain_view: &'a mut wgpu::TextureView,
     scene_texture_view: &'a mut wgpu::TextureView,
     scene_source: &'a mut SceneSource,
     resources: &'a mut FrameResources<'b>,
@@ -329,7 +328,6 @@ impl ComputeTargets for ExternalComputeTargets<'_> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SceneSource {
-    Swapchain,
     Offscreen,
     Compute,
 }
@@ -432,7 +430,7 @@ impl RenderCore {
             .begin_all_frames(device, queue, config);
 
         let mut scene_texture_view = targets.offscreen.clone();
-        let mut scene_source = SceneSource::Swapchain;
+        let mut scene_source = SceneSource::Offscreen;
         let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
         let mut frame_resources = FrameResources::new(FrameResourcesParams {
             pool: local_textures,
@@ -445,7 +443,7 @@ impl RenderCore {
             external: self.external_textures.clone(),
         });
 
-        let mut output_view = output_frame
+        let output_view = output_frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -466,7 +464,6 @@ impl RenderCore {
                 &mut frame_state,
                 RenderPassExecParams {
                     encoder: &mut encoder,
-                    swapchain_view: &mut output_view,
                     scene_texture_view: &mut scene_texture_view,
                     scene_source: &mut scene_source,
                     resources: &mut frame_resources,
@@ -478,22 +475,17 @@ impl RenderCore {
             frame_resources.release_for_pass(pass_index);
         }
 
-        if !matches!(scene_source, SceneSource::Swapchain) {
-            RenderCore::blit_to_view(BlitParams {
-                encoder: &mut encoder,
-                device,
-                source: &scene_texture_view,
-                target: &output_view,
-                bind_group_layout: &blit.bind_group_layout,
-                sampler: &blit.sampler,
-                pipeline: &blit.pipeline,
-                target_size: PxSize::new(
-                    Px(self.config.width as i32),
-                    Px(self.config.height as i32),
-                ),
-                scissor_rect: None,
-            });
-        }
+        RenderCore::blit_to_view(BlitParams {
+            encoder: &mut encoder,
+            device,
+            source: &scene_texture_view,
+            target: &output_view,
+            bind_group_layout: &blit.bind_group_layout,
+            sampler: &blit.sampler,
+            pipeline: &blit.pipeline,
+            target_size: PxSize::new(Px(self.config.width as i32), Px(self.config.height as i32)),
+            scissor_rect: None,
+        });
 
         // Frame-level end for all pipelines
         frame_state
@@ -530,7 +522,6 @@ impl RenderCore {
     ) {
         let RenderPassExecParams {
             encoder,
-            swapchain_view,
             scene_texture_view,
             scene_source,
             resources,
@@ -551,34 +542,6 @@ impl RenderCore {
 
                 let read_resource = pass.read_resource.unwrap_or(RenderResourceId::SceneColor);
                 let write_resource = pass.write_resource;
-
-                if read_resource == RenderResourceId::SceneColor {
-                    let full_rect = PxRect {
-                        x: Px(0),
-                        y: Px(0),
-                        width: Px(state.config.width as i32),
-                        height: Px(state.config.height as i32),
-                    };
-                    let copy_rect = pass.copy_rect.unwrap_or(full_rect);
-                    if matches!(*scene_source, SceneSource::Swapchain) {
-                        Self::blit_to_view(BlitParams {
-                            encoder,
-                            device: state.device,
-                            source: swapchain_view,
-                            target: &state.targets.offscreen,
-                            bind_group_layout: &state.blit.bind_group_layout,
-                            sampler: &state.blit.sampler,
-                            pipeline: &state.blit.pipeline,
-                            target_size: PxSize::new(
-                                Px(state.config.width as i32),
-                                Px(state.config.height as i32),
-                            ),
-                            scissor_rect: Some(copy_rect),
-                        });
-                        *scene_texture_view = state.targets.offscreen.clone();
-                        *scene_source = SceneSource::Offscreen;
-                    }
-                }
 
                 let input_view = match read_resource {
                     RenderResourceId::SceneColor => Some(scene_texture_view.clone()),
@@ -718,37 +681,9 @@ impl RenderCore {
 
                 let write_resource = pass.write_resource;
                 let reads_scene = pass.read_resource == Some(RenderResourceId::SceneColor);
-                if reads_scene {
-                    let full_rect = PxRect {
-                        x: Px(0),
-                        y: Px(0),
-                        width: Px(state.config.width as i32),
-                        height: Px(state.config.height as i32),
-                    };
-                    let copy_rect = pass.copy_rect.unwrap_or(full_rect);
-                    if matches!(*scene_source, SceneSource::Swapchain) {
-                        Self::blit_to_view(BlitParams {
-                            encoder,
-                            device: state.device,
-                            source: swapchain_view,
-                            target: &state.targets.offscreen,
-                            bind_group_layout: &state.blit.bind_group_layout,
-                            sampler: &state.blit.sampler,
-                            pipeline: &state.blit.pipeline,
-                            target_size: PxSize::new(
-                                Px(state.config.width as i32),
-                                Px(state.config.height as i32),
-                            ),
-                            scissor_rect: Some(copy_rect),
-                        });
-                        *scene_texture_view = state.targets.offscreen.clone();
-                        *scene_source = SceneSource::Offscreen;
-                    }
-                }
-
                 let (write_target, msaa_view, target_size) = match write_resource {
                     RenderResourceId::SceneColor => (
-                        swapchain_view.clone(),
+                        state.targets.offscreen.clone(),
                         state.targets.msaa_view.clone(),
                         PxSize::new(
                             Px(state.config.width as i32),
@@ -787,7 +722,7 @@ impl RenderCore {
                     msaa_view,
                     clear_target,
                     encoder,
-                    write_target,
+                    write_target: write_target.clone(),
                     commands_in_pass: &mut pass.draws,
                     scene_texture_view: scene_view,
                     drawer: &mut state.pipelines.drawer,
@@ -801,7 +736,8 @@ impl RenderCore {
                 });
 
                 if write_resource == RenderResourceId::SceneColor {
-                    *scene_source = SceneSource::Swapchain;
+                    *scene_texture_view = write_target.clone();
+                    *scene_source = SceneSource::Offscreen;
                 }
             }
         }

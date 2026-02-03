@@ -97,14 +97,7 @@ impl RenderCore {
     pub(crate) async fn new(window: Arc<Window>, sample_count: u32) -> Self {
         // Looking for adapters
         let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            /* Currently the renderer's design only supports VULKAN.
-             * Given VULKAN's broad compatibility, this does not affect cross-platform support
-             * for now.
-             *
-             * TODO: Refactor the renderer to support additional backends.
-             */
-            backends: wgpu::Backends::VULKAN,
-            // backends: wgpu::Backends::all(),
+            backends: wgpu::Backends::all(),
             ..Default::default()
         });
         // Create a surface
@@ -132,7 +125,7 @@ impl RenderCore {
         };
         info!("Using present mode: {present_mode:?}");
         let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: caps.formats[0],
             width: size.width,
             height: size.height,
