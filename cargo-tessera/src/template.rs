@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result, anyhow};
 use handlebars::Handlebars;
@@ -142,6 +138,8 @@ pub fn write_template_file(
 
 #[cfg(windows)]
 fn mark_gradlew_executable_with_git(out_path: &Path) {
+    use std::{path::PathBuf, process::Command};
+
     let parent = out_path.parent().unwrap_or_else(|| Path::new("."));
     let Ok(output) = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
