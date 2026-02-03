@@ -1,4 +1,8 @@
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use anyhow::{Context, Result, anyhow};
 use handlebars::Handlebars;
@@ -73,6 +77,11 @@ pub fn write_template_dir_at(
                     perms.set_mode(0o755);
                     fs::set_permissions(&out_path, perms)?;
                 }
+
+                #[cfg(windows)]
+                if out_path.file_name().is_some_and(|f| f == "gradlew") {
+                    mark_gradlew_executable_with_git(&out_path);
+                }
             }
         }
     }
@@ -123,5 +132,39 @@ pub fn write_template_file(
         fs::set_permissions(&out_path, perms)?;
     }
 
+    #[cfg(windows)]
+    if out_path.file_name().is_some_and(|f| f == "gradlew") {
+        mark_gradlew_executable_with_git(&out_path);
+    }
+
     Ok(())
+}
+
+#[cfg(windows)]
+fn mark_gradlew_executable_with_git(out_path: &Path) {
+    let parent = out_path.parent().unwrap_or_else(|| Path::new("."));
+    let Ok(output) = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(parent)
+        .output()
+    else {
+        return;
+    };
+    if !output.status.success() {
+        return;
+    }
+    let root = String::from_utf8_lossy(&output.stdout);
+    let root = root.trim();
+    if root.is_empty() {
+        return;
+    }
+    let root_path = PathBuf::from(root);
+    let Ok(rel_path) = out_path.strip_prefix(&root_path) else {
+        return;
+    };
+    let rel_path = rel_path.to_string_lossy().replace('\\', "/");
+    let _ = Command::new("git")
+        .args(["update-index", "--chmod=+x", &rel_path])
+        .current_dir(root_path)
+        .status();
 }
