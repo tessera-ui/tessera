@@ -14,7 +14,7 @@ use tessera_platform::clipboard;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, LayoutInput,
     LayoutOutput, LayoutSpec, MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, State,
-    provide_context, remember, tessera, use_context,
+    provide_context, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -772,130 +772,102 @@ fn render_text_field(
         core_args.border_width = Dp(0.0);
         core_args.focus_border_width = Some(Dp(0.0));
 
-        surface(
-            create_surface_args(&editor_args, &controller).content_color(content_color),
-            move || {
-                boxed(BoxedArgs::default(), move |scope| {
-                    scope.child(move || {
-                        let row_modifier = RowArgs::default()
-                            .modifier
-                            .padding(Padding::all(content_padding));
-                        row(
-                            RowArgs::default()
-                                .modifier(row_modifier)
-                                .cross_axis_alignment(CrossAxisAlignment::Center),
-                            move |row_scope| {
-                                if let Some(leading_icon) = leading_icon {
-                                    row_scope.child(move || {
-                                        provide_context(
-                                            || ContentColor {
-                                                current: content_color,
-                                            },
-                                            || {
-                                                leading_icon();
-                                            },
-                                        );
-                                    });
-                                    let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
-                                    row_scope.child(move || {
-                                        spacer(Modifier::new().width(spacing));
-                                    });
-                                }
+        let surface_args = create_surface_args(&editor_args, &controller)
+            .content_color(content_color)
+            .block_input(!args.enabled);
+        surface(surface_args, move || {
+            boxed(BoxedArgs::default(), move |scope| {
+                scope.child(move || {
+                    let row_modifier = RowArgs::default()
+                        .modifier
+                        .padding(Padding::all(content_padding));
+                    row(
+                        RowArgs::default()
+                            .modifier(row_modifier)
+                            .cross_axis_alignment(CrossAxisAlignment::Center),
+                        move |row_scope| {
+                            if let Some(leading_icon) = leading_icon {
+                                row_scope.child(move || {
+                                    provide_context(
+                                        || ContentColor {
+                                            current: content_color,
+                                        },
+                                        || {
+                                            leading_icon();
+                                        },
+                                    );
+                                });
+                                let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
+                                row_scope.child(move || {
+                                    spacer(Modifier::new().width(spacing));
+                                });
+                            }
 
-                                if let Some(prefix) = prefix {
-                                    row_scope.child(move || {
-                                        provide_context(
-                                            || ContentColor {
-                                                current: content_color,
-                                            },
-                                            || {
-                                                prefix();
-                                            },
-                                        );
-                                    });
-                                    let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
-                                    row_scope.child(move || {
-                                        spacer(Modifier::new().width(spacing));
-                                    });
-                                }
+                            if let Some(prefix) = prefix {
+                                row_scope.child(move || {
+                                    provide_context(
+                                        || ContentColor {
+                                            current: content_color,
+                                        },
+                                        || {
+                                            prefix();
+                                        },
+                                    );
+                                });
+                                let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
+                                row_scope.child(move || {
+                                    spacer(Modifier::new().width(spacing));
+                                });
+                            }
 
-                                row_scope.child_weighted(
-                                    move || {
-                                        boxed(BoxedArgs::default(), move |box_scope| {
-                                            box_scope.child(move || {
-                                                text_input_core_with_controller(
-                                                    core_args, controller,
-                                                );
-                                            });
+                            row_scope.child_weighted(
+                                move || {
+                                    boxed(BoxedArgs::default(), move |box_scope| {
+                                        box_scope.child(move || {
+                                            text_input_core_with_controller(core_args, controller);
+                                        });
 
-                                            if show_placeholder
-                                                && let Some(placeholder_text) = placeholder_text
-                                            {
-                                                box_scope.child_with_alignment(
-                                                    Alignment::TopStart,
-                                                    move || {
-                                                        let (font_size, line_height) =
-                                                            placeholder_style;
-                                                        let mut args = TextArgs::default()
-                                                            .text(placeholder_text)
-                                                            .color(placeholder_color)
-                                                            .size(font_size);
-                                                        if let Some(line_height) = line_height {
-                                                            args = args.line_height(line_height);
-                                                        }
-                                                        text(args);
-                                                    },
-                                                );
-                                            }
-
-                                            if let Some(label_text) = label_text {
-                                                if label_should_float {
-                                                    if is_outlined {
-                                                        let floating_args =
-                                                            OutlinedFloatingLabelArgs {
-                                                                label_text,
-                                                                label_color,
-                                                                label_font_size:
-                                                                    label_floating_font_size,
-                                                                label_line_height:
-                                                                    label_floating_line_height,
-                                                                label_offset_x:
-                                                                    floating_label_offset_x,
-                                                                label_offset_y:
-                                                                    floating_label_offset_y,
-                                                                notch_fill_color,
-                                                                notch_padding,
-                                                                notch_vertical_padding,
-                                                            };
-                                                        box_scope.child_with_alignment(
-                                                            Alignment::TopStart,
-                                                            move || {
-                                                                outlined_floating_label(
-                                                                    floating_args,
-                                                                );
-                                                            },
-                                                        );
-                                                    } else {
-                                                        box_scope.child_with_alignment(
-                                                            Alignment::TopStart,
-                                                            move || {
-                                                                let mut args = TextArgs::default()
-                                                                    .text(label_text)
-                                                                    .color(label_color)
-                                                                    .size(label_floating_font_size)
-                                                                    .modifier(
-                                                                        Modifier::new().offset(
-                                                                            floating_label_offset_x,
-                                                                            floating_label_offset_y,
-                                                                        ),
-                                                                    );
-                                                                args = args.line_height(
-                                                                    label_floating_line_height,
-                                                                );
-                                                                text(args);
-                                                            },
-                                                        );
+                                        if show_placeholder
+                                            && let Some(placeholder_text) = placeholder_text
+                                        {
+                                            box_scope.child_with_alignment(
+                                                Alignment::TopStart,
+                                                move || {
+                                                    let (font_size, line_height) =
+                                                        placeholder_style;
+                                                    let mut args = TextArgs::default()
+                                                        .text(placeholder_text)
+                                                        .color(placeholder_color)
+                                                        .size(font_size);
+                                                    if let Some(line_height) = line_height {
+                                                        args = args.line_height(line_height);
                                                     }
+                                                    text(args);
+                                                },
+                                            );
+                                        }
+
+                                        if let Some(label_text) = label_text {
+                                            if label_should_float {
+                                                if is_outlined {
+                                                    let floating_args = OutlinedFloatingLabelArgs {
+                                                        label_text,
+                                                        label_color,
+                                                        label_font_size: label_floating_font_size,
+                                                        label_line_height:
+                                                            label_floating_line_height,
+                                                        label_offset_x: floating_label_offset_x,
+                                                        label_offset_y: floating_label_offset_y,
+                                                        notch_fill_color,
+                                                        notch_padding,
+                                                        notch_vertical_padding,
+                                                    };
+                                                    box_scope.child_with_alignment(
+                                                        Alignment::TopStart,
+                                                        move || {
+                                                            outlined_floating_label(floating_args);
+                                                        },
+                                                    );
                                                 } else {
                                                     box_scope.child_with_alignment(
                                                         Alignment::TopStart,
@@ -903,69 +875,86 @@ fn render_text_field(
                                                             let mut args = TextArgs::default()
                                                                 .text(label_text)
                                                                 .color(label_color)
-                                                                .size(label_resting_font_size);
+                                                                .size(label_floating_font_size)
+                                                                .modifier(Modifier::new().offset(
+                                                                    floating_label_offset_x,
+                                                                    floating_label_offset_y,
+                                                                ));
                                                             args = args.line_height(
-                                                                label_resting_line_height,
+                                                                label_floating_line_height,
                                                             );
                                                             text(args);
                                                         },
                                                     );
                                                 }
+                                            } else {
+                                                box_scope.child_with_alignment(
+                                                    Alignment::TopStart,
+                                                    move || {
+                                                        let mut args = TextArgs::default()
+                                                            .text(label_text)
+                                                            .color(label_color)
+                                                            .size(label_resting_font_size);
+                                                        args = args
+                                                            .line_height(label_resting_line_height);
+                                                        text(args);
+                                                    },
+                                                );
                                             }
-                                        });
-                                    },
-                                    1.0,
-                                );
+                                        }
+                                    });
+                                },
+                                1.0,
+                            );
 
-                                if let Some(suffix) = suffix {
-                                    let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
-                                    row_scope.child(move || {
-                                        spacer(Modifier::new().width(spacing));
-                                    });
-                                    row_scope.child(move || {
-                                        provide_context(
-                                            || ContentColor {
-                                                current: content_color,
-                                            },
-                                            || {
-                                                suffix();
-                                            },
-                                        );
-                                    });
-                                }
+                            if let Some(suffix) = suffix {
+                                let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
+                                row_scope.child(move || {
+                                    spacer(Modifier::new().width(spacing));
+                                });
+                                row_scope.child(move || {
+                                    provide_context(
+                                        || ContentColor {
+                                            current: content_color,
+                                        },
+                                        || {
+                                            suffix();
+                                        },
+                                    );
+                                });
+                            }
 
-                                if let Some(trailing_icon) = trailing_icon {
-                                    let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
-                                    row_scope.child(move || {
-                                        spacer(Modifier::new().width(spacing));
-                                    });
-                                    row_scope.child(move || {
-                                        provide_context(
-                                            || ContentColor {
-                                                current: content_color,
-                                            },
-                                            || {
-                                                trailing_icon();
-                                            },
-                                        );
-                                    });
-                                }
-                            },
+                            if let Some(trailing_icon) = trailing_icon {
+                                let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
+                                row_scope.child(move || {
+                                    spacer(Modifier::new().width(spacing));
+                                });
+                                row_scope.child(move || {
+                                    provide_context(
+                                        || ContentColor {
+                                            current: content_color,
+                                        },
+                                        || {
+                                            trailing_icon();
+                                        },
+                                    );
+                                });
+                            }
+                        },
+                    );
+                });
+
+                if show_indicator {
+                    scope.child_with_alignment(Alignment::BottomStart, move || {
+                        horizontal_divider(
+                            DividerArgs::default()
+                                .thickness(indicator_thickness)
+                                .color(indicator_color),
                         );
                     });
-
-                    if show_indicator {
-                        scope.child_with_alignment(Alignment::BottomStart, move || {
-                            horizontal_divider(
-                                DividerArgs::default()
-                                    .thickness(indicator_thickness)
-                                    .color(indicator_color),
-                            );
-                        });
-                    }
-                });
-            },
-        );
+                }
+            });
+        });
     };
 
     render_editor();
@@ -1229,7 +1218,8 @@ pub fn text_field_with_controller(
         render_text_field(render_args, controller, editor_args);
     }
 
-    input_handler(move |input| {
+    input_handler(move |mut input| {
+        let cursor_pos = input.cursor_position_rel;
         if menu_policy.enabled {
             if let Some(action) = action_state.with_mut(|state| state.take()) {
                 apply_menu_action(
@@ -1242,7 +1232,6 @@ pub fn text_field_with_controller(
                 );
             }
 
-            let cursor_pos = input.cursor_position_rel;
             let has_right_click = input.cursor_events.iter().any(|event| {
                 matches!(
                     event.content,
@@ -1260,8 +1249,15 @@ pub fn text_field_with_controller(
             }
         }
 
+        let is_inside = cursor_pos
+            .map(|pos| is_position_in_component(input.computed_data, pos))
+            .unwrap_or(false);
+
         if enabled {
-            let cursor_pos = input.cursor_position_rel;
+            if is_inside {
+                input.requests.cursor_icon = winit::window::CursorIcon::Text;
+            }
+
             let has_left_click = input.cursor_events.iter().any(|event| {
                 matches!(
                     event.content,
@@ -1269,13 +1265,14 @@ pub fn text_field_with_controller(
                 )
             });
 
-            if has_left_click
-                && let Some(cursor_pos) = cursor_pos
-                && is_position_in_component(input.computed_data, cursor_pos)
-            {
+            if has_left_click && cursor_pos.is_some() && is_inside {
                 controller.with_mut(|c| c.focus_handler_mut().request_focus());
                 input.cursor_events.clear();
             }
+        }
+
+        if is_inside {
+            input.block_cursor();
         }
     });
 }
