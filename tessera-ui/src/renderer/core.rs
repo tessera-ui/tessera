@@ -33,6 +33,7 @@ struct RenderPipelines {
 
 struct FrameTargets {
     offscreen: wgpu::TextureView,
+    offscreen_copy: wgpu::TextureView,
     msaa_texture: Option<wgpu::Texture>,
     msaa_view: Option<wgpu::TextureView>,
     sample_count: u32,

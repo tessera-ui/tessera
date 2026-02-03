@@ -711,11 +711,32 @@ impl RenderCore {
                     }
                 };
 
-                let scene_view = if reads_scene {
+                let mut scene_view = if reads_scene {
                     scene_texture_view.clone()
                 } else {
                     write_target.clone()
                 };
+                if reads_scene
+                    && write_resource == RenderResourceId::SceneColor
+                    && matches!(*scene_source, SceneSource::Offscreen)
+                {
+                    let copy_view = state.targets.offscreen_copy.clone();
+                    Self::blit_to_view(BlitParams {
+                        encoder,
+                        device: state.device,
+                        source: scene_texture_view,
+                        target: &copy_view,
+                        bind_group_layout: &state.blit.bind_group_layout,
+                        sampler: &state.blit.sampler,
+                        pipeline: &state.blit.pipeline,
+                        target_size: PxSize::new(
+                            Px(state.config.width as i32),
+                            Px(state.config.height as i32),
+                        ),
+                        scissor_rect: None,
+                    });
+                    scene_view = copy_view;
+                }
                 let clear_target = clear_state.should_clear(write_resource);
 
                 render_current_pass(RenderPassParams {

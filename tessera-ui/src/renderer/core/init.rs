@@ -144,6 +144,7 @@ impl RenderCore {
 
         // Create Pass Targets (Offscreen and Compute)
         let offscreen_texture = Self::create_pass_target(&device, &config, "Offscreen");
+        let offscreen_copy_texture = Self::create_pass_target(&device, &config, "Offscreen Copy");
         let compute_target_a = Self::create_compute_pass_target(
             &device,
             &config,
@@ -247,6 +248,7 @@ impl RenderCore {
 
         let targets = FrameTargets {
             offscreen: offscreen_texture,
+            offscreen_copy: offscreen_copy_texture,
             msaa_texture,
             msaa_view,
             sample_count,
@@ -370,10 +372,13 @@ impl RenderCore {
     pub(crate) fn rebuild_pass_targets(&mut self) {
         self.local_textures.clear();
         self.targets.offscreen.texture().destroy();
+        self.targets.offscreen_copy.texture().destroy();
         self.compute.target_a.texture().destroy();
         self.compute.target_b.texture().destroy();
 
         self.targets.offscreen = Self::create_pass_target(&self.device, &self.config, "Offscreen");
+        self.targets.offscreen_copy =
+            Self::create_pass_target(&self.device, &self.config, "Offscreen Copy");
         self.compute.target_a = Self::create_compute_pass_target(
             &self.device,
             &self.config,
