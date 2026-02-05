@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use tessera_ui::{
     ComputedData, CursorEventContent, GestureState, PressKeyEventType, PxPosition, PxSize, State,
+    WindowAction,
     accesskit::{self, Action, Toggled},
     tessera,
     winit::window::CursorIcon,
@@ -448,6 +449,103 @@ where
         }
 
         if block_input && within_bounds {
+            input.block_all();
+        }
+    });
+}
+
+#[tessera]
+pub(crate) fn modifier_window_drag_region<F>(child: F)
+where
+    F: FnOnce(),
+{
+    child();
+
+    input_handler(move |mut input| {
+        let within_bounds = input
+            .cursor_position_rel
+            .map(|pos| {
+                is_position_in_rect(
+                    pos,
+                    PxPosition::ZERO,
+                    input.computed_data.width,
+                    input.computed_data.height,
+                )
+            })
+            .unwrap_or(false);
+
+        if !within_bounds {
+            return;
+        }
+
+        let mut should_drag = false;
+        for event in input.cursor_events.iter() {
+            if matches!(
+                event.content,
+                CursorEventContent::Pressed(PressKeyEventType::Left)
+            ) {
+                should_drag = true;
+                break;
+            }
+        }
+
+        if should_drag {
+            input.request_window_action(WindowAction::DragWindow);
+        }
+        input.block_all();
+    });
+}
+
+#[tessera]
+pub(crate) fn modifier_window_action<F>(action: WindowAction, child: F)
+where
+    F: FnOnce(),
+{
+    child();
+
+    input_handler(move |mut input| {
+        let within_bounds = input
+            .cursor_position_rel
+            .map(|pos| {
+                is_position_in_rect(
+                    pos,
+                    PxPosition::ZERO,
+                    input.computed_data.width,
+                    input.computed_data.height,
+                )
+            })
+            .unwrap_or(false);
+
+        if within_bounds {
+            input.requests.cursor_icon = CursorIcon::Pointer;
+        }
+
+        let mut requested = false;
+        let is_drag_action = matches!(action, WindowAction::DragWindow);
+        for event in input.cursor_events.iter() {
+            match event.content {
+                CursorEventContent::Pressed(PressKeyEventType::Left) => {
+                    if is_drag_action && within_bounds {
+                        input.request_window_action(action);
+                        requested = true;
+                        break;
+                    }
+                }
+                CursorEventContent::Released(PressKeyEventType::Left) => {
+                    if !is_drag_action
+                        && within_bounds
+                        && event.gesture_state == GestureState::TapCandidate
+                    {
+                        input.request_window_action(action);
+                        requested = true;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if requested || within_bounds {
             input.block_all();
         }
     });

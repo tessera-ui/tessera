@@ -25,7 +25,7 @@ use winit::{
 
 use crate::{
     ImeState, PxPosition,
-    component_tree::WindowRequests,
+    component_tree::{WindowAction, WindowRequests},
     context::begin_frame_context_slots,
     cursor::{CursorEvent, CursorEventContent, CursorState, GestureState},
     dp::SCALE_FACTOR,
@@ -64,6 +64,27 @@ use winit::platform::android::{
 };
 
 type RenderComputationOutput = (RenderGraph, WindowRequests, std::time::Duration);
+
+/// Window creation options for desktop platforms.
+#[derive(Debug, Clone)]
+pub struct WindowConfig {
+    /// Whether to show the system window decorations (title bar and borders).
+    pub decorations: bool,
+    /// Whether the window supports transparency.
+    pub transparent: bool,
+    /// Whether the window is resizable.
+    pub resizable: bool,
+}
+
+impl Default for WindowConfig {
+    fn default() -> Self {
+        Self {
+            decorations: true,
+            transparent: true,
+            resizable: true,
+        }
+    }
+}
 
 /// Configuration for the Tessera runtime and renderer.
 ///
@@ -113,6 +134,8 @@ pub struct TesseraConfig {
     /// The title of the application window.
     /// Defaults to "Tessera" if not specified.
     pub window_title: String,
+    /// Window configuration (desktop only).
+    pub window: WindowConfig,
     /// Path to write profiler output when `profiling` is enabled.
     #[cfg(feature = "profiling")]
     pub profiler_output_path: PathBuf,
@@ -125,6 +148,7 @@ impl Default for TesseraConfig {
         Self {
             sample_count: 1,
             window_title: "Tessera".to_string(),
+            window: WindowConfig::default(),
             #[cfg(feature = "profiling")]
             profiler_output_path: PathBuf::from("tessera-profiler.jsonl"),
         }
@@ -252,6 +276,8 @@ pub struct Renderer<F: Fn()> {
     event_loop_proxy: Option<winit::event_loop::EventLoopProxy<AccessKitEvent>>,
     /// Incrementing frame index for profiling and debugging.
     frame_index: u64,
+    /// Whether a window close was requested during the last frame.
+    pending_close_requested: bool,
     #[cfg(target_os = "android")]
     /// Android-specific state tracking whether the soft keyboard is currently
     /// open
@@ -373,6 +399,7 @@ impl<F: Fn()> Renderer<F> {
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
             frame_index: 0,
+            pending_close_requested: false,
         };
         thread_utils::set_thread_name("TesseraMain");
         event_loop.run_app(&mut renderer)
@@ -498,6 +525,7 @@ impl<F: Fn()> Renderer<F> {
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
             frame_index: 0,
+            pending_close_requested: false,
         };
         thread_utils::set_thread_name("TesseraMain");
         event_loop.run_app(&mut renderer)
@@ -734,7 +762,7 @@ Fps: {:.2}
     }
 
     #[instrument(level = "debug", skip(context))]
-    fn execute_render_frame(context: RenderFrameContext<'_, F>) -> Option<TreeUpdate> {
+    fn execute_render_frame(&mut self, context: RenderFrameContext<'_, F>) -> Option<TreeUpdate> {
         let RenderFrameContext {
             entry_point,
             args,
@@ -866,6 +894,10 @@ Fps: {:.2}
             }
         }
 
+        if let Some(window_action) = window_requests.window_action {
+            self.apply_window_action(args.app.window(), window_action);
+        }
+
         // End of frame cleanup
         args.cursor_state.frame_cleanup();
 
@@ -908,6 +940,28 @@ impl<F: Fn()> Renderer<F> {
             warn!("Failed to save pipeline cache: {}", e);
         }
         event_loop.exit();
+    }
+
+    fn apply_window_action(&mut self, window: &Window, action: WindowAction) {
+        match action {
+            WindowAction::DragWindow => {
+                if let Err(err) = window.drag_window() {
+                    warn!("Failed to start window drag: {}", err);
+                }
+            }
+            WindowAction::Minimize => {
+                window.set_minimized(true);
+            }
+            WindowAction::Maximize => {
+                window.set_maximized(true);
+            }
+            WindowAction::ToggleMaximize => {
+                window.set_maximized(!window.is_maximized());
+            }
+            WindowAction::Close => {
+                self.pending_close_requested = true;
+            }
+        }
     }
 
     fn handle_resized(&mut self, size: winit::dpi::PhysicalSize<u32>) {
@@ -1056,7 +1110,7 @@ impl<F: Fn()> Renderer<F> {
             #[cfg(target_os = "android")]
             event_loop,
         };
-        let accessibility_update = Self::execute_render_frame(RenderFrameContext {
+        let accessibility_update = self.execute_render_frame(RenderFrameContext {
             entry_point: &self.entry_point,
             args: &mut args,
             accessibility_enabled: self.accessibility_adapter.is_some(),
@@ -1115,7 +1169,9 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
         // Create a new window (initially hidden for AccessKit initialization)
         let window_attributes = Window::default_attributes()
             .with_title(&self.config.window_title)
-            .with_transparent(true)
+            .with_decorations(self.config.window.decorations)
+            .with_resizable(self.config.window.resizable)
+            .with_transparent(self.config.window.transparent)
             .with_visible(false); // Hide initially for AccessKit
         let window = match event_loop.create_window(window_attributes) {
             Ok(window) => Arc::new(window),
@@ -1200,6 +1256,12 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
+        if self.pending_close_requested {
+            self.pending_close_requested = false;
+            self.handle_close_requested(event_loop);
+            return;
+        }
+
         // Forward event to AccessKit adapter
         if let (Some(adapter), Some(app)) = (&mut self.accessibility_adapter, &self.app) {
             adapter.process_event(app.window(), &event);

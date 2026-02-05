@@ -431,6 +431,11 @@ impl InputHandlerInput<'_> {
         self.block_ime();
     }
 
+    /// Requests a window action for the current frame.
+    pub fn request_window_action(&mut self, action: WindowAction) {
+        self.requests.window_action = Some(action);
+    }
+
     /// Provides a fluent API for setting accessibility information for the
     /// current component.
     ///
@@ -517,6 +522,23 @@ pub struct WindowRequests {
     /// (which is processed later in the state handling pass) will overwrite
     /// previous requests.
     pub ime_request: Option<ImeRequest>,
+    /// A window action request for the current frame.
+    pub window_action: Option<WindowAction>,
+}
+
+/// Window actions that components can request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowAction {
+    /// Begin a system drag move for the window.
+    DragWindow,
+    /// Minimize the window.
+    Minimize,
+    /// Maximize the window.
+    Maximize,
+    /// Toggle maximized state.
+    ToggleMaximize,
+    /// Request application close.
+    Close,
 }
 
 /// A request to the windowing system to open an Input Method Editor (IME).

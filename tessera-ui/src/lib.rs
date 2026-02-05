@@ -360,7 +360,7 @@ pub use crate::{
     component_tree::{
         ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
         ComponentTree, ComputedData, Constraint, DimensionValue, ImeRequest, InputHandlerFn,
-        InputHandlerInput, MeasurementError, ParentConstraint,
+        InputHandlerInput, MeasurementError, ParentConstraint, WindowAction, WindowRequests,
     },
     context::{Context, provide_context, use_context},
     cursor::{

@@ -10,12 +10,13 @@ mod semantics;
 mod shadow;
 mod visual;
 
-use tessera_ui::{Color, DimensionValue, Dp, Modifier, Px, use_context};
+use tessera_ui::{Color, DimensionValue, Dp, Modifier, Px, WindowAction, use_context};
 
 use crate::shape_def::Shape;
 
 use interaction::{
     modifier_block_touch_propagation, modifier_clickable, modifier_selectable, modifier_toggleable,
+    modifier_window_action, modifier_window_drag_region,
 };
 use layout::{
     modifier_constraints, modifier_minimum_interactive_size, modifier_offset, modifier_padding,
@@ -117,6 +118,12 @@ pub trait ModifierExt {
 
     /// Makes the subtree selectable with optional ripple/state-layer feedback.
     fn selectable(self, args: SelectableArgs) -> Modifier;
+
+    /// Marks this subtree as a draggable window region.
+    fn window_drag_region(self) -> Modifier;
+
+    /// Requests a window action when tapped.
+    fn window_action(self, action: WindowAction) -> Modifier;
 }
 
 impl ModifierExt for Modifier {
@@ -409,6 +416,26 @@ impl ModifierExt for Modifier {
             let args = args.clone();
             move || {
                 modifier_selectable(args, || {
+                    child();
+                });
+            }
+        })
+    }
+
+    fn window_drag_region(self) -> Modifier {
+        self.push_wrapper(move |child| {
+            move || {
+                modifier_window_drag_region(|| {
+                    child();
+                });
+            }
+        })
+    }
+
+    fn window_action(self, action: WindowAction) -> Modifier {
+        self.push_wrapper(move |child| {
+            move || {
+                modifier_window_action(action, || {
                     child();
                 });
             }

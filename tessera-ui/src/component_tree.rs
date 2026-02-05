@@ -18,7 +18,7 @@ use crate::{
 pub use constraint::{Constraint, DimensionValue, ParentConstraint};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
-    ImeRequest, InputHandlerFn, InputHandlerInput, MeasurementError, WindowRequests,
+    ImeRequest, InputHandlerFn, InputHandlerInput, MeasurementError, WindowAction, WindowRequests,
 };
 
 pub(crate) use node::{measure_node, measure_nodes};
