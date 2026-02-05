@@ -6,7 +6,7 @@
 //! Configure app startup with packages and plugins before launching the
 //! renderer.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use parking_lot::RwLock;
 #[cfg(target_os = "android")]
@@ -86,7 +86,7 @@ impl EntryPoint {
 fn init_deadlock_detection() {
     #[cfg(debug_assertions)]
     {
-        use std::{sync::Once, thread};
+        use std::{sync::Once, thread, time::Duration};
 
         static INIT: Once = Once::new();
         INIT.call_once(|| {
