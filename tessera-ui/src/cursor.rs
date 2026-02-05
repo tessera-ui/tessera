@@ -2,12 +2,12 @@
 //!
 //! This module provides comprehensive cursor and touch event handling for the
 //! Tessera UI framework. It manages cursor position tracking, event queuing,
-//! touch gesture recognition, and inertial scrolling for smooth user
+//! touch gesture recognition, and scroll event generation for smooth user
 //! interactions.
 
 use std::{
     collections::{HashMap, VecDeque},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use crate::PxPosition;
@@ -16,87 +16,22 @@ use crate::PxPosition;
 /// during UI jank.
 const KEEP_EVENTS_COUNT: usize = 10;
 
-/// Controls how quickly inertial scrolling decelerates (higher = faster
-/// slowdown).
-const INERTIA_DECAY_CONSTANT: f32 = 5.0;
-
-/// Minimum velocity threshold below which inertial scrolling stops (pixels per
-/// second).
-const MIN_INERTIA_VELOCITY: f32 = 10.0;
-
-/// Minimum velocity from a gesture required to start inertial scrolling (pixels
-/// per second).
-const INERTIA_MIN_VELOCITY_THRESHOLD_FOR_START: f32 = 50.0;
-
-/// Multiplier applied to initial inertial velocity (typically 1.0 for natural
-/// feel).
-const INERTIA_MOMENTUM_FACTOR: f32 = 1.0;
-
-/// Maximum inertial velocity to keep flicks controllable (pixels per second).
-const MAX_INERTIA_VELOCITY: f32 = 6000.0;
-
 /// Tracks the state of a single touch point for gesture recognition and
-/// velocity calculation.
+/// scroll tracking.
 ///
-/// This struct maintains the necessary information to track touch movement,
-/// calculate velocities, and determine when to trigger inertial scrolling.
+/// This struct maintains the necessary information to track touch movement and
+/// determine when to trigger scrolling.
 #[derive(Debug, Clone)]
 struct TouchPointState {
     /// The last recorded position of this touch point.
     last_position: PxPosition,
     /// Timestamp of the last position update.
     last_update_time: Instant,
-    /// Tracks recent velocity samples and temporal metadata for momentum
-    /// calculation.
-    velocity_tracker: VelocityTracker,
     /// Tracks whether this touch gesture generated a scroll event.
     ///
     /// When set, the gesture should be treated as a drag/scroll rather than a
     /// tap.
     generated_scroll_event: bool,
-}
-
-/// Maintains a short window of velocity samples for inertia calculations.
-#[derive(Debug, Clone)]
-struct VelocityTracker {
-    samples: VecDeque<(Instant, f32, f32)>,
-    last_sample_time: Instant,
-}
-
-const VELOCITY_SAMPLE_WINDOW: Duration = Duration::from_millis(90);
-const VELOCITY_IDLE_CUTOFF: Duration = Duration::from_millis(65);
-
-/// Represents an active inertial scrolling session.
-///
-/// When a touch gesture ends with sufficient velocity, this struct tracks
-/// the momentum and gradually decelerates the scroll movement over time.
-#[derive(Debug, Clone)]
-struct ActiveInertia {
-    /// Current horizontal velocity in pixels per second.
-    velocity_x: f32,
-    /// Current vertical velocity in pixels per second.
-    velocity_y: f32,
-    /// Timestamp of the last inertia calculation update.
-    last_tick_time: Instant,
-}
-
-fn clamp_inertia_velocity(vx: f32, vy: f32) -> (f32, f32) {
-    if !vx.is_finite() || !vy.is_finite() {
-        return (0.0, 0.0);
-    }
-
-    let magnitude_sq = vx * vx + vy * vy;
-    if !magnitude_sq.is_finite() {
-        return (0.0, 0.0);
-    }
-
-    let magnitude = magnitude_sq.sqrt();
-    if magnitude > MAX_INERTIA_VELOCITY && MAX_INERTIA_VELOCITY > 0.0 {
-        let scale = MAX_INERTIA_VELOCITY / magnitude;
-        return (vx * scale, vy * scale);
-    }
-
-    (vx, vy)
 }
 
 /// Configuration settings for touch scrolling behavior.
@@ -128,8 +63,7 @@ impl Default for TouchScrollConfig {
 ///
 /// `CursorState` is the main interface for handling all cursor-related events
 /// in the Tessera UI framework. It manages cursor position tracking, event
-/// queuing, multi-touch support, and provides smooth inertial scrolling for
-/// touch gestures.
+/// queuing, and multi-touch support for touch gestures.
 #[derive(Default)]
 pub struct CursorState {
     /// Current cursor position, if any cursor is active.
@@ -140,8 +74,6 @@ pub struct CursorState {
     touch_points: HashMap<u64, TouchPointState>,
     /// Configuration settings for touch scrolling behavior.
     touch_scroll_config: TouchScrollConfig,
-    /// Current inertial scrolling state, if active.
-    active_inertia: Option<ActiveInertia>,
     /// If true, the cursor position will be cleared on the next frame.
     clear_position_on_next_frame: bool,
 }
@@ -186,75 +118,10 @@ impl CursorState {
         self.position = position.into();
     }
 
-    /// Processes active inertial scrolling and generates scroll events.
-    ///
-    /// This method is called internally to update inertial scrolling state and
-    /// generate appropriate scroll events. It handles velocity decay over
-    /// time and stops inertia when velocity falls below the minimum
-    /// threshold.
-    ///
-    /// The method calculates scroll deltas based on current velocity and
-    /// elapsed time, applies exponential decay to the velocity, and queues
-    /// scroll events for processing.
-    ///
-    /// # Implementation Details
-    ///
-    /// - Uses exponential decay with [`INERTIA_DECAY_CONSTANT`] for natural
-    ///   deceleration
-    /// - Stops inertia when velocity drops below [`MIN_INERTIA_VELOCITY`]
-    /// - Generates scroll events with calculated position deltas
-    /// - Handles edge cases like zero delta time gracefully
-    fn process_and_queue_inertial_scroll(&mut self) {
-        // Handle active inertia with clear, small responsibilities.
-        if let Some(mut inertia) = self.active_inertia.take() {
-            let now = Instant::now();
-            let delta_time = now.duration_since(inertia.last_tick_time).as_secs_f32();
-
-            if delta_time <= 0.0 {
-                // Called multiple times in the same instant; reinsert for next frame.
-                self.active_inertia = Some(inertia);
-                return;
-            }
-
-            // Compute scroll delta and emit event if meaningful.
-            let scroll_delta_x = inertia.velocity_x * delta_time;
-            let scroll_delta_y = inertia.velocity_y * delta_time;
-            if scroll_delta_x.abs() > 0.01 || scroll_delta_y.abs() > 0.01 {
-                self.push_scroll_event(now, scroll_delta_x, scroll_delta_y);
-            }
-
-            // Apply exponential decay to velocities.
-            let decay = (-INERTIA_DECAY_CONSTANT * delta_time).exp();
-            inertia.velocity_x *= decay;
-            inertia.velocity_y *= decay;
-            inertia.last_tick_time = now;
-
-            // Reinsert inertia only if still above threshold.
-            if inertia.velocity_x.abs() >= MIN_INERTIA_VELOCITY
-                || inertia.velocity_y.abs() >= MIN_INERTIA_VELOCITY
-            {
-                self.active_inertia = Some(inertia);
-            }
-        }
-    }
-
-    // Helper: push a scroll event with consistent construction.
-    fn push_scroll_event(&mut self, timestamp: Instant, dx: f32, dy: f32) {
-        self.push_event(CursorEvent {
-            timestamp,
-            content: CursorEventContent::Scroll(ScrollEventConent {
-                delta_x: dx,
-                delta_y: dy,
-            }),
-            gesture_state: GestureState::Dragged,
-        });
-    }
-
     /// Retrieves and clears all pending cursor events.
     ///
-    /// This method processes any active inertial scrolling, then returns all
-    /// queued cursor events and clears the internal event queue. Events are
-    /// returned in chronological order (oldest first).
+    /// This method returns all queued cursor events and clears the internal
+    /// event queue. Events are returned in chronological order (oldest first).
     ///
     /// This is typically called once per frame by the UI framework to process
     /// all accumulated input events.
@@ -268,7 +135,6 @@ impl CursorState {
     /// Events are ordered from oldest to newest to ensure proper event
     /// processing order.
     pub fn take_events(&mut self) -> Vec<CursorEvent> {
-        self.process_and_queue_inertial_scroll();
         self.events.drain(..).collect()
     }
 
@@ -280,7 +146,6 @@ impl CursorState {
     pub fn clear(&mut self) {
         self.events.clear();
         self.update_position(None);
-        self.active_inertia = None;
         self.touch_points.clear();
         self.clear_position_on_next_frame = false;
     }
@@ -301,16 +166,13 @@ impl CursorState {
 
     /// Handles the start of a touch gesture.
     ///
-    /// This method registers a new touch point and generates a press event. It
-    /// also stops any active inertial scrolling since a new touch
-    /// interaction has begun.
+    /// This method registers a new touch point and generates a press event.
     ///
     /// # Arguments
     ///
     /// * `touch_id` - Unique identifier for this touch point
     /// * `position` - Initial position of the touch in pixel coordinates
     pub fn handle_touch_start(&mut self, touch_id: u64, position: PxPosition) {
-        self.active_inertia = None; // Stop any existing inertia on new touch
         self.clear_position_on_next_frame = false;
         let now = Instant::now();
 
@@ -319,7 +181,6 @@ impl CursorState {
             TouchPointState {
                 last_position: position,
                 last_update_time: now,
-                velocity_tracker: VelocityTracker::new(now),
                 generated_scroll_event: false,
             },
         );
@@ -334,10 +195,8 @@ impl CursorState {
 
     /// Handles touch movement and generates scroll events when appropriate.
     ///
-    /// This method tracks touch movement, calculates velocities for inertial
-    /// scrolling, and generates scroll events when the movement exceeds the
-    /// minimum threshold. It also maintains a velocity history for momentum
-    /// calculation.
+    /// This method tracks touch movement and generates scroll events when the
+    /// movement exceeds the minimum threshold.
     ///
     /// # Arguments
     ///
@@ -365,25 +224,10 @@ impl CursorState {
             let delta_x = (current_position.x - touch_state.last_position.x).to_f32();
             let delta_y = (current_position.y - touch_state.last_position.y).to_f32();
             let move_distance = (delta_x * delta_x + delta_y * delta_y).sqrt();
-            let time_delta = now
-                .duration_since(touch_state.last_update_time)
-                .as_secs_f32();
-
             touch_state.last_position = current_position;
             touch_state.last_update_time = now;
 
             if move_distance >= self.touch_scroll_config.min_move_threshold {
-                // Stop any active inertia when user actively moves the touch.
-                self.active_inertia = None;
-
-                if time_delta > 0.0 {
-                    let velocity_x = delta_x / time_delta;
-                    let velocity_y = delta_y / time_delta;
-                    touch_state
-                        .velocity_tracker
-                        .push(now, velocity_x, velocity_y);
-                }
-
                 touch_state.generated_scroll_event = true;
 
                 // Return a scroll event for immediate feedback.
@@ -392,6 +236,7 @@ impl CursorState {
                     content: CursorEventContent::Scroll(ScrollEventConent {
                         delta_x, // Direct scroll delta for touch move
                         delta_y,
+                        source: ScrollEventSource::Touch,
                     }),
                     gesture_state: GestureState::Dragged,
                 });
@@ -400,12 +245,10 @@ impl CursorState {
         None
     }
 
-    /// Handles the end of a touch gesture and potentially starts inertial
-    /// scrolling.
+    /// Handles the end of a touch gesture and emits a release event.
     ///
     /// This method processes the end of a touch interaction by:
-    /// - Calculating average velocity from recent touch movement
-    /// - Starting inertial scrolling if velocity exceeds the threshold
+    /// - Determining whether the gesture was a drag
     /// - Generating a release event
     /// - Cleaning up touch point tracking
     ///
@@ -418,34 +261,6 @@ impl CursorState {
 
         if let Some(touch_state) = self.touch_points.get_mut(&touch_id) {
             was_drag |= touch_state.generated_scroll_event;
-            if self.touch_scroll_config.enabled {
-                if let Some((avg_vx, avg_vy)) = touch_state.velocity_tracker.resolve(now) {
-                    let velocity_magnitude = (avg_vx * avg_vx + avg_vy * avg_vy).sqrt();
-                    if velocity_magnitude > INERTIA_MIN_VELOCITY_THRESHOLD_FOR_START {
-                        let (inertia_vx, inertia_vy) = clamp_inertia_velocity(
-                            avg_vx * INERTIA_MOMENTUM_FACTOR,
-                            avg_vy * INERTIA_MOMENTUM_FACTOR,
-                        );
-                        self.active_inertia = Some(ActiveInertia {
-                            velocity_x: inertia_vx,
-                            velocity_y: inertia_vy,
-                            last_tick_time: now,
-                        });
-                    } else {
-                        self.active_inertia = None;
-                    }
-                } else {
-                    self.active_inertia = None;
-                }
-            } else {
-                self.active_inertia = None; // Scrolling disabled
-            }
-        } else {
-            self.active_inertia = None; // No touch state present
-        }
-
-        if self.active_inertia.is_some() {
-            was_drag = true;
         }
 
         self.touch_points.remove(&touch_id);
@@ -462,78 +277,6 @@ impl CursorState {
 
         if self.touch_points.is_empty() {
             self.clear_position_on_next_frame = true;
-        }
-    }
-}
-
-impl VelocityTracker {
-    fn new(now: Instant) -> Self {
-        Self {
-            samples: VecDeque::new(),
-            last_sample_time: now,
-        }
-    }
-
-    fn push(&mut self, now: Instant, vx: f32, vy: f32) {
-        let (vx, vy) = clamp_inertia_velocity(vx, vy);
-        self.samples.push_back((now, vx, vy));
-        self.last_sample_time = now;
-        self.prune(now);
-    }
-
-    fn resolve(&mut self, now: Instant) -> Option<(f32, f32)> {
-        self.prune(now);
-
-        if self.samples.is_empty() {
-            return None;
-        }
-
-        let idle_time = now.duration_since(self.last_sample_time);
-        if idle_time >= VELOCITY_IDLE_CUTOFF {
-            self.samples.clear();
-            return None;
-        }
-
-        let mut weighted_sum_x = 0.0f32;
-        let mut weighted_sum_y = 0.0f32;
-        let mut total_weight = 0.0f32;
-        let window_secs = VELOCITY_SAMPLE_WINDOW.as_secs_f32().max(f32::EPSILON);
-
-        for &(timestamp, vx, vy) in &self.samples {
-            let age_secs = now
-                .duration_since(timestamp)
-                .as_secs_f32()
-                .clamp(0.0, window_secs);
-            let weight = (window_secs - age_secs).max(0.0);
-            if weight > 0.0 {
-                weighted_sum_x += vx * weight;
-                weighted_sum_y += vy * weight;
-                total_weight += weight;
-            }
-        }
-
-        if total_weight <= f32::EPSILON {
-            self.samples.clear();
-            return None;
-        }
-
-        let avg_x = weighted_sum_x / total_weight;
-        let avg_y = weighted_sum_y / total_weight;
-
-        let damping = 1.0 - idle_time.as_secs_f32() / VELOCITY_IDLE_CUTOFF.as_secs_f32();
-        let damping = damping.clamp(0.0, 1.0);
-        let (avg_x, avg_y) = clamp_inertia_velocity(avg_x * damping, avg_y * damping);
-
-        Some((avg_x, avg_y))
-    }
-
-    fn prune(&mut self, now: Instant) {
-        while let Some(&(timestamp, _, _)) = self.samples.front() {
-            if now.duration_since(timestamp) > VELOCITY_SAMPLE_WINDOW {
-                self.samples.pop_front();
-            } else {
-                break;
-            }
         }
     }
 }
@@ -568,6 +311,8 @@ pub struct ScrollEventConent {
     pub delta_x: f32,
     /// Vertical scroll distance in pixels.
     pub delta_y: f32,
+    /// The input source that produced the scroll event.
+    pub source: ScrollEventSource,
 }
 
 /// Enumeration of all possible cursor event types.
@@ -581,7 +326,7 @@ pub enum CursorEventContent {
     Pressed(PressKeyEventType),
     /// A cursor button or touch point was released.
     Released(PressKeyEventType),
-    /// A scroll action occurred (mouse wheel, touch drag, or inertial scroll).
+    /// A scroll action occurred (mouse wheel or touch drag).
     Scroll(ScrollEventConent),
 }
 
@@ -653,6 +398,7 @@ impl CursorEventContent {
         Self::Scroll(ScrollEventConent {
             delta_x: delta_x * MOUSE_WHEEL_SPEED_MULTIPLIER,
             delta_y: delta_y * MOUSE_WHEEL_SPEED_MULTIPLIER,
+            source: ScrollEventSource::Wheel,
         })
     }
 }
@@ -666,4 +412,13 @@ pub enum PressKeyEventType {
     Right,
     /// The middle mouse button (typically scroll wheel click).
     Middle,
+}
+
+/// Indicates the input source for a scroll event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollEventSource {
+    /// Scroll generated from a touch drag gesture.
+    Touch,
+    /// Scroll generated by a mouse wheel or trackpad.
+    Wheel,
 }

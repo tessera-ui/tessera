@@ -363,7 +363,10 @@ pub use crate::{
         InputHandlerInput, MeasurementError, ParentConstraint,
     },
     context::{Context, provide_context, use_context},
-    cursor::{CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent},
+    cursor::{
+        CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent,
+        ScrollEventSource,
+    },
     dp::Dp,
     entry_point::EntryPoint,
     entry_registry::{EntryRegistry, TesseraPackage},

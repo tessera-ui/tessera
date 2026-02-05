@@ -4,12 +4,15 @@
 //!
 //! Use to display content that might overflow the available space.
 pub(crate) mod scrollbar;
-use std::time::Instant;
+use std::{
+    collections::VecDeque,
+    time::{Duration, Instant},
+};
 
 use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEvent, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, Px, PxPosition, State,
+    MeasurementError, Modifier, Px, PxPosition, ScrollEventSource, State,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     remember, tessera,
 };
@@ -46,6 +49,45 @@ pub struct ScrollableArgs {
     pub scrollbar_thumb_hover_color: Color,
     /// The layout of the scrollbar relative to the content.
     pub scrollbar_layout: ScrollBarLayout,
+}
+
+const SCROLL_INERTIA_DECAY_CONSTANT: f32 = 5.0;
+const SCROLL_INERTIA_MIN_VELOCITY: f32 = 10.0;
+const SCROLL_INERTIA_START_THRESHOLD: f32 = 50.0;
+const SCROLL_INERTIA_MAX_VELOCITY: f32 = 6000.0;
+const SCROLL_VELOCITY_SAMPLE_WINDOW: Duration = Duration::from_millis(90);
+const SCROLL_VELOCITY_IDLE_CUTOFF: Duration = Duration::from_millis(65);
+
+#[derive(Clone)]
+struct ScrollVelocityTracker {
+    samples: VecDeque<(Instant, f32, f32)>,
+    last_sample_time: Instant,
+}
+
+#[derive(Clone)]
+struct ActiveInertia {
+    velocity_x: f32,
+    velocity_y: f32,
+    last_tick_time: Instant,
+}
+
+fn clamp_inertia_velocity(vx: f32, vy: f32) -> (f32, f32) {
+    if !vx.is_finite() || !vy.is_finite() {
+        return (0.0, 0.0);
+    }
+
+    let magnitude_sq = vx * vx + vy * vy;
+    if !magnitude_sq.is_finite() {
+        return (0.0, 0.0);
+    }
+
+    let magnitude = magnitude_sq.sqrt();
+    if magnitude > SCROLL_INERTIA_MAX_VELOCITY && SCROLL_INERTIA_MAX_VELOCITY > 0.0 {
+        let scale = SCROLL_INERTIA_MAX_VELOCITY / magnitude;
+        return (vx * scale, vy * scale);
+    }
+
+    (vx, vy)
 }
 
 /// Defines the behavior of the scrollbar visibility.
@@ -111,6 +153,10 @@ pub struct ScrollableController {
     scrollbar_state_v: ScrollBarState,
     /// The state for horizontal scrollbar
     scrollbar_state_h: ScrollBarState,
+    /// Velocity tracking for touch-driven inertia.
+    velocity_tracker: Option<ScrollVelocityTracker>,
+    /// Active inertia state after a touch release.
+    active_inertia: Option<ActiveInertia>,
 }
 
 impl Default for ScrollableController {
@@ -131,6 +177,8 @@ impl ScrollableController {
             last_frame_time: None,
             scrollbar_state_v: ScrollBarState::default(),
             scrollbar_state_h: ScrollBarState::default(),
+            velocity_tracker: None,
+            active_inertia: None,
         }
     }
 
@@ -221,12 +269,183 @@ impl ScrollableController {
         old_position != self.child_position
     }
 
+    fn cancel_inertia(&mut self) {
+        self.active_inertia = None;
+    }
+
+    fn push_touch_delta(&mut self, now: Instant, dx: f32, dy: f32) {
+        self.cancel_inertia();
+        let tracker = self
+            .velocity_tracker
+            .get_or_insert_with(|| ScrollVelocityTracker::new(now));
+        tracker.push_delta(now, dx, dy);
+    }
+
+    fn end_touch_scroll(&mut self, now: Instant) {
+        let Some(mut tracker) = self.velocity_tracker.take() else {
+            return;
+        };
+        if let Some((avg_vx, avg_vy)) = tracker.resolve(now) {
+            let velocity_magnitude = (avg_vx * avg_vx + avg_vy * avg_vy).sqrt();
+            if velocity_magnitude > SCROLL_INERTIA_START_THRESHOLD {
+                let (vx, vy) = clamp_inertia_velocity(avg_vx, avg_vy);
+                self.active_inertia = Some(ActiveInertia {
+                    velocity_x: vx,
+                    velocity_y: vy,
+                    last_tick_time: now,
+                });
+            }
+        }
+    }
+
+    fn should_trigger_idle_inertia(&self, now: Instant) -> bool {
+        self.active_inertia.is_none()
+            && self
+                .velocity_tracker
+                .as_ref()
+                .is_some_and(|tracker| tracker.is_idle(now))
+    }
+
+    fn advance_inertia(
+        &mut self,
+        now: Instant,
+        container_size: &ComputedData,
+        vertical_scrollable: bool,
+        horizontal_scrollable: bool,
+    ) {
+        let Some(mut inertia) = self.active_inertia.take() else {
+            return;
+        };
+        let delta_time = now.duration_since(inertia.last_tick_time).as_secs_f32();
+        if delta_time <= 0.0 {
+            self.active_inertia = Some(inertia);
+            return;
+        }
+
+        let delta_x = inertia.velocity_x * delta_time;
+        let delta_y = inertia.velocity_y * delta_time;
+        if delta_x.abs() > 0.01 || delta_y.abs() > 0.01 {
+            let new_target = self.target_position.saturating_offset(
+                Px::saturating_from_f32(delta_x),
+                Px::saturating_from_f32(delta_y),
+            );
+            let constrained_target = constrain_position(
+                new_target,
+                &self.child_size,
+                container_size,
+                vertical_scrollable,
+                horizontal_scrollable,
+            );
+            let consumed_x = constrained_target.x.to_f32() - self.target_position.x.to_f32();
+            let consumed_y = constrained_target.y.to_f32() - self.target_position.y.to_f32();
+            self.target_position = constrained_target;
+            if consumed_x.abs() <= f32::EPSILON {
+                inertia.velocity_x = 0.0;
+            }
+            if consumed_y.abs() <= f32::EPSILON {
+                inertia.velocity_y = 0.0;
+            }
+        }
+
+        let decay = (-SCROLL_INERTIA_DECAY_CONSTANT * delta_time).exp();
+        inertia.velocity_x *= decay;
+        inertia.velocity_y *= decay;
+        inertia.last_tick_time = now;
+
+        if inertia.velocity_x.abs() >= SCROLL_INERTIA_MIN_VELOCITY
+            || inertia.velocity_y.abs() >= SCROLL_INERTIA_MIN_VELOCITY
+        {
+            self.active_inertia = Some(inertia);
+        }
+    }
+
     pub(crate) fn scrollbar_state_v(&self) -> ScrollBarState {
         self.scrollbar_state_v.clone()
     }
 
     pub(crate) fn scrollbar_state_h(&self) -> ScrollBarState {
         self.scrollbar_state_h.clone()
+    }
+}
+
+impl ScrollVelocityTracker {
+    fn new(now: Instant) -> Self {
+        Self {
+            samples: VecDeque::new(),
+            last_sample_time: now,
+        }
+    }
+
+    fn push_delta(&mut self, now: Instant, dx: f32, dy: f32) {
+        let delta_time = now.duration_since(self.last_sample_time).as_secs_f32();
+        self.last_sample_time = now;
+        if delta_time <= 0.0 {
+            return;
+        }
+
+        let vx = dx / delta_time;
+        let vy = dy / delta_time;
+        let (vx, vy) = clamp_inertia_velocity(vx, vy);
+        self.samples.push_back((now, vx, vy));
+        self.prune(now);
+    }
+
+    fn resolve(&mut self, now: Instant) -> Option<(f32, f32)> {
+        self.prune(now);
+
+        if self.samples.is_empty() {
+            return None;
+        }
+
+        let idle_time = now.duration_since(self.last_sample_time);
+
+        let mut weighted_sum_x = 0.0f32;
+        let mut weighted_sum_y = 0.0f32;
+        let mut total_weight = 0.0f32;
+        let window_secs = SCROLL_VELOCITY_SAMPLE_WINDOW
+            .as_secs_f32()
+            .max(f32::EPSILON);
+
+        for &(timestamp, vx, vy) in &self.samples {
+            let age_secs = now
+                .duration_since(timestamp)
+                .as_secs_f32()
+                .clamp(0.0, window_secs);
+            let weight = (window_secs - age_secs).max(0.0);
+            if weight > 0.0 {
+                weighted_sum_x += vx * weight;
+                weighted_sum_y += vy * weight;
+                total_weight += weight;
+            }
+        }
+
+        if total_weight <= f32::EPSILON {
+            self.samples.clear();
+            return None;
+        }
+
+        let avg_x = weighted_sum_x / total_weight;
+        let avg_y = weighted_sum_y / total_weight;
+
+        let damping = 1.0 - idle_time.as_secs_f32() / SCROLL_VELOCITY_IDLE_CUTOFF.as_secs_f32();
+        let damping = damping.clamp(0.0, 1.0);
+        let (avg_x, avg_y) = clamp_inertia_velocity(avg_x * damping, avg_y * damping);
+
+        Some((avg_x, avg_y))
+    }
+
+    fn is_idle(&self, now: Instant) -> bool {
+        now.duration_since(self.last_sample_time) >= SCROLL_VELOCITY_IDLE_CUTOFF
+    }
+
+    fn prune(&mut self, now: Instant) {
+        while let Some(&(timestamp, _, _)) = self.samples.front() {
+            if now.duration_since(timestamp) > SCROLL_VELOCITY_SAMPLE_WINDOW {
+                self.samples.pop_front();
+            } else {
+                break;
+            }
+        }
     }
 }
 
@@ -665,12 +884,15 @@ fn scrollable_inner(
         let is_cursor_in_component = cursor_pos_option
             .map(|pos| is_position_in_component(size, pos))
             .unwrap_or(false);
+        let now = Instant::now();
+        let should_handle_scroll = is_cursor_in_component;
 
-        if is_cursor_in_component {
+        if should_handle_scroll {
             let mut remaining_events: Vec<CursorEvent> = Vec::new();
             for cursor_event in input.cursor_events.iter() {
                 match &cursor_event.content {
                     CursorEventContent::Scroll(scroll_event) => {
+                        controller.with_mut(|c| c.cancel_inertia());
                         let scroll_delta_x = scroll_event.delta_x;
                         let scroll_delta_y = scroll_event.delta_y;
                         let (consumed_x, consumed_y) = controller.with_mut(|c| {
@@ -696,6 +918,14 @@ fn scrollable_inner(
 
                         let remaining_x = scroll_delta_x - consumed_x;
                         let remaining_y = scroll_delta_y - consumed_y;
+
+                        if scroll_event.source == ScrollEventSource::Touch
+                            && (consumed_x.abs() > f32::EPSILON || consumed_y.abs() > f32::EPSILON)
+                        {
+                            controller.with_mut(|c| {
+                                c.push_touch_delta(cursor_event.timestamp, consumed_x, consumed_y);
+                            });
+                        }
 
                         if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide)
                             && (consumed_x.abs() > f32::EPSILON || consumed_y.abs() > f32::EPSILON)
@@ -723,7 +953,14 @@ fn scrollable_inner(
                             remaining_events.push(event);
                         }
                     }
-                    _ => remaining_events.push(cursor_event.clone()),
+                    CursorEventContent::Pressed(_) => {
+                        controller.with_mut(|c| c.cancel_inertia());
+                        remaining_events.push(cursor_event.clone());
+                    }
+                    CursorEventContent::Released(_) => {
+                        controller.with_mut(|c| c.end_touch_scroll(cursor_event.timestamp));
+                        remaining_events.push(cursor_event.clone());
+                    }
                 }
             }
 
@@ -743,6 +980,18 @@ fn scrollable_inner(
             input.cursor_events.clear();
             input.cursor_events.extend(remaining_events);
         }
+
+        if !is_cursor_in_component {
+            controller.with_mut(|c| {
+                if c.should_trigger_idle_inertia(now) {
+                    c.end_touch_scroll(now);
+                }
+            });
+        }
+
+        controller.with_mut(|c| {
+            c.advance_inertia(now, &input.computed_data, args.vertical, args.horizontal);
+        });
     });
 
     // Add child component
