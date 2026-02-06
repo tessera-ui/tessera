@@ -5,7 +5,8 @@
     <application android:hasCode="{{has-code}}" android:supportsRtl="true" android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name" android:theme="@style/AppTheme">
         <activity android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" android:exported="true"
-            android:label="@string/app_name" android:name="{{android-app-activity-name}}">
+            android:label="@string/app_name" android:name="{{android-app-activity-name}}"
+            android:windowLayoutInDisplayCutoutMode="shortEdges">
             <meta-data android:name="android.app.lib_name" android:value="{{#if app.lib-name}}{{app.lib-name}}{{else}}{{snake-case app.name}}{{/if}}" />
             <meta-data android:name="android.app.func_name" android:value="GameActivity_onCreate" />
             <intent-filter>
