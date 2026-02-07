@@ -20,14 +20,14 @@ use winit::{
     error::EventLoopError,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    window::{Window, WindowId},
+    window::{ResizeDirection, Window, WindowId},
 };
 
 use crate::{
     ImeState, PxPosition,
     component_tree::{WindowAction, WindowRequests},
     context::begin_frame_context_slots,
-    cursor::{CursorEvent, CursorEventContent, CursorState, GestureState},
+    cursor::{CursorEvent, CursorEventContent, CursorState, GestureState, PressKeyEventType},
     dp::SCALE_FACTOR,
     keyboard_state::KeyboardState,
     pipeline_context::PipelineContext,
@@ -278,6 +278,10 @@ pub struct Renderer<F: Fn()> {
     frame_index: u64,
     /// Whether a window close was requested during the last frame.
     pending_close_requested: bool,
+    /// Tracks whether a native border resize drag is currently in progress.
+    /// While active, cursor input is withheld from the component tree to avoid
+    /// accidental UI interaction during system resize.
+    resize_in_progress: bool,
     #[cfg(target_os = "android")]
     /// Android-specific state tracking whether the soft keyboard is currently
     /// open
@@ -400,6 +404,7 @@ impl<F: Fn()> Renderer<F> {
             event_loop_proxy: Some(event_loop_proxy),
             frame_index: 0,
             pending_close_requested: false,
+            resize_in_progress: false,
         };
         thread_utils::set_thread_name("TesseraMain");
         event_loop.run_app(&mut renderer)
@@ -526,6 +531,7 @@ impl<F: Fn()> Renderer<F> {
             event_loop_proxy: Some(event_loop_proxy),
             frame_index: 0,
             pending_close_requested: false,
+            resize_in_progress: false,
         };
         thread_utils::set_thread_name("TesseraMain");
         event_loop.run_app(&mut renderer)
@@ -549,11 +555,89 @@ struct RenderFrameContext<'a, F: Fn()> {
     entry_point: &'a F,
     args: &'a mut RenderFrameArgs<'a>,
     accessibility_enabled: bool,
+    decorations: bool,
     window_label: &'a str,
     frame_idx: u64,
 }
 
+struct RenderFrameOutcome {
+    accessibility_update: Option<TreeUpdate>,
+    window_action: Option<WindowAction>,
+}
+
 impl<F: Fn()> Renderer<F> {
+    const RESIZE_EDGE_THRESHOLD: f64 = 8.0;
+
+    #[cfg(target_os = "windows")]
+    fn update_native_window_shape(&self, window: &Window) {
+        use winit::platform::windows::{CornerPreference, WindowExtWindows};
+
+        if self.config.window.decorations {
+            window.set_corner_preference(CornerPreference::Default);
+            return;
+        }
+
+        let preference = if window.is_maximized() || window.fullscreen().is_some() {
+            CornerPreference::DoNotRound
+        } else {
+            CornerPreference::Round
+        };
+        window.set_corner_preference(preference);
+    }
+
+    #[cfg(target_os = "macos")]
+    fn update_native_window_shape(&self, window: &Window) {
+        use objc2::rc::Retained;
+        use objc2_app_kit::NSView;
+        use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+        let raw_window_handle = match window.window_handle() {
+            Ok(handle) => handle.as_raw(),
+            Err(err) => {
+                warn!("Failed to fetch native window handle: {}", err);
+                return;
+            }
+        };
+        let RawWindowHandle::AppKit(appkit) = raw_window_handle else {
+            return;
+        };
+
+        // SAFETY: The pointer comes from winit's window handle and is valid for
+        // the lifetime of this call on the main thread.
+        let Some(ns_view) = (unsafe { Retained::<NSView>::retain(appkit.ns_view.as_ptr().cast()) })
+        else {
+            warn!("Failed to retain NSView from raw window handle");
+            return;
+        };
+
+        let radius_px = if self.config.window.decorations
+            || window.is_maximized()
+            || window.fullscreen().is_some()
+        {
+            0.0
+        } else {
+            8.0 * window.scale_factor()
+        };
+
+        ns_view.setWantsLayer(true);
+        // SAFETY: `layer()` and `makeBackingLayer()` are Objective-C APIs on a
+        // live NSView obtained above.
+        let layer = unsafe {
+            if let Some(layer) = ns_view.layer() {
+                layer
+            } else {
+                let layer = ns_view.makeBackingLayer();
+                ns_view.setLayer(Some(&layer));
+                layer
+            }
+        };
+        layer.setCornerRadius(radius_px as _);
+        layer.setMasksToBounds(radius_px > 0.0);
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    fn update_native_window_shape(&self, _window: &Window) {}
+
     fn should_set_cursor_pos(
         cursor_position: Option<crate::PxPosition>,
         window_width: f64,
@@ -569,6 +653,48 @@ impl<F: Fn()> Renderer<F> {
                 && y < window_height - edge_threshold
         } else {
             false
+        }
+    }
+
+    fn cursor_resize_direction(
+        cursor_position: Option<crate::PxPosition>,
+        window_size: winit::dpi::PhysicalSize<u32>,
+        edge_threshold: f64,
+    ) -> Option<ResizeDirection> {
+        let position = cursor_position?;
+        let x = position.x.0 as f64;
+        let y = position.y.0 as f64;
+        let width = window_size.width as f64;
+        let height = window_size.height as f64;
+
+        let near_left = x <= edge_threshold;
+        let near_right = x >= width - edge_threshold;
+        let near_top = y <= edge_threshold;
+        let near_bottom = y >= height - edge_threshold;
+
+        match (near_left, near_right, near_top, near_bottom) {
+            (true, _, true, _) => Some(ResizeDirection::NorthWest),
+            (_, true, true, _) => Some(ResizeDirection::NorthEast),
+            (true, _, _, true) => Some(ResizeDirection::SouthWest),
+            (_, true, _, true) => Some(ResizeDirection::SouthEast),
+            (true, _, _, _) => Some(ResizeDirection::West),
+            (_, true, _, _) => Some(ResizeDirection::East),
+            (_, _, true, _) => Some(ResizeDirection::North),
+            (_, _, _, true) => Some(ResizeDirection::South),
+            _ => None,
+        }
+    }
+
+    fn cursor_icon_for_resize(direction: ResizeDirection) -> winit::window::CursorIcon {
+        match direction {
+            ResizeDirection::East | ResizeDirection::West => winit::window::CursorIcon::EwResize,
+            ResizeDirection::North | ResizeDirection::South => winit::window::CursorIcon::NsResize,
+            ResizeDirection::NorthEast | ResizeDirection::SouthWest => {
+                winit::window::CursorIcon::NeswResize
+            }
+            ResizeDirection::NorthWest | ResizeDirection::SouthEast => {
+                winit::window::CursorIcon::NwseResize
+            }
         }
     }
 
@@ -762,11 +888,12 @@ Fps: {:.2}
     }
 
     #[instrument(level = "debug", skip(context))]
-    fn execute_render_frame(&mut self, context: RenderFrameContext<'_, F>) -> Option<TreeUpdate> {
+    fn execute_render_frame(context: RenderFrameContext<'_, F>) -> RenderFrameOutcome {
         let RenderFrameContext {
             entry_point,
             args,
             accessibility_enabled,
+            decorations,
             window_label,
             frame_idx,
         } = context;
@@ -848,20 +975,31 @@ Fps: {:.2}
         // cursors
         let cursor_position = args.cursor_state.position();
         let window_size = args.app.size();
-        let edge_threshold = 8.0; // Slightly larger threshold for better UX
+        let resize_direction = (!decorations).then(|| {
+            Self::cursor_resize_direction(cursor_position, window_size, Self::RESIZE_EDGE_THRESHOLD)
+        });
 
-        let should_set_cursor = Self::should_set_cursor_pos(
-            cursor_position,
-            window_size.width as f64,
-            window_size.height as f64,
-            edge_threshold,
-        );
-
-        if should_set_cursor {
+        if let Some(direction) = resize_direction.flatten() {
+            let icon = Self::cursor_icon_for_resize(direction);
             args.app
                 .window()
-                .set_cursor(winit::window::Cursor::Icon(window_requests.cursor_icon));
+                .set_cursor(winit::window::Cursor::Icon(icon));
+        } else {
+            let should_set_cursor = Self::should_set_cursor_pos(
+                cursor_position,
+                window_size.width as f64,
+                window_size.height as f64,
+                Self::RESIZE_EDGE_THRESHOLD,
+            );
+
+            if should_set_cursor {
+                args.app
+                    .window()
+                    .set_cursor(winit::window::Cursor::Icon(window_requests.cursor_icon));
+            }
         }
+
+        let window_action = window_requests.window_action;
 
         if let Some(ime_request) = window_requests.ime_request {
             #[cfg(not(target_os = "android"))]
@@ -894,10 +1032,6 @@ Fps: {:.2}
             }
         }
 
-        if let Some(window_action) = window_requests.window_action {
-            self.apply_window_action(args.app.window(), window_action);
-        }
-
         // End of frame cleanup
         args.cursor_state.frame_cleanup();
 
@@ -909,7 +1043,10 @@ Fps: {:.2}
         // Request a redraw to keep the event loop spinning for animations.
         args.app.window().request_redraw();
 
-        accessibility_update
+        RenderFrameOutcome {
+            accessibility_update,
+            window_action,
+        }
     }
 }
 
@@ -962,6 +1099,7 @@ impl<F: Fn()> Renderer<F> {
                 self.pending_close_requested = true;
             }
         }
+        self.update_native_window_shape(window);
     }
 
     fn handle_resized(&mut self, size: winit::dpi::PhysicalSize<u32>) {
@@ -971,6 +1109,7 @@ impl<F: Fn()> Renderer<F> {
             Some(app) => app,
             None => return,
         };
+        let window = app.window_arc();
 
         if size.width == 0 || size.height == 0 {
             TesseraRuntime::with_mut(|rt| {
@@ -986,9 +1125,13 @@ impl<F: Fn()> Renderer<F> {
             });
             app.resize(size);
         }
+        self.update_native_window_shape(&window);
     }
 
     fn handle_cursor_moved(&mut self, position: winit::dpi::PhysicalPosition<f64>) {
+        if self.resize_in_progress {
+            return;
+        }
         // Update cursor position
         self.cursor_state
             .update_position(PxPosition::from_f64_arr2([position.x, position.y]));
@@ -1038,6 +1181,41 @@ impl<F: Fn()> Renderer<F> {
         let Some(event_content) = CursorEventContent::from_press_event(state, button) else {
             return; // Ignore unsupported buttons
         };
+
+        if self.resize_in_progress {
+            if matches!(
+                event_content,
+                CursorEventContent::Released(PressKeyEventType::Left)
+            ) {
+                self.resize_in_progress = false;
+            }
+            return;
+        }
+
+        if matches!(
+            event_content,
+            CursorEventContent::Pressed(PressKeyEventType::Left)
+        ) && !self.config.window.decorations
+        {
+            if let Some(app) = self.app.as_ref() {
+                let window_size = app.size();
+                let direction = Self::cursor_resize_direction(
+                    self.cursor_state.position(),
+                    window_size,
+                    Self::RESIZE_EDGE_THRESHOLD,
+                );
+                if let Some(direction) = direction {
+                    if let Err(err) = app.window().drag_resize_window(direction) {
+                        warn!("Failed to start window resize: {}", err);
+                    } else {
+                        self.resize_in_progress = true;
+                        self.cursor_state.clear();
+                        debug!("Started native border resize; suppressing cursor input");
+                    }
+                    return;
+                }
+            }
+        }
         let event = CursorEvent {
             timestamp: Instant::now(),
             content: event_content,
@@ -1048,6 +1226,9 @@ impl<F: Fn()> Renderer<F> {
     }
 
     fn handle_mouse_wheel(&mut self, delta: winit::event::MouseScrollDelta) {
+        if self.resize_in_progress {
+            return;
+        }
         let event_content = CursorEventContent::from_scroll_event(delta);
         let event = CursorEvent {
             timestamp: Instant::now(),
@@ -1059,6 +1240,9 @@ impl<F: Fn()> Renderer<F> {
     }
 
     fn handle_touch(&mut self, touch_event: winit::event::Touch) {
+        if self.resize_in_progress {
+            return;
+        }
         let pos = PxPosition::from_f64_arr2([touch_event.location.x, touch_event.location.y]);
         debug!(
             "Touch event: id {}, phase {:?}, position {:?}",
@@ -1093,36 +1277,51 @@ impl<F: Fn()> Renderer<F> {
         &mut self,
         #[cfg(target_os = "android")] event_loop: &ActiveEventLoop,
     ) {
-        // Borrow the app here to avoid simultaneous mutable borrows of `self`
-        let app = match self.app.as_mut() {
+        let mut app = match self.app.take() {
             Some(app) => app,
             None => return,
         };
 
         app.resize_if_needed();
-        let mut args = RenderFrameArgs {
-            cursor_state: &mut self.cursor_state,
-            keyboard_state: &mut self.keyboard_state,
-            ime_state: &mut self.ime_state,
-            #[cfg(target_os = "android")]
-            android_ime_opened: &mut self.android_ime_opened,
-            app,
-            #[cfg(target_os = "android")]
-            event_loop,
+        let accessibility_enabled = self.accessibility_adapter.is_some();
+        let frame_idx = self.frame_index;
+        let window_label = &self.config.window_title;
+
+        let RenderFrameOutcome {
+            accessibility_update,
+            window_action,
+        } = {
+            let mut args = RenderFrameArgs {
+                cursor_state: &mut self.cursor_state,
+                keyboard_state: &mut self.keyboard_state,
+                ime_state: &mut self.ime_state,
+                #[cfg(target_os = "android")]
+                android_ime_opened: &mut self.android_ime_opened,
+                app: &mut app,
+                #[cfg(target_os = "android")]
+                event_loop,
+            };
+            Self::execute_render_frame(RenderFrameContext {
+                entry_point: &self.entry_point,
+                args: &mut args,
+                accessibility_enabled,
+                decorations: self.config.window.decorations,
+                window_label,
+                frame_idx,
+            })
         };
-        let accessibility_update = self.execute_render_frame(RenderFrameContext {
-            entry_point: &self.entry_point,
-            args: &mut args,
-            accessibility_enabled: self.accessibility_adapter.is_some(),
-            window_label: &self.config.window_title,
-            frame_idx: self.frame_index,
-        });
+
+        if let Some(action) = window_action {
+            self.apply_window_action(app.window(), action);
+        }
 
         self.frame_index = self.frame_index.wrapping_add(1);
 
         if let Some(tree_update) = accessibility_update {
             self.push_accessibility_update(tree_update);
         }
+
+        self.app = Some(app);
     }
 }
 
@@ -1190,9 +1389,13 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
 
         // Now show the window after AccessKit is initialized
         window.set_visible(true);
+        self.update_native_window_shape(&window);
 
-        let mut render_core =
-            pollster::block_on(RenderCore::new(window.clone(), self.config.sample_count));
+        let mut render_core = pollster::block_on(RenderCore::new(
+            window.clone(),
+            self.config.sample_count,
+            self.config.window.transparent,
+        ));
 
         // Register pipelines
         let mut context = PipelineContext::new(&mut render_core);
@@ -1235,6 +1438,7 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
         self.cursor_state = CursorState::default();
         self.keyboard_state = KeyboardState::default();
         self.ime_state = ImeState::default();
+        self.resize_in_progress = false;
         #[cfg(target_os = "android")]
         {
             self.android_ime_opened = false;
@@ -1307,6 +1511,9 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
                 } else {
                     let _ = SCALE_FACTOR.set(RwLock::new(scale_factor));
                 }
+                if let Some(app) = self.app.as_ref() {
+                    self.update_native_window_shape(app.window());
+                }
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 self.handle_keyboard_input(event);
@@ -1318,6 +1525,12 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
             WindowEvent::Ime(ime_event) => {
                 debug!("IME event: {ime_event:?}");
                 self.ime_state.push_event(ime_event);
+            }
+            WindowEvent::Focused(false) => {
+                if self.resize_in_progress {
+                    self.resize_in_progress = false;
+                    self.cursor_state.clear();
+                }
             }
             WindowEvent::RedrawRequested => {
                 #[cfg(target_os = "android")]

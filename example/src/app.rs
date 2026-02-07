@@ -3,7 +3,7 @@ use std::sync::Arc;
 use closure::closure;
 use tessera_components::{
     alignment::CrossAxisAlignment,
-    app_bar::{AppBarArgs, AppBarDefaults, TopAppBarArgs, top_app_bar as material_top_app_bar},
+    app_bar::{AppBarArgs, AppBarDefaults, app_bar},
     bottom_sheet::{
         BottomSheetController, BottomSheetProviderArgs, BottomSheetStyle,
         bottom_sheet_provider_with_controller,
@@ -17,7 +17,7 @@ use tessera_components::{
     icon::{IconArgs, icon},
     icon_button::{IconButtonArgs, icon_button},
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
-    material_icons::filled::{self, menu_icon, menu_open_icon},
+    material_icons::filled,
     modifier::{ModifierExt as _, Padding},
     navigation_bar::{NavigationBarItem, navigation_bar},
     navigation_rail::{
@@ -33,7 +33,7 @@ use tessera_components::{
     spacer::spacer,
     surface::{SurfaceArgs, SurfaceStyle, surface},
     text::{TextArgs, text},
-    theme::{MaterialTheme, material_theme},
+    theme::{MaterialTheme, material_theme, provide_text_style},
 };
 use tessera_ui::{
     Color, Dp, Modifier, State, remember, retain,
@@ -169,10 +169,12 @@ fn app_inner() {
                                                                     .with(|c| c.is_expanded());
                                                             let icon_button_args = if is_expanded {
                                                                 IconButtonArgs::new(
-                                                                    menu_open_icon(),
+                                                                    filled::menu_open_icon(),
                                                                 )
                                                             } else {
-                                                                IconButtonArgs::new(menu_icon())
+                                                                IconButtonArgs::new(
+                                                                    filled::menu_icon(),
+                                                                )
                                                             };
                                                             icon_button(icon_button_args.on_click(
                                                                 move || {
@@ -828,31 +830,116 @@ fn component_card(title: &str, description: &str, on_click: Arc<dyn Fn() + Send 
     );
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tessera]
+fn window_control_button(icon_args: IconArgs, action: tessera_ui::WindowAction, tint: Color) {
+    let icon_args = icon_args.size(Dp(18.0)).tint(tint);
+    surface(
+        SurfaceArgs::default()
+            .modifier(
+                Modifier::new()
+                    .size(Dp(40.0), Dp(32.0))
+                    .window_action(action),
+            )
+            .style(Color::TRANSPARENT.into())
+            .content_color(tint)
+            .content_alignment(tessera_components::alignment::Alignment::Center),
+        move || {
+            icon(icon_args);
+        },
+    );
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tessera]
+fn window_controls() {
+    use tessera_ui::WindowAction;
+
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let neutral = scheme.on_surface_variant;
+    let destructive = scheme.error;
+
+    row(
+        RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
+        move |row_scope| {
+            row_scope.child(move || {
+                window_control_button(
+                    IconArgs::from(filled::minimize_icon()),
+                    WindowAction::Minimize,
+                    neutral,
+                );
+            });
+            row_scope.child(|| spacer(Modifier::new().width(Dp(4.0))));
+            row_scope.child(move || {
+                window_control_button(
+                    IconArgs::from(filled::fullscreen_icon()),
+                    WindowAction::ToggleMaximize,
+                    neutral,
+                );
+            });
+            row_scope.child(|| spacer(Modifier::new().width(Dp(4.0))));
+            row_scope.child(move || {
+                window_control_button(
+                    IconArgs::from(filled::close_icon()),
+                    WindowAction::Close,
+                    destructive,
+                );
+            });
+        },
+    );
+}
+
 #[tessera]
 fn top_app_bar() {
     let app_bar_args = AppBarArgs::default().elevation(Dp(4.0));
-    let args = TopAppBarArgs::new("Tessera UI")
-        .app_bar(app_bar_args)
-        .navigation_icon(|| {
-            let mut button_args = ButtonArgs::default()
-                .padding(Dp(5.0))
-                .color(Color::TRANSPARENT)
-                .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)));
+    let title_style = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .typography
+        .title_large;
+    let can_go_back = Router::with(|router| router.len()) > 1;
 
-            if Router::with(|router| router.len()) > 1 {
-                button_args = button_args.on_click(|| {
-                    Router::with_mut(|router| {
-                        router.pop();
-                    });
-                });
-            }
-
-            button(button_args, || {
-                icon(IconArgs::from(filled::arrow_back_icon()).size(Dp(20.0)));
-            });
+    app_bar(app_bar_args, move |scope| {
+        scope.child(move || {
+            icon_button(
+                IconButtonArgs::new(filled::arrow_back_icon())
+                    .enabled(can_go_back)
+                    .color(Color::TRANSPARENT)
+                    .on_click(|| {
+                        Router::with_mut(|router| {
+                            router.pop();
+                        });
+                    }),
+            )
         });
 
-    material_top_app_bar(args);
+        let title_text = "Tessera UI".to_string();
+        scope.child_weighted(
+            move || {
+                row(
+                    RowArgs::default()
+                        .modifier(Modifier::new().fill_max_size().window_drag_region())
+                        .cross_axis_alignment(CrossAxisAlignment::Center),
+                    move |row_scope| {
+                        row_scope.child(move || {
+                            provide_text_style(title_style, move || {
+                                text(TextArgs::default().text(title_text));
+                            });
+                        });
+                    },
+                );
+            },
+            1.0,
+        );
+
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        scope.child(|| {
+            window_controls();
+        });
+    });
 }
 
 #[tessera]

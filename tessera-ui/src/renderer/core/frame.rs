@@ -475,6 +475,7 @@ impl RenderCore {
             frame_resources.release_for_pass(pass_index);
         }
 
+        let target_size = PxSize::new(Px(self.config.width as i32), Px(self.config.height as i32));
         RenderCore::blit_to_view(BlitParams {
             encoder: &mut encoder,
             device,
@@ -483,7 +484,7 @@ impl RenderCore {
             bind_group_layout: &blit.bind_group_layout,
             sampler: &blit.sampler,
             pipeline: &blit.pipeline,
-            target_size: PxSize::new(Px(self.config.width as i32), Px(self.config.height as i32)),
+            target_size,
             scissor_rect: None,
         });
 

@@ -18,6 +18,38 @@ use crate::{
 use super::{BlitState, ComputeState, FrameTargets, LocalTexturePool, RenderCore, RenderPipelines};
 
 impl RenderCore {
+    fn pick_alpha_mode(
+        caps: &wgpu::SurfaceCapabilities,
+        window_transparent: bool,
+    ) -> wgpu::CompositeAlphaMode {
+        if window_transparent {
+            if caps
+                .alpha_modes
+                .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
+            {
+                return wgpu::CompositeAlphaMode::PreMultiplied;
+            }
+            if caps
+                .alpha_modes
+                .contains(&wgpu::CompositeAlphaMode::PostMultiplied)
+            {
+                return wgpu::CompositeAlphaMode::PostMultiplied;
+            }
+            if caps
+                .alpha_modes
+                .contains(&wgpu::CompositeAlphaMode::Inherit)
+            {
+                return wgpu::CompositeAlphaMode::Inherit;
+            }
+        } else if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
+            return wgpu::CompositeAlphaMode::Opaque;
+        }
+        caps.alpha_modes
+            .first()
+            .copied()
+            .unwrap_or(wgpu::CompositeAlphaMode::Opaque)
+    }
+
     async fn request_adapter_for_surface(
         instance: &wgpu::Instance,
         surface: &wgpu::Surface<'_>,
@@ -94,7 +126,11 @@ impl RenderCore {
     }
 
     /// Create a new render core as the root of Tessera.
-    pub(crate) async fn new(window: Arc<Window>, sample_count: u32) -> Self {
+    pub(crate) async fn new(
+        window: Arc<Window>,
+        sample_count: u32,
+        window_transparent: bool,
+    ) -> Self {
         // Looking for adapters
         let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -123,6 +159,7 @@ impl RenderCore {
             // Immediate is the least preferred, it can cause tearing and is not recommended
             wgpu::PresentMode::Immediate
         };
+        let alpha_mode = Self::pick_alpha_mode(&caps, window_transparent);
         info!("Using present mode: {present_mode:?}");
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -130,7 +167,7 @@ impl RenderCore {
             width: size.width,
             height: size.height,
             present_mode,
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            alpha_mode,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
