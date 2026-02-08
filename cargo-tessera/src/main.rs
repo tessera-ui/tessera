@@ -1,4 +1,4 @@
-use std::process::ExitCode;
+use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
@@ -55,6 +55,10 @@ enum TesseraCommands {
         /// Enable release mode
         #[arg(short, long)]
         release: bool,
+        /// Enable profiling output and write records to this JSONL file
+        /// (desktop only)
+        #[arg(long, value_name = "FILE")]
+        profiling_output: Option<PathBuf>,
     },
     /// Build the project for release (native targets)
     Build {
@@ -67,6 +71,15 @@ enum TesseraCommands {
         /// Specify package to build
         #[arg(short, long)]
         package: Option<String>,
+        /// Enable profiling output and write records to this JSONL file
+        /// (desktop only)
+        #[arg(long, value_name = "FILE")]
+        profiling_output: Option<PathBuf>,
+    },
+    /// Profiling utilities
+    Profiling {
+        #[command(subcommand)]
+        command: ProfilingCommands,
     },
     /// Android-specific helpers (build/dev)
     Android {
@@ -105,6 +118,27 @@ enum PluginCommands {
         /// Use a specific template
         #[arg(short, long)]
         template: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProfilingCommands {
+    /// Analyze profiler JSONL output
+    Analyze {
+        /// Path to tessera profiler JSONL output file
+        path: PathBuf,
+        /// Show top N component entries per section
+        #[arg(long, default_value_t = 20)]
+        top: usize,
+        /// Minimum sample count per component to include in top lists
+        #[arg(long, default_value_t = 1)]
+        min_count: u64,
+        /// Skip non-frame JSON lines that fail parsing
+        #[arg(long)]
+        skip_invalid: bool,
+        /// Export full per-component aggregated stats to CSV
+        #[arg(long, value_name = "FILE")]
+        csv: Option<PathBuf>,
     },
 }
 
@@ -193,16 +227,45 @@ fn run() -> Result<()> {
                 verbose,
                 package,
                 release,
+                profiling_output,
             } => {
-                commands::dev::execute(verbose, package.as_deref(), release)?;
+                commands::dev::execute(
+                    verbose,
+                    package.as_deref(),
+                    release,
+                    profiling_output.as_deref(),
+                )?;
             }
             TesseraCommands::Build {
                 release,
                 target,
                 package,
+                profiling_output,
             } => {
-                commands::build::execute(release, target.as_deref(), package.as_deref())?;
+                commands::build::execute(
+                    release,
+                    target.as_deref(),
+                    package.as_deref(),
+                    profiling_output.as_deref(),
+                )?;
             }
+            TesseraCommands::Profiling { command } => match command {
+                ProfilingCommands::Analyze {
+                    path,
+                    top,
+                    min_count,
+                    skip_invalid,
+                    csv,
+                } => {
+                    commands::profiling::analyze(
+                        &path,
+                        top,
+                        min_count,
+                        skip_invalid,
+                        csv.as_deref(),
+                    )?;
+                }
+            },
             TesseraCommands::Android { command } => match command {
                 AndroidCommands::Init {
                     skip_targets_install,

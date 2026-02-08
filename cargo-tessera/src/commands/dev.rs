@@ -1,5 +1,5 @@
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command},
     sync::mpsc::channel,
     time::{Duration, Instant},
@@ -12,10 +12,18 @@ use crate::output;
 
 use super::find_package_dir;
 
-pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()> {
+pub fn execute(
+    verbose: bool,
+    package: Option<&str>,
+    release: bool,
+    profiling_output: Option<&Path>,
+) -> Result<()> {
     output::status("Starting", "dev server (auto rebuild/restart)");
     if let Some(pkg) = package {
         output::status("Package", format!("`{}`", pkg));
+    }
+    if let Some(path) = profiling_output {
+        output::status("Profiling", format!("enabled ({})", path.display()));
     }
     output::status("Watching", "for file changes");
 
@@ -102,6 +110,9 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
             if let Some(pkg) = package {
                 build_cmd.arg("-p").arg(pkg);
             }
+            if let Some(path) = profiling_output {
+                enable_profiling(&mut build_cmd, path);
+            }
 
             match build_cmd.spawn() {
                 Ok(c) => {
@@ -130,6 +141,9 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
                         }
                         if let Some(pkg) = package {
                             run_cmd.arg("-p").arg(pkg);
+                        }
+                        if let Some(path) = profiling_output {
+                            enable_profiling(&mut run_cmd, path);
                         }
 
                         match run_cmd.spawn() {
@@ -189,4 +203,9 @@ pub fn execute(verbose: bool, package: Option<&str>, release: bool) -> Result<()
     }
 
     Ok(())
+}
+
+fn enable_profiling(cmd: &mut Command, output_path: &Path) {
+    cmd.arg("--features").arg("tessera-ui/profiling");
+    cmd.env("TESSERA_PROFILING_OUTPUT", output_path);
 }

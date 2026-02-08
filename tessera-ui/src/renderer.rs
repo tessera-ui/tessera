@@ -10,6 +10,8 @@ pub mod external;
 
 use std::{sync::Arc, time::Instant};
 
+pub use core::{RenderCore, RenderResources};
+
 use accesskit::{self, TreeUpdate};
 use accesskit_winit::{Adapter as AccessKitAdapter, Event as AccessKitEvent};
 use parking_lot::RwLock;
@@ -39,14 +41,13 @@ use crate::{
     thread_utils,
 };
 
-use self::core::RenderTimingBreakdown;
-
 pub use crate::render_scene::{Command, DrawRegion, PaddingRect, SampleRegion};
+
+use self::core::RenderTimingBreakdown;
 
 pub use compute::{
     ComputablePipeline, ComputeBatchItem, ComputePipelineRegistry, ErasedComputeBatchItem,
 };
-pub use core::{RenderCore, RenderResources};
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
 pub use external::{ExternalTextureHandle, ExternalTextureRegistry};
 
@@ -64,6 +65,21 @@ use winit::platform::android::{
 };
 
 type RenderComputationOutput = (RenderGraph, WindowRequests, std::time::Duration);
+
+#[cfg(feature = "profiling")]
+fn resolve_profiler_output_path(config: &TesseraConfig) -> PathBuf {
+    if let Ok(path) = std::env::var("TESSERA_PROFILING_OUTPUT")
+        && !path.trim().is_empty()
+    {
+        return PathBuf::from(path);
+    }
+    if let Some(path) = option_env!("TESSERA_PROFILING_OUTPUT")
+        && !path.trim().is_empty()
+    {
+        return PathBuf::from(path);
+    }
+    config.profiler_output_path.clone()
+}
 
 /// Window creation options for desktop platforms.
 #[derive(Debug, Clone)]
@@ -390,7 +406,7 @@ impl<F: Fn()> Renderer<F> {
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
         #[cfg(feature = "profiling")]
-        crate::profiler::set_output_path(&config.profiler_output_path);
+        crate::profiler::set_output_path(resolve_profiler_output_path(&config));
         let mut renderer = Self {
             app,
             entry_point,
@@ -516,7 +532,7 @@ impl<F: Fn()> Renderer<F> {
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
         #[cfg(feature = "profiling")]
-        crate::profiler::set_output_path(&config.profiler_output_path);
+        crate::profiler::set_output_path(resolve_profiler_output_path(&config));
         let mut renderer = Self {
             app,
             entry_point,
@@ -1192,8 +1208,7 @@ impl<F: Fn()> Renderer<F> {
             event_content,
             CursorEventContent::Pressed(PressKeyEventType::Left)
         ) && !self.config.window.decorations
-        {
-            if let Some(app) = self.app.as_ref() {
+            && let Some(app) = self.app.as_ref() {
                 let window_size = app.size();
                 let direction = Self::cursor_resize_direction(
                     self.cursor_state.position(),
@@ -1211,7 +1226,6 @@ impl<F: Fn()> Renderer<F> {
                     return;
                 }
             }
-        }
         let event = CursorEvent {
             timestamp: Instant::now(),
             content: event_content,

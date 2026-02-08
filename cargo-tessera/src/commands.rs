@@ -3,6 +3,7 @@ pub mod build;
 pub mod dev;
 pub mod new;
 pub mod plugin;
+pub mod profiling;
 
 use std::{fs, path::PathBuf};
 

@@ -24,6 +24,12 @@ cargo tessera dev
 ```
 `cargo tessera dev` watches `src/`, `Cargo.toml`, and (if present) `build.rs`, then rebuilds and restarts the app whenever changes are saved. Pass `--verbose` to see the underlying `cargo` commands.
 
+Enable profiler output during desktop dev:
+
+```bash
+cargo tessera dev -p example --profiling-output profiles/dev.jsonl
+```
+
 ### Build for release
 
 ```bash
@@ -34,6 +40,24 @@ Cross-compile for a specific target:
 
 ```bash
 cargo tessera build --release --target x86_64-pc-windows-msvc
+```
+
+Enable profiler instrumentation in desktop build artifacts:
+
+```bash
+cargo tessera build -p example --profiling-output profiles/build.jsonl
+```
+
+### Analyze profiler output
+
+```bash
+cargo tessera profiling analyze profiles/dev.jsonl --top 30
+```
+
+Optional CSV export:
+
+```bash
+cargo tessera profiling analyze profiles/dev.jsonl --csv profiles/components.csv
 ```
 
 ### Build for Android (experimental)
@@ -60,6 +84,7 @@ cargo tessera android dev --device 8cd1353b
 - `cargo tessera new <name>` - Create a new Tessera project
 - `cargo tessera dev` - Start development server with automatic rebuild/restart
 - `cargo tessera build` - Build desktop targets
+- `cargo tessera profiling analyze <file>` - Analyze profiler JSONL output
 - `cargo tessera android <subcommand>` - Android helpers (`build`, `dev`)
 
 ## License

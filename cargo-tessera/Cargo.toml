@@ -33,3 +33,6 @@ cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", defaul
 handlebars = "6"
 serde_json = "1"
 cargo_metadata = "0.23"
+comfy-table = "7.1"
+owo-colors = "4.1"
+csv = "1.3"
