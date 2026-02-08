@@ -620,16 +620,12 @@ impl<F: Fn()> Renderer<F> {
         };
 
         ns_view.setWantsLayer(true);
-        // SAFETY: `layer()` and `makeBackingLayer()` are Objective-C APIs on a
-        // live NSView obtained above.
-        let layer = unsafe {
-            if let Some(layer) = ns_view.layer() {
-                layer
-            } else {
-                let layer = ns_view.makeBackingLayer();
-                ns_view.setLayer(Some(&layer));
-                layer
-            }
+        let layer = if let Some(layer) = ns_view.layer() {
+            layer
+        } else {
+            let layer = ns_view.makeBackingLayer();
+            ns_view.setLayer(Some(&layer));
+            layer
         };
         layer.setCornerRadius(radius_px as _);
         layer.setMasksToBounds(radius_px > 0.0);
