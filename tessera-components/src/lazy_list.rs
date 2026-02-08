@@ -749,17 +749,21 @@ impl LayoutSpec for LazyListLayout {
             ));
         }
 
+        let mut measured_children: Vec<(usize, NodeId)> = self
+            .visible_item_indices
+            .iter()
+            .copied()
+            .zip(input.children_ids().iter().copied())
+            .collect();
+        measured_children.sort_unstable_by_key(|(item_index, _)| *item_index);
+
         let mut child_constraint = self.axis.child_constraint(input.parent_constraint());
         apply_cross_padding(&mut child_constraint, self.axis, self.padding_cross);
         let (placements, inner_cross, total_main) = self.controller.with_mut(|c| {
             let mut placements = Vec::with_capacity(self.visible_item_indices.len());
             let mut max_cross = Px::ZERO;
 
-            for (item_index, child_id) in self
-                .visible_item_indices
-                .iter()
-                .zip(input.children_ids().iter())
-            {
+            for (item_index, child_id) in &measured_children {
                 let item_offset =
                     c.cache
                         .offset_for(*item_index, self.estimated_item_main, self.item_spacing);

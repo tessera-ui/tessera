@@ -11,7 +11,7 @@ use tessera_ui::{Color, Dp, Modifier, accesskit::Role, tessera, use_context};
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
     icon::{IconArgs, icon},
-    modifier::{ModifierExt as _, Padding},
+    modifier::{ModifierExt as _, Padding, ShadowArgs},
     row::{RowArgs, row},
     shape_def::Shape,
     spacer::spacer,
@@ -570,11 +570,22 @@ pub fn chip(args: impl Into<ChipArgs>) {
         .accessibility_label
         .or_else(|| (!label.is_empty()).then(|| label.clone()));
 
+    let mut modifier = args
+        .modifier
+        .size_in(None, None, Some(ChipDefaults::HEIGHT), None);
+    if matches!(style, ChipStyle::Elevated)
+        && let Some(elevation) = elevation
+    {
+        modifier = modifier.shadow(
+            ShadowArgs::new(elevation)
+                .shape(args.shape)
+                .ambient_color(theme.color_scheme.shadow.with_alpha(0.12))
+                .spot_color(Color::TRANSPARENT),
+        );
+    }
+
     let mut surface_args = SurfaceArgs::default()
-        .modifier(
-            args.modifier
-                .size_in(None, None, Some(ChipDefaults::HEIGHT), None),
-        )
+        .modifier(modifier)
         .style(surface_style)
         .shape(args.shape)
         .content_alignment(Alignment::Center)
@@ -582,7 +593,9 @@ pub fn chip(args: impl Into<ChipArgs>) {
         .enabled(args.enabled)
         .ripple_color(label_color);
 
-    if let Some(elevation) = elevation {
+    if !matches!(style, ChipStyle::Elevated)
+        && let Some(elevation) = elevation
+    {
         surface_args = surface_args.elevation(elevation);
     }
 

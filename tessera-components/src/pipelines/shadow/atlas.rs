@@ -100,8 +100,11 @@ impl ShadowAtlasPipeline {
                 count: 0,
                 last_seen_frame: frame_index.wrapping_sub(1),
             });
-        entry.count = entry.count.saturating_add(1);
-        entry.last_seen_frame = frame_index;
+        if entry.last_seen_frame != frame_index {
+            // Avoid promoting mid-frame when the same key appears multiple times.
+            entry.count = entry.count.saturating_add(1);
+            entry.last_seen_frame = frame_index;
+        }
         entry.count >= SHADOW_ATLAS_HEAT_THRESHOLD
     }
 }
@@ -177,11 +180,24 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
         }
         self.atlas.ensure_limits(device);
 
+        let mut key_counts: HashMap<ShadowStampKey, usize> = HashMap::new();
         for item in &shadows {
             let key = build_stamp_key(item, sample_count);
-            if !self.stamp_cache.contains_key(&key)
-                && !self.should_promote_to_atlas(&key, frame_index)
-            {
+            *key_counts.entry(key).or_insert(0) += 1;
+        }
+
+        let mut use_atlas_by_key: HashMap<ShadowStampKey, bool> =
+            HashMap::with_capacity(key_counts.len());
+        for (key, count) in &key_counts {
+            let use_atlas = self.stamp_cache.contains_key(key)
+                || *count > 1
+                || self.should_promote_to_atlas(key, frame_index);
+            use_atlas_by_key.insert(key.clone(), use_atlas);
+        }
+
+        for item in &shadows {
+            let key = build_stamp_key(item, sample_count);
+            if !*use_atlas_by_key.get(&key).unwrap_or(&false) {
                 emit_fallback_item(&mut output, item);
                 continue;
             }
@@ -951,7 +967,10 @@ fn build_op(
 
 fn emit_fallback_item(output: &mut CompositeOutput, item: &ShadowItem) {
     let mask_id = add_atlas_resource(&mut output.resources, item.mask_size);
-    let blur_id = add_atlas_resource(&mut output.resources, item.mask_size);
+    let mut blur_ids: Vec<RenderResourceId> = Vec::with_capacity(item.layers.len());
+    for _ in &item.layers {
+        blur_ids.push(add_atlas_resource(&mut output.resources, item.mask_size));
+    }
 
     let mask_command = ShadowMaskCommand::new(item.shape);
     output.prelude_ops.push(build_op(
@@ -966,7 +985,8 @@ fn emit_fallback_item(output: &mut CompositeOutput, item: &ShadowItem) {
 
     let mut replacement_ops: Vec<RenderGraphOp> = Vec::new();
 
-    for layer_info in &item.layers {
+    for (layer_index, layer_info) in item.layers.iter().enumerate() {
+        let blur_id = blur_ids[layer_index];
         let mut last_resource = None;
         for (index, radius) in layer_info.radii.iter().copied().enumerate() {
             let blur_command = DualBlurCommand::horizontal_then_vertical(radius);
