@@ -48,19 +48,25 @@ pub struct Application {
 
 impl Application {
     pub fn detect_editor() -> Result<Self, DetectEditorError> {
-        unsafe fn inner(uti: CFStringRef) -> Result<CFURL, CFError> {
+        fn inner(uti: CFStringRef) -> Result<CFURL, CFError> {
             let mut err: CFErrorRef = ptr::null_mut();
-            let out_url =
-                ffi::LSCopyDefaultApplicationURLForContentType(uti, ffi::kLSRolesEditor, &mut err);
+            // SAFETY: `uti` is a valid CoreFoundation string reference, and
+            // `err` points to writable storage for LaunchServices to fill.
+            let out_url = unsafe {
+                ffi::LSCopyDefaultApplicationURLForContentType(uti, ffi::kLSRolesEditor, &mut err)
+            };
             if out_url.is_null() {
-                Err(TCFType::wrap_under_create_rule(err))
+                // SAFETY: LaunchServices returned an owned `CFErrorRef` on
+                // failure according to Create Rule conventions.
+                Err(unsafe { TCFType::wrap_under_create_rule(err) })
             } else {
-                Ok(TCFType::wrap_under_create_rule(out_url))
+                // SAFETY: LaunchServices returned an owned `CFURLRef` on
+                // success according to Create Rule conventions.
+                Ok(unsafe { TCFType::wrap_under_create_rule(out_url) })
             }
         }
         let uti = CFString::from_static_string(RUST_UTI);
-        let url =
-            unsafe { inner(uti.as_concrete_TypeRef()) }.map_err(DetectEditorError::LookupFailed)?;
+        let url = inner(uti.as_concrete_TypeRef()).map_err(DetectEditorError::LookupFailed)?;
         Ok(Self { url })
     }
 

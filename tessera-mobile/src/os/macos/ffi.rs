@@ -82,7 +82,7 @@ pub const kLSNoClassicEnvironmentErr: OSStatus = -10828;
 pub const kLSMultipleSessionsNotSupportedErr: OSStatus = -10829;
 
 #[link(name = "CoreServices", kind = "framework")]
-extern "C" {
+unsafe extern "C" {
     // https://developer.apple.com/documentation/coreservices/1448824-lscopydefaultapplicationurlforur?language=objc
     pub fn LSCopyDefaultApplicationURLForURL(
         inURL: CFURLRef,
