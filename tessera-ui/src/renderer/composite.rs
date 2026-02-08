@@ -14,8 +14,7 @@ use crate::{
     },
 };
 
-use super::core::RenderResources;
-use super::external::ExternalTextureRegistry;
+use super::{core::RenderResources, external::ExternalTextureRegistry};
 
 /// Context provided to composite pipelines during expansion.
 pub struct CompositeContext<'a> {

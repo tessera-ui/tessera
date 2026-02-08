@@ -349,8 +349,7 @@ pub mod router;
 
 pub use accesskit;
 pub use indextree::{Arena, NodeId};
-pub use tessera_macros::entry;
-pub use tessera_macros::tessera;
+pub use tessera_macros::{entry, tessera};
 pub use wgpu;
 pub use winit;
 

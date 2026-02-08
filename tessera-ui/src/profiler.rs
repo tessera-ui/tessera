@@ -111,6 +111,7 @@ use std::{
 use indextree::NodeId;
 use serde::Serialize;
 use serde_json;
+use tracing::error;
 
 /// Profiling phases that can be emitted.
 #[derive(Clone, Copy)]
@@ -284,7 +285,7 @@ fn current_frame_idx() -> u64 {
 
 fn push_sample(sample: Sample) {
     if let Err(err) = profiler_runtime().sender.send(Message::Sample(sample)) {
-        eprintln!("tessera profiler channel send failed: {err}");
+        error!("tessera profiler sample send failed: {err}");
     }
 }
 

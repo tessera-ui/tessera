@@ -9,8 +9,6 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-#[cfg(target_os = "android")]
-use winit::platform::android::activity::AndroidApp;
 
 use crate::{
     entry_registry::{EntryRegistry, TesseraPackage},
@@ -18,6 +16,9 @@ use crate::{
     render_module::RenderModule,
     renderer::{Renderer, TesseraConfig},
 };
+
+#[cfg(target_os = "android")]
+use winit::platform::android::activity::AndroidApp;
 
 /// Builder for application entry configuration and startup.
 pub struct EntryPoint {

@@ -923,7 +923,7 @@ fn guard_padding_for_layers(layers: &[ShadowLayerInfo]) -> u32 {
         .iter()
         .map(|layer| layer.layer.smoothness)
         .fold(0.0f32, f32::max);
-    let scale = downscale_factor_for_radius(max_radius).max(1) as u32;
+    let scale = downscale_factor_for_radius(max_radius).max(1);
     SHADOW_ATLAS_GUARD_PX.saturating_mul(scale).max(1)
 }
 

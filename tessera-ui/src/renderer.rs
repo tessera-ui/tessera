@@ -1208,24 +1208,25 @@ impl<F: Fn()> Renderer<F> {
             event_content,
             CursorEventContent::Pressed(PressKeyEventType::Left)
         ) && !self.config.window.decorations
-            && let Some(app) = self.app.as_ref() {
-                let window_size = app.size();
-                let direction = Self::cursor_resize_direction(
-                    self.cursor_state.position(),
-                    window_size,
-                    Self::RESIZE_EDGE_THRESHOLD,
-                );
-                if let Some(direction) = direction {
-                    if let Err(err) = app.window().drag_resize_window(direction) {
-                        warn!("Failed to start window resize: {}", err);
-                    } else {
-                        self.resize_in_progress = true;
-                        self.cursor_state.clear();
-                        debug!("Started native border resize; suppressing cursor input");
-                    }
-                    return;
+            && let Some(app) = self.app.as_ref()
+        {
+            let window_size = app.size();
+            let direction = Self::cursor_resize_direction(
+                self.cursor_state.position(),
+                window_size,
+                Self::RESIZE_EDGE_THRESHOLD,
+            );
+            if let Some(direction) = direction {
+                if let Err(err) = app.window().drag_resize_window(direction) {
+                    warn!("Failed to start window resize: {}", err);
+                } else {
+                    self.resize_in_progress = true;
+                    self.cursor_state.clear();
+                    debug!("Started native border resize; suppressing cursor input");
                 }
+                return;
             }
+        }
         let event = CursorEvent {
             timestamp: Instant::now(),
             content: event_content,

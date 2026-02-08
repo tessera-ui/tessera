@@ -11,7 +11,6 @@ use std::{
 };
 
 use derive_setters::Setters;
-
 use tessera_ui::{Color, Dp, Modifier, State, tessera, use_context};
 
 use crate::{
