@@ -34,6 +34,21 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check && rust-script scripts/check-imports.rs .
 
+  check_macos:
+    name: Check macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install stable
+        run: rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - name: Check macOS build
+        run: |
+          cargo +stable check -p tessera-ui --all-targets --verbose
+          cargo +stable check -p example --verbose
+          cargo tessera build -p example
+
   check_android:
     name: Check Android
     runs-on: ubuntu-latest
