@@ -263,7 +263,10 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 impl Drop for ComponentScopeGuard {
                     fn drop(&mut self) {
                         use #crate_path::runtime::TesseraRuntime;
-                        TesseraRuntime::with_mut(|runtime| runtime.component_tree.pop_node());
+                        TesseraRuntime::with_mut(|runtime| {
+                            runtime.finalize_current_layout_spec_dirty();
+                            runtime.component_tree.pop_node();
+                        });
                     }
                 }
                 ComponentScopeGuard
@@ -282,17 +285,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     runtime.set_current_instance_key(__tessera_instance_key);
                 });
             }
-            let _trace_guard = {
-                struct TraceGuard;
-                impl Drop for TraceGuard {
-                    fn drop(&mut self) {
-                        #crate_path::runtime::trace_end();
-                    }
-                }
-                #crate_path::runtime::trace_begin(__tessera_instance_key);
-                TraceGuard
-            };
-
             // Inject helper tokens
             #layout_tokens
             #state_tokens

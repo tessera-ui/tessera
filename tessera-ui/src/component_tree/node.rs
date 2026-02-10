@@ -20,11 +20,11 @@ use crate::{
     layout::{LayoutInput, LayoutOutput, LayoutResult, LayoutSpecDyn},
     px::{PxPosition, PxSize},
     render_graph::RenderFragment,
-    runtime::{LayoutCacheEntry, RuntimePhase, push_current_node, push_phase},
+    runtime::{RuntimePhase, push_current_node, push_phase},
 };
 
 use super::{
-    LayoutContext,
+    LayoutContext, LayoutSnapshotEntry,
     constraint::{Constraint, DimensionValue, ParentConstraint},
 };
 
@@ -586,6 +586,57 @@ fn apply_layout_placements(
     }
 }
 
+fn restore_cached_subtree_metadata(
+    node_id: NodeId,
+    rel_position: Option<PxPosition>,
+    tree: &ComponentNodeTree,
+    component_node_metadatas: &ComponentNodeMetaDatas,
+    snapshots: &DashMap<u64, LayoutSnapshotEntry>,
+) -> bool {
+    let Some(node) = tree.get(node_id) else {
+        return false;
+    };
+    let instance_key = node.get().instance_key;
+    let Some(entry) = snapshots.get(&instance_key) else {
+        return false;
+    };
+
+    let size = entry.layout_result.size;
+    let placements = entry.layout_result.placements.clone();
+    drop(entry);
+
+    {
+        let mut metadata = component_node_metadatas.entry(node_id).or_default();
+        metadata.computed_data = Some(size);
+        metadata.layout_cache_hit = true;
+        if let Some(position) = rel_position {
+            metadata.rel_position = Some(position);
+        }
+    }
+
+    let mut child_positions = HashMap::new();
+    for (child_key, child_pos) in placements {
+        child_positions.insert(child_key, child_pos);
+    }
+
+    for child_id in node_id.children(tree) {
+        let child_rel_position = tree
+            .get(child_id)
+            .and_then(|child| child_positions.get(&child.get().instance_key).copied());
+        if !restore_cached_subtree_metadata(
+            child_id,
+            child_rel_position,
+            tree,
+            component_node_metadatas,
+            snapshots,
+        ) {
+            return false;
+        }
+    }
+
+    true
+}
+
 /// Measures a single node recursively, returning its size or an error.
 ///
 /// See [`measure_nodes`] for concurrent measurement of multiple nodes.
@@ -639,69 +690,147 @@ pub(crate) fn measure_node(
             0
         }
     };
-    let child_keys: Vec<u64> = children
-        .iter()
-        .map(|&child_id| resolve_instance_key(child_id))
-        .collect();
-
     let layout_spec = &node_data.layout_spec;
-    if let Some(layout_ctx) = layout_ctx
-        && let Some(entry) = layout_ctx.cache.get(&node_data.instance_key)
-    {
-        let can_try_reuse = entry.constraint_key == *parent_constraint
-            && entry.layout_spec.dyn_eq(layout_spec.as_ref())
-            && entry.child_keys == child_keys
-            && entry.child_constraints.len() == child_keys.len()
-            && entry.child_sizes.len() == child_keys.len();
-        if can_try_reuse {
-            let cached_constraints = entry.child_constraints.clone();
-            let cached_sizes = entry.child_sizes.clone();
-            let cached_result = entry.layout_result.clone();
-            drop(entry);
+    if let Some(layout_ctx) = layout_ctx {
+        layout_ctx.diagnostics.inc_measure_node_calls();
+        if let Some(entry) = layout_ctx.snapshots.get(&node_data.instance_key) {
+            let same_constraint = entry.constraint_key == *parent_constraint;
+            let node_self_dirty = layout_ctx
+                .dirty_self_nodes
+                .contains(&node_data.instance_key);
+            let node_effective_dirty = layout_ctx
+                .dirty_effective_nodes
+                .contains(&node_data.instance_key);
+            let has_all_child_constraints = entry.child_constraints.len() == children.len();
+            let has_all_child_sizes = entry.child_sizes.len() == children.len();
+            let can_try_reuse = same_constraint
+                && !node_self_dirty
+                && has_all_child_constraints
+                && (!node_effective_dirty || has_all_child_sizes);
+            if can_try_reuse {
+                let cached_result = entry.layout_result.clone();
+                let cached_child_constraints = entry.child_constraints.clone();
+                let cached_child_sizes = entry.child_sizes.clone();
+                drop(entry);
 
-            let nodes_to_measure = children
-                .iter()
-                .zip(cached_constraints.iter())
-                .map(|(child_id, constraint)| (*child_id, *constraint))
-                .collect();
-            let measured = measure_nodes(
-                nodes_to_measure,
-                tree,
-                component_node_metadatas,
-                compute_resource_manager.clone(),
-                gpu,
-                Some(layout_ctx),
-            );
-            let mut sizes_match = true;
-            for (index, child_id) in children.iter().enumerate() {
-                let Some(result) = measured.get(child_id) else {
-                    sizes_match = false;
-                    break;
-                };
-                match result {
-                    Ok(size) => {
-                        if *size != cached_sizes[index] {
-                            sizes_match = false;
+                if !node_effective_dirty
+                    && restore_cached_subtree_metadata(
+                        node_id,
+                        None,
+                        tree,
+                        component_node_metadatas,
+                        layout_ctx.snapshots,
+                    )
+                {
+                    apply_layout_placements(
+                        &cached_result.placements,
+                        tree,
+                        &children,
+                        component_node_metadatas,
+                    );
+                    layout_ctx.diagnostics.inc_cache_hit_direct();
+                    return Ok(cached_result.size);
+                }
+
+                let dirty_children: Vec<(usize, NodeId, Constraint)> = children
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, child_id)| {
+                        tree.get(*child_id).and_then(|child| {
+                            if layout_ctx
+                                .dirty_effective_nodes
+                                .contains(&child.get().instance_key)
+                            {
+                                Some((index, *child_id, cached_child_constraints[index]))
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .collect();
+
+                let nodes_to_measure = dirty_children
+                    .iter()
+                    .map(|(_, child_id, constraint)| (*child_id, *constraint))
+                    .collect();
+                let measured = measure_nodes(
+                    nodes_to_measure,
+                    tree,
+                    component_node_metadatas,
+                    compute_resource_manager.clone(),
+                    gpu,
+                    Some(layout_ctx),
+                );
+                let mut child_size_changed = false;
+                for (index, child_id, _constraint) in &dirty_children {
+                    let Some(result) = measured.get(child_id) else {
+                        layout_ctx.diagnostics.inc_cache_miss_no_entry();
+                        return Err(MeasurementError::NodeNotFoundInTree);
+                    };
+                    match result {
+                        Ok(size) => {
+                            if *size != cached_child_sizes[*index] {
+                                child_size_changed = true;
+                                break;
+                            }
+                        }
+                        Err(err) => return Err(err.clone()),
+                    }
+                }
+                if child_size_changed {
+                    layout_ctx.diagnostics.inc_cache_miss_child_size();
+                } else {
+                    let mut restored = true;
+                    for child_id in &children {
+                        let Some(child) = tree.get(*child_id) else {
+                            restored = false;
+                            break;
+                        };
+                        if layout_ctx
+                            .dirty_effective_nodes
+                            .contains(&child.get().instance_key)
+                        {
+                            continue;
+                        }
+                        if !restore_cached_subtree_metadata(
+                            *child_id,
+                            None,
+                            tree,
+                            component_node_metadatas,
+                            layout_ctx.snapshots,
+                        ) {
+                            restored = false;
                             break;
                         }
                     }
-                    Err(err) => return Err(err.clone()),
+                    if restored {
+                        component_node_metadatas.insert(node_id, Default::default());
+                        apply_layout_placements(
+                            &cached_result.placements,
+                            tree,
+                            &children,
+                            component_node_metadatas,
+                        );
+                        if let Some(mut metadata) = component_node_metadatas.get_mut(&node_id) {
+                            metadata.computed_data = Some(cached_result.size);
+                            metadata.layout_cache_hit = true;
+                        }
+                        layout_ctx.diagnostics.inc_cache_hit_boundary();
+                        return Ok(cached_result.size);
+                    }
                 }
             }
-            if sizes_match {
-                component_node_metadatas.insert(node_id, Default::default());
-                apply_layout_placements(
-                    &cached_result.placements,
-                    tree,
-                    &children,
-                    component_node_metadatas,
-                );
-                if let Some(mut metadata) = component_node_metadatas.get_mut(&node_id) {
-                    metadata.computed_data = Some(cached_result.size);
-                    metadata.layout_cache_hit = true;
-                }
-                return Ok(cached_result.size);
+            if !same_constraint {
+                layout_ctx.diagnostics.inc_cache_miss_constraint();
+            } else if node_self_dirty {
+                layout_ctx.diagnostics.inc_cache_miss_dirty_self();
+            } else if node_effective_dirty {
+                layout_ctx.diagnostics.inc_cache_miss_child_size();
+            } else {
+                layout_ctx.diagnostics.inc_cache_miss_no_entry();
             }
+        } else {
+            layout_ctx.diagnostics.inc_cache_miss_no_entry();
         }
     }
 
@@ -749,19 +878,19 @@ pub(crate) fn measure_node(
         }
         if cacheable {
             let layout_result = LayoutResult { size, placements };
-            layout_ctx.cache.insert(
+            layout_ctx.snapshots.insert(
                 node_data.instance_key,
-                LayoutCacheEntry {
+                LayoutSnapshotEntry {
                     constraint_key: *parent_constraint,
-                    layout_spec: layout_spec.clone(),
                     layout_result,
-                    child_keys,
                     child_constraints,
                     child_sizes,
                 },
             );
+            layout_ctx.diagnostics.inc_cache_store_count();
         } else {
-            layout_ctx.cache.remove(&node_data.instance_key);
+            layout_ctx.snapshots.remove(&node_data.instance_key);
+            layout_ctx.diagnostics.inc_cache_drop_non_cacheable_count();
         }
     }
 

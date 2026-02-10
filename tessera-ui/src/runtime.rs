@@ -3,19 +3,18 @@
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
     marker::PhantomData,
     sync::{Arc, OnceLock},
 };
 
-use dashmap::DashMap;
 use parking_lot::RwLock;
 
 use crate::{
-    ComputedData, Constraint, NodeId,
+    NodeId,
     component_tree::ComponentTree,
-    layout::{LayoutResult, LayoutSpec, LayoutSpecDyn},
+    layout::{LayoutSpec, LayoutSpecDyn},
 };
 
 thread_local! {
@@ -120,6 +119,96 @@ fn slot_table() -> &'static RwLock<SlotTable> {
     SLOT_TABLE.get_or_init(|| RwLock::new(SlotTable::default()))
 }
 
+#[derive(Default)]
+struct LayoutDirtyTracker {
+    previous_layout_specs_by_node: HashMap<u64, Box<dyn LayoutSpecDyn>>,
+    frame_layout_specs_by_node: HashMap<u64, Box<dyn LayoutSpecDyn>>,
+    param_dirty_nodes: HashSet<u64>,
+    dirty_nodes: HashSet<u64>,
+    previous_children_by_node: HashMap<u64, Vec<u64>>,
+}
+
+#[derive(Default)]
+pub(crate) struct StructureReconcileResult {
+    pub changed_nodes: HashSet<u64>,
+    pub removed_nodes: HashSet<u64>,
+}
+
+static LAYOUT_DIRTY_TRACKER: OnceLock<RwLock<LayoutDirtyTracker>> = OnceLock::new();
+
+fn layout_dirty_tracker() -> &'static RwLock<LayoutDirtyTracker> {
+    LAYOUT_DIRTY_TRACKER.get_or_init(|| RwLock::new(LayoutDirtyTracker::default()))
+}
+
+fn record_layout_spec_dirty(instance_key: u64, layout_spec: &dyn LayoutSpecDyn) {
+    if current_phase() != Some(RuntimePhase::Build) {
+        return;
+    }
+    let mut tracker = layout_dirty_tracker().write();
+    let changed = match tracker.previous_layout_specs_by_node.get(&instance_key) {
+        Some(previous) => !previous.dyn_eq(layout_spec),
+        None => true,
+    };
+    if changed {
+        tracker.param_dirty_nodes.insert(instance_key);
+    }
+    tracker
+        .frame_layout_specs_by_node
+        .insert(instance_key, layout_spec.clone_box());
+}
+
+pub(crate) fn begin_frame_layout_dirty_tracking() {
+    let mut tracker = layout_dirty_tracker().write();
+    tracker.frame_layout_specs_by_node.clear();
+    tracker.param_dirty_nodes.clear();
+}
+
+pub(crate) fn finalize_frame_layout_dirty_tracking() {
+    let mut tracker = layout_dirty_tracker().write();
+    tracker.dirty_nodes = std::mem::take(&mut tracker.param_dirty_nodes);
+    tracker.previous_layout_specs_by_node = std::mem::take(&mut tracker.frame_layout_specs_by_node);
+}
+
+pub(crate) fn take_dirty_layout_nodes() -> HashSet<u64> {
+    std::mem::take(&mut layout_dirty_tracker().write().dirty_nodes)
+}
+
+pub(crate) fn reset_layout_dirty_tracking() {
+    *layout_dirty_tracker().write() = LayoutDirtyTracker::default();
+}
+
+pub(crate) fn reconcile_layout_structure(
+    current_children_by_node: &HashMap<u64, Vec<u64>>,
+) -> StructureReconcileResult {
+    let mut tracker = layout_dirty_tracker().write();
+    let previous_children_by_node = &tracker.previous_children_by_node;
+
+    let mut changed_nodes = HashSet::new();
+    let mut removed_nodes = HashSet::new();
+
+    for (node, current_children) in current_children_by_node {
+        match previous_children_by_node.get(node) {
+            Some(previous_children) if previous_children == current_children => {}
+            _ => {
+                changed_nodes.insert(*node);
+            }
+        }
+    }
+
+    for node in previous_children_by_node.keys().copied() {
+        if !current_children_by_node.contains_key(&node) {
+            changed_nodes.insert(node);
+            removed_nodes.insert(node);
+        }
+    }
+
+    tracker.previous_children_by_node = current_children_by_node.clone();
+    StructureReconcileResult {
+        changed_nodes,
+        removed_nodes,
+    }
+}
+
 /// Handle to memoized state created by [`remember`] and [`remember_with_key`].
 ///
 /// `State<T>` is `Copy + Send + Sync` and provides `with`, `with_mut`, `get`,
@@ -212,8 +301,11 @@ where
     /// Execute a closure with a mutable reference to the stored value.
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
         let lock = self.load_lock();
-        let mut guard = lock.write();
-        f(&mut guard)
+
+        {
+            let mut guard = lock.write();
+            f(&mut guard)
+        }
     }
 
     /// Get a cloned value. Requires `T: Clone`.
@@ -244,33 +336,6 @@ pub struct TesseraRuntime {
     pub cursor_icon_request: Option<winit::window::CursorIcon>,
     /// Whether the window is currently minimized.
     pub(crate) window_minimized: bool,
-    /// Per-frame control-flow trace.
-    frame_trace: Vec<TraceEntry>,
-    /// Layout cache for pure layout specs.
-    pub(crate) layout_cache: LayoutCache,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum TraceEntry {
-    Begin {
-        #[allow(dead_code)]
-        instance_key: u64,
-    },
-    End,
-}
-
-pub(crate) struct LayoutCacheEntry {
-    pub constraint_key: Constraint,
-    pub layout_spec: Box<dyn LayoutSpecDyn>,
-    pub layout_result: LayoutResult,
-    pub child_keys: Vec<u64>,
-    pub child_constraints: Vec<Constraint>,
-    pub child_sizes: Vec<ComputedData>,
-}
-
-#[derive(Default)]
-pub(crate) struct LayoutCache {
-    pub entries: DashMap<u64, LayoutCacheEntry>,
 }
 
 impl TesseraRuntime {
@@ -328,35 +393,18 @@ impl TesseraRuntime {
         }
     }
 
-    /// Clears the per-frame control-flow trace.
-    pub(crate) fn begin_frame_trace(&mut self) {
-        self.frame_trace.clear();
+    /// Records the final layout spec snapshot for the current node.
+    #[doc(hidden)]
+    pub fn finalize_current_layout_spec_dirty(&mut self) {
+        if let Some(node) = self.component_tree.current_node() {
+            record_layout_spec_dirty(node.instance_key, node.layout_spec.as_ref());
+        } else {
+            debug_assert!(
+                false,
+                "finalize_current_layout_spec_dirty must be called inside a component build"
+            );
+        }
     }
-
-    /// Returns and clears the current frame trace.
-    pub(crate) fn take_frame_trace(&mut self) -> Vec<TraceEntry> {
-        std::mem::take(&mut self.frame_trace)
-    }
-
-    pub(crate) fn trace_begin(&mut self, instance_key: u64) {
-        self.frame_trace.push(TraceEntry::Begin { instance_key });
-    }
-
-    pub(crate) fn trace_end(&mut self) {
-        self.frame_trace.push(TraceEntry::End);
-    }
-}
-
-/// Records the start of a component instance in the frame trace.
-#[doc(hidden)]
-pub fn trace_begin(instance_key: u64) {
-    TesseraRuntime::with_mut(|runtime| runtime.trace_begin(instance_key));
-}
-
-/// Records the end of a component instance in the frame trace.
-#[doc(hidden)]
-pub fn trace_end() {
-    TesseraRuntime::with_mut(|runtime| runtime.trace_end());
 }
 
 /// Guard that records the current component node id for the calling thread.

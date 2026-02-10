@@ -4,8 +4,6 @@
 //!
 //! Build per-component render fragments and merge them into a frame graph.
 
-#![allow(dead_code)]
-
 use std::{
     any::TypeId,
     collections::{BinaryHeap, HashMap},

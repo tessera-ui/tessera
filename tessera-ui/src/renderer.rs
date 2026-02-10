@@ -27,7 +27,9 @@ use winit::{
 
 use crate::{
     ImeState, PxPosition,
-    component_tree::{WindowAction, WindowRequests},
+    component_tree::{
+        LayoutFrameDiagnostics, WindowAction, WindowRequests, clear_layout_snapshots,
+    },
     context::begin_frame_context_slots,
     cursor::{CursorEvent, CursorEventContent, CursorState, GestureState, PressKeyEventType},
     dp::SCALE_FACTOR,
@@ -37,7 +39,10 @@ use crate::{
     px::PxSize,
     render_graph::{RenderGraph, RenderGraphExecution},
     render_module::RenderModule,
-    runtime::{TesseraRuntime, begin_frame_slots},
+    runtime::{
+        TesseraRuntime, begin_frame_layout_dirty_tracking, begin_frame_slots,
+        finalize_frame_layout_dirty_tracking, reset_layout_dirty_tracking, take_dirty_layout_nodes,
+    },
     thread_utils,
 };
 
@@ -64,7 +69,12 @@ use winit::platform::android::{
     ActiveEventLoopExtAndroid, EventLoopBuilderExtAndroid, activity::AndroidApp,
 };
 
-type RenderComputationOutput = (RenderGraph, WindowRequests, std::time::Duration);
+type RenderComputationOutput = (
+    RenderGraph,
+    WindowRequests,
+    std::time::Duration,
+    LayoutFrameDiagnostics,
+);
 
 #[cfg(feature = "profiling")]
 fn resolve_profiler_output_path(config: &TesseraConfig) -> PathBuf {
@@ -754,11 +764,12 @@ impl<F: Fn()> Renderer<F> {
     fn build_component_tree(entry_point: &F) -> std::time::Duration {
         let tree_timer = Instant::now();
         debug!("Building component tree...");
+        begin_frame_layout_dirty_tracking();
         begin_frame_slots();
         begin_frame_context_slots();
-        TesseraRuntime::with_mut(|rt| rt.begin_frame_trace());
         let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
         entry_wrapper(entry_point);
+        finalize_frame_layout_dirty_tracking();
         let build_tree_cost = tree_timer.elapsed();
         debug!("Component tree built in {build_tree_cost:?}");
         build_tree_cost
@@ -835,10 +846,9 @@ Fps: {:.2}
 
         // Clear any existing compute resources
         args.app.compute_resource_manager().write().clear();
+        let dirty_layout_nodes = take_dirty_layout_nodes();
 
-        let (graph, window_requests) = TesseraRuntime::with_mut(|rt| {
-            let frame_trace = rt.take_frame_trace();
-            let layout_cache = &mut rt.layout_cache;
+        let (graph, window_requests, layout_diagnostics) = TesseraRuntime::with_mut(|rt| {
             let component_tree = &mut rt.component_tree;
             component_tree.compute(crate::component_tree::ComputeParams {
                 screen_size,
@@ -849,14 +859,13 @@ Fps: {:.2}
                 modifiers: args.keyboard_state.modifiers(),
                 compute_resource_manager: args.app.compute_resource_manager(),
                 gpu: args.app.device(),
-                layout_cache,
-                frame_trace,
+                dirty_layout_nodes: &dirty_layout_nodes,
             })
         });
 
         let draw_cost = draw_timer.elapsed();
         debug!("Draw commands computed in {draw_cost:?}");
-        (graph, window_requests, draw_cost)
+        (graph, window_requests, draw_cost, layout_diagnostics)
     }
 
     /// Perform the actual GPU rendering for the provided commands and return
@@ -924,8 +933,10 @@ Fps: {:.2}
 
         // Compute draw commands
         let screen_size: PxSize = args.app.size().into();
-        let (new_graph, window_requests, draw_cost) =
+        let (new_graph, window_requests, draw_cost, layout_diagnostics) =
             Self::compute_draw_commands(args, screen_size, frame_idx);
+        #[cfg(not(feature = "profiling"))]
+        let _ = layout_diagnostics;
         let (composite_context, composite_registry) =
             args.app.composite_context_parts(screen_size, frame_idx);
         let new_graph =
@@ -935,8 +946,6 @@ Fps: {:.2}
             resources,
             external_resources,
         } = new_graph.into_execution();
-        #[cfg(feature = "profiling")]
-        let mut render_duration_ns: Option<u128> = None;
         // Perform GPU render every frame.
         let render_cost = Self::perform_render(
             args,
@@ -949,13 +958,10 @@ Fps: {:.2}
         // Log frame statistics
         let render_breakdown = args.app.last_render_breakdown();
         Self::log_frame_stats(build_tree_cost, draw_cost, render_cost, render_breakdown);
-        #[cfg(feature = "profiling")]
-        {
-            render_duration_ns = Some(render_cost.as_nanos());
-        }
 
         #[cfg(feature = "profiling")]
         {
+            let render_duration_ns = Some(render_cost.as_nanos());
             let frame_total_ns = frame_timer.elapsed().as_nanos();
             let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
             submit_frame_meta(FrameMeta {
@@ -964,6 +970,7 @@ Fps: {:.2}
                 build_tree_time_ns: Some(build_tree_cost.as_nanos()),
                 draw_time_ns: Some(draw_cost.as_nanos()),
                 frame_total_ns: Some(frame_total_ns),
+                layout_diagnostics: Some(layout_diagnostics),
                 nodes,
             });
         }
@@ -1461,6 +1468,8 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
             runtime.window_minimized = false;
             runtime.window_size = [0, 0];
         });
+        clear_layout_snapshots();
+        reset_layout_dirty_tracking();
         crate::runtime::reset_slots();
     }
 
