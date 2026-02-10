@@ -21,6 +21,7 @@ struct FrameRecord {
     build_tree_time_ns: Option<u128>,
     draw_time_ns: Option<u128>,
     frame_total_ns: Option<u128>,
+    layout_diagnostics: Option<LayoutDiagnosticsRecord>,
     components: Vec<ComponentRecord>,
 }
 
@@ -39,6 +40,96 @@ struct PhaseDurations {
     build_ns: Option<u128>,
     measure_ns: Option<u128>,
     input_ns: Option<u128>,
+}
+
+#[derive(Deserialize, Clone, Copy)]
+struct LayoutDiagnosticsRecord {
+    dirty_nodes_param: u64,
+    dirty_nodes_structural: u64,
+    dirty_nodes_with_ancestors: u64,
+    dirty_expand_ns: u64,
+    measure_node_calls: u64,
+    cache_hits_direct: u64,
+    cache_hits_boundary: u64,
+    cache_miss_no_entry: u64,
+    cache_miss_constraint: u64,
+    cache_miss_dirty_self: u64,
+    cache_miss_child_size: u64,
+    cache_store_count: u64,
+    cache_drop_non_cacheable_count: u64,
+}
+
+#[derive(Deserialize)]
+struct JsonLineProbe {
+    format: Option<String>,
+    frame: Option<u64>,
+}
+
+#[derive(Default, Clone, Copy)]
+struct MetricSummary {
+    sum: u128,
+    count: u64,
+    min: Option<u128>,
+    max: Option<u128>,
+}
+
+impl MetricSummary {
+    fn record(&mut self, value: u128) {
+        self.sum += value;
+        self.count += 1;
+        self.min = Some(self.min.map_or(value, |v| v.min(value)));
+        self.max = Some(self.max.map_or(value, |v| v.max(value)));
+    }
+}
+
+#[derive(Default)]
+struct LayoutDiagnosticsSummary {
+    frames: u64,
+    dirty_nodes_param: MetricSummary,
+    dirty_nodes_structural: MetricSummary,
+    dirty_nodes_with_ancestors: MetricSummary,
+    dirty_expand_ns: MetricSummary,
+    measure_node_calls: MetricSummary,
+    cache_hits_direct: MetricSummary,
+    cache_hits_boundary: MetricSummary,
+    cache_miss_no_entry: MetricSummary,
+    cache_miss_constraint: MetricSummary,
+    cache_miss_dirty_self: MetricSummary,
+    cache_miss_child_size: MetricSummary,
+    cache_store_count: MetricSummary,
+    cache_drop_non_cacheable_count: MetricSummary,
+}
+
+impl LayoutDiagnosticsSummary {
+    fn record(&mut self, value: LayoutDiagnosticsRecord) {
+        self.frames += 1;
+        self.dirty_nodes_param
+            .record(u128::from(value.dirty_nodes_param));
+        self.dirty_nodes_structural
+            .record(u128::from(value.dirty_nodes_structural));
+        self.dirty_nodes_with_ancestors
+            .record(u128::from(value.dirty_nodes_with_ancestors));
+        self.dirty_expand_ns
+            .record(u128::from(value.dirty_expand_ns));
+        self.measure_node_calls
+            .record(u128::from(value.measure_node_calls));
+        self.cache_hits_direct
+            .record(u128::from(value.cache_hits_direct));
+        self.cache_hits_boundary
+            .record(u128::from(value.cache_hits_boundary));
+        self.cache_miss_no_entry
+            .record(u128::from(value.cache_miss_no_entry));
+        self.cache_miss_constraint
+            .record(u128::from(value.cache_miss_constraint));
+        self.cache_miss_dirty_self
+            .record(u128::from(value.cache_miss_dirty_self));
+        self.cache_miss_child_size
+            .record(u128::from(value.cache_miss_child_size));
+        self.cache_store_count
+            .record(u128::from(value.cache_store_count));
+        self.cache_drop_non_cacheable_count
+            .record(u128::from(value.cache_drop_non_cacheable_count));
+    }
 }
 
 #[derive(Default)]
@@ -78,6 +169,7 @@ struct Summary {
     cache_hit: u64,
     cache_miss: u64,
     cache_unknown: u64,
+    layout_diagnostics: LayoutDiagnosticsSummary,
 }
 
 #[derive(Default, Clone)]
@@ -138,23 +230,17 @@ pub fn analyze(
         match serde_json::from_str::<FrameRecord>(trimmed) {
             Ok(frame) => process_frame(frame, &mut summary, &mut stats_by_name),
             Err(_) => {
-                let value = serde_json::from_str::<serde_json::Value>(trimmed).ok();
-                let object = value.as_ref().and_then(|v| v.as_object());
-                let is_header = object
-                    .and_then(|obj| obj.get("format"))
-                    .and_then(|val| val.as_str())
-                    .is_some_and(|format| format == "tessera-profiler");
-                if is_header {
-                    continue;
-                }
-                if object
-                    .and_then(|obj| obj.get("frame"))
-                    .and_then(|val| val.as_u64())
-                    .is_some()
-                {
-                    bail!("invalid frame record at line {}", line_idx + 1);
-                }
-                if !skip_invalid {
+                if let Ok(probe) = serde_json::from_str::<JsonLineProbe>(trimmed) {
+                    if probe.format.as_deref() == Some("tessera-profiler") {
+                        continue;
+                    }
+                    if probe.frame.is_some() {
+                        bail!("invalid frame record at line {}", line_idx + 1);
+                    }
+                    if !skip_invalid {
+                        bail!("unrecognized JSON line at {}", line_idx + 1);
+                    }
+                } else if !skip_invalid {
                     bail!("unrecognized JSON line at {}", line_idx + 1);
                 }
             }
@@ -322,6 +408,10 @@ fn process_frame(
             .input_total_max
             .map_or(frame_totals.input, |v| v.max(frame_totals.input)),
     );
+
+    if let Some(layout_diagnostics) = frame.layout_diagnostics {
+        summary.layout_diagnostics.record(layout_diagnostics);
+    }
 
     if let Some(total) = frame.frame_total_ns {
         summary.frame_total_sum += total;
@@ -599,6 +689,99 @@ fn print_summary(summary: &Summary) {
         ]));
     }
 
+    if summary.layout_diagnostics.frames > 0 {
+        let diag = &summary.layout_diagnostics;
+        add_metric_count_row(
+            &mut table,
+            "Layout dirty nodes (params)",
+            &diag.dirty_nodes_param,
+        );
+        add_metric_count_row(
+            &mut table,
+            "Layout dirty nodes (structural)",
+            &diag.dirty_nodes_structural,
+        );
+        add_metric_count_row(
+            &mut table,
+            "Layout dirty nodes (effective)",
+            &diag.dirty_nodes_with_ancestors,
+        );
+        add_metric_ns_row(
+            &mut table,
+            "Layout dirty prepare (CPU)",
+            &diag.dirty_expand_ns,
+        );
+        add_metric_count_row(&mut table, "Layout measure calls", &diag.measure_node_calls);
+        add_metric_count_row(&mut table, "Layout hit: direct", &diag.cache_hits_direct);
+        add_metric_count_row(
+            &mut table,
+            "Layout hit: boundary",
+            &diag.cache_hits_boundary,
+        );
+        add_metric_count_row(
+            &mut table,
+            "Layout miss: no entry",
+            &diag.cache_miss_no_entry,
+        );
+        add_metric_count_row(
+            &mut table,
+            "Layout miss: constraint",
+            &diag.cache_miss_constraint,
+        );
+        add_metric_count_row(
+            &mut table,
+            "Layout miss: dirty self",
+            &diag.cache_miss_dirty_self,
+        );
+        add_metric_count_row(
+            &mut table,
+            "Layout miss: child size",
+            &diag.cache_miss_child_size,
+        );
+        add_metric_count_row(&mut table, "Layout cache stores", &diag.cache_store_count);
+        add_metric_count_row(
+            &mut table,
+            "Layout cache drops",
+            &diag.cache_drop_non_cacheable_count,
+        );
+
+        let total_hits = diag.cache_hits_direct.sum + diag.cache_hits_boundary.sum;
+        let total_misses = diag.cache_miss_no_entry.sum
+            + diag.cache_miss_constraint.sum
+            + diag.cache_miss_dirty_self.sum
+            + diag.cache_miss_child_size.sum;
+        let total_attempts = total_hits + total_misses;
+        if total_attempts > 0 {
+            let rate = total_hits as f64 / total_attempts as f64;
+            table.add_row(Row::from(vec![
+                Cell::new("Layout cache hit rate (diag)"),
+                Cell::new(format!(
+                    "{}% (hit {}, miss {})",
+                    format_pct(rate),
+                    total_hits,
+                    total_misses
+                )),
+                Cell::new(""),
+                Cell::new(""),
+            ]));
+        }
+
+        if total_hits > 0 {
+            let boundary_rate = diag.cache_hits_boundary.sum as f64 / total_hits as f64;
+            table.add_row(Row::from(vec![
+                Cell::new("Layout boundary hit ratio"),
+                Cell::new(format!(
+                    "{}% (boundary {} / total hits {})",
+                    format_pct(boundary_rate),
+                    diag.cache_hits_boundary.sum,
+                    total_hits
+                )),
+                Cell::new(""),
+                Cell::new(""),
+            ]));
+        }
+    }
+
     table.add_row(Row::from(vec![
         Cell::new("Components counted"),
         Cell::new(summary.node_count.to_string()),
@@ -697,4 +880,30 @@ fn truncate(text: &str, limit: usize) -> String {
         let cutoff = limit - 3;
         format!("{}...", &text[..cutoff])
     }
+}
+
+fn add_metric_count_row(table: &mut Table, label: &str, metric: &MetricSummary) {
+    if metric.count == 0 {
+        return;
+    }
+    let avg = metric.sum as f64 / metric.count as f64;
+    table.add_row(Row::from(vec![
+        Cell::new(label),
+        Cell::new(format!("{avg:.2}")),
+        Cell::new(metric.min.unwrap_or(0).to_string()),
+        Cell::new(metric.max.unwrap_or(0).to_string()),
+    ]));
+}
+
+fn add_metric_ns_row(table: &mut Table, label: &str, metric: &MetricSummary) {
+    if metric.count == 0 {
+        return;
+    }
+    let avg_ns = metric.sum as f64 / metric.count as f64;
+    table.add_row(Row::from(vec![
+        Cell::new(label),
+        Cell::new(format!("{} us", format_us(avg_ns))),
+        Cell::new(format!("{} us", format_us(metric.min.unwrap_or(0) as f64))),
+        Cell::new(format!("{} us", format_us(metric.max.unwrap_or(0) as f64))),
+    ]));
 }

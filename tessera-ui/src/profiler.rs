@@ -113,6 +113,8 @@ use serde::Serialize;
 use serde_json;
 use tracing::error;
 
+use crate::component_tree::LayoutFrameDiagnostics;
+
 /// Profiling phases that can be emitted.
 #[derive(Clone, Copy)]
 pub enum Phase {
@@ -168,6 +170,8 @@ pub struct FrameMeta {
     pub draw_time_ns: Option<u128>,
     /// Total duration for the frame.
     pub frame_total_ns: Option<u128>,
+    /// Optional layout diagnostics for the frame.
+    pub layout_diagnostics: Option<LayoutFrameDiagnostics>,
     /// All nodes observed in the frame.
     pub nodes: Vec<NodeMeta>,
 }
@@ -327,8 +331,48 @@ pub struct FrameRecord {
     draw_time_ns: Option<u128>,
     /// Total duration for the frame.
     frame_total_ns: Option<u128>,
+    /// Optional per-frame layout diagnostics.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    layout_diagnostics: Option<LayoutDiagnosticsRecord>,
     /// Component tree records.
     components: Vec<ComponentRecord>,
+}
+
+#[derive(Serialize, Clone, Copy)]
+struct LayoutDiagnosticsRecord {
+    dirty_nodes_param: u64,
+    dirty_nodes_structural: u64,
+    dirty_nodes_with_ancestors: u64,
+    dirty_expand_ns: u64,
+    measure_node_calls: u64,
+    cache_hits_direct: u64,
+    cache_hits_boundary: u64,
+    cache_miss_no_entry: u64,
+    cache_miss_constraint: u64,
+    cache_miss_dirty_self: u64,
+    cache_miss_child_size: u64,
+    cache_store_count: u64,
+    cache_drop_non_cacheable_count: u64,
+}
+
+impl From<LayoutFrameDiagnostics> for LayoutDiagnosticsRecord {
+    fn from(value: LayoutFrameDiagnostics) -> Self {
+        Self {
+            dirty_nodes_param: value.dirty_nodes_param,
+            dirty_nodes_structural: value.dirty_nodes_structural,
+            dirty_nodes_with_ancestors: value.dirty_nodes_with_ancestors,
+            dirty_expand_ns: value.dirty_expand_ns,
+            measure_node_calls: value.measure_node_calls,
+            cache_hits_direct: value.cache_hits_direct,
+            cache_hits_boundary: value.cache_hits_boundary,
+            cache_miss_no_entry: value.cache_miss_no_entry,
+            cache_miss_constraint: value.cache_miss_constraint,
+            cache_miss_dirty_self: value.cache_miss_dirty_self,
+            cache_miss_child_size: value.cache_miss_child_size,
+            cache_store_count: value.cache_store_count,
+            cache_drop_non_cacheable_count: value.cache_drop_non_cacheable_count,
+        }
+    }
 }
 
 /// Component record within a frame.
@@ -487,6 +531,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             build_tree_time_ns: frame_meta.build_tree_time_ns,
             draw_time_ns: frame_meta.draw_time_ns,
             frame_total_ns: frame_meta.frame_total_ns,
+            layout_diagnostics: frame_meta.layout_diagnostics.map(Into::into),
             components: Vec::new(),
         });
     }
@@ -543,6 +588,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
         build_tree_time_ns: frame_meta.build_tree_time_ns,
         draw_time_ns: frame_meta.draw_time_ns,
         frame_total_ns: frame_meta.frame_total_ns,
+        layout_diagnostics: frame_meta.layout_diagnostics.map(Into::into),
         components,
     })
 }
