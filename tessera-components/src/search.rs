@@ -7,7 +7,6 @@
 use std::sync::Arc;
 
 use derive_setters::Setters;
-use glyphon::Edit;
 use tessera_ui::{
     Color, CursorEventContent, Dp, Modifier, PressKeyEventType, State, remember, tessera,
     use_context, winit,
@@ -283,10 +282,6 @@ impl SearchBarController {
     pub fn query(&self) -> &str {
         &self.query
     }
-
-    fn snapshot(&self) -> (bool, String) {
-        (self.is_active, self.query.clone())
-    }
 }
 
 impl Default for SearchBarController {
@@ -499,13 +494,15 @@ fn search_bar_inner(
     let line_height = field_args.line_height;
 
     let input_controller = remember(|| TextInputController::new(font_size, line_height));
+    let synced_query = remember(String::new);
 
-    sync_query(&controller, &input_controller);
+    sync_query(&controller, &input_controller, &synced_query);
 
     let on_query_change = args.on_query_change.clone();
     field_args = field_args.on_change(move |text| {
         let next = (on_query_change)(text);
         controller.with_mut(|c| c.set_query(next.clone()));
+        synced_query.set(next.clone());
         next
     });
 
@@ -590,7 +587,12 @@ fn search_bar_inner(
     });
 
     let dropdown_gap = args.dropdown_gap;
-    let args_for_results = args.clone();
+    let results_container_color = args.colors.container_color;
+    let results_divider_color = args.colors.divider_color;
+    let results_dropdown_shape = args.dropdown_shape;
+    let results_tonal_elevation = args.tonal_elevation;
+    let results_shadow_elevation = args.shadow_elevation;
+    let results_content_padding = args.content_padding;
     column(ColumnArgs::default(), move |scope| {
         scope.child(move || {
             text_field_with_controller(field_args, input_controller);
@@ -602,7 +604,16 @@ fn search_bar_inner(
             }
 
             scope.child(move || {
-                render_results_surface(kind, &args_for_results, content);
+                render_results_surface(
+                    kind,
+                    results_container_color,
+                    results_divider_color,
+                    results_dropdown_shape,
+                    results_tonal_elevation,
+                    results_shadow_elevation,
+                    results_content_padding,
+                    content,
+                );
             });
         }
     });
@@ -610,15 +621,14 @@ fn search_bar_inner(
 
 fn render_results_surface(
     kind: SearchBarLayoutKind,
-    args: &SearchBarArgs,
+    container_color: Color,
+    divider_color: Color,
+    dropdown_shape: Shape,
+    tonal_elevation: Dp,
+    shadow_elevation: Dp,
+    content_padding: Dp,
     content: impl FnOnce() + Send + Sync + 'static,
 ) {
-    let container_color = args.colors.container_color;
-    let divider_color = args.colors.divider_color;
-    let dropdown_shape = args.dropdown_shape;
-    let tonal_elevation = args.tonal_elevation;
-    let shadow_elevation = args.shadow_elevation;
-    let content_padding = args.content_padding;
     let shape = match kind {
         SearchBarLayoutKind::FullScreen => Shape::RECTANGLE,
         SearchBarLayoutKind::Docked => dropdown_shape,
@@ -650,22 +660,16 @@ fn render_results_surface(
     );
 }
 
-fn sync_query(controller: &State<SearchBarController>, input: &State<TextInputController>) {
-    let (_, query) = controller.with(|c| c.snapshot());
-    let current = input_text(input);
-    if current != query {
+fn sync_query(
+    controller: &State<SearchBarController>,
+    input: &State<TextInputController>,
+    synced_query: &State<String>,
+) {
+    let needs_sync =
+        controller.with(|c| synced_query.with(|current| current.as_str() != c.query()));
+    if needs_sync {
+        let query = controller.with(|c| c.query().to_owned());
         input.with_mut(|c| c.set_text(&query));
+        synced_query.set(query);
     }
-}
-
-fn input_text(controller: &State<TextInputController>) -> String {
-    controller.with(|c| {
-        c.editor.with_buffer(|buffer| {
-            buffer
-                .lines
-                .iter()
-                .map(|line| line.text().to_string() + line.ending().as_str())
-                .collect::<String>()
-        })
-    })
 }
