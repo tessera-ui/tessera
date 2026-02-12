@@ -22,7 +22,7 @@ tessera-ui = { path = "../tessera-ui" }
 tessera-platform = { path = "../tessera-platform" }
 unicode-segmentation = "1.12.0"
 encase = "0.12.0"
-glam = { version = "0.31.0", features = ["encase"] }
+glam = { version = "0.32.0", features = ["encase"] }
 lru = "0.16.3"
 smallvec = "1.15.1"
 usvg = "0.46.0"
