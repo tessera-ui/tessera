@@ -1,9 +1,10 @@
 use std::{
     cmp::Reverse,
     collections::HashMap,
-    fs::File,
+    fs::{self, File},
     io::{BufRead, BufReader},
     path::Path,
+    process::Command,
 };
 
 use anyhow::{Context, Result, bail};
@@ -12,6 +13,9 @@ use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
 use crate::output;
+
+const DEFAULT_ANDROID_REMOTE_PATHS: [&str; 2] =
+    ["tessera-profiler.jsonl", "files/tessera-profiler.jsonl"];
 
 #[derive(Deserialize)]
 struct FrameRecord {
@@ -271,6 +275,139 @@ pub fn analyze(
     print_summary(&summary);
     print_top_sections(&stats_by_name, top, min_count);
     Ok(())
+}
+
+pub fn analyze_android(
+    package: &str,
+    device: Option<&str>,
+    remote_path: Option<&str>,
+    pull_to: &Path,
+    top: usize,
+    min_count: u64,
+    skip_invalid: bool,
+    csv: Option<&Path>,
+) -> Result<()> {
+    output::status(
+        "Pulling",
+        format!("android profiler from package `{package}`"),
+    );
+    let pulled_remote_path = pull_android_profile(device, package, remote_path, pull_to)?;
+    output::status(
+        "Pulled",
+        format!("{} -> {}", pulled_remote_path, pull_to.display()),
+    );
+
+    analyze(pull_to, top, min_count, skip_invalid, csv)
+}
+
+fn pull_android_profile(
+    device: Option<&str>,
+    package: &str,
+    remote_path: Option<&str>,
+    pull_to: &Path,
+) -> Result<String> {
+    let candidates = build_android_remote_path_candidates(package, remote_path);
+
+    let mut errors = Vec::new();
+    for candidate in &candidates {
+        match pull_android_profile_once(device, package, candidate) {
+            Ok(bytes) => {
+                if let Some(parent) = pull_to.parent()
+                    && !parent.as_os_str().is_empty()
+                {
+                    fs::create_dir_all(parent).with_context(|| {
+                        format!("failed to create output directory {}", parent.display())
+                    })?;
+                }
+                fs::write(pull_to, &bytes).with_context(|| {
+                    format!(
+                        "failed to write pulled profiler file to {}",
+                        pull_to.display()
+                    )
+                })?;
+                return Ok(candidate.clone());
+            }
+            Err(err) => {
+                errors.push(format!("{candidate}: {err:#}"));
+            }
+        }
+    }
+
+    let tried_paths = candidates.join(", ");
+    let device_hint = device
+        .map(|serial| format!(" on device `{serial}`"))
+        .unwrap_or_default();
+    let details = errors.join(" | ");
+    bail!(
+        "failed to pull profiler output for package `{package}`{device_hint}; tried paths: [{tried_paths}]. \
+details: {details}. Make sure the app was built with `--profiling-output <REMOTE_PATH>`, started at least once, and is debuggable (required by `run-as`)."
+    );
+}
+
+fn build_android_remote_path_candidates(package: &str, remote_path: Option<&str>) -> Vec<String> {
+    if let Some(path) = remote_path {
+        return vec![path.to_string()];
+    }
+
+    let mut candidates = Vec::new();
+    for path in DEFAULT_ANDROID_REMOTE_PATHS {
+        push_unique_path(&mut candidates, path);
+    }
+    push_unique_path(
+        &mut candidates,
+        format!("/data/user/0/{package}/files/tessera-profiler.jsonl"),
+    );
+    push_unique_path(
+        &mut candidates,
+        format!("/data/data/{package}/files/tessera-profiler.jsonl"),
+    );
+    candidates
+}
+
+fn push_unique_path(paths: &mut Vec<String>, value: impl Into<String>) {
+    let value = value.into();
+    if !paths.iter().any(|path| path == &value) {
+        paths.push(value);
+    }
+}
+
+fn pull_android_profile_once(
+    device: Option<&str>,
+    package: &str,
+    remote_path: &str,
+) -> Result<Vec<u8>> {
+    let mut cmd = Command::new("adb");
+    if let Some(serial) = device {
+        cmd.arg("-s").arg(serial);
+    }
+    cmd.arg("exec-out")
+        .arg("run-as")
+        .arg(package)
+        .arg("cat")
+        .arg(remote_path);
+
+    let output = cmd.output().with_context(|| {
+        if let Some(serial) = device {
+            format!("failed to run adb for device `{serial}`")
+        } else {
+            "failed to run adb".to_string()
+        }
+    })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = stderr.trim();
+        if stderr.is_empty() {
+            bail!("adb command failed with status {}", output.status);
+        }
+        bail!("adb command failed with status {}: {stderr}", output.status);
+    }
+
+    if output.stdout.is_empty() {
+        bail!("remote profiler file is empty");
+    }
+
+    Ok(output.stdout)
 }
 
 #[derive(Serialize)]

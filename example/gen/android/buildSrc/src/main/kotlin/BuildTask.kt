@@ -3,6 +3,7 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.logging.LogLevel
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 
 open class BuildTask : DefaultTask() {
@@ -12,6 +13,9 @@ open class BuildTask : DefaultTask() {
     var target: String? = null
     @Input
     var release: Boolean? = null
+    @Input
+    @Optional
+    var profilingOutput: String? = null
 
     @TaskAction
     fun build() {
@@ -30,6 +34,9 @@ open class BuildTask : DefaultTask() {
             }
             if (release) {
                 args("--release")
+            }
+            profilingOutput?.takeIf { it.isNotBlank() }?.let { outputPath ->
+                args("--profiling-output", outputPath)
             }
             args(target)
         }.assertNormalExitValue()

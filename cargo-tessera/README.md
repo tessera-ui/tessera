@@ -60,6 +60,16 @@ Optional CSV export:
 cargo tessera profiling analyze profiles/dev.jsonl --csv profiles/components.csv
 ```
 
+Android pull + analyze in one step:
+
+```bash
+cargo tessera profiling analyze-android \
+  --package com.example.my_app \
+  --device 8cd1353b \
+  --remote-path files/tessera-profiler.jsonl \
+  --pull-to profiles/android.jsonl
+```
+
 ### Build for Android (experimental)
 
 Make sure Android SDK/NDK are installed and `adb` is available in your PATH.
@@ -79,12 +89,30 @@ cargo tessera android dev --device 8cd1353b
 
 `cargo tessera android dev` requires `--device <device_id>` (list devices with `adb devices`).
 
+Enable profiler data on Android builds by passing a sandbox path:
+
+```bash
+cargo tessera android dev \
+  --device 8cd1353b \
+  --profiling-output files/tessera-profiler.jsonl
+```
+
+Then pull and analyze:
+
+```bash
+cargo tessera profiling analyze-android \
+  --package com.example.my_app \
+  --device 8cd1353b \
+  --remote-path files/tessera-profiler.jsonl
+```
+
 ## Commands
 
 - `cargo tessera new <name>` - Create a new Tessera project
 - `cargo tessera dev` - Start development server with automatic rebuild/restart
 - `cargo tessera build` - Build desktop targets
 - `cargo tessera profiling analyze <file>` - Analyze profiler JSONL output
+- `cargo tessera profiling analyze-android` - Pull Android profiler JSONL via adb, then analyze
 - `cargo tessera android <subcommand>` - Android helpers (`build`, `dev`)
 
 ## License

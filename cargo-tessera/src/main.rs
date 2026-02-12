@@ -140,6 +140,33 @@ enum ProfilingCommands {
         #[arg(long, value_name = "FILE")]
         csv: Option<PathBuf>,
     },
+    /// Pull profiler JSONL from Android via adb and analyze it
+    AnalyzeAndroid {
+        /// Android app package name (applicationId)
+        #[arg(long)]
+        package: String,
+        /// Device id from `adb devices`
+        #[arg(long, short)]
+        device: Option<String>,
+        /// Path inside app sandbox (default: auto-detect common paths)
+        #[arg(long, value_name = "REMOTE_PATH")]
+        remote_path: Option<String>,
+        /// Local output path for pulled JSONL before analysis
+        #[arg(long, value_name = "FILE", default_value = "profiles/android.jsonl")]
+        pull_to: PathBuf,
+        /// Show top N component entries per section
+        #[arg(long, default_value_t = 20)]
+        top: usize,
+        /// Minimum sample count per component to include in top lists
+        #[arg(long, default_value_t = 1)]
+        min_count: u64,
+        /// Skip non-frame JSON lines that fail parsing
+        #[arg(long)]
+        skip_invalid: bool,
+        /// Export full per-component aggregated stats to CSV
+        #[arg(long, value_name = "FILE")]
+        csv: Option<PathBuf>,
+    },
 }
 
 #[derive(Args)]
@@ -156,6 +183,9 @@ struct AndroidBuildArgs {
     /// Override artifact format (apk or aab)
     #[arg(long, short, value_enum)]
     format: Option<AndroidFormat>,
+    /// Enable profiling and write JSONL inside app sandbox at this path
+    #[arg(long, value_name = "REMOTE_PATH")]
+    profiling_output: Option<String>,
 }
 
 #[derive(Args)]
@@ -172,6 +202,9 @@ struct AndroidDevArgs {
     /// Device id from `adb devices`
     #[arg(long, short)]
     device: Option<String>,
+    /// Enable profiling and write JSONL inside app sandbox at this path
+    #[arg(long, value_name = "REMOTE_PATH")]
+    profiling_output: Option<String>,
 }
 
 #[derive(Args)]
@@ -184,6 +217,9 @@ struct AndroidRustBuildArgs {
     /// Override package/binary name (-p)
     #[arg(long, short)]
     package: Option<String>,
+    /// Enable profiling and write JSONL inside app sandbox at this path
+    #[arg(long, value_name = "REMOTE_PATH")]
+    profiling_output: Option<String>,
 }
 
 fn main() -> ExitCode {
@@ -265,6 +301,27 @@ fn run() -> Result<()> {
                         csv.as_deref(),
                     )?;
                 }
+                ProfilingCommands::AnalyzeAndroid {
+                    package,
+                    device,
+                    remote_path,
+                    pull_to,
+                    top,
+                    min_count,
+                    skip_invalid,
+                    csv,
+                } => {
+                    commands::profiling::analyze_android(
+                        &package,
+                        device.as_deref(),
+                        remote_path.as_deref(),
+                        &pull_to,
+                        top,
+                        min_count,
+                        skip_invalid,
+                        csv.as_deref(),
+                    )?;
+                }
             },
             TesseraCommands::Android { command } => match command {
                 AndroidCommands::Init {
@@ -278,6 +335,7 @@ fn run() -> Result<()> {
                         arch: build_args.arch.clone(),
                         package: build_args.package.clone(),
                         format: build_args.format,
+                        profiling_output: build_args.profiling_output.clone(),
                     })?;
                 }
                 AndroidCommands::Dev(dev_args) => {
@@ -286,6 +344,7 @@ fn run() -> Result<()> {
                         arch: dev_args.arch.clone(),
                         package: dev_args.package.clone(),
                         device: dev_args.device.clone(),
+                        profiling_output: dev_args.profiling_output.clone(),
                     })?;
                 }
                 AndroidCommands::RustBuild(build_args) => {
@@ -293,6 +352,7 @@ fn run() -> Result<()> {
                         release: build_args.release,
                         target: build_args.target.clone(),
                         package: build_args.package.clone(),
+                        profiling_output: build_args.profiling_output.clone(),
                     })?;
                 }
             },

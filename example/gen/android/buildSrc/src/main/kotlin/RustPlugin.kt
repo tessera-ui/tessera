@@ -9,6 +9,7 @@ const val TASK_GROUP = "rust"
 
 open class Config {
     lateinit var rootDirRel: String
+    var profilingOutput: String? = null
 }
 
 open class RustPlugin : Plugin<Project> {
@@ -72,6 +73,7 @@ open class RustPlugin : Plugin<Project> {
                         rootDirRel = config.rootDirRel
                         target = targetName
                         release = profile == "release"
+                        profilingOutput = config.profilingOutput
                     }
 
                     buildTask.dependsOn(targetBuildTask)

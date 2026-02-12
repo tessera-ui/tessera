@@ -42,6 +42,9 @@ android {
 
 rust {
     rootDirRel = "{{root-dir-rel}}"
+{{#if android-profiling-output}}
+    profilingOutput = "{{android-profiling-output}}"
+{{/if}}
 }
 
 dependencies {

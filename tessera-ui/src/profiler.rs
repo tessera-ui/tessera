@@ -96,7 +96,7 @@
 //! See [`FrameRecord`] and [`ComponentRecord`] for equivalent Rust structures.
 use std::{
     collections::HashMap,
-    fs::{File, OpenOptions},
+    fs::{File, OpenOptions, create_dir_all},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
     sync::{
@@ -233,9 +233,27 @@ fn worker_loop(receiver: mpsc::Receiver<Message>) {
     let mut options = OpenOptions::new();
     options.create(true).write(true).truncate(true);
 
-    let file = options
-        .open(output_path())
-        .expect("failed to open profiler output file");
+    let output_path = output_path();
+    if let Some(parent) = output_path.parent()
+        && !parent.as_os_str().is_empty()
+        && let Err(err) = create_dir_all(parent)
+    {
+        error!(
+            "tessera profiler failed to create output directory {}: {err}",
+            parent.display()
+        );
+        return;
+    }
+    let file = match options.open(&output_path) {
+        Ok(file) => file,
+        Err(err) => {
+            error!(
+                "tessera profiler failed to open output file {}: {err}",
+                output_path.display()
+            );
+            return;
+        }
+    };
     let mut state = WorkerState {
         frames: HashMap::new(),
         writer: BufWriter::new(file),

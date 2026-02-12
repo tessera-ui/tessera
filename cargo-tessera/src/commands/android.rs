@@ -69,6 +69,7 @@ pub struct BuildOptions {
     pub arch: Option<String>,
     pub package: Option<String>,
     pub format: Option<AndroidFormat>,
+    pub profiling_output: Option<String>,
 }
 
 #[derive(Debug)]
@@ -77,12 +78,14 @@ pub struct DevOptions {
     pub arch: Option<String>,
     pub package: Option<String>,
     pub device: Option<String>,
+    pub profiling_output: Option<String>,
 }
 
 pub struct RustBuildOptions {
     pub release: bool,
     pub target: String,
     pub package: Option<String>,
+    pub profiling_output: Option<String>,
 }
 
 struct AndroidContext {
@@ -92,6 +95,7 @@ struct AndroidContext {
     format: AndroidFormat,
     arch: Option<String>,
     device: Option<String>,
+    profiling_output: Option<String>,
     activity: String,
     config: AndroidConfig,
     metadata: AndroidMetadata,
@@ -105,18 +109,39 @@ struct AndroidPlugin {
 
 impl AndroidContext {
     fn from_init() -> Result<Self> {
-        Self::from_opts(false, None, None, None, None)
+        Self::from_opts(false, None, None, None, None, None)
     }
     fn from_build_opts(opts: BuildOptions) -> Result<Self> {
-        Self::from_opts(opts.release, opts.arch, opts.package, None, opts.format)
+        Self::from_opts(
+            opts.release,
+            opts.arch,
+            opts.package,
+            None,
+            opts.format,
+            opts.profiling_output,
+        )
     }
 
     fn from_dev_opts(opts: DevOptions) -> Result<Self> {
-        Self::from_opts(opts.release, opts.arch, opts.package, opts.device, None)
+        Self::from_opts(
+            opts.release,
+            opts.arch,
+            opts.package,
+            opts.device,
+            None,
+            opts.profiling_output,
+        )
     }
 
     fn from_rust_build_opts(opts: RustBuildOptions) -> Result<Self> {
-        Self::from_opts(opts.release, None, opts.package, None, None)
+        Self::from_opts(
+            opts.release,
+            None,
+            opts.package,
+            None,
+            None,
+            opts.profiling_output,
+        )
     }
 
     fn from_opts(
@@ -125,6 +150,7 @@ impl AndroidContext {
         package: Option<String>,
         device: Option<String>,
         format: Option<AndroidFormat>,
+        profiling_output: Option<String>,
     ) -> Result<Self> {
         let package_dir = package
             .as_deref()
@@ -205,6 +231,8 @@ package.metadata.tessera.android.package in Cargo.toml"
         };
         let config = AndroidConfig::from_raw(app, Some(raw_android))
             .context("Failed to build Android config")?;
+        let profiling_output = profiling_output
+            .map(|path| normalize_android_profiling_output_path(&path, config.app().identifier()));
 
         let app_toml = load_app_toml(config.app().root_dir())?;
         let mut tessera_permissions = app_toml.permissions.unwrap_or_default();
@@ -215,11 +243,24 @@ package.metadata.tessera.android.package in Cargo.toml"
         merged_permissions.sort();
         merged_permissions.dedup();
 
+        let mut profiling_cargo_args = Vec::new();
+        let mut profiling_features = Vec::new();
+        let mut profiling_env_vars = HashMap::new();
+        if let Some(path) = profiling_output.as_ref() {
+            profiling_features.push("tessera-ui/profiling".to_string());
+            profiling_env_vars.insert("TESSERA_PROFILING_OUTPUT".to_string(), path.clone());
+            profiling_cargo_args.push("--config".to_string());
+            profiling_cargo_args.push(format!(
+                "env.TESSERA_PROFILING_OUTPUT={}",
+                toml::Value::String(path.clone())
+            ));
+        }
+
         let metadata = AndroidMetadata {
             supported: true,
             no_default_features: false,
-            cargo_args: None,
-            features: None,
+            cargo_args: (!profiling_cargo_args.is_empty()).then_some(profiling_cargo_args),
+            features: (!profiling_features.is_empty()).then_some(profiling_features),
             app_sources: None,
             app_plugins: manifest_cfg.app_plugins.clone(),
             project_dependencies: manifest_cfg.project_dependencies.clone(),
@@ -229,7 +270,7 @@ package.metadata.tessera.android.package in Cargo.toml"
             app_activity_name: Some(DEFAULT_ANDROID_ACTIVITY.to_string()),
             app_permissions: Some(merged_permissions),
             app_theme_parent: Some(DEFAULT_ANDROID_THEME_PARENT.to_string()),
-            env_vars: None,
+            env_vars: (!profiling_env_vars.is_empty()).then_some(profiling_env_vars),
             vulkan_validation: None,
         };
 
@@ -240,6 +281,7 @@ package.metadata.tessera.android.package in Cargo.toml"
             format,
             arch,
             device,
+            profiling_output,
             activity: DEFAULT_ANDROID_ACTIVITY.to_string(),
             config,
             metadata,
@@ -309,6 +351,20 @@ fn sanitize_identifier(identifier: &str) -> String {
         .collect()
 }
 
+fn normalize_android_profiling_output_path(path: &str, app_identifier: &str) -> String {
+    let path = path.trim().replace('\\', "/");
+    if path.is_empty() {
+        return format!("/data/user/0/{app_identifier}/files/tessera-profiler.jsonl");
+    }
+    if path.starts_with('/') {
+        return path;
+    }
+    if path.starts_with("data/") {
+        return format!("/{path}");
+    }
+    format!("/data/user/0/{app_identifier}/{path}")
+}
+
 pub fn init(skip_targets_install: bool) -> Result<()> {
     let ctx = AndroidContext::from_init()?;
     let android_plugins = collect_android_plugins(&ctx)?;
@@ -353,6 +409,27 @@ pub fn init(skip_targets_install: bool) -> Result<()> {
         write_template_file(
             &ANDROID_TEMPLATE_DIR,
             Path::new("settings.gradle.hbs"),
+            ctx.config.project_dir().as_path(),
+            &handlebars,
+            &data,
+        )?;
+        write_template_file(
+            &ANDROID_TEMPLATE_DIR,
+            Path::new("buildSrc/build.gradle.kts.hbs"),
+            ctx.config.project_dir().as_path(),
+            &handlebars,
+            &data,
+        )?;
+        write_template_file(
+            &ANDROID_TEMPLATE_DIR,
+            Path::new("buildSrc/src/main/kotlin/BuildTask.kt.hbs"),
+            ctx.config.project_dir().as_path(),
+            &handlebars,
+            &data,
+        )?;
+        write_template_file(
+            &ANDROID_TEMPLATE_DIR,
+            Path::new("buildSrc/src/main/kotlin/RustPlugin.kt.hbs"),
             ctx.config.project_dir().as_path(),
             &handlebars,
             &data,
@@ -449,6 +526,9 @@ pub fn build(opts: BuildOptions) -> Result<()> {
             if ctx.release { "yes" } else { "no" }
         ),
     );
+    if let Some(path) = &ctx.profiling_output {
+        output::status("Profiling", format!("enabled ({path})"));
+    }
 
     for target in &targets {
         target.build(
@@ -509,6 +589,9 @@ pub fn dev(opts: DevOptions) -> Result<()> {
             if ctx.release { "yes" } else { "no" }
         ),
     );
+    if let Some(path) = &ctx.profiling_output {
+        output::status("Profiling", format!("enabled ({path})"));
+    }
 
     let env = AndroidEnv::new()?;
     let profile = ctx.profile();
@@ -623,6 +706,9 @@ pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
     let env = AndroidEnv::new()?;
     let target = ctx.target_by_name_or_triple(&target_name)?;
     let profile = ctx.profile();
+    if let Some(path) = &ctx.profiling_output {
+        output::status("Profiling", format!("enabled ({path})"));
+    }
 
     target.build(
         &ctx.config,
@@ -752,6 +838,7 @@ fn build_android_template_data(
         "android": {
             "min-sdk-version": ctx.config.min_sdk_version(),
         },
+        "android-profiling-output": ctx.profiling_output,
         "root-dir-rel": root_dir_rel,
         "android-app-plugins": ctx.metadata.app_plugins.clone().unwrap_or_default(),
         "android-project-dependencies": project_dependencies,
@@ -798,6 +885,27 @@ fn sync_android_project(ctx: &AndroidContext) -> Result<()> {
     write_template_file(
         &ANDROID_TEMPLATE_DIR,
         Path::new("settings.gradle.hbs"),
+        project_dir.as_path(),
+        &handlebars,
+        &data,
+    )?;
+    write_template_file(
+        &ANDROID_TEMPLATE_DIR,
+        Path::new("buildSrc/build.gradle.kts.hbs"),
+        project_dir.as_path(),
+        &handlebars,
+        &data,
+    )?;
+    write_template_file(
+        &ANDROID_TEMPLATE_DIR,
+        Path::new("buildSrc/src/main/kotlin/BuildTask.kt.hbs"),
+        project_dir.as_path(),
+        &handlebars,
+        &data,
+    )?;
+    write_template_file(
+        &ANDROID_TEMPLATE_DIR,
+        Path::new("buildSrc/src/main/kotlin/RustPlugin.kt.hbs"),
         project_dir.as_path(),
         &handlebars,
         &data,
