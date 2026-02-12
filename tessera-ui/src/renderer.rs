@@ -74,6 +74,7 @@ type RenderComputationOutput = (
     WindowRequests,
     std::time::Duration,
     LayoutFrameDiagnostics,
+    std::time::Duration,
 );
 
 #[cfg(feature = "profiling")]
@@ -848,24 +849,31 @@ Fps: {:.2}
         args.app.compute_resource_manager().write().clear();
         let dirty_layout_nodes = take_dirty_layout_nodes();
 
-        let (graph, window_requests, layout_diagnostics) = TesseraRuntime::with_mut(|rt| {
-            let component_tree = &mut rt.component_tree;
-            component_tree.compute(crate::component_tree::ComputeParams {
-                screen_size,
-                cursor_position,
-                cursor_events,
-                keyboard_events,
-                ime_events,
-                modifiers: args.keyboard_state.modifiers(),
-                compute_resource_manager: args.app.compute_resource_manager(),
-                gpu: args.app.device(),
-                dirty_layout_nodes: &dirty_layout_nodes,
-            })
-        });
+        let (graph, window_requests, layout_diagnostics, record_cost) =
+            TesseraRuntime::with_mut(|rt| {
+                let component_tree = &mut rt.component_tree;
+                component_tree.compute(crate::component_tree::ComputeParams {
+                    screen_size,
+                    cursor_position,
+                    cursor_events,
+                    keyboard_events,
+                    ime_events,
+                    modifiers: args.keyboard_state.modifiers(),
+                    compute_resource_manager: args.app.compute_resource_manager(),
+                    gpu: args.app.device(),
+                    dirty_layout_nodes: &dirty_layout_nodes,
+                })
+            });
 
         let draw_cost = draw_timer.elapsed();
         debug!("Draw commands computed in {draw_cost:?}");
-        (graph, window_requests, draw_cost, layout_diagnostics)
+        (
+            graph,
+            window_requests,
+            draw_cost,
+            layout_diagnostics,
+            record_cost,
+        )
     }
 
     /// Perform the actual GPU rendering for the provided commands and return
@@ -933,10 +941,10 @@ Fps: {:.2}
 
         // Compute draw commands
         let screen_size: PxSize = args.app.size().into();
-        let (new_graph, window_requests, draw_cost, layout_diagnostics) =
+        let (new_graph, window_requests, draw_cost, layout_diagnostics, record_cost) =
             Self::compute_draw_commands(args, screen_size, frame_idx);
         #[cfg(not(feature = "profiling"))]
-        let _ = layout_diagnostics;
+        let _ = (layout_diagnostics, record_cost);
         let (composite_context, composite_registry) =
             args.app.composite_context_parts(screen_size, frame_idx);
         let new_graph =
@@ -969,6 +977,7 @@ Fps: {:.2}
                 render_time_ns: render_duration_ns,
                 build_tree_time_ns: Some(build_tree_cost.as_nanos()),
                 draw_time_ns: Some(draw_cost.as_nanos()),
+                record_time_ns: Some(record_cost.as_nanos()),
                 frame_total_ns: Some(frame_total_ns),
                 layout_diagnostics: Some(layout_diagnostics),
                 nodes,

@@ -20,6 +20,7 @@ struct FrameRecord {
     render_time_ns: Option<u128>,
     build_tree_time_ns: Option<u128>,
     draw_time_ns: Option<u128>,
+    record_time_ns: Option<u128>,
     frame_total_ns: Option<u128>,
     layout_diagnostics: Option<LayoutDiagnosticsRecord>,
     components: Vec<ComponentRecord>,
@@ -39,6 +40,7 @@ struct ComponentRecord {
 struct PhaseDurations {
     build_ns: Option<u128>,
     measure_ns: Option<u128>,
+    record_ns: Option<u128>,
     input_ns: Option<u128>,
 }
 
@@ -149,6 +151,10 @@ struct Summary {
     draw_min: Option<u128>,
     draw_max: Option<u128>,
     draw_count: u64,
+    record_total: u128,
+    record_min: Option<u128>,
+    record_max: Option<u128>,
+    record_count: u64,
     build_total_sum: u128,
     build_total_min: Option<u128>,
     build_total_max: Option<u128>,
@@ -157,6 +163,10 @@ struct Summary {
     measure_total_min: Option<u128>,
     measure_total_max: Option<u128>,
     measure_total_count: u64,
+    record_total_sum: u128,
+    record_total_min: Option<u128>,
+    record_total_max: Option<u128>,
+    record_total_count: u64,
     input_total_sum: u128,
     input_total_min: Option<u128>,
     input_total_max: Option<u128>,
@@ -177,6 +187,7 @@ struct Stats {
     count: u64,
     build_ns: u128,
     measure_ns: u128,
+    record_ns: u128,
     input_ns: u128,
     cache_hit: u64,
     cache_miss: u64,
@@ -185,7 +196,7 @@ struct Stats {
 
 impl Stats {
     fn total_ns(&self) -> u128 {
-        self.build_ns + self.measure_ns + self.input_ns
+        self.build_ns + self.measure_ns + self.record_ns + self.input_ns
     }
 
     fn hit_rate(&self) -> Option<f64> {
@@ -202,6 +213,7 @@ impl Stats {
 struct PhaseTotals {
     build: u128,
     measure: u128,
+    record: u128,
     input: u128,
 }
 
@@ -274,6 +286,10 @@ struct CsvRow {
     measure_total_ms: f64,
     measure_avg_us: f64,
 
+    record_total_ns: u128,
+    record_total_ms: f64,
+    record_avg_us: f64,
+
     input_total_ns: u128,
     input_total_ms: f64,
     input_avg_us: f64,
@@ -315,6 +331,11 @@ fn export_csv(path: &Path, stats: &HashMap<String, Stats>) -> Result<()> {
         } else {
             stat.input_ns as f64 / count as f64
         };
+        let record_avg_ns = if count == 0 {
+            0.0
+        } else {
+            stat.record_ns as f64 / count as f64
+        };
         let total_ns = stat.total_ns();
         let total_avg_ns = if count == 0 {
             0.0
@@ -334,6 +355,10 @@ fn export_csv(path: &Path, stats: &HashMap<String, Stats>) -> Result<()> {
                 measure_total_ns: stat.measure_ns,
                 measure_total_ms: stat.measure_ns as f64 / 1_000_000.0,
                 measure_avg_us: measure_avg_ns / 1_000.0,
+
+                record_total_ns: stat.record_ns,
+                record_total_ms: stat.record_ns as f64 / 1_000_000.0,
+                record_avg_us: record_avg_ns / 1_000.0,
 
                 input_total_ns: stat.input_ns,
                 input_total_ms: stat.input_ns as f64 / 1_000_000.0,
@@ -396,6 +421,19 @@ fn process_frame(
             .map_or(frame_totals.measure, |v| v.max(frame_totals.measure)),
     );
 
+    summary.record_total_sum += frame_totals.record;
+    summary.record_total_count += 1;
+    summary.record_total_min = Some(
+        summary
+            .record_total_min
+            .map_or(frame_totals.record, |v| v.min(frame_totals.record)),
+    );
+    summary.record_total_max = Some(
+        summary
+            .record_total_max
+            .map_or(frame_totals.record, |v| v.max(frame_totals.record)),
+    );
+
     summary.input_total_sum += frame_totals.input;
     summary.input_total_count += 1;
     summary.input_total_min = Some(
@@ -439,12 +477,22 @@ fn process_frame(
             summary.draw_min = Some(summary.draw_min.map_or(draw, |v| v.min(draw)));
             summary.draw_max = Some(summary.draw_max.map_or(draw, |v| v.max(draw)));
         }
+        if let Some(record) = frame.record_time_ns {
+            summary.record_total += record;
+            summary.record_count += 1;
+            summary.record_min = Some(summary.record_min.map_or(record, |v| v.min(record)));
+            summary.record_max = Some(summary.record_max.map_or(record, |v| v.max(record)));
+        }
 
         if let Some(render) = frame.render_time_ns {
             summary.render_total += render;
             summary.render_count += 1;
 
-            let accounted = frame_totals.build + frame_totals.measure + frame_totals.input + render;
+            let accounted = frame_totals.build
+                + frame_totals.measure
+                + frame_totals.record
+                + frame_totals.input
+                + render;
             let unaccounted = total.saturating_sub(accounted);
             summary.unaccounted_total_sum += unaccounted;
             summary.unaccounted_total_count += 1;
@@ -476,23 +524,27 @@ fn accumulate_component_exclusive(
             accumulate_component_exclusive(child, summary, stats_by_name, frame_totals);
         children_inclusive.build += child_inclusive.build;
         children_inclusive.measure += child_inclusive.measure;
+        children_inclusive.record += child_inclusive.record;
         children_inclusive.input += child_inclusive.input;
     }
 
     let inclusive = PhaseTotals {
         build: component.phases.build_ns.unwrap_or(0),
         measure: component.phases.measure_ns.unwrap_or(0),
+        record: component.phases.record_ns.unwrap_or(0),
         input: component.phases.input_ns.unwrap_or(0),
     };
 
     let exclusive = PhaseTotals {
         build: inclusive.build.saturating_sub(children_inclusive.build),
         measure: inclusive.measure.saturating_sub(children_inclusive.measure),
+        record: inclusive.record.saturating_sub(children_inclusive.record),
         input: inclusive.input.saturating_sub(children_inclusive.input),
     };
 
     frame_totals.build += exclusive.build;
     frame_totals.measure += exclusive.measure;
+    frame_totals.record += exclusive.record;
     frame_totals.input += exclusive.input;
 
     let name = component
@@ -504,6 +556,7 @@ fn accumulate_component_exclusive(
     entry.count += 1;
     entry.build_ns += exclusive.build;
     entry.measure_ns += exclusive.measure;
+    entry.record_ns += exclusive.record;
     entry.input_ns += exclusive.input;
 
     match component.layout_cache_hit {
@@ -591,6 +644,21 @@ fn print_summary(summary: &Summary) {
             )),
         ]));
     }
+    if summary.record_count > 0 {
+        let avg = summary.record_total as f64 / summary.record_count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Record (wall)"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.record_min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.record_max.unwrap_or(0) as f64)
+            )),
+        ]));
+    }
     if summary.render_count > 0 {
         let avg = summary.render_total as f64 / summary.render_count as f64;
         table.add_row(Row::from(vec![
@@ -628,6 +696,21 @@ fn print_summary(summary: &Summary) {
             Cell::new(format!(
                 "{} ms",
                 format_ms(summary.measure_total_max.unwrap_or(0) as f64)
+            )),
+        ]));
+    }
+    if summary.record_total_count > 0 {
+        let avg = summary.record_total_sum as f64 / summary.record_total_count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Record total (exclusive CPU)"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.record_total_min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.record_total_max.unwrap_or(0) as f64)
             )),
         ]));
     }
@@ -805,6 +888,9 @@ fn print_top_sections(stats: &HashMap<String, Stats>, top: usize, min_count: u64
 
     rows.sort_by_key(|(_, stat)| Reverse(stat.build_ns));
     print_section("Top by build_ns (exclusive)", &rows, top, |s| s.build_ns);
+
+    rows.sort_by_key(|(_, stat)| Reverse(stat.record_ns));
+    print_section("Top by record_ns (exclusive)", &rows, top, |s| s.record_ns);
 
     rows.sort_by_key(|(_, stat)| Reverse(stat.input_ns));
     print_section("Top by input_ns (exclusive)", &rows, top, |s| s.input_ns);

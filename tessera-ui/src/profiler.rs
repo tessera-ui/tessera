@@ -118,10 +118,12 @@ use crate::component_tree::LayoutFrameDiagnostics;
 /// Profiling phases that can be emitted.
 #[derive(Clone, Copy)]
 pub enum Phase {
-    /// Component build/render stage.
+    /// Component build stage.
     Build,
     /// Layout measurement stage.
     Measure,
+    /// Layout record stage (generate draw/compute commands).
+    Record,
     /// Input handling stage.
     Input,
     /// GPU render stage (frame-level).
@@ -168,6 +170,8 @@ pub struct FrameMeta {
     pub build_tree_time_ns: Option<u128>,
     /// Draw/compute duration for the frame (wall time).
     pub draw_time_ns: Option<u128>,
+    /// Layout record duration for the frame (wall time).
+    pub record_time_ns: Option<u128>,
     /// Total duration for the frame.
     pub frame_total_ns: Option<u128>,
     /// Optional layout diagnostics for the frame.
@@ -329,6 +333,8 @@ pub struct FrameRecord {
     build_tree_time_ns: Option<u128>,
     /// Draw/compute duration for the frame (wall time).
     draw_time_ns: Option<u128>,
+    /// Layout record duration for the frame (wall time).
+    record_time_ns: Option<u128>,
     /// Total duration for the frame.
     frame_total_ns: Option<u128>,
     /// Optional per-frame layout diagnostics.
@@ -413,6 +419,8 @@ struct PhaseDurations {
     build_ns: Option<u128>,
     #[serde(skip_serializing_if = "Option::is_none")]
     measure_ns: Option<u128>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    record_ns: Option<u128>,
     #[serde(skip_serializing_if = "Option::is_none")]
     input_ns: Option<u128>,
 }
@@ -517,6 +525,9 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             Phase::Measure => {
                 entry.phases.measure_ns = Some(entry.phases.measure_ns.unwrap_or(0) + duration_ns);
             }
+            Phase::Record => {
+                entry.phases.record_ns = Some(entry.phases.record_ns.unwrap_or(0) + duration_ns);
+            }
             Phase::Input => {
                 entry.phases.input_ns = Some(entry.phases.input_ns.unwrap_or(0) + duration_ns);
             }
@@ -530,6 +541,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             render_time_ns: frame_meta.render_time_ns,
             build_tree_time_ns: frame_meta.build_tree_time_ns,
             draw_time_ns: frame_meta.draw_time_ns,
+            record_time_ns: frame_meta.record_time_ns,
             frame_total_ns: frame_meta.frame_total_ns,
             layout_diagnostics: frame_meta.layout_diagnostics.map(Into::into),
             components: Vec::new(),
@@ -587,6 +599,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
         render_time_ns: frame_meta.render_time_ns,
         build_tree_time_ns: frame_meta.build_tree_time_ns,
         draw_time_ns: frame_meta.draw_time_ns,
+        record_time_ns: frame_meta.record_time_ns,
         frame_total_ns: frame_meta.frame_total_ns,
         layout_diagnostics: frame_meta.layout_diagnostics.map(Into::into),
         components,

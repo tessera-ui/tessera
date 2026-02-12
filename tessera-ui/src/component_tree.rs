@@ -348,7 +348,12 @@ impl ComponentTree {
     pub(crate) fn compute(
         &mut self,
         params: ComputeParams<'_>,
-    ) -> (RenderGraph, WindowRequests, LayoutFrameDiagnostics) {
+    ) -> (
+        RenderGraph,
+        WindowRequests,
+        LayoutFrameDiagnostics,
+        std::time::Duration,
+    ) {
         let ComputeParams {
             screen_size,
             mut cursor_position,
@@ -368,6 +373,7 @@ impl ComponentTree {
                 RenderGraph::default(),
                 WindowRequests::default(),
                 LayoutFrameDiagnostics::default(),
+                std::time::Duration::ZERO,
             );
         };
         let screen_constraint = Constraint::new(
@@ -422,6 +428,7 @@ impl ComponentTree {
             }
         }
 
+        let record_timer = Instant::now();
         record_layout_commands(
             root_node,
             &self.tree,
@@ -429,6 +436,7 @@ impl ComponentTree {
             compute_resource_manager.clone(),
             gpu,
         );
+        let record_cost = record_timer.elapsed();
 
         let compute_draw_timer = Instant::now();
         debug!("Start computing render graph...");
@@ -562,6 +570,7 @@ impl ComponentTree {
                 dirty_nodes_effective.len() as u64,
                 dirty_expand_ns,
             ),
+            record_cost,
         )
     }
 }
@@ -637,6 +646,16 @@ fn record_layout_commands(
     while let Some(node_id) = stack.pop() {
         let Some(node) = tree.get(node_id) else {
             continue;
+        };
+        #[cfg(feature = "profiling")]
+        let _record_profiler_guard = {
+            let parent_id = node.parent();
+            Some(ProfilerScopeGuard::new(
+                ProfilerPhase::Record,
+                Some(node_id),
+                parent_id,
+                Some(node.get().fn_name.as_str()),
+            ))
         };
         let input = RenderInput::new(node_id, metadatas, compute_resource_manager.clone(), gpu);
         node.get().layout_spec.record_dyn(&input);
